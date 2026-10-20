@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Edge } from "@xyflow/react";
+import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type {
@@ -251,6 +252,43 @@ describe("biochar mass labels", () => {
           graphEdge.target === "biochar-product:product-1",
       )?.data?.kgLabel,
     ).toBe("Wet: 340 kg · Dry: 333.2 kg");
+  });
+
+  it.each([false, true])("sums a shared run's unequal applications regardless of lineage order (reversed: %s)", (reversed) => {
+    const applications = [
+      { id: "application-small", wetKg: 12, dryKg: 9.6 },
+      { id: "application-large", wetKg: 24, dryKg: 19.2 },
+    ];
+    const lineages = applications.map(({ id, wetKg, dryKg }) => {
+      const data = lineage();
+      data.application = {
+        ...data.application, id,
+        biocharAppliedTons: kgToTonnes(wetKg),
+        biocharAppliedDryTons: kgToTonnes(dryKg),
+      };
+      data.biocharProduct = {
+        id: "product-1", code: "BP-1", status: "ready", productionDate: "2026-05-18",
+        massKg: data.delivery.deliveredWetMassKg ?? null, moistureContentPercent: null,
+        formulationName: null, linkedProductionRunId: data.productionRun!.id,
+        href: "/biochar-products",
+      };
+      data.sources = [{
+        productionRun: data.productionRun!, reactor: data.reactor, feedstocks: data.feedstocks,
+        allocatedWetMassKg: wetKg, allocatedDryMassKg: dryKg,
+      }];
+      return data;
+    });
+    const { nodes, edges } = useBatchChainGraph(reversed ? [...lineages].reverse() : lineages, undefined);
+    const expectedMass = "Wet: 36 kg · Dry: 28.8 kg";
+
+    expect(nodes.find(node => node.id === "production-run:run-1")?.data.details).toContainEqual({
+      label: "Applied from source", value: expectedMass,
+    });
+    expect(nodes.find(node => node.id === "biochar-product:product-1")?.data.details).toContainEqual({
+      label: "Applied from batch", value: expectedMass,
+    });
+    expect(edges.find(graphEdge => graphEdge.source === "production-run:run-1" &&
+      graphEdge.target === "biochar-product:product-1")?.data?.kgLabel).toBe(expectedMass);
   });
 
   it("merges commingled slices without multiplying lot mass or understating applied mass", () => {

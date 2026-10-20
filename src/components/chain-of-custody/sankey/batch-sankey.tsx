@@ -42,7 +42,7 @@ import {
 
 // ViewBox geometry — rendered 1:1 on the canvas; React Flow handles zoom.
 const VIEW_W = 1040;
-const VIEW_H = 480;
+const VIEW_H = 500;
 const COLUMN_XS = [80, 373, 666, 960];
 const BAR_W = 20;
 const FLOW_TOP = 84;
@@ -51,7 +51,8 @@ const FLOW_MAX_H = 230;
 const MIN_BAR_H = 3;
 const EXIT_STUB_W = 12;
 const EXIT_STUB_H = 26;
-const EXIT_ROW_H = 46;
+/** Stub, label line and value line stacked, so a second exit never lands on the first. */
+const EXIT_ROW_H = 68;
 /** Invisible hit zone widening each clickable column / exit target. */
 const HIT_PAD_X = 40;
 

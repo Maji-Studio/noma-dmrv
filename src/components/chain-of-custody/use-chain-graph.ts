@@ -19,6 +19,7 @@ import {
   NODE_WIDTH,
   type LineageNodeKind,
 } from "./chain-constants";
+import { sumNullable } from "@/lib/nullable-sum";
 import type { ChainNodeData } from "./chain-node";
 import { expandProductLineages } from "./expand-product-lineages";
 
@@ -77,6 +78,11 @@ export interface LineageGraphNode {
 // Stroke, casing, and the mass label chip live in ChainEdge (chain-edge.tsx).
 // Mass-flow lines are dark purple for contrast on the tinted canvas; the
 // reactor's equipment link is a quieter dashed tint of the same ink.
+const PRODUCTION_RUN_NODE_PREFIX = "production-run:";
+const APPLIED_FROM_SOURCE_LABEL = "Applied from source";
+const productionRunNodeId = (productionRunId: string) =>
+  `${PRODUCTION_RUN_NODE_PREFIX}${productionRunId}`;
+
 const FLOW_EDGE_COLOR = "var(--clr-dark-purple)";
 const EQUIPMENT_EDGE_COLOR = "var(--clr-dark-purple-40)";
 
@@ -387,7 +393,7 @@ function buildSourceNodes(sources: ChainSourceLineage[]): LineageGraphNode[] {
     ) {
       addRow(
         details,
-        "Applied from source",
+        APPLIED_FROM_SOURCE_LABEL,
         formatWetDryMass({
           wetKg: source.allocatedWetMassKg,
           dryKg: source.allocatedDryMassKg,
@@ -396,7 +402,7 @@ function buildSourceNodes(sources: ChainSourceLineage[]): LineageGraphNode[] {
     }
 
     nodes.push({
-      id: `production-run:${productionRun.id}`,
+      id: productionRunNodeId(productionRun.id),
       kind: "productionRun",
       code: productionRun.biocharStorageName ?? productionRun.code,
       href: productionRun.href,
@@ -563,7 +569,7 @@ function buildSourceEdges(source: ChainSourceLineage): Edge[] {
   const productionRun = source.productionRun;
   for (const feedstock of source.feedstocks) {
     edges.push(
-      edge(`feedstock:${feedstock.id}`, `production-run:${productionRun.id}`, {
+      edge(`feedstock:${feedstock.id}`, productionRunNodeId(productionRun.id), {
         mass: { value: feedstock.wetMassUsedKg, unit: "kg" },
       })
     );
@@ -572,7 +578,7 @@ function buildSourceEdges(source: ChainSourceLineage): Edge[] {
   if (source.reactor) {
     // Equipment association, not a mass flow — drawn as a quiet dashed link.
     edges.push(
-      edge(`reactor:${source.reactor.id}`, `production-run:${productionRun.id}`, {
+      edge(`reactor:${source.reactor.id}`, productionRunNodeId(productionRun.id), {
         variant: "equipment",
       })
     );
@@ -606,7 +612,7 @@ function buildLineageEdges(data: ChainOfCustodyData): Edge[] {
         (sources.length === 1 ? legacyDryMassKg : null);
       edges.push(
         edge(
-          `production-run:${productionRun.id}`,
+          productionRunNodeId(productionRun.id),
           `biochar-product:${data.biocharProduct.id}`,
           {
             mass: { value: dryMassKg ?? wetMassKg, unit: "kg" },
@@ -661,7 +667,7 @@ export function buildRollForwardGraph(rollForward: ChainRunRollForward): {
   const { source } = rollForward;
   const nodes = buildSourceNodes([source]);
   const edges = buildSourceEdges(source);
-  const runNodeId = `production-run:${source.productionRun.id}`;
+  const runNodeId = productionRunNodeId(source.productionRun.id);
   for (const { product, drawnWetMassKg, drawnDryMassKg, deliveries } of rollForward.products) {
     const productNodeId = `biochar-product:${product.id}`;
     nodes.push({
@@ -851,7 +857,15 @@ function buildMergedChainGraph(
     applicationMasses.set(lineage.application.id, totals);
   }
   const productMasses = new Map<string, { wetKg: number; dryKg: number }>();
+  const runAllocations = new Map<string, { wetKg: (number | null)[]; dryKg: (number | null)[] }>();
   for (const lineage of lineages) {
+    for (const source of resolveChainSources(lineage)) {
+      const runNodeId = productionRunNodeId(source.productionRun.id);
+      const allocations = runAllocations.get(runNodeId) ?? { wetKg: [], dryKg: [] };
+      allocations.wetKg.push(source.allocatedWetMassKg ?? null);
+      allocations.dryKg.push(source.allocatedDryMassKg ?? null);
+      runAllocations.set(runNodeId, allocations);
+    }
     if (!lineage.biocharProduct) continue;
     const total = productMasses.get(lineage.biocharProduct.id) ?? { wetKg: 0, dryKg: 0 };
     total.wetKg += tonnesToKg(lineage.application.biocharAppliedTons ?? 0);
@@ -874,6 +888,15 @@ function buildMergedChainGraph(
   const edgeById = new Map<string, Edge>();
   for (const [index, lineage] of lineages.entries()) {
     for (const node of buildLineageNodes(normalizedLineages[index])) {
+      if (node.kind === "productionRun") {
+        const allocations = runAllocations.get(node.id);
+        if (allocations) {
+          const total = { wetKg: sumNullable(allocations.wetKg), dryKg: sumNullable(allocations.dryKg) };
+          node.details = node.details.map(row => row.label === APPLIED_FROM_SOURCE_LABEL
+            ? { ...row, value: formatWetDryMass(total) }
+            : row);
+        }
+      }
       if (node.kind === "biocharProduct" && lineage.biocharProduct) {
         const total = productMasses.get(lineage.biocharProduct.id);
         if (total) node.details = [{ label: "Applied from batch", value: formatWetDryMass(total) }];
@@ -883,7 +906,7 @@ function buildMergedChainGraph(
     for (const lineageEdge of buildLineageEdges(lineage)) {
       const existing = edgeById.get(lineageEdge.id);
       if (!existing) edgeById.set(lineageEdge.id, lineageEdge);
-      else if ((lineageEdge.source.startsWith("production-run:") || lineageEdge.source.startsWith("biochar-product:") || lineageEdge.source.startsWith("delivery:")) && existing.data && lineageEdge.data && existing.data.mass != null && lineageEdge.data.mass != null) {
+      else if ((lineageEdge.source.startsWith(PRODUCTION_RUN_NODE_PREFIX) || lineageEdge.source.startsWith("biochar-product:") || lineageEdge.source.startsWith("delivery:")) && existing.data && lineageEdge.data && existing.data.mass != null && lineageEdge.data.mass != null) {
         const mass = Number(existing.data.mass) + Number(lineageEdge.data.mass);
         const wetKg = existing.data.wetKg != null && lineageEdge.data.wetKg != null ? Number(existing.data.wetKg) + Number(lineageEdge.data.wetKg) : null;
         existing.data = { ...existing.data, mass, wetKg, kgLabel: wetKg != null ? formatWetDryMass({ wetKg, dryKg: existing.data.unit === "tDry" ? tonnesToKg(mass) : mass }) : existing.data.unit === "tDry" ? formatDryTons(mass) : formatKg(mass) };
