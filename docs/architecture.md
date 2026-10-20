@@ -277,20 +277,26 @@ runtime.
 - `src/app/(auth)/*` public · `src/app/(app)/*` authenticated workspace ·
   `src/app/(app)/admin/*` admin-only · `src/app/api/*` API routes.
 - `src/app/(app)/layout.tsx` enforces auth and mounts `FacilityProvider`.
-- **Three configuration surfaces, deliberately not one.** `/settings`
-  (`Members` · `Defaults` · `Vehicles and crew` · `API keys`) is org configuration. Every member can view the
-  Members roster; only Owners/Admins (and Platform Admins) can mutate membership
-  or open Defaults. Every member can edit and delete vehicles, drivers and
-  operators in Vehicles and crew, as every member can create them from a picker. API keys require a verified Owner/Admin membership; a
-  Platform Admin without that membership cannot manage keys.
-  `/certification/settings` is registry configuration and
-  stays there by ADR
-  [0007](./adr/0007-certification-workspace-consolidation.md). `/admin` is
-  cross-tenant platform administration (`users.role === "admin"`) and is now
-  only the organization directory — `/admin` itself redirects to
-  `/admin/organizations`. Both settings surfaces render the shared
-  `SettingsRail`; `/settings` selects by route, `/certification/settings` by
-  `?section=`.
+- **One settings console** (`/settings`, #1277). `SettingsConsole` renders a
+  rail grouped by whose setting it is, one route per pane, listed in
+  `src/lib/settings/panes.ts`: **You** (Connected apps), **Organization**
+  (General, Members, Developers), **Certification** (Registry, Removal
+  templates, Facilities) and **Platform** (Organizations, Diagnostics,
+  Template mapping; Platform Admins only). Each route loads the viewer with
+  `loadSettingsViewer()` and calls `assertSettingsPaneVisible()`: a pane
+  outside the viewer's audience is a 404, and Removal templates and Facilities
+  answer with Registry while the organization has no registry keys saved.
+  Every member opens General and Members read-only; Owners/Admins (and
+  Platform Admins) change them. Developers (API keys) requires a verified
+  Owner/Admin membership; a Platform Admin without one sees it without
+  controls. Certification panes configure the working facility from
+  `FacilityProvider`; there is no second facility picker. `/certification/settings`,
+  `/settings/organization`, `/settings/defaults`, `/settings/api-keys` and
+  `/settings/vehicles-and-crew` only redirect (`legacyCertificationSettingsRedirect`,
+  `redirectPreservingQuery`). Vehicles and crew is a list page at
+  `/vehicles-and-crew` under Distribution. `/admin` is cross-tenant platform
+  administration (`users.role === "admin"`) and is only the organization
+  directory; `/admin` itself redirects to `/admin/organizations`.
 - `src/proxy.ts` → `updateSession()` in `src/lib/auth/middleware.ts`. Node
   runtime (not Edge) so Better Auth can use `crypto`. The matcher covers
   everything except static assets — **including `/api`**; `/api/auth/*` is

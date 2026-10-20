@@ -54,7 +54,7 @@ Delete the project-emissions journal subsystem end-to-end:
 - `certifier_project_emissions` table + `project_emission_category` enum
 - schemas / data-access / fn / hooks for project emissions
 - the "Period emissions (LCA-derived)" section and the registry-reconciliation
-  drift panel on `/certification/settings`
+  drift panel on the former `/certification/settings` (now the settings console)
 - the `CATEGORY_TO_BLUEPRINT` matcher (`project-emission-match.ts`) and the
   drift half of `scripts/isometric-coverage-check.ts`
 

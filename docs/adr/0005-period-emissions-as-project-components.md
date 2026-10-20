@@ -8,7 +8,8 @@
 > **Current route note:** The period-emissions journal described here was
 > removed by ADR 0018. There is no current period-emissions route. The surviving
 > facility configuration lives at
-> `/certification/settings?section=emission-estimates&facility=<id>` (see
+> `/settings/facilities?facility=<id>` since #1277 (formerly
+> `/certification/settings?section=emission-estimates`; see
 > `src/lib/certification/links.ts`).
 
 > **Amended 2026-07-29**: the `miscellaneous/mass_based_ci_emissions/mass`
