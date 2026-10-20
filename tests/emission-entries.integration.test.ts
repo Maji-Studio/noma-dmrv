@@ -1,5 +1,5 @@
 import { insertRemovalFixture } from "./helpers/removal-fixture";
-import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { assert, afterAll, beforeAll, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -36,6 +36,7 @@ import { deleteDocumentInTransaction } from "@/data-access/document-mutations";
 import { createTransportLeg } from "@/data-access/transport-legs";
 import { loadFacilityEmissionsOverview } from "@/lib/read-models/facility-emissions-overview";
 import { loadBatchEmissionLines } from "@/lib/read-models/batch-emission-lines";
+import { removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 import {
   createLineageFixture,
   cleanupLineageFixture,
@@ -364,7 +365,9 @@ it("tombstones unsubmitted draft zeros on value creation", async () => {
 });
 it("loads persisted entries with the flag off while refusing writes", async () => {
   const entry = await create();
-  const lines = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  const linesResult = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  assert(linesResult.status === "ready");
+  const lines = linesResult.lines;
   expect(
     lines
       .find((line) => line.componentId === "energy")
@@ -418,7 +421,9 @@ it("refuses unit-change confirmation and reads the re-entry state", async () => 
     "This entry no longer matches the template. Enter the values again.",
   );
   expect(await getEmissionEntry(ctx, entry.id)).toMatchObject({ observationId, version: 1 });
-  const lines = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  const linesResult = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  assert(linesResult.status === "ready");
+  const lines = linesResult.lines;
   expect(lines.find(line => line.componentId === "energy")).toMatchObject({
     state: "needsReview", total: null,
     blocker: { message: "Enter the values again for the current template line." },
@@ -796,8 +801,9 @@ it("uses the read model blocker for an unpinned batch", async () => {
     .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, lineage.batchId)));
   try {
     await expect(create()).rejects.toThrow("Choose a Removal template for this credit batch.");
-    await expect(loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId))
-      .rejects.toThrow("Choose a Removal template for this credit batch.");
+    await expect(loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId)).resolves.toEqual({
+      status: "blocked", blocker: removalTemplateBlocker("unpinnedTemplate"),
+    });
   } finally {
     await db.update(creditBatches).set({ removalTemplateId: templateId })
       .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, lineage.batchId)));

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { assert, afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, creditBatches, emissionLineComments, organizations, removalTemplateObservations, users } from "@/db/schema";
@@ -170,12 +170,16 @@ it("enforces uniqueness and a nonblank body in the database", async () => {
 });
 
 it("joins only matching current-template lines and keeps all derived emissions facts unchanged", async () => {
-  const before = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  const beforeResult = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  assert(beforeResult.status === "ready");
+  const before = beforeResult.lines;
   const overview = await loadFacilityEmissionsOverview(ctx, lineage.facilityId);
   const created = await setEmissionLineComment(ctx, input());
   const other = await setEmissionLineComment(ctx, input("other"));
   await setEmissionLineComment(ctx, { ...input(), facilityId: otherBatch.facilityId, creditBatchId: otherBatch.batchId, body: "Other batch" });
-  const lines = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  const linesResult = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  assert(linesResult.status === "ready");
+  const lines = linesResult.lines;
   expect(lines.find((line) => line.componentId === "energy")?.comment).toEqual({
     id: created.id, body: created.body, version: created.version, updatedAt: created.updatedAt, updatedBy: userId,
   });
@@ -187,7 +191,9 @@ it("joins only matching current-template lines and keeps all derived emissions f
   source.definition.groups[0].components = source.definition.groups[0].components.filter((component) => component.id !== "energy");
   await db.update(removalTemplateObservations).set({ definition: source.definition }).where(eq(removalTemplateObservations.id, observationId));
   try {
-    const after = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+    const afterResult = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+    assert(afterResult.status === "ready");
+    const after = afterResult.lines;
     expect(after.some((line) => line.comment?.id === created.id)).toBe(false);
     expect(await getEmissionLineComment(ctx, created.id)).toEqual(created);
     // Deletion still works after a template removes the component.
