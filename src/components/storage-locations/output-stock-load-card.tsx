@@ -82,7 +82,7 @@ function drawnCaption(preview: Preview): string {
 function enteredCaption(preview: Preview): string {
   return preview.removedWetKg === null
     ? "What you entered"
-    : `${formatMassKg(Math.abs(preview.removedWetKg))} wet ${movementDirection(preview.removedWetKg)}`;
+    : `${formatMassKg(Math.abs(preview.removedWetKg))} wet mass ${movementDirection(preview.removedWetKg)}`;
 }
 
 /**

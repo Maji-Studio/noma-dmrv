@@ -85,7 +85,7 @@ describe("Order read view levels", () => {
     for (const level of ["simple", "detailed"] as const) {
       await switchTo(level);
       const shown = visibleText(renderer.root);
-      expect(shown).toContain("60.5 of 130.125 kg wet");
+      expect(shown).toContain("60.5 of 130.125 kg wet mass");
       expect(shown).toContain("2 deliveries");
       expect(shown).toContain("Partial");
     }

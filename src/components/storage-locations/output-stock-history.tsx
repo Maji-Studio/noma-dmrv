@@ -45,7 +45,7 @@ function entryFigure(entry: OutputStockHistoryEntry, kind: string): string {
 
 /** The entry's own size: what was weighed or counted, signed by direction. */
 function entryAmount(entry: OutputStockHistoryEntry, kind: string): string {
-  if (kind === "count") return entry.wetMassKg === null ? `${formatMassKg(entry.afterDryKg)} dry` : `${formatMassKg(entry.wetMassKg)} wet`;
+  if (kind === "count") return entry.wetMassKg === null ? `${formatMassKg(entry.afterDryKg)} dry` : `${formatMassKg(entry.wetMassKg)} wet mass`;
   // dryMassKg is signed: removals positive, intakes negative.
   const sign = entry.dryMassKg > 0 ? "−" : entry.dryMassKg < 0 ? "+" : "";
   return `${sign}${outputEntryMass(entry)}`;

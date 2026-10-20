@@ -611,12 +611,13 @@ presentation, so switching levels does not reset an active correction.
 ### Stock blocks lead with wet mass
 
 Stock is kept in dry biochar, but operators weigh and load wet mass, so the
-stock family presents wet first. Only presentation changes.
+stock family presents wet first. Only presentation changes. A wet figure reads
+"N kg wet mass", number first, in every caption; never the short "kg wet".
 
 - **Movement blocks** (`OutputStockPreview variant="movement"`: correction,
   loss, count, delivery load). Headline "Wet stock in bin, estimate" as
-  "≈ 1,420 → 1,110 kg", with the entry as its caption ("310 kg wet removed at
-  22.7% moisture", "Counted 2,650 kg wet at 27.4% moisture", "1,190 kg wet
+  "≈ 1,420 → 1,110 kg", with the entry as its caption ("310 kg wet mass removed at
+  22.7% moisture", "Counted 2,650 kg wet mass at 27.4% moisture", "1,190 kg wet mass
   loaded at 16% moisture"). Before is each batch's wet stock, wet mass added
   less wet mass taken out from its last count; after takes this entry's wet
   mass out, or for a count, sets each batch to the count. The picture is the entered wet mass split into
@@ -673,8 +674,8 @@ check, never a value:
 
 A bin selector whose choice moves stock shows the change in its selected value:
 `EntitySelect`'s `formatSelectedLabel` returns a `ReactNode`, and
-`StockChangeLabel` renders "Biochar bin (−100 kg wet)" in amber for a draw and
-"Product bin (+400 kg wet)" in green for an addition. It shows only for a fresh,
+`StockChangeLabel` renders "Biochar bin (−100 kg wet mass)" in amber for a draw and
+"Product bin (+400 kg wet mass)" in green for an addition. It shows only for a fresh,
 unblocked projection with a finite, non-zero mass; pass `available={false}`
 while the preview refetches or has failed. The biochar product form's biochar,
 ingredient and product bin selectors are the reference; they replace separate

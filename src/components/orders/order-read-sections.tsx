@@ -15,11 +15,11 @@ import { ORDER_FULFILLMENT_DISPLAY } from "@/lib/orders/fulfillment";
 import { MatchingOutputBins } from "./matching-output-bins";
 import { OrderLocationRead } from "./order-location-read";
 
-/** "1,200 of 2,000 kg wet": delivered wet mass against the requested wet mass. */
+/** "1,200 of 2,000 kg wet mass": delivered wet mass against the requested wet mass. */
 function formatDeliveredMass(order: Pick<OrderWithRelations, "deliveredWetMassKg" | "quantityKg">): string {
   const digits = { digits: MASS_KG_STORAGE_DECIMALS };
   const requested = formatMassKg(order.quantityKg, digits);
-  return `${order.deliveredWetMassKg.toLocaleString(undefined, { maximumFractionDigits: MASS_KG_STORAGE_DECIMALS })} of ${requested} wet`;
+  return `${order.deliveredWetMassKg.toLocaleString(undefined, { maximumFractionDigits: MASS_KG_STORAGE_DECIMALS })} of ${requested} wet mass`;
 }
 
 /** "2 deliveries". Every delivery is recorded as delivered, so the count is the whole story. */

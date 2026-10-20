@@ -338,14 +338,14 @@ describe("EntitySelect menu interactions", () => {
 
   it("keeps server code matches and a rich selected label while searching", async () => {
     const change = vi.fn();
-    render(<EntitySelect entityType="storageLocation" value="one" onChange={change} alwaysShowSearch formatSelectedLabel={(option) => <strong>{option.name} (+100 kg wet)</strong>} />);
+    render(<EntitySelect entityType="storageLocation" value="one" onChange={change} alwaysShowSearch formatSelectedLabel={(option) => <strong>{option.name} (+100 kg wet mass)</strong>} />);
     open();
     const search = screen.getByRole("combobox", { name: "Search storage bin" });
     await waitFor(() => expect(document.activeElement).toBe(search));
     fireEvent.change(search, { target: { value: "2" } });
     await waitFor(() => expect(screen.queryByTestId("entity-option-one")).toBeNull());
     expect(screen.getByTestId("entity-option-two").textContent).toBe("South bin");
-    expect(trigger().querySelector("strong")?.textContent).toBe("North bin (+100 kg wet)");
+    expect(trigger().querySelector("strong")?.textContent).toBe("North bin (+100 kg wet mass)");
     key("Enter");
     expect(change).toHaveBeenCalledExactlyOnceWith("two");
   });

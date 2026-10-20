@@ -30,7 +30,7 @@ const ENTRY_ICONS: Record<FeedstockLedgerEntry["kind"], string> = {
 function signedWet(kg: number | null): string {
   if (kg === null) return MISSING_VALUE.notAvailable;
   const sign = kg > 0 ? "+" : kg < 0 ? "−" : "";
-  return `${sign}${formatMassKg(Math.abs(kg))} wet`;
+  return `${sign}${formatMassKg(Math.abs(kg))} wet mass`;
 }
 
 function recordedBy(at: string, occurredAt: string | null, actorName: string | null, timeZone: string): string {
@@ -53,7 +53,7 @@ export function FeedstockLedgerRow({ entry, corrected, timeZone, facilityId, onE
   const chips = [...(entry.reversedBy ? [replaced ? "Replaced" : "Reversed"] : []), ...(corrected ? ["Correction"] : [])];
   // The times show under Original and Corrected only when the correction moved the entry.
   const movedTime = !!corrected && corrected.occurredAt !== entry.occurredAt;
-  const amount = entry.kind === "count" && entry.countedWetKg !== null ? `${formatMassKg(entry.countedWetKg)} wet` : signedWet(entry.wetDeltaKg);
+  const amount = entry.kind === "count" && entry.countedWetKg !== null ? `${formatMassKg(entry.countedWetKg)} wet mass` : signedWet(entry.wetDeltaKg);
   return (
     <LedgerLine id={`feedstock-entry-${entry.id}`} time={formatFacilityTime(new Date(entry.occurredAt), timeZone, TIME_FORMAT)}
       iconKind={ENTRY_ICONS[entry.kind]} label={FEEDSTOCK_ENTRY_LABELS[entry.kind]} chips={chips} note={entry.reason || entry.code || undefined}
@@ -65,7 +65,7 @@ export function FeedstockLedgerRow({ entry, corrected, timeZone, facilityId, onE
       )}
       <StockSourceLink facilityId={facilityId} source={entry.sourceId && (entry.kind === "intake" || entry.kind === "run_draw" || entry.kind === "ingredient_draw")
         ? { entity: entry.kind === "intake" ? "feedstock" : entry.kind === "run_draw" ? "productionRun" : "biocharProduct", id: entry.sourceId } : null} />
-      {!entry.reversedBy && <LedgerBeforeAfter before={`${formatMassKg(entry.beforeWetKg)} wet`} after={`${formatMassKg(entry.afterWetKg)} wet`} />}
+      {!entry.reversedBy && <LedgerBeforeAfter before={`${formatMassKg(entry.beforeWetKg)} wet mass`} after={`${formatMassKg(entry.afterWetKg)} wet mass`} />}
       {corrected && (
         <LedgerBeforeAfter title={`Corrects the lost mass from ${formatFacilityDateTime(corrected.occurredAt, timeZone)}`} labels={["Original", "Corrected"]}
           before={{ value: signedWet(corrected.wetDeltaKg), caption: movedTime ? formatFacilityDateTime(corrected.occurredAt, timeZone) : undefined }}

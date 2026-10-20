@@ -42,7 +42,7 @@ describe("MoistureSplit", () => {
       />,
     );
 
-    expect(html).toContain("100 kg wet: 80 kg dry mass and 20 kg water");
+    expect(html).toContain("100 kg wet mass: 80 kg dry mass and 20 kg water");
     expect(html).toContain("20% moisture");
   });
 

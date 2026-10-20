@@ -41,9 +41,9 @@ describe("ProcessFlowPreview", () => {
     const rendered = text(<ProcessFlowPreview {...run} />);
 
     expect(rendered).toContain("Dry yield 50%");
-    expect(rendered).toContain("Feedstock July 100 kg wet, 90 kg dry");
+    expect(rendered).toContain("Feedstock July 100 kg wet mass, 90 kg dry");
     expect(rendered).toContain("Reactor 1");
-    expect(rendered).toContain("Biochar July 50 kg wet, 45 kg dry");
+    expect(rendered).toContain("Biochar July 50 kg wet mass, 45 kg dry");
     expect(rendered).toContain("Water driven off 10 kg");
     expect(rendered).toContain("Conversion loss 45 kg");
     expect(rendered).toContain(`${PROCESS_FLOW_WATER_INFLOW_LABEL} 5 kg`);
@@ -74,8 +74,8 @@ describe("ProcessFlowPreview", () => {
     const waterIn = diagram.inflows!.reduce((total, inflow) => total + masses[inflow.to], 0);
     const losses = diagram.exits!.reduce((total, exit) => total + masses[exit.from], 0);
 
-    expect(rendered).toContain("500 kg wet, 400 kg dry");
-    expect(rendered).toContain("300 kg wet, 292.5 kg dry");
+    expect(rendered).toContain("500 kg wet mass, 400 kg dry");
+    expect(rendered).toContain("300 kg wet mass, 292.5 kg dry");
     expect(rendered).toContain("Water driven off 100 kg");
     expect(rendered).toContain("Conversion loss 107.5 kg");
     expect(rendered).toContain(`${PROCESS_FLOW_WATER_INFLOW_LABEL} 7.5 kg`);
@@ -141,7 +141,7 @@ describe("ProcessFlowPreview", () => {
     const rendered = text(<ProcessFlowPreview {...run} biocharMoisturePercent={null} biocharDryKg={null} />);
 
     expect(rendered).toContain("Wet yield 50%");
-    expect(rendered).toContain("Feedstock July 100 kg wet");
+    expect(rendered).toContain("Feedstock July 100 kg wet mass");
     expect(rendered).toContain("Water and conversion loss 50 kg");
     expect(rendered).not.toContain("Water driven off");
     expect(rendered).not.toContain("kg dry");

@@ -307,7 +307,7 @@ describe("IngredientBinField stock change", () => {
   it("shows the draw inside the selector while the projection is fresh", () => {
     state.storageValue = "bin-manure";
     renderField(false, [manureBinPreview], true);
-    expect(selectedLabel()).toBe("Manure bin M1(−240 kg wet)");
+    expect(selectedLabel()).toBe("Manure bin M1(−240 kg wet mass)");
   });
 
   it("shows the name only while the projection is stale", () => {
