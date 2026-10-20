@@ -26,7 +26,7 @@ let feedstockTypeId: string;
 let productionProcessId: string;
 let template: ReturnType<typeof protocolDefaultFixture>;
 const scope = () => and(eq(certifierProjects.organizationId, ctx.organizationId), eq(certifierProjects.facilityId, facilityId));
-beforeAll(ensureTestOrg);
+beforeAll(async () => { await ensureTestOrg(); });
 beforeEach(async () => {
   vi.clearAllMocks();
   vi.mocked(requireOrgContext).mockResolvedValue({ ...ctx, orgRole: "admin" });
