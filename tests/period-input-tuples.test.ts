@@ -17,7 +17,6 @@ import type { LineContract } from "@/lib/isometric/template-observations/line-so
 //      from a merge or refactor surfaces immediately.
 
 import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
-import { allowsPeriodInputStub } from "@/lib/isometric/datapoint-mapping";
 import { SafeError } from "@/lib/errors";
 import type { components } from "@/lib/isometric/generated/certify";
 import {
@@ -208,20 +207,16 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
     warnings: [],
   };
 
-  // Distinctive (non-"kg") unit so the stub assertion verifies the builder
-  // echoes blueprintInput.compatible_unit rather than coincidentally matching a
-  // hard-coded "kg".
-  const STUB_COMPATIBLE_UNIT = "tonne";
+  const COMPATIBLE_UNIT = "tonne";
 
   function callWith(
     tuple: typeof PERIOD_INPUT_TUPLE_CANON[number],
     opts?: {
-      allowPeriodInputStub?: boolean;
       componentDisplayName?: string;
     },
   ) {
     const blueprintInput: ComponentBlueprintInput = {
-      compatible_unit: STUB_COMPATIBLE_UNIT,
+      compatible_unit: COMPATIBLE_UNIT,
       data_shape: "SCALAR",
       description: "x",
       input_key: tuple.input,
@@ -244,11 +239,11 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
         agg: minimalAgg,
         projectId: "prj_TEST",
         supplierRefId: "nm-test",
-        allowPeriodInputStub: opts?.allowPeriodInputStub,
       });
   }
 
-  it("throws a SafeError naming PROJECT scope and the category", () => {
+  // No environment input exists anymore: period inputs are never stubbed, so one fail-closed case covers every environment.
+  it("rejects unsourced period inputs", () => {
     for (const t of PERIOD_INPUT_TUPLE_CANON) {
       let err: unknown;
       try {
@@ -277,7 +272,7 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
       [tuple.blueprint]: {
         [tuple.input]: {
           source: "totalBiocharDryMassKg",
-          unit: STUB_COMPATIBLE_UNIT,
+          unit: COMPATIBLE_UNIT,
           datapointType: "REPORTED",
           expectedQuantityKind: "mass",
           bucket: "stored",
@@ -287,24 +282,8 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
     try {
       expect(callWith(tuple)).toThrowError(SafeError);
       expect(callWith(tuple)).toThrowError(/belongs at the project level/);
-      const dp = callWith(tuple, { allowPeriodInputStub: true })();
-      expect(dp.quantity.magnitude).toBe(0);
     } finally {
       delete INPUT_MAPPING[tuple.group];
-    }
-  });
-
-  it("emits a 0-magnitude REPORTED stub when allowPeriodInputStub is set (sandbox)", () => {
-    // ADR 0005 sandbox escape hatch: the same tuples that fail closed by
-    // default emit a 0 datapoint (in the blueprint's compatible_unit) when the
-    // caller opts in. submitRemoval only opts in for ISOMETRIC_ENVIRONMENT
-    // === "sandbox", so production keeps failing closed (asserted above).
-    for (const t of PERIOD_INPUT_TUPLE_CANON) {
-      const dp = callWith(t, { allowPeriodInputStub: true })();
-      expect(dp.quantity.magnitude).toBe(0);
-      expect(dp.quantity.unit).toBe(STUB_COMPATIBLE_UNIT); // echoes blueprintInput.compatible_unit
-      expect(dp.type).toBe("REPORTED");
-      expect(dp.display_name).toBe(t.input);
     }
   });
 });
@@ -325,15 +304,6 @@ describe("MAPPING_REVISION", () => {
     expect(MAPPING_REVISION).toBe(payloadHash(MAPPING_REVISION_INPUT));
     expect(MAPPING_REVISION).not.toBe(payloadHash(INPUT_MAPPING));
   });
-});
-
-it.each([
-  ["sandbox", true],
-  ["production", false],
-  ["unknown", false],
-  [undefined, false],
-] as const)("allows period-input stubs only in sandbox (%s)", (environment, expected) => {
-  expect(allowsPeriodInputStub(environment)).toBe(expected);
 });
 
 it.each([false, true])("retires only sample automatic mass-distance, preserving project-owned sample inputs (gate: %s)", (enabled) => {

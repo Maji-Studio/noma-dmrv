@@ -16,6 +16,7 @@ vi.mock("@/lib/operations/biochar-products", () => ({ makeBiocharProduct: { id: 
 vi.mock("@/data-access/deliveries", () => ({}));
 vi.mock("@/lib/operations/deliveries", () => ({ recordDeliveryForUi: { id: "record_posted_delivery" }, updateDelivery: mocks.update }));
 vi.mock("@/data-access/delivery-stats", () => ({}));
+vi.mock("@/data-access/biochar-product-stats", () => ({}));
 vi.mock("@/data-access/utils", () => ({}));
 vi.mock("@/db/schema", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/db/schema")>();

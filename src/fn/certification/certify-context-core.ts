@@ -467,6 +467,7 @@ function projectUiContext(
     unbindableTemplateInputs: ctx.unbindableTemplateInputs,
     memberBatches: ctx.memberBatches,
     emissionsLedger: buildRemovalLedgerPreview(ctx),
+    emissionsEntriesEnabled: emissionsEntriesEnabled(),
     feedstockTypeMappingGaps: ctx.feedstockTypeMappingGaps,
     transportCoverage: ctx.transportCoverage,
     requiredTransportCategories: ctx.requiredTransportCategories,

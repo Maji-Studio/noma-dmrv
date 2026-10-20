@@ -1,7 +1,9 @@
 "use server";
 
+import { recordTransportLeg } from "@/lib/operations/transport-legs";
+import { runOperationInProcess } from "@/lib/operations/runner";
+import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
 import {
-  createTransportLeg,
   deleteTransportLeg,
   getTransportLegsForEntity,
   type TransportLegWithEvidence,
@@ -40,15 +42,17 @@ export async function getTransportLegsForEntityFn(input: {
 
 export async function createTransportLegFn(
   input: CreateTransportLegData,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<TransportLeg>> {
   return withAction(async (ctx) => {
     const parsed = createTransportLegSchema.parse(input);
-    return createTransportLeg(ctx, {
+    const parsedOptions = createIntentOptionsSchema.parse(options);
+    return runOperationInProcess(recordTransportLeg, ctx, {
       ...parsed,
       // Explicit/manual legs own their distance + provenance; a leg saved
       // without one was hand-typed.
       distanceSource: resolveDistanceSource(parsed.distanceKm, parsed.distanceSource) ?? null,
-    });
+    }, parsedOptions);
   });
 }
 
