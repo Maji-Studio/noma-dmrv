@@ -1,5 +1,4 @@
 import type { RemovalAdvisory } from "@/lib/certification/removal-blockers";
-import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { effectiveContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
@@ -103,8 +102,8 @@ export function buildSubmissionAdvisories(args: {
     }),
   ];
   return droppedFacts.map((source) => ({
-    code: "droppedRecordedFact", fixTarget: "templateLineReview",
-    message: `${source.label} is recorded, but the active Removal template takes no automatic datapoints for it. ${REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview}`,
+    code: "droppedRecordedFact", fixTarget: "templateLines",
+    message: `${source.label} is recorded, but the active Removal template takes no automatic datapoints for it. Check which template line should take it in Removal templates.`,
   }));
 }
 

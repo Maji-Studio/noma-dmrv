@@ -11,7 +11,7 @@ import {
 } from "@/lib/entity-deep-link";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
 import { creditBatchDeepLinkHref, creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
-import { certificationEmissionEstimatesHref, certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL } from "./links";
+import { certificationEmissionEstimatesHref, certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "./links";
 
 export const BATCH_DETAILS_FIX_LABEL = "Edit details";
 
@@ -97,6 +97,12 @@ export function batchHealthFixLinkFor(
       return creditBatchId
         ? { label: "Switch template", href: creditBatchRemovalTemplateHref(creditBatchId, facilityId) }
         : { label: "Review credit batches", href: `/credit-batches?${query(undefined, false)}` };
+    case "templateReplacement":
+      return creditBatchId
+        ? { label: "Switch template", href: creditBatchRemovalTemplateHref(creditBatchId, facilityId) }
+        : { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: certificationRemovalTemplatesHref(facilityId) };
+    case "templateLines":
+      return { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: certificationRemovalTemplatesHref(facilityId) };
     case "templateLineReview":
       return { label: DECIDE_LINES_LINK_LABEL, href: certificationRemovalTemplatesHref(facilityId) };
     case "batchDetails":

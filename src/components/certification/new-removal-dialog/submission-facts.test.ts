@@ -235,8 +235,8 @@ describe("buildSubmissionFacts verdict precedence", () => {
   });
 
   it("shows a typed advisory once, not again as a free-text note", () => {
-    const message = "Electricity is recorded, but the active Removal template takes no automatic datapoints for it.";
-    const advisory = { code: "droppedRecordedFact", fixTarget: "templateLineReview", message } as const;
+    const message = "Electricity is recorded, but the active Removal template takes no automatic datapoints for it. Check which template line should take it in Removal templates.";
+    const advisory = { code: "droppedRecordedFact", fixTarget: "templateLines", message } as const;
     const result = facts({
       compilation: { ...READY_COMPILATION, submissionAdvisories: [advisory], warnings: [message, "Other note."] } as unknown as RemovalCompilationView,
       ctx: { ...CONTEXT, submissionWarnings: [message] } as unknown as RemovalCertifyContext,
@@ -247,7 +247,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
   });
 
   it("falls back to the context advisories before the compilation arrives", () => {
-    const advisory = { code: "droppedRecordedFact", fixTarget: "templateLineReview", message: "Startup diesel is recorded." } as const;
+    const advisory = { code: "droppedRecordedFact", fixTarget: "templateLines", message: "Startup diesel is recorded." } as const;
     const result = facts({
       compilation: null,
       ctx: { ...CONTEXT, submissionAdvisories: [advisory] } as unknown as RemovalCertifyContext,

@@ -1,3 +1,4 @@
+import type { RemovalBlockerCode } from "./removal-blockers";
 /**
  * One plain-language source for every certification readiness requirement
  * (Phase 0 of the removal/GHG "legible + guided" redesign, rides #246).
@@ -68,6 +69,11 @@ export const NO_REMOVAL_TEMPLATE_LABEL = "No Removal template chosen";
 
 /** The unmet Emissions label when an entry needs checking rather than a file. */
 export const EMISSION_ENTRIES_TO_CHECK_LABEL = "Emission entries to check";
+
+/** The unmet Lines decided label when no line is undecided: the read or the lines are the problem. */
+export const TEMPLATE_LINES_NOT_READY_LABEL = "Template lines not ready";
+
+export const TEMPLATE_NOT_FULLY_READ_TITLE = "Template not fully read";
 
 export const CERT_REQUIREMENT_META: Record<
   CertRequirementKey,
@@ -146,7 +152,7 @@ export const CERT_REQUIREMENT_META: Record<
   },
   templateLines: {
     requirementLabel: "Lines decided",
-    unmetLabel: "Lines to decide",
+    unmetLabel: TEMPLATE_LINES_NOT_READY_LABEL,
     whyDetail:
       "noma fills each template line from its records or from emissions entries, as decided in Removal templates. A line without a decision, or a template Isometric did not return in full, blocks Removals on that template.",
   },
@@ -172,18 +178,10 @@ export function linesToDecideLabel(count: number): string {
   return `${count} ${count === 1 ? "line" : "lines"} to decide`;
 }
 
-/** The unmet Lines decided label when no line is undecided: the read or the lines are the problem. */
-export const TEMPLATE_LINES_NOT_READY_LABEL = "Template lines not ready";
-
-/**
- * Counts undecided lines when the facts name them. Without a count, the
- * blocker codes say whether lines are undecided, the template was not read in
- * full, or a decided line cannot be filled.
- */
-export function templateLinesUnmetLabel(lineCount: number, codes: readonly string[] = []): string {
+/** A count names undecided lines; otherwise name the read or filling problem. */
+export function templateLinesUnmetLabel(lineCount: number, codes: readonly RemovalBlockerCode[] = []): string {
   if (lineCount > 0) return linesToDecideLabel(lineCount);
-  if (codes.includes("templateLinesNeedReview") || codes.includes("lineNeedsReview")) return CERT_REQUIREMENT_META.templateLines.unmetLabel;
-  return codes.includes("templateNotFullyRead") ? "Template not fully read" : TEMPLATE_LINES_NOT_READY_LABEL;
+  return codes.includes("templateNotFullyRead") ? TEMPLATE_NOT_FULLY_READ_TITLE : TEMPLATE_LINES_NOT_READY_LABEL;
 }
 
 /** The unmet form of a per-field entity readiness label: "Proof of delivery not complete". */

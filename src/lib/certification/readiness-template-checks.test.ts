@@ -74,7 +74,7 @@ describe("Removal template requirement split", () => {
         key: "templateLines", status: "unmet", detail: blocker.message, templateBlockerCodes: [code],
       });
       expect(certCheckLabel(lines)).toBe({
-        templateLinesNeedReview: "Lines to decide", templateNotFullyRead: "Template not fully read", forbiddenLine: "Template lines not ready",
+        templateLinesNeedReview: "Template lines not ready", templateNotFullyRead: "Template not fully read", forbiddenLine: "Template lines not ready",
       }[code]);
       expect(deriveRemovalReadiness(input)).toMatchObject({ state: "blocked", reasons: [blocker.message] });
     },
@@ -108,11 +108,11 @@ describe("Removal template requirement split", () => {
   });
 
   it.each([
-    { blockers: [lineBlocker()], label: "Lines to decide" },
+    { blockers: [lineBlocker()], label: "Template lines not ready" },
     { blockers: [lineBlocker("one"), lineBlocker("one")], label: "1 line to decide" },
     { blockers: [lineBlocker("one"), lineBlocker("two"), lineBlocker("one")], label: "2 lines to decide" },
   ])("uses $label for per-line facts without inflating repeated lines", ({ blockers, label }) => {
-    const input = facts({ emissionLineBlockers: blockers });
+    const input = facts({ emissionLineBlockers: blockers, undecidedLineIds: blockers.flatMap((blocker) => blocker.lineRef ? [blocker.lineRef.componentId] : []) });
     const [set, lines] = templateChecks(input);
     expect(set.status).toBe("met");
     expect(lines.status).toBe("unmet");
@@ -134,7 +134,7 @@ describe("Removal template requirement split", () => {
     expect(emissions).toMatchObject({ status: "unmet", detail: entry.message });
     expect(certCheckLabel(emissions!)).toBe("Emission entries without a file");
     expect(deriveRemovalReadiness(input)).toMatchObject({ state: "blocked", reasons: [entry.message] });
-    expect(certCheckLabel(templateChecks(facts({ emissionLineBlockers: [entry, lineBlocker("one")] }))[1]))
+    expect(certCheckLabel(templateChecks(facts({ emissionLineBlockers: [entry, lineBlocker("one")], undecidedLineIds: ["one"] }))[1]))
       .toBe("1 line to decide");
   });
 
@@ -142,13 +142,13 @@ describe("Removal template requirement split", () => {
     { reason: "unmapped", label: "Template lines not ready" },
     { reason: "unassigned", label: "1 line to decide" },
   ] as const)("puts $reason line coverage on Lines decided with the template set", ({ reason, label }) => {
-    const input = facts({ unbindableTemplateInputs: [{
+    const input = facts({ undecidedLineIds: reason === "unassigned" ? ["line"] : [], unbindableTemplateInputs: [{
       state: "needsSetup", groupKey: "pyrolysis", componentId: "line", componentDisplayName: "Line",
       blueprintKey: "unknown", inputKey: "unknown", reason,
     }] });
     const [set, lines] = templateChecks(input);
     expect(set.status).toBe("met");
-    expect(lines).toMatchObject({ status: "unmet", templateBlockerCodes: ["templateLinesNeedReview"] });
+    expect(lines).toMatchObject({ status: "unmet", templateBlockerCodes: reason === "unassigned" ? ["templateLinesNeedReview"] : [] });
     expect(certCheckLabel(lines)).toBe(label);
     expect(deriveRemovalReadiness(input).state).toBe("blocked");
   });
@@ -158,5 +158,35 @@ describe("Removal template requirement split", () => {
       lineRef: { componentId: "one", displayName: "One" } };
     const lines = templateChecks(facts({ emissionLineBlockers: [notRead, { ...notRead, lineRef: { componentId: "two", displayName: "Two" } }] }))[1];
     expect(certCheckLabel(lines)).toBe("Template not fully read");
+  });
+});
+
+it("uses only template line blocker messages before coverage wording", () => {
+  const blocker = removalTemplateBlocker("templateLinesNeedReview");
+  const input = facts({
+    templateBlockers: [blocker], undecidedLineIds: ["one"],
+    unbindableTemplateInputs: [{ state: "needsReview", groupKey: "pyrolysis", componentId: "one", componentDisplayName: "One",
+      blueprintKey: "grid_electricity_use", inputKey: "electricity_use", reason: "unassigned" }],
+    emissionLineBlockers: [lineBlocker("one")],
+  });
+  expect(templateChecks(input)[1]).toMatchObject({ detail: blocker.message, unmetLabel: "1 line to decide" });
+});
+
+it.each(["lineNeedsSetup", "lineHasNoSource", "forbiddenLine"] as const)("keeps the real %s code without suggesting an undecided line", (code) => {
+  const input = facts({ emissionLineBlockers: [{ code, message: "A decided line cannot be filled.", fixTarget: "templateLineReview" }] });
+  expect(templateChecks(input)[1]).toMatchObject({
+    status: "unmet", templateBlockerCodes: [code], templateFixTargets: ["templateLines"], unmetLabel: "Template lines not ready",
+  });
+  expect(deriveRemovalReadiness(input).state).toBe("blocked");
+});
+
+it.each(["project-scope", "unrecognized-component", "ambiguous"] as const)("routes %s coverage without inventing blocker codes", (reason) => {
+  const input = facts({ undecidedLineIds: reason === "ambiguous" ? ["one"] : [], unbindableTemplateInputs: [{
+    state: "needsSetup", groupKey: "pyrolysis", componentId: "one", componentDisplayName: "One",
+    blueprintKey: "unknown", inputKey: "unknown", reason,
+  }] });
+  expect(templateChecks(input)[1]).toMatchObject({
+    templateBlockerCodes: reason === "ambiguous" ? ["templateLinesNeedReview"] : [],
+    templateFixTargets: reason === "ambiguous" ? ["templateLineReview"] : ["templateLines"],
   });
 });

@@ -1,6 +1,7 @@
+import { LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE } from "@/lib/isometric/emission-line-constants";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { ENTITY_READINESS_CHECK_DISPLAY_LIMIT, type RemovalRequirementCheck } from "@/lib/certification/readiness";
+import { buildRemovalRequirementsChecklist, ENTITY_READINESS_CHECK_DISPLAY_LIMIT, type RemovalReadinessFacts, type RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { CERT_REQUIREMENT_META } from "@/lib/certification/requirement-labels";
 import { SubmissionChecks } from "./submission-checks";
 
@@ -56,7 +57,7 @@ describe("SubmissionChecks", () => {
     expect(html).toContain('href="/certification/settings?section=removal-templates&amp;facility=facility-1"');
     expect(html).toContain(">Decide lines</a>");
     expect(html).toContain("Template cannot be used");
-    expect(html).toContain("Lines to decide");
+    expect(html).toContain("Template lines not ready");
     expect(html).not.toContain(">Open settings</a>");
   });
 
@@ -273,4 +274,41 @@ describe("SubmissionChecks", () => {
     expect(html).toContain("Review D-0 evidence");
     expect(html).not.toContain(`Review D-${ENTITY_READINESS_CHECK_DISPLAY_LIMIT} evidence`);
   });
+});
+
+it.each(["templateNotFullyRead", "forbiddenLine", "lineNeedsSetup", "lineHasNoSource"] as const)("opens Removal templates for a decided or unread %s problem", (code) => {
+  const checks = buildRemovalRequirementsChecklist({
+    local: null, lockInFlight: false, hasMapping: true, hasOrgCredentials: true, hasRemovalTemplate: true,
+    hasSubmittableRuns: true, unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], requiredTransport: [], feedstockTypeMappingGaps: [],
+    emissionLineBlockers: [{ code, message: "Check the template.", fixTarget: "templateLineReview" }],
+  });
+  const html = renderToStaticMarkup(<SubmissionChecks checks={checks} facilityId="facility-1" />);
+  expect(html).toContain(">Open Removal templates</a>");
+  expect(html).not.toContain(">Decide lines</a>");
+});
+
+it.each([LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE])("links replacement guidance to each batch or Removal templates: %s", (message) => {
+  const facts: RemovalReadinessFacts = {
+    local: null, lockInFlight: false, hasMapping: true, hasOrgCredentials: true, hasRemovalTemplate: true,
+    hasSubmittableRuns: true, unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], requiredTransport: [], feedstockTypeMappingGaps: [],
+    emissionLineBlockers: [{ code: "lineNeedsSetup", message, fixTarget: "templateLineReview" }],
+  };
+  const checks = buildRemovalRequirementsChecklist(facts);
+  for (const count of [0, 1, 2]) {
+    const creditBatches = [{ id: "batch-1", code: "CB-1" }, { id: "batch-2", code: "CB-2" }].slice(0, count);
+    const html = renderToStaticMarkup(<SubmissionChecks checks={checks} facilityId="facility-1" creditBatches={creditBatches} />);
+    expect(html).toContain(`>${count === 0 ? "Open Removal templates" : count === 1 ? "Switch template" : "Switch template on CB-1"}</a>`);
+    if (count > 0) expect(html).toContain('href="/credit-batches/batch-1?facility=facility-1&amp;focus=removal-template"');
+    if (count === 2) expect(html).toContain(">Switch template on CB-2</a>");
+    expect(html).not.toContain(">Decide lines</a>");
+  }
+});
+
+it.each([0, 1, 2])("preserves emissions link labels for %s batches", (count) => {
+  const creditBatches = [{ id: "batch-1", code: "CB-1" }, { id: "batch-2", code: "CB-2" }].slice(0, count);
+  const checks: RemovalRequirementCheck[] = [{ key: "emissions", label: "Emissions", ...CERT_REQUIREMENT_META.emissions, status: "unmet" }];
+  const html = renderToStaticMarkup(<SubmissionChecks checks={checks} facilityId="facility-1" creditBatches={creditBatches} />);
+  expect(html).toContain(`>${count < 2 ? "Review emissions" : "Review emissions on CB-1"}</a>`);
+  expect(html).toContain(count === 0 ? 'href="/credit-batches?facility=facility-1"' : 'href="/credit-batches/batch-1?facility=facility-1&amp;tab=emissions"');
+  if (count === 2) expect(html).toContain(">Review emissions on CB-2</a>");
 });

@@ -526,18 +526,19 @@ _Avoid_: GHG entry template (the registry's API name), template pin, active
 template.
 
 **Template line**:
-One component of a **Removal template**, named as Isometric names it. Each line
-is decided once per template: its scope, its **automatic datapoints** and
-whether it takes **emissions entries**. noma proposes a decision where it can;
-an Owner or Admin decides. Every credit batch on that template follows those
-decisions.
+One component of a **Removal template**, named as Isometric names it. Its
+decision (scope, **automatic datapoints**, whether it takes **emissions
+entries**) belongs to the template in this Organization: every facility and
+credit batch using that template follows it. noma proposes a decision where it
+can; an Owner or Admin decides.
 _Avoid_: component (the registry's API name), template input.
 
 **Lines to decide**:
 The template lines without a saved decision, always shown with their count
 ("3 lines to decide"). A Removal template with lines to decide blocks the
 Removals of every credit batch on it. The link to settle them always reads
-"Decide lines" and opens Removal templates. In the New Removal checks this is
+"Decide lines" and opens Removal templates; a decided line noma cannot fill
+links "Open Removal templates" instead. In the New Removal checks this is
 the **Lines decided** check; the batch's own template choice is the **Template
 set** check.
 _Avoid_: needs review, unresolved, template review.

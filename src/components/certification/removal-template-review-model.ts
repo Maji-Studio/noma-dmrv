@@ -18,7 +18,7 @@ import {
 import type { ComponentEnrichment, EntryPolicy, QuantityKind } from "@/lib/isometric/template-observations/types";
 import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
 
-export { linesToDecideLabel } from "@/lib/certification/requirement-labels";
+export { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE } from "@/lib/certification/requirement-labels";
 
 export type RemovalTemplateReviewEntry = NonNullable<
   ReturnType<typeof useRemovalTemplateReview>["data"]
@@ -79,7 +79,6 @@ const PROBLEM_COPY: Partial<Record<LineSourceProblem["code"], string>> = {
   "missing-contract": "This line has no contract yet. Assign one.",
 };
 
-export const TEMPLATE_NOT_FULLY_READ_TITLE = "Template not fully read";
 /** The badge on a line without a saved decision. */
 export const TO_DECIDE_LABEL = "To decide";
 export const DEPRECATED_FACTORS_LABEL = "Deprecated factors";

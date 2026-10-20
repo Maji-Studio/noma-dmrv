@@ -51,17 +51,18 @@ describe("deriveBatchHealth", () => {
       .map((check) => batchHealthFixLinkFor(check, "facility-1", "batch-1"));
     expect(links).toEqual([
       { label: "Switch template", href: "/credit-batches/batch-1?facility=facility-1&focus=removal-template" },
+      { label: "Open Removal templates", href: "/certification/settings?section=removal-templates&facility=facility-1" },
       { label: "Decide lines", href: "/certification/settings?section=removal-templates&facility=facility-1" },
     ]);
     expect(result.checks.filter((check) => check.key === "templateSet" || check.key === "templateLines")
-      .map(certCheckLabel)).toEqual(["No Removal template chosen", "Lines to decide"]);
+      .map(certCheckLabel)).toEqual(["No Removal template chosen", "Template not fully read", "Template lines not ready"]);
   });
 
   it("names missing pins and undecided lines separately", () => {
     const unpinned = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("unpinnedTemplate")] })), "templateSet");
     expect(unpinned.unmetLabel).toBe("No Removal template chosen");
     const lines = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("templateLinesNeedReview")] })), "templateLines");
-    expect(lines.unmetLabel).toBe("Lines to decide");
+    expect(lines.unmetLabel).toBe("Template lines not ready");
   });
 
   it.each([
@@ -84,14 +85,15 @@ describe("deriveBatchHealth", () => {
         removalTemplateBlocker("templateNotFullyRead"),
         removalTemplateBlocker("templateLinesNeedReview"),
       ],
+      undecidedLineIds: [...ids, ...ids],
       emissionLines: [...lines, ...lines, {
         ...lines[0], componentId: "evidence",
         blocker: { code: "entryMissingEvidence", message: "Add evidence.", fixTarget: "emissions" },
       }],
     }));
     const checks = result.checks.filter((check) => check.key === "templateSet" || check.key === "templateLines");
-    expect(checks.map(certCheckLabel)).toEqual(["Template cannot be used", label]);
-    expect(checks.map((check) => check.fixTarget)).toEqual(["creditBatchTemplate", "templateLineReview"]);
+    expect(checks.map(certCheckLabel)).toEqual(["Template cannot be used", "Template not fully read", label]);
+    expect(checks.map((check) => check.fixTarget)).toEqual(["creditBatchTemplate", "templateLines", "templateLineReview"]);
   });
 
   it("uses the general pin label when an unpinned batch is not the only pin problem", () => {
@@ -487,3 +489,14 @@ it.each(["stopped counting", "unit mismatch"])("fails emissions for entries with
   expect(checkFor(health, "emissions").detail).not.toMatch(/[\u2013\u2014]/);
   expect(deriveBatchHealth(facts({ emissionLines: [] })).state).toBe("ready");
 });
+
+it("keeps an undecided check separate from a decided line it cannot fill, and counts from the template", () => {
+  const checks = deriveBatchHealth(facts({
+    undecidedLineIds: ["one", "two"],
+    templateBlockers: [removalTemplateBlocker("templateLinesNeedReview"), removalTemplateBlocker("forbiddenLine")],
+  })).checks.filter((check) => check.key === "templateLines");
+  expect(checks.map(certCheckLabel)).toEqual(["2 lines to decide", "Template lines not ready"]);
+  expect(batchHealthFixLinkFor(checks[0], "facility-1", "batch-1").label).toBe("Decide lines");
+  expect(batchHealthFixLinkFor(checks[1], "facility-1", "batch-1").label).toBe("Open Removal templates");
+});
+

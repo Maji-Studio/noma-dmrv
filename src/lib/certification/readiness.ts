@@ -1,4 +1,5 @@
-import type { RemovalBlocker } from "./removal-blockers";
+import { templateLineFixTarget, templateCoverageFixTarget, type TemplateFixTarget } from "./template-fix-targets";
+import type { RemovalBlocker, RemovalBlockerCode } from "./removal-blockers";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 /**
  * Removal readiness classifier — the single pure decision behind every
@@ -25,7 +26,7 @@ import {
   type ProductionReadinessGap,
 } from "./production-readiness";
 import { CERT_REQUIREMENT_META, EMISSION_ENTRIES_TO_CHECK_LABEL, NO_REMOVAL_TEMPLATE_LABEL, templateLinesUnmetLabel } from "./requirement-labels";
-import { removalTemplateBlockerDestination, type RemovalTemplateBlocker, type RemovalTemplateBlockerCode } from "./removal-template-blockers";
+import { removalTemplateBlockerDestination, type RemovalTemplateBlocker } from "./removal-template-blockers";
 import { pluralize } from "@/lib/copy-utils";
 import {
   describeFeedstockTypeMappingGap,
@@ -63,6 +64,8 @@ export interface RemovalReadinessFacts {
   /** The member batches' pinned Removal template resolved on Isometric. */
   hasRemovalTemplate: boolean;
   templateBlockers?: RemovalTemplateBlocker[];
+  /** Current template lines without a saved, unambiguous decision. */
+  undecidedLineIds?: readonly string[];
   emissionLineBlockers?: RemovalBlocker[];
   /** Template blueprint keys with no matching component blueprint. */
   unresolvedBlueprintKeys: string[];
@@ -516,7 +519,8 @@ export interface RemovalRequirementCheck {
   fixTargetId?: string;
   transportCategory?: TransportCategory;
   /** Removal template blocker codes behind an unmet template check, for its fix links. */
-  templateBlockerCodes?: RemovalTemplateBlockerCode[];
+  templateBlockerCodes?: RemovalBlockerCode[];
+  templateFixTargets?: TemplateFixTarget[];
   status: "met" | "unmet" | "skipped" | "warning";
   /** The blocker text when unmet, or context when met/skipped. */
   detail?: string;
@@ -542,9 +546,6 @@ function withRequirementMeta(
   };
 }
 
-/** Line coverage findings that mean a line still needs its decision. */
-const UNDECIDED_LINE_REASONS: ReadonlySet<UnbindableTemplateInput["reason"]> = new Set(["unassigned", "ambiguous"]);
-
 function templateRequirementChecks(facts: RemovalReadinessFacts): RemovalRequirementCheckBase[] {
   const canEvaluate = facts.hasMapping && facts.hasOrgCredentials;
   const pinBlockers = (facts.templateBlockers ?? []).filter(
@@ -560,20 +561,23 @@ function templateRequirementChecks(facts: RemovalReadinessFacts): RemovalRequire
   // so they get their own check rather than reading as a line to decide.
   const entryBlockers = (facts.emissionLineBlockers ?? []).filter((blocker) => blocker.fixTarget === "emissions");
   const emissionBlockers = (facts.emissionLineBlockers ?? []).filter((blocker) => blocker.fixTarget !== "emissions");
-  // Only undecided lines count; a template that was not read in full blocks without a count.
-  const linesToDecide = new Set([
-    ...emissionBlockers.flatMap((blocker) => blocker.code === "lineNeedsReview" && blocker.lineRef
-      ? [blocker.lineRef.componentId] : []),
-    ...facts.unbindableTemplateInputs.flatMap((input) => UNDECIDED_LINE_REASONS.has(input.reason) ? [input.componentId] : []),
-  ]).size;
-  const lineMessages = [...new Set([
-    ...lineBlockers.map((blocker) => blocker.message),
-    // Coverage words the line findings; emission blockers only add what coverage has no wording for.
-    ...(facts.unbindableTemplateInputs.length
+  const linesToDecide = new Set(facts.undecidedLineIds).size;
+  const lineMessages = [...new Set(lineBlockers.length
+    ? lineBlockers.map((blocker) => blocker.message)
+    : facts.unbindableTemplateInputs.length
       ? [formatUnbindableTemplateInputsText(facts.unbindableTemplateInputs)]
-      : emissionBlockers.map((blocker) => blocker.message)),
+      : emissionBlockers.map((blocker) => blocker.message))];
+  const codes = [...new Set([...lineBlockers, ...emissionBlockers].map((blocker) => blocker.code))];
+  if (linesToDecide > 0 || codes.includes("lineNeedsReview") || codes.includes("templateLinesNeedReview")) {
+    if (!codes.includes("templateLinesNeedReview")) codes.push("templateLinesNeedReview");
+  }
+  const targets = [...new Set([
+    ...lineBlockers.map(templateLineFixTarget),
+    ...facts.unbindableTemplateInputs.map(templateCoverageFixTarget),
+    ...emissionBlockers.map(templateLineFixTarget),
+    ...(linesToDecide > 0 ? ["templateLineReview" as const] : []),
   ])];
-  const linesUnmet = lineMessages.length > 0;
+  const linesUnmet = lineMessages.length > 0 || linesToDecide > 0;
   const entriesNeedFiles = entryBlockers.every((blocker) => blocker.code === "entryMissingEvidence");
   return [
     {
@@ -589,10 +593,11 @@ function templateRequirementChecks(facts: RemovalReadinessFacts): RemovalRequire
       key: "templateLines",
       label: CERT_REQUIREMENT_META.templateLines.requirementLabel,
       status: !canEvaluate || !templateSet ? "skipped" : linesUnmet ? "unmet" : "met",
-      detail: canEvaluate && templateSet ? lineMessages.join(" ") || undefined : undefined,
-      // Every line problem is settled in Removal templates, so its link is Decide lines.
+      detail: canEvaluate && templateSet
+        ? lineMessages.join(" ") || (linesToDecide > 0 ? REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview : undefined)
+        : undefined,
       ...(canEvaluate && templateSet && linesUnmet
-        ? { templateBlockerCodes: lineBlockers.length ? lineBlockers.map((blocker) => blocker.code) : ["templateLinesNeedReview" as const] }
+        ? { templateBlockerCodes: codes, templateFixTargets: targets }
         : {}),
       unmetLabel: templateLinesUnmetLabel(linesToDecide, [...lineBlockers, ...emissionBlockers].map((blocker) => blocker.code)),
     },

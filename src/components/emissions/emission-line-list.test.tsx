@@ -92,7 +92,7 @@ describe("EmissionLineList", () => {
 
   it("points Not set up lines at Removal templates", () => {
     renderList([makeLine({ state: "needsSetup" })]);
-    expect(screen.getByRole("link", { name: "Decide lines" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open Removal templates" })).toBeTruthy();
   });
 
   it("says which chip hides every line", () => {

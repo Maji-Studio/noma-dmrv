@@ -36,6 +36,8 @@ export interface RemovalCertifyContext {
   removalTemplate: IsometricGhgEntryTemplate | null;
   lineSources: LineSources;
   templateBlockers: RemovalTemplateBlocker[];
+  /** Current template lines without a saved, unambiguous decision. */
+  undecidedLineIds?: readonly string[];
   emissionLinesByBatchId?: Record<string, BatchEmissionLine[]>;
   emissionLines?: BatchEmissionLine[] | null;
   blueprintsForTemplate: IsometricComponentBlueprint[];

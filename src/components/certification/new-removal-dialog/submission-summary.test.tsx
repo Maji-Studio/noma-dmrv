@@ -73,7 +73,7 @@ const PASSING_CHECKS: RemovalRequirementCheck[] = [
     key: "templateLines",
     label: "Lines decided",
     requirementLabel: "Lines decided",
-    unmetLabel: "Lines to decide",
+    unmetLabel: "Template lines not ready",
     status: "met",
   },
 ];
@@ -109,17 +109,17 @@ describe("SubmissionSummary", () => {
   });
 
   it("links a dropped recorded fact as a warning, not a blocker", () => {
-    const message = "Genset diesel is recorded, but the active Removal template has no automatic source for it.";
+    const message = "Genset diesel is recorded, but the active Removal template takes no automatic datapoints for it. Check which template line should take it in Removal templates.";
     const html = render({
       compilation: {
         ...COMPILATION,
-        submissionAdvisories: [{ code: "droppedRecordedFact", fixTarget: "templateLineReview", message }],
+        submissionAdvisories: [{ code: "droppedRecordedFact", fixTarget: "templateLines", message }],
         warnings: [message],
       } as unknown as RemovalCompilationView,
     });
     expect(html).toContain("Submission notes");
     expect(html.split(message)).toHaveLength(2);
-    expect(html).toContain("Decide lines");
+    expect(html).toContain("Open Removal templates");
     expect(html).toContain("/certification/settings?section=removal-templates&amp;facility=facility-1");
     expect(html).not.toContain('role="alert"');
   });
