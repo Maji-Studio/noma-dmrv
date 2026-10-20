@@ -37,11 +37,11 @@ it("reads dry biochar as the secondary figure under the wet estimate", async () 
   await act(async () => renderer.unmount());
 });
 
-it("drops the caption and leads with dry biochar when nothing dates a moisture", async () => {
+it("shows the known dry biochar, never a placeholder, if a wet figure is ever missing", async () => {
   state.wetKg = null; state.subBins = [{ ...subBin, wetEstimateKg: null, moisturePercent: null }];
   const renderer = await render();
-  expect(JSON.stringify(renderer.toJSON())).toContain("90 kg dry biochar");
-  expect(JSON.stringify(renderer.toJSON())).not.toContain("kg wet");
+  const headline = renderer.root.findAll((n) => n.type === "p" && n.props.className?.includes("body-large"))[0];
+  expect(headline.children).toEqual(["90 kg dry biochar"]);
   expect(renderer.root.findAllByType(SecondaryFigure)).toHaveLength(0);
   await act(async () => renderer.unmount());
 });

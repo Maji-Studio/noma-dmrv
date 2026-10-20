@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import type { DbTransaction } from "@/db";
 import { creditBatches, emissionEntries, facilities } from "@/db/schema";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
-import { lockEmissionEntryBatch, lockEmissionEntryDocumentOwner } from "./emission-entry-lock";
+import { assertEmissionEntryDocumentWritable, lockEmissionEntryBatch, lockEmissionEntryDocumentOwner } from "./emission-entry-lock";
 
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/certification/emissions-entry-gate", () => ({
@@ -48,4 +48,11 @@ it("returns a retryable conflict when the entry changed batch", async () => {
   await expect(lockEmissionEntryDocumentOwner(ctx, tx, "entry")).rejects.toMatchObject({
     code: "conflict", retryable: true,
   });
+});
+
+it("refuses files on recorded zeros", async () => {
+  const entry = { id: "entry", creditBatchId: "batch", kind: "zero" };
+  const batch = { id: "batch", facilityId: "facility", archivedAt: null };
+  const tx = transaction([[entry], [batch], [{ archivedAt: null }], [batch], [entry]]);
+  await expect(assertEmissionEntryDocumentWritable(ctx, "entry", tx)).rejects.toThrow("Recorded zeros cannot have files.");
 });

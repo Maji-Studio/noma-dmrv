@@ -59,6 +59,12 @@ _On screen_: manual entry; the screen calls the part that comes from forms and
 routes "From records".
 _Avoid_: activity (reserved for the history log).
 
+**Recorded zero**:
+A confirmation that one component had no emissions for a specific Removal.
+It is an emissions entry owned by that Removal, contributes 0, and needs no file.
+It is never pooled into another Removal. Distinct from the sandbox zero stub,
+which is a temporary compilation exception and is not an operator confirmation.
+
 **Component comment**:
 One editable comment on a credit batch's Removal-template component, identified by
 component ID. It stays in noma and never changes the component's state or blocks a Removal.
@@ -403,6 +409,8 @@ from the same credit batch can remain unassigned for a later Removal without
 changing the earlier one. A credit batch's production emissions are claimed by
 at most one Removal. There is no claimant until the first successful Removal
 submission records one, preventing double-counting across entries (ADR 0020).
+Each emissions entry has a separate claim: one submission reserves it, then stamps
+the sending Removal on it. This claim is independent of the batch production claim.
 _Avoid_: batch, issuance; "production batch" as a separate entity —
 the credit batch *is* noma's production batch.
 
@@ -425,6 +433,8 @@ basis splits by emission-input bucket (ADR 0020): **stored** quantities
 are ex-post applied-scoped (each run weighted by its applied share);
 the **production** bucket submits in full, once, on the claiming
 Removal; the **delivery** bucket is applied-scoped.
+A Removal also sends the individual emissions entries its submission reserves,
+stamping itself as their sender so each entry is sent once.
 Submission is single-phase (`submitRemoval`) **to the registry**. There is
 **no remote Removal status** in this integration, so a Removal's lifecycle
 ends at *Submitted* (+ *Superseded* on a re-version) — never *Accepted* /

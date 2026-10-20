@@ -1,4 +1,5 @@
 import {
+  boolean,
   check,
   date,
   foreignKey,
@@ -392,6 +393,8 @@ export const certificationSubmissions = pgTable(
     version: integer('version').notNull().default(1),
     status: certificationSubmissionStatus('status').notNull().default('draft'),
     payloadSnapshot: jsonb('payload_snapshot'),
+    // Maintained by the snapshot trigger, including rejected-attempt resets.
+    payloadSnapshotFrozen: boolean('payload_snapshot_frozen').notNull().default(false),
     payloadHash: text('payload_hash'),
     submittedAt: timestamp('submitted_at'),
     lockedAt: timestamp('locked_at'),

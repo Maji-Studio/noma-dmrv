@@ -5,8 +5,7 @@ import type { LineContract } from "@/lib/isometric/template-observations/line-so
  * Parity for the semantic binding catalog (#636): the catalog's projections
  * must resolve every (group, blueprint, input) tuple exactly as the literal
  * INPUT_MAPPING and PERIOD_INPUT_TUPLES did before the catalog existed, and
- * MAPPING_REVISION must not move (a moved revision supersedes every prior
- * removal version).
+ * MAPPING_REVISION is pinned to the entry-contribution policy (PR 4).
  *
  * The frozen tables below are the pre-catalog literals (staging @ 41ac738fe),
  * with transform functions reduced to their transformRevision. Change them
@@ -30,8 +29,8 @@ import {
   resolveDatapointSource,
 } from "@/lib/isometric/transformers/datapoint";
 
-const PRE_CATALOG_MAPPING_REVISION =
-  "ade17311184266354b7ee20e1ea0b58406c05deae8e2dbb6709d3105e007a2e5";
+const ENTRY_CONTRIBUTION_MAPPING_REVISION =
+  "72a68a1d8d2b61b338c874fe101275dfb2185b1a53851de4339ff5588d412315";
 
 const PRE_CATALOG_INPUT_MAPPING = {
   "co2-stored": {
@@ -181,8 +180,8 @@ function triples(
 }
 
 describe("semantic binding catalog parity", () => {
-  it("keeps MAPPING_REVISION byte-identical", () => {
-    expect(MAPPING_REVISION).toBe(PRE_CATALOG_MAPPING_REVISION);
+  it("pins MAPPING_REVISION for entry contributions", () => {
+    expect(MAPPING_REVISION).toBe(ENTRY_CONTRIBUTION_MAPPING_REVISION);
   });
 
   it("projects INPUT_MAPPING to the pre-catalog literal", () => {
@@ -291,8 +290,8 @@ it.each([false, true])("keeps the mapping revision stable while retiring sample 
   vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
   const { buildMappingRevisionInput } = await import("@/lib/isometric/transformers/datapoint");
   const { payloadHash } = await import("@/lib/isometric/utils/payload-hash");
-  expect(payloadHash(buildMappingRevisionInput())).toBe(PRE_CATALOG_MAPPING_REVISION);
-  expect(MAPPING_REVISION).toBe(PRE_CATALOG_MAPPING_REVISION);
+  expect(payloadHash(buildMappingRevisionInput())).toBe(ENTRY_CONTRIBUTION_MAPPING_REVISION);
+  expect(MAPPING_REVISION).toBe(ENTRY_CONTRIBUTION_MAPPING_REVISION);
   expect(INPUT_MAPPING["sampling-required-for-mrv"].mass_distance_based_ci_emissions.mass_distance.source).toBe("sampleTransportMassDistanceTonneKm");
   expect(lookupInputMapping("sampling-required-for-mrv", "mass_distance_based_ci_emissions", "mass_distance") === undefined).toBe(enabled);
   expect(lookupSourceFact("sampleTransportMassDistanceTonneKm") === undefined).toBe(enabled);
@@ -302,7 +301,7 @@ it("keeps fresh module-load projections identical across activation states", asy
   vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
   vi.resetModules();
   const activated = await import("@/lib/isometric/transformers/datapoint");
-  expect(activated.MAPPING_REVISION).toBe(PRE_CATALOG_MAPPING_REVISION);
+  expect(activated.MAPPING_REVISION).toBe(ENTRY_CONTRIBUTION_MAPPING_REVISION);
   expect(JSON.parse(JSON.stringify(activated.INPUT_MAPPING))).toEqual(PRE_CATALOG_INPUT_MAPPING);
   vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false");
   vi.resetModules();

@@ -1,3 +1,4 @@
+import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations";
@@ -18,6 +19,7 @@ import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib
 import { resolveTemplateInputs } from "./removal-template-inputs";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 
+vi.mock("@/data-access/emission-entry-contenders", () => ({ listEmissionEntryDraftContenders: vi.fn(), listEmissionEntryAvailableApplications: vi.fn(), loadEmissionEntryReservations: vi.fn() }));
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntries: vi.fn(), listEmissionEntriesForBatches: vi.fn() }));
 vi.mock("@/data-access/removal-template-observations", () => ({ getTemplateObservationById: vi.fn(), getTemplateObservationsByIds: vi.fn() }));
 vi.mock("@/data-access/batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: vi.fn() }));
@@ -39,12 +41,16 @@ const facilityFacts = { templatesById: { template: { template, observation,
 } } } as unknown as FacilityCertifierFacts;
 type StoredEntry = Awaited<ReturnType<typeof listEmissionEntriesForBatches>>[number];
 function storedEntry(creditBatchId: string, overrides: Partial<StoredEntry> = {}): StoredEntry {
-  return { creditBatchId, componentId: "line", kind: "value", documentCount: 1, observationId: "current",
+  return { id: `entry-${creditBatchId}`, occurredOn: "2026-01-01", evidenceDocumentIds: ["file"], creditBatchId, componentId: "line", kind: "value", documentCount: 1, observationId: "current",
     values: [{ inputKey: "electricity_use", magnitude: "1", unit: "kWh" }], ...overrides } as StoredEntry;
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(listEmissionEntryAvailableApplications).mockResolvedValue([]);
+  vi.mocked(loadEmissionEntryReservations).mockResolvedValue([]);
   vi.mocked(emissionsEntriesEnabled).mockReturnValue(true);
+  vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([{ contenderKind: "draft", removalId: "removal", createdAt: "2026-01-01",
+    creditBatchIds: ["one", "two", "three", "readable", "missing", "zero"], window: { start: "2026-01-01", end: "2026-02-01" } }]);
   vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([]);
   vi.mocked(getTemplateObservationsByIds).mockResolvedValue([]);
   vi.mocked(loadCreditBatchRollups).mockImplementation(async (_ctx, ids) => Object.fromEntries(
@@ -94,7 +100,8 @@ it("loads three batches once per bulk loader and matches the per-batch entry fac
 
   const result = await loadBatchEmissionContext(ctx, "facility", batches, facts);
 
-  expect(result).toEqual(expected);
+  expect(result).toMatchObject(expected);
+  expect(result.one.entriesWithoutRemoval).toEqual([]);
   const ids = batches.map(batch => batch.id);
   expect(listEmissionEntriesForBatches).toHaveBeenCalledExactlyOnceWith(ctx, ids);
   expect(getTemplateObservationsByIds).toHaveBeenCalledExactlyOnceWith(ctx, ["previous", "missing"]);
@@ -114,7 +121,7 @@ it("only loads batches with a readable observation, including batches without en
     { id: "unpinned", removalTemplateId: null },
     { id: "unreadable", removalTemplateId: "missing-template" },
   ];
-  expect(await loadBatchEmissionContext(ctx, "facility", batches, facilityFacts)).toEqual({
+  expect(await loadBatchEmissionContext(ctx, "facility", batches, facilityFacts)).toMatchObject({
     readable: { entries: [], previousObservations: new Map(), automaticFigures: {} },
   });
   expect(listEmissionEntriesForBatches).toHaveBeenCalledExactlyOnceWith(ctx, ["readable"]);
@@ -249,4 +256,20 @@ it.each([false, true])("keeps removed-entry blockers in Removal readiness (group
   })).toMatchObject({ monitored: [], fixed: [], datapointBodyByKey: new Map() });
   expect(live.template.groups).toEqual([]);
   expect(live.observation.definition.groups).toEqual([]);
+});
+
+it("blocks the batch when an entry is after every draft's application window", async () => {
+  vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([storedEntry("one", { occurredOn: "2026-03-01" })]);
+  const batches = [{ id: "one", removalTemplateId: "template" }];
+  const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facilityFacts);
+  const resolved = resolveRemovalTemplate(batches, facilityFacts, loaded);
+  expect(resolved.emissionLinesByBatchId.one[0].blocker).toMatchObject({ code: "entryHasNoRemoval", message: "No Removal can carry this entry yet. Change its date to fit the Removal period, or wait for a later Removal.", fixTarget: "emissions" });
+});
+
+it.each(["2026-01-01", "2026-03-01"])("allows an entry before an available application, including before the first draft (%s)", async (occurredOn) => {
+  vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([]);
+  vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([storedEntry("one", { occurredOn })]);
+  vi.mocked(listEmissionEntryAvailableApplications).mockResolvedValue([{ creditBatchId: "one", applicationDate: new Date("2026-04-01") }]);
+  const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts);
+  expect(loaded.one.entriesWithoutRemoval).toEqual([]);
 });

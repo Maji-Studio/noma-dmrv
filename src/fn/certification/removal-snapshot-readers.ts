@@ -337,3 +337,5 @@ export function readRemovalBiocharApplicationIntents(
   }
   return parsed.data as BiocharApplicationIntent[];
 }
+
+export { readRemovalEntrySnapshot } from "@/lib/certification/removal-entry-snapshot";

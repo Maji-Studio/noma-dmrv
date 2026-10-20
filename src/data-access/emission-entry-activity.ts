@@ -15,6 +15,8 @@ export async function recordEmissionEntryActivity(
   action: ActivityEventInput["action"],
   before: EntrySnapshot | null,
   after: EntrySnapshot,
+  // Claim bookkeeping skips empty diffs; an operator's save is always recorded.
+  options: { skipEmpty?: boolean } = {},
 ) {
   requireOrgScope(ctx);
   await recordActivityChange(
@@ -29,5 +31,6 @@ export async function recordEmissionEntryActivity(
     },
     before,
     after,
+    options,
   );
 }
