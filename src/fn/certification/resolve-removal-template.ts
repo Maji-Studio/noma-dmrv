@@ -1,3 +1,5 @@
+import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
+import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
 import type { BatchEmissionContext } from "./batch-emission-context";
 import { deriveBatchEmissionLines, type BatchEmissionLine } from "@/lib/certification/emission-lines";
 import { withRemovedEntryComponents } from "@/lib/certification/emission-line-definition";
@@ -14,6 +16,7 @@ export function resolveRemovalTemplate(
   batches: readonly { id?: string; removalTemplateId: string | null }[],
   facilityFacts: FacilityCertifierFacts,
   batchFacts: BatchEmissionContext = {},
+  contributions?: RemovalEntryContributions,
 ) {
   const unresolved = (code: "unpinnedTemplate" | "mixedTemplatePins" | "templateNotFound") => ({
     emissionLinesByBatchId: {} as Record<string, BatchEmissionLine[]>,
@@ -41,7 +44,19 @@ export function resolveRemovalTemplate(
     lineSources: withTemplateOrder(facts.template, facts.observation!.lineSources),
     problems: facts.lineSourceProblems, enrichmentComplete: facts.enrichmentProblems.length === 0,
     automaticFigures: batchId ? batchFacts[batchId]?.automaticFigures ?? {} : {},
-    entries: batchId ? batchFacts[batchId]?.entries ?? [] : [],
+    entries: (batchId ? batchFacts[batchId]?.entries ?? [] : []).filter((entry) => !contributions || contributions.selectedEntryIds.includes(entry.id)),
+    entriesCanSubmit: !!contributions,
+  }).map((line) => {
+    const batch = batchId ? batchFacts[batchId] : undefined;
+    if (batch?.entries.some((entry) => entry.componentId === line.componentId && batch.entriesWithoutRemoval?.includes(entry.id))) {
+      return { ...line, blocker: { code: "entryHasNoRemoval" as const, message: "No Removal can carry this entry yet",
+        fixTarget: "emissions" as const, lineRef: { componentId: line.componentId, displayName: line.displayName } } };
+    }
+    const sent = contributions && batchId && batchFacts[batchId]?.entries.some((entry) =>
+      entry.componentId === line.componentId && entry.lineRule === "single" && entry.kind === "value" &&
+      entry.sentByRemovalId && !contributions.selectedEntryIds.includes(entry.id));
+    if (sent && line.state === "empty") return { ...line, state: "filled" as const, blocker: undefined };
+    return line;
   });
   const emissionLinesByBatchId: Record<string, BatchEmissionLine[]> = {};
   if (facts.observation) for (const batch of batches) {
@@ -53,6 +68,6 @@ export function resolveRemovalTemplate(
     emissionLines, emissionLinesByBatchId,
     removalTemplate: facts.template, lineSources: facts.observation?.lineSources ?? {}, templateBlockers,
     blueprintsForTemplate: facts.blueprintsForTemplate, unresolvedBlueprintKeys: facts.unresolvedBlueprintKeys,
-    unbindableTemplateInputs: facts.unbindableTemplateInputs, requiredTransportCategories: facts.requiredTransportCategories,
+    unbindableTemplateInputs: contributions ? findUnbindableTemplateInputs(facts.template, { lineSources: facts.observation?.lineSources, entriesCanSubmit: true, enrichmentComplete: facts.enrichmentProblems.length === 0 }) : facts.unbindableTemplateInputs, requiredTransportCategories: facts.requiredTransportCategories,
   };
 }

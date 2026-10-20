@@ -1,0 +1,144 @@
+import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
+import { getMetadataValue, SUBMISSION_METADATA_KEYS, SUBMISSION_EXTERNAL_MUTATIONS } from "./submission-metadata";
+import { effectiveContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
+import { canonicalDecimal } from "@/lib/isometric/template-observations/units";
+import { sumFigures, type EmissionFigure } from "./emission-lines";
+import type { RemovalBlocker } from "./removal-blockers";
+
+export interface RemovalEntryWindow { start: string; end: string }
+const CALENDAR_DATE_LENGTH = 10;
+/** Applications are calendar dates persisted at UTC midnight, never facility instants. */
+export function deriveRemovalEntryWindow(
+  memberBatches: readonly { startDate: string }[], applicationDates: readonly (Date | string)[],
+): RemovalEntryWindow | null {
+  const starts = memberBatches.map((batch) => batch.startDate).sort();
+  const ends = applicationDates.map((date) => (date instanceof Date ? date.toISOString() : date).slice(0, CALENDAR_DATE_LENGTH)).sort();
+  if (!starts.length || !ends.length || starts[0] > ends[ends.length - 1]) return null;
+  return { start: starts[0], end: ends[ends.length - 1] };
+}
+export interface EntryContender {
+  contenderKind: "draft";
+  removalId: string;
+  createdAt: string;
+  creditBatchIds: readonly string[];
+  window: RemovalEntryWindow;
+}
+export interface RemovalEntryValue extends EmissionFigure {
+  inputKey: string;
+  massDistanceDetail?: { mass: EmissionFigure; distance: EmissionFigure } | null;
+}
+export interface RemovalEntryFact {
+  id: string; creditBatchId: string; componentId: string; contentRevision: number;
+  kind: "value" | "zero"; lineRule: "single" | "additive"; occurredOn: string;
+  deletedAt: Date | string | null; sentByRemovalId: string | null;
+  confirmedForRemovalId: string | null;
+  sendReservedBySubmissionId: string | null;
+  /** Resolved only for a live reservation ledger row. */
+  reservedByRemovalId?: string | null;
+  reservationKnownInactive?: boolean;
+  counts: boolean; unitMismatch?: boolean; reason?: string | null;
+  values: readonly RemovalEntryValue[]; evidenceDocumentIds: readonly string[];
+}
+export interface EntryInputManifest {
+  componentId: string; inputKey: string;
+  entries: { entryId: string; creditBatchId: string; contentRevision: number; kind: "value" | "zero";
+    value: EmissionFigure; massDistanceDetail?: RemovalEntryValue["massDistanceDetail"];
+    evidenceDocumentIds: string[] }[];
+}
+export interface RemovalEntryContributions {
+  manifest: EntryInputManifest[];
+  inputs: { componentId: string; inputKey: string; value: EmissionFigure }[];
+  entrySet: { entryId: string; contentRevision: number }[];
+  selectedEntryIds: string[];
+  sentSingleComponentIds: string[];
+  blockers: (RemovalBlocker & { creditBatchId: string })[];
+}
+/** Read-side ownership mirrors the production reservation transfer rules; it never transfers a reservation. */
+export function isLiveEntryReservation(row: {
+  status: "draft" | "submitted" | "accepted" | "rejected" | "superseded";
+  lockedAt: Date | null; metadata: unknown;
+}, nowMs: number): boolean {
+  const mutation = getMetadataValue(row.metadata, SUBMISSION_METADATA_KEYS.externalMutation);
+  if (mutation === SUBMISSION_EXTERNAL_MUTATIONS.possible || mutation === SUBMISSION_EXTERNAL_MUTATIONS.confirmed) return true;
+  if (row.status === "rejected" || row.status === "superseded") return false;
+  if (row.status !== "draft") return true;
+  return nowMs - (row.lockedAt?.getTime() ?? 0) < LOCK_TTL_MS;
+}
+function inWindow(entry: RemovalEntryFact, window: RemovalEntryWindow) {
+  return entry.occurredOn >= window.start && entry.occurredOn <= window.end;
+}
+export function removalEntryOwner(entry: RemovalEntryFact, contenders: readonly EntryContender[]): string | null {
+  if (entry.deletedAt) return null;
+  if (entry.sentByRemovalId) return entry.sentByRemovalId;
+  if (entry.reservedByRemovalId) return entry.reservedByRemovalId;
+  if (entry.sendReservedBySubmissionId && !entry.reservationKnownInactive) return null;
+  return contenders.filter((draft) => draft.creditBatchIds.includes(entry.creditBatchId) && inWindow(entry, draft.window) &&
+    (entry.kind !== "zero" || entry.confirmedForRemovalId === draft.removalId))
+    .sort((a, b) => a.window.end.localeCompare(b.window.end) || a.createdAt.localeCompare(b.createdAt) || a.removalId.localeCompare(b.removalId))[0]?.removalId ?? null;
+}
+
+/** Select whole entries before reducing inputs, so paired measurements never cross entries. */
+export function deriveRemovalEntryContributions(args: {
+  removalId: string; memberBatchIds: readonly string[]; window: RemovalEntryWindow | null;
+  contenders: readonly EntryContender[]; entries: readonly RemovalEntryFact[]; lineSources: LineSources;
+  monitoredInputs: readonly { componentId: string; inputKey: string; unit: string }[];
+}): RemovalEntryContributions {
+  const result: RemovalEntryContributions = { manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], sentSingleComponentIds: [], blockers: [] };
+  const relevant = args.entries.filter((entry) => !entry.deletedAt && args.memberBatchIds.includes(entry.creditBatchId));
+  const selected: RemovalEntryFact[] = [];
+  for (const entry of relevant) {
+    const owner = removalEntryOwner(entry, args.contenders);
+    const stored = args.lineSources[entry.componentId];
+    const contract = stored && effectiveContract(stored);
+    if (!owner && entry.kind === "value") result.blockers.push({ code: "entryHasNoRemoval", message: "No Removal can carry this entry yet", fixTarget: "emissions", creditBatchId: entry.creditBatchId });
+    if (contract?.scope !== "operating" || contract.entryPolicy === "none") continue;
+    if (entry.kind === "value" && entry.lineRule === "single" && entry.sentByRemovalId && entry.sentByRemovalId !== args.removalId) {
+      result.sentSingleComponentIds.push(entry.componentId);
+      continue;
+    }
+    if (owner !== args.removalId || !args.window || !inWindow(entry, args.window) ||
+      (entry.kind === "zero" && entry.confirmedForRemovalId !== args.removalId)) continue;
+    if (!entry.counts || entry.unitMismatch) {
+      result.blockers.push({ code: "lineNeedsReview", message: entry.reason ?? "Enter the values again for the current template line.", fixTarget: "emissions", creditBatchId: entry.creditBatchId });
+      continue;
+    }
+    if (entry.kind === "value" && !entry.evidenceDocumentIds.length) result.blockers.push({ code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", creditBatchId: entry.creditBatchId });
+    selected.push(entry);
+  }
+  const components = [...new Set(selected.map((entry) => entry.componentId))].sort();
+  for (const componentId of components) {
+    const entries = selected.filter((entry) => entry.componentId === componentId).sort((a, b) => a.id.localeCompare(b.id));
+    const values = entries.filter((entry) => entry.kind === "value");
+    if (args.lineSources[componentId].entryPolicy === "single" && values.length > 1) {
+      result.blockers.push({ code: "singleLineMultipleEntries", message: "This line has values on more than one credit batch. Create separate Removals for these batches.", fixTarget: "emissions", creditBatchId: values[0].creditBatchId });
+      continue;
+    }
+    // A value supersedes that batch's zero, even if a caller supplied stale facts.
+    const counting = entries.filter((entry) => entry.kind === "value" || !values.some((value) => value.creditBatchId === entry.creditBatchId));
+    for (const input of args.monitoredInputs.filter((input) => input.componentId === componentId).sort((a, b) => a.inputKey.localeCompare(b.inputKey))) {
+      const manifest: EntryInputManifest = { componentId, inputKey: input.inputKey, entries: [] };
+      for (const entry of counting) {
+        const value = entry.kind === "zero" ? { magnitude: "0", unit: input.unit } : entry.values.find((value) => value.inputKey === input.inputKey);
+        if (!value || value.unit !== input.unit || canonicalDecimal(value.magnitude) === undefined) {
+          result.blockers.push({ code: "lineNeedsReview", message: "Enter the values again for the current template line.", fixTarget: "emissions", creditBatchId: entry.creditBatchId });
+          continue;
+        }
+        manifest.entries.push({ entryId: entry.id, creditBatchId: entry.creditBatchId, contentRevision: entry.contentRevision, kind: entry.kind,
+          value: { magnitude: canonicalDecimal(value.magnitude)!, unit: value.unit },
+          ...("massDistanceDetail" in value && value.massDistanceDetail ? { massDistanceDetail: value.massDistanceDetail } : {}),
+          evidenceDocumentIds: entry.kind === "zero" ? [] : [...entry.evidenceDocumentIds].sort() });
+      }
+      if (manifest.entries.length) {
+        result.manifest.push(manifest);
+        result.inputs.push({ componentId, inputKey: input.inputKey, value: sumFigures(manifest.entries.map((entry) => entry.value))! });
+      }
+    }
+    for (const entry of counting) {
+      result.entrySet.push({ entryId: entry.id, contentRevision: entry.contentRevision });
+      result.selectedEntryIds.push(entry.id);
+    }
+  }
+  result.entrySet.sort((a, b) => a.entryId.localeCompare(b.entryId));
+  result.sentSingleComponentIds = [...new Set(result.sentSingleComponentIds)].filter((id) => !components.includes(id)).sort();
+  return result;
+}

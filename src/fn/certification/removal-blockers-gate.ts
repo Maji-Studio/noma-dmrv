@@ -27,7 +27,10 @@ export function collectContextRemovalBlockers(
   ctx: RemovalSubmissionContext,
   options: { beforeConfirmation?: boolean } = {},
 ): RemovalBlocker[] {
-  const blockers: RemovalBlocker[] = [];
+  const blockers: RemovalBlocker[] = ctx.removalEntryContext ? [
+    ...ctx.removalEntryContext.contributions.blockers,
+    ...(ctx.emissionLines ?? []).flatMap((line) => line.blocker ? [line.blocker] : []),
+  ] : [];
   // Submit checks these before recovery. Review needs the same connection refusal.
   const preparation = prepareRemovalSubmission(ctx);
   if (!ctx.mapping || !ctx.hasOrgCredentials) return preparation.blockers.map(preparationBlocker);

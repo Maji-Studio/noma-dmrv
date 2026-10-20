@@ -102,7 +102,7 @@ export async function listEmissionEntriesForBatches(
     )
     .orderBy(asc(emissionEntryValues.inputKey));
   const counts = await executor
-    .select({ entryId: documents.entityId, count: sql<number>`count(*)::int` })
+    .select({ entryId: documents.entityId, count: sql<number>`count(*)::int`, evidenceDocumentIds: sql<string[]>`array_agg(${documents.id} order by ${documents.id})` })
     .from(documents)
     .where(
       and(
@@ -119,11 +119,12 @@ export async function listEmissionEntriesForBatches(
     group.push(value);
     valuesByEntry.set(value.entryId, group);
   }
-  const countsByEntry = new Map(counts.map((row) => [row.entryId, row.count]));
+  const countsByEntry = new Map(counts.map((row) => [row.entryId, row]));
   return entries.map((entry) => ({
     ...entry,
     values: valuesByEntry.get(entry.id) ?? [],
-    documentCount: countsByEntry.get(entry.id) ?? 0,
+    documentCount: countsByEntry.get(entry.id)?.count ?? 0,
+    evidenceDocumentIds: countsByEntry.get(entry.id)?.evidenceDocumentIds ?? [],
   }));
 }
 async function lockedBatch(

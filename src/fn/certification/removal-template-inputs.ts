@@ -1,3 +1,5 @@
+import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
+import { effectiveContract } from "@/lib/isometric/template-observations/line-sources";
 import { removalLineBlockerMessage } from "@/lib/certification/removal-blockers";
 import { deriveBatchEmissionLines, type BatchEmissionLine } from "@/lib/certification/emission-lines";
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
@@ -45,6 +47,7 @@ export function resolveTemplateInputs(args: {
   lineSources: LineSources;
   enrichmentComplete?: boolean;
   emissionLines?: BatchEmissionLine[] | null;
+  entryContributions?: RemovalEntryContributions;
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
   agg: AggregatedProductionData;
   externalProjectId: string;
@@ -65,12 +68,14 @@ export function resolveTemplateInputs(args: {
     omitProductionComponents,
   } = args;
 
-  // Keep compilation capability guards until PR 4 supplies entry contributions.
+  // Revalidate capabilities independently from the loaded line states.
   const lineDecisions = [...(args.emissionLines ?? []), ...deriveBatchEmissionLines({
     definition: normalizeTemplateDefinition(template), lineSources: withTemplateOrder(template, lineSources), problems: [],
     enrichmentComplete: args.enrichmentComplete ?? true, automaticFigures: {}, entries: [],
-  })];
+    entriesCanSubmit: !!args.entryContributions,
+  }).filter((line) => !args.entryContributions || line.blocker?.code !== "lineHasNoSource")];
 
+  if (args.entryContributions?.blockers.length) throw new SafeError(removalLineBlockerMessage(args.entryContributions.blockers[0]));
   const monitored: ResolvedMonitoredInput[] = [];
   const fixed: ResolvedFixedInput[] = [];
   const datapointBodyByKey = new Map<string, CreateDatapointRequest>();
@@ -80,6 +85,8 @@ export function resolveTemplateInputs(args: {
   for (const group of template.groups) {
     for (const component of group.components) {
       const lineContract = ownValue(lineSources, component.id);
+      const entryInputs = args.entryContributions?.inputs.filter((input) => input.componentId === component.id) ?? [];
+      const contract = lineContract && effectiveContract(lineContract);
       const blocker = lineDecisions.find((line) => line.componentId === component.id && line.blocker)?.blocker;
       if (blocker) throw new SafeError(removalLineBlockerMessage(blocker));
       const monitoredMappings = component.inputs
@@ -94,9 +101,9 @@ export function resolveTemplateInputs(args: {
         )
         .filter((mapping) => mapping != null);
       if (
-        omitProductionComponents &&
+        !entryInputs.length && (args.entryContributions?.sentSingleComponentIds.includes(component.id) || (omitProductionComponents &&
         monitoredMappings.length > 0 &&
-        monitoredMappings.every((mapping) => mapping.bucket === "production")
+        monitoredMappings.every((mapping) => mapping.bucket === "production")))
       ) {
         omittedTemplateComponentIds.push(component.id);
         continue;
@@ -133,11 +140,18 @@ export function resolveTemplateInputs(args: {
             `Registry template component "${blueprint.key}" is missing a required field. Ask an Admin to update the template.`,
           );
         }
+        const contribution = entryInputs.find((input) => input.inputKey === rtcInput.input_key);
+        if (args.entryContributions && contract?.scope === "operating" && contract.entryPolicy !== "none" &&
+          (!contract.automaticSource || omitProductionComponents) && !contribution) {
+          throw new SafeError("Record a value or confirm that this line has no emissions for this Removal.");
+        }
         const draft = buildCreateDatapointRequest({
           groupKey: group.key,
           componentBlueprintKey: component.blueprint_key,
           componentDisplayName: component.display_name,
           lineContract,
+          entryContribution: contribution?.value,
+          omitAutomaticProduction: omitProductionComponents,
           rtcInput,
           blueprintInput,
           agg,

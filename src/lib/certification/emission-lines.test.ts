@@ -151,3 +151,15 @@ it("reports catalog transport and stored sources using their record kinds", () =
   expect(lines.find((line) => line.contract?.automaticSource === "sequestration")?.records)
     .toEqual({ source: "applications", count: 5, figure: null });
 });
+
+it("permits counted entry-only values and zeros, but keeps the Removal's empty line blocker", () => {
+  const f = facts(); const id = f.definition.groups[0].components[0].id;
+  f.lineSources[id] = { scope: "operating", origin: "reviewed", entryPolicy: "additive" };
+  f.entriesCanSubmit = true;
+  expect(deriveBatchEmissionLines(f)[0].blocker?.code).toBe("lineHasNoSource");
+  f.entries = [entry(f)];
+  expect(deriveBatchEmissionLines(f)[0].blocker).toBeUndefined();
+  f.entries = [entry(f, { kind: "zero", confirmedForRemovalId: "removal", total: null, hasEvidence: false })];
+  expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "confirmedZero" });
+  expect(deriveBatchEmissionLines(f)[0].blocker).toBeUndefined();
+});

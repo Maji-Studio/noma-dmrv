@@ -1,3 +1,5 @@
+import { listEmissionEntryDraftContenders } from "@/data-access/emission-entry-contenders";
+import { removalEntryOwner, type EntryContender } from "@/lib/certification/removal-emission-contributions";
 import type { OrgContext } from "@/lib/auth/server";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import type { loadBatchEmissionEntryFacts } from "@/data-access/emission-entry-facts";
@@ -12,7 +14,7 @@ import type { BatchEmissionLineFacts } from "@/lib/certification/emission-lines"
 import type { FacilityCertifierFacts } from "./facility-certifier-facts";
 
 export type BatchEmissionContext = Record<string,
-  Pick<BatchEmissionLineFacts, "automaticFigures"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>>>;
+  Pick<BatchEmissionLineFacts, "automaticFigures"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
 
 /** Batch-wide facts, even when the Removal carries only some applications. */
 export async function loadBatchEmissionContext(
@@ -36,9 +38,10 @@ export async function loadBatchEmissionContext(
   for (const id of ids) {
     if (rollups[id]?.batch.facilityId !== facilityId) throw new SafeError("Credit batch was not found.");
   }
-  const [storedEntries, automatic] = await Promise.all([
+  const [storedEntries, automatic, contenders] = await Promise.all([
     listEmissionEntriesForBatches(ctx, ids),
     loadBatchesEmissionAutomaticFacts(ctx, ids),
+    listEmissionEntryDraftContenders(ctx, ids),
   ]);
   const observationsById = new Map(readableBatches.map(({ observation }) => [observation.id, observation]));
   const previousIds = [...new Set(storedEntries.map((entry) => entry.observationId))]
@@ -57,7 +60,9 @@ export async function loadBatchEmissionContext(
       [entry.observationId, observationsById.get(entry.observationId) ?? null] as const,
     ));
     const entries = deriveEmissionEntryFacts(stored, observation, previousObservations);
-    result[id] = { entries, previousObservations, automaticFigures: automatic[id].automaticFigures };
+    result[id] = { entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
+      entriesWithoutRemoval: entries.filter((entry) => entry.kind === "value" && !entry.sentByRemovalId &&
+        !entry.sendReservedBySubmissionId && !removalEntryOwner(entry, contenders)).map((entry) => entry.id) };
   }
   return result;
 }

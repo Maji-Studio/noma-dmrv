@@ -36,6 +36,7 @@ export interface EmissionLineEntryFact {
 export interface BatchEmissionLineFacts {
   definition: TemplateDefinition; lineSources: LineSources; problems: readonly LineSourceProblem[];
   enrichmentComplete: boolean;
+  entriesCanSubmit?: boolean;
   automaticFigures: Partial<Record<AutomaticSourceId, EmissionFigure | null>>;
   automaticRecordCounts?: Partial<Record<AutomaticSourceId, number>>;
   entries: readonly EmissionLineEntryFact[];
@@ -70,7 +71,7 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
   return facts.definition.groups.flatMap((group, groupIndex) => group.components.map((component, componentIndex) => {
     const stored = ownValue(facts.lineSources, component.id);
     const contract = stored ? effectiveContract(stored) : undefined;
-    const decision = emissionLineBindingDecision({ component, groupKey: group.key, contract: stored, problems, enrichmentComplete: facts.enrichmentComplete });
+    const decision = emissionLineBindingDecision({ component, groupKey: group.key, contract: stored, problems, enrichmentComplete: facts.enrichmentComplete, entriesCanSubmit: facts.entriesCanSubmit });
     const entries = facts.entries.filter((entry) => entry.componentId === component.id);
     const counting = entries.filter((entry) => entry.counts);
     const values = counting.filter((entry) => entry.kind === "value");
@@ -88,7 +89,11 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
       blocker = { code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     } else if (automaticFigure || values.length) state = "filled";
     else if (counting.some((entry) => entry.kind === "zero")) state = "confirmedZero";
-    else { state = "empty"; blocker = decision?.blocker; }
+    else { state = "empty"; blocker = decision?.blocker;
+      if (facts.entriesCanSubmit && contract?.scope === "operating" && contract.entryPolicy !== "none") {
+        blocker = { code: "lineHasNoSource", message: "Record a value or confirm that this line has no emissions for this Removal.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      }
+    }
     // A paired-input value has no scalar total. Do not show a partial sum.
     const figures = [
       ...(automaticFigure ? [automaticFigure] : []), ...values.flatMap((entry) => entry.total ? [entry.total] : []),

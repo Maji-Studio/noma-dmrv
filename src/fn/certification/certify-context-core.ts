@@ -1,3 +1,4 @@
+import { loadRemovalEntryContext } from "./removal-entry-context";
 import { loadBatchEmissionContext } from "./batch-emission-context";
 import { getRemovalCodes } from "@/data-access/removal-codes";
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
@@ -95,7 +96,8 @@ export async function buildRemovalContext(
   facilityFacts: FacilityCertifierFacts,
 ): Promise<RemovalSubmissionContext> {
   const batchEmissionFacts = await loadBatchEmissionContext(orgCtx, scope.facilityId, scope.memberBatches, facilityFacts);
-  const templateFacts = resolveRemovalTemplate(scope.memberBatches, facilityFacts, batchEmissionFacts);
+  const removalEntryContext = await loadRemovalEntryContext(orgCtx, scope, batchEmissionFacts, facilityFacts);
+  const templateFacts = resolveRemovalTemplate(scope.memberBatches, facilityFacts, batchEmissionFacts, removalEntryContext?.contributions);
   const isProduction = env.ISOMETRIC_ENVIRONMENT === "production";
   const memberBatches: MemberCreditBatch[] =
     scope.memberBatches.map(toMemberCreditBatchView);
@@ -244,6 +246,7 @@ export async function buildRemovalContext(
       mapping: facilityFacts.mapping,
       project: facilityFacts.project,
       ...templateFacts,
+      removalEntryContext,
       memberBatches: memberBatchesWithSubmissionGates,
       feedstockTypeMappingGaps,
       transportCoverage: EMPTY_TRANSPORT_COVERAGE,
@@ -375,6 +378,7 @@ export async function buildRemovalContext(
     mapping: facilityFacts.mapping,
     project: facilityFacts.project,
     ...templateFacts,
+    removalEntryContext,
     requiredTransportCategories,
     memberBatches: memberBatchesWithSubmissionGates,
     feedstockTypeMappingGaps,

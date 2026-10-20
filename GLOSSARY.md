@@ -59,6 +59,12 @@ _On screen_: manual entry; the screen calls the part that comes from forms and
 routes "From records".
 _Avoid_: activity (reserved for the history log).
 
+**Recorded zero**:
+A confirmation that one template line had no emissions for a specific Removal.
+It is an emissions entry owned by that Removal, contributes 0, and needs no file.
+It is never pooled into another Removal. Distinct from the sandbox zero stub,
+which is a temporary compilation exception and is not an operator confirmation.
+
 **Line comment**:
 One editable comment on a credit batch's Removal-template line, identified by
 component ID. It stays in noma and never changes line state or blocks a Removal.

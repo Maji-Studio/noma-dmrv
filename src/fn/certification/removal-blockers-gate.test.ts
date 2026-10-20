@@ -198,3 +198,13 @@ describe("Removal preflight", () => {
     expect(deriveRemovalReadiness(facts)).toMatchObject({ state: "blocked", reasons: expect.arrayContaining([message]) });
   });
 });
+
+it("retains typed empty-line and contribution blockers with entry compilation enabled", () => {
+  const ctx = makeContext();
+  ctx.removalEntryContext = { observationId: "observation", semanticFingerprint: "fingerprint", contributions: {
+    manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], sentSingleComponentIds: [],
+    blockers: [{ code: "singleLineMultipleEntries", message: "Create separate Removals for these batches.", creditBatchId: "batch", fixTarget: "emissions" }],
+  } };
+  ctx.emissionLines = [{ componentId: "line", blocker: { code: "lineHasNoSource", message: "Record a value or confirm that this line has no emissions for this Removal.", fixTarget: "emissions" } }] as typeof ctx.emissionLines;
+  expect(collectContextRemovalBlockers(ctx).map((blocker) => blocker.code)).toEqual(["singleLineMultipleEntries", "lineHasNoSource"]);
+});
