@@ -2,10 +2,10 @@
  * One line of a Removal template in the line review: what the line is, its
  * inputs with their quantity kind and unit, where its values come from (scope,
  * automatic datapoints, emissions entries), and for an Owner or Admin the controls
- * to accept a proposal or assign a contract. Only a line that needs review
+ * to accept a proposal or assign a contract. Only a line to decide
  * takes an assignment; a settled line is read-only, as the server enforces.
  *
- * A line that needs review carries the open-check treatment the credit batch
+ * A line to decide carries the open-check treatment the credit batch
  * checklist uses (a left rule on the sea wash), so the lines that block a
  * Removal read as a short list among the reviewed ones.
  */

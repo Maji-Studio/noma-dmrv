@@ -57,7 +57,7 @@ describe("Removal template requirement split", () => {
     const input = facts({ templateBlockers: [removalTemplateBlocker(code)] });
     const [set, lines] = templateChecks(input);
     expect(set).toMatchObject({ key: "templateSet", status: "unmet", templateBlockerCodes: [code] });
-    expect(certCheckLabel(set)).toBe(code === "unpinnedTemplate" ? "No Removal template chosen" : "Template not set");
+    expect(certCheckLabel(set)).toBe(code === "unpinnedTemplate" ? "No Removal template chosen" : "Template cannot be used");
     expect(lines.status).toBe("skipped");
     expect(lines.templateBlockerCodes).toBeUndefined();
     expect(deriveRemovalReadiness(input).state).toBe("blocked");
@@ -73,7 +73,9 @@ describe("Removal template requirement split", () => {
       expect(lines).toMatchObject({
         key: "templateLines", status: "unmet", detail: blocker.message, templateBlockerCodes: [code],
       });
-      expect(certCheckLabel(lines)).toBe("Lines to decide");
+      expect(certCheckLabel(lines)).toBe({
+        templateLinesNeedReview: "Lines to decide", templateNotFullyRead: "Template not fully read", forbiddenLine: "Template lines not ready",
+      }[code]);
       expect(deriveRemovalReadiness(input)).toMatchObject({ state: "blocked", reasons: [blocker.message] });
     },
   );
@@ -87,19 +89,15 @@ describe("Removal template requirement split", () => {
     const [set, lines] = templateChecks(input);
     expect(set.templateBlockerCodes).toEqual(["unpinnedTemplate"]);
     expect(certCheckLabel(set)).toBe("No Removal template chosen");
-    expect(lines).toMatchObject({
-      status: "skipped", templateBlockerCodes: ["templateLinesNeedReview", "templateNotFullyRead"],
-    });
+    // A skipped check shows no link, so it carries no codes.
+    expect(lines).toMatchObject({ status: "skipped" });
+    expect(lines.templateBlockerCodes).toBeUndefined();
     expect(lines.detail).toBeUndefined();
   });
 
   it.each([
     { hasRemovalTemplate: false },
     { unresolvedBlueprintKeys: ["unknown"] },
-    { unbindableTemplateInputs: [{
-      state: "needsSetup", groupKey: "pyrolysis", componentId: "line", componentDisplayName: "Line",
-      blueprintKey: "unknown", inputKey: "unknown", reason: "unmapped",
-    }] },
   ] satisfies Partial<RemovalReadinessFacts>[])("puts legacy pin and binding facts on Template set: %j", (overrides) => {
     const input = facts(overrides);
     const [set, lines] = templateChecks(input);
@@ -138,5 +136,27 @@ describe("Removal template requirement split", () => {
     expect(deriveRemovalReadiness(input)).toMatchObject({ state: "blocked", reasons: [entry.message] });
     expect(certCheckLabel(templateChecks(facts({ emissionLineBlockers: [entry, lineBlocker("one")] }))[1]))
       .toBe("1 line to decide");
+  });
+
+  it.each([
+    { reason: "unmapped", label: "Template lines not ready" },
+    { reason: "unassigned", label: "1 line to decide" },
+  ] as const)("puts $reason line coverage on Lines decided with the template set", ({ reason, label }) => {
+    const input = facts({ unbindableTemplateInputs: [{
+      state: "needsSetup", groupKey: "pyrolysis", componentId: "line", componentDisplayName: "Line",
+      blueprintKey: "unknown", inputKey: "unknown", reason,
+    }] });
+    const [set, lines] = templateChecks(input);
+    expect(set.status).toBe("met");
+    expect(lines).toMatchObject({ status: "unmet", templateBlockerCodes: ["templateLinesNeedReview"] });
+    expect(certCheckLabel(lines)).toBe(label);
+    expect(deriveRemovalReadiness(input).state).toBe("blocked");
+  });
+
+  it("does not count lines when the template was not read in full", () => {
+    const notRead: RemovalBlocker = { ...removalTemplateBlocker("templateNotFullyRead"), fixTarget: "templateLineReview",
+      lineRef: { componentId: "one", displayName: "One" } };
+    const lines = templateChecks(facts({ emissionLineBlockers: [notRead, { ...notRead, lineRef: { componentId: "two", displayName: "Two" } }] }))[1];
+    expect(certCheckLabel(lines)).toBe("Template not fully read");
   });
 });

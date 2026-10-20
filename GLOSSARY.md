@@ -526,10 +526,11 @@ _Avoid_: GHG entry template (the registry's API name), template pin, active
 template.
 
 **Template line**:
-One component of a **Removal template**, named as Isometric names it. noma
-decides each line once per facility and template: its scope, its **automatic
-datapoints** and whether it takes **emissions entries**. Every credit batch on
-that template follows those decisions.
+One component of a **Removal template**, named as Isometric names it. Each line
+is decided once per template: its scope, its **automatic datapoints** and
+whether it takes **emissions entries**. noma proposes a decision where it can;
+an Owner or Admin decides. Every credit batch on that template follows those
+decisions.
 _Avoid_: component (the registry's API name), template input.
 
 **Lines to decide**:

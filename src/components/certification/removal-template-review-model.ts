@@ -18,6 +18,8 @@ import {
 import type { ComponentEnrichment, EntryPolicy, QuantityKind } from "@/lib/isometric/template-observations/types";
 import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
 
+export { linesToDecideLabel } from "@/lib/certification/requirement-labels";
+
 export type RemovalTemplateReviewEntry = NonNullable<
   ReturnType<typeof useRemovalTemplateReview>["data"]
 >[number];
@@ -183,11 +185,6 @@ export function changeSummary(changes: RemovalTemplateReviewEntry["changes"]): s
     count("cosmetic") && plural(count("cosmetic"), "wording change", "wording changes"),
   ].filter(Boolean);
   return parts.length === 0 ? "No changes since the last read." : `Since the last read: ${parts.join(", ")}.`;
-}
-
-/** "3 lines to decide", the one phrase every template surface counts with. */
-export function linesToDecideLabel(count: number): string {
-  return `${plural(count, "line", "lines")} to decide`;
 }
 
 export function reviewCountSummary(lineCount: number, toDecide: number): string {

@@ -104,7 +104,7 @@ export function buildSubmissionAdvisories(args: {
   ];
   return droppedFacts.map((source) => ({
     code: "droppedRecordedFact", fixTarget: "templateLineReview",
-    message: `${source.label} is recorded, but the active Removal template has no automatic source for it. ${REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview}`,
+    message: `${source.label} is recorded, but the active Removal template takes no automatic datapoints for it. ${REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview}`,
   }));
 }
 

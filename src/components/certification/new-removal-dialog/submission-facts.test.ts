@@ -235,7 +235,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
   });
 
   it("shows a typed advisory once, not again as a free-text note", () => {
-    const message = "Electricity is recorded, but the active Removal template has no automatic source for it.";
+    const message = "Electricity is recorded, but the active Removal template takes no automatic datapoints for it.";
     const advisory = { code: "droppedRecordedFact", fixTarget: "templateLineReview", message } as const;
     const result = facts({
       compilation: { ...READY_COMPILATION, submissionAdvisories: [advisory], warnings: [message, "Other note."] } as unknown as RemovalCompilationView,

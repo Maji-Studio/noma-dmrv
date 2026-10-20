@@ -60,7 +60,7 @@ export function certificationEmissionEstimatesHref(facilityId: string): string {
 }
 
 /**
- * The Removal template line review, where lines that need review are settled.
+ * The Removal template line review, where lines to decide are settled.
  * With `templateId` the pane also shows that template's lines when no facility
  * default or credit batch uses it yet.
  */

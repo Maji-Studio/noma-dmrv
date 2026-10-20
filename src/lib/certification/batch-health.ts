@@ -494,8 +494,9 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
   const emissionIssues = new Map(facts.emissionLines
     ?.filter((line) => line.blocker?.fixTarget === "emissions")
     .map((line) => [line.componentId, line]));
+  // Only undecided lines count; a template that was not read in full blocks without a count.
   const linesToDecide = new Set(facts.emissionLines
-    ?.filter((line) => line.blocker?.fixTarget === "templateLineReview")
+    ?.filter((line) => line.blocker?.fixTarget === "templateLineReview" && line.blocker.code === "lineNeedsReview")
     .map((line) => line.componentId)).size;
   const pinBlockers = (facts.templateBlockers ?? []).filter(
     (blocker) => removalTemplateBlockerDestination(blocker.code) === "creditBatchTemplate",
@@ -512,7 +513,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
           key, label: CERT_REQUIREMENT_META[key].requirementLabel, status: "unmet",
           detail: blocker.message, fixTarget,
           unmetLabel: key === "templateLines"
-            ? templateLinesUnmetLabel(linesToDecide)
+            ? templateLinesUnmetLabel(linesToDecide, (facts.templateBlockers ?? []).map((item) => item.code))
             : onlyUnpinned ? NO_REMOVAL_TEMPLATE_LABEL : CERT_REQUIREMENT_META.templateSet.unmetLabel,
         };
       }),

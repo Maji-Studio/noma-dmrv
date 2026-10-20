@@ -66,6 +66,9 @@ export interface CertRequirementMeta {
 /** The template check's unmet label when the batch has no Removal template at all. */
 export const NO_REMOVAL_TEMPLATE_LABEL = "No Removal template chosen";
 
+/** The unmet Emissions label when an entry needs checking rather than a file. */
+export const EMISSION_ENTRIES_TO_CHECK_LABEL = "Emission entries to check";
+
 export const CERT_REQUIREMENT_META: Record<
   CertRequirementKey,
   CertRequirementMeta
@@ -137,7 +140,7 @@ export const CERT_REQUIREMENT_META: Record<
   },
   templateSet: {
     requirementLabel: "Template set",
-    unmetLabel: "Template not set",
+    unmetLabel: "Template cannot be used",
     whyDetail:
       "Each credit batch uses one Removal template from the facility's Isometric project. Removals are built from that template, so Isometric must still list it as a Removal template.",
   },
@@ -164,11 +167,23 @@ export const CERT_REQUIREMENT_META: Record<
 /** Suffix that turns a per-field entity readiness label ("Proof of delivery") into its unmet form. */
 export const ENTITY_FIELD_UNMET_SUFFIX = "not complete";
 
-/** Name distinct lines when available, otherwise keep the template-wide label. */
-export function templateLinesUnmetLabel(lineCount: number): string {
-  return lineCount > 0
-    ? `${lineCount} ${lineCount === 1 ? "line" : "lines"} to decide`
-    : CERT_REQUIREMENT_META.templateLines.unmetLabel;
+/** "3 lines to decide", the one phrase every template surface counts with. */
+export function linesToDecideLabel(count: number): string {
+  return `${count} ${count === 1 ? "line" : "lines"} to decide`;
+}
+
+/** The unmet Lines decided label when no line is undecided: the read or the lines are the problem. */
+export const TEMPLATE_LINES_NOT_READY_LABEL = "Template lines not ready";
+
+/**
+ * Counts undecided lines when the facts name them. Without a count, the
+ * blocker codes say whether lines are undecided, the template was not read in
+ * full, or a decided line cannot be filled.
+ */
+export function templateLinesUnmetLabel(lineCount: number, codes: readonly string[] = []): string {
+  if (lineCount > 0) return linesToDecideLabel(lineCount);
+  if (codes.includes("templateLinesNeedReview") || codes.includes("lineNeedsReview")) return CERT_REQUIREMENT_META.templateLines.unmetLabel;
+  return codes.includes("templateNotFullyRead") ? "Template not fully read" : TEMPLATE_LINES_NOT_READY_LABEL;
 }
 
 /** The unmet form of a per-field entity readiness label: "Proof of delivery not complete". */

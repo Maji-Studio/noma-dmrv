@@ -111,6 +111,7 @@ function fixLinksFor(
     case "templateLines":
       return templateFixLinks(check.templateBlockerCodes ?? [], facilityId, creditBatches);
     case "emissions":
+      if (creditBatches.length === 0) return [batchHealthFixLinkFor({ key: "emissions" }, facilityId)];
       return creditBatches.length === 1
         ? [batchHealthFixLinkFor({ key: "emissions" }, facilityId, creditBatches[0].id)]
         : creditBatches.map((batch) => {

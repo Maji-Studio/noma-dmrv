@@ -43,7 +43,7 @@ describe("contract-based template coverage", () => {
     const findings = coverage(copy, reviewedTemplateSources(copy, { second: { ...firstContract, origin: "reviewed" } }))
       .filter((finding) => finding.reason === "ambiguous");
     expect(findings.map((finding) => finding.componentId).sort()).toEqual([first.id, "second"].sort());
-    expect(formatUnbindableTemplateInputsText(findings)).toContain("Choose a different automatic source for each line.");
+    expect(formatUnbindableTemplateInputsText(findings)).toContain("Give each line its own automatic datapoints.");
   });
   it("resolves a renamed diesel component with the same id", () => {
     const copy = structuredClone(template);

@@ -24,7 +24,7 @@ import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "./production-readiness";
-import { CERT_REQUIREMENT_META, NO_REMOVAL_TEMPLATE_LABEL, templateLinesUnmetLabel } from "./requirement-labels";
+import { CERT_REQUIREMENT_META, EMISSION_ENTRIES_TO_CHECK_LABEL, NO_REMOVAL_TEMPLATE_LABEL, templateLinesUnmetLabel } from "./requirement-labels";
 import { removalTemplateBlockerDestination, type RemovalTemplateBlocker, type RemovalTemplateBlockerCode } from "./removal-template-blockers";
 import { pluralize } from "@/lib/copy-utils";
 import {
@@ -542,6 +542,9 @@ function withRequirementMeta(
   };
 }
 
+/** Line coverage findings that mean a line still needs its decision. */
+const UNDECIDED_LINE_REASONS: ReadonlySet<UnbindableTemplateInput["reason"]> = new Set(["unassigned", "ambiguous"]);
+
 function templateRequirementChecks(facts: RemovalReadinessFacts): RemovalRequirementCheckBase[] {
   const canEvaluate = facts.hasMapping && facts.hasOrgCredentials;
   const pinBlockers = (facts.templateBlockers ?? []).filter(
@@ -550,16 +553,28 @@ function templateRequirementChecks(facts: RemovalReadinessFacts): RemovalRequire
   const lineBlockers = (facts.templateBlockers ?? []).filter(
     (blocker) => removalTemplateBlockerDestination(blocker.code) === "templateLineReview",
   );
-  const pinFacts = { ...facts, templateBlockers: pinBlockers, emissionLineBlockers: [] };
+  // Unbindable inputs come from the line decisions, so they belong to the lines check.
+  const pinFacts = { ...facts, templateBlockers: pinBlockers, emissionLineBlockers: [], unbindableTemplateInputs: [] };
   const templateSet = templateResolvesCleanly(pinFacts);
   // Entry problems (a missing file, an entry to check) are fixed on Emissions,
   // so they get their own check rather than reading as a line to decide.
   const entryBlockers = (facts.emissionLineBlockers ?? []).filter((blocker) => blocker.fixTarget === "emissions");
   const emissionBlockers = (facts.emissionLineBlockers ?? []).filter((blocker) => blocker.fixTarget !== "emissions");
-  const linesToDecide = new Set(emissionBlockers
-    .flatMap((blocker) => blocker.fixTarget === "templateLineReview" && blocker.lineRef
-      ? [blocker.lineRef.componentId] : [])).size;
-  const lineMessages = [...new Set([...lineBlockers, ...emissionBlockers].map((blocker) => blocker.message))];
+  // Only undecided lines count; a template that was not read in full blocks without a count.
+  const linesToDecide = new Set([
+    ...emissionBlockers.flatMap((blocker) => blocker.code === "lineNeedsReview" && blocker.lineRef
+      ? [blocker.lineRef.componentId] : []),
+    ...facts.unbindableTemplateInputs.flatMap((input) => UNDECIDED_LINE_REASONS.has(input.reason) ? [input.componentId] : []),
+  ]).size;
+  const lineMessages = [...new Set([
+    ...lineBlockers.map((blocker) => blocker.message),
+    // Coverage words the line findings; emission blockers only add what coverage has no wording for.
+    ...(facts.unbindableTemplateInputs.length
+      ? [formatUnbindableTemplateInputsText(facts.unbindableTemplateInputs)]
+      : emissionBlockers.map((blocker) => blocker.message)),
+  ])];
+  const linesUnmet = lineMessages.length > 0;
+  const entriesNeedFiles = entryBlockers.every((blocker) => blocker.code === "entryMissingEvidence");
   return [
     {
       key: "templateSet",
@@ -573,11 +588,13 @@ function templateRequirementChecks(facts: RemovalReadinessFacts): RemovalRequire
     {
       key: "templateLines",
       label: CERT_REQUIREMENT_META.templateLines.requirementLabel,
-      status: !canEvaluate || !templateSet ? "skipped" : lineMessages.length ? "unmet" : "met",
+      status: !canEvaluate || !templateSet ? "skipped" : linesUnmet ? "unmet" : "met",
       detail: canEvaluate && templateSet ? lineMessages.join(" ") || undefined : undefined,
-      ...(canEvaluate && lineBlockers.length
-        ? { templateBlockerCodes: lineBlockers.map((blocker) => blocker.code) } : {}),
-      unmetLabel: templateLinesUnmetLabel(linesToDecide),
+      // Every line problem is settled in Removal templates, so its link is Decide lines.
+      ...(canEvaluate && templateSet && linesUnmet
+        ? { templateBlockerCodes: lineBlockers.length ? lineBlockers.map((blocker) => blocker.code) : ["templateLinesNeedReview" as const] }
+        : {}),
+      unmetLabel: templateLinesUnmetLabel(linesToDecide, [...lineBlockers, ...emissionBlockers].map((blocker) => blocker.code)),
     },
     // Only an open entry problem adds this check; batch health covers the met case.
     ...(canEvaluate && templateSet && entryBlockers.length ? [{
@@ -585,6 +602,7 @@ function templateRequirementChecks(facts: RemovalReadinessFacts): RemovalRequire
       label: CERT_REQUIREMENT_META.emissions.requirementLabel,
       status: "unmet" as const,
       detail: [...new Set(entryBlockers.map((blocker) => blocker.message))].join(" "),
+      ...(entriesNeedFiles ? {} : { unmetLabel: EMISSION_ENTRIES_TO_CHECK_LABEL }),
     }] : []),
   ];
 }

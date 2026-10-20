@@ -111,7 +111,7 @@ describe("buildCreditBatchOpenItems", () => {
             key: "templateSet",
             label: "Template",
             requirementLabel: "Template resolved",
-            unmetLabel: "Template has unresolved parts",
+            unmetLabel: "Template lines not ready",
             status: "unmet",
           },
           {
@@ -140,7 +140,7 @@ describe("buildCreditBatchOpenItems", () => {
     expect(result.blocking.map(row => [row.title, row.target])).toEqual([
       ["No Sample data", { tab: "samples" }],
       ["Emissions not recorded", { tab: "emissions" }],
-      ["Template has unresolved parts", { href: "/certification/settings?section=removal-templates&facility=facility" }],
+      ["Template lines not ready", { href: "/certification/settings?section=removal-templates&facility=facility" }],
       ["Distances not recorded", { href: "/customers?location=location" }],
     ]);
   });

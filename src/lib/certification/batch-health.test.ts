@@ -90,7 +90,7 @@ describe("deriveBatchHealth", () => {
       }],
     }));
     const checks = result.checks.filter((check) => check.key === "templateSet" || check.key === "templateLines");
-    expect(checks.map(certCheckLabel)).toEqual(["Template not set", label]);
+    expect(checks.map(certCheckLabel)).toEqual(["Template cannot be used", label]);
     expect(checks.map((check) => check.fixTarget)).toEqual(["creditBatchTemplate", "templateLineReview"]);
   });
 
@@ -98,7 +98,7 @@ describe("deriveBatchHealth", () => {
     const result = deriveBatchHealth(facts({ templateBlockers: [
       removalTemplateBlocker("unpinnedTemplate"), removalTemplateBlocker("templateNotFound"),
     ] }));
-    expect(certCheckLabel(checkFor(result, "templateSet"))).toBe("Template not set");
+    expect(certCheckLabel(checkFor(result, "templateSet"))).toBe("Template cannot be used");
   });
 
   it("keeps document warnings separate from blocking issues", () => {

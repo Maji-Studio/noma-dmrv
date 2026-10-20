@@ -102,7 +102,7 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
     });
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatch(/Genset diesel is recorded/);
-    expect(warnings[0]).toMatch(/Review the Removal template lines/);
+    expect(warnings[0]).toMatch(/This Removal template has lines to decide/);
   });
 
   it("warns when startup/preprocessing diesel is recorded without the component", () => {

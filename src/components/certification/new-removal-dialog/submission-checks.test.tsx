@@ -55,7 +55,7 @@ describe("SubmissionChecks", () => {
     expect(html).toContain(">Switch template on CB-2</a>");
     expect(html).toContain('href="/certification/settings?section=removal-templates&amp;facility=facility-1"');
     expect(html).toContain(">Decide lines</a>");
-    expect(html).toContain("Template not set");
+    expect(html).toContain("Template cannot be used");
     expect(html).toContain("Lines to decide");
     expect(html).not.toContain(">Open settings</a>");
   });
@@ -109,7 +109,7 @@ describe("SubmissionChecks", () => {
     expect(html).toContain("9 checks passed");
     expect(html).toMatch(/<h3[^>]*>\s*What to fix\s*<\/h3>/);
     expect(html).not.toContain("<button");
-    expect(html).toContain("Template not set");
+    expect(html).toContain("Template cannot be used");
     expect(html).not.toContain("Template set");
     expect(html).toContain("No default Removal template is selected.");
     expect(html).toContain(

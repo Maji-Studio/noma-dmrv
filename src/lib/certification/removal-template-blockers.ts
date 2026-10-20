@@ -6,7 +6,7 @@ export const REMOVAL_TEMPLATE_BLOCKERS = {
   templateNotFound: "Template no longer exists in Isometric.",
   templateNotFullyRead: "Template not fully read. Try again.",
   missingFixedDatapoint: "Set each value in the Isometric template editor before submitting.",
-  templateLinesNeedReview: "This Removal template has lines to decide.",
+  templateLinesNeedReview: "This Removal template has lines to decide. Decide them in Removal templates.",
 } as const;
 /**
  * Landing line for a deep link to a credit batch's template block when the
