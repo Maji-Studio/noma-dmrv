@@ -152,12 +152,12 @@ describe("saved record credit batches (real database)", () => {
   it.each(KINDS)("%s returns every distinct batch in date order, independent of record date", async kind => {
     const f = await fixture();
     expect(await getRecordCreditBatches(ctx, { kind, id: f.ids[kind] }))
-      .toEqual({ batches: [batch(f.early), batch(f.late)] });
+      .toEqual({ batches: [batch(f.early), batch(f.late)], heldOut: false });
   });
 
   it.each(KINDS)("%s returns none without provenance, even in a shared source bin", async kind => {
     const f = await fixture();
-    expect(await getRecordCreditBatches(ctx, { kind, id: f.emptyIds[kind] })).toEqual({ batches: [] });
+    expect(await getRecordCreditBatches(ctx, { kind, id: f.emptyIds[kind] })).toEqual({ batches: [], heldOut: false });
   });
 
   it.each(KINDS)("%s hides another organization's ID exactly like a missing ID", async kind => {
@@ -186,13 +186,13 @@ describe("saved record credit batches (real database)", () => {
       allocatedWetMassKg: MASS_KG, allocatedDryMassKg: MASS_KG,
     });
     expect(await getRecordCreditBatches(ctx, { kind: "application", id: f.application.id }))
-      .toEqual({ batches: [batch(f.late)] });
+      .toEqual({ batches: [batch(f.late)], heldOut: false });
     await db.insert(creditBatchApplications).values({
       ...org, applicationId: f.application.id, creditBatchId: f.early.id,
       allocatedWetMassKg: MASS_KG, allocatedDryMassKg: MASS_KG,
     });
     expect(await getRecordCreditBatches(ctx, { kind: "application", id: f.application.id }))
-      .toEqual({ batches: [batch(f.early), batch(f.late)] });
+      .toEqual({ batches: [batch(f.early), batch(f.late)], heldOut: false });
   });
 
   it("ignores zero application shares but keeps a wet-only positive share", async () => {
@@ -237,7 +237,7 @@ describe("saved record credit batches (real database)", () => {
   it("excludes runs with zero net delivery dry mass, agreeing with the existing lineage filter", async () => {
     const f = await fixture();
     const original = await reverseDelivery(f);
-    expect(await getRecordCreditBatches(ctx, { kind: "delivery", id: f.delivery.id })).toEqual({ batches: [] });
+    expect(await getRecordCreditBatches(ctx, { kind: "delivery", id: f.delivery.id })).toEqual({ batches: [], heldOut: false });
 
     // A replacement draws only the first run; the other runs still net to zero.
     const [movement] = await db.insert(binMovements).values({
@@ -256,7 +256,7 @@ describe("saved record credit batches (real database)", () => {
       ...org, allocationId: replacement.id, productionRunId: f.runs[0].id, dryMassKg: String(MASS_KG),
     });
     expect(await getRecordCreditBatches(ctx, { kind: "delivery", id: f.delivery.id }))
-      .toEqual({ batches: [batch(f.early)] });
+      .toEqual({ batches: [batch(f.early)], heldOut: false });
     for (const target of [f.early, f.late]) {
       const matching = await db.select({ id: deliveries.id }).from(deliveries).where(and(
         eq(deliveries.organizationId, organizationId), eq(deliveries.id, f.delivery.id),
@@ -271,21 +271,21 @@ describe("saved record credit batches (real database)", () => {
     await db.update(outputStockAllocations).set({
       sourceStorageLocationId: f.product.sourceBiocharStorageLocationId,
     }).where(eq(outputStockAllocations.deliveryId, f.delivery.id));
-    expect(await getRecordCreditBatches(ctx, { kind: "delivery", id: f.delivery.id })).toEqual({ batches: [] });
+    expect(await getRecordCreditBatches(ctx, { kind: "delivery", id: f.delivery.id })).toEqual({ batches: [], heldOut: false });
   });
 
   it("holds out a mix-bin application even when slices exist, and releases a reversed mix draw", async () => {
     const f = await fixture();
     await db.update(outputStockAllocations).set({ basisSnapshot: { policy: PRO_RATA_POLICY } })
       .where(eq(outputStockAllocations.deliveryId, f.delivery.id));
-    expect(await getRecordCreditBatches(ctx, { kind: "application", id: f.application.id })).toEqual({ batches: [] });
+    expect(await getRecordCreditBatches(ctx, { kind: "application", id: f.application.id })).toEqual({ batches: [], heldOut: true });
     await db.insert(creditBatchApplications).values({
       ...org, applicationId: f.application.id, creditBatchId: f.early.id,
       allocatedWetMassKg: MASS_KG, allocatedDryMassKg: MASS_KG,
     });
-    expect(await getRecordCreditBatches(ctx, { kind: "application", id: f.application.id })).toEqual({ batches: [] });
+    expect(await getRecordCreditBatches(ctx, { kind: "application", id: f.application.id })).toEqual({ batches: [], heldOut: true });
     await reverseDelivery(f, PRO_RATA_POLICY);
     expect(await getRecordCreditBatches(ctx, { kind: "application", id: f.application.id }))
-      .toEqual({ batches: [batch(f.early)] });
+      .toEqual({ batches: [batch(f.early)], heldOut: false });
   });
 });

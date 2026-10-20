@@ -20,6 +20,8 @@ export type RecordCreditBatchLineView =
   | { state: "new" }
   | { state: "pending" }
   | { state: "error" }
+  /** A mix-bin application, held out of credit batches (ADR 0030). */
+  | { state: "heldOut" }
   | { state: "loaded"; batches: CreditBatchLineBatch[] };
 
 const NEW_INFO: Record<RecordCreditBatchKind, string> = {
@@ -34,6 +36,8 @@ const NONE_INFO: Record<RecordCreditBatchKind, string> = {
   application: "No production run that produced the applied biochar is in a credit batch yet.",
 };
 
+const HELD_OUT_INFO = "This application's biochar was drawn from a mix bin, so it is held out of credit batches.";
+
 export function describeRecordCreditBatchLine(
   kind: RecordCreditBatchKind,
   view: RecordCreditBatchLineView,
@@ -41,6 +45,8 @@ export function describeRecordCreditBatchLine(
   switch (view.state) {
     case "new":
       return missingLineCopy(MISSING_VALUE.notYetComputed, NEW_INFO[kind]);
+    case "heldOut":
+      return missingLineCopy(MISSING_VALUE.notApplicable, HELD_OUT_INFO);
     case "pending":
       return pendingLineCopy();
     case "error":

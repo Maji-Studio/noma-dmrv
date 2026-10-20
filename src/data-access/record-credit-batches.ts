@@ -30,7 +30,7 @@ export async function getRecordCreditBatches(
 
   if (input.kind === "application") {
     const held = await getMixBinHeldApplicationIds(ctx, db, [input.id]);
-    if (held.has(input.id)) return { batches: [] };
+    if (held.has(input.id)) return { batches: [], heldOut: true };
 
     const slices = await db.selectDistinct(batchSelection)
       .from(creditBatchApplications)
@@ -42,7 +42,7 @@ export async function getRecordCreditBatches(
         eq(creditBatchApplications.applicationId, input.id),
       )).orderBy(creditBatches.startDate, creditBatches.code);
     // Saved slices take precedence over current source-run membership.
-    if (slices.length) return { batches: slices };
+    if (slices.length) return { batches: slices, heldOut: false };
 
     // Same positive-share predicate as inApplicationCreditBatchLineage.
     const shares = await db.selectDistinct({ id: applicationOutputAllocations.productionRunId })
@@ -51,7 +51,7 @@ export async function getRecordCreditBatches(
         eq(applicationOutputAllocations.applicationId, input.id),
         or(gt(applicationOutputAllocations.wetMassKg, "0"), gt(applicationOutputAllocations.dryMassKg, "0")),
       ));
-    return { batches: await batchesForRuns(ctx, shares.map(share => share.id)) };
+    return { batches: await batchesForRuns(ctx, shares.map(share => share.id)), heldOut: false };
   }
 
   const runs = input.kind === "feedstock"
@@ -61,7 +61,7 @@ export async function getRecordCreditBatches(
         eq(productionRunFeedstocks.feedstockId, input.id),
       ))
     : await deliveryRuns(ctx, input.id);
-  return { batches: await batchesForRuns(ctx, runs.map(run => run.id)) };
+  return { batches: await batchesForRuns(ctx, runs.map(run => run.id)), heldOut: false };
 }
 
 /** All three source-run paths resolve membership through this one helper. */

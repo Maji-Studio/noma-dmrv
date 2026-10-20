@@ -7,6 +7,15 @@ const KINDS: RecordCreditBatchKind[] = ["feedstock", "delivery", "application"];
 const ONE = { id: "b1", code: "CB-26-001" };
 const TWO = { id: "b2", code: "CB-26-002" };
 
+describe("held out", () => {
+  it("says Not applicable with the mix bin reason", () => {
+    const copy = describeRecordCreditBatchLine("application", { state: "heldOut" });
+    expect(copy.lead).toBe(`Credit batch: ${MISSING_VALUE.notApplicable}`);
+    expect(copy.info).toBe("This application's biochar was drawn from a mix bin, so it is held out of credit batches.");
+    expect(copy.batches).toEqual([]);
+  });
+});
+
 describe.each(KINDS)("describeRecordCreditBatchLine (%s)", (kind) => {
   it("says Not yet computed with an explanation for a new record", () => {
     const copy = describeRecordCreditBatchLine(kind, { state: "new" });

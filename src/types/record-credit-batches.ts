@@ -8,4 +8,6 @@ export interface RecordCreditBatch {
 
 export interface RecordCreditBatches {
   batches: RecordCreditBatch[];
+  /** A mix-bin application is held out of credit batches (ADR 0030); `batches` is empty by design. */
+  heldOut: boolean;
 }

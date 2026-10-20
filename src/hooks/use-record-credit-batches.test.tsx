@@ -34,19 +34,19 @@ describe("useRecordCreditBatches", () => {
 
   it("fetches saved provenance and clears the prior response when the ID changes", async () => {
     vi.mocked(getRecordCreditBatchesFn)
-      .mockResolvedValueOnce({ success: true, data: { batches: [BATCH] } })
+      .mockResolvedValueOnce({ success: true, data: { batches: [BATCH], heldOut: false } })
       .mockImplementationOnce(() => new Promise(() => {}));
     const { result, rerender } = renderHook(({ id }) => useRecordCreditBatches("delivery", id), {
       initialProps: { id: RECORD_ID }, wrapper: wrapper(),
     });
-    await waitFor(() => expect(result.current.data).toEqual({ batches: [BATCH] }));
+    await waitFor(() => expect(result.current.data).toEqual({ batches: [BATCH], heldOut: false }));
     rerender({ id: OTHER_ID });
     expect(result.current.data).toBeUndefined();
     await waitFor(() => expect(getRecordCreditBatchesFn).toHaveBeenLastCalledWith({ kind: "delivery", id: OTHER_ID }));
   });
 
   it("separates kinds in the query cache", async () => {
-    vi.mocked(getRecordCreditBatchesFn).mockResolvedValue({ success: true, data: { batches: [] } });
+    vi.mocked(getRecordCreditBatchesFn).mockResolvedValue({ success: true, data: { batches: [], heldOut: false } });
     const { result } = renderHook(() => ({
       feedstock: useRecordCreditBatches("feedstock", RECORD_ID),
       application: useRecordCreditBatches("application", RECORD_ID),

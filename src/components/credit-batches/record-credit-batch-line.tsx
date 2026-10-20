@@ -25,9 +25,11 @@ export function RecordCreditBatchLine({ kind, id }: RecordCreditBatchLineProps) 
     ? { state: "new" }
     : query.isError
       ? { state: "error" }
-      : query.data
-        ? { state: "loaded", batches: query.data.batches }
-        : { state: "pending" };
+      : query.data?.heldOut
+        ? { state: "heldOut" }
+        : query.data
+          ? { state: "loaded", batches: query.data.batches }
+          : { state: "pending" };
 
   return (
     <CreditBatchLine
