@@ -86,6 +86,20 @@ type PreparationContext = Pick<
   | "blueprintsForTemplate"
 >;
 
+/** Preparation and compilation must judge the same submission capabilities. */
+export function removalSubmissionBindingOptions(
+  ctx: Pick<PreparationContext, "removalEntryContext" | "templateBlockers">,
+  lineSources: LineSources,
+) {
+  return {
+    lineSources,
+    entriesCanSubmit: !!ctx.removalEntryContext,
+    enrichmentComplete: !ctx.templateBlockers?.some(
+      (blocker) => blocker.code === "templateNotFullyRead",
+    ),
+  };
+}
+
 function blocker(code: RemovalPreparationBlockerCode): RemovalPreparationBlocker {
   return { code, message: REMOVAL_PREPARATION_BLOCKERS[code] };
 }
@@ -131,7 +145,10 @@ export function prepareRemovalSubmission(
   const hasDurabilityComponents = hasDurabilityMeasurementComponents(removalTemplate);
   const blockers: RemovalPreparationBlocker[] = [...ctx.templateBlockers];
   const isometricEnvironment = options.isometricEnvironment ?? env.ISOMETRIC_ENVIRONMENT;
-  const unbindable = findUnbindableTemplateInputs(removalTemplate, { lineSources: ctx.lineSources, entriesCanSubmit: !!ctx.removalEntryContext, enrichmentComplete: !ctx.templateBlockers.some((blocker) => blocker.code === "templateNotFullyRead") });
+  const unbindable = findUnbindableTemplateInputs(
+    removalTemplate,
+    removalSubmissionBindingOptions(ctx, ctx.lineSources),
+  );
   // The template lives on Isometric and can change credit_type after binding;
   // a REDUCTION template must never mislabel a GHG entry.
   if (removalTemplate.credit_type !== "REMOVAL") {

@@ -732,6 +732,7 @@ export async function finalizeRemovalDeletion(
       )
       .returning({ id: creditBatches.id });
 
+    await releaseDeletedRemovalEntries(ctx, tx, claim.removalId, claim.submissionIds);
     const released = await tx
       .update(creditBatchApplications)
       .set({ removalId: null })
@@ -743,7 +744,6 @@ export async function finalizeRemovalDeletion(
       )
       .returning({ id: creditBatchApplications.id, creditBatchId: creditBatchApplications.creditBatchId, removalId: creditBatchApplications.removalId });
 
-    await releaseDeletedRemovalEntries(ctx, tx, claim.removalId, claim.submissionIds);
     const [deleted] = await tx
       .delete(certifierRemovals)
       .where(

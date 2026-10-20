@@ -344,7 +344,13 @@ catalog declares on each input:
 - application-boundary inventory/logbook evidence to sequestration
   `product_mass` and, when present, safety-margin `mass`;
 - generated transport ledger to the transport inputs present in the template;
-- generated durability ledger to the tier-specific durability inputs.
+- generated durability ledger to the tier-specific durability inputs;
+- `emission_entry` files to the exact `{componentId, inputKey}` targets in the
+  contribution manifest, validated against the frozen entry set. Paired inputs
+  each receive the entry's files; recorded zeros and tombstoned entries add none.
+  Datapoints receive the sorted, deduplicated union of automatic and entry Sources.
+  Source descriptions identify the emissions entry by component name, entry date,
+  and credit batch code. The lineage retains the entry ID.
 
 Confirmed Application-owned photos, PDFs, weighbridge tickets, and affidavits
 are also mirrored as Sources and attached to each corresponding Biochar

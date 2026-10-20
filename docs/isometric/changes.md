@@ -1,5 +1,12 @@
 # Isometric Docs Change Log
 
+## 2026-10-20: Emissions entry evidence binding
+
+Entry files now bind as `emission_entry` Sources to every contributed component/input
+in the frozen manifest. Explicit targets fail closed outside the template or entry
+set. Automatic targets and ordering are unchanged; the Source mapping revision
+includes the new explicit-target vocabulary. No schema change or backfill.
+
 ## 2026-10-20: Removal entry claims and frozen payloads (#1242)
 
 With `EMISSIONS_ENTRIES_ENABLED` on, emissions entries and recorded zeros feed

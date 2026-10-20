@@ -168,7 +168,8 @@ export type NomaEvidenceRole =
   | "delivery_bill_of_lading"
   | "transport_evidence_ledger"
   | "durability_evidence_ledger"
-  | "lab_report";
+  | "lab_report"
+  | "emission_entry";
 
 /**
  * A noma evidence role whose Isometric Source supports a role's input. The
@@ -176,7 +177,7 @@ export type NomaEvidenceRole =
  * input of its tier's storage components (`projectDurabilityLedgerInputKeys`).
  */
 export interface EvidenceTarget {
-  role: Exclude<NomaEvidenceRole, "durability_evidence_ledger">;
+  role: Exclude<NomaEvidenceRole, "durability_evidence_ledger" | "emission_entry">;
   /** The template may leave the input out without failing the Source plan. */
   optional?: true;
   /** Only this component, by a name the role's disambiguation rule declares. */
