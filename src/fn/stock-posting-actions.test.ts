@@ -3,7 +3,7 @@ import { throwActionError } from "@/lib/stale-version";
 import { conflictCode } from "@/lib/conflict-ref";
 import { DomainError } from "@/lib/domain-errors";
 import { ActionConflictError } from "@/lib/errors";
-import { deliveryActionFieldIssues } from "@/lib/delivery-action-errors";
+import { planSaveRefusal } from "@/lib/save-refusal";
 import type { OrgContext } from "@/lib/auth/server";
 
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), autoCode: vi.fn(), log: vi.fn(), run: vi.fn(), update: vi.fn() }));
@@ -167,7 +167,7 @@ describe("delivery action field mapping and partial notes", () => {
     }
     catch (error) {
       expect(error).toMatchObject({ message, issues });
-      expect(deliveryActionFieldIssues(error, ["deliveryDate", "deliveredWetMassKg"])).toBeUndefined();
+      expect(planSaveRefusal(error, { isShown: (field) => field !== "deliveryId", isChanged: () => true })).toEqual({ fieldErrors: [], footer: message });
     }
     expect(mocks.log).not.toHaveBeenCalled();
   });

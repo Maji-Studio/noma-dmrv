@@ -6,7 +6,7 @@
 "use client";
 
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
-import { deliveryActionFieldIssues } from "@/lib/delivery-action-errors";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { Notice } from "@/components/ui/notice";
 import { deliveryAfterDistanceFill } from "@/lib/delivery-distance-refresh";
 import { useDeliveryWithRelations } from "@/hooks/use-deliveries";
@@ -67,11 +67,14 @@ const isDeliveryCertifyField = (field: string) =>
 // Component
 // ============================================
 
+/** Server issue paths the form names differently: a source row refusal sits on the load mass. */
+const DELIVERY_REFUSAL_ALIASES = { sources: "deliveredWetMassKg" } as const;
+
 interface DeliveryFormProps {
   /** Existing delivery data for editing (undefined for create mode) */
   delivery?: Delivery;
   /** Form submission handler */
-  onSubmit: (data: DeliveryFormData, onError: (error: unknown) => boolean, expectedVersion?: number) => Promise<void> | void;
+  onSubmit: (data: DeliveryFormData, onError: SaveRefusalHandler, expectedVersion?: number) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -240,6 +243,11 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
   const defaultSubmitLabel = isEditMode ? "Update delivery" : "Create delivery";
 
+  const refuseSave = useSaveRefusal({
+    control, setError, formId, aliases: DELIVERY_REFUSAL_ALIASES,
+    // The single moisture field is only on screen for a load with one reading.
+    isEnabled: (field) => field !== "moistureContentPercent" || stockLocked || draw.usesSingleMoisture,
+  });
   const submitDelivery = latched(handleSubmit(async (data) => {
     if (!canSave || (stockLocked && (massChanged || dateChanged))) return;
     const submitted = { overriding, distanceKm: data.distanceKmOverride, source: data.distanceSource, note: data.distanceNote };
@@ -254,18 +262,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     // A failed save needs no refetch here: the host reports the error and the
     // mutation hooks invalidate `outputStockKeys.all`, which refreshes this preview.
     await onSubmit({ ...data, ...distanceFields, status: "delivered", idempotencyKey, basisFingerprint: basisFingerprint ?? "pending-preview", correctsMovementId: stockChanged ? openedMovement?.id : undefined,
-      ...(isEditMode && !stockChanged ? { sources: undefined, deliveredWetMassKg: delivery.deliveredWetMassKg, moistureContentPercent: delivery.moistureContentPercent ?? undefined } : {}) } as DeliveryFormData, (error) => {
-      const issues = deliveryActionFieldIssues(error, [
-        "deliveryDate", "orderId", "storageLocationId", "deliveredWetMassKg",
-        ...(stockLocked || draw.usesSingleMoisture ? ["moistureContentPercent" as const] : []),
-        ...(overriding ? ["distanceKmOverride" as const, "distanceSource" as const, "distanceNote" as const] : []),
-      ] as const);
-      if (!issues) return false;
-      issues.forEach((issue, index) => {
-        setError(issue.field, { type: "server", message: issue.message }, { shouldFocus: index === 0 });
-      });
-      return true;
-    }, distanceRecord?.version);
+      ...(isEditMode && !stockChanged ? { sources: undefined, deliveredWetMassKg: delivery.deliveredWetMassKg, moistureContentPercent: delivery.moistureContentPercent ?? undefined } : {}) } as DeliveryFormData, refuseSave, distanceRecord?.version);
   }));
 
   return (

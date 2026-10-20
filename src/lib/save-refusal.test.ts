@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ActionError } from "./action-error";
 import { conflictCode } from "./conflict-ref";
 import { STALE_VERSION_CONFLICT_CODE, StaleVersionError, throwActionError } from "./stale-version";
+import { deliveryReferenceNotFound } from "./delivery-domain-errors";
 import { LOCKED_FIELD_MESSAGE, planSaveRefusal } from "./save-refusal";
 
 const LOCK_REASON = "Sent to a Removal. Fix it by correcting the Removal first.";
@@ -100,5 +101,19 @@ describe("planSaveRefusal", () => {
     }
     const other = new ActionError({ error: "Taken", code: "conflict", conflict: { code: conflictCode("BIN-1"), entity: "storageLocation", id: "b1" }, issues: [issue(["x"])] });
     expect(planSaveRefusal(other, everything)).toBeNull();
+  });
+
+  it("shows a delivery source bin not_found refusal on the source bin field", () => {
+    const missing = deliveryReferenceNotFound(["storageLocationId"], "Source bin");
+    try {
+      throwActionError({ success: false, error: missing.message, code: missing.code, issues: missing.issues });
+    } catch (error) {
+      expect(planSaveRefusal(error, everything)).toEqual({
+        fieldErrors: [{ field: "storageLocationId", message: "Source bin was not found.", locked: false }],
+        footer: null,
+      });
+      return;
+    }
+    expect.fail("Expected the action refusal to throw");
   });
 });
