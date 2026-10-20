@@ -33,8 +33,8 @@ const ROW_GRID =
   "grid grid-cols-[minmax(0,1fr)_auto] gap-x-12 gap-y-4 md:items-center";
 // The Files column exists only in a batch where some component has files.
 const ROW_GRID_WITH_FILES =
-  "md:grid-cols-[minmax(0,1fr)_minmax(0,272px)_120px_104px]";
-const ROW_GRID_NO_FILES = "md:grid-cols-[minmax(0,1fr)_minmax(0,272px)_104px]";
+  "md:grid-cols-[minmax(0,1fr)_minmax(0,272px)_120px_140px]";
+const ROW_GRID_NO_FILES = "md:grid-cols-[minmax(0,1fr)_minmax(0,272px)_140px]";
 
 function EntryFileNames({ entryId }: { entryId: string }) {
   const { data } = useDocumentsForEntity(ENTRY_ENTITY_TYPE, entryId);
