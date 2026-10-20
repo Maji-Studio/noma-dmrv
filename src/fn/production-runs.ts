@@ -18,11 +18,17 @@ import {
 } from "@/schemas/production-runs";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
+import { getProductionRunCreditBatchPreview } from "@/data-access/production-run-credit-batch-preview";
+import { productionRunCreditBatchPreviewSchema, type ProductionRunCreditBatchPreviewInput } from "@/schemas/production-run-credit-batch-preview";
 
 import { startProductionRun, updateProductionRun, deleteProductionRun } from "@/lib/operations/production-runs";
 import { runOperationInProcess } from "@/lib/operations/runner";
 
 const LOG_MESSAGE = "production run action failed";
+
+export async function previewProductionRunCreditBatchFn(input: ProductionRunCreditBatchPreviewInput) {
+  return withAction((ctx) => getProductionRunCreditBatchPreview(ctx, productionRunCreditBatchPreviewSchema.parse(input)));
+}
 
 /** Keep the per-operation log context the legacy wrapper emitted. */
 function logFor(op: string) {
