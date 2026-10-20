@@ -172,14 +172,15 @@ test.describe("Production Run + Sample UI CRUD", () => {
         .locator('input[name="feedstockDraws.1.wetMassKg"]')
         .fill("70");
       await page.locator('input[name="feedstockMoisturePercent"]').fill("15");
-      // The "Total wet input" recap is gone; the Detailed composition ledger
-      // carries the summed wet mass. With no biochar mass yet the process flow
-      // is not drawn and names the mass still to record instead.
-      await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
+      // The "Total wet input" recap is gone; the composition ledger behind the
+      // split's (i) carries the summed wet mass. With no biochar mass yet the
+      // process flow is not drawn and names the mass still to record instead.
+      await page.getByRole("button", { name: /^How feedstock composition is worked out$/ }).click();
       await expect(
         page.getByRole("table", { name: /^Feedstock composition/ })
           .getByRole("row").filter({ hasText: "Wet total" }),
       ).toContainText("120 kg");
+      await page.keyboard.press("Escape");
       await expect(
         page.getByText("Record the biochar wet mass to draw the flow.", { exact: true }),
       ).toBeVisible();
@@ -586,13 +587,10 @@ test.describe("Production Run lifecycle (#254)", () => {
     await page.getByRole("button", { name: "New production run" }).click();
     await waitForSideSheet(page);
 
-    for (const detail of ["Simple", "Detailed"]) {
-      await page.getByRole("radio", { name: detail, exact: true }).locator("..").click();
-      const options = page.locator('[role="dialog"] label:has(input[name="status"])');
-      await expect(options).toHaveText(["Running", "Complete"]);
-      for (const option of await options.all()) await expect(option).toBeVisible();
-      await expect(page.locator('[role="dialog"] input[name="status"][value="running"]')).toBeChecked();
-    }
+    const options = page.locator('[role="dialog"] label:has(input[name="status"])');
+    await expect(options).toHaveText(["Running", "Complete"]);
+    for (const option of await options.all()) await expect(option).toBeVisible();
+    await expect(page.locator('[role="dialog"] input[name="status"][value="running"]')).toBeChecked();
   });
 
   test("requires a cancellation reason and saves the cancelled audit record", async ({

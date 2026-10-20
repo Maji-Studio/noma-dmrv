@@ -1,6 +1,6 @@
 ---
 name: noma-design
-description: noma-dmrv's UI layer on top of maji-design-app. Points to noma's design system, forms, copy and decision docs, and covers what is specific here (wet mass first, Simple and Detailed, worktree prototypes, Before | After evidence, advisory design review). Use for any UI work in noma-dmrv, such as building or changing a page, sheet, form, dialog, table, chart or map, choosing between layouts, writing interface copy, prototyping, or reviewing a UI PR.
+description: noma-dmrv's UI layer on top of maji-design-app. Points to noma's design system, forms, copy and decision docs, and covers what is specific here (wet mass first, explanations behind an (i), worktree prototypes, Before | After evidence, advisory design review). Use for any UI work in noma-dmrv, such as building or changing a page, sheet, form, dialog, table, chart or map, choosing between layouts, writing interface copy, prototyping, or reviewing a UI PR.
 ---
 
 # noma design
@@ -10,7 +10,7 @@ Load `maji-design-app` first and follow its steps. This skill adds what noma dec
 ## Sources (read the target before the work)
 
 - `docs/design-system.md`: tokens, spacing trap (default Tailwind spacing and radius classes are deleted), Canonical Page Shell, list-page idiom, dialogs, choice controls, illustrations, EmptyState, wet/dry mass.
-- `docs/forms.md`: FormField, FormActions, Simple and Detailed, derived blocks, entity selects.
+- `docs/forms.md`: FormField, FormActions, explanations behind an (i), derived blocks, entity selects.
 - `docs/ux-writing.md`: terms, message structure, missing-value tokens, no en or em dashes (`pnpm check:ux-copy` enforces the dashes).
 - `docs/design-decisions.md`: what was tried per surface, what replaced it, and what the user rejected. Read the entries for your surface before proposing anything.
 - `GLOSSARY.md`: domain terms override casual wording.
@@ -18,7 +18,7 @@ Load `maji-design-app` first and follow its steps. This skill adds what noma dec
 ## noma specifics (look up the owning section, do not restate it)
 
 - Wet mass first: `docs/design-system.md` § Wet mass, moisture, dry mass; `docs/forms.md` § Stock blocks lead with wet mass.
-- Simple and Detailed: `docs/forms.md` § Simple and Detailed presentation (explanation only, parity test).
+- Explanations: `docs/forms.md` § Explanations behind an (i) (one view, `ExplanationInfo`, two inline lines).
 - CERT chip: `docs/forms.md` § CERT chip status.
 - Dialogs: `docs/design-system.md` § Modal (action order, width, linked records).
 - Locks: `docs/design-system.md` § Notice (informative box, no unavailable action).
