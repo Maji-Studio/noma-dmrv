@@ -1,3 +1,7 @@
+vi.mock("@/data-access/credit-batch-removal-holders", () => ({
+  getCreditBatchUndeletableRemovalCodes: vi.fn(async () => new Map()),
+}));
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/data-access/certifier-credentials", () => ({
@@ -5,6 +9,7 @@ vi.mock("@/data-access/certifier-credentials", () => ({
 }));
 
 import type { OrgContext } from "@/lib/auth/server";
+import { getCreditBatchUndeletableRemovalCodes } from "@/data-access/credit-batch-removal-holders";
 import { MASS_COMPARISON_EPSILON_KG } from "@/lib/calculations/mass-dry";
 import type { Logger } from "@/lib/log";
 import type { ProductionBatchRegistryInput } from "@/data-access/certifier-production-batches";
@@ -188,6 +193,19 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     })]);
     if (registered) mocks.getProductionBatchRegistrations.mockResolvedValue([await upsertReturning(PRODUCTION_BATCH_ID)(orgCtx, { supplierReference: await currentSupplierRef() })]);
     await expect(ensure()).rejects.toThrow("Production run RUN-LAST ends on or after");
+    expect(mocks.client.get).not.toHaveBeenCalled();
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
+  it("names the current undeletable Removal before registry access", async () => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([registryInput({
+      endedAt: "2026-04-01T07:15:00.000Z",
+    })]);
+    vi.mocked(getCreditBatchUndeletableRemovalCodes).mockResolvedValueOnce(
+      new Map([[CREDIT_BATCH_ID, ["RM-1"]]]),
+    );
+    await expect(ensure()).rejects.toThrow("Removal RM-1 was sent to Isometric and cannot be deleted");
+    expect(getCreditBatchUndeletableRemovalCodes).toHaveBeenCalledWith(orgCtx, [CREDIT_BATCH_ID]);
     expect(mocks.client.get).not.toHaveBeenCalled();
     expect(mocks.client.post).not.toHaveBeenCalled();
   });

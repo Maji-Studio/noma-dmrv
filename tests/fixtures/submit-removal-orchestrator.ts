@@ -1,3 +1,9 @@
+vi.mock("@/data-access/credit-batch-removal-holders", () => ({
+  getCreditBatchUndeletableRemovalCodes: vi.fn<
+    typeof import("@/data-access/credit-batch-removal-holders").getCreditBatchUndeletableRemovalCodes
+  >(async () => new Map()),
+}));
+
 import { reviewedTemplateSources } from "../helpers/template-line-sources";
 import { beforeEach, vi } from "vitest";
 
