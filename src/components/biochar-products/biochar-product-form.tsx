@@ -11,6 +11,7 @@ import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-conte
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 
+import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
 import { EntitySelect, FormActions, FormField, FormInput, FormSection, FormSpine, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
 import { EventTimeInput } from "@/components/forms/event-time-input";
@@ -697,6 +698,7 @@ export function BiocharProductForm({
         submitDisabled={hasZeroSourceBiochar || submitDisabled}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        preview={<RecordCreditBatchLine kind="biochar-product" id={product?.id} />}
       />
     </div>
   );
