@@ -18,12 +18,14 @@ import { ListIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { SidebarContent } from "./sidebar-content";
+import { useViewerOrg } from "./viewer-org";
 
 export function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const [lastPath, setLastPath] = useState(pathname);
   const isMobile = useIsMobile();
+  const organizationName = useViewerOrg()?.organizationName ?? "noma dMRV";
 
   // The drawer (and its focus trap + scroll lock) only belongs below `md`. If
   // the viewport grows to desktop while it's open — rotate, resize — the popup
@@ -52,11 +54,11 @@ export function MobileNav() {
         <Link href="/dashboard" className="flex items-center gap-10 min-w-0">
           <div className="size-28 bg-[var(--clr-purple)] flex items-center justify-center shrink-0">
             <span className="text-white font-bold text-[length:var(--text-xxs)] leading-none">
-              D
+              {organizationName.charAt(0).toUpperCase()}
             </span>
           </div>
           <span className="body-small font-medium text-white truncate">
-            Dark Earth Carbon
+            {organizationName}
           </span>
         </Link>
 

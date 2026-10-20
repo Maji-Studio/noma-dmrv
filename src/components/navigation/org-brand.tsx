@@ -1,10 +1,10 @@
 /**
  * OrgBrand — the sidebar brand header, doubling as the Organization switcher.
  *
+ * Always shows the organization name and the viewer's role (a small chip).
  * One row, two behaviors: users with at most one accessible organization get
- * the plain brand link to the dashboard (no tenancy chrome at all), while users
- * with multiple accessible organizations get the same row as a listbox trigger
- * — the org name is shown exactly once, and a caret is the only extra
+ * a plain brand link to the dashboard, while users with another organization to
+ * go to get the same row as a listbox trigger, with a caret as the only extra
  * affordance.
  * Switching resets facility selection and clears the query cache, because
  * every data view changes.
@@ -22,6 +22,8 @@ import {
   useEnterOrganization,
 } from "@/hooks/use-organizations";
 import { shouldShowOrganizationSwitcher } from "./org-brand-switching";
+import { useViewerOrg } from "./viewer-org";
+import { viewerRoleLabel } from "./viewer-org-rules";
 
 type SwitchableOrg = { id: string; name: string };
 
@@ -35,6 +37,24 @@ function BrandMark({ initial }: { initial: string }) {
         {initial}
       </span>
     </div>
+  );
+}
+
+function OrgIdentity({ name, roleLabel }: { name: string; roleLabel: string | null }) {
+  return (
+    <span className="flex min-w-0 flex-1 flex-col items-start gap-2">
+      <span
+        className="body-small font-medium text-white truncate max-w-full"
+        suppressHydrationWarning
+      >
+        {name}
+      </span>
+      {roleLabel && (
+        <span className="bg-[var(--color-white-10)] px-6 text-[length:var(--text-xxs)] leading-[16px] text-[var(--color-white-75)]">
+          {roleLabel}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -54,6 +74,8 @@ function OrgBrandLoading() {
 
 export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
   const isAdmin = useIsAdmin();
+  const viewer = useViewerOrg();
+  const roleLabel = viewer ? viewerRoleLabel(viewer) : null;
   const enterOrganization = useEnterOrganization();
   const listboxId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -112,14 +134,14 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
       ? allOrgsQuery.isPending && !allOrgsQuery.error
       : memberOrgsQuery.isPending && !memberOrgsQuery.error);
 
-  async function handleSelect(organizationId: string) {
+  async function handleSelect(organizationId: string, organizationName: string) {
     if (organizationId === activeOrganizationId) {
       setIsOpen(false);
       return;
     }
     setIsSwitching(true);
     try {
-      const result = await enterOrganization(organizationId);
+      const result = await enterOrganization(organizationId, organizationName);
       if (!result.success) {
         setIsSwitching(false);
         return;
@@ -146,12 +168,7 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
           className="flex items-center gap-10 min-w-0"
         >
           <BrandMark initial={orgInitial} />
-          <span
-            className="body-small font-medium text-white truncate"
-            suppressHydrationWarning
-          >
-            {activeOrgName}
-          </span>
+          <OrgIdentity name={activeOrgName} roleLabel={roleLabel} />
         </Link>
       </div>
     );
@@ -172,12 +189,10 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
         className="group flex items-center gap-10 w-full h-full px-16 text-left cursor-pointer hover:bg-[var(--color-white-100)]/[0.04] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--clr-purple)] transition-colors duration-150 disabled:opacity-60"
       >
         <BrandMark initial={orgInitial} />
-        <span
-          className="body-small font-medium text-white truncate flex-1"
-          suppressHydrationWarning
-        >
-          {isSwitching ? "Switching…" : activeOrgName}
-        </span>
+        <OrgIdentity
+          name={isSwitching ? "Switching…" : activeOrgName}
+          roleLabel={roleLabel}
+        />
         <CaretDownIcon
           size={12}
           weight="bold"
@@ -208,7 +223,7 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
                     type="button"
                     role="option"
                     aria-selected={isSelected}
-                    onClick={() => handleSelect(org.id)}
+                    onClick={() => handleSelect(org.id, org.name)}
                     className={`w-full h-40 px-16 flex items-center justify-between gap-8 body-caption text-left transition-colors duration-150 ${
                       isSelected
                         ? "text-white bg-[var(--color-white-100)]/[0.08]"
