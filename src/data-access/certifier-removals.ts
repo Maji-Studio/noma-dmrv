@@ -1,3 +1,4 @@
+import { releaseDeletedRemovalEntries } from "./emission-entry-deletion";
 import { CODE_CONFLICT_MESSAGES, withAutoCodes } from "./code-generator";
 import { recordActivityChange } from "./activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
@@ -189,6 +190,7 @@ export async function gcRemovalIfOrphaned(
     .limit(1);
   if (anySubmission) return;
 
+  await releaseDeletedRemovalEntries(ctx, tx, removalId, []);
   await tx.delete(certifierRemovals).where(and(eq(certifierRemovals.id, removalId), eq(certifierRemovals.organizationId, ctx.organizationId)));
   logger.info({ removalId }, "orphan certifier removal deleted");
 }
@@ -678,6 +680,7 @@ export async function discardLocalRemovalDraft(
       throw new SafeError(DISCARD_REMOVAL_ERROR);
     }
 
+    await releaseDeletedRemovalEntries(ctx, tx, removalId, []);
     const released = await tx
       .update(creditBatchApplications)
       .set({ removalId: null })

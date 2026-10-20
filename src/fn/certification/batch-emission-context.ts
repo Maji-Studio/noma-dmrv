@@ -11,16 +11,21 @@ import { requireOrgFacility } from "@/data-access/utils";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 import { SafeError } from "@/lib/errors";
 import type { BatchEmissionLineFacts } from "@/lib/certification/emission-lines";
-import type { FacilityCertifierFacts } from "./facility-certifier-facts";
+import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
+
+/** Entry derivation only needs persisted observations, never registry facts. */
+export interface EntryTemplateContext {
+  templatesById: Partial<Record<string, { observation: RemovalTemplateObservation | null }>>;
+}
 
 export type BatchEmissionContext = Record<string,
-  Pick<BatchEmissionLineFacts, "automaticFigures" | "omittedAutomaticSources"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
+  Pick<BatchEmissionLineFacts, "automaticFigures" | "omittedAutomaticSources"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { productionReservationSubmissionId?: string | null; contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
 
 /** Batch-wide facts, even when the Removal carries only some applications. */
 export async function loadBatchEmissionContext(
   ctx: OrgContext, facilityId: string,
   batches: readonly { id: string; removalTemplateId: string | null }[],
-  facilityFacts: FacilityCertifierFacts,
+  facilityFacts: EntryTemplateContext,
 ): Promise<BatchEmissionContext> {
   const result: BatchEmissionContext = {};
   if (!emissionsEntriesEnabled()) return result;
@@ -63,7 +68,7 @@ export async function loadBatchEmissionContext(
       [entry.observationId, observationsById.get(entry.observationId) ?? null] as const,
     ));
     const entries = deriveEmissionEntryFacts(stored, observation, previousObservations);
-    result[id] = { entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
+    result[id] = { productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
       entriesWithoutRemoval: entriesWithoutRemoval(entries, contenders, liveReservationIds, availableApplications) };
   }
   return result;
