@@ -1,4 +1,3 @@
-import { getFacilityById } from "@/data-access/facilities";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { frozenEntriesForAttempt, loadRemovalEntryContext } from "./removal-entry-context";
 import { loadBatchEmissionContext } from "./batch-emission-context";
@@ -241,15 +240,13 @@ export async function buildRemovalContext(
     soilTemperatureGate.blockers,
   );
 
-  const facility = await getFacilityById(orgCtx, scope.facilityId);
-
   // Nothing to submit when the removal carries no applications. Facility
   // template setup does NOT gate the lineage walk; otherwise setup gaps collapse
   // into a misleading "no production data" blocker.
   if (applicationIds.length === 0) {
     return {
       facilityId: scope.facilityId,
-      facilityTimezone: facility.timezone,
+      facilityTimezone: facilityFacts.facilityTimezone,
       removalId: scope.removalId,
       reportingWindowStartedOn: scope.removal?.startedOn ?? null,
       reportingWindowCompletedOn: scope.removal?.completedOn ?? null,
@@ -383,7 +380,7 @@ export async function buildRemovalContext(
 
   return {
     facilityId: scope.facilityId,
-    facilityTimezone: facility.timezone,
+    facilityTimezone: facilityFacts.facilityTimezone,
     removalId: scope.removalId,
     reportingWindowStartedOn: scope.removal?.startedOn ?? null,
     reportingWindowCompletedOn: scope.removal?.completedOn ?? null,
@@ -405,7 +402,7 @@ export async function buildRemovalContext(
     durabilityConfigurationBlockers: durabilityConfigBlockers,
     templateTierBlocker,
     futureDatedMeasurements: collectFutureDatedMeasurements({
-      facilityTimezone: facility.timezone,
+      facilityTimezone: facilityFacts.facilityTimezone,
       runs,
       samples: batchesWithSamples.flatMap((batch) => batch.samples),
       lineages,
