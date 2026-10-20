@@ -113,6 +113,13 @@ interface EntitySideSheetProps {
    * link to the record's own page). Edit then drops to secondary weight.
    */
   viewPrimaryAction?: React.ReactNode;
+  /**
+   * A view-mode footer Delete, after Edit (primary first, destructive after).
+   * Pass it only while the record can be deleted; the caller confirms.
+   */
+  onDelete?: () => void;
+  /** Label for the view-mode Delete action. */
+  deleteLabel?: string;
   /** The form component rendered in edit/create mode */
   children: React.ReactNode;
   /** Panel width */
@@ -143,6 +150,8 @@ function EntitySideSheet({
   editLabel = "Edit",
   canEdit = true,
   viewPrimaryAction,
+  onDelete,
+  deleteLabel = "Delete",
   children,
   size = "wide",
 }: EntitySideSheetProps) {
@@ -310,13 +319,19 @@ function EntitySideSheet({
         )}
 
         {/* Footer — only in view mode; the header X is the way out. A preview's
-            lead action (its link to the record's own page) comes before Edit. */}
-        {isViewMode && (canEdit || viewPrimaryAction) && (
+            lead action (its link to the record's own page) comes before Edit,
+            and Delete comes after it. */}
+        {isViewMode && (canEdit || viewPrimaryAction || onDelete) && (
           <SlideOverPanel.Footer>
             {viewPrimaryAction}
             {canEdit && (
               <Button variant={viewPrimaryAction ? "default" : "primary"} onClick={() => onModeChange("edit")}>
                 {editLabel}
+              </Button>
+            )}
+            {onDelete && (
+              <Button variant="destructive" onClick={onDelete}>
+                {deleteLabel}
               </Button>
             )}
           </SlideOverPanel.Footer>

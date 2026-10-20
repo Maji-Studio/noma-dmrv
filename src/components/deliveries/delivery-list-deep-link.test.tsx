@@ -41,6 +41,7 @@ vi.mock("@/hooks/use-deliveries", () => ({
   }),
   useCreateDelivery: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useUpdateDelivery: () => ({ isPending: false, mutateAsync: harness.update }),
+  useDeleteDelivery: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useFetchDeliveryWithRelations: () => vi.fn(),
 }));
 vi.mock("@/hooks/use-credit-batches", () => ({
@@ -85,6 +86,7 @@ vi.mock("@/components/ui", () => ({
 vi.mock("@/components/navigation", () => ({ SelectFacilityEmptyState: () => null }));
 vi.mock("@/components/ui/data-table", () => ({ DataTable: () => null }));
 vi.mock("@/components/ui/stat-card", () => ({ StatCard: () => null }));
+vi.mock("@/components/ui/delete-confirm-dialog", () => ({ DeleteConfirmDialog: () => null }));
 vi.mock("@/components/forms", () => ({ ServerError: () => null }));
 vi.mock("@/components/certification/entity-certify-readiness-badge", () => ({
   EntityCertifyReadinessBadge: () => null,
