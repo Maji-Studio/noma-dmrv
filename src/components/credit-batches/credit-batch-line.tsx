@@ -42,7 +42,7 @@ function BatchLink({ batch, facilityId }: { batch: CreditBatchLineBatch; facilit
   );
 }
 
-/** "+N": a button opening every batch with its date window. */
+/** "+N": a button opening every batch with its date window. The `after:` box gives it the 44px touch target without changing the line's layout (same trick as the new Removal batch box). */
 function MoreBatches({ batches, rest, facilityId }: { batches: CreditBatchLineBatch[]; rest: number; facilityId?: string | null }) {
   return (
     <>
@@ -54,7 +54,7 @@ function MoreBatches({ batches, rest, facilityId }: { batches: CreditBatchLineBa
           <button
             type="button"
             aria-label={`Show all ${batches.length} credit batches`}
-            className="cursor-pointer text-[var(--clr-dark-purple)] underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-interaction)]"
+            className="relative cursor-pointer text-[var(--clr-dark-purple)] after:absolute after:left-1/2 after:top-1/2 after:size-44 after:-translate-x-1/2 after:-translate-y-1/2 after:content-[''] underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-interaction)]"
           >
             +{rest}
           </button>
