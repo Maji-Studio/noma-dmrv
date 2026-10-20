@@ -18,6 +18,7 @@ import { getStaleVersionConflict } from "@/lib/stale-version";
 import {
   type Answers,
   answerSummary,
+  decisionQuestion,
   entryCount,
   openDecisions,
   startState,
@@ -134,7 +135,7 @@ export function RemovalTemplateSetupFlow({ data, facilityId, templateId: request
             <div className="flex flex-col gap-16">
               {showMissing && step === 0 && <Notice tone="error">Pick a template to continue.</Notice>}
               {showMissing && step === 1 && open.length > 0 && (
-                <Notice tone="error">{`${toDecideLabel(open.length)}: ${open.map((decision) => decision.components[0].component.displayName).join(", ")}.`}</Notice>
+                <Notice tone="error">{`${toDecideLabel(open.length)}: ${open.map((decision) => decisionQuestion(decision)).join(" ")}`}</Notice>
               )}
               {error && (
                 <Notice

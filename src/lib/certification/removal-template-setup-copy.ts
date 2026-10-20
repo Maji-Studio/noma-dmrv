@@ -16,17 +16,10 @@ export type SetupStepKey = "template" | "decisions" | "apply";
 export const SETUP_STEP_KEYS: readonly SetupStepKey[] = ["template", "decisions", "apply"];
 
 /** What noma records for each source, in the words of the explanation lines. */
-const SOURCE_RECORDS: Record<AutomaticSourceId, string> = {
+const SOURCE_RECORDS: Partial<Record<AutomaticSourceId, string>> = {
   "run-genset-diesel": "one generator diesel figure per production run",
   "run-startup-diesel": "one startup diesel figure per production run",
   "run-electricity": "one electricity figure per production run",
-  "feedstock-transport": "one feedstock transport leg per delivery to the site",
-  "delivery-transport": "one delivery transport leg per delivery",
-  "sample-transport": "one sample transport leg per sample",
-  "feedstock-dry-mass": "one feedstock dry mass per intake",
-  "biochar-dry-mass": "one biochar dry mass per credit batch",
-  sequestration: "one set of application and lab results per application",
-  "safety-margin": "one safety margin per credit batch",
 };
 
 const SOURCE_NOUNS: Record<AutomaticSourceId, string> = {
@@ -55,7 +48,7 @@ function sourceNoun(source: string): string {
 }
 
 function sourceRecords(source: string): string {
-  return SOURCE_RECORDS[source as AutomaticSourceId] ?? source;
+  return SOURCE_RECORDS[source as AutomaticSourceId] ?? `one record of ${sourceNoun(source)}`;
 }
 
 /** The source an option fills, if it fills one. */

@@ -52,7 +52,7 @@ describe("RemovalTemplateSetupFlow", () => {
     renderFlow(setupData({ fitting: [withDecisions] }), { step: "decisions" });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(screen.getByRole("heading", { name: "Decide what noma cannot" })).toBeTruthy();
-    expect(screen.getByText(/2 to decide: Pyrolyzer electricity usage, Biomass processing fuel usage\./)).toBeTruthy();
+    expect(screen.getByText(/2 to decide: Which component gets electricity from production runs\? Which source fills Biomass processing fuel usage\?/)).toBeTruthy();
   });
 
   it("disables an option another component already holds and says why", () => {

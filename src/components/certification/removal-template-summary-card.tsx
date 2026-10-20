@@ -81,9 +81,7 @@ export function RemovalTemplateSummaryCard({ facilityId }: { facilityId: string 
         padding="sm"
         action={data.viewerCanManage && data.fitting.length > 0 ? (
           <Link href={removalTemplateSetupHref(facilityId)} className={buttonVariants({ variant: "primary" })}>Set up template</Link>
-        ) : (
-          <p className="body-small text-[var(--color-text-secondary)]">Owners and Admins can set it up.</p>
-        )}
+        ) : undefined}
       />
     );
   }
