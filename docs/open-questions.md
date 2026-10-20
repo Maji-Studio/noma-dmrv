@@ -273,6 +273,7 @@ companion inherits this file's schema, invariants, and resolution rules.
   legacy row. `src/fn/certification/certify-transport-coverage.ts:deriveRequiredTransportCategories`
   derives required categories from the live template, so a category the template
   drops is silently no longer collected or submitted.
+- **Fail closed after retirement (from #1237 review):** once `retire-sample-transport --delete` has run, switching `EMISSIONS_ENTRIES_ENABLED` back off makes a line still bound to `sample-transport` compile 0 t·km with no gap. Decide whether gate-off reads should treat missing sample legs as missing (null plus a readiness gap) once retirement has run, or whether the gate is never switched off again after deletion.
 - Two explanations are open and only a registry probe separates them: the
   re-authored template genuinely dropped sample transport, or the spec picked a
   different template — `pickTransportTemplate` falls back to the first template
