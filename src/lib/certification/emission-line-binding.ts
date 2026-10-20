@@ -60,7 +60,9 @@ export function emissionLineBindingDecision(args: {
     blocker: { ...templateRemovalBlocker("forbiddenLine"), lineRef },
   };
   if (lineCompilesWithoutEmissionSource(component)) return undefined;
-  if (args.entriesCanSubmit && contract?.scope === "operating" && contract.entryPolicy !== "none") return undefined;
+  // Legacy paired transport can have a valid automatic contract but no datapoint mapping.
+  // Entry capability cannot waive mapping checks for the automatic contribution.
+  if (args.entriesCanSubmit && !contract?.automaticSource && contract?.scope === "operating" && contract.entryPolicy !== "none") return undefined;
   const unmappedKeys = component.inputs.filter((input) => input.type === "monitored" &&
     !getSequestrationInputBinding(component.blueprintKey, input.key) &&
     !lookupInputMapping(groupKey, component.blueprintKey, input.key, contract)).map((input) => input.key);

@@ -337,6 +337,28 @@ describe("buildRemovalSourceBindingPlan", () => {
     ["credit-batch-1", ["delivery-1"]],
   ]);
 
+  it("keeps automatic-only plans byte-identical at a fixed mapping revision", () => {
+    // Golden pre-entry plan. A vocabulary revision change is intentional and
+    // independent of role classification, target resolution and ordering.
+    const candidates = classified.map((candidate) => ({ ...candidate,
+      binding: { ...candidate.binding, mappingRevision: "legacy-revision" } }));
+    const plan = buildRemovalSourceBindingPlan({ candidates, template: template as never,
+      applicationIdsByCreditBatchId, deliveryIdsByCreditBatchId });
+    expect(JSON.stringify(plan)).toBe(JSON.stringify([
+      { documentId: "document-delivery", sourceId: "source-delivery", nomaRole: "delivery_bill_of_lading",
+        lineage: { entityType: "delivery", entityId: "delivery-1", entityLabel: "Delivery DEL-001" },
+        intendedTarget: { kind: "ordinary", groupKey: "biochar-transport", componentId: "component-biochar-transport",
+          componentBlueprintKey: "mass_distance_based_ci_emissions", inputKey: "mass_distance", creditBatchIds: [] }, mappingRevision: "legacy-revision" },
+      { documentId: "document-feedstock", sourceId: "source-feedstock", nomaRole: "feedstock_bill_of_lading",
+        lineage: { entityType: "feedstock", entityId: "feedstock-1", entityLabel: "Feedstock FS-001" },
+        intendedTarget: { kind: "ordinary", groupKey: "biomass-feedstock-transport", componentId: "component-feedstock-transport",
+          componentBlueprintKey: "mass_distance_based_ci_emissions", inputKey: "mass_distance", creditBatchIds: [] }, mappingRevision: "legacy-revision" },
+      { documentId: "document-inventory", sourceId: "source-inventory", nomaRole: "inventory", lineage: application,
+        intendedTarget: { kind: "sequestration", groupKey: "co2-stored", componentId: "component-sequestration",
+          componentBlueprintKey: "carbon_rich_substance_sequestration", inputKey: "product_mass", creditBatchIds: ["credit-batch-1"] }, mappingRevision: "legacy-revision" },
+    ]));
+  });
+
   it("persists source identity, Noma role, lineage, target, and revision", () => {
     const plan = buildRemovalSourceBindingPlan({
       candidates: classified,

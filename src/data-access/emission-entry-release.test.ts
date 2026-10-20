@@ -14,7 +14,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   metadata = null;
   const query = (result: unknown[]) => {
-    const q = { from: () => q, where: () => q, for: () => q, returning: () => q,
+    const q = { from: () => q, where: () => q, orderBy: () => q, for: () => q, returning: () => q,
       then: (resolve: (rows: unknown[]) => unknown) => Promise.resolve(result).then(resolve) };
     return q;
   };

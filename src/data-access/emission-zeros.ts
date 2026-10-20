@@ -23,9 +23,11 @@ import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deleti
 
 async function lockZeroDraft(ctx: OrgContext, tx: DbTransaction, data: z.infer<typeof undoEmissionZerosSchema>, expectedVersion?: number) {
   requireOrgScope(ctx);
+  // Stamping holds batch locks before its sentByRemovalId FK takes KEY SHARE here.
+  // NO KEY UPDATE serializes zero writers without closing that batch/Removal cycle.
   const [removal] = await tx.select().from(certifierRemovals).where(and(
     eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, data.removalId),
-  )).for("update");
+  )).for("no key update");
   const context = await lockedBatch(ctx, tx, data.creditBatchId);
   const members = await tx.select({ batch: creditBatches }).from(creditBatchApplications)
     .innerJoin(creditBatches, and(eq(creditBatches.id, creditBatchApplications.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId))).where(and(

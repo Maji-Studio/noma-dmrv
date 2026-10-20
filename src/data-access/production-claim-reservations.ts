@@ -1,3 +1,4 @@
+import { releaseSubmissionReservations } from "./submission-reservation-release";
 import { EMISSION_ENTRIES_CHANGED } from "@/lib/certification/emission-entry-messages";
 import { emissionEntryCanBeReserved } from "@/lib/certification/emission-entry-reservation";
 import { DomainError } from "@/lib/domain-errors";
@@ -286,33 +287,6 @@ export async function rejectSubmissionAndReleaseProductionClaims(
         expectedLockedAt: args.expectedLockedAt,
       });
     }
-    // Lock order: submission, then reserved credit batches.
-    const released = await tx
-      .update(creditBatches)
-      .set({ version: nextVersion(creditBatches.version),
-        productionEmissionsClaimReservedBySubmissionId: null,
-        updatedAt: sql`now()`,
-      })
-      .where(
-        and(
-          eq(
-            creditBatches.productionEmissionsClaimReservedBySubmissionId,
-            args.submissionId,
-          ),
-          eq(creditBatches.organizationId, ctx.organizationId),
-        ),
-      )
-      .returning();
-    // Not flag-gated: a reservation made while the flag was on must still be released.
-    const releasedEntries = await tx.update(emissionEntries).set({
-      sendReservedBySubmissionId: null, version: nextVersion(emissionEntries.version), updatedAt: sql`now()`,
-    }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.sendReservedBySubmissionId, args.submissionId))).returning();
-    for (const entry of releasedEntries) await recordActivityChange(ctx, tx, {
-      entityType: "emission_entry", entityId: entry.id, creditBatchId: entry.creditBatchId, action: "updated", source: "form",
-    }, { ...entry, sendReservedBySubmissionId: args.submissionId }, entry, { skipEmpty: true });
-    for (const batch of released) await recordActivityChange(ctx, tx, {
-      entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
-      action: "updated", source: "form",
-    }, { ...batch, productionEmissionsClaimReservedBySubmissionId: args.submissionId }, batch, { skipEmpty: true });
+    await releaseSubmissionReservations(ctx, tx, args.submissionId, submission.localEntityId);
   });
 }

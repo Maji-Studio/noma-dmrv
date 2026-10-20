@@ -275,6 +275,22 @@ export async function listDocumentsForEntity(
     .limit(MAX_DOCUMENTS_PER_ENTITY);
 }
 
+/** Exact manifest lookup, independent of the capped operator document listing. */
+export async function listEmissionEntryDocumentsByIds(
+  ctx: OrgContext,
+  entryIds: string[],
+  documentIds: string[],
+): Promise<DocumentRow[]> {
+  requireOrgScope(ctx);
+  if (!entryIds.length || !documentIds.length) return [];
+  return db.select().from(documents).where(and(
+    eq(documents.organizationId, ctx.organizationId),
+    eq(documents.entityType, "emission_entry"),
+    inArray(documents.entityId, [...new Set(entryIds)]),
+    inArray(documents.id, [...new Set(documentIds)]),
+  ));
+}
+
 export async function listDocumentsForEntityIds(
   ctx: OrgContext,
   entityType: string,
