@@ -8,13 +8,13 @@ import { certifierRemovals, certificationSubmissions, creditBatchApplications, e
 import type { OrgContext } from "@/lib/auth/server";
 import { requireEmissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { entryLine } from "@/lib/certification/emission-entry-rules";
-import { deriveRemovalEntryContributions, isLiveEntryReservation } from "@/lib/certification/removal-emission-contributions";
+import { deriveRemovalEntryContributions, entriesWithoutRemoval, isLiveEntryReservation } from "@/lib/certification/removal-emission-contributions";
 import { validateLineSources } from "@/lib/isometric/template-observations/line-sources";
 import { SafeError } from "@/lib/errors";
 import { recordEmissionZerosSchema, undoEmissionZerosSchema } from "@/schemas/emission-zeros";
 import { lockedBatch } from "./emission-entries";
 import { loadBatchEmissionEntryFacts } from "./emission-entry-facts";
-import { listEmissionEntryDraftContenders, loadEmissionEntryReservations } from "./emission-entry-contenders";
+import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "./emission-entry-contenders";
 import { recordEmissionEntryActivity } from "./emission-entry-activity";
 import { assertRowVersion, nextVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
@@ -53,11 +53,14 @@ export async function recordEmissionZeros(ctx: OrgContext, input: z.input<typeof
     const contenders = await listEmissionEntryDraftContenders(ctx, [batch.id], tx);
     const reservations = await loadEmissionEntryReservations(ctx, entries.flatMap((entry) => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []), tx);
     const problems = validateLineSources(observation.definition, observation.lineSources);
-    const automatic = (await loadBatchesEmissionAutomaticFacts(ctx, [batch.id]))[batch.id];
+    const automatic = (await loadBatchesEmissionAutomaticFacts(ctx, [batch.id], {}, tx))[batch.id];
     const omittedAutomaticSources = omittedProductionSources(batch.productionEmissionsClaimedByRemovalId, data.removalId);
     // Ignore this Removal's existing zeros while checking eligibility, retaining idempotent writes.
     const candidates = entries.filter((entry) => !(entry.kind === "zero" && entry.confirmedForRemovalId === data.removalId));
+    const availableApplications = await listEmissionEntryAvailableApplications(ctx, [batch.id], tx);
+    const orphanIds = entriesWithoutRemoval(candidates, contenders, new Set(reservations.filter((row) => isLiveEntryReservation(row, Date.now())).map((row) => row.submissionId)), availableApplications);
     const contributions = deriveRemovalEntryContributions({
+      entriesWithoutRemoval: orphanIds,
       removalId: data.removalId, memberBatchIds: [batch.id], window: contenders.find((row) => row.removalId === data.removalId)?.window ?? null,
       contenders, entries: candidates.map((entry) => {
         const reservation = reservations.find((row) => row.submissionId === entry.sendReservedBySubmissionId);
@@ -70,7 +73,7 @@ export async function recordEmissionZeros(ctx: OrgContext, input: z.input<typeof
       entriesCanSubmit: true, omittedAutomaticSources,
       automaticFigures: Object.fromEntries(Object.entries(automatic.automaticFigures).filter(([source]) => !omittedAutomaticSources.some((id) => id === source))),
       entries: candidates.filter((entry) => contributions.ownedEntryIds?.includes(entry.id)),
-    }, batch.id, { entries: candidates }, contributions);
+    }, batch.id, { entries: candidates, entriesWithoutRemoval: orphanIds }, contributions);
     const saved = [];
     for (const componentId of [...new Set(data.componentIds)].sort()) {
       const line = entryLine(observation, componentId);
@@ -91,6 +94,7 @@ export async function recordEmissionZeros(ctx: OrgContext, input: z.input<typeof
       await recordEmissionEntryActivity(ctx, tx, "created", null, { ...entry, values: [] });
       saved.push(entry.id);
     }
+    if (saved.some((id) => !entries.some((entry) => entry.id === id))) await touchZeroReviewVersion(ctx, tx, data.removalId);
     return { entryIds: saved };
   });
 }
@@ -100,7 +104,7 @@ export async function undoEmissionZeros(ctx: OrgContext, input: z.input<typeof u
   requireEmissionsEntriesEnabled();
   const data = undoEmissionZerosSchema.parse(input);
   return db.transaction(async (tx) => {
-    await lockZeroDraft(ctx, tx, data);
+    await lockZeroDraft(ctx, tx, data, data.expectedRemovalVersion);
     const rows = await tx.select().from(emissionEntries).where(and(eq(emissionEntries.organizationId, ctx.organizationId),
       eq(emissionEntries.creditBatchId, data.creditBatchId), eq(emissionEntries.confirmedForRemovalId, data.removalId), isNull(emissionEntries.deletedAt),
     )).orderBy(emissionEntries.id).for("update");
@@ -111,6 +115,15 @@ export async function undoEmissionZeros(ctx: OrgContext, input: z.input<typeof u
       }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, row.id))).returning();
       await recordEmissionEntryActivity(ctx, tx, "deleted", { ...row, values: [] }, { ...saved, values: [] });
     }
+    if (rows.length) await touchZeroReviewVersion(ctx, tx, data.removalId);
     return { entryIds: rows.map((row) => row.id) };
   });
+}
+
+/** Advance the millisecond review token when zero confirmations change. */
+async function touchZeroReviewVersion(ctx: OrgContext, tx: DbTransaction, removalId: string) {
+  requireOrgScope(ctx);
+  await tx.update(certifierRemovals).set({
+    updatedAt: sql`greatest(date_trunc('milliseconds', clock_timestamp()), ${certifierRemovals.updatedAt} + interval '1 millisecond')`,
+  }).where(and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, removalId)));
 }

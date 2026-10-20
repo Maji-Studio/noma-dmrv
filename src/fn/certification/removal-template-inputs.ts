@@ -1,3 +1,4 @@
+import { EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages";
 import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
 import { effectiveContract } from "@/lib/isometric/template-observations/line-sources";
 import { removalLineBlockerMessage } from "@/lib/certification/removal-blockers";
@@ -143,7 +144,7 @@ export function resolveTemplateInputs(args: {
         const contribution = entryInputs.find((input) => input.inputKey === rtcInput.input_key);
         if (args.entryContributions && contract?.scope === "operating" && contract.entryPolicy !== "none" &&
           (!contract.automaticSource || (omitProductionComponents && lookupInputMapping(group.key, component.blueprint_key, rtcInput.input_key, lineContract)?.bucket === "production")) && !contribution) {
-          throw new SafeError("Record a value or confirm that this line has no emissions for this Removal.");
+          throw new SafeError(EMPTY_REMOVAL_LINE);
         }
         const draft = buildCreateDatapointRequest({
           groupKey: group.key,

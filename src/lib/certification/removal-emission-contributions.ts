@@ -1,3 +1,5 @@
+import { ENTRY_HAS_NO_REMOVAL } from "@/lib/certification/emission-entry-messages";
+import { formatUtcDate } from "@/lib/date-utils";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { getMetadataValue, SUBMISSION_METADATA_KEYS, SUBMISSION_EXTERNAL_MUTATIONS } from "./submission-metadata";
 import { effectiveContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
@@ -6,13 +8,12 @@ import { sumFigures, type EmissionFigure } from "./emission-lines";
 import type { RemovalBlocker } from "./removal-blockers";
 
 export interface RemovalEntryWindow { start: string; end: string }
-const CALENDAR_DATE_LENGTH = 10;
 /** Applications are calendar dates persisted at UTC midnight, never facility instants. */
 export function deriveRemovalEntryWindow(
   memberBatches: readonly { startDate: string }[], applicationDates: readonly (Date | string)[],
 ): RemovalEntryWindow | null {
   const starts = memberBatches.map((batch) => batch.startDate).sort();
-  const ends = applicationDates.map((date) => (date instanceof Date ? date.toISOString() : date).slice(0, CALENDAR_DATE_LENGTH)).sort();
+  const ends = applicationDates.map((date) => date instanceof Date ? formatUtcDate(date) : date).sort();
   if (!starts.length || !ends.length || starts[0] > ends[ends.length - 1]) return null;
   return { start: starts[0], end: ends[ends.length - 1] };
 }
@@ -78,6 +79,18 @@ export function removalEntryOwner(entry: RemovalEntryFact, contenders: readonly 
     .sort((a, b) => a.window.end.localeCompare(b.window.end) || a.createdAt.localeCompare(b.createdAt) || a.removalId.localeCompare(b.removalId))[0]?.removalId ?? null;
 }
 
+/** Shared by batch reads and the transactional zero writer. */
+export function entriesWithoutRemoval(
+  entries: readonly RemovalEntryFact[], contenders: readonly EntryContender[], liveReservationIds: ReadonlySet<string>,
+  applications: readonly { creditBatchId: string; applicationDate: Date }[],
+): string[] {
+  return entries.filter((entry) => entry.kind === "value" && !entry.sentByRemovalId &&
+    !liveReservationIds.has(entry.sendReservedBySubmissionId ?? "") &&
+    !removalEntryOwner({ ...entry, reservationKnownInactive: true }, contenders) &&
+    !applications.some((application) => application.creditBatchId === entry.creditBatchId &&
+      formatUtcDate(application.applicationDate) >= entry.occurredOn)).map((entry) => entry.id);
+}
+
 /** Select whole entries before reducing inputs, so paired measurements never cross entries. */
 export function deriveRemovalEntryContributions(args: {
   removalId: string; memberBatchIds: readonly string[]; window: RemovalEntryWindow | null;
@@ -97,7 +110,7 @@ export function deriveRemovalEntryContributions(args: {
     const contract = stored && effectiveContract(stored);
     if (contract?.scope !== "operating" || contract.entryPolicy === "none") continue;
     if (!owner && entry.kind === "value" && (args.entriesWithoutRemoval?.includes(entry.id) ?? true)) result.blockers.push({
-      code: "entryHasNoRemoval", message: "No Removal can carry this entry yet", fixTarget: "emissions", creditBatchId: entry.creditBatchId,
+      code: "entryHasNoRemoval", message: ENTRY_HAS_NO_REMOVAL, fixTarget: "emissions", creditBatchId: entry.creditBatchId,
       lineRef: { componentId: entry.componentId, displayName: entry.componentId },
     });
     if (entry.kind === "value" && entry.lineRule === "single" && entry.sentByRemovalId && entry.sentByRemovalId !== args.removalId) {

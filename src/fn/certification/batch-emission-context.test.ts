@@ -263,7 +263,7 @@ it("blocks the batch when an entry is after every draft's application window", a
   const batches = [{ id: "one", removalTemplateId: "template" }];
   const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facilityFacts);
   const resolved = resolveRemovalTemplate(batches, facilityFacts, loaded);
-  expect(resolved.emissionLinesByBatchId.one[0].blocker).toMatchObject({ code: "entryHasNoRemoval", message: "No Removal can carry this entry yet", fixTarget: "emissions" });
+  expect(resolved.emissionLinesByBatchId.one[0].blocker).toMatchObject({ code: "entryHasNoRemoval", message: "No Removal can carry this entry yet. Change its date to fit the Removal period, or wait for a later Removal.", fixTarget: "emissions" });
 });
 
 it.each(["2026-01-01", "2026-03-01"])("allows an entry before an available application, including before the first draft (%s)", async (occurredOn) => {

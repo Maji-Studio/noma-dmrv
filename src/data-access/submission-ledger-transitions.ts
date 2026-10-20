@@ -1,3 +1,4 @@
+import { recordActivityChange } from "./activity-events";
 import { emissionEntries } from "@/db/schema/emission-entries";
 import { readRemovalEntrySnapshot } from "@/lib/certification/removal-entry-snapshot";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
@@ -76,16 +77,22 @@ export async function markSubmissionSubmitted(
         .where(and(eq(creditBatches.organizationId, ctx.organizationId), inArray(creditBatches.id, batchIds)))
         .orderBy(creditBatches.id).for("update");
       const frozen = readRemovalEntrySnapshot(updated[0]).frozenEntrySet;
+      const beforeEntries = await tx.select().from(emissionEntries).where(and(
+        eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.sendReservedBySubmissionId, id),
+      )).orderBy(emissionEntries.id).for("update");
       const stamped = await tx.update(emissionEntries).set({
         sentByRemovalId: args.productionEmissionsClaim.removalId, sendReservedBySubmissionId: null,
         version: nextVersion(emissionEntries.version), updatedAt: sql`now()`,
       }).where(and(eq(emissionEntries.organizationId, ctx.organizationId),
         eq(emissionEntries.sendReservedBySubmissionId, id), isNull(emissionEntries.deletedAt),
         or(isNull(emissionEntries.sentByRemovalId), eq(emissionEntries.sentByRemovalId, args.productionEmissionsClaim.removalId)),
-      )).returning({ id: emissionEntries.id, contentRevision: emissionEntries.contentRevision });
+      )).returning();
       if (stamped.length !== frozen.length || stamped.some((entry) => !frozen.some((item) => item.entryId === entry.id && item.contentRevision === entry.contentRevision))) {
         throw new SafeError("Emissions entry reservation changed before submission could be finalized. Review the Removal again.");
       }
+      for (const entry of stamped) await recordActivityChange(ctx, tx, {
+        entityType: "emission_entry", entityId: entry.id, creditBatchId: entry.creditBatchId, action: "updated", source: "form",
+      }, beforeEntries.find((before) => before.id === entry.id)!, entry, { skipEmpty: true });
     }
     if (args.productionEmissionsClaim?.creditBatchIds.length) {
       // A throw here rolls back the ledger flip too: the row stays a locked

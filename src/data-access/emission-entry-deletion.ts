@@ -28,8 +28,8 @@ export async function releaseDeletedRemovalEntries(ctx: OrgContext, tx: DbTransa
       ...(zeroOwned ? { deletedAt: sql`now()`, contentRevision: nextVersion(emissionEntries.contentRevision) } : {}),
       version: nextVersion(emissionEntries.version), updatedAt: sql`now()`,
     }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, row.id))).returning();
+    await recordEmissionEntryActivity(ctx, tx, zeroOwned ? "deleted" : "updated", { ...row, values: [] }, { ...saved, values: [] }, { skipEmpty: !zeroOwned });
     if (zeroOwned) {
-      await recordEmissionEntryActivity(ctx, tx, "deleted", { ...row, values: [] }, { ...saved, values: [] });
       // The owner is hard-deleted. Keep the persisted tombstone in activity, then remove the never-sent zero
       // so the non-null owner CHECK and composite NO ACTION FK remain intact.
       await tx.delete(emissionEntries).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, row.id)));

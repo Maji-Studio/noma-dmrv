@@ -1,5 +1,5 @@
 import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
-import { isLiveEntryReservation, removalEntryOwner, type EntryContender } from "@/lib/certification/removal-emission-contributions";
+import { isLiveEntryReservation, entriesWithoutRemoval, type EntryContender } from "@/lib/certification/removal-emission-contributions";
 import type { OrgContext } from "@/lib/auth/server";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import type { loadBatchEmissionEntryFacts } from "@/data-access/emission-entry-facts";
@@ -64,10 +64,7 @@ export async function loadBatchEmissionContext(
     ));
     const entries = deriveEmissionEntryFacts(stored, observation, previousObservations);
     result[id] = { entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
-      entriesWithoutRemoval: entries.filter((entry) => entry.kind === "value" && !entry.sentByRemovalId &&
-        !liveReservationIds.has(entry.sendReservedBySubmissionId ?? "") &&
-        !removalEntryOwner({ ...entry, reservationKnownInactive: true }, contenders) &&
-        !availableApplications.some((application) => application.creditBatchId === id && application.applicationDate.toISOString().slice(0, "YYYY-MM-DD".length) >= entry.occurredOn)).map((entry) => entry.id) };
+      entriesWithoutRemoval: entriesWithoutRemoval(entries, contenders, liveReservationIds, availableApplications) };
   }
   return result;
 }

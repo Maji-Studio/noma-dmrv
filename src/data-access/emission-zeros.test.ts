@@ -1,10 +1,10 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), batch: vi.fn(), facts: vi.fn(), contenders: vi.fn(), reservations: vi.fn(), automatic: vi.fn(), activity: vi.fn() }));
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), batch: vi.fn(), facts: vi.fn(), contenders: vi.fn(), reservations: vi.fn(), available: vi.fn(), automatic: vi.fn(), activity: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 vi.mock("./emission-entries", () => ({ lockedBatch: mocks.batch }));
 vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: mocks.facts }));
-vi.mock("./emission-entry-contenders", () => ({ listEmissionEntryDraftContenders: mocks.contenders, loadEmissionEntryReservations: mocks.reservations }));
+vi.mock("./emission-entry-contenders", () => ({ listEmissionEntryAvailableApplications: mocks.available, listEmissionEntryDraftContenders: mocks.contenders, loadEmissionEntryReservations: mocks.reservations }));
 vi.mock("./emission-entry-activity", () => ({ recordEmissionEntryActivity: mocks.activity }));
 vi.mock("@/lib/certification/emissions-entry-gate", () => ({ requireEmissionsEntriesEnabled: vi.fn() }));
 vi.mock("./batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: mocks.automatic }));
@@ -37,6 +37,7 @@ beforeEach(() => {
   mocks.facts.mockResolvedValue({ entries: [] });
   mocks.contenders.mockResolvedValue([{ contenderKind: "draft", removalId, creditBatchIds: [creditBatchId], createdAt: "2026-01-01", window: { start: "2026-01-01", end: "2026-02-01" } }]);
   mocks.reservations.mockResolvedValue([]);
+  mocks.available.mockResolvedValue([]);
   mocks.automatic.mockResolvedValue({ [creditBatchId]: { automaticFigures: {} } });
 });
 it("records a zero with the pinned binding and trimmed note, capturing the persisted row", async () => {
@@ -112,4 +113,18 @@ it("locks the Removal before its batch", async () => {
   });
   rows = [[{ id: removalId, updatedAt: new Date(), metadata: null }], [{ id: "member" }], []];
   await recordEmissionZeros(ctx, input);
+});
+
+it("accepts the same empty line as the read when a value awaits a future application", async () => {
+  mocks.facts.mockResolvedValue({ entries: [{ id: "later", componentId: "line", kind: "value", counts: true,
+    creditBatchId, occurredOn: "2026-03-01", values: [], evidenceDocumentIds: [] }] });
+  mocks.available.mockResolvedValue([{ creditBatchId, applicationDate: new Date("2026-04-01") }]);
+  expect(await recordEmissionZeros(ctx, input)).toEqual({ entryIds: ["zero"] });
+  const tx = mocks.batch.mock.calls[0][1];
+  expect(mocks.automatic).toHaveBeenCalledWith(ctx, [creditBatchId], {}, tx);
+  expect(mocks.available).toHaveBeenCalledWith(ctx, [creditBatchId], tx);
+});
+it("refuses undo with a stale Removal review token", async () => {
+  await expect(undoEmissionZeros(ctx, { removalId, creditBatchId, expectedRemovalVersion: 1 })).rejects.toMatchObject({ code: "stale_version" });
+  expect(update).not.toHaveBeenCalled();
 });

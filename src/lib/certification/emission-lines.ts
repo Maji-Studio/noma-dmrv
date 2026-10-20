@@ -1,3 +1,4 @@
+import { EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages";
 import { DomainError } from "@/lib/domain-errors";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
@@ -93,7 +94,7 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     else if (contract?.automaticSource && facts.omittedAutomaticSources?.includes(contract.automaticSource)) { state = "filled"; blocker = undefined; }
     else { state = "empty"; blocker = decision?.blocker;
       if (facts.entriesCanSubmit && contract?.scope === "operating" && contract.entryPolicy !== "none") {
-        blocker = { code: "lineHasNoSource", message: "Record a value or confirm that this line has no emissions for this Removal.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+        blocker = { code: "lineHasNoSource", message: EMPTY_REMOVAL_LINE, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
       }
     }
     // A paired-input value has no scalar total. Do not show a partial sum.

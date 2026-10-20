@@ -1,6 +1,7 @@
+import { EMISSION_ENTRIES_CHANGED } from "@/lib/certification/emission-entry-messages";
 import type { certificationSubmissions } from "@/db/schema/certification";
 import { readRemovalEntrySnapshot } from "@/lib/certification/removal-entry-snapshot";
-import { DomainError } from "@/lib/domain-errors";
+import { getMetadataValue, SUBMISSION_METADATA_KEYS, SUBMISSION_EXTERNAL_MUTATIONS } from "@/lib/certification/submission-metadata";
 import { omittedProductionSources } from "@/lib/certification/removal-emission-lines";
 import type { OrgContext } from "@/lib/auth/server";
 import { loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
@@ -16,9 +17,8 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   const observation = facility.templatesById[scope.memberBatches[0]?.removalTemplateId ?? ""]?.observation;
   if (!observation) return undefined;
   const allEntries = Object.values(facts).flatMap((batch) => batch.entries);
-  if (frozenEntrySet && frozenEntrySet.some((frozen) => !allEntries.some((entry) => entry.id === frozen.entryId && entry.contentRevision === frozen.contentRevision && !entry.deletedAt))) {
-    throw new DomainError("conflict", "Emissions entries changed. Review the Removal again.", { retryable: true });
-  }
+  const frozenChanged = frozenEntrySet && frozenEntrySet.some((frozen) => !allEntries.some((entry) => entry.id === frozen.entryId && entry.contentRevision === frozen.contentRevision && !entry.deletedAt));
+  if (frozenChanged) frozenEntrySet = undefined;
   // Historical sent singles remain omission facts, even though they are not part of this attempt's frozen set.
   const belongsToFrozenView = (entry: (typeof allEntries)[number]) => !frozenEntrySet ||
     frozenEntrySet.some((frozen) => frozen.entryId === entry.id) ||
@@ -48,6 +48,8 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
       return unit ? [{ componentId: component.id, inputKey: input.key, unit }] : [];
     }))),
   });
+  if (frozenChanged) contributions.blockers.push({ code: "lineNeedsReview", message: EMISSION_ENTRIES_CHANGED,
+    fixTarget: "emissions", creditBatchId: scope.memberBatches[0].id });
   const batchFacts: BatchEmissionContext = Object.fromEntries(Object.entries(facts).map(([id, batch]) => {
     const member = scope.memberBatches.find((item) => item.id === id);
     const omittedAutomaticSources = omittedProductionSources(member?.productionEmissionsClaimedByRemovalId, scope.removalId!);
@@ -66,5 +68,6 @@ export function frozenEntriesForAttempt(submission: typeof certificationSubmissi
   const entries = Object.values(facts).flatMap((batch) => batch.entries);
   const reserved = frozen.length > 0 && frozen.every((item) => entries.some((entry) =>
     entry.id === item.entryId && entry.sendReservedBySubmissionId === submission.id));
-  return reserved || isLiveEntryReservation(submission, Date.now()) ? frozen : undefined;
+  const mutation = getMetadataValue(submission.metadata, SUBMISSION_METADATA_KEYS.externalMutation);
+  return reserved || mutation === SUBMISSION_EXTERNAL_MUTATIONS.possible || mutation === SUBMISSION_EXTERNAL_MUTATIONS.confirmed ? frozen : undefined;
 }

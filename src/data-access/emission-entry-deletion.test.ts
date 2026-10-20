@@ -20,3 +20,18 @@ it.each([null, new Date("2026-01-01")])("records deletion only for a live zero (
   expect(update).toHaveBeenCalledTimes(deletedAt ? 0 : 1);
   expect(mocks.activity).toHaveBeenCalledTimes(deletedAt ? 0 : 1);
 });
+
+it("records claim release activity for value entries on draft deletion", async () => {
+  mocks.activity.mockClear();
+  const before = { id: "value", kind: "value", sendReservedBySubmissionId: "attempt" };
+  const after = { ...before, sendReservedBySubmissionId: null };
+  const query = (rows: unknown[]) => {
+    const q = { from: () => q, where: () => q, orderBy: () => q, for: () => q, returning: () => q,
+      then: (resolve: (rows: unknown[]) => unknown) => Promise.resolve(rows).then(resolve) };
+    return q;
+  };
+  const tx = { select: () => query([before]), update: () => ({ set: () => query([after]) }) as never } as unknown as DbTransaction;
+  const ctx = makeTestOrgContext();
+  await releaseDeletedRemovalEntries(ctx, tx, "removal", ["attempt"]);
+  expect(mocks.activity).toHaveBeenCalledExactlyOnceWith(ctx, tx, "updated", { ...before, values: [] }, { ...after, values: [] }, { skipEmpty: true });
+});

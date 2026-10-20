@@ -58,9 +58,9 @@ it("retries with exactly the frozen set, leaving newly created entries for a lat
   expect(result?.contributions.entrySet).toEqual([{ entryId: "entry-b1", contentRevision: 1 }]);
   expect(result?.batchFacts.b2.entries).toEqual([]);
 });
-it("refuses a frozen retry when an entry changed or disappeared", async () => {
-  await expect(loadRemovalEntryContext(makeTestOrgContext(), scope, facts(), facility, [{ entryId: "entry-b1", contentRevision: 2 }])).rejects.toThrow("Emissions entries changed");
-  await expect(loadRemovalEntryContext(makeTestOrgContext(), scope, facts(), facility, [{ entryId: "missing", contentRevision: 1 }])).rejects.toThrow("Emissions entries changed");
+it.each(["entry-b1", "missing"])("keeps reads available with a blocker for inconsistent frozen entry %s", async (entryId) => {
+  const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, facts(), facility, [{ entryId, contentRevision: 2 }]);
+  expect(result?.contributions.blockers).toContainEqual(expect.objectContaining({ code: "lineNeedsReview", message: "Emissions entries changed. Review the Removal again." }));
 });
 it("keeps an owned stale entry visible instead of treating it as absent", async () => {
   const loaded = facts();
@@ -98,11 +98,21 @@ it("loads edited entries after a crash before reservation and lock expiry", asyn
   const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, loaded, facility, frozen);
   expect(result?.contributions.entrySet).toContainEqual({ entryId: "entry-b1", contentRevision: 2 });
 });
-it.each(["reserved", "live", "possible", "confirmed"])("keeps the frozen view for %s attempts", (state) => {
+it.each(["reserved", "possible", "confirmed"])("keeps the frozen view for %s attempts", (state) => {
   const loaded = facts();
   if (state === "reserved") loaded.b1.entries[0].sendReservedBySubmissionId = "attempt";
   const frozenEntrySet = [{ entryId: "entry-b1", contentRevision: 1 }];
   const submission = { id: "attempt", status: "draft", lockedAt: state === "live" ? new Date() : new Date(0),
     metadata: { externalMutation: state }, payloadSnapshot: { frozenEntrySet } } as Parameters<typeof frozenEntriesForAttempt>[0];
   expect(frozenEntriesForAttempt(submission, loaded)).toEqual(frozenEntrySet);
+});
+
+it("uses new entries after a crashed unreserved attempt acquires a fresh lock", async () => {
+  const loaded = facts();
+  const submission = { id: "attempt", status: "draft", lockedAt: new Date(), metadata: null,
+    payloadSnapshot: { frozenEntrySet: [{ entryId: "entry-b1", contentRevision: 1 }] } } as Parameters<typeof frozenEntriesForAttempt>[0];
+  const frozen = frozenEntriesForAttempt(submission, loaded);
+  expect(frozen).toBeUndefined();
+  const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, loaded, facility, frozen);
+  expect(result?.contributions.entrySet).toHaveLength(2);
 });

@@ -106,7 +106,7 @@ import { loadBatchEmissionContext } from "./batch-emission-context";
 import { loadCertificationOverview } from "./overview";
 import { loadRemovalEmptyLines } from "./removal-empty-lines-core";
 
-it("loads context, Empty lines and the facility overview after an unreserved draft crashes and its entry changes", async () => {
+it.each([new Date(0), new Date()])("loads context, Empty lines and overview after an unreserved draft entry changes (lock %s)", async (lockedAt) => {
   vi.mocked(emissionsEntriesEnabled).mockReturnValue(true);
   const template = structuredClone(fixture) as GhgEntryTemplate;
   const facility = facts(template);
@@ -118,7 +118,7 @@ it("loads context, Empty lines and the facility overview after an unreserved dra
   vi.mocked(loadFacilityCertifierFacts).mockResolvedValue(facility);
   vi.mocked(listRemovalsForFacility).mockResolvedValue([removal] as never);
   vi.mocked(getCertifierRemovalById).mockResolvedValue(removal as never);
-  vi.mocked(getLatestSubmission).mockResolvedValue({ id: "crashed", status: "draft", lockedAt: new Date(0), metadata: null,
+  vi.mocked(getLatestSubmission).mockResolvedValue({ id: "crashed", status: "draft", lockedAt, metadata: null,
     payloadSnapshot: { frozenEntrySet: [{ entryId: "entry", contentRevision: 1 }] } } as never);
   vi.mocked(loadBatchEmissionContext).mockResolvedValue({ "batch-1": { entries: [{ id: "entry", componentId: "removed-line", creditBatchId: "batch-1",
     kind: "value", contentRevision: 2, counts: false, values: [], evidenceDocumentIds: [], occurredOn: "2026-01-02" }],

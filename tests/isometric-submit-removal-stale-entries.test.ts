@@ -11,7 +11,7 @@ import * as isometric from "@/lib/isometric";
 vi.mock("@/data-access/emission-entry-contenders", () => ({ loadEmissionEntryReservations: vi.fn(async () => []) }));
 vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => true }));
 
-it("heals a crashed unreserved draft after entry edits and submits a new version", async () => {
+it("heals a crashed unreserved draft after a new entry is added and submits a new version", async () => {
   const org = makeTestOrgContext(USER_ID);
   vi.mocked(loadRemovalSubmissionContext).mockImplementation(async () => makeContext());
   vi.mocked(isometric.createDatapoint).mockImplementation(vi.fn(fakeExternalIds("dp")) as never);
@@ -20,7 +20,7 @@ it("heals a crashed unreserved draft after entry edits and submits a new version
   // Retain a complete modern snapshot, but model a process that died before reservation or registry writes.
   const row = storedRows[0];
   Object.assign(row, { status: "draft", externalId: null, submittedAt: null, metadata: null, lockedAt: new Date(0),
-    payloadSnapshot: { ...row.payloadSnapshot as object, frozenEntrySet: [{ entryId: "entry", contentRevision: 1 }] } });
+    payloadSnapshot: { ...row.payloadSnapshot as object, frozenEntrySet: [] } });
   vi.mocked(isometric.createDatapoint).mockClear();
   vi.mocked(isometric.createGhgEntry).mockClear();
   const batchFacts = { [CREDIT_BATCH_ID]: { entries: [{ id: "entry", creditBatchId: CREDIT_BATCH_ID,
@@ -42,10 +42,10 @@ it("heals a crashed unreserved draft after entry edits and submits a new version
   });
   vi.mocked(isometric.createDatapoint).mockImplementation(vi.fn(fakeExternalIds("dp")) as never);
   vi.mocked(isometric.createGhgEntry).mockImplementation(vi.fn(fakeExternalIds("rmv")) as never);
-  // The initial read succeeds. Once reclaimed, the mismatch rejects the attempt normally.
-  await expect(submitRemoval({ orgCtx: org, removalId: REMOVAL_ID })).rejects.toThrow("Emissions entries changed");
+  // The initial read succeeds. Once reclaimed, the new entry changes the rebuilt hash and retires the attempt.
+  await expect(submitRemoval({ orgCtx: org, removalId: REMOVAL_ID })).rejects.toThrow("stale draft was retired");
   expect(loadedFresh).toBe(true);
-  expect(row.status).toBe("rejected");
+  expect(row.status).toBe("superseded");
   expect(isometric.createGhgEntry).not.toHaveBeenCalled();
   await expect(submitRemoval({ orgCtx: org, removalId: REMOVAL_ID })).resolves.toMatchObject({ version: 2 });
   expect(isometric.createGhgEntry).toHaveBeenCalledOnce();

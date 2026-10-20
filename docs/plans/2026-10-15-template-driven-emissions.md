@@ -138,7 +138,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | `observationId` | The template observation the entry was written against |
 | `kind` | `value` or `zero`. `zero` is written only by the Removal-flow confirmation. |
 | `confirmedForRemovalId` | Required on `zero` rows: the draft Removal whose confirmation wrote it. Null on value rows. Separate from the sent claim. |
-| `occurredOn` | Date in the facility time zone. Not before the batch start date, not in the future. The entry window (§4.5) starts at the same date, so every accepted date has a Removal that can carry it. |
+| `occurredOn` | Date in the facility time zone. Not before the batch start date, not in the future. The entry window (§4.5) starts at the same date, but an accepted date may wait for a later application and Removal. |
 | `note`, `createdBy`, timestamps | |
 | `version` | Concurrency only: bumped by every write, claims included |
 | `contentRevision` | Bumped only by changes that alter what would be sent: values, date, binding or evidence |
@@ -149,7 +149,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - **Removal-confirmed zeros** belong to the draft Removal that confirmed them, through `confirmedForRemovalId`, never through the pool of eligible entries:
   - unique per `(confirmedForRemovalId, creditBatchId, componentId)` where `deletedAt` is null; a multi-batch Removal writes one zero per member batch and line;
   - reservation, stamping and retries carry them like that Removal's other entries;
-  - releasing an attempt keeps them on the draft; deleting the draft, or superseding it, tombstones them; they never return to the pool, so no other Removal can send them;
+  - releasing or retiring an attempt keeps them on the Removal draft; deleting the draft preserves their activity tombstones (§4.5); they never return to the pool, so no other Removal can send them;
   - adding a value entry to a line tombstones that line's zeros on every unsubmitted draft that owns one.
 - Isometric receives 0 for the line with no file; the note stays in noma.
 - On a follow-up Removal of the same batch, a `single` line whose value an earlier Removal already sent counts as sent, not empty. It is omitted like a production component (ADR 0020) and needs no zero confirmation.
@@ -288,7 +288,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
   - an existing live reservation or claim wins;
   - otherwise the eligible Removal with the earliest window end, then the earliest draft creation, then the lowest id.
   - This rule is only for entry contenders. It does not reuse the production contender ordering (`listProductionClaimDraftContenders`, by reporting quarter).
-- An entry outside every window waits and blocks the batch with "No Removal can carry this entry yet". If the batch is fully applied, #1059 sends it on the facility's next Removal (§7).
+- An entry outside every draft window blocks only when no available, unsubmitted application is dated on or after it; otherwise it waits for a later Removal. The blocker gives the next action: change the entry date to fit the Removal period, or wait for a later Removal. If the batch is fully applied, #1059 sends it on the facility's next Removal (§7).
 - A 200-year Removal grouping two batches that both have an entry on the same `single` line is refused in v1. Paired inputs are never summed one input at a time. Whether Isometric accepts list-shaped inputs (`InputDataShape: LIST`) for these lines is a follow-up.
 
 **Reservation and claims**
@@ -300,19 +300,20 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - Stamping happens in `markSubmissionSubmitted`.
 - Release follows `rejectSubmissionAndReleaseProductionClaims`: release on mutation-free failure, keep on an ambiguous one.
 - Removal deletion releases entry claims only in `finalizeRemovalDeletion`, after registry cleanup.
+- Draft deletion hard-deletes never-sent zeros after an activity tombstone because the zero-owner CHECK and NO ACTION FK forbid retaining them after the Removal row is deleted.
 - Retries resume with the frozen entry set from the snapshot.
 
 **Guard**
 - A line can carry entries only when its contract is `operating` with an entry policy other than `none`. An entry existing on it is not enough.
 - Additive entries go alongside an automatic source when the contract has both, including entry-only follow-ups.
 - `forbidden` and `unassigned` lines stay blocked.
-- The sandbox zero stub is removed.
+- Part 3 removes the sandbox zero stub together with the nightly E2E update.
 
 **Snapshot and hash**
 - `semanticPayload` gains the semantic fingerprint and a contribution manifest per input: entry id, `contentRevision`, values and evidence document ids. Any change that alters what is sent therefore moves `payloadHash`.
 - `reviewPayloadHash` keeps these fields; it only strips registry Source ids and generated ledgers.
 - The materialized snapshot stores the observation id.
-- A DB trigger refuses updates to `payload_snapshot` once the status leaves draft.
+- A DB trigger freezes `payload_snapshot` once the status leaves draft, exempting only `journaled`, which holds registry recovery identities for durability-measurement retries, not reviewed payload.
 
 **Evidence binding**
 - `buildRemovalSourceBindingPlan` gains explicit `{componentId, inputKey}` targets, validated against the entries being sent.
@@ -414,7 +415,7 @@ Decided by Kenji on 2026-10-15, and deferred to #1059, after PR 4:
 ## 8. Risks and checks
 
 - **Hash churn.** Entry edits supersede sent Removals. The derived "correction needed" state and the edit window keep this explicit.
-- **Window edge.** An entry dated after its batch's last application has no Removal to go on until #1059 ships. It shows as blocking on the batch, and is never silently dropped.
+- **Window edge.** An entry dated after its batch's last application has no Removal to go on until #1059 ships. It blocks only when no draft window covers it and no available, unsubmitted application is dated on or after it; otherwise it waits, and is never silently dropped.
 - **Additive double count.** It cannot be detected. The form shows the run total, and the batch panel lists run and entry sources side by side.
 - **Template fetch cost.** Observations are written on fetches that already happen. No new polling.
 - **Verify protocol wording verbatim before gating.** The quotes in ADR 0032 came through the MCP; re-read them against https://registry.isometric.com/protocol/biochar/1.1 before PR 4 merges.

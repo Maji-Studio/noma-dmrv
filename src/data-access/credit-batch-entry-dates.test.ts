@@ -23,3 +23,17 @@ it.each([true, false])("invalidates zeros after redating a single value only whe
   if (enabled) expect(mocks.tombstone).toHaveBeenCalledExactlyOnceWith(ctx, tx, after);
   else expect(mocks.tombstone).not.toHaveBeenCalled();
 });
+
+it("redates an additive zero when narrowing the start without treating it as a manual dated value", async () => {
+  mocks.enabled = true;
+  const row = { id: "zero", kind: "zero", lineRule: "additive", creditBatchId: "batch", occurredOn: "2026-06-01" };
+  const query = (rows: object[]) => {
+    const q = { from: () => q, where: () => q, orderBy: () => q, for: () => q, returning: () => q,
+      then: (resolve: (rows: object[]) => unknown) => Promise.resolve(rows).then(resolve) };
+    return q;
+  };
+  const set = vi.fn(() => query([{ ...row, occurredOn: "2026-06-02" }]));
+  const tx = { select: () => query([row]), update: () => ({ set }) } as unknown as DbTransaction;
+  await syncCreditBatchEntryDates(makeTestOrgContext(), tx, { id: "batch", startDate: "2026-06-01", endDate: "2026-06-30" } as CreditBatch, "2026-06-02", "2026-06-30");
+  expect(set).toHaveBeenCalledWith(expect.objectContaining({ occurredOn: "2026-06-02" }));
+});

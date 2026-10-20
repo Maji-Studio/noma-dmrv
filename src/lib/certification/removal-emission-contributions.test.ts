@@ -42,7 +42,7 @@ describe("Removal entry windows and ownership", () => {
     }
   });
   it.each(["2025-12-31", "2026-03-02"])("blocks an entry outside every window: %s", (occurredOn) => {
-    expect(derive([entry({ occurredOn })]).blockers).toEqual([{ code: "entryHasNoRemoval", message: "No Removal can carry this entry yet", fixTarget: "emissions", creditBatchId: "b1", lineRef: { componentId: "c1", displayName: "c1" } }]);
+    expect(derive([entry({ occurredOn })]).blockers).toEqual([{ code: "entryHasNoRemoval", message: "No Removal can carry this entry yet. Change its date to fit the Removal period, or wait for a later Removal.", fixTarget: "emissions", creditBatchId: "b1", lineRef: { componentId: "c1", displayName: "c1" } }]);
   });
   it("ignores tombstones and nonmember batches", () => {
     expect(derive([entry({ deletedAt: new Date() }), entry({ id: "e2", creditBatchId: "foreign" })]).selectedEntryIds).toEqual([]);

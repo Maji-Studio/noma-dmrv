@@ -1,3 +1,4 @@
+import { EMISSION_ENTRIES_CHANGED } from "@/lib/certification/emission-entry-messages";
 import { emissionEntryCanBeReserved } from "@/lib/certification/emission-entry-reservation";
 import { DomainError } from "@/lib/domain-errors";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
@@ -111,7 +112,7 @@ export async function reserveProductionEmissionsClaims(
     const entries = entryIds.length ? await tx.select().from(emissionEntries).where(and(
       eq(emissionEntries.organizationId, ctx.organizationId), inArray(emissionEntries.id, entryIds),
     )).orderBy(emissionEntries.id).for("update") : [];
-    const entryChanged = () => new DomainError("conflict", "Emissions entries changed. Review the Removal again.", { retryable: true });
+    const entryChanged = () => new DomainError("conflict", EMISSION_ENTRIES_CHANGED, { retryable: true });
     if (new Set(entryIds).size !== entryIds.length || entries.length !== frozen.length) throw entryChanged();
     const submissionIds = [
       ...new Set(
@@ -207,9 +208,12 @@ export async function reserveProductionEmissionsClaims(
       );
     }
 
-    if (entryIds.length) await tx.update(emissionEntries).set({
+    const reservedEntries = entryIds.length ? await tx.update(emissionEntries).set({
       sendReservedBySubmissionId: args.submissionId, version: nextVersion(emissionEntries.version), updatedAt: sql`now()`,
-    }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), inArray(emissionEntries.id, entryIds)));
+    }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), inArray(emissionEntries.id, entryIds))).returning() : [];
+    for (const entry of reservedEntries) await recordActivityChange(ctx, tx, {
+      entityType: "emission_entry", entityId: entry.id, creditBatchId: entry.creditBatchId, action: "updated", source: "form",
+    }, entries.find((before) => before.id === entry.id)!, entry, { skipEmpty: true });
     if (!productionIds.length) return;
     const reserved = await tx
       .update(creditBatches)
@@ -300,9 +304,12 @@ export async function rejectSubmissionAndReleaseProductionClaims(
       )
       .returning();
     // Not flag-gated: a reservation made while the flag was on must still be released.
-    await tx.update(emissionEntries).set({
+    const releasedEntries = await tx.update(emissionEntries).set({
       sendReservedBySubmissionId: null, version: nextVersion(emissionEntries.version), updatedAt: sql`now()`,
-    }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.sendReservedBySubmissionId, args.submissionId)));
+    }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.sendReservedBySubmissionId, args.submissionId))).returning();
+    for (const entry of releasedEntries) await recordActivityChange(ctx, tx, {
+      entityType: "emission_entry", entityId: entry.id, creditBatchId: entry.creditBatchId, action: "updated", source: "form",
+    }, { ...entry, sendReservedBySubmissionId: args.submissionId }, entry, { skipEmpty: true });
     for (const batch of released) await recordActivityChange(ctx, tx, {
       entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
       action: "updated", source: "form",

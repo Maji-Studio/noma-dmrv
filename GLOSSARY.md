@@ -409,6 +409,8 @@ from the same credit batch can remain unassigned for a later Removal without
 changing the earlier one. A credit batch's production emissions are claimed by
 at most one Removal. There is no claimant until the first successful Removal
 submission records one, preventing double-counting across entries (ADR 0020).
+Each emissions entry has a separate claim: one submission reserves it, then stamps
+the sending Removal on it. This claim is independent of the batch production claim.
 _Avoid_: batch, issuance; "production batch" as a separate entity —
 the credit batch *is* noma's production batch.
 
@@ -431,6 +433,8 @@ basis splits by emission-input bucket (ADR 0020): **stored** quantities
 are ex-post applied-scoped (each run weighted by its applied share);
 the **production** bucket submits in full, once, on the claiming
 Removal; the **delivery** bucket is applied-scoped.
+A Removal also sends the individual emissions entries its submission reserves,
+stamping itself as their sender so each entry is sent once.
 Submission is single-phase (`submitRemoval`) **to the registry**. There is
 **no remote Removal status** in this integration, so a Removal's lifecycle
 ends at *Submitted* (+ *Superseded* on a re-version) — never *Accepted* /

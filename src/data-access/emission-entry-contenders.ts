@@ -49,10 +49,10 @@ export async function loadEmissionEntryReservations(ctx: OrgContext, submissionI
 }
 
 /** Applications still available to a current or future draft, compared as calendar dates. */
-export async function listEmissionEntryAvailableApplications(ctx: OrgContext, creditBatchIds: string[]) {
+export async function listEmissionEntryAvailableApplications(ctx: OrgContext, creditBatchIds: string[], executor: Executor = db) {
   requireOrgScope(ctx);
   if (!creditBatchIds.length) return [];
-  return db.select({ creditBatchId: creditBatchApplications.creditBatchId, applicationDate: applications.applicationDate })
+  return executor.select({ creditBatchId: creditBatchApplications.creditBatchId, applicationDate: applications.applicationDate })
     .from(creditBatchApplications)
     .innerJoin(applications, and(eq(applications.id, creditBatchApplications.applicationId), eq(applications.organizationId, ctx.organizationId)))
     .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.creditBatchId, creditBatchIds),
