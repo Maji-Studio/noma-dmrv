@@ -770,6 +770,7 @@ other admitted MCP requests count as reads.
 
 `src/lib/mcp/tools/read-tools.ts` defines whoami, the intake find tools and
 get_feedstock. Each request captures its resolved context in a fresh server.
+Tool list changes are not advertised because stateless serving cannot push them.
 `src/lib/mcp/tools/write-tools.ts` adds log_feedstock_delivery, update_feedstock
 and delete_feedstock through the same operation runner as REST. Each write needs
 one requestKey reused on retry; dryRun previews may omit it. Updates and deletes

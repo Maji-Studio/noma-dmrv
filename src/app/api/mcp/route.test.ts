@@ -71,12 +71,20 @@ vi.mock("@/lib/read-models/api-drivers", () => ({ readApiDriverList: vi.fn() }))
 vi.mock("@/lib/read-models/api-feedstocks", () => ({ readApiFeedstockList: vi.fn(), readApiFeedstock: vi.fn() }));
 
 const ENDPOINT = "http://localhost:3100/api/mcp";
+/** Far below the route's 30 s maxDuration; a listen stream that is still open here never ends. */
+const STREAM_END_LIMIT_MS = 2000;
+const MODERN_REVISION = "2026-07-28";
+const ENVELOPE = {
+  "io.modelcontextprotocol/protocolVersion": MODERN_REVISION,
+  "io.modelcontextprotocol/clientCapabilities": {},
+  "io.modelcontextprotocol/clientInfo": { name: "unit-test", version: "1" },
+};
 const rateHeaders = { "RateLimit-Limit": "600", "RateLimit-Remaining": "599", "RateLimit-Reset": "1" };
-function rpc(method: string, params: Record<string, unknown> = {}, headers: Record<string, string> = {}) {
+function rpc(method: string, params: Record<string, unknown> = {}, headers: Record<string, string> = {}, id = 1) {
   return new Request(ENDPOINT, { method: "POST", headers: {
     "content-type": "application/json", accept: "application/json, text/event-stream",
     "mcp-protocol-version": "2025-06-18", authorization: "Bearer test-key", ...headers,
-  }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+  }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params }) });
 }
 async function body(response: Response) {
   const text = await response.text();
@@ -279,11 +287,9 @@ describe("authenticated MCP read route", () => {
   });
 });
 
-it("serves read results on MCP revision 2026-07-28", async () => {
-  const request = rpc("tools/call", { name: "whoami", arguments: {}, _meta: {
-    "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-    "io.modelcontextprotocol/clientCapabilities": {},
-  } }, { "mcp-protocol-version": "2026-07-28", "mcp-method": "tools/call", "mcp-name": "whoami" });
+it(`serves read results on MCP revision ${MODERN_REVISION}`, async () => {
+  const request = modernRequest("tools/call", 1, { name: "whoami", arguments: {} });
+  request.headers.set("mcp-name", "whoami");
   const response = await POST(request);
   const payload = await body(response);
   expect(response.status, JSON.stringify(payload)).toBe(200);
@@ -498,4 +504,32 @@ it.each(LOCATION_WRITE_TOOLS)("returns a retryable deadline result for %s before
   const response = await call(name, { requestKey: "write" });
   expect(response.status).toBe(200);
   expect(await body(response)).toMatchObject({ result: { isError: true, structuredContent: { code: "deadline_exceeded", retryable: true } } });
+});
+
+function modernRequest(method: string, id: number, params: Record<string, unknown> = {}) {
+  return rpc(method, { ...params, _meta: ENVELOPE }, {
+    "mcp-protocol-version": MODERN_REVISION, "mcp-method": method,
+  }, id);
+}
+
+async function readsToEnd(response: Response) {
+  const reader = response.body!.getReader();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<"open">((resolve) => { timer = setTimeout(() => resolve("open"), STREAM_END_LIMIT_MS); });
+  try {
+    for (;;) {
+      const next = await Promise.race([reader.read(), limit]);
+      if (next === "open") { await reader.cancel(); return false; }
+      if (next.done) return true;
+    }
+  } finally { clearTimeout(timer); }
+}
+
+// Stateless serverless MCP cannot push list changes; an open listen stream only burns the function to maxDuration.
+it("does not advertise tool list changes and closes subscriptions/listen at once", async () => {
+  const listen = await POST(modernRequest("subscriptions/listen", 1, { notifications: { toolsListChanged: true } }));
+  expect(listen.status).toBe(200);
+  expect(await readsToEnd(listen)).toBe(true);
+  const discover = await (await POST(modernRequest("server/discover", 2))).json();
+  expect(discover.result.capabilities.tools.listChanged).toBe(false);
 });
