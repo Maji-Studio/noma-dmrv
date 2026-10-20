@@ -14,6 +14,14 @@ Never review a diff with the model that wrote it: if gpt-6-astra implemented the
 with gpt-6.1-sol even when the escalation above would pick gpt-6-astra, and vice versa. Model
 assignments in the project's CLAUDE.md take precedence over these defaults.
 
+## Safety preamble
+
+Paste this text verbatim as the first lines of every Codex prompt this skill writes (the review target or task follows it; in Mode B the `Target:` line comes right after the preamble):
+
+> Safety rules. Do not read, list or cat any file outside this repository (no ~/.npmrc, ~/.ssh, ~/.config, other home dotfiles). Do not run pnpm db:reset, db:push, db:migrate, drizzle-kit push, psql or any SQL against a database. Do not run pkill, killall or kill on processes you did not start. Do not edit package.json dependencies or the lockfile unless the task says so. Never loosen, skip or delete a test, lint rule or guard to make something pass; stop and report instead.
+
+When a command below runs in the background (`codex exec` or a stdin-fed `codex review`), pass the prompt file as stdin (`- < prompt.md`); without it the process waits on "Reading additional input from stdin" and hangs.
+
 ## Shared invocation rules
 
 - Locate the binary with the PATH-then-pnpm fallback and always call it via `"$CODEX"`:
@@ -89,12 +97,12 @@ The target flags are **mutually exclusive with a custom prompt** (re-verified on
 
 ```bash
 # Mode B — custom instructions via stdin; NO target flag allowed. Name the review
-# target in the prompt's first line — codex resolves the diff itself with git:
+# target in the first line after the safety preamble — codex resolves the diff itself with git:
 "$CODEX" -m gpt-6.1-sol -c 'model_reasoning_effort="high"' -C "$PWD" review - < "$PROMPT" > "$REPORT"
 ```
 
 Prefer Mode B whenever task-specific context matters (it usually does); use Mode A for a
-plain no-context review.
+plain no-context review. Mode A carries no safety preamble, so use Mode B whenever the safety rules matter (always, in auto mode).
 
 ### 4. Verify before presenting
 
@@ -112,10 +120,12 @@ residual test gaps.
 
 Write this into `$PROMPT`, adding task-specific context (requirements the change must meet,
 risky areas, expected behavior, files Claude is unsure about) where useful. In Mode B the
-first line MUST name the target, e.g. `Target: the diff of this branch against the base
+first line after the safety preamble MUST name the target, e.g. `Target: the diff of this branch against the base
 branch staging (git diff staging...HEAD).` or `Target: all uncommitted changes.`
 
 ```text
+<Safety preamble, verbatim>
+
 Target: <the exact diff to review>
 
 Review these changes for bugs, regressions, security issues, requirement mismatches, meaningful

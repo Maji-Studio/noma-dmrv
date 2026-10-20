@@ -9,6 +9,14 @@ reviewing the diff, running or checking verification, and explaining the final r
 let Codex commit, push, deploy, or edit global config. Codex output is **evidence, not
 authority**.
 
+## Safety preamble
+
+Paste this text verbatim as the first lines of every Codex prompt this skill writes (the review target or task follows it):
+
+> Safety rules. Do not read, list or cat any file outside this repository (no ~/.npmrc, ~/.ssh, ~/.config, other home dotfiles). Do not run pnpm db:reset, db:push, db:migrate, drizzle-kit push, psql or any SQL against a database. Do not run pkill, killall or kill on processes you did not start. Do not edit package.json dependencies or the lockfile unless the task says so. Never loosen, skip or delete a test, lint rule or guard to make something pass; stop and report instead.
+
+When a command below runs in the background (`codex exec` or a stdin-fed `codex review`), pass the prompt file as stdin (`- < prompt.md`); without it the process waits on "Reading additional input from stdin" and hangs.
+
 ## Shared invocation rules
 
 - Locate the binary with the PATH-then-pnpm fallback and always call it via `"$CODEX"`:
@@ -81,6 +89,8 @@ authority**.
 - **Never touch `staging`/`main`** or create commits.
 
 ## Example Prompt
+
+Start every prompt with the safety preamble, verbatim.
 
 ```text
 Repository: <task worktree from scripts/worktree.sh new, never the main checkout> (branch: <current>)
