@@ -157,7 +157,7 @@ it("shows the lines when a delivery has no load mass, leaving delivery transport
   vi.mocked(getEmissionAutomaticMasses).mockResolvedValue({ runs: {}, legs: {} });
   const lines = await loadReadyLines();
   expect(lines.length).toBeGreaterThan(0);
-  expect(loadBiocharDeliveryTransportLegs).toHaveBeenCalledWith(expect.anything(), [{ deliveryId: "complete", loadMassKg: 10 }]);
+  expect(loadBiocharDeliveryTransportLegs).toHaveBeenCalledWith(expect.anything(), [{ deliveryId: "complete", loadMassKg: 10 }], expect.anything());
   const delivery = lines.filter((line) => line.contract?.automaticSource === "delivery-transport");
   expect(delivery.length).toBeGreaterThan(0);
   for (const line of delivery) expect(line.automaticFigure).toBeNull();

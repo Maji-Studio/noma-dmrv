@@ -19,7 +19,7 @@ export interface UnbindableTemplateInput {
 
 export function findUnbindableTemplateInputs(
   template: components["schemas"]["GhgEntryTemplate"],
-  options: { lineSources?: LineSources; enrichmentComplete?: boolean } = {},
+  options: { lineSources?: LineSources; enrichmentComplete?: boolean; entriesCanSubmit?: boolean } = {},
 ): UnbindableTemplateInput[] {
   if (options.enrichmentComplete === false) return [];
   const definition = normalizeTemplateDefinition(template);
@@ -29,7 +29,7 @@ export function findUnbindableTemplateInputs(
   return template.groups.flatMap((group) => group.components.flatMap((rawComponent) => {
     const component = componentsById.get(rawComponent.id)!;
     const decision = emissionLineBindingDecision({ component, groupKey: group.key,
-      contract: ownValue(lineSources, component.id), problems, enrichmentComplete: options.enrichmentComplete ?? true });
+      contract: ownValue(lineSources, component.id), entriesCanSubmit: options.entriesCanSubmit, problems, enrichmentComplete: options.enrichmentComplete ?? true });
     if (!decision) return [];
     const finding = (inputKey: string, reason: LineCoverageReason) => ({ groupKey: group.key, componentId: component.id,
       componentDisplayName: component.displayName, blueprintKey: component.blueprintKey, inputKey, reason, state: decision.state });

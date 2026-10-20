@@ -1,3 +1,4 @@
+import { releaseDeletedRemovalEntries } from "./emission-entry-deletion";
 import { recordActivityChange } from "./activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { withCertificationStatusActivity } from "./certification-status-activity";
@@ -742,6 +743,7 @@ export async function finalizeRemovalDeletion(
       )
       .returning({ id: creditBatchApplications.id, creditBatchId: creditBatchApplications.creditBatchId, removalId: creditBatchApplications.removalId });
 
+    await releaseDeletedRemovalEntries(ctx, tx, claim.removalId, claim.submissionIds);
     const [deleted] = await tx
       .delete(certifierRemovals)
       .where(
