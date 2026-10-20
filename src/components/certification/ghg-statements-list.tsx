@@ -44,6 +44,7 @@ import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
 import { SubmittedOnCell, submittedOnSortingFn, submittedOnSortValue } from "./submitted-on-cell";
+import { LastSyncedCell, lastSyncedSortingFn, lastSyncedSortValue } from "./last-synced-cell";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
@@ -309,6 +310,14 @@ const createColumns = (
     cell: ({ row }) => (
       <SubmittedOnCell state={row.original.submittedOn} />
     ),
+  },
+  {
+    id: "lastSynced",
+    header: "Last synced",
+    accessorFn: (item) => lastSyncedSortValue(item.lastSyncedAt),
+    sortingFn: lastSyncedSortingFn,
+    sortUndefined: "last",
+    cell: ({ row }) => <LastSyncedCell value={row.original.lastSyncedAt} />,
   },
   {
     id: "status",
