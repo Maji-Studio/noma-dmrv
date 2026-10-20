@@ -189,7 +189,7 @@ it.each([false, true])("runs follow-up line derivation through compilation, incl
     ["run-electricity", "delivery-transport"].includes(allSources[component.id]?.automaticSource ?? "")),
   })).filter((group) => group.components.length);
   const sources = resolveLineSources({ definition: normalizeTemplateDefinition(template) });
-  const facility = { templatesById: { [template.id]: { template, observation: { lineSources: sources },
+  const facility = { facilityTimezone: "UTC", templatesById: { [template.id]: { template, observation: { lineSources: sources },
     enrichmentProblems: [], lineSourceProblems: [], blueprintsForTemplate: [], unresolvedBlueprintKeys: [], requiredTransportCategories: [],
   } } } as unknown as FacilityCertifierFacts;
   const contributions = deriveRemovalEntryContributions({ removalId: "r", memberBatchIds: ["batch"], window: null,

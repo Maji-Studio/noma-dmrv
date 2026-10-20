@@ -54,6 +54,7 @@ function supportedAutomaticTemplate(template: GhgEntryTemplate) {
 
 function facilityFacts(template: GhgEntryTemplate, lineSources: LineSources): FacilityCertifierFacts {
   return {
+    facilityTimezone: "UTC",
     hasOrgCredentials: true, mapping: { externalProjectId: template.project_id },
     defaultTemplate: { ...template, id: "different-default" },
     templatesById: { [template.id]: {

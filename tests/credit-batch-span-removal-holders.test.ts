@@ -67,6 +67,7 @@ function makeReadinessContext(
   // The gate consumes these prepared context fields before its span check.
   // Registry/template loading is outside this DB contract.
   return {
+    facilityTimezone: "UTC",
     mapping, hasOrgCredentials: true, removalTemplate: template,
     lineSources: reviewedTemplateSources(template), templateBlockers: [],
     unresolvedBlueprintKeys: [], blueprintsForTemplate: [],

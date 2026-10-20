@@ -17,6 +17,7 @@ const template = templateFixture as GhgEntryTemplate;
 
 function facts(): FacilityCertifierFacts {
   return {
+    facilityTimezone: "UTC",
     // Deliberately a different default. It must never be used for a Removal.
     defaultTemplate: { ...template, id: "other-default" },
     templatesById: {

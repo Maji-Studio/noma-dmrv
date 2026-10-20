@@ -52,6 +52,7 @@ describe("createRemovalWithBatchesAction", () => {
     vi.clearAllMocks();
     mocks.requireOrgContext.mockResolvedValue(ORG_CONTEXT);
     mocks.loadFacilityCertifierFacts.mockResolvedValue({
+      facilityTimezone: "UTC",
       hasOrgCredentials: false,
       mapping: null,
       defaultTemplate: null,
@@ -82,6 +83,7 @@ describe("createRemovalWithBatchesAction", () => {
 });
 
 const CONNECTED = {
+  facilityTimezone: "UTC",
   hasOrgCredentials: true, mapping: { externalFacilityId: "fcl-1" }, defaultTemplate: null,
   missingDefaultTemplateId: null, unresolvedBlueprintKeys: [], unbindableTemplateInputs: [],
 };

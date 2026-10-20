@@ -10,9 +10,9 @@
 
 import { DomainError } from "@/lib/domain-errors";
 import { and, eq, gt, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
-import { productionRuns } from "@/db/schema";
+import { facilities, productionRuns } from "@/db/schema";
 import { isPgUniqueViolation } from "@/db/errors";
-import { formatLocalDate, formatLocalTime } from "@/lib/date-utils";
+import { formatProductionRunOverlapMessage } from "@/lib/production-runs/overlap-conflict";
 import { conflictCode } from "@/lib/conflict-ref";
 import type { RunConflict } from "@/lib/production-runs/overlap-conflict";
 import type { DbTransaction } from "@/db";
@@ -51,34 +51,6 @@ export function runWindowsConflict(
   const candEnd = candidate.end ?? Number.POSITIVE_INFINITY;
   const exEnd = existing.end ?? Number.POSITIVE_INFINITY;
   return candidate.start < exEnd && existing.start < candEnd;
-}
-
-/** Format a single instant as "YYYY-MM-DD HH:MM" using the shared date helpers. */
-function formatInstant(d: Date): string {
-  return `${formatLocalDate(d)} ${formatLocalTime(d)}`;
-}
-
-/** Format a closed window; collapses the date when start and end share a day. */
-function formatWindow(start: Date, end: Date): string {
-  const startDate = formatLocalDate(start);
-  const endDate = formatLocalDate(end);
-  const startTime = formatLocalTime(start);
-  const endTime = formatLocalTime(end);
-  return startDate === endDate
-    ? `${startDate} ${startTime} to ${endTime}`
-    : `${formatInstant(start)} to ${formatInstant(end)}`;
-}
-
-/** Build the friendly, non-technical overlap message for a conflicting run. */
-function overlapMessage(conflict: {
-  code: string;
-  startTime: Date;
-  endTime: Date | null;
-}): string {
-  if (conflict.endTime) {
-    return `Overlaps run ${conflict.code} (${formatWindow(conflict.startTime, conflict.endTime)}) on this reactor`;
-  }
-  return `Production run ${conflict.code} on this reactor is unfinished. Set its end time before adding another run.`;
 }
 
 /**
@@ -142,14 +114,19 @@ export async function assertNoReactorRunOverlap(
       code: productionRuns.code,
       startTime: productionRuns.startTime,
       endTime: productionRuns.endTime,
+      facilityTimezone: facilities.timezone,
     })
     .from(productionRuns)
+    .innerJoin(facilities, and(
+      eq(facilities.id, productionRuns.facilityId),
+      eq(facilities.organizationId, ctx.organizationId),
+    ))
     .where(and(...conditions))
     .limit(1);
 
   if (!conflict) return;
 
-  throw new ProductionRunOverlapError(overlapMessage(conflict), {
+  throw new ProductionRunOverlapError(formatProductionRunOverlapMessage(conflict), {
     entity: "productionRun",
     id: conflict.id,
     code: conflictCode(conflict.code),

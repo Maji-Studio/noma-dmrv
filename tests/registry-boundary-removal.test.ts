@@ -372,6 +372,7 @@ function makeContext(
   return {
     facilityId: fixture.facilityId,
     hasOrgCredentials: true,
+    facilityTimezone: "UTC",
     removalId: fixture.removalId,
     reportingWindowStartedOn: null,
     reportingWindowCompletedOn: null,

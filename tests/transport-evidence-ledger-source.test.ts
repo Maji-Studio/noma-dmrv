@@ -127,6 +127,7 @@ function ctx(overrides?: {
   legs?: { feedstock: TransportLeg[]; biochar: TransportLeg[]; sample: TransportLeg[] };
 }): RemovalSubmissionContext {
   return {
+    facilityTimezone: "UTC",
     facilityId: FACILITY,
     removalId: REMOVAL,
     mapping:

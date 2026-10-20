@@ -27,6 +27,7 @@ it.each(["missing observation", "incomplete enrichment"])("defers coverage to te
     });
     expect(facts.unbindableTemplateInputs).toEqual([]);
     const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], {
+      facilityTimezone: "UTC",
       templatesById: { [template.id]: facts },
     } as unknown as FacilityCertifierFacts);
     expect(resolved.templateBlockers[0]).toEqual({ code: "templateNotFullyRead", message: REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead });

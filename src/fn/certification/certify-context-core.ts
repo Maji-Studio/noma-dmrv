@@ -246,6 +246,7 @@ export async function buildRemovalContext(
   if (applicationIds.length === 0) {
     return {
       facilityId: scope.facilityId,
+      facilityTimezone: facilityFacts.facilityTimezone,
       removalId: scope.removalId,
       reportingWindowStartedOn: scope.removal?.startedOn ?? null,
       reportingWindowCompletedOn: scope.removal?.completedOn ?? null,
@@ -379,6 +380,7 @@ export async function buildRemovalContext(
 
   return {
     facilityId: scope.facilityId,
+    facilityTimezone: facilityFacts.facilityTimezone,
     removalId: scope.removalId,
     reportingWindowStartedOn: scope.removal?.startedOn ?? null,
     reportingWindowCompletedOn: scope.removal?.completedOn ?? null,
@@ -400,6 +402,7 @@ export async function buildRemovalContext(
     durabilityConfigurationBlockers: durabilityConfigBlockers,
     templateTierBlocker,
     futureDatedMeasurements: collectFutureDatedMeasurements({
+      facilityTimezone: facilityFacts.facilityTimezone,
       runs,
       samples: batchesWithSamples.flatMap((batch) => batch.samples),
       lineages,

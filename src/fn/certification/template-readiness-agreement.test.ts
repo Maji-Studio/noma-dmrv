@@ -25,7 +25,7 @@ function templateFacts(sources: LineSources = {}) {
     unbindableTemplateInputs: findUnbindableTemplateInputs(template, { lineSources: sources }),
     requiredTransportCategories: [],
   };
-  return { template, facility: { templatesById: { [template.id]: facts } } as unknown as FacilityCertifierFacts };
+  return { template, facility: { facilityTimezone: "UTC", templatesById: { [template.id]: facts } } as unknown as FacilityCertifierFacts };
 }
 
 function context(resolved: ReturnType<typeof resolveRemovalTemplate>): RemovalCertifyContext {

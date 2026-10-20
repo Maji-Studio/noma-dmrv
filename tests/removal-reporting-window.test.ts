@@ -53,6 +53,7 @@ describe("assertReportingWindowNotInverted", () => {
           lineage("2026-04-01T00:00:00Z", "APP-B", RUN_B, "RUN-B"),
         ],
         runStartTimeByRunId: runStarts,
+        facilityTimezone: "UTC",
       }),
     ).not.toThrow();
   });
@@ -68,6 +69,7 @@ describe("assertReportingWindowNotInverted", () => {
           lineage("2026-02-01T00:00:00Z", "APP-B", RUN_B, "RUN-B"),
         ],
         runStartTimeByRunId: runStarts,
+        facilityTimezone: "UTC",
       }),
     ).toThrow(
       /APP-B is dated 2026-02-01, before its production run RUN-B started 2026-03-01/,
@@ -79,8 +81,28 @@ describe("assertReportingWindowNotInverted", () => {
       assertReportingWindowNotInverted({
         lineages: [lineage("2026-01-01T00:00:00Z", "APP-A", RUN_A)],
         runStartTimeByRunId: runStarts,
+        facilityTimezone: "UTC",
       }),
     ).not.toThrow();
+  });
+
+  it.each([
+    { zone: "Africa/Dar_es_Salaam", start: "2026-07-25T22:30:00Z", day: "2026-07-26", previous: "2026-07-25" },
+    { zone: "America/Los_Angeles", start: "2026-07-26T02:30:00Z", day: "2026-07-25", previous: "2026-07-24" },
+  ])("compares business dates with the run's local day in $zone", ({ zone, start, day, previous }) => {
+    const runStartTimeByRunId = new Map([[RUN_A, new Date(start)]]);
+    const check = (applicationDay: string) => assertReportingWindowNotInverted({
+      lineages: [lineage(`${applicationDay}T00:00:00Z`, "APP-A", RUN_A, "RUN-A")],
+      runStartTimeByRunId,
+      facilityTimezone: zone,
+    });
+    expect(() => check(day)).not.toThrow();
+    const message = thrownMessage(() => check(previous));
+    expect(message).toBe(
+      `Application APP-A is dated ${previous}, before its production run RUN-A started ${day}. ` +
+        "Correct the application date before submitting.",
+    );
+    expect(message).not.toMatch(EN_OR_EM_DASH);
   });
 
   it("fails closed when a lineage has no production run", () => {
@@ -88,6 +110,7 @@ describe("assertReportingWindowNotInverted", () => {
       assertReportingWindowNotInverted({
         lineages: [lineage("2026-02-01T00:00:00Z", "APP-X", null)],
         runStartTimeByRunId: runStarts,
+        facilityTimezone: "UTC",
       }),
     ).toThrow(/APP-X.*no resolvable production run start/);
   });
@@ -103,6 +126,7 @@ describe("assertReportingWindowNotInverted", () => {
           ),
         ],
         runStartTimeByRunId: runStarts,
+        facilityTimezone: "UTC",
       }),
     ).toThrow(/APP-Y.*no resolvable production run start/);
   });

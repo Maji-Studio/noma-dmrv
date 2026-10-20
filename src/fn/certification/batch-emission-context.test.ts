@@ -35,7 +35,7 @@ const template = {
 const observation = { id: "current", externalTemplateId: template.id, definition: normalizeTemplateDefinition(template),
   enrichment: { line: { electricity_use: { unit: "kWh" } } },
   lineSources: { line: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } } };
-const facilityFacts = { templatesById: { template: { template, observation,
+const facilityFacts = { facilityTimezone: "UTC", templatesById: { template: { template, observation,
   lineSourceProblems: [], enrichmentProblems: [], blueprintsForTemplate: [], unresolvedBlueprintKeys: [],
   unbindableTemplateInputs: [], requiredTransportCategories: [],
 } } } as unknown as FacilityCertifierFacts;

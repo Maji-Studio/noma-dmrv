@@ -23,6 +23,7 @@ describe("collectFutureDatedMeasurements", () => {
         runs: [run("PR-0001", new Date("2026-07-20T08:00:00.000Z"))],
         lineages: [lineage("APP-0001", new Date("2026-07-24T00:00:00.000Z"))],
         now: NOW,
+        facilityTimezone: "UTC",
       }),
     ).toEqual([]);
   });
@@ -33,6 +34,7 @@ describe("collectFutureDatedMeasurements", () => {
         runs: [run("PR-0001", NOW)],
         lineages: [lineage("APP-0001", NOW)],
         now: NOW,
+        facilityTimezone: "UTC",
       }),
     ).toEqual([]);
   });
@@ -42,6 +44,7 @@ describe("collectFutureDatedMeasurements", () => {
       runs: [run("PR-0007", new Date("2026-08-01T06:00:00.000Z"))],
       lineages: [],
       now: NOW,
+      facilityTimezone: "UTC",
     });
 
     expect(rest).toEqual([]);
@@ -52,11 +55,25 @@ describe("collectFutureDatedMeasurements", () => {
     expect(blocker).not.toMatch(EN_OR_EM_DASH);
   });
 
+  it.each([
+    { zone: "Africa/Dar_es_Salaam", start: "2026-07-25T22:30:00Z", end: "2026-07-25T23:30:00Z", day: "2026-07-26" },
+    { zone: "America/Los_Angeles", start: "2026-07-26T02:30:00Z", end: "2026-07-26T03:30:00Z", day: "2026-07-25" },
+  ])("keeps the instant check and prints the facility day in $zone", ({ zone, start, end, day }) => {
+    const runs = [run("PR-0007", new Date(end))];
+    const blockers = collectFutureDatedMeasurements({ runs, lineages: [], now: new Date(start), facilityTimezone: zone });
+    expect(blockers).toEqual([
+      `Production run PR-0007 ends on ${day}. Change the end time or wait until the run ends.`,
+    ]);
+    expect(blockers[0]).not.toMatch(EN_OR_EM_DASH);
+    expect(collectFutureDatedMeasurements({ runs, lineages: [], now: new Date(end), facilityTimezone: zone })).toEqual([]);
+  });
+
   it("names the application dated in the future", () => {
     const [blocker] = collectFutureDatedMeasurements({
       runs: [],
       lineages: [lineage("APP-0003", new Date("2026-08-14T00:00:00.000Z"))],
       now: NOW,
+      facilityTimezone: "UTC",
     });
 
     expect(blocker).toBe(
@@ -72,6 +89,7 @@ describe("collectFutureDatedMeasurements", () => {
       samples: [sample("LAB-0042", new Date("2026-08-14T09:30:00.000Z"))],
       lineages: [],
       now: NOW,
+      facilityTimezone: "UTC",
     });
 
     expect(blocker).toBe(
@@ -92,6 +110,7 @@ describe("collectFutureDatedMeasurements", () => {
         lineage("APP-0004", new Date("2026-07-02T00:00:00.000Z")),
       ],
       now: NOW,
+      facilityTimezone: "UTC",
     });
 
     expect(blockers).toHaveLength(2);
@@ -105,6 +124,7 @@ describe("collectFutureDatedMeasurements", () => {
         runs: [run("PR-0009", null)],
         lineages: [],
         now: NOW,
+        facilityTimezone: "UTC",
       }),
     ).toEqual([]);
   });
@@ -116,6 +136,7 @@ describe("collectFutureDatedMeasurements", () => {
         samples: [{ sampleCode: "LAB-0042" }],
         lineages: [],
         now: NOW,
+        facilityTimezone: "UTC",
       }),
     ).toEqual([]);
   });
@@ -130,6 +151,7 @@ describe("collectFutureDatedMeasurements", () => {
           lineage("APP-0003", applicationDate),
         ],
         now: NOW,
+        facilityTimezone: "UTC",
       }),
     ).toHaveLength(1);
   });

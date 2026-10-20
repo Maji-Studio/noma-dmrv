@@ -57,6 +57,7 @@ it.each(cases)("coverage, readiness and submission agree for %s", (name, code, r
   if (code === "lineNeedsReview") expect(lines[0].blocker?.fixTarget).toBe("templateLineReview");
   expect(coverage[0]?.reason).toBe(reason);
   const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], {
+    facilityTimezone: "UTC",
     templatesById: { [template.id]: { template, observation: { lineSources: sources }, enrichmentProblems: [],
       lineSourceProblems: validateLineSources(normalizeTemplateDefinition(template), sources),
       blueprintsForTemplate: [], unresolvedBlueprintKeys: [], unbindableTemplateInputs: coverage, requiredTransportCategories: [],

@@ -15,39 +15,18 @@ import * as readingsActions from "@/fn/production-run-readings";
 import * as readingImportActions from "@/fn/production-run-reading-imports";
 import * as readingsCsv from "@/lib/production-readings/readings-csv";
 import { deriveRemovalReadiness } from "@/lib/certification/readiness";
-import {
-  getCertifierProjectByFacility,
-  type CertifierProjectRow,
-} from "@/data-access/certification";
+import { getCertifierProjectByFacility, type CertifierProjectRow } from "@/data-access/certification";
 import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
-import {
-  getCreditBatchById,
-  getCreditBatchActiveScopeRemovalId,
-} from "@/data-access/credit-batches";
-import {
-  listDocumentsForEntityIds,
-} from "@/data-access/documents";
+import { getCreditBatchById, getCreditBatchActiveScopeRemovalId } from "@/data-access/credit-batches";
+import { listDocumentsForEntityIds } from "@/data-access/documents";
 import { getProductionRunsForCertification } from "@/data-access/production-runs";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
-import {
-  listComponentBlueprints,
-  listProjects,
-  listGhgEntryTemplates,
-  type IsometricComponentBlueprint,
-  type IsometricProject,
-  type IsometricGhgEntryTemplate,
-} from "@/lib/isometric";
-import {
-  loadCertifyContextForCreditBatchForUser,
-} from "@/fn/certification/certify-context-core";
-import {
-  mockNormalizedLineageFacts,
-  satisfiedVisualEvidenceDocuments,
-  transportTemplate,
-} from "./fixtures/certify-context";
+import { listComponentBlueprints, listProjects, listGhgEntryTemplates, type IsometricComponentBlueprint, type IsometricProject, type IsometricGhgEntryTemplate } from "@/lib/isometric";
+import { loadCertifyContextForCreditBatchForUser } from "@/fn/certification/certify-context-core";
+import { mockNormalizedLineageFacts, satisfiedVisualEvidenceDocuments, transportTemplate } from "./fixtures/certify-context";
 
 vi.mock("@/data-access/production-run-readings");
 vi.mock("@/data-access/production-run-reading-imports");
@@ -57,6 +36,8 @@ vi.mock("@/lib/production-readings/readings-csv");
 
 const readingsFunctions = [readings, readingImports, readingsActions,
   readingImportActions, readingsCsv].flatMap((module) => Object.values(module));
+
+vi.mock("@/data-access/facilities", () => ({ getFacilityById: vi.fn(async () => ({ timezone: "UTC" })) }));
 
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: vi.fn(),
