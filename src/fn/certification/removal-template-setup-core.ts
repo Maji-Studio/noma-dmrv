@@ -11,6 +11,7 @@ import { listComponentBlueprints, listGhgEntryTemplates, listProjects } from "@/
 import { compareTemplateObservations, fullFingerprint, normalizeTemplateDefinition, semanticFingerprint, validateLineSources } from "@/lib/isometric/template-observations";
 import { isTemplateReady, linesToDecideCount } from "@/lib/certification/removal-template-readiness";
 import { setupPlan, templateFitsFacility } from "@/lib/certification/removal-template-setup-plan";
+import { setupBlockedReason } from "@/lib/certification/removal-template-setup-blockers";
 import { setupPlanFingerprint } from "@/lib/certification/removal-template-setup-fingerprint";
 import { reviewLineSources } from "@/lib/certification/removal-template-review-sources";
 import { removalTemplateReviewLines } from "@/lib/certification/removal-template-review-lines";
@@ -68,6 +69,7 @@ export async function loadRemovalTemplateSetupCore(ctx: OrgContext, facilityId: 
     fitting.push({ id: template.id, name: template.display_name,
       componentCount: entry.lines.length, plan, planFingerprint: setupPlanFingerprint(plan),
       ready: isTemplateReady(entry), toDecideCount: linesToDecideCount(entry),
+      blockedReason: setupBlockedReason(template, entry.enrichmentProblems),
       ...fingerprints,
     });
   }
