@@ -32,7 +32,7 @@ import { useToast } from "@/components/ui/toast";
 import { useSwitchCreditBatchRemovalTemplate } from "@/hooks/use-removal-template-review";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { Notice } from "@/components/ui/notice";
-import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL } from "@/lib/certification/links";
+import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
 import { getStaleVersionConflict, toSaveErrorMessage } from "@/lib/stale-version";
 import {
   switchRemovalTemplateFormSchema,
@@ -84,6 +84,8 @@ export interface TemplateReadiness {
   ready: boolean;
   /** Why it cannot be chosen yet: "3 lines to decide", "Not set up yet". */
   reason?: string;
+  /** Lines without a decision; only then does the link say "Decide lines". */
+  toDecide?: number;
 }
 
 export function CreditBatchTemplateSwitchDialog(props: CreditBatchTemplateSwitchDialogProps) {
@@ -136,7 +138,7 @@ function SwitchTemplateForm({
   const notReady = removalTemplates.flatMap((template) => {
     const state = readiness?.get(template.id);
     return state && !state.ready && template.id !== creditBatch.removalTemplateId
-      ? [{ template, reason: state.reason }] : [];
+      ? [{ template, reason: state.reason, toDecide: state.toDecide ?? 0 }] : [];
   });
   const notReadyIds = new Set(notReady.map(({ template }) => template.id));
   const options = removalTemplates.map((template) => {
@@ -232,7 +234,7 @@ function SwitchTemplateForm({
       {!unavailableReason && notReady.length > 0 && (
         <Notice tone="info" title="Not ready for credit batches">
           <ul className="flex flex-col gap-8">
-            {notReady.map(({ template, reason }) => (
+            {notReady.map(({ template, reason, toDecide }) => (
               <li key={template.id} className="flex flex-wrap items-baseline gap-x-8 gap-y-2">
                 <span className="body-small text-[var(--color-text-primary)]">{template.display_name}</span>
                 {reason && <span className="body-caption text-[var(--color-text-tertiary)]">{reason}</span>}
@@ -243,7 +245,7 @@ function SwitchTemplateForm({
                   rel="noreferrer"
                   className="inline-flex items-center gap-4 body-small underline underline-offset-2"
                 >
-                  {DECIDE_LINES_LINK_LABEL}
+                  {toDecide > 0 ? DECIDE_LINES_LINK_LABEL : OPEN_REMOVAL_TEMPLATES_LINK_LABEL}
                   <ArrowSquareOutIcon size={12} aria-hidden />
                   <span className="sr-only"> {`for ${template.display_name} (opens in a new tab)`}</span>
                 </Link>

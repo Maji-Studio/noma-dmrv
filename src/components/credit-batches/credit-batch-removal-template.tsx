@@ -40,7 +40,7 @@ export interface CreditBatchRemovalTemplateProps {
 function templateReadiness(entry: RemovalTemplateReviewEntry): TemplateReadiness {
   if (isReady(entry)) return { ready: true };
   const toDecide = toDecideCount(entry);
-  if (toDecide > 0) return { ready: false, reason: linesToDecideLabel(toDecide) };
+  if (toDecide > 0) return { ready: false, reason: linesToDecideLabel(toDecide), toDecide };
   if (entry.enrichmentProblems.length > 0) return { ready: false, reason: TEMPLATE_NOT_FULLY_READ_TITLE };
   return { ready: false, reason: "Not set up yet" };
 }

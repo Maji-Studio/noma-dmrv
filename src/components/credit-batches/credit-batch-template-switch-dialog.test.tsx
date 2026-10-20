@@ -85,7 +85,7 @@ describe("CreditBatchTemplateSwitchDialog", () => {
   it("disables templates that are not ready, says why, and links each to Removal templates", async () => {
     render(dialog(BATCH, new Map([
       ["rvt_old", { ready: false, reason: "2 lines to decide" }],
-      ["rvt_new", { ready: false, reason: "3 lines to decide" }],
+      ["rvt_new", { ready: false, reason: "3 lines to decide", toDecide: 3 }],
     ])));
     await screen.findByRole("dialog", { name: "Switch template" });
     const select = document.getElementById("removalTemplateId") as HTMLSelectElement;
@@ -202,5 +202,12 @@ describe("CreditBatchTemplateSwitchDialog", () => {
     expect(option("rvt_new").disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(retry).toHaveBeenCalledOnce();
+  });
+
+  it("links a template that is not set up to Removal templates without saying Decide lines", async () => {
+    render(dialog(BATCH, new Map([["rvt_new", { ready: false, reason: "Not set up yet", toDecide: 0 }]])));
+    await screen.findByRole("dialog", { name: "Switch template" });
+    expect(screen.queryByRole("link", { name: /^Decide lines/ })).toBeNull();
+    expect(screen.getByRole("link", { name: /^Open Removal templates/ }).getAttribute("href")).toContain("template=rvt_new");
   });
 });
