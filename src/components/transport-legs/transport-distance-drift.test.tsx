@@ -156,9 +156,9 @@ describe("DistanceDriftAction", () => {
     await screen.findByRole("button", { name: /Refreshing/ });
 
     await act(async () => { fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" }); });
-    const dialog = screen.getByRole("dialog");
-    const backdrop = dialog.parentElement?.querySelector("[data-base-ui-inert], [class*='backdrop' i]") ?? document.body;
-    await act(async () => { fireEvent.pointerDown(backdrop); fireEvent.click(backdrop); });
+    const backdrop = document.querySelector('[data-overlay-layer="dialog-backdrop"]');
+    expect(backdrop).toBeTruthy();
+    await act(async () => { fireEvent.pointerDown(backdrop!); fireEvent.click(backdrop!); });
     expect(screen.getByText("Refresh distance from location?")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Close" }) as HTMLButtonElement).disabled).toBe(true);
 
@@ -182,6 +182,49 @@ describe("DistanceDriftAction", () => {
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Refresh" })); });
     await waitFor(() => expect(screen.queryByText("Refresh distance from location?")).toBeNull());
     expect(mocks.error).toHaveBeenCalledWith(message);
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  function renderRefused(message: string) {
+    mocks.drift.mockResolvedValue({ success: true, data: drift });
+    mocks.refresh.mockResolvedValue({ success: false, error: message });
+    return render(
+      <QueryClientProvider client={client}>
+        <DistanceDriftAction target={target} recordCode="FS-26-001" onRefreshed={vi.fn()} />
+      </QueryClientProvider>,
+    );
+  }
+
+  it("holds the dialog pending while the drift is rechecked after a refusal", async () => {
+    const message = "The distance was not refreshed. Try again.";
+    renderRefused(message);
+    fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
+    let landRecheck!: () => void;
+    const recheck = new Promise<void>((resolve) => { landRecheck = resolve; });
+    await act(async () => { await Promise.resolve(); });
+    mocks.drift.mockImplementation(async () => { await recheck; return { success: true, data: drift }; });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Refresh" })); });
+    await screen.findByRole("button", { name: /Refreshing/ });
+
+    await act(async () => { fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" }); });
+    expect(screen.getByText("Refresh distance from location?")).toBeTruthy();
+    expect((screen.getByRole("button", { name: /Refreshing/ }) as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => { landRecheck(); });
+    expect(await screen.findByText(message)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Refresh" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("closes when a later background refetch clears the drift after a refusal", async () => {
+    const message = "The distance was not refreshed. Try again.";
+    renderRefused(message);
+    fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Refresh" })); });
+    expect(await screen.findByText(message)).toBeTruthy();
+
+    mocks.drift.mockResolvedValue({ success: true, data: { ...drift, hasDrift: false } });
+    await act(async () => { await client.refetchQueries({ queryKey: transportDistanceKeys.detail(target) }); });
+    await waitFor(() => expect(screen.queryByText("Refresh distance from location?")).toBeNull());
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
   });
 });

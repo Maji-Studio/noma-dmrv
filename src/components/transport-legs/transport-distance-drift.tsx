@@ -51,7 +51,7 @@ type VisibleDrift = TransportDistanceDrift & { currentDistanceKm: number };
  * read view's notice and the edit form's compact action.
  */
 function DistanceRefreshDialog({
-  open, onClose, target, drift, recordCode, onRefused, onRefreshed,
+  open, onClose, target, drift, recordCode, onRefused, onAttempt, onRefreshed,
 }: {
   open: boolean;
   onClose: () => void;
@@ -64,6 +64,8 @@ function DistanceRefreshDialog({
    * instead of retrying on its stale snapshot.
    */
   onRefused: () => Promise<boolean>;
+  /** Called when a refresh attempt starts, before any request. */
+  onAttempt?: () => void;
   /** Resolves once the caller holds the refreshed record; the dialog waits for it. */
   onRefreshed?: (refreshed: TransportDistanceDrift) => Promise<void> | void;
 }) {
@@ -73,6 +75,10 @@ function DistanceRefreshDialog({
   // The refresh committed a new version; Save stays out of reach until the
   // form holds it, or it would send the old one.
   const [reloading, setReloading] = useState(false);
+  // After a refusal the drift is refetched; the stale version stays out of
+  // reach (no retry, no dismissal) until that recheck settles.
+  const [rechecking, setRechecking] = useState(false);
+  const busy = refresh.isPending || reloading || rechecking;
   const noun = RECORD_NOUNS[target.entityType];
   const close = () => {
     setError(null);
@@ -80,12 +86,20 @@ function DistanceRefreshDialog({
   };
   const confirm = async () => {
     setError(null);
+    onAttempt?.();
     let refreshed: TransportDistanceDrift;
     try {
       refreshed = await refresh.mutateAsync({ entityId: target.entityId, expectedVersion: drift.expectedVersion });
     } catch (refusal) {
       const message = toSaveErrorMessage(refusal, REFRESH_FAILED_MESSAGE);
-      if (await onRefused()) {
+      setRechecking(true);
+      let stillOffered = false;
+      try {
+        stillOffered = await onRefused();
+      } finally {
+        setRechecking(false);
+      }
+      if (stillOffered) {
         setError(message);
       } else {
         close();
@@ -130,8 +144,8 @@ function DistanceRefreshDialog({
       }
       confirmLabel={CONFIRM_LABEL}
       busyLabel="Refreshing…"
-      isPending={refresh.isPending || reloading}
-      dismissible={!(refresh.isPending || reloading)}
+      isPending={busy}
+      dismissible={!busy}
       confirmDisabled={drift.hasSubmittedRemoval}
       errorMessage={error ?? undefined}
     />
@@ -199,9 +213,15 @@ export function DistanceDriftAction({ target, recordCode, disabledReason, onRefr
   // drift before the form has reloaded; the dialog stays on this snapshot,
   // pending, until the reload lands.
   const [confirmingDrift, setConfirmingDrift] = useState<VisibleDrift | null>(null);
+  // Set by a refusal, cleared by the next attempt: after one, the snapshot is
+  // stale and the live drift is the only version worth retrying with.
+  const [refused, setRefused] = useState(false);
   const visible = visibleDrift(drift.data) ? drift.data : null;
-  // A refused attempt refetches: the live drift carries the version to retry with.
-  const dialogDrift = visible ?? confirmingDrift;
+  if (refused && !visible && confirmingDrift) {
+    setConfirmingDrift(null);
+    setRefused(false);
+  }
+  const dialogDrift = visible ?? (refused ? null : confirmingDrift);
   if (!dialogDrift) return null;
 
   return (
@@ -217,7 +237,10 @@ export function DistanceDriftAction({ target, recordCode, disabledReason, onRefr
             size="small"
             variant="noOutline"
             disabled={!!disabledReason}
-            onClick={() => setConfirmingDrift(visible)}
+            onClick={() => {
+              setRefused(false);
+              setConfirmingDrift(visible);
+            }}
           >
             {REFRESH_FROM_LOCATION_LABEL}
           </Button>
@@ -229,7 +252,11 @@ export function DistanceDriftAction({ target, recordCode, disabledReason, onRefr
         target={target}
         drift={dialogDrift}
         recordCode={recordCode}
-        onRefused={async () => visibleDrift((await drift.refetch()).data)}
+        onAttempt={() => setRefused(false)}
+        onRefused={async () => {
+          setRefused(true);
+          return !!visibleDrift((await drift.refetch()).data);
+        }}
         onRefreshed={onRefreshed}
       />
     </>
