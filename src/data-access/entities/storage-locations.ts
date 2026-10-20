@@ -56,7 +56,9 @@ function outputBinStockSubtitle(
     dryKg: stock.dryMassKg,
     estimatedWet: true,
   });
-  return row.type === "product_bin" ? `${row.formulationName ?? PURE_BIOCHAR_LABEL} · ${stockText}` : stockText;
+  if (row.type !== "product_bin") return stockText;
+  const formulation = row.formulationName ?? PURE_BIOCHAR_LABEL;
+  return stockText ? `${formulation} · ${stockText}` : formulation;
 }
 /** Feedstock bin option subtitle: type, held feedstock, wet stock, pending intake. */
 function formatFeedstockBinSubtitle(

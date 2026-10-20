@@ -23,6 +23,31 @@ import { assertRowVersion, nextVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 
+/** A submitted, accepted or in-flight attempt freezes the recorded zeros. */
+function submissionsLockZeros(submissions: (typeof certificationSubmissions.$inferSelect)[]) {
+  return submissions.some((row) => row.submittedAt || row.status === "submitted" || row.status === "accepted" || isLiveEntryReservation(row, Date.now()));
+}
+
+/** Whether recorded zeros may change now: the check `lockZeroDraft` applies, without the lock. */
+export async function isRemovalZeroEditable(ctx: OrgContext, removalId: string): Promise<boolean> {
+  requireOrgScope(ctx);
+  const [removal] = await db.select().from(certifierRemovals).where(and(
+    eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, removalId),
+  ));
+  if (!removal || hasFreshRemovalDeletionLease(removal.metadata)) return false;
+  const submissions = await db.select().from(certificationSubmissions).where(and(
+    eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityId, removalId),
+    eq(certificationSubmissions.localEntityType, "removal"), eq(certificationSubmissions.submissionType, "removal"),
+  ));
+  if (!submissionsLockZeros(submissions)) return true;
+  // A returned Removal with an open correction window may change its zeros, as `lockZeroDraft` allows.
+  const members = await db.select({ id: creditBatchApplications.creditBatchId }).from(creditBatchApplications).where(and(
+    eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.removalId, removalId),
+  ));
+  const contenders = await listEmissionEntryDraftContenders(ctx, [...new Set(members.map((row) => row.id))]);
+  return contenders.some((row) => row.removalId === removalId && row.contenderKind === "correction");
+}
+
 async function lockZeroDraft(ctx: OrgContext, tx: DbTransaction, data: z.infer<typeof undoEmissionZerosSchema>, expectedVersion?: number) {
   requireOrgScope(ctx);
   await lockEmissionCorrectionScope(ctx, tx, data.creditBatchId);
@@ -52,7 +77,7 @@ async function lockZeroDraft(ctx: OrgContext, tx: DbTransaction, data: z.infer<t
     eq(certificationSubmissions.localEntityType, "removal"), eq(certificationSubmissions.submissionType, "removal"),
   ));
   const correction = emissionCorrectionWindow(ctx, tx, data.creditBatchId, data.removalId);
-  if (!correction && submissions.some((row) => row.submittedAt || row.status === "submitted" || row.status === "accepted" || isLiveEntryReservation(row, Date.now()))) {
+  if (!correction && submissionsLockZeros(submissions)) {
     throw new SafeError("Recorded zeros can only be changed on an unsubmitted, idle Removal.");
   }
   // Removals have no integer row version; use the persisted updatedAt millisecond token returned by the empty-lines read.

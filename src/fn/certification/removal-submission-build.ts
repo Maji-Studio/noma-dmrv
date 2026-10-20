@@ -5,7 +5,6 @@ import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from
 import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
 import { SafeError } from "@/lib/errors";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   aggregateProductionRuns,
   buildRemovalSupplierRef,
@@ -131,6 +130,8 @@ export interface RemovalSubmissionReview {
     deliveryCode: string;
   }>;
   reportingWindow: { startedOn: string; completedOn: string };
+  /** Components this Removal leaves out: already sent with, or claimed by, an earlier Removal. */
+  omittedComponentIds?: string[];
   productionEmissionClaims?: Array<{
     creditBatchId: string;
     creditBatchCode: string;
@@ -353,18 +354,30 @@ export async function compileRemovalSubmission(
       wireUnit: input.quantity.unit,
       wireType: input.datapointType,
     })),
-    ...build.fixed.map((input) => ({
-      componentId: input.removalTemplateComponentId,
-      componentBlueprintKey:
-        templateComponentById.get(input.removalTemplateComponentId)
-          ?.blueprint_key ?? MISSING_VALUE.notAvailable,
-      componentDisplayName: templateComponentById.get(
+    ...build.fixed.map((input) => {
+      const component = templateComponentById.get(
         input.removalTemplateComponentId,
-      )?.display_name,
-      inputKey: input.inputKey,
-      binding: "fixed" as const,
-      fixedDatapointId: input.preboundDatapointId,
-    })),
+      );
+      const fixedValue = args.ctx.fixedInputValues?.find(
+        (value) =>
+          value.componentId === input.removalTemplateComponentId &&
+          value.inputKey === input.inputKey,
+      );
+      return {
+        componentId: input.removalTemplateComponentId,
+        componentBlueprintKey:
+          // A fixed input whose component the template no longer carries keeps a string key, saying so.
+          component?.blueprint_key ?? "Component not in the template",
+        componentDisplayName: component?.display_name,
+        inputKey: input.inputKey,
+        binding: "fixed" as const,
+        // The datapoint's own value, read with the template observation.
+        ...(fixedValue
+          ? { wireMagnitude: fixedValue.magnitude, wireUnit: fixedValue.unit }
+          : {}),
+        fixedDatapointId: input.preboundDatapointId,
+      };
+    }),
     ...args.prepared.removalTemplate.groups.flatMap((group) =>
       group.components
         .filter((component) =>
@@ -415,6 +428,7 @@ export async function compileRemovalSubmission(
       mappingRevision: MAPPING_REVISION,
     },
     bindings,
+    omittedComponentIds: [...build.omittedTemplateComponentIds],
     measurementSamples,
     directSequestrationDatapoints,
     sourceIds: [...build.sourceIds],
@@ -632,7 +646,6 @@ export async function buildRemovalSubmissionBuild(args: {
     removalTemplate,
     blueprintsByKey,
     externalProjectId,
-    allowPeriodInputStub,
     hasDurabilityComponents,
   } = args.prepared;
 
@@ -709,6 +722,7 @@ export async function buildRemovalSubmissionBuild(args: {
   const agg = transportAgg;
   const latestApplicationTime = resolveLatestApplicationTime(ctx.lineages);
   assertReportingWindowNotInverted({
+    facilityTimezone: ctx.facilityTimezone,
     lineages: ctx.lineages,
     runStartTimeByRunId: new Map(
       ctx.runs.map((run) => [run.id, run.startTime]),
@@ -764,7 +778,6 @@ export async function buildRemovalSubmissionBuild(args: {
     externalProjectId,
     sourceIds: datapointSourceIds,
     sourceBindingPlan,
-    allowPeriodInputStub,
     omitProductionComponents: !hasProductionContribution,
   });
   const hasOnly1000YearBatches =

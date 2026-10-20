@@ -1,3 +1,4 @@
+import { useIntentMutation } from "./use-create-intent-key";
 import { getCreditBatchPageModelFn } from "@/fn/credit-batch-page-model";
 import type { ActionResult } from "@/types/actions";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
@@ -175,13 +176,13 @@ export function useCreditBatchProductionRunOptions(params: {
 export function useCreateCreditBatch() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIntentMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.creditBatch),
     // The batch and the warning are two facts about one committed write: the
     // batch is saved either way, and `warning` says its accounting roll-up did
     // not load with it (issue #769).
-    mutationFn: async (data: CreditBatchFormData) => {
-      const result = await createCreditBatchFn(data);
+    mutationFn: async (data: CreditBatchFormData, intentKey) => {
+      const result = await createCreditBatchFn(data, { intentKey });
       if (!result.success) throw new Error(result.error);
       return { creditBatch: result.data, warning: result.warning };
     },

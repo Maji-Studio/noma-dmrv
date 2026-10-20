@@ -23,7 +23,7 @@ import { activityEvents, certificationSubmissions, creditBatchApplications, cred
   removalTemplateObservations, users, certifierRemovals, certifierGhgStatements, certifierProductionBatches, organizations, facilities, certifierProjects, samples } from "@/db/schema";
 import { createEmissionEntry, deleteEmissionEntry, getEmissionEntry, updateEmissionEntry, replaceEmissionEntry } from "@/data-access/emission-entries";
 import { assertEmissionEntryDocumentWritable } from "@/data-access/emission-entry-lock";
-import { recordEmissionZeros, undoEmissionZeros } from "@/data-access/emission-zeros";
+import { isRemovalZeroEditable, recordEmissionZeros, undoEmissionZeros } from "@/data-access/emission-zeros";
 import { reserveProductionEmissionsClaims, rejectSubmissionAndReleaseProductionClaims } from "@/data-access/production-claim-reservations";
 import { markSubmissionSubmitted, retireStaleSubmissionDraft } from "@/data-access/submission-ledger-transitions";
 import { claimRemovalDeletion, finalizeRemovalDeletion } from "@/data-access/certifier-removal-deletion";
@@ -201,6 +201,26 @@ it("records activity when a new value tombstones an unsubmitted draft's zero", a
   expect(zero.deletedAt).not.toBeNull();
   expect(zero.confirmedForRemovalId).toBe(fixture.removalId);
   expect(await db.select().from(activityEvents).where(and(eq(activityEvents.entityId, zero.id), eq(activityEvents.action, "deleted")))).toHaveLength(1);
+});
+it("reports whether recorded zeros can still change, by the check the writer applies", async () => {
+  expect(await isRemovalZeroEditable(ctx, fixture.removalId)).toBe(true);
+  expect(await isRemovalZeroEditable(ctx, crypto.randomUUID())).toBe(false);
+  // Another organization never sees a Removal as editable.
+  expect(await isRemovalZeroEditable({ ...ctx, organizationId: crypto.randomUUID() }, fixture.removalId)).toBe(false);
+
+  // A live attempt (fresh lock) freezes the zeros, and so does the writer.
+  const live = await draft([]);
+  expect(await isRemovalZeroEditable(ctx, fixture.removalId)).toBe(false);
+  await expect(recordEmissionZeros(ctx, { removalId: fixture.removalId, creditBatchId: fixture.batchId, componentIds: ["zero"] }))
+    .rejects.toThrow("unsubmitted, idle Removal");
+
+  // A released attempt that never submitted leaves them editable again.
+  await db.update(certificationSubmissions).set({ status: "rejected" }).where(eq(certificationSubmissions.id, live.id));
+  expect(await isRemovalZeroEditable(ctx, fixture.removalId)).toBe(true);
+
+  // A submitted Removal is frozen for good.
+  await db.update(certificationSubmissions).set({ status: "submitted", submittedAt: new Date() }).where(eq(certificationSubmissions.id, live.id));
+  expect(await isRemovalZeroEditable(ctx, fixture.removalId)).toBe(false);
 });
 
 it("releases a retired attempt so its entry can be edited", async () => {
@@ -512,7 +532,10 @@ it("keeps a replaced sent entry claimed by its original Removal even after the w
 
 it.each([false, true])("records and undoes zeros inside an open window, already sent=%s", async (sent) => {
   const { zeroIds } = await sentCorrectionEntry(sent);
+  // The empty-lines read applies the writer's correction window.
+  expect(await isRemovalZeroEditable(ctx, fixture.removalId)).toBe(false);
   correctionRemote.status = "FAILED_VERIFICATION";
+  expect(await isRemovalZeroEditable(ctx, fixture.removalId)).toBe(true);
   const ids = sent ? zeroIds : (await recordEmissionZeros(ctx, { removalId: fixture.removalId, creditBatchId: fixture.batchId, componentIds: ["zero"] })).entryIds;
   await undoEmissionZeros(ctx, { removalId: fixture.removalId, creditBatchId: fixture.batchId });
   const [zero] = await db.select().from(emissionEntries).where(eq(emissionEntries.id, ids[0]));
