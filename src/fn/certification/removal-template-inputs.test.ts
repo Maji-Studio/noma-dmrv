@@ -175,3 +175,43 @@ it("omits an already-sent single component on a follow-up", () => {
   expect(result.monitored).toEqual([]);
   expect(result.omittedTemplateComponentIds).toEqual([component.id]);
 });
+
+import { resolveRemovalTemplate } from "./resolve-removal-template";
+import type { FacilityCertifierFacts } from "./facility-certifier-facts";
+import type { BatchEmissionContext } from "./batch-emission-context";
+it.each([false, true])("runs follow-up line derivation through compilation, including mixed ownership (%s)", (mixed) => {
+  const template = structuredClone(sandbox);
+  const allSources = resolveLineSources({ definition: normalizeTemplateDefinition(template) });
+  template.groups = template.groups.map((group) => ({ ...group, components: group.components.filter((component) =>
+    ["run-electricity", "delivery-transport"].includes(allSources[component.id]?.automaticSource ?? "")),
+  })).filter((group) => group.components.length);
+  const sources = resolveLineSources({ definition: normalizeTemplateDefinition(template) });
+  const facility = { templatesById: { [template.id]: { template, observation: { lineSources: sources },
+    enrichmentProblems: [], lineSourceProblems: [], blueprintsForTemplate: [], unresolvedBlueprintKeys: [], requiredTransportCategories: [],
+  } } } as unknown as FacilityCertifierFacts;
+  const contributions = deriveRemovalEntryContributions({ removalId: "r", memberBatchIds: ["batch"], window: null,
+    contenders: [], entries: [], lineSources: sources, monitoredInputs: [] });
+  const batchFacts: BatchEmissionContext = { batch: { entries: [], previousObservations: new Map(),
+    automaticFigures: { "delivery-transport": { magnitude: "12", unit: "km * tonne" } }, omittedAutomaticSources: ["run-electricity"],
+  } };
+  if (mixed) batchFacts.current = { entries: [], previousObservations: new Map(), automaticFigures: {
+    "run-electricity": { magnitude: String(agg.totalElectricityKwh), unit: "kWh" }, "delivery-transport": { magnitude: "12", unit: "km * tonne" },
+  } };
+  const resolved = resolveRemovalTemplate(Object.keys(batchFacts).map((id) => ({ id, removalTemplateId: template.id })), facility, batchFacts, contributions);
+  expect(resolved.emissionLines).toHaveLength(mixed ? 4 : 2);
+  expect(resolved.emissionLines!.every((line) => !line.blocker)).toBe(true);
+  const result = resolveTemplateInputs({ template, lineSources: sources, emissionLines: resolved.emissionLines, entryContributions: contributions,
+    blueprintsByKey, agg, externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: false, omitProductionComponents: !mixed });
+  expect(result.omittedTemplateComponentIds).toHaveLength(mixed ? 0 : 1);
+  expect(result.monitored).toHaveLength(mixed ? 2 : 1);
+  expect(result.monitored.find((input) => sources[input.removalTemplateComponentId].automaticSource === "delivery-transport")!.quantity.magnitude).toBe(agg.biocharTransportMassDistanceTonneKm);
+});
+it("sends an additive entry alone for a null automatic aggregate but refuses an invalid non-null aggregate", () => {
+  const previous = agg.totalElectricityKwh;
+  try {
+    agg.totalElectricityKwh = null as never;
+    expect(compileEntries("grid_electricity_use").monitored[0].quantity.magnitude).toBe(2);
+    agg.totalElectricityKwh = Number.NaN;
+    expect(() => compileEntries("grid_electricity_use")).toThrow();
+  } finally { agg.totalElectricityKwh = previous; }
+});

@@ -44,17 +44,20 @@ export function resolveRemovalTemplate(
     lineSources: withTemplateOrder(facts.template, facts.observation!.lineSources),
     problems: facts.lineSourceProblems, enrichmentComplete: facts.enrichmentProblems.length === 0,
     automaticFigures: batchId ? batchFacts[batchId]?.automaticFigures ?? {} : {},
-    entries: (batchId ? batchFacts[batchId]?.entries ?? [] : []).filter((entry) => !contributions || contributions.selectedEntryIds.includes(entry.id)),
+    omittedAutomaticSources: batchId ? batchFacts[batchId]?.omittedAutomaticSources : [],
+    entries: (batchId ? batchFacts[batchId]?.entries ?? [] : []).filter((entry) => !contributions || (contributions.ownedEntryIds ?? contributions.selectedEntryIds).includes(entry.id)),
     entriesCanSubmit: !!contributions,
   }).map((line) => {
     const batch = batchId ? batchFacts[batchId] : undefined;
-    if (batch?.entries.some((entry) => entry.componentId === line.componentId && batch.entriesWithoutRemoval?.includes(entry.id))) {
+    const contributionBlocker = contributions?.blockers.find((blocker) => blocker.creditBatchId === batchId && blocker.lineRef?.componentId === line.componentId);
+    if (contributionBlocker) return { ...line, ...(["singleLineMultipleEntries", "lineNeedsReview"].includes(contributionBlocker.code) ? { state: "needsReview" as const } : {}), blocker: { ...contributionBlocker, lineRef: { ...contributionBlocker.lineRef!, displayName: line.displayName } } };
+    if (line.contract?.scope === "operating" && line.contract.entryPolicy !== "none" && batch?.entries.some((entry) => entry.componentId === line.componentId && batch.entriesWithoutRemoval?.includes(entry.id))) {
       return { ...line, blocker: { code: "entryHasNoRemoval" as const, message: "No Removal can carry this entry yet",
         fixTarget: "emissions" as const, lineRef: { componentId: line.componentId, displayName: line.displayName } } };
     }
     const sent = contributions && batchId && batchFacts[batchId]?.entries.some((entry) =>
       entry.componentId === line.componentId && entry.lineRule === "single" && entry.kind === "value" &&
-      entry.sentByRemovalId && !contributions.selectedEntryIds.includes(entry.id));
+      entry.sentByRemovalId && !(contributions.ownedEntryIds ?? contributions.selectedEntryIds).includes(entry.id));
     if (sent && line.state === "empty") return { ...line, state: "filled" as const, blocker: undefined };
     return line;
   });

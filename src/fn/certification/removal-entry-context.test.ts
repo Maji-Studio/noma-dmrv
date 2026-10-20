@@ -38,7 +38,8 @@ it("keeps both batches' entries while excluding only the earlier production clai
   const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, loaded, facility);
   expect(result?.contributions.inputs[0].value).toEqual({ magnitude: "4", unit: "kWh" });
   expect(result?.contributions.entrySet).toHaveLength(2);
-  expect(loaded.b1.automaticFigures["run-electricity"]).toBeUndefined();
+  expect(result?.batchFacts.b1.automaticFigures["run-electricity"]).toBeUndefined();
+  expect(loaded.b1.automaticFigures["run-electricity"]?.magnitude).toBe("10");
   expect(loaded.b2.automaticFigures["run-electricity"]?.magnitude).toBe("10");
   expect(loaded.b1.automaticFigures["delivery-transport"]?.magnitude).toBe("20");
   expect(result).toMatchObject({ observationId: "observation", semanticFingerprint: "fingerprint" });
@@ -50,4 +51,39 @@ it("uses reservation ownership even if another draft would win the window order"
   const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, loaded, facility);
   expect(result?.contributions.selectedEntryIds).toEqual(["entry-b2"]);
   expect(loadEmissionEntryReservations).toHaveBeenCalledWith(expect.objectContaining({ organizationId: expect.any(String) }), ["submission"]);
+});
+it("retries with exactly the frozen set, leaving newly created entries for a later contribution", async () => {
+  const loaded = facts();
+  const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, loaded, facility, [{ entryId: "entry-b1", contentRevision: 1 }]);
+  expect(result?.contributions.entrySet).toEqual([{ entryId: "entry-b1", contentRevision: 1 }]);
+  expect(result?.batchFacts.b2.entries).toEqual([]);
+});
+it("refuses a frozen retry when an entry changed or disappeared", async () => {
+  await expect(loadRemovalEntryContext(makeTestOrgContext(), scope, facts(), facility, [{ entryId: "entry-b1", contentRevision: 2 }])).rejects.toThrow("Emissions entries changed");
+  await expect(loadRemovalEntryContext(makeTestOrgContext(), scope, facts(), facility, [{ entryId: "missing", contentRevision: 1 }])).rejects.toThrow("Emissions entries changed");
+});
+it("keeps an owned stale entry visible instead of treating it as absent", async () => {
+  const loaded = facts();
+  loaded.b1.entries[0].counts = false;
+  loaded.b1.entries[0].reason = "Confirm this entry for the changed template line.";
+  const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, loaded, facility);
+  expect(result?.contributions.ownedEntryIds).toContain("entry-b1");
+  expect(result?.contributions.selectedEntryIds).not.toContain("entry-b1");
+  expect(result?.contributions.blockers).toContainEqual(expect.objectContaining({ code: "lineNeedsReview", lineRef: expect.objectContaining({ componentId: "electricity" }) }));
+});
+it("treats a missing reservation row as inactive", async () => {
+  const loaded = facts();
+  loaded.b1.entries[0].sendReservedBySubmissionId = "missing";
+  const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, loaded, facility);
+  expect(result?.contributions.selectedEntryIds).toContain("entry-b1");
+  expect(result?.contributions.blockers).toEqual([]);
+});
+it("keeps earlier sent singles as omission facts when retrying a frozen set", async () => {
+  const loaded = facts();
+  loaded.b1.entries[0].lineRule = "single";
+  loaded.b1.entries[0].sentByRemovalId = "earlier";
+  const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, loaded, facility, []);
+  expect(result?.contributions.sentSingleComponentIds).toEqual(["electricity"]);
+  expect(result?.contributions.entrySet).toEqual([]);
+  expect(result?.batchFacts.b1.entries).toHaveLength(1);
 });

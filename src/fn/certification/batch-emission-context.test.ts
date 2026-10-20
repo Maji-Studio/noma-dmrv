@@ -1,4 +1,4 @@
-import { listEmissionEntryDraftContenders } from "@/data-access/emission-entry-contenders";
+import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations";
@@ -19,7 +19,7 @@ import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib
 import { resolveTemplateInputs } from "./removal-template-inputs";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 
-vi.mock("@/data-access/emission-entry-contenders", () => ({ listEmissionEntryDraftContenders: vi.fn() }));
+vi.mock("@/data-access/emission-entry-contenders", () => ({ listEmissionEntryDraftContenders: vi.fn(), listEmissionEntryAvailableApplications: vi.fn(), loadEmissionEntryReservations: vi.fn() }));
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntries: vi.fn(), listEmissionEntriesForBatches: vi.fn() }));
 vi.mock("@/data-access/removal-template-observations", () => ({ getTemplateObservationById: vi.fn(), getTemplateObservationsByIds: vi.fn() }));
 vi.mock("@/data-access/batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: vi.fn() }));
@@ -46,6 +46,8 @@ function storedEntry(creditBatchId: string, overrides: Partial<StoredEntry> = {}
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(listEmissionEntryAvailableApplications).mockResolvedValue([]);
+  vi.mocked(loadEmissionEntryReservations).mockResolvedValue([]);
   vi.mocked(emissionsEntriesEnabled).mockReturnValue(true);
   vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([{ contenderKind: "draft", removalId: "removal", createdAt: "2026-01-01",
     creditBatchIds: ["one", "two", "three", "readable", "missing", "zero"], window: { start: "2026-01-01", end: "2026-02-01" } }]);
@@ -262,4 +264,12 @@ it("blocks the batch when an entry is after every draft's application window", a
   const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facilityFacts);
   const resolved = resolveRemovalTemplate(batches, facilityFacts, loaded);
   expect(resolved.emissionLinesByBatchId.one[0].blocker).toMatchObject({ code: "entryHasNoRemoval", message: "No Removal can carry this entry yet", fixTarget: "emissions" });
+});
+
+it.each(["2026-01-01", "2026-03-01"])("allows an entry before an available application, including before the first draft (%s)", async (occurredOn) => {
+  vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([]);
+  vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([storedEntry("one", { occurredOn })]);
+  vi.mocked(listEmissionEntryAvailableApplications).mockResolvedValue([{ creditBatchId: "one", applicationDate: new Date("2026-04-01") }]);
+  const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts);
+  expect(loaded.one.entriesWithoutRemoval).toEqual([]);
 });

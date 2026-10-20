@@ -1,3 +1,5 @@
+import { emissionEntries } from "@/db/schema/emission-entries";
+import { readRemovalEntrySnapshot } from "@/lib/certification/removal-entry-snapshot";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { certificationSubmissions } from "@/db/schema/certification";
@@ -47,7 +49,7 @@ export async function markSubmissionSubmitted(
             : []),
         ),
       )
-      .returning({ id: certificationSubmissions.id });
+      .returning({ id: certificationSubmissions.id, payloadSnapshot: certificationSubmissions.payloadSnapshot });
     if (updated.length === 0) {
       throw new SafeError("The submission changed before it could be finalized. Refresh and try again.");
     }
@@ -60,6 +62,20 @@ export async function markSubmissionSubmitted(
           updatedAt: sql`now()`,
         })
         .where(and(eq(certificationSubmissions.id, args.supersedePreviousId), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+    }
+    // Not flag-gated: entries reserved while the flag was on must still be stamped.
+    if (args.productionEmissionsClaim) {
+      const frozen = readRemovalEntrySnapshot(updated[0]).frozenEntrySet;
+      const stamped = await tx.update(emissionEntries).set({
+        sentByRemovalId: args.productionEmissionsClaim.removalId, sendReservedBySubmissionId: null,
+        version: nextVersion(emissionEntries.version), updatedAt: sql`now()`,
+      }).where(and(eq(emissionEntries.organizationId, ctx.organizationId),
+        eq(emissionEntries.sendReservedBySubmissionId, id), isNull(emissionEntries.deletedAt),
+        or(isNull(emissionEntries.sentByRemovalId), eq(emissionEntries.sentByRemovalId, args.productionEmissionsClaim.removalId)),
+      )).returning({ id: emissionEntries.id, contentRevision: emissionEntries.contentRevision });
+      if (stamped.length !== frozen.length || stamped.some((entry) => !frozen.some((item) => item.entryId === entry.id && item.contentRevision === entry.contentRevision))) {
+        throw new SafeError("Emissions entry reservation changed before submission could be finalized. Review the Removal again.");
+      }
     }
     if (args.productionEmissionsClaim?.creditBatchIds.length) {
       // A throw here rolls back the ledger flip too: the row stays a locked

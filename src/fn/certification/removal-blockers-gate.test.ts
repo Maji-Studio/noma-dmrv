@@ -208,3 +208,14 @@ it("retains typed empty-line and contribution blockers with entry compilation en
   ctx.emissionLines = [{ componentId: "line", blocker: { code: "lineHasNoSource", message: "Record a value or confirm that this line has no emissions for this Removal.", fixTarget: "emissions" } }] as typeof ctx.emissionLines;
   expect(collectContextRemovalBlockers(ctx).map((blocker) => blocker.code)).toEqual(["singleLineMultipleEntries", "lineHasNoSource"]);
 });
+it("deduplicates the same contribution and line blocker but keeps distinct batches and components", () => {
+  const ctx = makeContext();
+  const blocker = { code: "entryMissingEvidence" as const, message: "Add a file.", fixTarget: "emissions" as const,
+    lineRef: { componentId: "line", displayName: "Electricity" } };
+  ctx.removalEntryContext = { observationId: "observation", semanticFingerprint: "fingerprint", contributions: {
+    manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], sentSingleComponentIds: [], blockers: [{ ...blocker, creditBatchId: "batch" }],
+  } };
+  ctx.emissionLinesByBatchId = { batch: [{ componentId: "line", blocker }, { componentId: "other", blocker: { ...blocker, lineRef: { componentId: "other", displayName: "Other" } } }],
+    second: [{ componentId: "line", blocker }] } as unknown as NonNullable<typeof ctx.emissionLinesByBatchId>;
+  expect(collectContextRemovalBlockers(ctx)).toHaveLength(3);
+});

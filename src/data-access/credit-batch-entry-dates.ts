@@ -1,3 +1,5 @@
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
+import { tombstoneEmissionZeros } from "./emission-entries";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import type { CreditBatch } from "@/db/schema/credits";
@@ -52,6 +54,7 @@ export async function syncCreditBatchEntryDates(
   if (toRedate.some((entry) => entry.sentByRemovalId || entry.sendReservedBySubmissionId)) {
     throw new DomainError("certification_locked", "This emissions entry is reserved or sent. It cannot be changed.");
   }
+  const redatedValues: typeof entries = [];
   for (const before of toRedate) {
     const [after] = await tx.update(emissionEntries).set({
       occurredOn: startDate,
@@ -62,9 +65,11 @@ export async function syncCreditBatchEntryDates(
       eq(emissionEntries.organizationId, ctx.organizationId),
       eq(emissionEntries.id, before.id),
     )).returning();
+    if (after.kind === "value") redatedValues.push(after);
     await recordActivityChange(ctx, tx, {
       entityType: "emission_entry", entityId: before.id, creditBatchId: batch.id,
       action: "updated", source: "form",
     }, before, after);
   }
+  if (emissionsEntriesEnabled()) for (const entry of redatedValues) await tombstoneEmissionZeros(ctx, tx, entry);
 }

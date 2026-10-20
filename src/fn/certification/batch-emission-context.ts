@@ -1,5 +1,5 @@
-import { listEmissionEntryDraftContenders } from "@/data-access/emission-entry-contenders";
-import { removalEntryOwner, type EntryContender } from "@/lib/certification/removal-emission-contributions";
+import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
+import { isLiveEntryReservation, removalEntryOwner, type EntryContender } from "@/lib/certification/removal-emission-contributions";
 import type { OrgContext } from "@/lib/auth/server";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import type { loadBatchEmissionEntryFacts } from "@/data-access/emission-entry-facts";
@@ -14,7 +14,7 @@ import type { BatchEmissionLineFacts } from "@/lib/certification/emission-lines"
 import type { FacilityCertifierFacts } from "./facility-certifier-facts";
 
 export type BatchEmissionContext = Record<string,
-  Pick<BatchEmissionLineFacts, "automaticFigures"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
+  Pick<BatchEmissionLineFacts, "automaticFigures" | "omittedAutomaticSources"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
 
 /** Batch-wide facts, even when the Removal carries only some applications. */
 export async function loadBatchEmissionContext(
@@ -38,11 +38,14 @@ export async function loadBatchEmissionContext(
   for (const id of ids) {
     if (rollups[id]?.batch.facilityId !== facilityId) throw new SafeError("Credit batch was not found.");
   }
-  const [storedEntries, automatic, contenders] = await Promise.all([
+  const [storedEntries, automatic, contenders, availableApplications] = await Promise.all([
     listEmissionEntriesForBatches(ctx, ids),
     loadBatchesEmissionAutomaticFacts(ctx, ids),
     listEmissionEntryDraftContenders(ctx, ids),
+    listEmissionEntryAvailableApplications(ctx, ids),
   ]);
+  const reservations = await loadEmissionEntryReservations(ctx, [...new Set(storedEntries.flatMap((entry) => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []))]);
+  const liveReservationIds = new Set(reservations.filter((row) => isLiveEntryReservation(row, Date.now())).map((row) => row.submissionId));
   const observationsById = new Map(readableBatches.map(({ observation }) => [observation.id, observation]));
   const previousIds = [...new Set(storedEntries.map((entry) => entry.observationId))]
     .filter((id) => !observationsById.has(id));
@@ -62,7 +65,9 @@ export async function loadBatchEmissionContext(
     const entries = deriveEmissionEntryFacts(stored, observation, previousObservations);
     result[id] = { entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
       entriesWithoutRemoval: entries.filter((entry) => entry.kind === "value" && !entry.sentByRemovalId &&
-        !entry.sendReservedBySubmissionId && !removalEntryOwner(entry, contenders)).map((entry) => entry.id) };
+        !liveReservationIds.has(entry.sendReservedBySubmissionId ?? "") &&
+        !removalEntryOwner({ ...entry, reservationKnownInactive: true }, contenders) &&
+        !availableApplications.some((application) => application.creditBatchId === id && application.applicationDate.toISOString().slice(0, "YYYY-MM-DD".length) >= entry.occurredOn)).map((entry) => entry.id) };
   }
   return result;
 }

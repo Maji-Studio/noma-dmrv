@@ -209,7 +209,7 @@ export function buildCreateDatapointRequest(
     if (!unit || args.entryContribution.unit !== unit || rtcInput.quantity_kind !== blueprintInput.quantity_kind) throw new SafeError("The emissions entry unit does not match this template input.");
     let figure = args.entryContribution;
     const mapping = lookupInputMapping(groupKey, componentBlueprintKey, rtcInput.input_key, lineContract);
-    if (contract.automaticSource && !(args.omitAutomaticProduction && mapping?.bucket === "production")) {
+    if (contract.automaticSource && mapping && agg[resolveDatapointSource(mapping, lineContract)] != null && !(args.omitAutomaticProduction && mapping?.bucket === "production")) {
       const automatic = buildCreateDatapointRequest({ ...args, entryContribution: undefined });
       const automaticUnit = canonicalUnit(blueprintInput.quantity_kind, automatic.quantity.unit ?? "");
       figure = sumFigures([figure, { magnitude: String(automatic.quantity.magnitude), unit: automaticUnit ?? "" }])!;

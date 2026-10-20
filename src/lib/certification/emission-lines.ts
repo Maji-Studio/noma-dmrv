@@ -38,6 +38,7 @@ export interface BatchEmissionLineFacts {
   enrichmentComplete: boolean;
   entriesCanSubmit?: boolean;
   automaticFigures: Partial<Record<AutomaticSourceId, EmissionFigure | null>>;
+  omittedAutomaticSources?: readonly AutomaticSourceId[];
   automaticRecordCounts?: Partial<Record<AutomaticSourceId, number>>;
   entries: readonly EmissionLineEntryFact[];
 }
@@ -89,6 +90,7 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
       blocker = { code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     } else if (automaticFigure || values.length) state = "filled";
     else if (counting.some((entry) => entry.kind === "zero")) state = "confirmedZero";
+    else if (contract?.automaticSource && facts.omittedAutomaticSources?.includes(contract.automaticSource)) { state = "filled"; blocker = undefined; }
     else { state = "empty"; blocker = decision?.blocker;
       if (facts.entriesCanSubmit && contract?.scope === "operating" && contract.entryPolicy !== "none") {
         blocker = { code: "lineHasNoSource", message: "Record a value or confirm that this line has no emissions for this Removal.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };

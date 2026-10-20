@@ -127,7 +127,7 @@ export async function listEmissionEntriesForBatches(
     evidenceDocumentIds: countsByEntry.get(entry.id)?.evidenceDocumentIds ?? [],
   }));
 }
-async function lockedBatch(
+export async function lockedBatch(
   ctx: OrgContext,
   tx: DbTransaction,
   creditBatchId: string,
@@ -176,7 +176,12 @@ export async function tombstoneEmissionZeros(
   entry: { creditBatchId: string; removalTemplateId: string; componentId: string },
 ) {
   requireOrgScope(ctx);
-  await tx
+  const before = await tx.select().from(emissionEntries).where(and(
+    eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.creditBatchId, entry.creditBatchId),
+    eq(emissionEntries.componentId, entry.componentId), eq(emissionEntries.kind, "zero"), isNull(emissionEntries.deletedAt),
+  )).orderBy(emissionEntries.id).for("update");
+  if (!before.length) return;
+  const saved = await tx
     .update(emissionEntries)
     .set({
       deletedAt: new Date(),
@@ -204,7 +209,8 @@ export async function tombstoneEmissionZeros(
               or ${certificationSubmissions.status} in ('submitted', 'accepted'))
         )`,
       ),
-    );
+    ).returning();
+  for (const row of saved) await recordEmissionEntryActivity(ctx, tx, "deleted", { ...before.find((item) => item.id === row.id)!, values: [] }, { ...row, values: [] });
 }
 export async function createEmissionEntry(ctx: OrgContext, input: CreateEmissionEntryInput) {
   requireOrgScope(ctx);
@@ -352,6 +358,7 @@ export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmission
       })
       .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id)))
       .returning();
+    if (entry.kind === "value") await tombstoneEmissionZeros(ctx, tx, saved);
     await recordEmissionEntryActivity(ctx, tx, "updated", entry, { ...saved, values });
     return getEmissionEntry(ctx, entry.id, tx);
   });

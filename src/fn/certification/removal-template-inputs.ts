@@ -142,7 +142,7 @@ export function resolveTemplateInputs(args: {
         }
         const contribution = entryInputs.find((input) => input.inputKey === rtcInput.input_key);
         if (args.entryContributions && contract?.scope === "operating" && contract.entryPolicy !== "none" &&
-          (!contract.automaticSource || omitProductionComponents) && !contribution) {
+          (!contract.automaticSource || (omitProductionComponents && lookupInputMapping(group.key, component.blueprint_key, rtcInput.input_key, lineContract)?.bucket === "production")) && !contribution) {
           throw new SafeError("Record a value or confirm that this line has no emissions for this Removal.");
         }
         const draft = buildCreateDatapointRequest({

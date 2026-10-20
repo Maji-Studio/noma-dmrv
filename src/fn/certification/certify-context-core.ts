@@ -1,3 +1,5 @@
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
+import { readRemovalEntrySnapshot } from "./removal-snapshot-readers";
 import { loadRemovalEntryContext } from "./removal-entry-context";
 import { loadBatchEmissionContext } from "./batch-emission-context";
 import { getRemovalCodes } from "@/data-access/removal-codes";
@@ -95,9 +97,35 @@ export async function buildRemovalContext(
   scope: RemovalScope,
   facilityFacts: FacilityCertifierFacts,
 ): Promise<RemovalSubmissionContext> {
+  // Load removal-owned facts up-front so every short-circuit carries them.
+  const [latestSubmission, hasFinalized, linkedGhgStatement] =
+    await Promise.all([
+      scope.removalId
+        ? getLatestSubmission(orgCtx, {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: REMOVAL_SUBMISSION_TYPE,
+            localEntityType: REMOVAL_ENTITY_TYPE,
+            localEntityId: scope.removalId,
+          })
+        : Promise.resolve(null),
+      scope.removalId
+        ? hasFinalizedSubmission(orgCtx, {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: REMOVAL_SUBMISSION_TYPE,
+            localEntityType: REMOVAL_ENTITY_TYPE,
+            localEntityId: scope.removalId,
+          })
+        : Promise.resolve(false),
+      loadLinkedGhgStatementStatus(orgCtx, scope.removal),
+    ]);
   const batchEmissionFacts = await loadBatchEmissionContext(orgCtx, scope.facilityId, scope.memberBatches, facilityFacts);
-  const removalEntryContext = await loadRemovalEntryContext(orgCtx, scope, batchEmissionFacts, facilityFacts);
-  const templateFacts = resolveRemovalTemplate(scope.memberBatches, facilityFacts, batchEmissionFacts, removalEntryContext?.contributions);
+  const frozenEntrySet = emissionsEntriesEnabled() && latestSubmission?.status === "draft" && latestSubmission.payloadSnapshot &&
+    typeof latestSubmission.payloadSnapshot === "object" && "frozenEntrySet" in latestSubmission.payloadSnapshot
+    ? readRemovalEntrySnapshot(latestSubmission).frozenEntrySet : undefined;
+  const loadedRemovalEntries = await loadRemovalEntryContext(orgCtx, scope, batchEmissionFacts, facilityFacts, frozenEntrySet);
+  const removalEntryContext = loadedRemovalEntries && { contributions: loadedRemovalEntries.contributions,
+    observationId: loadedRemovalEntries.observationId, semanticFingerprint: loadedRemovalEntries.semanticFingerprint };
+  const templateFacts = resolveRemovalTemplate(scope.memberBatches, facilityFacts, loadedRemovalEntries?.batchFacts ?? batchEmissionFacts, removalEntryContext?.contributions);
   const isProduction = env.ISOMETRIC_ENVIRONMENT === "production";
   const memberBatches: MemberCreditBatch[] =
     scope.memberBatches.map(toMemberCreditBatchView);
@@ -125,27 +153,6 @@ export async function buildRemovalContext(
     applicationSlices: b.applicationSlices,
   }));
 
-  // Load removal-owned facts up-front so every short-circuit carries them.
-  const [latestSubmission, hasFinalized, linkedGhgStatement] =
-    await Promise.all([
-      scope.removalId
-        ? getLatestSubmission(orgCtx, {
-            provider: ISOMETRIC_PROVIDER,
-            submissionType: REMOVAL_SUBMISSION_TYPE,
-            localEntityType: REMOVAL_ENTITY_TYPE,
-            localEntityId: scope.removalId,
-          })
-        : Promise.resolve(null),
-      scope.removalId
-        ? hasFinalizedSubmission(orgCtx, {
-            provider: ISOMETRIC_PROVIDER,
-            submissionType: REMOVAL_SUBMISSION_TYPE,
-            localEntityType: REMOVAL_ENTITY_TYPE,
-            localEntityId: scope.removalId,
-          })
-        : Promise.resolve(false),
-      loadLinkedGhgStatementStatus(orgCtx, scope.removal),
-    ]);
   const registryBoundaryOpened = removalMayHaveExternalMutation(
     scope.removal?.metadata ?? null,
   );

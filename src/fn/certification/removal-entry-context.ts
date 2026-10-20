@@ -1,3 +1,4 @@
+import { DomainError } from "@/lib/domain-errors";
 import { SOURCE_IDS } from "@/lib/isometric/template-observations/catalog-sources";
 import { SOURCE_BUCKETS } from "@/lib/isometric/utils/aggregation";
 import { productionClaimContribution } from "./production-claim-policy";
@@ -10,11 +11,19 @@ import type { BatchEmissionContext } from "./batch-emission-context";
 import type { FacilityCertifierFacts } from "./facility-certifier-facts";
 import type { RemovalScope } from "./removal-scope";
 
-export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalScope, facts: BatchEmissionContext, facility: FacilityCertifierFacts) {
+export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalScope, facts: BatchEmissionContext, facility: FacilityCertifierFacts, frozenEntrySet?: { entryId: string; contentRevision: number }[]) {
   if (!emissionsEntriesEnabled() || !scope.removalId) return undefined;
   const observation = facility.templatesById[scope.memberBatches[0]?.removalTemplateId ?? ""]?.observation;
   if (!observation) return undefined;
-  const entries = Object.values(facts).flatMap((batch) => batch.entries);
+  const allEntries = Object.values(facts).flatMap((batch) => batch.entries);
+  if (frozenEntrySet && frozenEntrySet.some((frozen) => !allEntries.some((entry) => entry.id === frozen.entryId && entry.contentRevision === frozen.contentRevision && !entry.deletedAt))) {
+    throw new DomainError("conflict", "Emissions entries changed. Review the Removal again.", { retryable: true });
+  }
+  // Historical sent singles remain omission facts, even though they are not part of this attempt's frozen set.
+  const belongsToFrozenView = (entry: (typeof allEntries)[number]) => !frozenEntrySet ||
+    frozenEntrySet.some((frozen) => frozen.entryId === entry.id) ||
+    (entry.kind === "value" && entry.lineRule === "single" && !!entry.sentByRemovalId && entry.sentByRemovalId !== scope.removalId);
+  const entries = allEntries.filter(belongsToFrozenView);
   const contenders = Object.values(facts)[0]?.contenders ?? [];
   const reservations = await loadEmissionEntryReservations(ctx,
     [...new Set(entries.flatMap((entry) => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []))]);
@@ -27,9 +36,10 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
     window: deriveRemovalEntryWindow(scope.memberBatches, scope.lineages.map((lineage) => lineage.application.applicationDate)),
     contenders, entries: entries.map((entry) => {
       const reservation = entry.sendReservedBySubmissionId ? reservationOwners.get(entry.sendReservedBySubmissionId) : undefined;
-      return { ...entry, reservedByRemovalId: reservation?.live ? reservation.removalId : null,
-        reservationKnownInactive: reservation?.live === false };
+      return { ...entry, reservedByRemovalId: reservation?.live ? reservation.removalId : frozenEntrySet ? scope.removalId : null,
+        reservationKnownInactive: !reservation?.live };
     }),
+    entriesWithoutRemoval: frozenEntrySet ? [] : Object.values(facts).flatMap((batch) => batch.entriesWithoutRemoval ?? []),
     lineSources: observation.lineSources,
     monitoredInputs: observation.definition.groups.flatMap((group) => group.components.flatMap((component) => component.inputs.flatMap((input) => {
       if (input.type !== "monitored") return [];
@@ -38,13 +48,14 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
       return unit ? [{ componentId: component.id, inputKey: input.key, unit }] : [];
     }))),
   });
-  // Automatic production figures obey the batch claim; delivery/stored figures remain scoped by compilation.
-  for (const batch of scope.memberBatches) {
-    if (productionClaimContribution(batch.productionEmissionsClaimedByRemovalId, scope.removalId) !== "delivery-only") continue;
-    const automatic = facts[batch.id]?.automaticFigures;
-    if (automatic) for (const key of Object.keys(SOURCE_IDS) as (keyof typeof SOURCE_IDS)[]) {
-      if (SOURCE_BUCKETS[key] === "production") delete automatic[SOURCE_IDS[key]];
-    }
-  }
-  return { contributions, observationId: observation.id, semanticFingerprint: observation.semanticFingerprint };
+  const batchFacts: BatchEmissionContext = Object.fromEntries(Object.entries(facts).map(([id, batch]) => {
+    const member = scope.memberBatches.find((item) => item.id === id);
+    const omitProduction = member && productionClaimContribution(member.productionEmissionsClaimedByRemovalId, scope.removalId) === "delivery-only";
+    const omittedAutomaticSources = omitProduction ? (Object.keys(SOURCE_IDS) as (keyof typeof SOURCE_IDS)[])
+      .filter((key) => SOURCE_BUCKETS[key] === "production").map((key) => SOURCE_IDS[key]) : [];
+    return [id, { ...batch, ...(frozenEntrySet ? { entries: batch.entries.filter(belongsToFrozenView), entriesWithoutRemoval: [] } : {}), omittedAutomaticSources, automaticFigures: Object.fromEntries(
+      Object.entries(batch.automaticFigures).filter(([source]) => !omittedAutomaticSources.some((id) => id === source)),
+    ) }];
+  }));
+  return { contributions, batchFacts, observationId: observation.id, semanticFingerprint: observation.semanticFingerprint };
 }

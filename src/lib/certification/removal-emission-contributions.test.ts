@@ -42,7 +42,7 @@ describe("Removal entry windows and ownership", () => {
     }
   });
   it.each(["2025-12-31", "2026-03-02"])("blocks an entry outside every window: %s", (occurredOn) => {
-    expect(derive([entry({ occurredOn })]).blockers).toEqual([{ code: "entryHasNoRemoval", message: "No Removal can carry this entry yet", fixTarget: "emissions", creditBatchId: "b1" }]);
+    expect(derive([entry({ occurredOn })]).blockers).toEqual([{ code: "entryHasNoRemoval", message: "No Removal can carry this entry yet", fixTarget: "emissions", creditBatchId: "b1", lineRef: { componentId: "c1", displayName: "c1" } }]);
   });
   it("ignores tombstones and nonmember batches", () => {
     expect(derive([entry({ deletedAt: new Date() }), entry({ id: "e2", creditBatchId: "foreign" })]).selectedEntryIds).toEqual([]);
@@ -108,4 +108,23 @@ it("distinguishes live and retained reservations from transferable abandoned att
   expect(isLiveEntryReservation({ status: "superseded", lockedAt: null, metadata: null }, now)).toBe(false);
   expect(removalEntryOwner(entry({ sendReservedBySubmissionId: "expired", reservationKnownInactive: true }), [first])).toBe("r1");
   expect(removalEntryOwner(entry({ sendReservedBySubmissionId: "unknown" }), [first])).toBeNull();
+});
+it("does not put an orphan blocker ahead of a none or forbidden contract", () => {
+  for (const contract of [{ scope: "operating", entryPolicy: "none" }, { scope: "forbidden", entryPolicy: "none" }] as const) {
+    expect(derive([entry({ occurredOn: "2026-03-02" })], { lineSources: { c1: { ...contract, origin: "reviewed" } } }).blockers).toEqual([]);
+  }
+});
+it("retains every owned single entry for line review even though it cannot compile the group", () => {
+  const result = derive([entry({ lineRule: "single" }), entry({ id: "e2", lineRule: "single", creditBatchId: "b2" })], {
+    memberBatchIds: ["b1", "b2"], contenders: [{ ...first, creditBatchIds: ["b1", "b2"] }],
+    lineSources: { c1: { scope: "operating", entryPolicy: "single", origin: "reviewed" } },
+  });
+  expect(result.ownedEntryIds).toEqual(["e1", "e2"]);
+  expect(result.selectedEntryIds).toEqual([]);
+  expect(result.blockers[0]).toMatchObject({ code: "singleLineMultipleEntries", lineRef: { componentId: "c1" } });
+});
+it("retains owned stale entries on removed template lines for review", () => {
+  const result = derive([entry({ counts: false })], { lineSources: {} });
+  expect(result.ownedEntryIds).toEqual(["e1"]);
+  expect(result.entrySet).toEqual([]);
 });
