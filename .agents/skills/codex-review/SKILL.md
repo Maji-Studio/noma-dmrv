@@ -16,7 +16,7 @@ assignments in the project's CLAUDE.md take precedence over these defaults.
 
 ## Safety preamble
 
-Paste this text verbatim as the first lines of every Codex prompt this skill writes (the review target or task follows it):
+Paste this text verbatim as the first lines of every Codex prompt this skill writes (the review target or task follows it; in Mode B the `Target:` line comes right after the preamble):
 
 > Safety rules. Do not read, list or cat any file outside this repository (no ~/.npmrc, ~/.ssh, ~/.config, other home dotfiles). Do not run pnpm db:reset, db:push, db:migrate, drizzle-kit push, psql or any SQL against a database. Do not run pkill, killall or kill on processes you did not start. Do not edit package.json dependencies or the lockfile unless the task says so. Never loosen, skip or delete a test, lint rule or guard to make something pass; stop and report instead.
 
@@ -97,7 +97,7 @@ The target flags are **mutually exclusive with a custom prompt** (re-verified on
 
 ```bash
 # Mode B — custom instructions via stdin; NO target flag allowed. Name the review
-# target in the prompt's first line — codex resolves the diff itself with git:
+# target in the first line after the safety preamble — codex resolves the diff itself with git:
 "$CODEX" -m gpt-6.1-sol -c 'model_reasoning_effort="high"' -C "$PWD" review - < "$PROMPT" > "$REPORT"
 ```
 
