@@ -1,15 +1,14 @@
-import { REGISTRY_DISCOVERY_SOURCE } from "./submission-source";
 import { getMetadataValue, SUBMISSION_METADATA_KEYS } from "./submission-metadata";
 
 export type SubmittedOnState =
   | { kind: "submitted"; at: Date | string }
-  /** Already submitted in the registry before noma synced it, with no date recorded. */
+  /** Past DRAFT in the registry (submitted there directly or discovered by a sync) with no date recorded. */
   | { kind: "registryDiscovered" }
   | { kind: "never" };
 
 /** Shown for a Removal or GHG Statement that has no submission yet. */
 export const NOT_SUBMITTED_LABEL = "Not submitted";
-/** Shown for a statement the registry already held as submitted, with no date recorded. */
+/** Shown for a statement past DRAFT in the registry with no recorded submission date. */
 export const REGISTRY_SUBMITTED_LABEL = "Submitted in Isometric";
 
 /** A Removal's submission date is its ledger `submitted_at`. */
@@ -22,21 +21,7 @@ export function submittedOnState(
   return { kind: "submitted", at: submission.submittedAt };
 }
 
-type StatementLedgerRow = { payloadSnapshot: unknown; metadata: unknown };
-
-function isRegistryDiscovered(row: StatementLedgerRow): boolean {
-  const snapshot = row.payloadSnapshot;
-  if (typeof snapshot !== "object" || snapshot === null || !("semantic" in snapshot)) {
-    return false;
-  }
-  const semantic = snapshot.semantic;
-  return (
-    typeof semantic === "object" &&
-    semantic !== null &&
-    "source" in semantic &&
-    semantic.source === REGISTRY_DISCOVERY_SOURCE
-  );
-}
+type StatementLedgerRow = { metadata: unknown };
 
 /**
  * A GHG Statement's ledger `submitted_at` stamps registry CREATION (the remote
@@ -56,7 +41,9 @@ export function statementSubmittedOnState(
   if (typeof recorded === "string" && Number.isFinite(Date.parse(recorded))) {
     return { kind: "submitted", at: recorded };
   }
-  if (latestRow && isRegistryDiscovered(latestRow)) {
+  // Past DRAFT in the registry but no recorded date: it was submitted there
+  // (directly in Isometric, or discovered by a sync), whoever created it here.
+  if (latestRow) {
     const status = getMetadataValue(latestRow.metadata, SUBMISSION_METADATA_KEYS.remoteStatus);
     if (typeof status === "string" && status !== "DRAFT") {
       return { kind: "registryDiscovered" };

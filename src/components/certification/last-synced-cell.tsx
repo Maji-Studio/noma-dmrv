@@ -1,5 +1,5 @@
-import type { Row } from "@tanstack/react-table";
 import { formatDateTime } from "@/lib/format-utils";
+import { undatedLastSortingFn } from "./undated-last-sort";
 
 /** Shown for a GHG Statement that has never been synced from the registry. */
 export const NEVER_SYNCED_LABEL = "Never";
@@ -11,23 +11,12 @@ export function lastSyncedText(value: SyncedAt): string {
   return value === null ? NEVER_SYNCED_LABEL : formatDateTime(value);
 }
 
-/** Column value: the time text, or undefined for a never-synced row so it sorts last. */
-export function lastSyncedSortValue(value: SyncedAt): string | undefined {
-  return value === null ? undefined : lastSyncedText(value);
-}
-
-/**
- * Chronological sort for the "Last synced" column. Pair it with
- * `sortUndefined: "last"` and `lastSyncedSortValue`, so never-synced rows stay
- * after every synced row in both directions.
- */
-export function lastSyncedSortingFn<T extends { lastSyncedAt: SyncedAt }>(
-  a: Row<T>,
-  b: Row<T>,
-): number {
-  const time = (row: Row<T>) =>
-    row.original.lastSyncedAt === null ? 0 : new Date(row.original.lastSyncedAt).getTime();
-  return time(a) - time(b);
+/** Chronological sort for the "Last synced" column; never-synced rows stay last in both directions. */
+export function lastSyncedSortingFn<T extends { lastSyncedAt: SyncedAt }>(descending: boolean) {
+  return undatedLastSortingFn<T>(
+    (item) => (item.lastSyncedAt === null ? null : new Date(item.lastSyncedAt).getTime()),
+    descending,
+  );
 }
 
 export function LastSyncedCell({ value }: { value: SyncedAt }) {

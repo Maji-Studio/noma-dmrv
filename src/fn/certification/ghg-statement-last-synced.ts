@@ -5,6 +5,7 @@ import {
 } from "@/data-access/certifier-sync-events";
 import type { OrgContext } from "@/lib/auth/server";
 import { logger } from "@/lib/log";
+import { sanitizeErrorMessage } from "@/lib/log/sanitize";
 import {
   GHG_STATEMENT_ENTITY_TYPE,
   ISOMETRIC_PROVIDER,
@@ -36,20 +37,23 @@ export function ghgStatementSyncEvent(entityId: string): AppendSyncEventInput {
 }
 
 /**
- * Record a sync for several statements in ONE insert, after the mirror
- * transaction committed (the helper writes through the pooled root `db`).
- * Best-effort like every sync event: a failed audit write never fails the sync.
+ * Write staged events once the mirror transaction settled: commit events in ONE
+ * insert (the helper writes through the pooled root `db`), rollback diagnostics
+ * one by one. Best-effort like every sync event: a failed audit write is logged
+ * and never fails the sync.
  */
-export async function recordGhgStatementSyncs(
+export async function flushStagedSyncEvents(
   orgCtx: OrgContext,
-  statementIds: string[],
+  staged: { committed: AppendSyncEventInput[]; rolledBack: AppendSyncEventInput[] },
+  phase: "commit" | "rollback",
 ): Promise<void> {
+  const events = phase === "commit" ? staged.committed : staged.rolledBack;
+  if (events.length === 0) return;
   try {
-    await appendSyncEvents(orgCtx, statementIds.map(ghgStatementSyncEvent));
-  } catch {
-    // Drizzle errors embed bound params; never log them raw.
+    await appendSyncEvents(orgCtx, events);
+  } catch (err) {
     logger.warn(
-      { op: GHG_STATEMENT_SYNC_OPERATION, count: statementIds.length },
+      { op: GHG_STATEMENT_SYNC_OPERATION, count: events.length, err: sanitizeErrorMessage(err) },
       "failed to record certifier sync events",
     );
   }

@@ -1,10 +1,10 @@
-import type { Row } from "@tanstack/react-table";
 import {
   NOT_SUBMITTED_LABEL,
   REGISTRY_SUBMITTED_LABEL,
   type SubmittedOnState,
 } from "@/lib/certification/submitted-on";
 import { formatDate } from "@/lib/format-utils";
+import { undatedLastSortingFn } from "./undated-last-sort";
 
 /** One line: the date, or why there is none. */
 export function submittedOnText(state: SubmittedOnState): string {
@@ -18,25 +18,15 @@ export function submittedOnText(state: SubmittedOnState): string {
   }
 }
 
-/** Column value: the date text, or undefined for an undated row so it sorts last. */
-export function submittedOnSortValue(state: SubmittedOnState): string | undefined {
-  return state.kind === "submitted" ? submittedOnText(state) : undefined;
+function timestamp(state: SubmittedOnState): number | null {
+  return state.kind === "submitted" ? new Date(state.at).getTime() : null;
 }
 
-function timestamp(state: SubmittedOnState): number {
-  return state.kind === "submitted" ? new Date(state.at).getTime() : 0;
-}
-
-/**
- * Chronological sort for the "Submitted on" column. Pair it with
- * `sortUndefined: "last"` and `submittedOnSortValue`, so undated rows stay after
- * every dated row in both directions (the sort fn only ever sees dated rows).
- */
+/** Chronological sort for the "Submitted on" column; undated rows stay last in both directions. */
 export function submittedOnSortingFn<T extends { submittedOn: SubmittedOnState }>(
-  a: Row<T>,
-  b: Row<T>,
-): number {
-  return timestamp(a.original.submittedOn) - timestamp(b.original.submittedOn);
+  descending: boolean,
+) {
+  return undatedLastSortingFn<T>((item) => timestamp(item.submittedOn), descending);
 }
 
 export function SubmittedOnCell({ state }: { state: SubmittedOnState }) {

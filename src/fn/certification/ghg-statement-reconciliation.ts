@@ -40,7 +40,8 @@ import {
   GHG_STATEMENT_SUBMISSION_TYPE,
   ISOMETRIC_PROVIDER,
 } from "./shared";
-import { ghgStatementSyncEvent, recordGhgStatementSyncs } from "./ghg-statement-last-synced";
+import { flushStagedSyncEvents, ghgStatementSyncEvent } from "./ghg-statement-last-synced";
+import type { AppendSyncEventInput } from "@/data-access/certifier-sync-events";
 import { withStagedSyncEvents, type SyncEventStage } from "./sync-event-stage";
 
 const facilityIdSchema = z.uuid();
@@ -121,14 +122,20 @@ export async function reconcileGhgStatementsForFacility(
       skippedCount: listedRemotes.length,
     };
   }
-  // Statements reconciled inside the lock; their sync events are written in one
-  // insert once the transaction has committed.
-  const syncedStatementIds: string[] = [];
-  const stage: SyncEventStage = {
-    onCommit: (event) => void syncedStatementIds.push(event.entityId),
-    onRollback: () => undefined,
+  // Events staged inside the lock, kept whole (inputs, not just ids). Commit
+  // events are written in one insert after the transaction committed; rollback
+  // diagnostics after it rolled back.
+  const staged: { committed: AppendSyncEventInput[]; rolledBack: AppendSyncEventInput[] } = {
+    committed: [],
+    rolledBack: [],
   };
-  const outcome = await withFacilityDurabilityLock(orgCtx, facilityId, async (tx) => {
+  const stage: SyncEventStage = {
+    onCommit: (event) => void staged.committed.push(event),
+    onRollback: (event) => void staged.rolledBack.push(event),
+  };
+  let outcome: ReconcileRegistryGhgStatementsResult;
+  try {
+    outcome = await withFacilityDurabilityLock(orgCtx, facilityId, async (tx) => {
     const lockedOperatorCreateInFlight =
       await hasInFlightGhgStatementForFacility(orgCtx, facilityId, tx);
     if (lockedOperatorCreateInFlight) {
@@ -242,8 +249,12 @@ export async function reconcileGhgStatementsForFacility(
       warningCount,
       skippedCount,
     };
-  });
-  await recordGhgStatementSyncs(orgCtx, syncedStatementIds);
+    });
+  } catch (error) {
+    await flushStagedSyncEvents(orgCtx, staged, "rollback");
+    throw error;
+  }
+  await flushStagedSyncEvents(orgCtx, staged, "commit");
   return outcome;
 }
 

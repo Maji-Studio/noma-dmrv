@@ -286,6 +286,23 @@ describe("submitted on list payloads (real DB)", () => {
     expect(entries.get(undated.id)?.submittedOn).toEqual({ kind: "registryDiscovered" });
   });
 
+  it("says submitted in Isometric for a noma-created statement submitted there directly", async () => {
+    const facility = await createFacility();
+    const statement = await createStatement(facility);
+    // Created here (no discovery snapshot); the registry shows it past DRAFT but
+    // never gave a submitted_at, so no submittedToVerifierAt was recorded.
+    await insertSubmission(statement, GHG_STATEMENT_ENTITY_TYPE, {
+      status: "submitted",
+      submittedAt: LATEST_SUBMITTED_AT,
+      metadata: { remoteStatus: "AWAITING_VERIFIER" },
+    });
+
+    const result = await loadGhgStatementsForFacility(facility.id);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error(result.error);
+    expect(result.data[0].submittedOn).toEqual({ kind: "registryDiscovered" });
+  });
+
   it("excludes another organization's entities and refuses its facility", async () => {
     const ownFacility = await createFacility();
     const otherFacility = await createFacility(OTHER_ORG_ID);

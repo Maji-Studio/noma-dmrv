@@ -101,6 +101,7 @@ import {
 } from "./shared";
 import { readRemovalReportingWindow } from "./removal-reporting-window";
 import {
+  GHG_STATEMENT_SYNC_OPERATION,
   getGhgStatementLastSyncedAt,
   ghgStatementSyncEvent,
 } from "./ghg-statement-last-synced";
@@ -745,6 +746,8 @@ export async function loadGhgStatementState(
           entityType: GHG_STATEMENT_ENTITY_TYPE,
           entityId: ghgStatementId,
           limit: RECENT_SYNC_EVENTS_LIMIT,
+          // Per-sync bookkeeping rows would push failed submit rows out of the window.
+          excludeOperations: [GHG_STATEMENT_SYNC_OPERATION],
         }),
       ]);
 

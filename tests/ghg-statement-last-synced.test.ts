@@ -467,6 +467,31 @@ describe("successful registry reconciliation records syncs (real DB, fake regist
     expect(await succeededSyncEvents(facility.id)).toHaveLength(1);
   });
 
+  it("keeps a failed submit row in the submission history after more than ten syncs", async () => {
+    const facility = await createFacility();
+    const projectId = await linkProject(facility);
+    const remote = registry.seedGhgStatement({ projectId, endOn: PERIOD_END });
+    const statement = await createStatement(facility);
+    await insertSubmission(statement, { externalId: remote.id });
+    await insertEvent(statement.id, {
+      operation: "ghg_statement:submit",
+      status: "failed",
+      errorMessage: "verifier refused",
+      attemptedAt: FIRST_SYNC_AT,
+    });
+    const syncCount = 12;
+    for (let i = 0; i < syncCount; i += 1) {
+      await insertEvent(statement.id, { attemptedAt: new Date(LATEST_SYNC_AT.getTime() + i * 60_000) });
+    }
+
+    const result = await loadGhgStatementState(statement.id);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error(result.error);
+    const operations = result.data.recentSyncEvents.map((event) => event.operation);
+    expect(operations).toContain("ghg_statement:submit");
+    expect(operations).not.toContain(GHG_STATEMENT_SYNC_OPERATION);
+  });
+
   it("does not record syncs for read-only state and registry list views", async () => {
     const facility = await createFacility();
     const projectId = await linkProject(facility);

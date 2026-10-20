@@ -18,7 +18,8 @@
 "use client";
 
 import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, SortingState } from "@tanstack/react-table";
+import { isSortedDescending } from "./undated-last-sort";
 import Link from "next/link";
 import { parseAsString, useQueryState } from "nuqs";
 import { GHG_STATEMENT_DEEP_LINK_PARAM } from "@/lib/ghg-statement-links";
@@ -43,8 +44,8 @@ import { certificationSettingsHref } from "@/lib/certification/links";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
-import { SubmittedOnCell, submittedOnSortingFn, submittedOnSortValue } from "./submitted-on-cell";
-import { LastSyncedCell, lastSyncedSortingFn, lastSyncedSortValue } from "./last-synced-cell";
+import { SubmittedOnCell, submittedOnSortingFn, submittedOnText } from "./submitted-on-cell";
+import { LastSyncedCell, lastSyncedSortingFn, lastSyncedText } from "./last-synced-cell";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
@@ -273,6 +274,7 @@ function StatusCell({ item }: { item: GhgStatementListItem }) {
 
 const createColumns = (
   registryHref: (externalId: string) => string | null,
+  sorting: { submittedOn: boolean; lastSynced: boolean },
 ): ColumnDef<GhgStatementListItem>[] => [
   {
     id: "period",
@@ -304,9 +306,8 @@ const createColumns = (
   {
     id: "submittedOn",
     header: "Submitted on",
-    accessorFn: (item) => submittedOnSortValue(item.submittedOn),
-    sortingFn: submittedOnSortingFn,
-    sortUndefined: "last",
+    accessorFn: (item) => submittedOnText(item.submittedOn),
+    sortingFn: submittedOnSortingFn<GhgStatementListItem>(sorting.submittedOn),
     cell: ({ row }) => (
       <SubmittedOnCell state={row.original.submittedOn} />
     ),
@@ -314,9 +315,8 @@ const createColumns = (
   {
     id: "lastSynced",
     header: "Last synced",
-    accessorFn: (item) => lastSyncedSortValue(item.lastSyncedAt),
-    sortingFn: lastSyncedSortingFn,
-    sortUndefined: "last",
+    accessorFn: (item) => lastSyncedText(item.lastSyncedAt),
+    sortingFn: lastSyncedSortingFn<GhgStatementListItem>(sorting.lastSynced),
     cell: ({ row }) => <LastSyncedCell value={row.original.lastSyncedAt} />,
   },
   {
@@ -345,6 +345,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
   const toast = useToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [statementId, setStatementId] = useQueryState(
     GHG_STATEMENT_DEEP_LINK_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
@@ -353,13 +354,18 @@ function ListBody({ facilityId }: { facilityId: string }) {
   const isProduction = summaryQuery.data?.isProduction ?? false;
   const externalProjectId =
     summaryQuery.data?.mapping?.externalProjectId ?? null;
-  const columns = createColumns((externalId) =>
-    registryRecordUrl({
-      kind: "ghgStatement",
-      externalId,
-      externalProjectId,
-      isProduction,
-    }),
+  const columns = createColumns(
+    (externalId) =>
+      registryRecordUrl({
+        kind: "ghgStatement",
+        externalId,
+        externalProjectId,
+        isProduction,
+      }),
+    {
+      submittedOn: isSortedDescending(sorting, "submittedOn"),
+      lastSynced: isSortedDescending(sorting, "lastSynced"),
+    },
   );
   const gate = deriveGhgCreateGate({
     isLoading: summaryQuery.isLoading,
@@ -475,6 +481,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
           enablePagination
           globalFilter={searchQuery}
           onGlobalFilterChange={setSearchQuery}
+          onSortingChange={setSorting}
           isLoading={query.isLoading}
           hoverable
           onRowClick={(row) => setStatementId(row.statement.id)}

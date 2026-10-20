@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, max } from "drizzle-orm";
+import { and, desc, eq, inArray, max, notInArray } from "drizzle-orm";
 import { db } from "@/db";
 import { certifierSyncEvents } from "@/db/schema/certification";
 import type { OrgContext } from "@/lib/auth/server";
@@ -66,7 +66,13 @@ export async function appendSyncEvents(
 
 export async function listRecentSyncEvents(
   ctx: OrgContext,
-  args: { entityType: string; entityId: string; limit: number },
+  args: {
+    entityType: string;
+    entityId: string;
+    limit: number;
+    /** Operations left out, e.g. high-volume bookkeeping that would crowd the history. */
+    excludeOperations?: string[];
+  },
 ): Promise<CertifierSyncEventRow[]> {
   requireOrgScope(ctx);
   return db
@@ -77,6 +83,9 @@ export async function listRecentSyncEvents(
         eq(certifierSyncEvents.entityType, args.entityType),
         eq(certifierSyncEvents.entityId, args.entityId),
         eq(certifierSyncEvents.organizationId, ctx.organizationId),
+        args.excludeOperations?.length
+          ? notInArray(certifierSyncEvents.operation, args.excludeOperations)
+          : undefined,
       ),
     )
     .orderBy(desc(certifierSyncEvents.attemptedAt))
