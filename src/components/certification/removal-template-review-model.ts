@@ -72,6 +72,7 @@ const PROBLEM_COPY: Partial<Record<LineSourceProblem["code"], string>> = {
   "single-with-automatic-source":
     "One entry per batch cannot add to an automatic figure. Remove the automatic figure.",
   "foreign-automatic-source": "This automatic figure does not fit this line. Choose another one.",
+  "retired-automatic-source": "This automatic figure is no longer available. Choose another figure or allow entries for this line.",
   "disallowed-entry-policy": "This entry rule does not fit the line's inputs. Choose another one.",
   ambiguous: "Another line uses the same automatic figure. Give each figure to one line.",
   "missing-contract": "This line has no contract yet. Assign one.",

@@ -1,7 +1,6 @@
-const retirementGate = vi.hoisted(() => ({ enabled: false }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
-afterEach(() => { retirementGate.enabled = false; });
-import { describe, expect, it, vi, afterEach } from "vitest";
+beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
+afterEach(() => { vi.unstubAllEnvs(); });
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import type { TransportLeg } from "@/db/schema";
@@ -244,7 +243,7 @@ it("keeps missing histogram evidence advisory for sampled 1,000-year batches", (
 });
 
 it.each([false, true])("ignores incomplete sample legs only on activation (gate: %s)", (enabled) => {
-  retirementGate.enabled = enabled;
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
   const sampleLeg = { id: "sample-leg", entityId: "sample", distanceKm: 10, loadMassKg: null } as TransportLeg;
   const result = buildEntityReadinessResult([], [], { feedstock: [], biochar: [], sample: [sampleLeg] }, ["sample"]);
   expect(result.gaps.length > 0).toBe(!enabled);

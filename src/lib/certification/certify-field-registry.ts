@@ -1,4 +1,4 @@
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
+import { sourceFactAvailable } from "@/lib/isometric/template-observations/catalog-sources";
 import {
   TRANSPORT_CATEGORIES,
   TRANSPORT_SOURCE_FACTS,
@@ -407,7 +407,7 @@ export function resolveCertifyFieldInputTuples(
   const seen = new Set<string>();
   const tuples: BindingInputTuple[] = [];
   for (const { source } of descriptor.mappings ?? []) {
-    if (source === "sampleTransportMassDistanceTonneKm" && emissionsEntriesEnabled()) continue;
+    if (!sourceFactAvailable(source)) continue;
     for (const tuple of tuplesBySource[source as keyof InputTuplesBySource] ?? []) {
       const key = `${tuple.groupKey}/${tuple.blueprintKey}/${tuple.inputKey}`;
       if (seen.has(key)) continue;

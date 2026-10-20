@@ -1,7 +1,6 @@
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { effectiveContract, type LineContract } from "./template-observations/line-sources";
-import { automaticSourceFact } from "./template-observations/catalog-sources";
+import { automaticSourceFact, sourceFactAvailable } from "./template-observations/catalog-sources";
 import { SafeError } from "@/lib/errors";
 import type { AggregatedProductionData } from "./utils/aggregation";
 import { lookupBindingTriple, projectInputMapping, projectPeriodInputTuples, type InputMappingEntry, type InputMappingTable } from "./semantic-binding-projections";
@@ -31,7 +30,7 @@ export function lookupInputMapping(
     inputKey,
   );
   if (!mapping || !contract) {
-    return mapping?.source === "sampleTransportMassDistanceTonneKm" && emissionsEntriesEnabled() ? undefined : mapping;
+    return mapping && sourceFactAvailable(mapping.source) ? mapping : undefined;
   }
   const effective = effectiveContract(contract);
   if (effective.scope !== "operating") return undefined;
@@ -50,7 +49,7 @@ export function resolveDatapointSource(
   const effective = contract && effectiveContract(contract);
   if (effective?.scope === "operating" && effective.automaticSource === "sequestration") return mapping.source;
   if (effective?.scope === "operating" && effective.automaticSource) return automaticSourceFact(effective.automaticSource);
-  if (contract || mapping.sourceByComponent || (mapping.source === "sampleTransportMassDistanceTonneKm" && emissionsEntriesEnabled())) {
+  if (contract || mapping.sourceByComponent || !sourceFactAvailable(mapping.source)) {
     throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview);
   }
   return mapping.source;

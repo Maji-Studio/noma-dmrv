@@ -1,6 +1,5 @@
-const retirementGate = vi.hoisted(() => ({ enabled: false }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
-afterEach(() => { retirementGate.enabled = false; });
+beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
+afterEach(() => { vi.unstubAllEnvs(); });
 /**
  * Parity for the #637 catalog projections: the certify field registry's input
  * tuples, the required transport categories, and the transport repair
@@ -12,7 +11,7 @@ afterEach(() => { retirementGate.enabled = false; });
  * feeds a bound input (moisture, the Safety margin, the transport-derived
  * distances and masses).
  */
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import {
   CERTIFY_FIELD_REGISTRY,
   resolveCertifyFieldInputTuples,
@@ -264,7 +263,7 @@ describe("one catalog edit", () => {
 });
 
 it.each([false, true])("filters sample coverage and field tuples without changing projections (gate: %s)", (enabled) => {
-  retirementGate.enabled = enabled;
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
   const sampleTriple: [string, string, string] = ["sampling-required-for-mrv", "mass_distance_based_ci_emissions", "mass_distance"];
   expect(deriveRequiredTransportCategories(templateOf([sampleTriple]))).toEqual(enabled ? [] : ["sample"]);
   expect(resolvedFieldTuples()["transportLeg.distanceKm"].includes(sampleTriple.join("/"))).toBe(!enabled);

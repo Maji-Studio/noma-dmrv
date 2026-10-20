@@ -1,7 +1,6 @@
-const retirementGate = vi.hoisted(() => ({ enabled: false }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
-afterEach(() => { retirementGate.enabled = false; });
-import { expect, it, vi, afterEach } from "vitest";
+beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
+afterEach(() => { vi.unstubAllEnvs(); });
+import { beforeEach, expect, it, vi, afterEach } from "vitest";
 import sandboxFixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import culaFixture from "../../../tests/fixtures/isometric/cula-template-2026-10-15.json";
 import enrichment from "../../../tests/fixtures/isometric/sandbox-enrichment-2026-10-15.json";
@@ -50,7 +49,7 @@ it("keeps the shared Isometric-editor guidance for an unset fixed value during c
 });
 
 it.each([["sandbox 15 Oct", sandbox, false], ["sandbox 15 Oct", sandbox, true], ["Cula", cula, false], ["Cula", cula, true]] as const)("compiles supported automatic lines from %s (gate: %s)", (_, fixture, enabled) => {
-  retirementGate.enabled = enabled;
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
   const definition = normalizeTemplateDefinition(fixture);
   const lineSources = resolveLineSources({ definition });
   const findings = findUnbindableTemplateInputs(fixture, { lineSources });

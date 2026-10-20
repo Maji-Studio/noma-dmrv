@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getLatestTemplateObservation, reviewLineContracts } from "@/data-access/removal-template-observations";
@@ -8,8 +8,10 @@ import { listGhgEntryTemplates, type IsometricGhgEntryTemplate } from "@/lib/iso
 import { loadRemovalTemplateFacts } from "./removal-template-facts";
 import { observeRemovalTemplate } from "./observe-removal-template";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
-import { normalizeTemplateDefinition, resolveLineSources } from "@/lib/isometric/template-observations";
-import { loadRemovalTemplateReviewEntry, loadRemovalTemplateReviewPreview, reviewRemovalTemplateLines, switchCreditBatchRemovalTemplate } from "./removal-template-review";
+import { normalizeTemplateDefinition, resolveLineSources, validateLineSources } from "@/lib/isometric/template-observations";
+import { canAcceptProposal, problemMessages } from "@/components/certification/removal-template-review-model";
+import { loadFacilityCertifierFacts } from "./facility-certifier-facts";
+import { loadRemovalTemplateReview, loadRemovalTemplateReviewEntry, loadRemovalTemplateReviewPreview, reviewRemovalTemplateLines, switchCreditBatchRemovalTemplate } from "./removal-template-review";
 
 const ctx = vi.hoisted((): OrgContext => ({ userId: "review-user", organizationId: "review-org", orgRole: "owner", isPlatformAdmin: false }));
 vi.mock("../with-action", async () => {
@@ -25,6 +27,7 @@ vi.mock("@/data-access/certification", () => ({ getCertifierProjectByFacility: v
 vi.mock("@/data-access/certifier-credentials", () => ({ resolveIsometricClient: vi.fn(async () => ({})) }));
 vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn() }));
 vi.mock("./removal-template-facts", () => ({ loadRemovalTemplateFacts: vi.fn() }));
+vi.mock("./facility-certifier-facts", () => ({ loadFacilityCertifierFacts: vi.fn() }));
 vi.mock("@/lib/isometric", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/isometric")>(),
   listGhgEntryTemplates: vi.fn(), listComponentBlueprints: vi.fn(async () => []),
@@ -33,11 +36,13 @@ const id = "00000000-0000-4000-8000-000000000001";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false");
   ctx.orgRole = "owner";
   vi.mocked(requireOrgFacility).mockResolvedValue(undefined as never);
   vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id } as never);
   vi.mocked(listGhgEntryTemplates).mockResolvedValue([fixture as IsometricGhgEntryTemplate]);
 });
+afterEach(() => { vi.unstubAllEnvs(); });
 describe("Removal template action guards", () => {
   it("denies members before review or switch reads", async () => {
     ctx.orgRole = "member";
@@ -124,7 +129,6 @@ describe("loadRemovalTemplateReviewEntry", () => {
     lineSources[componentId] = { scope: "operating", automaticSource: "sample-transport", entryPolicy: "additive", origin: "proposed" };
     vi.mocked(getLatestTemplateObservation).mockResolvedValueOnce({ definition, lineSources } as never);
     const result = await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: fixture.id });
-    vi.unstubAllEnvs();
     if (!result.success) throw new Error("expected a read");
     expect(result.data.lines.find((line) => line.component.id === componentId)?.contract)
       .toEqual({ scope: "operating", automaticSource: undefined, entryPolicy: "additive", origin: "proposed" });
@@ -147,4 +151,58 @@ describe("loadRemovalTemplateReviewEntry", () => {
     expect(listGhgEntryTemplates).not.toHaveBeenCalled();
     expect((await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: "other-project-template" })).success).toBe(false);
   });
+});
+
+it.each([false, true])("sends gate-adjusted contracts and candidates for client proposal validation (gate: %s)", async (enabled) => {
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
+  const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
+  const lineSources = resolveLineSources({ definition });
+  const ids = ["rtc_1M4ZRPH1RSBXADG2", "rtc_1M4ZRRN6PSBXHQ7C"];
+  for (const componentId of ids) {
+    lineSources[componentId] = { scope: "operating", automaticSource: "sample-transport", entryPolicy: "additive", origin: "proposed" };
+  }
+  const before = structuredClone(lineSources);
+  const observation = { id, definition, lineSources };
+  vi.mocked(loadFacilityCertifierFacts).mockResolvedValueOnce({
+    removalTemplateIds: [fixture.id], templatesById: { [fixture.id]: {
+      template: fixture, observation, enrichmentProblems: [], lineSourceProblems: validateLineSources(definition, lineSources),
+    } },
+  } as never);
+  const result = await loadRemovalTemplateReview(id);
+  if (!result.success) throw new Error("expected a read");
+  const entry = result.data[0];
+  expect(entry.observation?.id).toBe(id);
+  expect(lineSources).toEqual(before);
+  if (enabled) expect(Object.values(entry.observation!.lineSources).some((contract) => contract.automaticSource === "sample-transport")).toBe(false);
+  // Private environment variables are absent in the browser after this server read.
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", undefined);
+  for (const componentId of ids) {
+    const line = entry.lines.find((candidate) => candidate.component.id === componentId)!;
+    expect(line.contract).toEqual(entry.observation?.lineSources[componentId]);
+    expect(line.contract).toMatchObject({ scope: "operating", entryPolicy: "additive", origin: "proposed" });
+    expect(line.contract.automaticSource).toBe(enabled ? undefined : "sample-transport");
+    expect(line.catalogCandidates.includes("sample-transport")).toBe(!enabled);
+    expect(canAcceptProposal(entry, line, {})).toBe(enabled);
+  }
+});
+
+it("preserves the server's retired-source review problem and operator guidance after stripping the source", async () => {
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
+  const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
+  const lineSources = resolveLineSources({ definition });
+  const componentId = "rtc_1M4ZRPH1RSBXADG2";
+  lineSources[componentId] = { scope: "operating", automaticSource: "sample-transport", entryPolicy: "none", origin: "reviewed" };
+  vi.mocked(loadFacilityCertifierFacts).mockResolvedValueOnce({
+    removalTemplateIds: [fixture.id], templatesById: { [fixture.id]: {
+      template: fixture, observation: { id, definition, lineSources }, enrichmentProblems: [], lineSourceProblems: validateLineSources(definition, lineSources),
+    } },
+  } as never);
+  const result = await loadRemovalTemplateReview(id);
+  if (!result.success) throw new Error("expected a read");
+  const entry = result.data[0];
+  const line = entry.lines.find((candidate) => candidate.component.id === componentId)!;
+  expect(line.contract.automaticSource).toBeUndefined();
+  expect(problemMessages(line, entry.lineSourceProblems)).toEqual([
+    "This automatic figure is no longer available. Choose another figure or allow entries for this line.",
+  ]);
 });

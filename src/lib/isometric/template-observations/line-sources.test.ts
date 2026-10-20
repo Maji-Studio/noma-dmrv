@@ -1,7 +1,6 @@
-const retirementGate = vi.hoisted(() => ({ enabled: false }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
-afterEach(() => { retirementGate.enabled = false; });
-import { describe, expect, it, vi, afterEach } from "vitest";
+beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
+afterEach(() => { vi.unstubAllEnvs(); });
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import sandbox from "../../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import cula from "../../../../tests/fixtures/isometric/cula-template-2026-10-15.json";
 import production from "../../../../tests/fixtures/isometric/production-template-2026-07-03.json";
@@ -304,7 +303,7 @@ describe("lineNeedsReview", () => {
 });
 
 it.each([false, true])("makes legacy sample contracts entry-only without changing stored sources (gate: %s)", (enabled) => {
-  retirementGate.enabled = enabled;
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
   const legacy = definitions[2];
   const sources = resolveLineSources({ definition: legacy });
   const stored = sources.rtc_1KWKNGJZY1S0HNRT;
@@ -315,4 +314,18 @@ it.each([false, true])("makes legacy sample contracts entry-only without changin
   const line = group.components.find((component) => component.id === "rtc_1KWKNGJZY1S0HNRT")!;
   expect(catalogCandidates(line, group.key).includes("sample-transport")).toBe(!enabled);
   expect(validateLineSources(legacy, sources)).toEqual([]);
+});
+
+it.each(["bootstrap", "carried", "reviewed"] as const)("reopens a settled %s sample contract with no entries after retirement", (origin) => {
+  const legacy = definitions[2];
+  const sources = resolveLineSources({ definition: legacy });
+  const id = "rtc_1KWKNGJZY1S0HNRT";
+  sources[id] = { ...sources[id], entryPolicy: "none", origin };
+  expect(lineNeedsReview(id, sources[id], validateLineSources(legacy, sources))).toBe(false);
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
+  const problems = validateLineSources(legacy, sources);
+  expect(problems).toContainEqual({ componentId: id, code: "retired-automatic-source" });
+  expect(lineNeedsReview(id, sources[id], problems)).toBe(true);
+  const reassigned: LineSources = { ...sources, [id]: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } };
+  expect(validateLineSources(legacy, reassigned)).toEqual([]);
 });

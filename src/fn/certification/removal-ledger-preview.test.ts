@@ -1,6 +1,5 @@
-const retirementGate = vi.hoisted(() => ({ enabled: false }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
-afterEach(() => { retirementGate.enabled = false; });
+beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
+afterEach(() => { vi.unstubAllEnvs(); });
 import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import {
   aggregateProductionRuns,
@@ -58,7 +57,7 @@ describe("buildRemovalLedgerPreview", () => {
   });
 
   it.each([false, true])("projects mixed production claims, transport inputs, and batch-aware links (gate: %s)", (enabled) => {
-    retirementGate.enabled = enabled;
+    vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
     const preview = buildRemovalLedgerPreview({
       removalId: "removal-current",
       memberBatchClaims: [

@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import { z } from "zod";
+import { DomainError } from "@/lib/domain-errors";
 
 const retirementOptionsSchema = z.object({
   "organization-id": z.string().trim().min(1),
@@ -27,19 +28,28 @@ export function selectSampleTransportRetirementCandidates(organizationId: string
 export async function runSampleTransportRetirement(options: { organizationId: string; delete: boolean }, dependencies: {
   list: () => Promise<RetirementCandidate[]>;
   remove: (id: string, version: number) => Promise<boolean>;
-  log: (value: { organizationId: string; legIds: string[]; documentIds: string[]; legCount: number; documentCount: number; deletedLegCount: number }) => void;
+  log: (value: { organizationId: string; legIds: string[]; documentIds: string[]; legCount: number; documentCount: number; deletedLegCount: number; skippedLegIds: string[] } | { deletedLegId: string }) => void;
 }) {
   const candidates = selectSampleTransportRetirementCandidates(options.organizationId, await dependencies.list());
   const documentIds = [...new Set(candidates.flatMap((candidate) => candidate.documentIds))].sort();
   let deletedLegCount = 0;
+  const skippedLegIds: string[] = [];
   dependencies.log({ organizationId: options.organizationId, legIds: candidates.map((candidate) => candidate.id),
-    documentIds, legCount: candidates.length, documentCount: documentIds.length, deletedLegCount });
+    documentIds, legCount: candidates.length, documentCount: documentIds.length, deletedLegCount, skippedLegIds });
   if (options.delete) {
     for (const candidate of candidates) {
-      if (await dependencies.remove(candidate.id, candidate.version)) deletedLegCount++;
+      try {
+        if (await dependencies.remove(candidate.id, candidate.version)) {
+          deletedLegCount++;
+          dependencies.log({ deletedLegId: candidate.id });
+        }
+      } catch (error) {
+        if (!(error instanceof DomainError) || error.code !== "certification_locked") throw error;
+        skippedLegIds.push(candidate.id);
+      }
     }
     dependencies.log({ organizationId: options.organizationId, legIds: candidates.map((candidate) => candidate.id),
-      documentIds, legCount: candidates.length, documentCount: documentIds.length, deletedLegCount });
+      documentIds, legCount: candidates.length, documentCount: documentIds.length, deletedLegCount, skippedLegIds });
   }
-  return { legCount: candidates.length, documentCount: documentIds.length, deletedLegCount };
+  return { legCount: candidates.length, documentCount: documentIds.length, deletedLegCount, skippedLegIds };
 }

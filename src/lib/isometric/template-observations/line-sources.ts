@@ -14,7 +14,7 @@ export interface LineContract {
 }
 export type LineSources = Record<string, LineContract>;
 export interface LineSourceProblem {
-  code: "single-with-automatic-source" | "foreign-automatic-source" | "disallowed-entry-policy" | "ambiguous" | "missing-contract" | "unassigned";
+  code: "single-with-automatic-source" | "foreign-automatic-source" | "retired-automatic-source" | "disallowed-entry-policy" | "ambiguous" | "missing-contract" | "unassigned";
   componentId: string;
 }
 
@@ -45,6 +45,9 @@ export function validateLineSources(definition: TemplateDefinition, lineSources:
       if (effectiveContract(contract).scope === "unassigned") problems.push({ code: "unassigned", componentId });
       if (contract.entryPolicy === "single" && contract.automaticSource) problems.push({ code: "single-with-automatic-source", componentId });
       if (!allowedEntryPolicies(component).includes(contract.entryPolicy)) problems.push({ code: "disallowed-entry-policy", componentId });
+      if (contract.automaticSource && !automaticSourceAvailable(contract.automaticSource) && contract.entryPolicy === "none") {
+        problems.push({ code: "retired-automatic-source", componentId });
+      }
       if (contract.automaticSource && automaticSourceAvailable(contract.automaticSource)) {
         if (!catalogCandidates(component, group.key).includes(contract.automaticSource)) problems.push({ code: "foreign-automatic-source", componentId });
         const owners = sourceOwners.get(contract.automaticSource) ?? [];

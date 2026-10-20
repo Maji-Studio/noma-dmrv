@@ -1,6 +1,5 @@
-const retirementGate = vi.hoisted(() => ({ enabled: false }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
-afterEach(() => { retirementGate.enabled = false; });
+beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
+afterEach(() => { vi.unstubAllEnvs(); });
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { outputProductFixtureValues, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 /**
@@ -8,7 +7,7 @@ import { outputProductFixtureValues, deleteOutputProductFixtures, deleteOutputFa
  * gaps. The fixture exercises canonical supplier-origin GPS, all three parent
  * types that own transport legs, and credit-batch scope for Samples.
  */
-import { afterAll, beforeAll, describe, expect, it, vi, afterEach } from "vitest";
+import { beforeEach, afterAll, beforeAll, describe, expect, it, vi, afterEach } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -599,7 +598,7 @@ describe("dashboard structural certification gaps", () => {
 
 it.for([false, true])("excludes legacy sample GPS gaps only after activation (gate: %s)", async (enabled, ctx) => {
   if (!dbReachable || !fixture) { ctx.skip(); return; }
-  retirementGate.enabled = enabled;
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
   const counts = await loadDashboardStructuralGapCounts(makeTestOrgContext(TEST_USER_ID), fixture.gapFacilityId);
   expect(counts.transportEndpointGpsGaps).toBe(enabled ? 1 : 2);
 });

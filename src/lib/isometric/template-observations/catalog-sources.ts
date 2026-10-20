@@ -1,10 +1,12 @@
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import {
   ownValue, SAFETY_MARGIN_CARVE_OUT, SEMANTIC_BINDING_CATALOG,
   type BindingRole, type SourceFactKey,
 } from "../semantic-binding-catalog";
 import { compareIds } from "./normalize";
 import type { TemplateComponent, TemplateInput } from "./types";
+import { RETIRED_SOURCE_FACT, sourceFactAvailable } from "./source-fact-availability";
+
+export { sourceFactAvailable } from "./source-fact-availability";
 
 /** Stable persisted IDs. Tuples and group permissions stay in the catalog. */
 export const SOURCE_IDS = {
@@ -13,7 +15,7 @@ export const SOURCE_IDS = {
   totalElectricityKwh: "run-electricity",
   feedstockTransportMassDistanceTonneKm: "feedstock-transport",
   biocharTransportMassDistanceTonneKm: "delivery-transport",
-  sampleTransportMassDistanceTonneKm: "sample-transport",
+  [RETIRED_SOURCE_FACT]: "sample-transport",
   totalFeedstockDryMassKg: "feedstock-dry-mass",
   totalBiocharDryMassKg: "biochar-dry-mass",
   weightedOrganicCarbonPercent: "sequestration",
@@ -23,7 +25,7 @@ export type AutomaticSourceId = typeof SOURCE_IDS[keyof typeof SOURCE_IDS] | "sa
 
 /** Runtime availability is separate from the stable catalog/hash projections. */
 export function automaticSourceAvailable(source: AutomaticSourceId): boolean {
-  return source !== "sample-transport" || !emissionsEntriesEnabled();
+  return source !== SOURCE_IDS[RETIRED_SOURCE_FACT] || sourceFactAvailable(RETIRED_SOURCE_FACT);
 }
 
 function roleSources(role: BindingRole, groupKey: string): AutomaticSourceId[] {

@@ -1,6 +1,5 @@
-const retirementGate = vi.hoisted(() => ({ enabled: false }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
-afterEach(() => { retirementGate.enabled = false; });
+beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
+afterEach(() => { vi.unstubAllEnvs(); });
 /**
  * Phase 3.5 — pure-logic tests.
  *
@@ -19,7 +18,7 @@ afterEach(() => { retirementGate.enabled = false; });
  * signed_upload_url 409 → insert) are tracked as a follow-up integration
  * test in docs/open-questions.md under `isometric/sources-integration-tests`.
  */
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import type { components } from "@/lib/isometric/generated/certify";
 import { buildCreateDatapointRequest } from "@/lib/isometric/transformers/datapoint";
 import { buildSourceSupplierRef } from "@/lib/isometric/utils/source-ref";
@@ -207,7 +206,7 @@ describe("payloadHash sensitivity to sourceIds — supersede contract", () => {
 });
 
 it.each([false, true])("does not attach evidence to a retired sample datapoint (gate: %s)", (enabled) => {
-  retirementGate.enabled = enabled;
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
   const build = () => buildCreateDatapointRequest({
     groupKey: "sampling-required-for-mrv", componentBlueprintKey: "mass_distance_based_ci_emissions",
     rtcInput: rtcInput({ input_key: "mass_distance", quantity_kind: "mass_distance" }),

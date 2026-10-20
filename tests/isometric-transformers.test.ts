@@ -1,8 +1,7 @@
-const retirementGate = vi.hoisted(() => ({ enabled: false }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
-afterEach(() => { retirementGate.enabled = false; });
+beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
+afterEach(() => { vi.unstubAllEnvs(); });
 import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import type { components } from "@/lib/isometric/generated/certify";
 import {
   buildCreateDatapointRequest,
@@ -617,7 +616,7 @@ describe("buildCreateDatapointRequest", () => {
   });
 
   it.each([false, true])("INPUT_MAPPING covers active demo-template tuples (gate: %s)", (enabled) => {
-    retirementGate.enabled = enabled;
+    vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
     // Sanity: any deletion here is a real schema change, not a refactor.
     // Anchors the contract with the noma-mvp tailored template authored in
     // `docs/isometric/sandbox-template-authoring.md`. The seven previously-

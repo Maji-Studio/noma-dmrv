@@ -1,11 +1,10 @@
-const retirementGate = vi.hoisted(() => ({ enabled: false }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
-afterEach(() => { retirementGate.enabled = false; });
+beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
+afterEach(() => { vi.unstubAllEnvs(); });
 import { buildTransportCoverage } from "@/fn/certification/certify-transport-coverage";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib/certification/readiness";
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import { TEST_ORG_ID } from "./helpers/test-org";
 import type { TransportLeg } from "@/db/schema";
 import { ROUND_TRIP_DISTANCE_FACTOR } from "@/lib/calculations/round-trip";
@@ -456,7 +455,7 @@ describe("enrichWithTransportLegs", () => {
 });
 
 it.each([false, true])("sample legs contribute and warn only before activation (gate: %s)", (enabled) => {
-  retirementGate.enabled = enabled;
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
   const aggregate = {
     sampleTransportMassDistanceTonneKm: 99, warnings: [],
   } as unknown as AggregatedProductionData;
