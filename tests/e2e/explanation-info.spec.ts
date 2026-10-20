@@ -1,11 +1,28 @@
+import type { Locator } from "@playwright/test";
 import { test, expect, selectEntity, waitForSideSheet } from "./fixtures";
+
+const SETTLE_POLL_MS = 100;
+const SETTLE_MAX_POLLS = 30;
+
+/** The box of a control once the sheet has stopped scrolling and re-laying out under it. */
+async function settledBox(control: Locator) {
+  await control.scrollIntoViewIfNeeded();
+  let previous = await control.boundingBox();
+  for (let poll = 0; poll < SETTLE_MAX_POLLS; poll++) {
+    await control.page().waitForTimeout(SETTLE_POLL_MS);
+    const next = await control.boundingBox();
+    if (previous && next && previous.x === next.x && previous.y === next.y) return next;
+    previous = next;
+  }
+  throw new Error("The control never settled");
+}
 
 /**
  * Explanations open from an (i): on hover with a mouse and on a press
  * everywhere else. The sheet has one view, no Simple or Detailed switch, and an
  * open panel never traps the field being edited.
  */
-const SPLIT_FORMULA = "Dry = wet × (1 - moisture). 50 kg × (1 - 15%) = 42.5 kg.";
+const SPLIT_FORMULA = /^Dry mass comes from the saved record\. Water is the wet mass minus the dry mass: 50 kg - 42\.5 kg = 7\.5 kg\.$/;
 
 for (const width of [1440, 390]) {
   test(`the feedstock split explains itself behind an (i) at ${width}px`, async ({ adminPage: page, seededData }) => {
@@ -25,7 +42,7 @@ for (const width of [1440, 390]) {
     await dialog.locator('input[name="feedstockMoisturePercent"]').fill("15");
 
     // The formula sentence stays inline; the ledger waits behind the (i).
-    await expect(dialog.getByText(SPLIT_FORMULA, { exact: true })).toBeVisible();
+    await expect(dialog.getByText(SPLIT_FORMULA)).toBeVisible();
     const ledger = page.getByRole("table", { name: /^Feedstock composition/ });
     await expect(ledger).toHaveCount(0);
     await expect(info).toBeVisible();
@@ -42,6 +59,7 @@ for (const width of [1440, 390]) {
 
     // An outside press closes it and still reaches the field being edited.
     const moisture = dialog.locator('input[name="feedstockMoisturePercent"]');
+    await moisture.click();
     await moisture.fill("20");
     await expect(ledger).toHaveCount(0);
     await expect(moisture).toHaveValue("20");
@@ -64,6 +82,10 @@ test("a mouse hover opens the explanation on desktop", async ({ adminPage: page,
   await selectEntity(page, "Source Bin", seededData.feedstockStorageLocation.id, seededData.feedstockStorageLocation.name);
   await dialog.locator('input[name="feedstockDraws.0.wetMassKg"]').fill("50");
   await dialog.locator('input[name="feedstockMoisturePercent"]').fill("15");
-  await dialog.getByRole("button", { name: "How feedstock composition is worked out" }).hover();
+  const info = dialog.getByRole("button", { name: "How feedstock composition is worked out" });
+  const box = await settledBox(info);
+  // A real pointer arrives over several moves.
+  await page.mouse.move(box.x - 60, box.y - 40);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 8 });
   await expect(page.getByRole("table", { name: /^Feedstock composition/ })).toBeVisible();
 });

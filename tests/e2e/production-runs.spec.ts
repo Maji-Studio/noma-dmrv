@@ -197,7 +197,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
       const detail = page.locator('[role="dialog"]');
       await expect(detail.getByText(seededData.feedstockStorageLocation.name)).toBeVisible();
       await expect(detail.getByText(`E2E Secondary Feedstock Bin ${tag}: 70 kg`)).toBeVisible();
-      await expect(detail.getByText("120 kg")).toBeVisible();
+      await expect(detail.getByText("120 kg", { exact: true })).toBeVisible();
 
       await detail.getByRole("button", { name: "Edit production run" }).click();
       const drawRows = detail.locator('[data-testid^="feedstock-draw-row-"]');
