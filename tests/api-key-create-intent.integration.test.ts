@@ -10,6 +10,8 @@ import { createApiKey } from "@/data-access/api-keys";
 import * as credentialAuth from "@/data-access/api-credential-auth";
 import * as idempotency from "@/data-access/api-idempotency-records";
 import { auth } from "@/lib/auth/better-auth";
+import { resolveApiContext } from "@/lib/auth/api-context";
+import { getOAuthConfig } from "@/lib/auth/oauth-config";
 import type { OrgContext } from "@/lib/auth/server";
 import { makeTestOrgContext } from "./helpers/test-org";
 
@@ -91,6 +93,32 @@ it("scopes the same user's same intent independently to each organization", asyn
   expect(await outcome(intentKey, other)).toHaveLength(1);
 });
 
+it("holds neither expired previous-key nor member row locks during pooled issuance", async () => {
+  expect((db.$client as Pool).options.max).toBe(1);
+  const intentKey = randomUUID();
+  const first = await createApiKey(ctx, input, intentKey);
+  await db.update(apiKeys).set({ expiresAt: new Date(0) }).where(and(
+    eq(apiKeys.id, first.id), eq(apiKeys.referenceId, ctx.organizationId),
+  ));
+  const original = auth.api.createApiKey;
+  vi.spyOn(auth.api, "createApiKey").mockImplementationOnce(async (...args) => {
+    // Model cleanup and a membership writer on the sole pooled connection.
+    // NOWAIT fails deterministically if the dedicated transaction locked either row.
+    await db.transaction(async (tx) => {
+      expect(await tx.select({ id: apiKeys.id }).from(apiKeys).where(and(
+        eq(apiKeys.id, first.id), eq(apiKeys.referenceId, ctx.organizationId),
+      )).for("update", { noWait: true })).toEqual([{ id: first.id }]);
+      expect(await tx.select({ id: members.id }).from(members).where(and(
+        eq(members.organizationId, ctx.organizationId), eq(members.userId, ctx.userId),
+      )).for("no key update", { noWait: true })).toHaveLength(1);
+    });
+    return original(...args);
+  });
+  const second = await createApiKey(ctx, input, intentKey);
+  expect(await keyIds()).toEqual([{ id: second.id }]);
+  expect((await outcome(intentKey))[0].outcome).toEqual({ kind: "success", data: { id: second.id } });
+});
+
 it("rolls back replacement and disables the new key when the membership re-check fails", async () => {
   const intentKey = randomUUID();
   const first = await createApiKey(ctx, input, intentKey);
@@ -125,12 +153,12 @@ it("waits for keyed issuance before demotion revokes the key permanently", async
   const entered = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
   const updating = Promise.withResolvers<void>();
-  const original = auth.api.createApiKey;
-  vi.spyOn(auth.api, "createApiKey").mockImplementationOnce(async (...args) => {
-    const result = await original(...args);
+  const original = idempotency.recordIdempotencyOutcome;
+  vi.spyOn(idempotency, "recordIdempotencyOutcome").mockImplementationOnce(async (...args) => {
+    // Owner is bound and membership locked, but neither is committed yet.
     entered.resolve();
     await release.promise;
-    return result;
+    return original(...args);
   });
   const creating = createApiKey(ctx, input, randomUUID());
   let demotion: Promise<void> | undefined;
@@ -166,6 +194,9 @@ it("waits for keyed issuance before demotion revokes the key permanently", async
     eq(members.id, member.id), eq(members.organizationId, ctx.organizationId), eq(members.userId, ctx.userId),
   ));
   expect(await state()).toEqual(revoked);
+  expect(await resolveApiContext(new Request("http://localhost:3100/api/v1/me", {
+    headers: { authorization: `Bearer ${created.key}` },
+  }), getOAuthConfig().rest)).toEqual({ ok: false, denial: "credential_owner_removed" });
 });
 
 it.each([false, true])("refuses a concurrent claim before issuing another key (replay: %s)", async (replay) => {

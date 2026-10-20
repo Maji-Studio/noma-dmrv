@@ -68,7 +68,7 @@ export async function createApiKey(ctx: OrgContext, input: unknown, intentKey?: 
   const parsed = createApiKeySchema.parse(input);
   let issuedId: string | undefined;
 
-  const issue = async (executor: Pick<typeof db, "insert" | "select">) => {
+  const issue = async () => {
     const result = await auth.api.createApiKey({
       body: {
         name: parsed.name,
@@ -79,6 +79,9 @@ export async function createApiKey(ctx: OrgContext, input: unknown, intentKey?: 
       },
     });
     issuedId = result.id;
+    return { id: result.id, key: result.key, name: result.name, expiresAt: result.expiresAt };
+  };
+  const bindOwner = async (executor: Pick<typeof db, "insert" | "select">, result: Awaited<ReturnType<typeof issue>>) => {
     await executor.insert(apiKeyOwners).values({
       credentialId: result.id,
       userId: ctx.userId,
@@ -97,11 +100,11 @@ export async function createApiKey(ctx: OrgContext, input: unknown, intentKey?: 
       || !canOwnApiKey(currentMember.role) || !currentMember.emailVerified) {
       throw new DomainError("forbidden", "Credential owner membership changed during issuance.");
     }
-    return { id: result.id, key: result.key, name: result.name, expiresAt: result.expiresAt };
+    return result;
   };
 
   try {
-    if (!intentKey) return await issue(db);
+    if (!intentKey) return await bindOwner(db, await issue());
     return await withDedicatedLockConnection(async (tx) => {
       const credentialId = `${APP_FORM_CREDENTIAL_PREFIX}${ctx.userId}`;
       const lockKey = JSON.stringify([CREATE_API_KEY_OPERATION, ctx.organizationId, credentialId, intentKey]);
@@ -117,20 +120,23 @@ export async function createApiKey(ctx: OrgContext, input: unknown, intentKey?: 
         operationId: CREATE_API_KEY_OPERATION,
         fingerprint: CREATE_API_KEY_FINGERPRINT,
       });
+      // Hold no member/previous-key row locks while Better Auth uses the pool:
+      // its membership writes or expired-key cleanup could otherwise wait on us.
+      const result = await issue();
       if (claim.kind === "replay") {
         const previous = createdKeyOutcomeSchema.parse(claim.outcome);
         await tx.delete(apiKeys).where(and(
           eq(apiKeys.id, previous.id), eq(apiKeys.referenceId, ctx.organizationId),
         ));
       }
-      // Serialize role updates and deletes with owner visibility at commit.
+      // After pooled issuance, serialize role updates/deletes with owner visibility.
       const [lockedMember] = await tx.select({ id: members.id }).from(members)
         .where(and(eq(members.id, member.id), eq(members.organizationId, ctx.organizationId), eq(members.userId, ctx.userId)))
         .for("no key update");
       if (!lockedMember) {
         throw new DomainError("forbidden", "Credential owner membership changed during issuance.");
       }
-      const result = await issue(tx);
+      await bindOwner(tx, result);
       await recordIdempotencyOutcome(ctx, tx, claim.recordId, { id: result.id });
       return result;
     });
