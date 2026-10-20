@@ -38,7 +38,8 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-// Only codes the read model can return: resolveBatchPin yields unpinned or mixed pins.
+// The hook passes through whatever blocker the read returns, so this also covers
+// mixedTemplatePins, which a single-batch read cannot produce.
 it.each(["unpinnedTemplate", "mixedTemplatePins"] as const)(
   "exposes %s as a typed error without retrying", async (code) => {
     const blocker = removalTemplateBlocker(code);
