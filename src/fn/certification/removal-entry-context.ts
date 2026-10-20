@@ -51,7 +51,9 @@ export function frozenEntriesForAttempt(submission: typeof certificationSubmissi
     typeof submission.payloadSnapshot !== "object" || !("frozenEntrySet" in submission.payloadSnapshot)) return undefined;
   const frozen = readRemovalEntrySnapshot(submission).frozenEntrySet;
   const entries = Object.values(facts).flatMap((batch) => batch.entries);
-  const reserved = frozen.length > 0 && frozen.every((item) => entries.some((entry) =>
+  // Both claim sets commit together, so production ownership also freezes an empty entry set.
+  const productionReserved = Object.values(facts).some((batch) => batch.productionReservationSubmissionId === submission.id);
+  const reserved = productionReserved || frozen.length > 0 && frozen.every((item) => entries.some((entry) =>
     entry.id === item.entryId && entry.sendReservedBySubmissionId === submission.id));
   const mutation = getMetadataValue(submission.metadata, SUBMISSION_METADATA_KEYS.externalMutation);
   return reserved || mutation === SUBMISSION_EXTERNAL_MUTATIONS.possible || mutation === SUBMISSION_EXTERNAL_MUTATIONS.confirmed ? frozen : undefined;

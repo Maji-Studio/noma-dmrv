@@ -47,6 +47,9 @@ const ACTIVITY_COVERAGE = {
     insertProductionRunReadingsSkippingDuplicates: { status: "exempt", reason: "Telemetry ingestion is measurement data, separate from operator entity activity." },
     recordReadingsImportOutcome: { status: "exempt", reason: "Import outcome metadata is internal bookkeeping; document lifecycle is recorded separately." },
   },
+  "submission-reservation-release.ts": {
+    releaseSubmissionReservations: { status: "direct" },
+  },
   "production-claim-reservations.ts": {
     reserveProductionEmissionsClaims: { status: "direct" },
     rejectSubmissionAndReleaseProductionClaims: { status: "direct" },

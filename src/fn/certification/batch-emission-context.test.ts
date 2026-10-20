@@ -273,3 +273,12 @@ it.each(["2026-01-01", "2026-03-01"])("allows an entry before an available appli
   const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts);
   expect(loaded.one.entriesWithoutRemoval).toEqual([]);
 });
+
+it("retains production reservation ownership when the batch has no entries", async () => {
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ one: { batch: {
+    facilityId: "facility", productionEmissionsClaimReservedBySubmissionId: "attempt",
+  } } } as never);
+  const result = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts);
+  expect(result.one.productionReservationSubmissionId).toBe("attempt");
+  expect(result.one.entries).toEqual([]);
+});

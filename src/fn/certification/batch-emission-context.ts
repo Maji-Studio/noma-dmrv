@@ -14,7 +14,7 @@ import type { BatchEmissionLineFacts } from "@/lib/certification/emission-lines"
 import type { FacilityCertifierFacts } from "./facility-certifier-facts";
 
 export type BatchEmissionContext = Record<string,
-  Pick<BatchEmissionLineFacts, "automaticFigures" | "omittedAutomaticSources"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
+  Pick<BatchEmissionLineFacts, "automaticFigures" | "omittedAutomaticSources"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { productionReservationSubmissionId?: string | null; contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
 
 /** Batch-wide facts, even when the Removal carries only some applications. */
 export async function loadBatchEmissionContext(
@@ -63,7 +63,7 @@ export async function loadBatchEmissionContext(
       [entry.observationId, observationsById.get(entry.observationId) ?? null] as const,
     ));
     const entries = deriveEmissionEntryFacts(stored, observation, previousObservations);
-    result[id] = { entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
+    result[id] = { productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
       entriesWithoutRemoval: entriesWithoutRemoval(entries, contenders, liveReservationIds, availableApplications) };
   }
   return result;

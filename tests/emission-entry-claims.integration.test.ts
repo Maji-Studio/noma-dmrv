@@ -1,3 +1,6 @@
+import { frozenEntriesForAttempt } from "@/fn/certification/removal-entry-context";
+import { discardLocalRemovalDraft } from "@/data-access/certifier-removals";
+import { deleteCreditBatchApplicationSlices } from "@/data-access/credit-batch-delete-slices";
 /** Real PostgreSQL coverage. Deliberately not run by the offline implementation verification. */
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
@@ -8,7 +11,7 @@ import { createEmissionEntry, deleteEmissionEntry, getEmissionEntry, updateEmiss
 import { assertEmissionEntryDocumentWritable } from "@/data-access/emission-entry-lock";
 import { recordEmissionZeros } from "@/data-access/emission-zeros";
 import { reserveProductionEmissionsClaims, rejectSubmissionAndReleaseProductionClaims } from "@/data-access/production-claim-reservations";
-import { markSubmissionSubmitted } from "@/data-access/submission-ledger-transitions";
+import { markSubmissionSubmitted, retireStaleSubmissionDraft } from "@/data-access/submission-ledger-transitions";
 import { claimRemovalDeletion, finalizeRemovalDeletion } from "@/data-access/certifier-removal-deletion";
 import { loadBatchEmissionEntryFacts } from "@/data-access/emission-entry-facts";
 import { deriveRemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
@@ -174,4 +177,45 @@ it("records activity when a new value tombstones an unsubmitted draft's zero", a
   expect(zero.deletedAt).not.toBeNull();
   expect(zero.confirmedForRemovalId).toBe(fixture.removalId);
   expect(await db.select().from(activityEvents).where(and(eq(activityEvents.entityId, zero.id), eq(activityEvents.action, "deleted")))).toHaveLength(1);
+});
+
+it("releases a retired attempt so its entry can be edited", async () => {
+  const entry = await value();
+  const row = await draft([{ entryId: entry.id, contentRevision: entry.contentRevision }]);
+  await reserve(row);
+  await retireStaleSubmissionDraft(ctx, row.id, { reason: "fixture drift" });
+  const released = await getEmissionEntry(ctx, entry.id);
+  expect(released.sendReservedBySubmissionId).toBeNull();
+  await updateEmissionEntry(ctx, { id: entry.id, expectedVersion: released.version, note: "editable again" });
+  expect((await getEmissionEntry(ctx, entry.id)).note).toBe("editable again");
+  const [batch] = await db.select().from(creditBatches).where(eq(creditBatches.id, fixture.batchId));
+  expect(batch.productionEmissionsClaimReservedBySubmissionId).toBeNull();
+});
+it.each(["discard", "orphan GC"])("deletes ledger-less zeros through %s with activity history", async (path) => {
+  const zero = await recordEmissionZeros(ctx, { removalId: fixture.removalId, creditBatchId: fixture.batchId, componentIds: ["zero"] });
+  if (path === "discard") await discardLocalRemovalDraft(ctx, fixture.facilityId, fixture.removalId);
+  else await db.transaction(async (tx) => {
+    await tx.select().from(creditBatches).where(eq(creditBatches.id, fixture.batchId)).for("update");
+    await deleteCreditBatchApplicationSlices(ctx, tx, fixture.batchId);
+  });
+  expect(await db.select().from(emissionEntries).where(eq(emissionEntries.id, zero.entryIds[0]))).toEqual([]);
+  expect(await db.select().from(certifierRemovals).where(eq(certifierRemovals.id, fixture.removalId))).toEqual([]);
+  expect(await db.select().from(activityEvents).where(and(eq(activityEvents.entityId, zero.entryIds[0]), eq(activityEvents.action, "deleted")))).toHaveLength(1);
+});
+
+it("retries an empty frozen set after production reservation and a new entry", async () => {
+  const row = await draft([]);
+  await reserve(row);
+  await value();
+  const [batch] = await db.select().from(creditBatches).where(eq(creditBatches.id, fixture.batchId));
+  const entryFacts = await loadBatchEmissionEntryFacts(ctx, fixture.batchId, observation);
+  const frozen = frozenEntriesForAttempt(row, { [fixture.batchId]: { ...entryFacts, automaticFigures: {},
+    productionReservationSubmissionId: batch.productionEmissionsClaimReservedBySubmissionId } });
+  expect(frozen).toEqual([]);
+  await reserve(row);
+  await markSubmissionSubmitted(ctx, row.id, { externalId: "empty-fixture", expectedLockedAt: row.lockedAt!,
+    productionEmissionsClaim: { removalId: fixture.removalId, creditBatchIds: [fixture.batchId] } });
+  const entries = await db.select().from(emissionEntries).where(eq(emissionEntries.creditBatchId, fixture.batchId));
+  expect(entries).toHaveLength(1);
+  expect(entries[0].sentByRemovalId).toBeNull();
 });
