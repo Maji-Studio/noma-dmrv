@@ -58,8 +58,12 @@ function DistanceRefreshDialog({
   target: TransportDistanceTarget;
   drift: VisibleDrift;
   recordCode: string;
-  /** A refused version or a new lock changes what the next attempt sees. */
-  onRefused: () => void;
+  /**
+   * A refused version or a new lock changes what the next attempt sees.
+   * Resolves false when the refetched drift is gone: the dialog then closes
+   * instead of retrying on its stale snapshot.
+   */
+  onRefused: () => Promise<boolean>;
   /** Resolves once the caller holds the refreshed record; the dialog waits for it. */
   onRefreshed?: (refreshed: TransportDistanceDrift) => Promise<void> | void;
 }) {
@@ -80,8 +84,13 @@ function DistanceRefreshDialog({
     try {
       refreshed = await refresh.mutateAsync({ entityId: target.entityId, expectedVersion: drift.expectedVersion });
     } catch (refusal) {
-      setError(toSaveErrorMessage(refusal, REFRESH_FAILED_MESSAGE));
-      onRefused();
+      const message = toSaveErrorMessage(refusal, REFRESH_FAILED_MESSAGE);
+      if (await onRefused()) {
+        setError(message);
+      } else {
+        close();
+        toast.error(message);
+      }
       return;
     }
     setReloading(true);
@@ -122,6 +131,7 @@ function DistanceRefreshDialog({
       confirmLabel={CONFIRM_LABEL}
       busyLabel="Refreshing…"
       isPending={refresh.isPending || reloading}
+      dismissible={!(refresh.isPending || reloading)}
       confirmDisabled={drift.hasSubmittedRemoval}
       errorMessage={error ?? undefined}
     />
@@ -161,7 +171,7 @@ export function TransportDistanceDriftNotice({ target, recordCode }: TransportDi
         target={target}
         drift={data}
         recordCode={recordCode}
-        onRefused={() => void drift.refetch()}
+        onRefused={async () => visibleDrift((await drift.refetch()).data)}
       />
     </>
   );
@@ -219,7 +229,7 @@ export function DistanceDriftAction({ target, recordCode, disabledReason, onRefr
         target={target}
         drift={dialogDrift}
         recordCode={recordCode}
-        onRefused={() => void drift.refetch()}
+        onRefused={async () => visibleDrift((await drift.refetch()).data)}
         onRefreshed={onRefreshed}
       />
     </>

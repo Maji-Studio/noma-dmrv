@@ -147,4 +147,41 @@ describe("DistanceDriftAction", () => {
     expect(mocks.success).not.toHaveBeenCalled();
     expect(mocks.error).not.toHaveBeenCalled();
   });
+
+  it("stays open against Escape and the backdrop while the record reloads", async () => {
+    let landReload!: () => void;
+    renderAction(() => new Promise<void>((resolve) => { landReload = resolve; }));
+    fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Refresh" })); });
+    await screen.findByRole("button", { name: /Refreshing/ });
+
+    await act(async () => { fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" }); });
+    const dialog = screen.getByRole("dialog");
+    const backdrop = dialog.parentElement?.querySelector("[data-base-ui-inert], [class*='backdrop' i]") ?? document.body;
+    await act(async () => { fireEvent.pointerDown(backdrop); fireEvent.click(backdrop); });
+    expect(screen.getByText("Refresh distance from location?")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Close" }) as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => { landReload(); });
+    await waitFor(() => expect(screen.queryByText("Refresh distance from location?")).toBeNull());
+  });
+
+  it("closes with the refusal when the live drift clears after a refused refresh", async () => {
+    const message = "The distance was not refreshed because the record changed.";
+    mocks.drift.mockResolvedValue({ success: true, data: drift });
+    mocks.refresh.mockImplementation(async () => {
+      mocks.drift.mockResolvedValue({ success: true, data: { ...drift, hasDrift: false } });
+      return { success: false, error: message };
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <DistanceDriftAction target={target} recordCode="FS-26-001" onRefreshed={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Refresh" })); });
+    await waitFor(() => expect(screen.queryByText("Refresh distance from location?")).toBeNull());
+    expect(mocks.error).toHaveBeenCalledWith(message);
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
 });
