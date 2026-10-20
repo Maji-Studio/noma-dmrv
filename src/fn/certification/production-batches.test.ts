@@ -1,3 +1,7 @@
+vi.mock("@/data-access/credit-batch-removal-holders", () => ({
+  getCreditBatchUndeletableRemovalCodes: vi.fn(async () => new Map()),
+}));
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/data-access/certifier-credentials", () => ({

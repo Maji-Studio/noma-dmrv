@@ -1,4 +1,5 @@
 import { getProductionBatchRegistryInputs } from "@/data-access/certifier-production-batches";
+import { getCreditBatchUndeletableRemovalCodes } from "@/data-access/credit-batch-removal-holders";
 import { getCreditBatchProductionSpanIssue } from "@/lib/credit-batch-production-span";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
@@ -72,8 +73,13 @@ export async function evaluateRemovalBlockers(args: {
   const { prepared } = prepareRemovalSubmission(args.ctx);
   if (!prepared) return [legacyBlocker(REMOVAL_PREPARATION_BLOCKERS.noTemplate, "creditBatchTemplate")];
   const inputs = await getProductionBatchRegistryInputs(args.orgCtx, args.ctx.memberBatches.map(batch => batch.id));
+  const undeletableHolders = await getCreditBatchUndeletableRemovalCodes(
+    args.orgCtx, inputs.map(input => input.creditBatchId), args.removalId,
+  );
   for (const input of inputs) {
-    const issue = getCreditBatchProductionSpanIssue(input);
+    const issue = getCreditBatchProductionSpanIssue({
+      ...input, undeletableRemovalCodes: undeletableHolders.get(input.creditBatchId),
+    });
     if (issue) blockers.push(legacyBlocker(issue, "batchDetails"));
   }
   if (blockers.length) return blockers;

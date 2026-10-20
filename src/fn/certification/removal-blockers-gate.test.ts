@@ -22,6 +22,7 @@ import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { deriveRemovalReadiness } from "@/lib/certification/readiness";
 
 import * as productionBatches from "@/data-access/certifier-production-batches";
+import { getCreditBatchUndeletableRemovalCodes } from "@/data-access/credit-batch-removal-holders";
 
 const orgCtx = makeTestOrgContext();
 const mappingGap = { creditBatchId: "batch", creditBatchCode: "CB-1", feedstockTypeId: "type", feedstockTypeName: "Wood" };
@@ -56,6 +57,28 @@ async function oldFirstMessage(ctx: ReturnType<typeof makeContext>) {
 }
 
 describe("Removal preflight", () => {
+  it("uses the same undeletable-holder refusal in readiness and submission", async () => {
+    const inputs = await productionBatches.getProductionBatchRegistryInputs(orgCtx, []);
+    vi.mocked(productionBatches.getProductionBatchRegistryInputs).mockResolvedValue(inputs.map(input => ({
+      ...input, endedAt: "2026-02-01T00:00:00.000Z", latestEndingRunCode: "RUN-OVER",
+    })));
+    vi.mocked(getCreditBatchUndeletableRemovalCodes).mockResolvedValue(
+      new Map(inputs.map(input => [input.creditBatchId, ["REM-SENT", "REM-RETURNED"]])),
+    );
+    const ctx = makeContext();
+    const [blocker] = await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx });
+    expect(blocker.message).toContain("Removal REM-SENT and Removal REM-RETURNED were sent to Isometric and cannot be deleted");
+    expect(blocker.message).not.toContain("Discard or delete");
+    expect(getCreditBatchUndeletableRemovalCodes).toHaveBeenCalledWith(
+      orgCtx, inputs.map(input => input.creditBatchId), REMOVAL_ID,
+    );
+    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue(ctx);
+    await expect(submitRemoval({ orgCtx, removalId: REMOVAL_ID, confirmProduction: true }))
+      .rejects.toThrow(blocker.message);
+    expect(createDatapoint).not.toHaveBeenCalled();
+    expect(createGhgEntry).not.toHaveBeenCalled();
+  });
+
   it("shows the overlong run span in readiness and refuses submit before registry writes", async () => {
     const inputs = await productionBatches.getProductionBatchRegistryInputs(orgCtx, []);
     vi.mocked(productionBatches.getProductionBatchRegistryInputs).mockResolvedValue(inputs.map(input => ({

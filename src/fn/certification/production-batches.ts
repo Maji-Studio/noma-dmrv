@@ -45,6 +45,7 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { MASS_COMPARISON_EPSILON_KG } from "@/lib/calculations/mass-dry";
 import { assertCreditBatchRunSpansUnderOneMonth } from "@/lib/credit-batch-production-span";
+import { getCreditBatchUndeletableRemovalCodes } from "@/data-access/credit-batch-removal-holders";
 import { SafeError } from "@/lib/errors";
 import {
   buildCreateProductionBatchRequest,
@@ -201,7 +202,12 @@ export async function ensureProductionBatchesForCreditBatches(
     existingRows.map((row) => [row.creditBatchId, row]),
   );
 
-  assertCreditBatchRunSpansUnderOneMonth(inputs);
+  const undeletableHolders = await getCreditBatchUndeletableRemovalCodes(
+    args.orgCtx, creditBatchIds, args.removalId,
+  );
+  assertCreditBatchRunSpansUnderOneMonth(inputs.map(input => ({
+    ...input, undeletableRemovalCodes: undeletableHolders.get(input.creditBatchId),
+  })));
   const client = await resolveIsometricClient(args.orgCtx);
 
   // Live identities retain their registered payload; missing identities require
