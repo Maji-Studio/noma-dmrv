@@ -18,6 +18,8 @@ vi.mock("@/lib/auth/server", async () => {
 });
 vi.mock("@/lib/read-models", () => ({
   readActiveOrganization: async () => ({ name: "Org One", slug: "org-one" }),
+}));
+vi.mock("@/lib/read-models/organization-registry-status", () => ({
   readOrganizationRegistryStatus: async () => registry,
 }));
 

@@ -6,7 +6,10 @@
 import { notFound, redirect } from "next/navigation";
 import { canOwnApiKey } from "@/lib/auth/api-scopes";
 import { getOrgContext, hasOrgRole, type OrgContext } from "@/lib/auth/server";
-import { readActiveOrganization, readOrganizationRegistryStatus } from "@/lib/read-models";
+import { readActiveOrganization } from "@/lib/read-models";
+// Not in the read-models barrel: it reaches the database through data-access
+// directly, and the barrel is imported by modules that must not load it.
+import { readOrganizationRegistryStatus } from "@/lib/read-models/organization-registry-status";
 import {
   redirectPreservingQuery,
   SETTINGS_REGISTRY_HREF,

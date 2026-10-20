@@ -98,7 +98,7 @@ describe("CreditBatchTemplateSwitchDialog", () => {
     expect(screen.queryByText("2 components to decide")).toBeNull();
     const link = screen.getByRole("link", { name: /^Decide components/ });
     // Straight to that template, in a new tab so the unsaved choice stays here.
-    expect(link.getAttribute("href")).toContain("section=removal-templates");
+    expect(link.getAttribute("href")).toContain("/settings/removal-templates?");
     expect(link.getAttribute("href")).toContain("template=rvt_new");
     expect(link.getAttribute("target")).toBe("_blank");
   });
