@@ -177,7 +177,6 @@ export function CustomerForm({
             id="cropType"
             label="Crop type"
             error={errors.cropType?.message}
-            helperText="Primary crop or land use for this biochar application site"
           >
             <FormInput
               id="cropType"

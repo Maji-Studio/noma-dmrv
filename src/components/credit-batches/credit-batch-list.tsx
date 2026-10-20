@@ -537,7 +537,6 @@ export function CreditBatchList({
         <PageHeader
           area="verification"
           title="Credit Batches"
-          subtitle="Carbon credit batches for verification and registry"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its credit batches." />
       </div>
@@ -590,7 +589,6 @@ export function CreditBatchList({
       <PageHeader
         area="verification"
         title="Credit Batches"
-        subtitle="Carbon credit batches for verification and registry"
         actions={
           <Button variant="primary" onClick={() => openCreate()}>
             <PlusIcon size={20} weight="bold" />

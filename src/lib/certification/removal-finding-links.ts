@@ -28,7 +28,7 @@ export function removalFindingFixLink(
   facilityId: string,
   memberBatchIds: readonly string[] = [],
 ): BatchHealthFixLink | null {
-  // Template findings route through the one table, so a decided line never says "Decide lines".
+  // Template findings route through the one table, so a decided line never says "Decide components".
   const target = finding.code && isTemplateFixTarget(finding.fixTarget)
     ? templateLineFixTarget({ code: finding.code, fixTarget: finding.fixTarget })
     : finding.fixTarget;

@@ -98,8 +98,8 @@ describe("EmissionLineList", () => {
   it("says which chip hides every line", () => {
     const onClear = vi.fn();
     render(<EmissionLineList lines={[]} grouped scope={SCOPE} actions={makeActions()} expanded={new Set()} editingCommentId={null} undo={null} canWrite filterLabel="Check entry" onClearFilter={onClear} />);
-    expect(screen.getByText('No lines in "Check entry"')).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Show all lines" }));
+    expect(screen.getByText('No components in "Check entry"')).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show all components" }));
     expect(onClear).toHaveBeenCalled();
   });
 

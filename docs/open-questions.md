@@ -60,10 +60,9 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
 
 ## Credit batch line on other forms (#1164, #1059) - **deferred**
 
-- `src/components/forms/form-actions.tsx:FormActions` `preview`: only the
-  Production Run form fills it. Feedstock, Biochar Product, Emissions entry,
-  Delivery, Application and Lab Sample still need their credit batch line
-  (#1059 section 2), each from its own provenance, not its date.
+- `src/components/forms/form-actions.tsx:FormActions` `preview`: Emissions entry
+  still needs its credit batch line (#1059 section 2), from its own
+  provenance, not its date. It waits for #1242.
 
 ## Record-lock follow-ups
 
@@ -86,10 +85,6 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
   fetch later movements from the same bin.
 
 ## Activity recording gaps (`activity/deferred-writers`) - **deferred**
-
-- 2026-10-16: `src/data-access/emission-entries.ts:tombstoneEmissionZeros` must
-  record activity in PR 4, before zero rows can be written. Its coverage
-  exemption is temporary until that writer is enabled.
 
 - `src/data-access/certifier-removals.ts:updateRemovalDates` changes Removal dates
   without an event. Define value-free lifecycle events alongside the existing

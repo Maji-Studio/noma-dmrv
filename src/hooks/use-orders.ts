@@ -1,4 +1,4 @@
-import { useCreateIntentKey } from "./use-create-intent-key";
+import { useIntentMutation } from "./use-create-intent-key";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
@@ -106,16 +106,14 @@ export function useCreateOrder(
   callbacks?: MutationCallbacks<Order, CreateOrderData>
 ) {
   const queryClient = useQueryClient();
-  const intent = useCreateIntentKey();
 
-  const mutation = useMutation({
+  return useIntentMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.order),
-    mutationFn: async (data: CreateOrderData) => unwrap(await createOrderFn(data, { intentKey: intent.current() })),
+    mutationFn: async (data: CreateOrderData, intentKey) => unwrap(await createOrderFn(data, { intentKey })),
     onMutate: async (variables) => {
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
-      intent.rotate();
       // Invalidate all order lists
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       invalidateStockEntityQueries(queryClient, "order");
@@ -133,8 +131,6 @@ export function useCreateOrder(
       await callbacks?.onSettled?.(data, error, variables);
     },
   });
-  // Call when a create sheet or dialog opens: each draft gets its own key.
-  return { ...mutation, startDraft: intent.rotate };
 }
 
 /**

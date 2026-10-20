@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   previewRefetch: vi.fn(),
   refetch: vi.fn(),
   mutateAsync: vi.fn(),
+  setupMutate: vi.fn(),
 }));
 vi.mock("@/hooks/use-removal-template-review", () => ({
   useRemovalTemplateReview: () => ({
@@ -33,6 +34,8 @@ vi.mock("@/hooks/use-removal-template-review", () => ({
     };
   },
   useReviewRemovalTemplateLines: () => ({ mutateAsync: mocks.mutateAsync, isPending: false }),
+  useSetFacilityDefaultRemovalTemplate: () => ({ mutateAsync: mocks.setupMutate, isPending: false }),
+  useStartRemovalTemplateSetup: () => ({ mutateAsync: mocks.setupMutate, isPending: false }),
 }));
 
 const FACILITY_ID = "11111111-1111-4111-8111-111111111111";
@@ -58,7 +61,7 @@ describe("RemovalTemplateReviewPanel", () => {
 
     const names = screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent);
     expect(names).toEqual(["Unused Template", "Dark Earth Carbon Template"]);
-    expect(screen.getByText("Not in use yet")).toBeTruthy();
+    expect(screen.getByText("Not set up yet")).toBeTruthy();
     // The one preview has nothing to save against; the listed card keeps its own controls.
     expect(screen.getAllByRole("button", { name: /^Save/ })).toHaveLength(1);
   });
@@ -88,7 +91,7 @@ describe("RemovalTemplateReviewPanel", () => {
     render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage templateId="rvt_test" />);
 
     expect(mocks.previewEnabled.every((enabled) => !enabled)).toBe(true);
-    expect(screen.queryByText("Not in use yet")).toBeNull();
+    expect(screen.queryByText("Not set up yet")).toBeNull();
     expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(1);
   });
 
@@ -104,13 +107,13 @@ describe("RemovalTemplateReviewPanel", () => {
     expect(screen.queryByText("No Removal templates yet")).toBeNull();
   });
 
-  it("is read-only for members and still flags the line to decide", () => {
+  it("is read-only for members and still flags the component to decide", () => {
     render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage={false} />);
 
     expect(screen.getByText("Dark Earth Carbon Template")).toBeTruthy();
     expect(screen.getByText("Default")).toBeTruthy();
     expect(screen.getByText("To decide")).toBeTruthy();
-    expect(screen.getByText("Ask an Owner or Admin to decide the lines marked To decide.")).toBeTruthy();
+    expect(screen.getByText("Ask an Owner or Admin to decide the components marked To decide.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Accept proposal/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Change/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
@@ -180,7 +183,7 @@ describe("RemovalTemplateReviewPanel", () => {
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Change Startup diesel usage" })); });
     const scope = document.getElementById("rvt_test-cmp_startup-scope") as HTMLSelectElement;
     await act(async () => { fireEvent.change(scope, { target: { value: "forbidden" } }); });
-    // Only operating lines take entries, so the policy resets with the scope.
+    // Only operating components take entries, so the policy resets with the scope.
     expect((document.getElementById("rvt_test-cmp_startup-entries") as HTMLSelectElement).disabled).toBe(true);
 
     await act(async () => { fireEvent.click(saveButton()); });
@@ -189,7 +192,7 @@ describe("RemovalTemplateReviewPanel", () => {
     }));
   });
 
-  it("offers assignment only on lines to decide", () => {
+  it("offers assignment only on components to decide", () => {
     mocks.data = [entry({
       lineSourceProblems: [{ code: "ambiguous", componentId: "cmp_lab" }],
       lines: [
@@ -310,5 +313,42 @@ describe("RemovalTemplateReviewPanel", () => {
 
     expect(screen.getByText("Template no longer exists in Isometric.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+  });
+
+  it("lays lines out like Isometric: Mitigated then Emitted, groups with counts", () => {
+    const base = entry();
+    mocks.data = [entry({ lines: [
+      ...base.lines,
+      { ...base.lines[1], component: component("cmp_stored", "CO₂ stored from biochar application"),
+        groupKey: "co2-stored", groupName: "CO₂ stored", section: "mitigated", groupPosition: 8 },
+    ] })];
+    render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage />);
+    const headings = screen.getAllByRole("heading").map((heading) => heading.textContent);
+    expect(headings).toEqual([
+      "Dark Earth Carbon Template", "Mitigated (1)", "CO₂ stored (1)", "Emitted (2)", "Operations (2)",
+    ]);
+  });
+
+  it("makes another template the default and starts deciding a template not set up yet", async () => {
+    mocks.setupMutate.mockResolvedValue(undefined);
+    mocks.data = [entry({ isDefault: false, observation: null, preview: true })];
+    render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage templateId="rvt_test" />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Make default" }));
+    });
+    expect(mocks.setupMutate).toHaveBeenCalledWith({ facilityId: FACILITY_ID, removalTemplateId: "rvt_test" });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Decide components" }));
+    });
+    expect(mocks.setupMutate).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a template that is not the default or linked folded until opened", () => {
+    mocks.data = [entry({ isDefault: false })];
+    render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage />);
+    const toggle = screen.getByRole("button", { name: "Show components" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Hide components" }).getAttribute("aria-expanded")).toBe("true");
   });
 });

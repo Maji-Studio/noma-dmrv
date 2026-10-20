@@ -65,7 +65,6 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
           value={stats?.totalFeedstocks ?? 0}
           icon={<PackageIcon size={20} />}
           isLoading={isLoading}
-          description="All time feedstocks"
         />
 
         {/* No `?? 0` on either quantity: the shared formatters render the
@@ -76,7 +75,6 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
           value={formatMass(stats?.totalDryMassKg)}
           icon={<ScalesIcon size={20} />}
           isLoading={isLoading}
-          description="Total dry mass received"
         />
 
         {/* Weighted by wet mass, not a mean of the per delivery readings: one

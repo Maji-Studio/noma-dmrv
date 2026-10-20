@@ -1,3 +1,4 @@
+import { db, type DbTransaction } from "@/db";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { emissionDeliveryShares } from "@/lib/certification/emission-delivery-shares";
 import { requireOrgFacility, requireOrgScope } from "@/data-access/utils";
@@ -19,14 +20,14 @@ const unique = (ids: string[]) => [...new Set(ids)];
 
 /** Set-based reads for all batches, including shipments not yet applied. */
 export async function loadBatchesEmissionAutomaticFacts(
-  ctx: OrgContext, creditBatchIds: string[], options: AutomaticOptions = {},
+  ctx: OrgContext, creditBatchIds: string[], options: AutomaticOptions = {}, executor: DbTransaction | typeof db = db,
 ): Promise<Record<string, AutomaticFacts>> {
   requireOrgScope(ctx);
   const ids = unique(creditBatchIds);
   if (!ids.length) return {};
   const [rollups, samples] = await Promise.all([
-    loadCreditBatchRollups(ctx, ids, { includeRunForwards: true }),
-    emissionsEntriesEnabled() ? [] : getSamplesByCreditBatchIds(ctx, ids),
+    loadCreditBatchRollups(ctx, ids, { includeRunForwards: true }, executor),
+    emissionsEntriesEnabled() ? [] : getSamplesByCreditBatchIds(ctx, ids, executor),
   ]);
   const batches = ids.map((id) => {
     const lineage = rollups[id]?.lineageFacts;
@@ -45,14 +46,14 @@ export async function loadBatchesEmissionAutomaticFacts(
     deliveries.filter((delivery) => delivery.exactWetMassKg != null).map((delivery) => [delivery.id, delivery] as const),
   ));
   const [runs, feedstock, biochar, sample] = await Promise.all([
-    getProductionRunsForCertification(ctx, runIds),
-    getTransportLegsForEntities(ctx, "feedstock", feedstockIds),
+    getProductionRunsForCertification(ctx, runIds, executor),
+    getTransportLegsForEntities(ctx, "feedstock", feedstockIds, executor),
     loadBiocharDeliveryTransportLegs(ctx, [...deliveryById.values()].map((delivery) => ({
       deliveryId: delivery.id, loadMassKg: Number(delivery.exactWetMassKg!),
-    }))),
-    emissionsEntriesEnabled() ? [] : getTransportLegsForEntities(ctx, "sample", samples.map((sample) => sample.id)),
+    })), executor),
+    emissionsEntriesEnabled() ? [] : getTransportLegsForEntities(ctx, "sample", samples.map((sample) => sample.id), executor),
   ]);
-  const exact = await getEmissionAutomaticMasses(ctx, runIds, [...feedstock, ...sample].map((leg) => leg.id));
+  const exact = await getEmissionAutomaticMasses(ctx, runIds, [...feedstock, ...sample].map((leg) => leg.id), executor);
   return Object.fromEntries(batches.map(({ id, lineage, deliveries, missing }) => {
     const memberRuns = new Set(lineage.runs.map((run) => run.id));
     const memberFeedstocks = new Set(lineage.runs.flatMap((run) => run.feedstocks.map((feedstock) => feedstock.id)));

@@ -376,10 +376,16 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
   rendered under the error summary and the Save blocker, directly above the
   buttons: what saving associates the record with. The Production Run form
   shows the credit batch the run joins, is expected to join, or belongs to
-  (#1164). The server answers
-  from the unsaved values with the save path's own rule, so the browser holds
-  no copy of it. The line never blocks Save, and it shows "Checking" whenever
+  (#1164); there the server answers from the unsaved values with the save
+  path's own rule, so the browser holds no copy of it. Credit batch lines
+  render through `CreditBatchLine`
+  (`src/components/credit-batches/credit-batch-line.tsx`) from a form-specific
+  `CreditBatchLineCopy`. The Lab Sample line repeats the batch chosen in the
+  form, read from the batch summary the form already loads. The line never blocks Save, and it shows "Checking" whenever
   its last answer is not for the current inputs.
+  Feedstock, Delivery, Application and Biochar Product render `RecordCreditBatchLine` from saved
+  provenance via `getRecordCreditBatches` and show "Not yet computed" while creating.
+  When several batches apply, "+N" opens a list of all their batches.
 - The submit skips the browser's constraint bubbles except for unparsed number text (see [Native number constraints](#native-number-constraints)); a nested `submitType="button"` is untouched.
 
 ### Double submit
@@ -387,7 +393,9 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 `disabled={isSubmitting}` turns on only after a render, so a double-click sends two saves (#1238). Every form uses the latch below; runner-backed create hooks also send an intent key. The storage bin forms are the exception: they keep their own request keys (the emissions entry form likewise has its own latch).
 
 - Wrap the RHF handler: `const latched = useLatchedSubmit(); <form onSubmit={latched(handleSubmit(...))}>`. The inner handler must `return` or `await` the save, or the latch lets go before the server answers.
-- Create hooks backed by `runOperationInProcess` send a draft intent key (`useCreateIntentKey`). The hook rotates it after a successful save and exposes `startDraft()`: call it when a create sheet or dialog opens, or when a dialog that stays mounted closes. A retry inside one open draft keeps the key and replays the first save.
+- Create hooks backed by `runOperationInProcess` use `useIntentMutation` from `@/hooks/use-create-intent-key`. Its `mutationFn(variables, intentKey)` passes `{ intentKey }` to the action and throws on an unsuccessful `ActionResult` (use `unwrap` or `throwActionError`). The action accepts `options?: CreateIntentOptions` and passes `createIntentOptionsSchema.parse(options)` as the fourth argument to `runOperationInProcess`. The helper keeps the key through failed saves, rotates it before the caller's `onSuccess`, and exposes `startDraft()` to rotate it for a new draft: call it when a create sheet or dialog opens, or when a dialog that stays mounted closes. A retry inside one open draft keeps the key and replays the first save.
+
+API key creation sends an intent key without the runner, and a retry replaces the unseen key instead of replaying it because the secret is shown only once (see [docs/auth.md](./auth.md)).
 
 ### FormSpine
 

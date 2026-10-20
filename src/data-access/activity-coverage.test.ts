@@ -153,16 +153,31 @@ const ACTIVITY_COVERAGE = {
     deleteProductionRun: { status: "exempt", reason: "Legacy production-run deletion activity is deferred; document retirements are covered. See docs/open-questions.md." },
     deleteProductionRunInTransaction: { status: "runner", operations: ["delete_production_run"] },
   },
-  "certification.ts": {
-    upsertCertifierProject: { status: "exempt", reason: "Registry project mappings are reference configuration without an entity activity type." },
+  "submission-ledger-transitions.ts": {
     markSubmissionSubmitted: { status: "direct" },
     retireStaleSubmissionDraft: { status: "direct" },
     markSubmissionRejected: { status: "direct" },
     setSubmissionTerminalStatus: { status: "direct" },
+    updateSubmissionMetadata: { status: "direct" },
+  },
+  "emission-zeros.ts": {
+    recordEmissionZeros: { status: "direct" },
+    undoEmissionZeros: { status: "direct" },
+  },
+  "emission-entry-deletion.ts": {
+    releaseDeletedRemovalEntries: { status: "direct" },
+  },
+  "certification.ts": {
+    markSubmissionSubmitted: { status: "direct" },
+    retireStaleSubmissionDraft: { status: "direct" },
+    markSubmissionRejected: { status: "direct" },
+    setSubmissionTerminalStatus: { status: "direct" },
+    updateSubmissionMetadata: { status: "direct" },
+    upsertCertifierProject: { status: "exempt", reason: "Registry project mappings are reference configuration without an entity activity type." },
     attachReportDocument: { status: "direct" },
     updateFacilityEmissionConfig: { status: "exempt", reason: "Facility energy configuration has no entity activity type." },
+    updateFacilityDefaultRemovalTemplate: { status: "exempt", reason: "The facility default Removal template is reference configuration without an entity activity type." },
     deleteCertifierProject: { status: "exempt", reason: "Registry project mapping deletion changes reference configuration without an entity activity type." },
-    updateSubmissionMetadata: { status: "direct" },
   },
   "ghg-statement-reports.ts": {
     insertPreparedGhgStatementReport: { status: "direct" },

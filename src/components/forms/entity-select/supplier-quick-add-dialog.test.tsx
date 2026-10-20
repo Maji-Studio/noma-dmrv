@@ -81,6 +81,7 @@ vi.mock("@/hooks/use-suppliers", () => ({
     return {
       mutateAsync: mocks.mutateAsync,
       isPending: mocks.isPending,
+      startDraft: vi.fn(),
     };
   },
 }));

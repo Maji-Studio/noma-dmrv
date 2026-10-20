@@ -211,6 +211,7 @@ export function CustomerList() {
 
   // Side sheet helpers
   const openCreate = () => {
+    createCustomer.startDraft();
     void setFocusedCustomerId(null);
     void setDeepLinkMode(null);
     void setLocationIntent(null);
@@ -428,7 +429,6 @@ export function CustomerList() {
       <PageHeader
         area="distribution"
         title="Customers"
-        subtitle="Biochar buyers and their application locations"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -443,14 +443,12 @@ export function CustomerList() {
           title={showArchived ? "Archived customers" : "Active customers"}
           value={totalCustomers}
           icon={<UsersIcon size={24} weight="bold" />}
-          description="Biochar application customers"
           isLoading={isLoading}
         />
         <StatCard
           title="Locations on this page"
           value={totalLocations}
           icon={<MapTrifoldIcon size={24} weight="bold" />}
-          description="Application field locations on this page"
           isLoading={isLoading}
         />
       </div>

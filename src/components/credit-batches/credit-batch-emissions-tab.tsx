@@ -2,7 +2,7 @@
 
 /**
  * The Emissions tab of the credit batch page. With EMISSIONS_ENTRIES_ENABLED
- * it shows `CreditBatchEmissionsPanel` (#1140): the template lines still open
+ * it shows `CreditBatchEmissionsPanel` (#1140): the template components still open
  * and a link to record them. Without the flag it points to the batch's
  * Emissions page, where its production inputs are listed.
  */

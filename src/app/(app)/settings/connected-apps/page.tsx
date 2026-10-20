@@ -22,7 +22,6 @@ export default async function ConnectedAppsPage() {
       title="Connected apps"
       caption="Apps you have allowed to act for you in this organization."
       access="You and organization Owners and Admins"
-      subtitle="See which apps are connected and disconnect any you no longer use."
       canManageDefaults={ctx.isPlatformAdmin || canManage}
       canManageApiKeys={canManage}
       isPlatformAdmin={ctx.isPlatformAdmin}

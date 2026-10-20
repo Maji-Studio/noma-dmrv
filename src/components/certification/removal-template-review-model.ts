@@ -17,8 +17,13 @@ import {
 } from "@/lib/isometric/template-observations/line-sources";
 import type { ComponentEnrichment, EntryPolicy, QuantityKind } from "@/lib/isometric/template-observations/types";
 import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
+import { isTemplateReady, linesToDecideCount } from "@/lib/certification/removal-template-readiness";
+import { sectionTemplateLines, type TemplateLineSection } from "@/lib/isometric/template-observations/template-sections";
+import { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE } from "@/lib/certification/requirement-labels";
 
-export { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE } from "@/lib/certification/requirement-labels";
+export { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE };
+/** Section grouping, lines still to decide and readiness, under the names the review uses. */
+export { isTemplateReady, linesToDecideCount, sectionTemplateLines };
 
 export type RemovalTemplateReviewEntry = NonNullable<
   ReturnType<typeof useRemovalTemplateReview>["data"]
@@ -65,7 +70,7 @@ export const ORIGIN_LABELS: Record<LineContract["origin"], string> = {
 /** Line badges. Unchanged lines carry none. */
 export const CHANGE_LABELS: Partial<Record<ComponentChange, string>> = {
   changed: "Changed",
-  added: "New line",
+  added: "New component",
   cosmetic: "Wording changed",
 };
 
@@ -73,11 +78,11 @@ export const CHANGE_LABELS: Partial<Record<ComponentChange, string>> = {
 const PROBLEM_COPY: Partial<Record<LineSourceProblem["code"], string>> = {
   "single-with-automatic-source":
     "One entry per batch cannot add to automatic datapoints. Remove the automatic datapoints.",
-  "foreign-automatic-source": "These automatic datapoints do not fit this line. Choose others.",
+  "foreign-automatic-source": "These automatic datapoints do not fit this component. Choose others.",
   "retired-automatic-source": "These automatic datapoints are no longer available. Choose others or allow entries for this component.",
-  "disallowed-entry-policy": "This entry rule does not fit the line's inputs. Choose another one.",
-  ambiguous: "Another line uses the same automatic datapoints. Give them to one line only.",
-  "missing-contract": "This line has no contract yet. Assign one.",
+  "disallowed-entry-policy": "This entry rule does not fit the component's inputs. Choose another one.",
+  ambiguous: "Another component uses the same automatic datapoints. Give them to one component only.",
+  "missing-contract": "This component has no contract yet. Assign one.",
 };
 
 /** The badge on a line without a saved decision. */
@@ -179,9 +184,9 @@ export function changeSummary(changes: RemovalTemplateReviewEntry["changes"]): s
   if (values.length === 0) return "No earlier read to compare with.";
   const count = (change: ComponentChange) => values.filter((value) => value === change).length;
   const parts = [
-    count("changed") && plural(count("changed"), "line changed", "lines changed"),
-    count("added") && plural(count("added"), "new line", "new lines"),
-    count("removed") && plural(count("removed"), "line removed", "lines removed"),
+    count("changed") && plural(count("changed"), "component changed", "components changed"),
+    count("added") && plural(count("added"), "new component", "new components"),
+    count("removed") && plural(count("removed"), "component removed", "components removed"),
     count("cosmetic") && plural(count("cosmetic"), "wording change", "wording changes"),
   ].filter(Boolean);
   return parts.length === 0 ? "No changes since the last read." : `Since the last read: ${parts.join(", ")}.`;
@@ -189,17 +194,38 @@ export function changeSummary(changes: RemovalTemplateReviewEntry["changes"]): s
 
 export function reviewCountSummary(lineCount: number, toDecide: number): string {
   return toDecide === 0
-    ? `${plural(lineCount, "line", "lines")}, all decided.`
-    : `${toDecide} of ${plural(lineCount, "line", "lines")} to decide.`;
+    ? `${plural(lineCount, "component", "components")}, all decided.`
+    : `${toDecide} of ${plural(lineCount, "component", "components")} to decide.`;
 }
 
-/** Lines in template order, grouped under their template group. */
-export function groupLines(lines: readonly RemovalTemplateReviewLine[]) {
-  const groups = new Map<string, { key: string; name: string; lines: RemovalTemplateReviewLine[] }>();
-  for (const line of lines) {
-    const group = groups.get(line.groupKey) ?? { key: line.groupKey, name: line.groupName, lines: [] };
-    group.lines.push(line);
-    groups.set(line.groupKey, group);
-  }
-  return [...groups.values()];
+/** Isometric's section names on its template page. */
+export const SECTION_LABELS: Record<TemplateLineSection, string> = {
+  mitigated: "Mitigated",
+  emitted: "Emitted",
+};
+
+/** "Pyrolysis (3)", as Isometric counts a section or group. */
+export function countedLabel(name: string, count: number): string {
+  return `${name} (${count})`;
+}
+
+/** The title of a template no one has set up yet. */
+export const NOT_SET_UP_TITLE = "Not set up yet";
+
+/** Whether a Removal template can be chosen for a credit batch, and why not. */
+export interface TemplateReadiness {
+  ready: boolean;
+  /** Why it cannot be chosen yet: "3 components to decide", "Not set up yet". */
+  reason?: string;
+  /** Lines without a decision; only then does the link say "Decide components". */
+  toDecide?: number;
+}
+
+/** Why a template cannot be chosen yet, in the words Removal templates uses. */
+export function templateReadiness(entry: RemovalTemplateReviewEntry): TemplateReadiness {
+  if (isTemplateReady(entry)) return { ready: true };
+  const toDecide = linesToDecideCount(entry);
+  if (toDecide > 0) return { ready: false, reason: linesToDecideLabel(toDecide), toDecide };
+  if (entry.enrichmentProblems.length > 0) return { ready: false, reason: TEMPLATE_NOT_FULLY_READ_TITLE };
+  return { ready: false, reason: NOT_SET_UP_TITLE };
 }

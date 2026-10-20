@@ -1,0 +1,3 @@
+ALTER TABLE "certification_submissions" ADD COLUMN "payload_snapshot_frozen" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE INDEX "emission_entries_sent_by_removal_idx" ON "emission_entries" USING btree ("sent_by_removal_id") WHERE "emission_entries"."sent_by_removal_id" is not null;--> statement-breakpoint
+CREATE INDEX "emission_entries_send_reserved_by_submission_idx" ON "emission_entries" USING btree ("send_reserved_by_submission_id") WHERE "emission_entries"."send_reserved_by_submission_id" is not null;

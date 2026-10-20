@@ -223,7 +223,6 @@ export function ReactorList() {
         <PageHeader
           area="infrastructure"
           title="Reactors"
-          subtitle="Pyrolysis equipment and facility capacity"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its reactors." />
       </div>
@@ -254,7 +253,6 @@ export function ReactorList() {
       <PageHeader
         area="infrastructure"
         title="Reactors"
-        subtitle="Pyrolysis equipment and facility capacity"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />
@@ -269,14 +267,12 @@ export function ReactorList() {
           title="Total reactors"
           value={totalReactors}
           icon={<LightningIcon size={24} weight="bold" />}
-          description="Pyrolysis equipment units"
           isLoading={isLoading}
         />
         <StatCard
-          title="Throughput on this page"
+          title="Nominal throughput on this page"
           value={totalThroughputValue}
           icon={<FlaskIcon size={24} weight="bold" />}
-          description="Combined nominal throughput on this page"
           isLoading={isLoading}
         />
       </div>

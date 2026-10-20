@@ -86,3 +86,45 @@ it.each([false, true])("threads explicit submission enrichment freshness to faci
   await loadRemovalSubmissionContext(ctx, "removal-1", { refreshEnrichment });
   expect(loadFacilityCertifierFacts).toHaveBeenCalledWith(ctx, scope.facilityId, { refreshEnrichment });
 });
+
+// These entry-enabled regressions run the real context and overview orchestration with DB seams mocked.
+vi.mock("@/db", () => ({ db: {} }));
+vi.mock("@/data-access/utils", async (original) => ({ ...await original<typeof import("@/data-access/utils")>(), requireOrgFacility: vi.fn() }));
+vi.mock("@/data-access/removal-codes", () => ({ getRemovalCodes: vi.fn(async () => new Map()) }));
+vi.mock("./batch-emission-context", () => ({ loadBatchEmissionContext: vi.fn(async () => ({})) }));
+vi.mock("@/data-access/emission-entry-contenders", () => ({ loadEmissionEntryReservations: vi.fn(async () => []) }));
+vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: vi.fn(() => false), requireEmissionsEntriesEnabled: vi.fn() }));
+vi.mock("@/data-access/certification", () => ({ listRecentSyncEvents: vi.fn(async () => []) }));
+vi.mock("@/data-access/certifier-removals", () => ({ listRemovalsForFacility: vi.fn(), listUngroupedCreditBatches: vi.fn(async () => []), getCertifierRemovalById: vi.fn() }));
+vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntriesForBatches: vi.fn(async () => []) }));
+vi.mock("./biochar-application-source-readback", () => ({ refreshRemovalEvidenceLinks: vi.fn(async () => []) }));
+vi.mock("../with-action", () => ({ withAction: async (fn: (org: typeof ctx) => unknown) => ({ success: true, data: await fn(ctx) }) }));
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
+import { getLatestSubmission } from "@/data-access/certification-submissions";
+import { listRemovalsForFacility, getCertifierRemovalById } from "@/data-access/certifier-removals";
+import { loadBatchEmissionContext } from "./batch-emission-context";
+import { loadCertificationOverview } from "./overview";
+import { loadRemovalEmptyLines } from "./removal-empty-lines-core";
+
+it.each([new Date(0), new Date()])("loads context, Empty lines and overview after an unreserved draft entry changes (lock %s)", async (lockedAt) => {
+  vi.mocked(emissionsEntriesEnabled).mockReturnValue(true);
+  const template = structuredClone(fixture) as GhgEntryTemplate;
+  const facility = facts(template);
+  const observation = facility.templatesById[template.id]!.observation!;
+  Object.assign(observation, { id: "observation", definition: normalizeTemplateDefinition(template), enrichment: {} });
+  const removal = { id: scope.removalId, code: "RM-1", metadata: null, updatedAt: new Date() };
+  const currentScope = { ...scope, removal, memberBatches: scope.memberBatches.map((batch) => ({ ...batch, startDate: "2026-01-01" })) } as RemovalScope;
+  vi.mocked(resolveScopeForRemoval).mockResolvedValue(currentScope);
+  vi.mocked(loadFacilityCertifierFacts).mockResolvedValue(facility);
+  vi.mocked(listRemovalsForFacility).mockResolvedValue([removal] as never);
+  vi.mocked(getCertifierRemovalById).mockResolvedValue(removal as never);
+  vi.mocked(getLatestSubmission).mockResolvedValue({ id: "crashed", status: "draft", lockedAt, metadata: null,
+    payloadSnapshot: { frozenEntrySet: [{ entryId: "entry", contentRevision: 1 }] } } as never);
+  vi.mocked(loadBatchEmissionContext).mockResolvedValue({ "batch-1": { entries: [{ id: "entry", componentId: "removed-line", creditBatchId: "batch-1",
+    kind: "value", contentRevision: 2, counts: false, values: [], evidenceDocumentIds: [], occurredOn: "2026-01-02" }],
+    previousObservations: new Map(), automaticFigures: {} } } as never);
+  await expect(loadRemovalSubmissionContext(ctx, "removal-1")).resolves.toMatchObject({ latestSubmission: { id: "crashed" } });
+  await expect(loadRemovalEmptyLines(ctx, "removal-1")).resolves.toHaveProperty("batches");
+  await expect(loadCertificationOverview(scope.facilityId)).resolves.toMatchObject({ success: true, data: { removals: [{ removalId: scope.removalId }] } });
+  vi.mocked(emissionsEntriesEnabled).mockReturnValue(false);
+});
