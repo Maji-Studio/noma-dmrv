@@ -1,3 +1,4 @@
+import { useCreateIntentKey } from "./use-create-intent-key";
 import type { ActionResult } from "@/types/actions";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import type { DeleteApplicationInput } from "@/schemas/application-input";
@@ -101,11 +102,14 @@ export function useApplicationDeliveryOptions(
  */
 export function useCreateApplication() {
   const queryClient = useQueryClient();
+  const intent = useCreateIntentKey();
 
   return useMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.application),
-    mutationFn: (data: ApplicationFormData) => createApplicationFn(applicationOperationInput(data)),
-    onSuccess: () => {
+    mutationFn: (data: ApplicationFormData) => createApplicationFn(applicationOperationInput(data), { intentKey: intent.current() }),
+    onSuccess: (result) => {
+      if (!result.success) return;
+      intent.rotate();
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
       queryClient.invalidateQueries({
         queryKey: [...applicationKeys.all, "deliveryOptions"],

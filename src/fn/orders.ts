@@ -26,6 +26,7 @@ import { runOperationInProcess } from "@/lib/operations/runner";
 import { withAction } from "./with-action";
 import { getOrderById, getOrderWithRelationsById, type OrderWithRelations } from "@/data-access/orders";
 import { uuidSchema } from "@/schemas/helpers";
+import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
 
 // ============================================
 // List/Query Operations
@@ -92,12 +93,13 @@ export async function getOrdersForSelectFn(
  * Create a new order
  */
 export async function createOrderFn(
-  data: z.infer<typeof createOrderSchema>
+  data: z.infer<typeof createOrderSchema>,
+  options?: CreateIntentOptions
 ): Promise<ActionResult<Order>> {
   return withAction(async (ctx) => {
     const validated = createOrderSchema.parse(data);
 
-    return runOperationInProcess(recordOrder, ctx, validated);
+    return runOperationInProcess(recordOrder, ctx, validated, createIntentOptionsSchema.parse(options));
   }, { fallbackMessage: "Failed to create order" });
 }
 

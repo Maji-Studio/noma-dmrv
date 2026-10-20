@@ -1,3 +1,4 @@
+import { useCreateIntentKey } from "./use-create-intent-key";
 import { transportLegKeys } from "./use-transport-legs";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
 import { feedstockKeys } from "./use-feedstocks";
@@ -495,14 +496,16 @@ export function useSupplierLocationsBySupplier(
 
 export function useCreateSupplierLocation(callbacks?: MutationCallbacks<SupplierLocation, CreateSupplierLocationData>) {
   const queryClient = useQueryClient();
+  const intent = useCreateIntentKey();
 
   return useMutation({
     mutationFn: async (data: CreateSupplierLocationData) => {
-      const result = await createSupplierLocationFn(data);
+      const result = await createSupplierLocationFn(data, { intentKey: intent.current() });
       if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: async (data, variables) => {
+      intent.rotate();
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(variables.supplierId) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(variables.supplierId) });

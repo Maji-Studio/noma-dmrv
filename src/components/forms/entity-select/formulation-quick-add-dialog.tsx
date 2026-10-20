@@ -11,6 +11,7 @@
  */
 "use client";
 
+import { useCreateIntentKey } from "@/hooks/use-create-intent-key";
 import { createFormulationFn } from "@/fn/formulations";
 import { FormulationForm } from "@/components/formulations";
 import type { FormulationFormData } from "@/schemas/formulations";
@@ -29,6 +30,7 @@ export function FormulationQuickAddDialog({
   onClose,
   onSuccess = () => undefined,
 }: FormulationQuickAddDialogProps) {
+  const intent = useCreateIntentKey();
   const { error, isSubmitting, handleSubmit } = useQuickAddSubmit<FormulationFormData>({
     entityType: "formulation",
     // `createFormulationFn` answers with the full formulation; the select only
@@ -37,8 +39,9 @@ export function FormulationQuickAddDialog({
     serverFn: async (data) => {
       // `createFormulationSchema` *is* the form schema, so the form's data is
       // already the payload.
-      const result = await createFormulationFn(data);
+      const result = await createFormulationFn(data, { intentKey: intent.current() });
       if (!result.success) return result;
+      intent.rotate();
       return {
         success: true,
         data: {
