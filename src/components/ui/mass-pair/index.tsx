@@ -15,6 +15,10 @@ export interface MassPairProps {
   className?: string;
 }
 
+function isRecorded(kg: number | null | undefined): boolean {
+  return formatRecordedMass(kg) !== MISSING_VALUE.notRecorded;
+}
+
 /** A structured wet/dry comparison for KPI cards and dense table cells. */
 export function MassPair({
   wetKg,
@@ -26,28 +30,10 @@ export function MassPair({
   className,
 }: MassPairProps) {
   const figures = [
-    { label: wetLabel, value: formatRecordedMass(wetKg) },
-    { label: dryLabel, value: formatRecordedMass(dryKg) },
+    { label: wetLabel, value: formatRecordedMass(wetKg), recorded: isRecorded(wetKg) },
+    { label: dryLabel, value: formatRecordedMass(dryKg), recorded: isRecorded(dryKg) },
   ];
   const isCompact = variant === "compact";
-  const bothMissing = figures.every(
-    (figure) => figure.value === MISSING_VALUE.notRecorded,
-  );
-
-  // Two bold "Not recorded" figures collide in a narrow card. When neither
-  // side has a figure, say it once in the quiet missing-value style.
-  if (bothMissing && !isCompact) {
-    return (
-      <p
-        className={cn(
-          "body-small text-[var(--color-text-tertiary)]",
-          className,
-        )}
-      >
-        {MISSING_VALUE.notRecorded}
-      </p>
-    );
-  }
 
   return (
     <dl
@@ -76,11 +62,16 @@ export function MassPair({
             {figure.label}
           </dt>
           <dd
+            {...(figure.recorded ? {} : { "data-empty": true })}
             className={cn(
-              "m-0 whitespace-nowrap font-mono tabular-nums text-[var(--color-text-primary)]",
+              "m-0 whitespace-nowrap",
+              figure.recorded
+                ? "font-mono tabular-nums text-[var(--color-text-primary)]"
+                : "text-[var(--color-text-tertiary)]",
               isCompact
                 ? "text-[length:var(--text-body-small)] leading-[var(--text-body-small--line-height)]"
-                : "text-[length:var(--text-body-large)] leading-[var(--text-body-large--line-height)] font-semibold",
+                : "text-[length:var(--text-body-large)] leading-[var(--text-body-large--line-height)]",
+              figure.recorded && !isCompact && "font-semibold",
             )}
           >
             {figure.value}

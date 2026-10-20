@@ -64,11 +64,14 @@ describe("MassPair", () => {
     }
   });
 
-  it("says Not recorded once when neither figure is recorded", () => {
+  it("keeps both labels and renders a missing figure as a quiet placeholder", () => {
     const html = renderToStaticMarkup(<MassPair wetKg={null} dryKg={null} />);
 
-    expect(html.match(/Not recorded/g)).toHaveLength(1);
+    expect(html).toContain("Wet mass");
+    expect(html).toContain("Dry mass");
+    expect(html.match(/data-empty="true"/g)).toHaveLength(2);
     expect(html).not.toContain("font-mono");
+    expect(html).not.toContain("font-semibold");
     expect(html).toContain("text-[var(--color-text-tertiary)]");
   });
 });
