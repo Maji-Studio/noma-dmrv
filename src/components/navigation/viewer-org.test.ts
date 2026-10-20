@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { OrgRole } from "@/lib/auth/server";
 import { shouldShowPlatformAdminBar, viewerRoleLabel } from "./viewer-org-rules";
 
 describe("viewerRoleLabel", () => {
-  it.each([
+  it.each<[OrgRole, string]>([
     ["owner", "Owner"],
     ["admin", "Admin"],
     ["member", "Member"],

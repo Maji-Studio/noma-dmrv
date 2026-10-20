@@ -299,7 +299,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     window.location.replace("/login");
   }
 
-  // Append the Admin section only for admin users. `useIsAdmin()` is
+  // Append the Platform section only for Platform Admins. `useIsAdmin()` is
   // hydration-safe (server snapshot is `false`, so the admin subtree only
   // mounts after hydration). Server-side `requireAdmin()` in
   // src/app/admin/layout.tsx remains the actual access boundary.

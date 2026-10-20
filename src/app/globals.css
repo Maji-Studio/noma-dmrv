@@ -189,6 +189,9 @@
   --z-layer-dialog-backdrop: 60;
   --z-layer-dialog: 70;
   --z-layer-toast: 80;
+  /* Height of the Platform Admin bar; the app layout sets it only while the
+     bar renders. Viewport-tall surfaces inside the shell subtract it. */
+  --platform-admin-bar-height: 0px;
   /* Active menus/tooltips must remain operable when a toast overlaps them. */
   --z-layer-popover: 90;
   /* Skip link tops the whole scale: it only exists while focused and must

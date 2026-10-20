@@ -20,7 +20,7 @@ import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
 import { unwrap } from "@/hooks/types";
 import { NO_ORGANIZATION_MESSAGE } from "@/lib/errors";
 import { stashPendingWarning } from "@/lib/pending-warning";
-import { stashOrgSwitchNotice } from "@/lib/org-switch-notice";
+import { stashOrgSwitchNotice, type OrgSwitchTarget } from "@/lib/org-switch-notice";
 
 // How many times the active-organization read is re-attempted after a
 // transport or server fault before the sidebar settles on an error. A
@@ -61,12 +61,12 @@ export function useResetAfterOrgSwitch() {
    * "Now working in <org>" confirmation travels the same way; the name is
    * optional because an accepted invitation does not know it.
    */
-  return function resetAfterOrgSwitch(warning?: string, organizationName?: string) {
+  return function resetAfterOrgSwitch(warning?: string, target?: OrgSwitchTarget) {
     if (typeof window === "undefined") {
       return;
     }
     stashPendingWarning(warning);
-    stashOrgSwitchNotice(organizationName);
+    stashOrgSwitchNotice(target);
     try {
       window.localStorage.removeItem(FACILITY_STORAGE_KEY);
     } finally {
@@ -90,7 +90,7 @@ export function useEnterOrganization() {
     // (issue #769). A `warning` on the result is the preference, not the
     // switch.
     if (result.success) {
-      resetAfterOrgSwitch(result.warning, organizationName);
+      resetAfterOrgSwitch(result.warning, { organizationId, organizationName });
     }
     return result;
   };

@@ -50,7 +50,7 @@ function OrgIdentity({ name, roleLabel }: { name: string; roleLabel: string | nu
         {name}
       </span>
       {roleLabel && (
-        <span className="bg-[var(--color-white-10)] px-6 text-[length:var(--text-xxs)] leading-[16px] text-[var(--color-white-75)]">
+        <span className="bg-[var(--color-white-10)] px-6 body-caption text-[var(--color-white-75)]">
           {roleLabel}
         </span>
       )}

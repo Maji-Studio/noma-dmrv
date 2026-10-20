@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { orgSwitchMessage, stashOrgSwitchNotice, takeOrgSwitchNotice } from "./org-switch-notice";
+import { orgNameToAnnounce, orgSwitchMessage, stashOrgSwitchNotice, takeOrgSwitchNotice } from "./org-switch-notice";
 
 function withStorage(store = new Map<string, string>()) {
   vi.stubGlobal("window", {
@@ -17,9 +17,9 @@ afterEach(() => vi.unstubAllGlobals());
 describe("org switch notice", () => {
   it("hands the organization name to the next page once", () => {
     withStorage();
-    stashOrgSwitchNotice("Mafinga Biochar");
+    stashOrgSwitchNotice({ organizationId: "org-2", organizationName: "Mafinga Biochar" });
 
-    expect(takeOrgSwitchNotice()).toEqual({ organizationName: "Mafinga Biochar" });
+    expect(takeOrgSwitchNotice()).toEqual({ organizationId: "org-2", organizationName: "Mafinga Biochar" });
     expect(takeOrgSwitchNotice()).toBeNull();
   });
 
@@ -27,7 +27,7 @@ describe("org switch notice", () => {
     withStorage();
     stashOrgSwitchNotice();
 
-    expect(takeOrgSwitchNotice()).toEqual({ organizationName: null });
+    expect(takeOrgSwitchNotice()).toEqual({ organizationId: null, organizationName: null });
   });
 
   it("answers null when no switch happened", () => {
@@ -48,11 +48,33 @@ describe("org switch notice", () => {
       },
     });
 
-    expect(() => stashOrgSwitchNotice("X")).not.toThrow();
+    expect(() => stashOrgSwitchNotice({ organizationName: "X" })).not.toThrow();
     expect(takeOrgSwitchNotice()).toBeNull();
   });
 
   it("words the confirmation", () => {
     expect(orgSwitchMessage("Mafinga Biochar")).toBe("Now working in Mafinga Biochar");
+  });
+});
+
+describe("orgNameToAnnounce", () => {
+  const landed = { organizationId: "org-1", organizationName: "Dark Earth Carbon" };
+
+  it("uses the stashed name when its organization is the one that loaded", () => {
+    expect(
+      orgNameToAnnounce({ organizationId: "org-1", organizationName: "Dark Earth Carbon" }, landed),
+    ).toBe("Dark Earth Carbon");
+  });
+
+  it("names the landed organization when another tab switched elsewhere", () => {
+    expect(
+      orgNameToAnnounce({ organizationId: "org-2", organizationName: "Mafinga Biochar" }, landed),
+    ).toBe("Dark Earth Carbon");
+  });
+
+  it("names the landed organization when the switch did not know its target", () => {
+    expect(orgNameToAnnounce({ organizationId: null, organizationName: null }, landed)).toBe(
+      "Dark Earth Carbon",
+    );
   });
 });

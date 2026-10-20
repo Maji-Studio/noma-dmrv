@@ -10,13 +10,21 @@
  */
 const ORG_SWITCH_KEY = "noma:org-switched";
 
-export type OrgSwitchNotice = { organizationName: string | null };
+/** The organization a switch aimed at; both fields are unknown for an accepted invitation. */
+export type OrgSwitchTarget = { organizationId?: string; organizationName?: string };
+export type OrgSwitchNotice = { organizationId: string | null; organizationName: string | null };
 
 /** Mark that the next load follows an organization switch. */
-export function stashOrgSwitchNotice(organizationName?: string): void {
+export function stashOrgSwitchNotice(target: OrgSwitchTarget = {}): void {
   if (typeof window === "undefined") return;
   try {
-    window.sessionStorage.setItem(ORG_SWITCH_KEY, organizationName?.trim() ?? "");
+    window.sessionStorage.setItem(
+      ORG_SWITCH_KEY,
+      JSON.stringify({
+        organizationId: target.organizationId ?? null,
+        organizationName: target.organizationName?.trim() || null,
+      }),
+    );
   } catch {
     // Storage can be blocked. The navigation matters more than the notice.
   }
@@ -28,10 +36,29 @@ export function takeOrgSwitchNotice(): OrgSwitchNotice | null {
   try {
     const stored = window.sessionStorage.getItem(ORG_SWITCH_KEY);
     window.sessionStorage.removeItem(ORG_SWITCH_KEY);
-    return stored === null ? null : { organizationName: stored || null };
+    if (stored === null) return null;
+    const parsed = JSON.parse(stored) as Partial<OrgSwitchNotice>;
+    return {
+      organizationId: parsed.organizationId ?? null,
+      organizationName: parsed.organizationName ?? null,
+    };
   } catch {
     return null;
   }
+}
+
+/**
+ * The name to announce. The stashed name counts only when its organization is
+ * the one that actually loaded (two tabs can switch to different ones);
+ * otherwise the landed organization is named.
+ */
+export function orgNameToAnnounce(
+  notice: OrgSwitchNotice,
+  landed: { organizationId: string; organizationName: string } | null,
+): string | null {
+  if (!landed) return notice.organizationName;
+  const stashedMatches = notice.organizationId === landed.organizationId;
+  return stashedMatches && notice.organizationName ? notice.organizationName : landed.organizationName;
 }
 
 export function orgSwitchMessage(organizationName: string): string {

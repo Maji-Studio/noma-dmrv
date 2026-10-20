@@ -7,7 +7,7 @@ import { getActiveOrganization } from "@/data-access/organizations";
 import { getOrganizationDefaults } from "@/data-access/organization-settings";
 import { AppSidebar, MobileNav } from "@/components/navigation";
 import { FacilityProvider } from "@/components/navigation/facility-provider";
-import { PlatformAdminBar } from "@/components/navigation/platform-admin-bar";
+import { PlatformAdminBar, PLATFORM_ADMIN_BAR_HEIGHT } from "@/components/navigation/platform-admin-bar";
 import { OrgSwitchToast } from "@/components/navigation/org-switch-toast";
 import { ViewerOrgProvider } from "@/components/navigation/viewer-org";
 import {
@@ -59,6 +59,8 @@ export default async function AppLayout({
         }
       : null;
 
+  const showPlatformAdminBar = shouldShowPlatformAdminBar(viewerOrg);
+
   return (
     <ViewerOrgProvider value={viewerOrg}>
     <FacilityProvider
@@ -93,8 +95,15 @@ export default async function AppLayout({
         <MobileNav />
         {/* The Platform Admin bar sits above `main`, inside this column, so it
             pushes the page down instead of covering it. */}
-        <div className="flex flex-1 min-w-0 flex-col md:min-h-0">
-          {shouldShowPlatformAdminBar(viewerOrg) && viewerOrg && (
+        <div
+          className="flex flex-1 min-w-0 flex-col md:min-h-0"
+          style={
+            showPlatformAdminBar
+              ? ({ "--platform-admin-bar-height": PLATFORM_ADMIN_BAR_HEIGHT } as React.CSSProperties)
+              : undefined
+          }
+        >
+          {showPlatformAdminBar && viewerOrg && (
             <PlatformAdminBar organizationName={viewerOrg.organizationName} />
           )}
           <main id="main-content" tabIndex={-1} className="flex-1 min-h-0 min-w-0 overflow-auto focus:outline-none">

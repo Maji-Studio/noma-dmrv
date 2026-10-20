@@ -8,17 +8,20 @@
 
 import { useEffect } from "react";
 import { useToast } from "@/components/ui/toast";
-import { orgSwitchMessage, takeOrgSwitchNotice } from "@/lib/org-switch-notice";
+import { orgNameToAnnounce, orgSwitchMessage, takeOrgSwitchNotice } from "@/lib/org-switch-notice";
 import { useViewerOrg } from "./viewer-org";
 
 export function OrgSwitchToast() {
   const { success } = useToast();
   const viewer = useViewerOrg();
+  const landedId = viewer?.organizationId ?? null;
   const landedName = viewer?.organizationName ?? null;
   useEffect(() => {
     const notice = takeOrgSwitchNotice();
-    const name = notice?.organizationName ?? (notice ? landedName : null);
+    if (!notice) return;
+    const landed = landedId && landedName ? { organizationId: landedId, organizationName: landedName } : null;
+    const name = orgNameToAnnounce(notice, landed);
     if (name) success(orgSwitchMessage(name));
-  }, [success, landedName]);
+  }, [success, landedId, landedName]);
   return null;
 }

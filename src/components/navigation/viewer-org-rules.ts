@@ -2,13 +2,14 @@
  * Pure rules for where the viewer is and as whom. No "use client", so the
  * server layout can call them as well as the sidebar.
  */
+import type { OrgRole } from "@/lib/auth/server";
 import { orgRoleLabel, PLATFORM_ADMIN_LABEL } from "@/lib/org-role-label";
 
 export interface ViewerOrg {
   organizationId: string;
   organizationName: string;
   /** Membership role in the active organization; null without a membership. */
-  orgRole: string | null;
+  orgRole: OrgRole | null;
   isPlatformAdmin: boolean;
 }
 
