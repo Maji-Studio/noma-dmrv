@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LOCAL_TIME_PATTERN } from "./helpers";
+import { dateOrStringSchema, LOCAL_TIME_PATTERN } from "./helpers";
 import { publishedJsonSchemas } from "./published-json-schema";
 
 const EVENT_INSTANT_GUIDANCE = "Add an explicit offset (Z or +hh:mm), or send { date, time }.";
@@ -24,8 +24,11 @@ const wireInstant = z.union([offsetInstant, localInstant]).describe("An RFC 3339
  * validated server actions only; the published contract lists the two wire shapes.
  */
 export function createEventInstantSchema(requiredMessage = EVENT_INSTANT_GUIDANCE) {
-  const instant = z.union([z.date(), offsetInstant, localInstant], { error: EVENT_INSTANT_GUIDANCE });
-  return z.custom<z.input<typeof instant>>((value) => value !== "", { error: requiredMessage })
+  const instant = z.union([
+    dateOrStringSchema(EVENT_INSTANT_GUIDANCE, (text) => text.pipe(offsetInstant)),
+    localInstant,
+  ], { error: EVENT_INSTANT_GUIDANCE });
+  return z.custom<z.input<typeof instant>>((value) => value !== "" && value != null, { error: requiredMessage })
     .pipe(instant)
     .register(publishedJsonSchemas, { jsonSchema: z.toJSONSchema(wireInstant) });
 }

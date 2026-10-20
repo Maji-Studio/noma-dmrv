@@ -1,14 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
+import { switchCreditBatchRemovalTemplate as switchTemplate } from "@/data-access/credit-batch-removal-template";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getLatestTemplateObservation, reviewLineContracts } from "@/data-access/removal-template-observations";
 import { getCertifierProjectByFacility } from "@/data-access/certification";
 import { requireOrgFacility } from "@/data-access/utils";
-import { listGhgEntryTemplates, type IsometricGhgEntryTemplate } from "@/lib/isometric";
+import { listComponentBlueprints, listGhgEntryTemplates, type IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { loadRemovalTemplateFacts } from "./removal-template-facts";
-import { observeRemovalTemplate } from "./observe-removal-template";
+import { observeRemovalTemplate, TEMPLATE_ENRICHMENT_TTL_MS } from "./observe-removal-template";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
-import { normalizeTemplateDefinition, resolveLineSources, validateLineSources } from "@/lib/isometric/template-observations";
+import { enrichmentProblems, fullFingerprint, lineNeedsReview, lineSourcesForObservation, normalizeTemplateDefinition, resolveLineSources, semanticFingerprint, validateLineSources, type TemplateEnrichment } from "@/lib/isometric/template-observations";
+import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/load-enrichment";
 import { canAcceptProposal, problemMessages } from "@/components/certification/removal-template-review-model";
 import { loadFacilityCertifierFacts } from "./facility-certifier-facts";
 import { loadRemovalTemplateReview, loadRemovalTemplateReviewEntry, loadRemovalTemplateReviewPreview, reviewRemovalTemplateLines, switchCreditBatchRemovalTemplate } from "./removal-template-review";
@@ -21,7 +23,10 @@ vi.mock("../with-action", async () => {
 vi.mock("@/data-access/credit-batches", () => ({ getCreditBatchById: vi.fn() }));
 vi.mock("@/data-access/removal-template-observations", () => ({ reviewLineContracts: vi.fn(), getPreviousTemplateObservation: vi.fn(), getLatestTemplateObservation: vi.fn(async () => null) }));
 vi.mock("@/lib/isometric/template-observations/load-enrichment", () => ({ loadTemplateEnrichment: vi.fn(async () => ({})) }));
-vi.mock("./observe-removal-template", () => ({ observeRemovalTemplate: vi.fn() }));
+vi.mock("./observe-removal-template", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./observe-removal-template")>(),
+  observeRemovalTemplate: vi.fn(),
+}));
 vi.mock("@/data-access/credit-batch-removal-template", () => ({ switchCreditBatchRemovalTemplate: vi.fn(), listPinnedRemovalTemplateIds: vi.fn() }));
 vi.mock("@/data-access/certification", () => ({ getCertifierProjectByFacility: vi.fn() }));
 vi.mock("@/data-access/certifier-credentials", () => ({ resolveIsometricClient: vi.fn(async () => ({})) }));
@@ -38,6 +43,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false");
   ctx.orgRole = "owner";
+  vi.mocked(getLatestTemplateObservation).mockResolvedValue(null);
+  vi.mocked(loadTemplateEnrichment).mockResolvedValue({});
   vi.mocked(requireOrgFacility).mockResolvedValue(undefined as never);
   vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id } as never);
   vi.mocked(listGhgEntryTemplates).mockResolvedValue([fixture as IsometricGhgEntryTemplate]);
@@ -73,16 +80,40 @@ it("uses the accurate non-Removal refusal for Switch template", async () => {
   expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
 });
 
+it("still observes the template facts before switching", async () => {
+  vi.mocked(getCreditBatchById).mockResolvedValue({ facilityId: id } as never);
+  vi.mocked(switchTemplate).mockResolvedValue({ id } as never);
+  const input = { creditBatchId: id, removalTemplateId: fixture.id, expectedVersion: 1 };
+  expect(await switchCreditBatchRemovalTemplate(input)).toEqual({ success: true, data: { id } });
+  expect(loadRemovalTemplateFacts).toHaveBeenCalledWith(ctx, {
+    client: {}, template: fixture, externalProjectId: fixture.project_id, blueprints: [],
+  });
+  expect(switchTemplate).toHaveBeenCalledWith(ctx, input);
+  expect(vi.mocked(loadRemovalTemplateFacts).mock.invocationCallOrder[0])
+    .toBeLessThan(vi.mocked(switchTemplate).mock.invocationCallOrder[0]);
+});
+
 it("lets a member preview an unpinned target in their facility's registry project", async () => {
   ctx.orgRole = "member";
   const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
   const lineSources = resolveLineSources({ definition });
-  lineSources.rtc_1KWHFRM4GSBX5Y7A.origin = "proposed";
-  vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({ observation: { lineSources }, enrichmentProblems: [], lineSourceProblems: [] } as never);
+  const componentId = "rtc_1KWHFRM4GSBX5Y7A";
+  lineSources[componentId].origin = "proposed";
+  // Keep one pending line and surface real validation problems from the live read.
+  lineSources[componentId].scope = "unassigned";
+  lineSources[componentId].entryPolicy = "none";
+  delete lineSources[componentId].automaticSource;
+  const latest = { definition, lineSources, enrichedAt: new Date(0), semanticFingerprint: semanticFingerprint(definition, {}), fullFingerprint: fullFingerprint(definition, {}) };
+  vi.mocked(getLatestTemplateObservation).mockResolvedValueOnce(latest as never);
+  const expectedSources = lineSourcesForObservation({ definition, enrichment: {}, latest });
+  const problems = validateLineSources(definition, expectedSources);
   const result = await loadRemovalTemplateReviewPreview({ facilityId: id, removalTemplateId: fixture.id });
   expect(result).toEqual({ success: true, data: {
-    templateId: fixture.id, needsReviewCount: 1, enrichmentProblems: [], lineSourceProblems: [],
+    templateId: fixture.id, needsReviewCount: 1, enrichmentProblems: enrichmentProblems(definition, {}), lineSourceProblems: problems,
   } });
+  expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
+  expect(observeRemovalTemplate).not.toHaveBeenCalled();
+  expect(loadTemplateEnrichment).toHaveBeenCalledWith({}, fixture, []);
   expect(requireOrgFacility).toHaveBeenCalledWith(ctx, id);
   expect(getCertifierProjectByFacility).toHaveBeenCalledWith(ctx, id, "isometric");
   expect(listGhgEntryTemplates).toHaveBeenCalledWith({}, fixture.project_id);
@@ -109,7 +140,7 @@ describe("loadRemovalTemplateReviewEntry", () => {
       lineSources[componentId] = { scope: "operating", automaticSource: "run-genset-diesel", entryPolicy: "additive", origin: "proposed" };
     }
     const before = structuredClone(lineSources);
-    vi.mocked(getLatestTemplateObservation).mockResolvedValueOnce({ definition, lineSources } as never);
+    vi.mocked(getLatestTemplateObservation).mockResolvedValueOnce({ definition, lineSources, enrichedAt: new Date(0), semanticFingerprint: semanticFingerprint(definition, {}), fullFingerprint: fullFingerprint(definition, {}) } as never);
     const result = await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: fixture.id });
     if (!result.success) throw new Error("expected a read");
     for (const componentId of ids) {
@@ -127,7 +158,8 @@ describe("loadRemovalTemplateReviewEntry", () => {
     const lineSources = resolveLineSources({ definition });
     const componentId = "rtc_1M4ZRPH1RSBXADG2";
     lineSources[componentId] = { scope: "operating", automaticSource: "sample-transport", entryPolicy: "additive", origin: "proposed" };
-    vi.mocked(getLatestTemplateObservation).mockResolvedValueOnce({ definition, lineSources } as never);
+    vi.mocked(getLatestTemplateObservation).mockResolvedValueOnce({ definition, lineSources, enrichedAt: new Date(),
+      semanticFingerprint: semanticFingerprint(definition, {}), fullFingerprint: fullFingerprint(definition, {}) } as never);
     const result = await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: fixture.id });
     if (!result.success) throw new Error("expected a read");
     expect(result.data.lines.find((line) => line.component.id === componentId)?.contract)
@@ -203,6 +235,101 @@ it("preserves the server's retired-source review problem and operator guidance a
   const line = entry.lines.find((candidate) => candidate.component.id === componentId)!;
   expect(line.contract.automaticSource).toBeUndefined();
   expect(problemMessages(line, entry.lineSourceProblems)).toEqual([
-    "This automatic figure is no longer available. Choose another figure or allow entries for this line.",
+    "These automatic datapoints are no longer available. Choose others or allow entries for this component.",
   ]);
+});
+
+it("keeps Preview and Entry consistent when live enrichment differs from the stored read", async () => {
+  const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
+  const lineSources = resolveLineSources({ definition });
+  const latest = { definition, lineSources, enrichedAt: new Date(0), semanticFingerprint: semanticFingerprint(definition, {}), fullFingerprint: fullFingerprint(definition, {}) };
+  const component = definition.groups.flatMap((group) => group.components).find((component) => component.inputs.length)!;
+  const enrichment = { [component.id]: { [component.inputs[0].key]: { unit: "changed-unit" } } };
+  vi.mocked(getLatestTemplateObservation).mockResolvedValue(latest as never);
+  vi.mocked(loadTemplateEnrichment).mockResolvedValue(enrichment);
+  const preview = await loadRemovalTemplateReviewPreview({ facilityId: id, removalTemplateId: fixture.id });
+  const entry = await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: fixture.id });
+  if (!preview.success || !entry.success) throw new Error("expected preview reads");
+  expect(preview.data).toEqual({
+    templateId: fixture.id,
+    needsReviewCount: entry.data.lines.filter((line) => lineNeedsReview(line.component.id, line.contract, entry.data.lineSourceProblems)).length,
+    enrichmentProblems: entry.data.enrichmentProblems,
+    lineSourceProblems: entry.data.lineSourceProblems,
+  });
+  expect(entry.data.lines.find((line) => line.contract.origin === "carried")).toBeDefined();
+  expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
+  expect(observeRemovalTemplate).not.toHaveBeenCalled();
+});
+
+describe("preview observation enrichment reuse", () => {
+  const template = structuredClone(fixture) as IsometricGhgEntryTemplate;
+  const group = template.groups.find((group) => group.key === "pyrolysis")!;
+  const component = group.components.find((component) => component.blueprint_key === "grid_electricity_use")!;
+  group.components = [component];
+  template.groups = [group];
+  const definition = normalizeTemplateDefinition(template);
+  const storedEnrichment: TemplateEnrichment = { [component.id]: {
+    electricity_use: { unit: "kWh" },
+    grid_carbon_intensity: { unit: "kgCO2e / kWh", fixedValue: "0.5" },
+  } };
+  const liveEnrichment: TemplateEnrichment = { [component.id]: {
+    electricity_use: { unit: "MWh" },
+    grid_carbon_intensity: { status: "unknown" },
+  } };
+  const lineSources = { [component.id]: { scope: "unassigned", entryPolicy: "none", origin: "proposed" } } as const;
+  function storedObservation(ageMs: number) {
+    return {
+      definition, enrichment: storedEnrichment, lineSources, externalProjectId: template.project_id,
+      enrichedAt: new Date(Date.now() - ageMs),
+      semanticFingerprint: semanticFingerprint(definition, storedEnrichment),
+      fullFingerprint: fullFingerprint(definition, storedEnrichment),
+    };
+  }
+
+  beforeEach(() => {
+    vi.mocked(listGhgEntryTemplates).mockResolvedValue([template]);
+    vi.mocked(loadTemplateEnrichment).mockResolvedValue(liveEnrichment);
+  });
+
+  it("uses fresh complete stored enrichment for Preview and Entry without loading blueprints or writing", async () => {
+    const latest = storedObservation(0);
+    const before = structuredClone(latest);
+    vi.mocked(getLatestTemplateObservation).mockResolvedValue(latest as never);
+    const input = { facilityId: id, removalTemplateId: template.id };
+    const preview = await loadRemovalTemplateReviewPreview(input);
+    const entry = await loadRemovalTemplateReviewEntry(input);
+    expect(preview).toEqual({ success: true, data: {
+      templateId: template.id, needsReviewCount: 1, enrichmentProblems: [],
+      lineSourceProblems: [{ code: "unassigned", componentId: component.id }],
+    } });
+    expect(entry).toMatchObject({ success: true, data: {
+      observation: null, preview: true, enrichment: storedEnrichment, enrichmentProblems: [],
+      lineSourceProblems: [{ code: "unassigned", componentId: component.id }],
+    } });
+    expect(enrichmentProblems(definition, liveEnrichment)).toEqual([
+      { code: "unknown-enrichment", componentId: component.id, inputKey: "grid_carbon_intensity" },
+    ]);
+    expect(loadTemplateEnrichment).not.toHaveBeenCalled();
+    expect(listComponentBlueprints).not.toHaveBeenCalled();
+    expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
+    expect(observeRemovalTemplate).not.toHaveBeenCalled();
+    expect(reviewLineContracts).not.toHaveBeenCalled();
+    expect(latest).toEqual(before);
+  });
+
+  it("loads live enrichment for a stored observation older than the TTL", async () => {
+    vi.mocked(getLatestTemplateObservation).mockResolvedValue(storedObservation(TEMPLATE_ENRICHMENT_TTL_MS + 1) as never);
+    const result = await loadRemovalTemplateReviewPreview({ facilityId: id, removalTemplateId: template.id });
+    expect(result).toEqual({ success: true, data: {
+      templateId: template.id, needsReviewCount: 0,
+      enrichmentProblems: [{ code: "unknown-enrichment", componentId: component.id, inputKey: "grid_carbon_intensity" }],
+      lineSourceProblems: [],
+    } });
+    expect(listComponentBlueprints).toHaveBeenCalledExactlyOnceWith({});
+    expect(loadTemplateEnrichment).toHaveBeenCalledExactlyOnceWith({}, template, []);
+    expect(vi.mocked(getLatestTemplateObservation).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(listComponentBlueprints).mock.invocationCallOrder[0]);
+    expect(observeRemovalTemplate).not.toHaveBeenCalled();
+    expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
+  });
 });

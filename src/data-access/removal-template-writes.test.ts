@@ -64,7 +64,7 @@ describe("Removal template write boundaries", () => {
     mocks.select.mockReturnValueOnce(query([row])).mockReturnValueOnce(query([row])).mockReturnValueOnce(query([{ id: row.id }]));
     await expect(reviewLineContracts(ctx, { observationId: row.id, expectedVersion: row.version,
       assignments: { [GENSET]: { scope: "operating", automaticSource: "run-startup-diesel", entryPolicy: "additive" } },
-    })).rejects.toThrow("This template line needs no review.");
+    })).rejects.toThrow("This template line is already decided.");
     expect(mocks.update).not.toHaveBeenCalled();
   });
 

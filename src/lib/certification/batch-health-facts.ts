@@ -81,6 +81,7 @@ export function toBatchHealthFacts(
   const batch = ctx.memberBatches.find((member) => member.id === batchId);
   return {
     templateBlockers: ctx.templateBlockers ?? [],
+    undecidedLineIds: ctx.undecidedLineIds,
     emissionLines: ctx.emissionLinesByBatchId?.[batchId] ?? ctx.emissionLines,
     warnings: batch ? sampleDocumentWarnings({ ...batch, creditBatchCode: batch.code }) : [],
     documentWarnings: batch ? sampleDocumentWarningKeys({ ...batch, creditBatchCode: batch.code }) : [],

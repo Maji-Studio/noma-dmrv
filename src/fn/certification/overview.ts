@@ -119,6 +119,8 @@ export interface RemovalPreflightSummary {
   hasFinalizedSubmission: boolean;
   /** A submit attempt opened the registry boundary before any ledger row. */
   registryBoundaryOpened: boolean;
+  /** A fresh Removal deletion lease hides Delete for every viewer. */
+  deletionInProgress: boolean;
   readiness: RemovalReadiness;
   /** Post-submit verification of Sources on their intended registry targets. */
   evidenceHealth: RemovalEvidenceHealth | null;
@@ -182,6 +184,7 @@ async function buildRemovalPreflightSummary(
     submissionInterrupted,
     hasFinalizedSubmission: ctx.hasFinalizedSubmission,
     registryBoundaryOpened: ctx.registryBoundaryOpened,
+    deletionInProgress: ctx.deletionInProgress,
     readiness: deriveRemovalReadiness(facts),
     evidenceHealth: deriveRemovalEvidenceHealth({
       submissionId: ctx.latestSubmission?.id ?? null,

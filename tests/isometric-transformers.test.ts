@@ -361,7 +361,7 @@ describe("buildCreateDatapointRequest", () => {
 
     expect(mapping).toBeDefined();
     expect(() => resolveDatapointSource(mapping!, { scope: "operating", entryPolicy: "none", origin: "reviewed" } satisfies LineContract)).toThrow(
-      /Review the Removal template lines/,
+      /This Removal template has lines to decide/,
     );
     expect(
       lookupInputMapping("constructor", "mass_based_ci_emissions", "mass"),
@@ -461,7 +461,7 @@ describe("buildCreateDatapointRequest", () => {
     // double-count or land in the wrong bucket.
     expect(() =>
       buildCreateDatapointRequest(fuelVolumeArgs("Diesel usage")),
-    ).toThrow(/Review the Removal template lines/);
+    ).toThrow(/This Removal template has lines to decide/);
   });
 
   it("rejects an unknown (group, blueprint, input) tuple with a SafeError pointing to the mapping file", () => {

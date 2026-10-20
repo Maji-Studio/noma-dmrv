@@ -166,7 +166,10 @@ change; the record lock notices use it. Keep
 `alert` for blocking errors; do not upgrade a warning to it. Field-level
 feedback stays in `FormField` (`error`, `warning`), not a Notice. `ServerError`
 renders through `Notice`. For loading failures with a retry, pass the button as
-`action`.
+`action`. `FormFooterPreview` (`@/components/forms`), the association line
+above Save ([forms.md](./forms.md#formactions)), is a Notice that passes
+`infoIcon`: its info tone leads with the subject's icon, because its own ⓘ sits
+in the line.
 
 ### Flat controls
 
@@ -692,10 +695,13 @@ The one outcome screen for auth pages (check your email, email verified, verific
   as `DataTable.Pagination`. Facilities and Credit Batches are the sanctioned
   KPI-rich card-list hubs; ordinary entity lists stay data tables.
 - **`PageHeader`** — mono uppercase area eyebrow → `title-heading-2` title →
-  one-line subtitle → actions. `area` sets the eyebrow text and ink; `eyebrow`
-  overrides the text; omit `area` for pages outside the nav groups
-  (Traceability). **Every list page gets a subtitle** — one descriptive line,
-  sentence case.
+  optional one-line subtitle → actions. `area` sets the eyebrow text and ink;
+  `eyebrow` overrides the text; omit `area` for pages outside the nav groups
+  (Traceability). **A list-page subtitle stays only when it says something the
+  title does not**: scope, what is counted, or a constraint the operator must
+  know. One line, sentence case. Test: delete it; would anyone miss it? Good:
+  "Deliveries of the last 90 days, newest first" under "Deliveries". Filler:
+  "Manage your orders" under "Orders".
 - **`DropdownMenu` / `RowActionsMenu`** — `RowActionsMenu` is *the* single
   row-action pattern for table and card lists: a quiet ⋮ per row, verbs in the
   menu. A clickable `DataTable` marks its code or name column
@@ -850,8 +856,8 @@ stays as a preview whose lead footer action opens the page
 
 ```tsx
 <div className="container-max page-shell">
-  {/* 1. Header — area eyebrow → title → one-line subtitle → actions */}
-  <PageHeader area="production" title="Orders" subtitle="…" actions={<Button …/>} />
+  {/* 1. Header — area eyebrow → title → optional subtitle (only if it adds information) → actions */}
+  <PageHeader area="production" title="Orders" actions={<Button …/>} />
 
   {/* 2. KPI strip — StatCards, every card carries a 24px Phosphor icon */}
   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
