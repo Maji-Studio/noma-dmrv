@@ -146,17 +146,17 @@ export async function reviewLineContracts(ctx: OrgContext, input: ReviewLineCont
     const currentProblems = validateLineSources(row.definition, row.lineSources);
     const lineSources = { ...row.lineSources };
     for (const [id, assignment] of Object.entries(input.assignments)) {
-      if (!componentIds.has(id)) throw new SafeError("Template line not found.");
+      if (!componentIds.has(id)) throw new SafeError("Template component not found.");
       if (!lineNeedsReview(id, row.lineSources[id], currentProblems)) {
-        throw new SafeError("This template line is already decided. Only lines to decide take a decision.");
+        throw new SafeError("This template component is already decided. Only components to decide take a decision.");
       }
       if (assignment.scope !== "operating" && (assignment.automaticSource || assignment.entryPolicy !== "none")) {
-        throw new SafeError("Only operating lines can take automatic datapoints or entries.");
+        throw new SafeError("Only operating components can take automatic datapoints or entries.");
       }
       lineSources[id] = { ...assignment, origin: "reviewed", templateOrder: lineSources[id]?.templateOrder };
     }
     const problems = validateLineSources(row.definition, lineSources).filter((problem) => problem.code !== "unassigned");
-    if (problems.length) throw new SafeError("Choose valid, distinct sources and entry policies for the Removal template lines.");
+    if (problems.length) throw new SafeError("Choose valid, distinct sources and entry policies for the Removal template components.");
     const [reviewed] = await tx.update(observations).set({
       lineSources, reviewedAt: new Date(), reviewedByUserId: ctx.userId,
       version: nextVersion(observations.version), updatedAt: new Date(),

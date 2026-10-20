@@ -29,7 +29,7 @@ export const DECIMAL_MESSAGE = "Enter a non-negative decimal value.";
 export const DATE_BEFORE_START_MESSAGE = "Entry date cannot be before the credit batch start date.";
 export const DATE_IN_FUTURE_MESSAGE = "Entry date cannot be in the future at this facility.";
 export const DATE_INVALID_MESSAGE = "Enter a valid entry date.";
-export const NEEDS_SETUP_COPY = "noma cannot fill this line from its records yet. Its decision and the template are in Removal templates.";
+export const NEEDS_SETUP_COPY = "noma cannot fill this component from its records yet. Its decision and the template are in Removal templates.";
 export const SINGLE_LINE_CAPTION = "One manual entry per credit batch. It counts for the whole credit batch.";
 /**
  * The server's note limit (MAX_ENTRY_TEXT_LENGTH in src/schemas/emission-entries.ts).
@@ -243,7 +243,7 @@ export function isTotalMissing(line: EmissionLine): boolean {
 
 /** Why Add manual entry is not offered, or null when it is. */
 export function addEntryRefusal(line: EmissionLine): string | null {
-  if (line.state === "needsSetup" || line.entryPolicy === "none" || line.contract?.scope !== "operating") return "This line takes no manual entries";
+  if (line.state === "needsSetup" || line.entryPolicy === "none" || line.contract?.scope !== "operating") return "This component takes no manual entries";
   if (line.entryPolicy === "single" && line.entries.some((entry) => entry.kind === "value")) return "One manual entry per credit batch";
   if (!line.inputShape.length || line.inputShape.some((input) => !input.unit)) return "The template units are not read yet";
   return null;

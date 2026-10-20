@@ -221,12 +221,12 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
           subtitle={overviewBatch ? batchSubtitle(overviewBatch) : SUBTITLE}
         />
       </div>
-      {!entriesEnabled && <Notice tone="info">Manual entries are not switched on yet. Lines show what records hold.</Notice>}
+      {!entriesEnabled && <Notice tone="info">Manual entries are not switched on yet. Components show what records hold.</Notice>}
       {isEmissionLinesBlocked(linesQuery.error) ? (
         <TemplateSetupNotice blocker={linesQuery.error.blocker} facilityId={scope.facilityId} creditBatchId={scope.creditBatchId} />
       ) : linesQuery.error && !linesQuery.data ? (
         <Notice tone="error" action={<Button size="small" variant="default" onClick={() => void linesQuery.refetch()}>Try again</Button>}>
-          {linesQuery.error.message || "The emission lines could not be loaded."}
+          {linesQuery.error.message || "The components could not be loaded."}
         </Notice>
       ) : overview.error && !overview.data ? (
         <Notice tone="error" action={<Button size="small" variant="default" onClick={() => void overview.refetch()}>Try again</Button>}>

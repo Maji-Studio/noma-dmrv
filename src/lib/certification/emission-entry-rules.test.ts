@@ -166,7 +166,7 @@ describe("entries after template changes", () => {
     const before = observation();
     const after = structuredClone(before);
     after.enrichment.line.electricity_use = { unit: "Wh" };
-    expect(emissionEntryCounts(before, after, "line")).toMatchObject({ counts: false, canConfirm: false, reason: "Enter the values again for the current template line." });
+    expect(emissionEntryCounts(before, after, "line")).toMatchObject({ counts: false, canConfirm: false, reason: "Enter the values again for the current template component." });
     expect(emissionEntryCounts(after, after, "line").counts).toBe(true);
   });
   it.each(["removed", "kind", "policy", "scope", "template", "unknown-unit"])(
@@ -226,7 +226,7 @@ it("still allows confirmation for a fixed-factor change with unchanged entry uni
   const after = structuredClone(before);
   after.enrichment.line.factor = { unit: "kWh", fixedValue: "2" };
   expect(emissionEntryCounts(before, after, "line")).toMatchObject({
-    counts: false, canConfirm: true, reason: "Confirm this entry for the changed template line.",
+    counts: false, canConfirm: true, reason: "Confirm this entry for the changed template component.",
   });
 });
 

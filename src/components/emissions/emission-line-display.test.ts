@@ -123,7 +123,7 @@ describe("add manual entry", () => {
     const single = makeLine({ entryPolicy: "single" });
     expect(addEntryRefusal(single)).toBeNull();
     expect(addEntryRefusal({ ...single, entries: [makeEntry()] })).toBe("One manual entry per credit batch");
-    expect(addEntryRefusal(makeLine({ entryPolicy: "none" }))).toBe("This line takes no manual entries");
+    expect(addEntryRefusal(makeLine({ entryPolicy: "none" }))).toBe("This component takes no manual entries");
   });
 
   it("splits a mass-distance input into mass and distance and sends the exact product", () => {
@@ -174,7 +174,7 @@ describe("filters and groups", () => {
     expect(lineMatches(makeLine({ state: "empty" }), "notRecorded")).toBe(true);
     expect(lineMatches(makeLine({ state: "filled" }), "open")).toBe(false);
   });
-  it("groups template lines in order under the server's group names", () => {
+  it("groups template components in order under the server's group names", () => {
     const groups = groupLines([
       makeLine({ componentId: "a", groupKey: "co2-stored", groupName: "CO₂ stored" }),
       makeLine({ componentId: "b", groupKey: "co2-stored", groupName: "CO₂ stored" }),

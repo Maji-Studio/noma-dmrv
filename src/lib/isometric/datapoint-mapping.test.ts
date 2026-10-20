@@ -8,7 +8,7 @@ describe("contract source lookup", () => {
   it("selects each diesel source by contract and fails closed without one", () => {
     expect(resolveDatapointSource(diesel, { ...operating, automaticSource: "run-genset-diesel" })).toBe("totalGensetDieselLitres");
     expect(resolveDatapointSource(diesel, { ...operating, automaticSource: "run-startup-diesel" })).toBe("totalStartupDieselLitres");
-    expect(() => resolveDatapointSource(diesel)).toThrow("This Removal template has lines to decide.");
+    expect(() => resolveDatapointSource(diesel)).toThrow("This Removal template has components to decide.");
     expect(() => resolveDatapointSource(diesel, { ...operating, automaticSource: "run-genset-diesel", origin: "proposed" })).toThrow();
   });
   it("releases the safety-margin tuple only with an effective automatic contract", () => {

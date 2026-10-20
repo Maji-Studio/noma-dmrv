@@ -28,7 +28,7 @@ describe("templateReadiness", () => {
       { component: { id: "line_b" }, contract: PROPOSED },
       { component: { id: "line_c" }, contract: undefined },
     ];
-    expect(templateReadiness(entry({ lines }))).toEqual({ ready: false, reason: "2 lines to decide", toDecide: 2 });
+    expect(templateReadiness(entry({ lines }))).toEqual({ ready: false, reason: "2 components to decide", toDecide: 2 });
   });
 
   it("names a template not read in full when no line is waiting", () => {

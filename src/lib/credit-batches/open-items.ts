@@ -37,7 +37,7 @@ export interface CreditBatchOpenItem {
   detail?: string;
   /** The protocol reasoning behind a requirement, shown behind an ⓘ. */
   why?: string;
-  /** Where the row leads; null when the viewer can't act on it (a member and lines to decide). */
+  /** Where the row leads; null when the viewer can't act on it (a member and components to decide). */
   target:
     | { tab: "overview" | "production" | "samples" | "emissions" | "removals"; rowId?: string }
     | { href: string }
@@ -51,7 +51,7 @@ export interface CreditBatchOpenItemsInput {
   durability?: DurabilityBatchSummary;
   emissionLines?: readonly BatchEmissionLine[];
   pageModel?: CreditBatchPageModel;
-  /** Owner or Admin. Members get no link to decide lines, which only Owners and Admins can do. */
+  /** Owner or Admin. Members get no link to decide components, which only Owners and Admins can do. */
   canManage: boolean;
 }
 
@@ -87,8 +87,8 @@ const DOCUMENT_WARNING_ITEMS: Record<SampleDocumentWarningKey, CreditBatchOpenIt
 };
 
 /**
- * What a member reads instead of a link to decide lines in Removal templates;
- * null when the row is not lines to decide or the viewer can act.
+ * What a member reads instead of a link to decide components in Removal templates;
+ * null when the row is not components to decide or the viewer can act.
  */
 function memberTemplateText(
   fixTarget: BatchHealthFixTarget | null | undefined,

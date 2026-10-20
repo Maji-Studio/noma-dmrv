@@ -341,7 +341,7 @@ describe("measurement-sample bindings", () => {
 describe("component disambiguation", () => {
   it("fails closed on an unrecognised pyrolysis diesel component with the same message", () => {
     const diesel = lookupInputMapping("pyrolysis", "fuel_usage_by_volume", "volume_of_fuel")!;
-    expect(() => resolveDatapointSource(diesel, { scope: "operating", entryPolicy: "none", origin: "reviewed" } satisfies LineContract)).toThrow("This Removal template has lines to decide.");
+    expect(() => resolveDatapointSource(diesel, { scope: "operating", entryPolicy: "none", origin: "reviewed" } satisfies LineContract)).toThrow("This Removal template has components to decide.");
   });
 
   it("resolves the diesel split and the Safety margin through their named rules", () => {

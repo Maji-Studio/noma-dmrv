@@ -96,9 +96,9 @@ export function EmissionLineList({ lines, grouped, scope, actions, expanded, edi
         <EmptyState
           padding="sm"
           icon={<FunnelSimpleIcon size={32} />}
-          title={filterLabel ? `No lines in "${filterLabel}"` : "No emission lines"}
-          description={filterLabel ? "Clear the filter to see every line of this credit batch." : undefined}
-          action={filterLabel ? <Button variant="default" onClick={onClearFilter}>Show all lines</Button> : undefined}
+          title={filterLabel ? `No components in "${filterLabel}"` : "No components"}
+          description={filterLabel ? "Clear the filter to see every component of this credit batch." : undefined}
+          action={filterLabel ? <Button variant="default" onClick={onClearFilter}>Show all components</Button> : undefined}
         />
       </div>
     );
@@ -119,13 +119,13 @@ export function EmissionLineList({ lines, grouped, scope, actions, expanded, edi
   return (
     <div className="bg-[var(--paper)] [border:var(--panel-border)]">
       <div aria-hidden="true" className={cn(ROW_GRID, "hidden bg-[var(--sea)] px-16 py-10 body-small font-medium text-[var(--color-text-secondary)] md:grid")}>
-        <span>Line</span>
+        <span>Component</span>
         <span>State</span>
         <span>Sources</span>
         <span className="text-right">Total</span>
         <span />
       </div>
-      <ul aria-label="Emission lines">
+      <ul aria-label="Components">
         {grouped
           ? groupLines(lines).map((group) => (
               <Fragment key={group.key}>

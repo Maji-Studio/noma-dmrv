@@ -76,7 +76,7 @@ describe("SelectBatchesStep", () => {
         issueCount: 3,
         checks: [
           { key: "templateSet", status: "met", label: "Template set", requirementLabel: "Template set", unmetLabel: "Template cannot be used" },
-          unmet("templateLines", "17 lines to decide"),
+          unmet("templateLines", "17 components to decide"),
           unmet("production", "No production run linked"),
           unmet("carbon", "No lab chemistry results"),
         ],
@@ -96,7 +96,7 @@ describe("SelectBatchesStep", () => {
 
     // Ready batches lead, whatever order the server returns.
     expect(html.indexOf("CB-1")).toBeLessThan(html.indexOf("CB-2"));
-    expect(html).toContain("3 issues: 17 lines to decide and 2 more");
+    expect(html).toContain("3 issues: 17 components to decide and 2 more");
     // One line per batch: no full issue list, details or per-gap fix links.
     expect(html).not.toContain("No production run linked");
     expect(html).not.toContain("Detail for");
@@ -212,15 +212,15 @@ it("renders the unbindable component guidance and settings action", () => {
   for (const line of lines) expect(html).toContain(`<li>${line}</li>`);
   expect(html).not.toContain('class="whitespace-pre-line"');
   expect(html).toContain(certificationRemovalTemplatesHref("facility-1").replaceAll("&", "&amp;"));
-  expect(html).toContain("Decide lines");
+  expect(html).toContain("Decide components");
   expect(html).not.toContain("Review certification settings");
 });
 
-it("sends template gaps about lines to decide to Decide lines", () => {
+it("sends template gaps about components to decide to Decide components", () => {
   const inputs = findUnbindableTemplateInputs(unsupportedTemplate());
   const toDecide = [{ ...inputs[0], reason: "unassigned" as const }];
   expect(setupGapCopy({ kind: "template_unbindable", inputs: toDecide }).action)
-    .toEqual({ label: "Decide lines", target: "removalTemplates" });
+    .toEqual({ label: "Decide components", target: "removalTemplates" });
   expect(setupGapCopy({ kind: "template_unbindable", inputs: [{ ...inputs[0], reason: "unmapped" as const }] }).action)
     .toEqual({ label: "Open Removal templates", target: "removalTemplates" });
 });

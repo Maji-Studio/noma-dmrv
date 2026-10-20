@@ -12,7 +12,7 @@ export function deriveEmissionEntryFacts(
     const previous = previousObservations.get(entry.observationId);
     const status = previous
       ? emissionEntryCounts(previous, observation, entry.componentId)
-      : { counts: false, reason: "Enter the values again for the current template line.", canConfirm: false };
+      : { counts: false, reason: "Enter the values again for the current template component.", canConfirm: false };
     const component = observation.definition.groups
       .flatMap((group) => group.components)
       .find((component) => component.id === entry.componentId);

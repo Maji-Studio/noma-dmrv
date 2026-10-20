@@ -96,7 +96,7 @@ interface DraftBaseline {
 }
 
 const EMPTY_DRAFT: ReviewRemovalTemplateLinesFormValues = { assignments: {} };
-const INVALID_DRAFT_MESSAGE = "Some line assignments are not valid. Change them and save again.";
+const INVALID_DRAFT_MESSAGE = "Some component assignments are not valid. Change them and save again.";
 
 export function RemovalTemplateReviewCard({
   entry,
@@ -177,11 +177,11 @@ export function RemovalTemplateReviewCard({
         assignments,
       });
       resetDrafts();
-      toast.success(`Template lines saved for ${name}.`);
+      toast.success(`Template components saved for ${name}.`);
     } catch (error) {
       setError("root.serverError", {
         type: "server",
-        message: toSaveErrorMessage(error, "The template lines were not saved. Try again."),
+        message: toSaveErrorMessage(error, "The template components were not saved. Try again."),
       });
       if (getStaleVersionConflict(error)) setStale(true);
     }
@@ -207,13 +207,13 @@ export function RemovalTemplateReviewCard({
     try {
       await startSetup.mutateAsync({ facilityId, removalTemplateId: entry.templateId });
       setExpanded(true);
-      toast.success(`The lines of ${name} can now be decided.`);
+      toast.success(`The components of ${name} can now be decided.`);
     } catch (error) {
       toast.error(toSaveErrorMessage(error, "The template was not read. Try again."));
     }
   };
   const bodyId = `${headingId}-lines`;
-  // Unsaved drafts and problems that need attention never sit behind "Show lines".
+  // Unsaved drafts and problems that need attention never sit behind "Show components".
   const needsAttention = missing || notFullyRead;
   const expanded = expandedByToggle || pendingCount > 0 || needsAttention;
 
@@ -249,7 +249,7 @@ export function RemovalTemplateReviewCard({
               aria-controls={bodyId}
               onClick={() => setExpanded((open) => !open)}
             >
-              {expanded ? "Hide lines" : "Show lines"}
+              {expanded ? "Hide components" : "Show components"}
               <CaretDownIcon
                 size={14}
                 weight="bold"
@@ -296,8 +296,8 @@ export function RemovalTemplateReviewCard({
                 ) : undefined}
               >
                 {canManage
-                  ? `No facility default or credit batch uses this template yet. ${hasLinesToDecide ? "Decide its lines" : "Set it up"} so credit batches can use it.`
-                  : `No facility default or credit batch uses this template yet. Ask an Owner or Admin to ${hasLinesToDecide ? "decide its lines" : "set it up"}.`}
+                  ? `No facility default or credit batch uses this template yet. ${hasLinesToDecide ? "Decide its components" : "Set it up"} so credit batches can use it.`
+                  : `No facility default or credit batch uses this template yet. Ask an Owner or Admin to ${hasLinesToDecide ? "decide its components" : "set it up"}.`}
               </Notice>
             )}
             {notFullyRead && (
@@ -315,7 +315,7 @@ export function RemovalTemplateReviewCard({
             )}
             {!canManage && reviewCount > 0 && (
               <Notice tone="info">
-                Ask an Owner or Admin to decide the lines marked {TO_DECIDE_LABEL}.
+                Ask an Owner or Admin to decide the components marked {TO_DECIDE_LABEL}.
               </Notice>
             )}
             <DeprecationFact entry={entry} />
@@ -353,7 +353,7 @@ export function RemovalTemplateReviewCard({
                 control={control}
                 sticky={false}
                 submitVariant="default"
-                submitLabel={pendingCount > 1 ? `Save ${pendingCount} lines` : "Save line"}
+                submitLabel={pendingCount > 1 ? `Save ${pendingCount} components` : "Save component"}
                 submittingLabel="Saving…"
                 isSubmitting={isSubmitting || review.isPending}
                 submitDisabled={pendingCount === 0 || notFullyRead || !baseline || stale}

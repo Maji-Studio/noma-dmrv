@@ -53,21 +53,21 @@ _Avoid_: sensor dump, log file, reactor-day file, channel mapping.
 
 **Emissions entry**:
 An operating-emissions measurement recorded on one credit batch and bound to a
-Removal-template line. Its typed values and evidence supplement the line's
-**automatic datapoints** where the line allows it.
+Removal-template **component**. Its typed values and evidence supplement the component's
+**automatic datapoints** where the component allows it.
 _On screen_: manual entry; the screen calls the part that comes from forms and
 routes "From records".
 _Avoid_: activity (reserved for the history log).
 
 **Recorded zero**:
-A confirmation that one template line had no emissions for a specific Removal.
+A confirmation that one component had no emissions for a specific Removal.
 It is an emissions entry owned by that Removal, contributes 0, and needs no file.
 It is never pooled into another Removal. Distinct from the sandbox zero stub,
 which is a temporary compilation exception and is not an operator confirmation.
 
-**Line comment**:
-One editable comment on a credit batch's Removal-template line, identified by
-component ID. It stays in noma and never changes line state or blocks a Removal.
+**Component comment**:
+One editable comment on a credit batch's Removal-template component, identified by
+component ID. It stays in noma and never changes the component's state or blocks a Removal.
 Earlier wording stays in the activity log. Each emissions entry keeps its own note.
 
 **Emission estimate**:
@@ -528,36 +528,39 @@ against a production registry project.
 
 **Removal template**:
 The Isometric template (credit type REMOVAL) a **Removal** is built from. It
-lists the template lines Isometric expects, in groups. Each facility has one
+lists the components Isometric expects, in groups. Each facility has one
 default Removal template; a new **credit batch** starts on it, and an Owner or
 Admin can switch a batch to another. A template is set up in Settings, Removal
-templates, where its lines are decided.
+templates, where its components are decided.
 _Avoid_: GHG entry template (the registry's API name), template pin, active
 template.
 
-**Template line**:
-One component of a **Removal template**, named as Isometric names it. Its
-decision covers its scope, its **automatic datapoints** and whether it takes
-**emissions entries**. A template's line decisions are made once, and every
-facility and credit batch using that template follows them. noma proposes a
-decision where it can; an Owner or Admin decides.
-_Avoid_: component (the registry's API name), template input.
+**Component**:
+One entry of a **Removal template**, named as Isometric names it: Isometric
+builds each component from a component blueprint, and groups components into
+component groups. Its decision covers its scope, its **automatic datapoints**
+and whether it takes **emissions entries**. A template's component decisions
+are made once, and every facility and credit batch using that template follows
+them. noma proposes a decision where it can; an Owner or Admin decides. Say
+"template component" only where "component" alone is ambiguous. The emissions
+pages use the same word.
+_Avoid_: line, emission line, template line, template input.
 
-**Lines to decide**:
-The template lines without a saved decision, always shown with their count
-("3 lines to decide"). A Removal template with lines to decide blocks the
-Removals of every credit batch on it. The link to settle them always reads
-"Decide lines" and opens Removal templates; a decided line noma cannot fill
-links "Open Removal templates" instead. In the New Removal checks this is
-the **Lines decided** check; the batch's own template choice is the **Template
-set** check.
-_Avoid_: needs review, unresolved, template review.
+**Components to decide**:
+The components without a saved decision, always shown with their count
+("3 components to decide"). A Removal template with components to decide
+blocks the Removals of every credit batch on it. The link to settle them always
+reads "Decide components" and opens Removal templates; a decided component noma
+cannot fill links "Open Removal templates" instead. In the New Removal checks
+this is the **Components decided** check; the batch's own template choice is
+the **Template set** check.
+_Avoid_: lines to decide, needs review, unresolved, template review.
 
 **Automatic datapoints**:
-The noma records that fill a template line by themselves, for example
+The noma records that fill a **component** by themselves, for example
 feedstock transport legs or generator diesel from production runs. Isometric
-calls each submitted value a Datapoint, and one line can take several (a
-transport line takes distance and mass).
+calls each submitted value a Datapoint, and one component can take several (a
+transport component takes distance and mass).
 _Avoid_: automatic figure, records source.
 
 ### Provenance & lineage

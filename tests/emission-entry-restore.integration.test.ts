@@ -117,7 +117,7 @@ it("serializes two restores so a single line cannot acquire two values", async (
   const second = await deleted("meter");
   const results = await Promise.allSettled([restoreEmissionEntry(ctx, first), restoreEmissionEntry(ctx, second)]);
   expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
-  expect(results.find(result => result.status === "rejected")).toMatchObject({ reason: { message: "This line already has an entry. Edit that entry instead." } });
+  expect(results.find(result => result.status === "rejected")).toMatchObject({ reason: { message: "This component already has an entry. Edit that entry instead." } });
 });
 
 it.each(["reserved", "sent", "owned-zero"] as const)("refuses a deleted entry that is %s without changing its tombstone", async state => {

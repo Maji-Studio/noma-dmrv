@@ -58,7 +58,7 @@ it.each(["stale entry", "unit mismatch"] as const)("counts both undecided lines 
   expect(removal.undecidedLineIds).toBe(resolved.undecidedLineIds);
   for (const checks of [deriveBatchHealth(batch).checks, buildRemovalRequirementsChecklist(removal)]) {
     expect(checks.find((check) => check.key === "templateLines")).toMatchObject({
-      status: "unmet", unmetLabel: "2 lines to decide",
+      status: "unmet", unmetLabel: "2 components to decide",
     });
   }
   expect(deriveRemovalReadiness(removal).state).toBe("blocked");

@@ -46,7 +46,7 @@ it.each([false, true])("only reopens the settled sample line for an additive ass
     expect(reviewed.lineSources[componentId].automaticSource).toBeUndefined();
     expect(set).toHaveBeenCalledOnce();
   } else {
-    await expect(review).rejects.toThrow("This template line is already decided.");
+    await expect(review).rejects.toThrow("This template component is already decided.");
     expect(set).not.toHaveBeenCalled();
   }
 });

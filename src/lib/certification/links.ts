@@ -28,8 +28,8 @@ export const CERTIFICATION_SETTINGS_CERTIFIER_SECTION = "certifier";
 export const CERTIFICATION_SETTINGS_LEGACY_CONNECTION_SECTION = "connection";
 
 export const OPEN_REMOVAL_TEMPLATES_LINK_LABEL = "Open Removal templates";
-/** The link text for template lines without a saved decision. */
-export const DECIDE_LINES_LINK_LABEL = "Decide lines";
+/** The link text for template components without a saved decision. */
+export const DECIDE_LINES_LINK_LABEL = "Decide components";
 
 /** Narrows the Removal templates pane to one template, even one not yet in use. */
 export const CERTIFICATION_SETTINGS_TEMPLATE_PARAM = "template";
@@ -61,7 +61,7 @@ export function certificationEmissionEstimatesHref(facilityId: string): string {
 }
 
 /**
- * The Removal template line review, where lines to decide are settled.
+ * The Removal template component review, where components to decide are settled.
  * With `templateId` the pane also shows that template's lines when no facility
  * default or credit batch uses it yet.
  */

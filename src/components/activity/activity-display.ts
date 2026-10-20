@@ -42,7 +42,7 @@ export const ACTIVITY_KIND_LABELS: Record<ActivityAction, string> = {
 /** Glossary names (GLOSSARY.md): Sample, Removal and GHG Statement keep their capitals. */
 export const ACTIVITY_RECORD_TYPE_LABELS: Record<ActivityEntityType, string> = {
   emission_entry: "Emissions entry",
-  emission_line_comment: "Line comment",
+  emission_line_comment: "Component comment",
   credit_batch: "Credit batch",
   production_run: "Production run",
   feedstock: "Feedstock",

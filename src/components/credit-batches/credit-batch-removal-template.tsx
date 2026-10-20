@@ -8,8 +8,8 @@
  * the shared focus target scrolls to it. The block says why the operator landed
  * here once: its own Notice when the pin is missing, else a neutral line.
  *
- * While the pinned template has lines to decide, every role sees it here with
- * the count the Lines decided check uses (#1201); Owners and Admins also get
+ * While the pinned template has components to decide, every role sees it here with
+ * the count the Components decided check uses (#1201); Owners and Admins also get
  * the link to decide them.
  */
 "use client";
@@ -42,7 +42,7 @@ export interface CreditBatchRemovalTemplateProps {
   /** The deep-link focus target, when this sheet was opened by one. */
   activeFocusTarget?: string | null;
   /**
-   * The batch's Lines decided count (`batchLinesToDecide`), from the health the
+   * The batch's Components decided count (`batchLinesToDecide`), from the health the
    * page or the list already loads; 0 when none or not loaded yet.
    */
   linesToDecide: number;
@@ -51,8 +51,8 @@ export interface CreditBatchRemovalTemplateProps {
 }
 
 /**
- * Why a credit batch with lines to decide can't go into a Removal, and who
- * decides them. Owners and Admins get the Decide lines link instead of the
+ * Why a credit batch with components to decide can't go into a Removal, and who
+ * decides them. Owners and Admins get the Decide components link instead of the
  * second sentence.
  */
 export function linesToDecideNoticeText(count: number, canManage: boolean, inRemoval = false): string {

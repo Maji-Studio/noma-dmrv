@@ -87,7 +87,7 @@ export interface CreditBatchHealthSummary {
   state: BatchHealthState;
   /** Count of unmet (blocking) checks; 0 when ready. */
   issueCount: number;
-  /** Template lines without a saved decision, from the Lines decided check (`batchLinesToDecide`); 0 when none. */
+  /** Template components without a saved decision, from the Components decided check (`batchLinesToDecide`); 0 when none. */
   linesToDecide: number;
   /** Non-blocking Check items, using the batch page's open-items builder. */
   checkCount: number;

@@ -13,11 +13,11 @@ describe("removalFindingFixLink", () => {
     expect(removalFindingFixLink({ fixTarget: "feedstockTypes" }, "fac-1")?.href).toContain("fac-1");
   });
 
-  it("never says Decide lines for a template that was not read in full", () => {
+  it("never says Decide components for a template that was not read in full", () => {
     const blocker = templateRemovalBlocker("templateNotFullyRead");
     expect(blocker.fixTarget).toBe("templateLines");
     expect(removalFindingFixLink(blocker, "fac-1", ["b1"])?.label).toBe("Open Removal templates");
-    expect(removalFindingFixLink(templateRemovalBlocker("templateLinesNeedReview"), "fac-1")?.label).toBe("Decide lines");
+    expect(removalFindingFixLink(templateRemovalBlocker("templateLinesNeedReview"), "fac-1")?.label).toBe("Decide components");
     expect(removalFindingFixLink({ fixTarget: "templateReplacement" }, "fac-1", ["b1"])?.label).toBe("Switch template");
   });
 

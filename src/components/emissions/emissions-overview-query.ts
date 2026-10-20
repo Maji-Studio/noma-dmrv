@@ -21,7 +21,7 @@ export const EMISSIONS_PATH = "/emissions";
 export const BATCH_STATUS_FILTERS = ["open", "done", "files", "review"] as const;
 export type BatchStatusFilter = (typeof BATCH_STATUS_FILTERS)[number];
 export const BATCH_STATUS_LABELS: Record<BatchStatusFilter, string> = {
-  open: "Lines open",
+  open: "Components open",
   done: "Done",
   files: "File missing",
   review: EMISSION_LINE_STATE_LABELS.needsReview,
@@ -47,7 +47,7 @@ export const BATCH_SORTS = ["period", "open", "code"] as const;
 export type BatchSort = (typeof BATCH_SORTS)[number];
 export const BATCH_SORT_LABELS: Record<BatchSort, string> = {
   period: "Period",
-  open: "Open lines",
+  open: "Open components",
   code: "Credit batch",
 };
 export const SORT_DIRS = ["asc", "desc"] as const;

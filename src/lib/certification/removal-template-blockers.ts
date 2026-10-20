@@ -1,12 +1,12 @@
 export const REMOVAL_TEMPLATE_BLOCKERS = {
-  forbiddenLine: "This line belongs at the project level in Isometric.",
+  forbiddenLine: "This component belongs at the project level in Isometric.",
   notRemovalTemplate: "This template is not a Removal template. Choose a Removal template for this credit batch.",
   unpinnedTemplate: "Choose a Removal template for this credit batch.",
   mixedTemplatePins: "These credit batches use different Removal templates.",
   templateNotFound: "Template no longer exists in Isometric.",
   templateNotFullyRead: "Template not fully read. Try again.",
   missingFixedDatapoint: "Set each value in the Isometric template editor before submitting.",
-  templateLinesNeedReview: "This Removal template has lines to decide. Decide them in Removal templates.",
+  templateLinesNeedReview: "This Removal template has components to decide. Decide them in Removal templates.",
 } as const;
 /**
  * Landing line for a deep link to a credit batch's template block when the
@@ -28,7 +28,7 @@ export type TemplateRoutedBlockerCode = RemovalTemplateBlockerCode | TemplateLin
 /**
  * Where an operator settles a template blocker. The one routing table:
  * - `creditBatchTemplate`: the credit batch's own template pin (Switch template);
- * - `templateLineReview`: lines without a decision (Decide lines);
+ * - `templateLineReview`: lines without a decision (Decide components);
  * - `templateLines`: decided lines or a read problem (Open Removal templates);
  * - `templateReplacement`: a decided line only another template can fill
  *   (Switch template, else Open Removal templates). Set as data by the line

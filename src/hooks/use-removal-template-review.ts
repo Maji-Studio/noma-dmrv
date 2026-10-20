@@ -37,7 +37,7 @@ export function useStartRemovalTemplateSetup() {
 }
 /**
  * `fresh` reads again whenever the window regains focus: the batch dialog
- * sends "Decide lines" to a new tab and must see those decisions on return.
+ * sends "Decide components" to a new tab and must see those decisions on return.
  */
 export function useRemovalTemplateReview(facilityId: string, enabled = true, { fresh = false } = {}) {
   return useQuery({

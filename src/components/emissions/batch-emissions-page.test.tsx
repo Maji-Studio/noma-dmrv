@@ -47,7 +47,7 @@ vi.mock("./emission-entry-form-panel", () => ({ EmissionEntryFormPanel: () => nu
 // The list itself is covered by emission-line-list.test.tsx; here each row offers a Delete and shows its Undo bar.
 vi.mock("./emission-line-list", () => ({
   EmissionLineList: ({ lines, actions, undo }: { lines: EmissionLine[]; actions: LineActions; undo: RowUndo | null }) => (
-    <ul aria-label="Emission lines">
+    <ul aria-label="Components">
       {lines.map((line) => (
         <li key={line.componentId} aria-label={line.displayName}>
           <button type="button" onClick={() => actions.deleteEntry(line, line.entries[0])}>Delete</button>

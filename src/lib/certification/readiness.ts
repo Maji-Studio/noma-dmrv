@@ -64,7 +64,7 @@ export interface RemovalReadinessFacts {
   /** The member batches' pinned Removal template resolved on Isometric. */
   hasRemovalTemplate: boolean;
   templateBlockers?: RemovalTemplateBlocker[];
-  /** Current template lines without a saved, unambiguous decision. */
+  /** Current template components without a saved, unambiguous decision. */
   undecidedLineIds?: readonly string[];
   emissionLineBlockers?: RemovalBlocker[];
   /** Template blueprint keys with no matching component blueprint. */
@@ -558,7 +558,7 @@ function templateRequirementChecks(facts: RemovalReadinessFacts): RemovalRequire
   const pinFacts = { ...facts, templateBlockers: pinBlockers, emissionLineBlockers: [], unbindableTemplateInputs: [] };
   const templateSet = templateResolvesCleanly(pinFacts);
   // Entry problems (a missing file, an entry to check) are fixed on Emissions,
-  // so they get their own check rather than reading as a line to decide.
+  // so they get their own check rather than reading as a component to decide.
   const entryBlockers = (facts.emissionLineBlockers ?? []).filter((blocker) => blocker.fixTarget === "emissions");
   const emissionBlockers = (facts.emissionLineBlockers ?? []).filter((blocker) => blocker.fixTarget !== "emissions");
   const linesToDecide = new Set(facts.undecidedLineIds).size;

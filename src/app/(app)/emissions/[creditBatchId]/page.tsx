@@ -1,5 +1,5 @@
 /**
- * Emissions of one credit batch: its Removal template lines, where each
+ * Emissions of one credit batch: its Removal template components, where each
  * figure comes from, and the manual entries (epic #1058). Protected by the
  * requireAuth guard in the (app) layout; the batch is read through the
  * facility-scoped lines action, which refuses another organization's batch.

@@ -27,7 +27,7 @@ export function NoBatchesEmpty() {
       padding="md"
       icon={<StackIcon size={40} />}
       title="No credit batches yet"
-      description="Each credit batch lists the lines its Removal template asks for. Create one to start recording emissions."
+      description="Each credit batch lists the components its Removal template asks for. Create one to start recording emissions."
       action={
         <Link href={NEW_CREDIT_BATCH_HREF} className={buttonVariants({ variant: "default" })}>
           New credit batch

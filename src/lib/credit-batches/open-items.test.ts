@@ -111,7 +111,7 @@ describe("buildCreditBatchOpenItems", () => {
             key: "templateSet",
             label: "Template",
             requirementLabel: "Template resolved",
-            unmetLabel: "Template lines not ready",
+            unmetLabel: "Template components not ready",
             status: "unmet",
           },
           {
@@ -140,7 +140,7 @@ describe("buildCreditBatchOpenItems", () => {
     expect(result.blocking.map(row => [row.title, row.target])).toEqual([
       ["No Sample data", { tab: "samples" }],
       ["Emissions not recorded", { tab: "emissions" }],
-      ["Template lines not ready", { href: "/certification/settings?section=removal-templates&facility=facility" }],
+      ["Template components not ready", { href: "/certification/settings?section=removal-templates&facility=facility" }],
       ["Distances not recorded", { href: "/customers?location=location" }],
     ]);
   });
@@ -201,8 +201,8 @@ describe("buildCreditBatchOpenItems", () => {
       : { href: batchHealthFixLinkFor({ key: "emissions", fixTarget }, "facility", "batch").href });
   });
 
-  it("gives a member no Decide lines link, only who decides the lines", () => {
-    const check = { key: "templateLines" as const, label: "Lines decided", requirementLabel: "Lines decided", unmetLabel: "5 lines to decide",
+  it("gives a member no Decide components link, only who decides the components", () => {
+    const check = { key: "templateLines" as const, label: "Components decided", requirementLabel: "Components decided", unmetLabel: "5 components to decide",
       status: "unmet" as const, fixTarget: "templateLineReview" as const, linesToDecide: 5, detail: "Decide them in Removal templates." };
     const line = {
       componentId: "diesel", displayName: "Diesel", state: "needsReview" as const, groupKey: "production", groupName: "Production", groupPosition: 0, position: 0,
@@ -214,7 +214,7 @@ describe("buildCreditBatchOpenItems", () => {
 
     const member = buildCreditBatchOpenItems({ ...input, canManage: false });
     expect(member.blocking[0]).toMatchObject({
-      title: "5 lines to decide", detail: "An Owner or Admin decides them in Removal templates.", target: null,
+      title: "5 components to decide", detail: "An Owner or Admin decides them in Removal templates.", target: null,
     });
     expect(member.check[0]).toMatchObject({ detail: "An Owner or Admin decides it in Removal templates.", target: null });
 
@@ -224,8 +224,8 @@ describe("buildCreditBatchOpenItems", () => {
     expect(owner.check[0].target).toEqual({ href: batchHealthFixLinkFor({ key: "emissions", fixTarget: "templateLineReview" }, "facility", "batch").href });
   });
 
-  it.each([false, true])("keeps the Removal templates link on a template line problem when canManage is %s", canManage => {
-    const check = { key: "templateLines" as const, label: "Lines decided", requirementLabel: "Lines decided", unmetLabel: "Template not fully read",
+  it.each([false, true])("keeps the Removal templates link on a template component problem when canManage is %s", canManage => {
+    const check = { key: "templateLines" as const, label: "Components decided", requirementLabel: "Components decided", unmetLabel: "Template not fully read",
       status: "unmet" as const, fixTarget: "templateLines" as const, detail: "Some inputs could not be read from Isometric." };
     const line = {
       componentId: "diesel", displayName: "Diesel", state: "needsReview" as const, groupKey: "production", groupName: "Production", groupPosition: 0, position: 0,
