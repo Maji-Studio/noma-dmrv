@@ -1,5 +1,6 @@
 "use client";
 
+import { useCreateIntentKey } from "./use-create-intent-key";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createApiKeyFn, listApiKeysFn, revokeApiKeyFn, updateApiKeyFn } from "@/fn/api-keys";
 import { getStaleVersionConflict, throwActionError } from "@/lib/stale-version";
@@ -27,16 +28,19 @@ export function useApiKeys(organizationId: string) {
 /** Plaintext goes directly to local UI state, never into mutation data. */
 export function useCreateApiKey(organizationId: string, onCreated: (key: CreatedApiKey) => void) {
   const client = useQueryClient();
-  return useMutation({
+  const intent = useCreateIntentKey();
+  const mutation = useMutation({
     mutationFn: async (input: CreateApiKeyInput) => {
-      const result = await createApiKeyFn(input);
+      const result = await createApiKeyFn(input, { intentKey: intent.current() });
       if (!result.success) throwActionError(result);
+      intent.rotate();
       onCreated(result.data);
       return { id: result.data.id };
     },
     onSuccess: () => { void client.invalidateQueries({ queryKey: apiKeyKeys.list(organizationId) }); },
     retry: false,
   });
+  return { ...mutation, startDraft: intent.rotate };
 }
 
 export function useUpdateApiKey(organizationId: string) {
