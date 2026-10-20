@@ -1,11 +1,12 @@
 ---
 name: codex-computer-use
-description: Ask Codex CLI (gpt-6.1-sol, high reasoning) to run local app verification that needs computer use — browser automation, screenshots, app launching, or independent runtime inspection. This is the DEFAULT tool for verifying UI behavior in this project — use it to test a flow, verify UI behavior, inspect the running app, capture screenshots, or confirm implemented behavior. Fall back to the claude-in-chrome MCP tools if codex fails or the task needs the user's own logged-in browser session.
+description: Ask Codex CLI (gpt-6.1-sol, high reasoning) to run local app verification that needs computer use (browser automation, screenshots, app launching, independent runtime inspection). Use in interactive sessions, or when the permission mode allows `-s danger-full-access`. In auto mode verify with a Playwright spec instead. Fall back to the claude-in-chrome MCP tools if codex fails or the task needs the user's own logged-in browser session.
 ---
 
 Delegate **local app verification** (browser automation, screenshots, app launch, runtime
-inspection) to the Codex CLI (gpt-6.1-sol, high reasoning) with computer use. This is the **default** way to
-verify UI behavior in this project; **claude-in-chrome is the fallback**. Codex output is
+inspection) to the Codex CLI (gpt-6.1-sol, high reasoning) with computer use. This is the
+way to verify UI behavior when computer use is available and allowed; **claude-in-chrome is the
+fallback**. In auto mode the Playwright path is the default (next section). Codex output is
 **evidence, not authority** — read the report and screenshots and judge them yourself.
 
 Do **not** use this for ordinary code reading, typechecking, linting, or tests Claude can run
@@ -13,13 +14,22 @@ directly. Launching apps/browsers to verify requested work is fine without askin
 only if the run could disrupt the user's environment (closing apps, changing system settings,
 or acting on real accounts/data).
 
+## Safety preamble
+
+Paste this text verbatim as the first lines of every Codex prompt this skill writes, before the task:
+
+> Safety rules. Do not read, list or cat any file outside this repository (no ~/.npmrc, ~/.ssh, ~/.config, other home dotfiles). Do not run pnpm db:reset, db:push, db:migrate, drizzle-kit push, psql or any SQL against a database. Do not run pkill, killall or kill on processes you did not start. Do not edit package.json dependencies or the lockfile unless the task says so. Never loosen, skip or delete a test, lint rule or guard to make something pass; stop and report instead.
+
+Launch a backgrounded `codex exec` with the prompt file as stdin (`- < prompt.md`); without it the process waits on "Reading additional input from stdin" and hangs.
+
 ## Shared invocation rules
 
-- **Interactive sessions only.** In auto/unattended mode the permission classifier denies
+- **Auto mode uses Playwright.** In auto/unattended mode the permission classifier often denies
   `-s danger-full-access` and every credential-materialization workaround (verified
-  2026-07-09) — don't retry variants. Verify via a Playwright e2e spec (HTTP-auth fixtures,
-  `docs/testing.md`) instead, or defer this skill to an interactive session where the user
-  approves the prompt. Read-only codex runs (`-s read-only`) are unaffected.
+  2026-07-09, mixed on 2026-10-17). Verify with a throwaway Playwright spec on the project's
+  authenticated-page fixture (see the project's testing docs and its UI verification notes) and
+  read the PNGs. Try the codex path at most once per session; on a denial, switch to Playwright
+  without retrying variants. Read-only codex runs (`-s read-only`) are unaffected.
 - Locate the binary with the PATH-then-bundle fallback and always call it via `"$CODEX"`:
   ```bash
   CODEX="$(command -v codex || echo "$HOME/Library/pnpm/bin/codex")"

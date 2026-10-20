@@ -14,6 +14,14 @@ Never review a diff with the model that wrote it: if gpt-6-astra implemented the
 with gpt-6.1-sol even when the escalation above would pick gpt-6-astra, and vice versa. Model
 assignments in the project's CLAUDE.md take precedence over these defaults.
 
+## Safety preamble
+
+Paste this text verbatim as the first lines of every Codex prompt this skill writes, before the task:
+
+> Safety rules. Do not read, list or cat any file outside this repository (no ~/.npmrc, ~/.ssh, ~/.config, other home dotfiles). Do not run pnpm db:reset, db:push, db:migrate, drizzle-kit push, psql or any SQL against a database. Do not run pkill, killall or kill on processes you did not start. Do not edit package.json dependencies or the lockfile unless the task says so. Never loosen, skip or delete a test, lint rule or guard to make something pass; stop and report instead.
+
+Launch a backgrounded `codex exec` with the prompt file as stdin (`- < prompt.md`); without it the process waits on "Reading additional input from stdin" and hangs.
+
 ## Shared invocation rules
 
 - Locate the binary with the PATH-then-pnpm fallback and always call it via `"$CODEX"`:

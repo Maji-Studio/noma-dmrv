@@ -1,0 +1,89 @@
+<!doctype html>
+<title>Merge page</title>
+<!--
+Merge page template (pr skill). Publish with capabilities {db:{}, user:{}}.
+Edit only the PRS array below, then republish to the SAME url. One card per PR.
+before/after: short text, or an <img> data URI (artifact CSP blocks GitHub images).
+Saved choices live in db collection "answers", doc "merge-<pr>" (read with ArtifactData).
+-->
+<style>
+:root{--bg:#fafaf7;--card:#fff;--ink:#1c1c1a;--mute:#6b6b66;--line:#e2e2dc;--ok:#1a7f4b;--bad:#b3261e;--wait:#8a6100;--accent:#1c1c1a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161614;--card:#1f1f1c;--ink:#f1f1ec;--mute:#a1a19a;--line:#33332f;--ok:#4cc38a;--bad:#ff8a80;--wait:#e6b450;--accent:#f1f1ec}}
+:root[data-theme="dark"]{--bg:#161614;--card:#1f1f1c;--ink:#f1f1ec;--mute:#a1a19a;--line:#33332f;--ok:#4cc38a;--bad:#ff8a80;--wait:#e6b450;--accent:#f1f1ec}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,sans-serif}
+main{max-width:720px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:22px;margin:0 0 4px}.sub{color:var(--mute);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.card h2{font-size:17px;margin:0 0 8px}.card h2 a{color:inherit}
+.facts{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.chip{font-size:13px;border:1px solid var(--line);border-radius:99px;padding:2px 10px}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.wait{color:var(--wait)}
+.ba{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:stretch;margin:0 0 12px}
+.blk{border:1px solid var(--line);border-radius:8px;padding:10px;font-size:14px;overflow:hidden}
+.blk small{display:block;color:var(--mute);margin-bottom:4px}.blk img{max-width:100%;display:block}
+.arrow{align-self:center;font-size:22px;color:var(--mute)}
+@media (max-width:520px){.ba{grid-template-columns:1fr}.arrow{transform:rotate(90deg);justify-self:center}}
+fieldset{border:0;padding:0;margin:0 0 10px}
+label{display:block;padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;cursor:pointer}
+label:has(input:checked){border-color:var(--accent)}
+textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--bg);color:var(--ink);font:inherit}
+button{font:inherit;padding:8px 16px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--bg);cursor:pointer}
+.saved{color:var(--ok);margin-left:8px;font-size:14px}
+</style>
+<main>
+<h1>Merge page</h1>
+<p class="sub" id="sub"></p>
+<div id="list"></div>
+</main>
+<script>
+// ---- EDIT THIS BLOCK ONLY ------------------------------------------------
+const UPDATED = "YYYY-MM-DD HH:MM";
+const PRS = [
+  {
+    num: 0, title: "type: imperative title", url: "https://github.com/Maji-Studio/noma-dmrv/pull/0",
+    before: "what it was (text or <img src='data:...'>)", after: "what it is now",
+    review: "suite run 1 on head abc1234, 0 P1 open", reviewState: "ok",   // ok | wait | bad
+    ci: "green", ciState: "ok",                                          // ok | wait | bad
+    action: "Merge into staging, delete the branch, tear down the worktree",
+    branch: "chore/example", worktree: "example"
+  }
+];
+// ---------------------------------------------------------------------------
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const SAFE_IMG = /^<img src='data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+\/=]+'( alt='[^'<>]*')?>$/;
+const block = (label, v) => `<div class="blk"><small>${label}</small>${SAFE_IMG.test(v) ? v : esc(v)}</div>`;
+document.getElementById("sub").textContent = `Updated ${UPDATED}. Merge is preselected; Save records your OK.`;
+document.getElementById("list").innerHTML = PRS.map(p => `
+<section class="card" data-pr="${p.num}">
+  <h2><a href="${esc(p.url)}">#${p.num}</a> ${esc(p.title)}</h2>
+  <div class="facts">
+    <span class="chip ${p.reviewState}">Review: ${esc(p.review)}</span>
+    <span class="chip ${p.ciState}">CI: ${esc(p.ci)}</span>
+  </div>
+  <div class="ba">${block("Before", p.before)}<span class="arrow" aria-hidden="true">&rarr;</span>${block("After", p.after)}</div>
+  <fieldset>
+    <label><input type="radio" name="c${p.num}" value="merge" checked> ${esc(p.action)} (<code>${esc(p.branch)}</code>)</label>
+    <label><input type="radio" name="c${p.num}" value="hold"> Hold, do not merge yet</label>
+  </fieldset>
+  <textarea rows="2" placeholder="Optional note"></textarea>
+  <p><button type="button">Save</button><span class="saved" hidden>Saved</span></p>
+</section>`).join("");
+(async () => {
+  const db = await claude.use("db");
+  if (!db) return;
+  document.querySelectorAll(".card").forEach(card => {
+    const ref = db.doc("answers/merge-" + card.dataset.pr);
+    ref.get().then(d => {
+      const v = d && (d.data ? d.data() : d);
+      if (!v) return;
+      const r = card.querySelector(`input[value="${v.choice}"]`); if (r) r.checked = true;
+      card.querySelector("textarea").value = v.note || "";
+    }).catch(() => {});
+    card.querySelector("button").onclick = async () => {
+      const choice = card.querySelector("input:checked").value;
+      await ref.set({choice, note: card.querySelector("textarea").value, savedAt: Date.now()});
+      card.querySelector(".saved").hidden = false;
+    };
+  });
+})();
+</script>
