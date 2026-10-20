@@ -93,6 +93,7 @@ beforeAll(async () => {
         endTime: new Date(`2026-07-0${n + 1}T16:00:00Z`),
         feedstockMassDryKg: 1_000 * (n + 1),
         biocharDryMassKg: 200 * (n + 1),
+        biocharOutputKg: 200 * (n + 1),
       })),
     )
     .returning({ id: productionRuns.id });

@@ -389,6 +389,7 @@ describe("certification lineage guards", () => {
         .returning({ id: storageLocations.id });
 
       const [sourceBin] = await db.insert(storageLocations).values({ organizationId: TEST_ORG_ID, facilityId: fixture.facilityId, type: "biochar_bin", code: `E2E-SOURCE-${tag}`, name: `E2E Certified remaining stock ${tag}` }).returning();
+      const [originalRun] = await db.select({ binId: productionRuns.biocharStorageLocationId, outputKg: productionRuns.biocharOutputKg, dryKg: productionRuns.biocharDryMassKg }).from(productionRuns).where(eq(productionRuns.id, fixture.productionRunId));
       await db.update(productionRuns).set({ biocharStorageLocationId: sourceBin.id, biocharDryMassKg: 380, biocharOutputKg: 400 }).where(eq(productionRuns.id, fixture.productionRunId));
       await db.insert(biocharProductSourceAllocations).values({ organizationId: TEST_ORG_ID, biocharProductId: fixture.productId, productionRunId: fixture.productionRunId, sourceStorageLocationId: sourceBin.id, allocatedDryMassKg: 285, allocatedWetMassKg: 300 });
       await ensureOutputFixtureActor(makeTestOrgContext(TEST_USER_ID));
@@ -413,7 +414,7 @@ describe("certification lineage guards", () => {
       } finally {
         await deleteOutputProductFixtures(db, eq(biocharProducts.code, `BP-LOCKED-${tag}`));
         await db.delete(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.biocharProductId, fixture.productId));
-        await db.update(productionRuns).set({ biocharStorageLocationId: null }).where(eq(productionRuns.id, fixture.productionRunId));
+        await db.update(productionRuns).set({ biocharStorageLocationId: originalRun.binId, biocharOutputKg: originalRun.outputKg, biocharDryMassKg: originalRun.dryKg }).where(eq(productionRuns.id, fixture.productionRunId));
         await db.delete(storageLocations).where(eq(storageLocations.id, sourceBin.id));
         await db
           .delete(storageLocations)

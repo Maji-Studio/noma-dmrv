@@ -66,7 +66,7 @@ export const productionRuns = pgTable(
 
     // --- Biochar Output ---
     biocharOutputKg: massKg('biochar_output_kg'), // Wet mass (recorded value)
-    biocharMoisturePercent: percent('biochar_moisture_percent'), // Typically 1-2%, default 0 if unknown
+    biocharMoisturePercent: percent('biochar_moisture_percent'), // Required once the run is complete
     biocharDryMassKg: massKg('biochar_dry_mass_kg'), // Derived: wetMass * (1 - moisture/100)
     biocharStorageLocationId: uuid('biochar_storage_location_id').references(
       () => storageLocations.id
@@ -132,6 +132,11 @@ export const productionRuns = pgTable(
     check(
       'production_runs_biochar_dry_lte_wet',
       sql`${table.biocharOutputKg} is null or ${table.biocharDryMassKg} is null or ${table.biocharDryMassKg} <= ${table.biocharOutputKg}`
+    ),
+    check(
+      'production_runs_complete_has_output',
+      // `is not null` on the output too: a CHECK passes when it evaluates to null, so `null > 0` alone would let it through.
+      sql`${table.status} <> 'complete' or (${table.biocharMoisturePercent} is not null and ${table.biocharOutputKg} is not null and ${table.biocharOutputKg} > 0 and ${table.biocharStorageLocationId} is not null)`
     ),
   ]
 );

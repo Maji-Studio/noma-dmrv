@@ -46,6 +46,8 @@ describe("production run facility-local display dates", () => {
       endTime: new Date("2025-09-30T22:15:00.000Z"),
       feedstockMassDryKg: FEEDSTOCK_DRY_KG,
       biocharDryMassKg: BIOCHAR_DRY_KG,
+      // Fixture runs have 0% moisture, so wet output equals dry mass.
+      biocharOutputKg: BIOCHAR_DRY_KG,
     }).where(and(eq(productionRuns.id, run.id), eq(productionRuns.organizationId, ctx.organizationId)));
 
     await f.feedstock(facility.id, `DELIVERED-${range}`, "2025-10-01", FEEDSTOCK_DRY_KG);
@@ -79,6 +81,8 @@ describe("production run facility-local display dates", () => {
     await db.update(productionRuns).set({
       feedstockMassDryKg: FEEDSTOCK_DRY_KG,
       biocharDryMassKg: BIOCHAR_DRY_KG,
+      // Fixture runs have 0% moisture, so wet output equals dry mass.
+      biocharOutputKg: BIOCHAR_DRY_KG,
     }).where(and(
       eq(productionRuns.organizationId, ctx.organizationId),
       inArray(productionRuns.id, runIds),

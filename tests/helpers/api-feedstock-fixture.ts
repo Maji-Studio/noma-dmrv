@@ -18,6 +18,7 @@ import { feedstockRepresentationSchema, type FeedstockRepresentation } from "@/l
 import { addFixtureReactor, createIntakeFixture, removeIntakeFixture, type IntakeFixture } from "./operation-fixture";
 
 export const PRODUCTION_RUN_FIXTURE_DRAW_WET_KG = 1200;
+const PRODUCTION_RUN_FIXTURE_OUTPUT_WET_KG = 100;
 const PRODUCTION_RUN_FIXTURE_MOISTURE_PERCENT = 32.5;
 const PRODUCTION_RUN_FIXTURE_START_TIME = "2026-10-06T10:00:00Z";
 
@@ -172,6 +173,7 @@ export async function seedFeedstockDraw(
     organizationId: org, facilityId: fixture.facilityId, reactorId: reactor.id,
     code: "PR-FEEDSTOCK-SUITE", status: "complete",
     biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
+    biocharOutputKg: PRODUCTION_RUN_FIXTURE_OUTPUT_WET_KG,
     startTime: new Date("2026-10-06T10:00:00Z"), endTime: new Date("2026-10-06T11:00:00Z"),
     feedstockWetMassKg: wetMassKg,
   }).returning();

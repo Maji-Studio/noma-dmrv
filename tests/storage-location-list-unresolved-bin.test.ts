@@ -82,6 +82,7 @@ beforeAll(async () => {
         endTime: new Date("2026-06-01T12:00:00Z"),
         biocharStorageLocationId: bin.id,
         biocharMoisturePercent: 0,
+        biocharOutputKg: 100,
         biocharDryMassKg: null,
       })
       .returning({ id: productionRuns.id, code: productionRuns.code });
