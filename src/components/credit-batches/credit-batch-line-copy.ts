@@ -12,6 +12,9 @@ import type { MissingValueCopy } from "@/lib/copy-utils";
 export interface CreditBatchLineBatch {
   id: string;
   code: string;
+  /** The batch's date window; named in the list a several-batch line opens. */
+  startDate?: string | Date | null;
+  endDate?: string | Date | null;
 }
 
 export interface CreditBatchLineCopy {
@@ -19,8 +22,8 @@ export interface CreditBatchLineCopy {
   /** Text before the batch links. */
   lead: string;
   /**
-   * Batches named in the line, each a link to its page. An array so a line for
-   * several batches ("CB-26-009-A +2") can fold it later without a new shape.
+   * Batches named in the line, each a link to its page. With several, the
+   * line shows the first code and a "+N" button opening the full list.
    */
   batches: CreditBatchLineBatch[];
   /** Text after the batch links. */
