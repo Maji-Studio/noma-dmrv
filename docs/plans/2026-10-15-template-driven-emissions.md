@@ -168,6 +168,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 **Entry policy per input shape** (code, next to the catalog)
 - `additive`: entries sum, and add to the line's automatic source if it has one. Applies to fuel volume, electricity, mass, distance and mass × distance.
 - `single`: at most one active entry per batch, and never an automatic source. Applies to gas concentration with mass flow, and meter readings.
+- Paired mass and distance inputs on one component (the current production and Cula truck lines): one entry or none. With an automatic figure the component takes no manual entries; without one it takes a single entry (Kenji, 2026-10-21). A t·km input stays `additive`: it takes many entries, each with its own leg's sources, summed into one component. noma keeps that shape and does not follow Cula's paired inputs; #1020 brings production to it.
 - An unsupported shape shows "Needs setup".
 - The entry's `lineRule` column records the policy it was written under.
 
@@ -289,7 +290,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
   - otherwise the eligible Removal with the earliest window end, then the earliest draft creation, then the lowest id.
   - This rule is only for entry contenders. It does not reuse the production contender ordering (`listProductionClaimDraftContenders`, by reporting quarter).
 - An entry outside every draft window blocks only when no available, unsubmitted application is dated on or after it; otherwise it waits for a later Removal. The blocker gives the next action: change the entry date to fit the Removal period, or wait for a later Removal. If the batch is fully applied, #1059 sends it on the facility's next Removal (§7).
-- A 200-year Removal grouping two batches that both have an entry on the same `single` line is refused in v1. Paired inputs are never summed one input at a time. Whether Isometric accepts list-shaped inputs (`InputDataShape: LIST`) for these lines is a follow-up.
+- A 200-year Removal grouping two batches that both have an entry on the same `single` line is refused in v1. Paired inputs are never summed one input at a time; a paired mass and distance component takes one entry or none (§4.1). Whether Isometric accepts list-shaped inputs (`InputDataShape: LIST`) for these lines is a follow-up.
 
 **Reservation and claims**
 - Atomic with the production claim. One transaction locks the batch rows, then the entries in id order.

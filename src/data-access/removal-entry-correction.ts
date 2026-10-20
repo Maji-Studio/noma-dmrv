@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { certificationSubmissions } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import type { EntryContender } from "@/lib/certification/removal-emission-contributions";
+import { entryInputManifestSchema, type EntryContender } from "@/lib/certification/removal-emission-contributions";
 import { deriveEntryCorrection } from "@/lib/certification/removal-entry-correction";
 import { deriveRemovalEntryInputs } from "@/lib/certification/removal-entry-inputs";
 import { requireOrgScope } from "./utils";
@@ -11,13 +11,6 @@ import { listEmissionEntryDraftContenders, loadEmissionEntryReservations } from 
 import { loadBatchEmissionEntryFacts } from "./emission-entry-facts";
 import { getLatestTemplateObservation } from "./removal-template-observations";
 import { getCreditBatchesByRemovalId } from "./certifier-removals";
-
-const figure = z.object({ magnitude: z.string(), unit: z.string() });
-const manifestSchema = z.array(z.object({ componentId: z.string(), inputKey: z.string(), entries: z.array(z.object({
-  entryId: z.string(), creditBatchId: z.string(), occurredOn: z.string().optional(), contentRevision: z.number(),
-  kind: z.enum(["value", "zero"]), value: figure, massDistanceDetail: z.object({ mass: figure, distance: figure }).nullable().optional(),
-  evidenceDocumentIds: z.array(z.string()),
-})) }));
 
 /** Advisory state only. Mutation authorization comes from the locked lineage loader. */
 export async function loadRemovalEntryCorrection(ctx: OrgContext, removalId: string, suppliedContenders?: EntryContender[]) {
@@ -34,7 +27,7 @@ export async function loadRemovalEntryCorrection(ctx: OrgContext, removalId: str
   const contenders = suppliedContenders ?? await listEmissionEntryDraftContenders(ctx, ids);
   const correction = contenders.find((item) => item.removalId === removalId && item.contenderKind === "correction");
   if (!correction) return closed;
-  const snapshot = z.object({ semantic: z.object({ entryContributions: manifestSchema }) }).safeParse(submitted?.payloadSnapshot);
+  const snapshot = z.object({ semantic: z.object({ entryContributions: z.array(entryInputManifestSchema) }) }).safeParse(submitted?.payloadSnapshot);
   const pin = batches[0]?.removalTemplateId;
   const observation = pin ? await getLatestTemplateObservation(ctx, "isometric", pin) : null;
   if (!snapshot.success || !observation) return closed;

@@ -14,8 +14,11 @@ export function deriveEntryCorrection(windowOpen: boolean, previous: readonly En
   const signature = (manifest: readonly EntryInputManifest[], componentId: string) => JSON.stringify(
     manifest.filter((input) => input.componentId === componentId).map((input) => ({ inputKey: input.inputKey,
       entries: input.entries.map((entry) => ({ entryId: entry.entryId, contentRevision: entry.contentRevision,
-        creditBatchId: entry.creditBatchId, occurredOn: entry.occurredOn, kind: entry.kind, value: entry.value,
-        massDistanceDetail: entry.massDistanceDetail ?? null, evidenceDocumentIds: [...entry.evidenceDocumentIds].sort(),
+        creditBatchId: entry.creditBatchId, occurredOn: entry.occurredOn, kind: entry.kind, value: { magnitude: entry.value.magnitude, unit: entry.value.unit },
+        massDistanceDetail: entry.massDistanceDetail ? {
+          mass: { magnitude: entry.massDistanceDetail.mass.magnitude, unit: entry.massDistanceDetail.mass.unit },
+          distance: { magnitude: entry.massDistanceDetail.distance.magnitude, unit: entry.massDistanceDetail.distance.unit },
+        } : null, evidenceDocumentIds: [...entry.evidenceDocumentIds].sort(),
       })).sort((a, b) => a.entryId.localeCompare(b.entryId)),
     })).sort((a, b) => a.inputKey.localeCompare(b.inputKey)),
   );

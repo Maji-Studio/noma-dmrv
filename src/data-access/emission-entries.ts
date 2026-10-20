@@ -1,5 +1,5 @@
 import { inWindow } from "@/lib/certification/removal-emission-contributions";
-import { emissionCorrectionWindow } from "./emission-entry-corrections";
+import { assertSentEntryInCorrectionWindow, emissionCorrectionWindow } from "./emission-entry-corrections";
 import { entryLine, resolveEmissionEntryDate } from "@/lib/certification/emission-entry-rules";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -306,9 +306,7 @@ export async function replaceEmissionEntry(ctx: OrgContext, input: ReplaceEmissi
       occurredOn: data.occurredOn, note: data.note, values: data.values,
     }, context);
     if (entry.sentByRemovalId) {
-      const window = emissionCorrectionWindow(ctx, tx, entry.creditBatchId, entry.sentByRemovalId);
-      if (!window || !inWindow(replacement, window))
-        throw new SafeError("Keep the entry date within this Removal's period.");
+      assertSentEntryInCorrectionWindow(ctx, tx, entry.creditBatchId, entry.sentByRemovalId, replacement.occurredOn);
       const [stored] = await tx.update(emissionEntries).set({ sentByRemovalId: entry.sentByRemovalId,
         version: nextVersion(emissionEntries.version), updatedAt: new Date() })
         .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, replacement.id))).returning();
@@ -356,9 +354,7 @@ export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmission
       });
     }
     if (entry.sentByRemovalId && data.occurredOn) {
-      const window = emissionCorrectionWindow(ctx, tx, entry.creditBatchId, entry.sentByRemovalId);
-      if (!window || !inWindow({ occurredOn: data.occurredOn }, window))
-        throw new SafeError("Keep the entry date within this Removal's period.");
+      assertSentEntryInCorrectionWindow(ctx, tx, entry.creditBatchId, entry.sentByRemovalId, data.occurredOn);
     }
     const contentChanged =
       (data.occurredOn !== undefined && data.occurredOn !== entry.occurredOn) ||

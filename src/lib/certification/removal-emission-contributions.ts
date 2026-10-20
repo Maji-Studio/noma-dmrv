@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { ENTRY_HAS_NO_REMOVAL } from "@/lib/certification/emission-entry-messages";
 import { formatUtcDate } from "@/lib/date-utils";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
@@ -40,12 +41,18 @@ export interface RemovalEntryFact {
   counts: boolean; unitMismatch?: boolean; reason?: string | null;
   values: readonly RemovalEntryValue[]; evidenceDocumentIds: readonly string[];
 }
-export interface EntryInputManifest {
-  componentId: string; inputKey: string; componentDisplayName?: string;
-  entries: { entryId: string; creditBatchId: string; creditBatchCode?: string; occurredOn?: string; contentRevision: number; kind: "value" | "zero";
-    value: EmissionFigure; massDistanceDetail?: RemovalEntryValue["massDistanceDetail"];
-    evidenceDocumentIds: string[] }[];
-}
+const entryManifestFigureSchema = z.object({ magnitude: z.string(), unit: z.string() });
+export const entryInputManifestSchema = z.object({
+  componentId: z.string(), inputKey: z.string(), componentDisplayName: z.string().optional(),
+  entries: z.array(z.object({
+    entryId: z.string(), creditBatchId: z.string(), creditBatchCode: z.string().optional(),
+    occurredOn: z.string().optional(), contentRevision: z.number(), kind: z.enum(["value", "zero"]),
+    value: entryManifestFigureSchema,
+    massDistanceDetail: z.object({ mass: entryManifestFigureSchema, distance: entryManifestFigureSchema }).nullable().optional(),
+    evidenceDocumentIds: z.array(z.string()),
+  })),
+});
+export type EntryInputManifest = z.infer<typeof entryInputManifestSchema>;
 export interface RemovalEntryContributions {
   manifest: EntryInputManifest[];
   inputs: { componentId: string; inputKey: string; value: EmissionFigure }[];
