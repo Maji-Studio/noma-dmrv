@@ -8,9 +8,12 @@ Run them with `python3 -I`. Anything uploaded is public, so look at every image 
   GitHub API (no checkout) and prints raw URLs. Paths: `prs/<n>/before-<slug>.png`,
   `prs/<n>/after-<slug>.png`, `issues/<n>/<slug>.png`.
 - `set-evidence.py <body.md> <head_sha> "<caption>|<before_url>|<after_url>|<width>" [--gif "<caption>|<url>|<width>"]`:
-  rewrites a PR body so it holds exactly one `## Evidence (head <sha>)` section with a Before | After
-  table. Each run replaces the old section, so rounds never stack. Fetch the body with
-  `gh pr view <n> --json body -q .body > body.md`, run the script, then `gh pr edit <n> --body-file body.md`.
+  keeps one managed block (`<!-- pr-evidence:start -->` ... `<!-- pr-evidence:end -->`, headed
+  `**Screenshots (head <sha>)**`) in the PR body's `## Evidence` section. A run replaces only the text between
+  the markers, so older rounds never stack and test output the `pr` skill wrote in Evidence stays. Without
+  markers the block goes at the top of an existing `## Evidence` section, else a new `## Evidence` section
+  is added before the robot line. Fetch the body with `gh pr view <n> --json body -q .body > body.md`, run the
+  script, then `gh pr edit <n> --body-file body.md`.
 - `add-shots.py <body.md> after-first|end "<caption>|<url>|<width>" [...]`: inserts a `## Screenshots`
   section into an issue body. Use half the pixel width for retina shots.
 

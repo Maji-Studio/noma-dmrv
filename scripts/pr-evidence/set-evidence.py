@@ -1,7 +1,10 @@
-"""Replace PR screenshot evidence with one section for the current head.
+"""Keep one managed screenshot block inside the PR body's Evidence section.
 
 Usage: python3 -I scripts/pr-evidence/set-evidence.py <body.md> <head_sha> \
     <caption>|<before_url>|<after_url>|<width> ...
+The block sits between <!-- pr-evidence:start --> and <!-- pr-evidence:end -->; a run
+replaces only that block. Without markers it goes at the top of an existing
+`## Evidence` section (other content kept), else a new `## Evidence` section.
 Also accepts --gif <caption>|<url>|<width>, placing the GIF in the After cell.
 Quote each entry in the shell. Use matching viewport and state for before/after
 captures, normally with width 400. Empty cells are allowed; each entry must
@@ -19,7 +22,9 @@ SHORT_SHA_LENGTH = 7
 MAX_SHA_LENGTH = 40
 ROW_FIELDS = 4
 GIF_FIELDS = 3
-EVIDENCE_HEADING = re.compile(r"## Evidence(?: \(head [^)]*\))?(?:[ \t]+#+)?[ \t]*")
+EVIDENCE_HEADING = re.compile(r"## Evidence\b.*")
+START_MARKER = "<!-- pr-evidence:start -->"
+END_MARKER = "<!-- pr-evidence:end -->"
 
 
 def image_cell(url, caption, width):
@@ -62,8 +67,8 @@ def parse_entry(value, gif=False):
     return caption, before, after, str(int(width))
 
 
-def render_section(head, entries):
-    lines = [f"## Evidence (head {head[:SHORT_SHA_LENGTH]})"]
+def render_block(head, entries):
+    lines = [START_MARKER, f"**Screenshots (head {head[:SHORT_SHA_LENGTH]})**"]
     for caption, before, after, width in entries:
         # Escape Markdown punctuation so captions stay within one bold label.
         label = re.sub(r"([\\`*_{}\[\]<>#!])", r"\\\1", caption)
@@ -75,12 +80,12 @@ def render_section(head, entries):
             "| --- | --- |",
             f"| {image_cell(before, caption, width)} | {image_cell(after, caption, width)} |",
         ])
+    lines.append(END_MARKER)
     return "\n".join(lines)
 
 
-def level_two_headings(lines):
-    """Find section boundaries while leaving fenced examples alone."""
-    headings = []
+def find_evidence_heading(lines):
+    """First `## Evidence` heading outside fenced code, or None."""
     fence_char = None
     fence_length = 0
     for index, line in enumerate(lines):
@@ -92,14 +97,25 @@ def level_two_headings(lines):
             elif marker[0] == fence_char and len(marker) >= fence_length and not rest.strip():
                 fence_char = None
             continue
-        if fence_char is None and re.match(r"^ {0,3}#{1,2}[ \t]", line):
-            headings.append(index)
-    return headings
+        if fence_char is None and EVIDENCE_HEADING.fullmatch(line.rstrip()):
+            return index
+    return None
 
 
-def rewrite_body(body, section):
+def rewrite_body(body, block):
+    start = body.find(START_MARKER)
+    if start != -1:
+        end = body.find(END_MARKER, start)
+        if end == -1:
+            raise ValueError("found the start marker without the end marker")
+        end += len(END_MARKER)
+        return body[:start] + block + body[end:]
     lines = body.splitlines()
-    headings = level_two_headings(lines)
+    heading = find_evidence_heading(lines)
+    if heading is not None:
+        rest = "\n".join(lines[heading + 1:]).strip("\n")
+        parts = ["\n".join(lines[:heading + 1]), block, rest]
+        return "\n\n".join(part for part in parts if part) + "\n"
     footer = len(lines)
     while footer and not lines[footer - 1].strip():
         footer -= 1
@@ -107,20 +123,9 @@ def rewrite_body(body, section):
         footer -= 1
     else:
         footer = len(lines)
-    spans = [
-        (start, headings[position + 1] if position + 1 < len(headings) else footer)
-        for position, start in enumerate(headings)
-        if EVIDENCE_HEADING.fullmatch(lines[start].lstrip())
-    ]
-    if spans:
-        insertion = spans[0][0]
-        for start, end in reversed(spans):
-            del lines[start:end]
-    else:
-        insertion = footer
-    before = "\n".join(lines[:insertion]).rstrip("\n")
-    after = "\n".join(lines[insertion:]).strip("\n")
-    return "\n\n".join(part for part in (before, section, after) if part) + "\n"
+    before = "\n".join(lines[:footer]).rstrip("\n")
+    after = "\n".join(lines[footer:]).strip("\n")
+    return "\n\n".join(part for part in (before, "## Evidence\n\n" + block, after) if part) + "\n"
 
 
 def main():
@@ -145,9 +150,9 @@ def main():
                 entries.append(parse_entry(value))
         if not entries:
             raise ValueError("provide at least one screenshot row or --gif entry")
-        section = render_section(args.head_sha, entries)
+        block = render_block(args.head_sha, entries)
         body = args.body.read_text(encoding="utf-8")
-        args.body.write_text(rewrite_body(body, section), encoding="utf-8")
+        args.body.write_text(rewrite_body(body, block), encoding="utf-8")
     except (OSError, UnicodeError, ValueError) as error:
         parser.error(str(error))
 
