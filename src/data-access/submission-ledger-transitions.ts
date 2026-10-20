@@ -3,7 +3,7 @@ import { readRemovalEntrySnapshot } from "@/lib/certification/removal-entry-snap
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { certificationSubmissions } from "@/db/schema/certification";
-import { creditBatches } from "@/db/schema/credits";
+import { creditBatchApplications, creditBatches } from "@/db/schema/credits";
 import type { OrgContext } from "@/lib/auth/server";
 import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import { SafeError } from "@/lib/errors";
@@ -65,6 +65,16 @@ export async function markSubmissionSubmitted(
     }
     // Not flag-gated: entries reserved while the flag was on must still be stamped.
     if (args.productionEmissionsClaim) {
+      // Match reservation/value writers: all member batches in id order, then entries.
+      const members = await tx.select({ creditBatchId: creditBatchApplications.creditBatchId }).from(creditBatchApplications)
+        .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId),
+          eq(creditBatchApplications.removalId, args.productionEmissionsClaim.removalId)));
+      const reserved = await tx.select({ creditBatchId: emissionEntries.creditBatchId }).from(emissionEntries)
+        .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.sendReservedBySubmissionId, id)));
+      const batchIds = [...new Set([...args.productionEmissionsClaim.creditBatchIds, ...members.map((row) => row.creditBatchId), ...reserved.map((row) => row.creditBatchId)])];
+      if (batchIds.length) await tx.select({ id: creditBatches.id }).from(creditBatches)
+        .where(and(eq(creditBatches.organizationId, ctx.organizationId), inArray(creditBatches.id, batchIds)))
+        .orderBy(creditBatches.id).for("update");
       const frozen = readRemovalEntrySnapshot(updated[0]).frozenEntrySet;
       const stamped = await tx.update(emissionEntries).set({
         sentByRemovalId: args.productionEmissionsClaim.removalId, sendReservedBySubmissionId: null,

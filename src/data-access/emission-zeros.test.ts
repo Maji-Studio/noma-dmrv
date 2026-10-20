@@ -1,12 +1,13 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), batch: vi.fn(), facts: vi.fn(), contenders: vi.fn(), reservations: vi.fn(), activity: vi.fn() }));
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), batch: vi.fn(), facts: vi.fn(), contenders: vi.fn(), reservations: vi.fn(), automatic: vi.fn(), activity: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 vi.mock("./emission-entries", () => ({ lockedBatch: mocks.batch }));
 vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: mocks.facts }));
 vi.mock("./emission-entry-contenders", () => ({ listEmissionEntryDraftContenders: mocks.contenders, loadEmissionEntryReservations: mocks.reservations }));
 vi.mock("./emission-entry-activity", () => ({ recordEmissionEntryActivity: mocks.activity }));
 vi.mock("@/lib/certification/emissions-entry-gate", () => ({ requireEmissionsEntriesEnabled: vi.fn() }));
+vi.mock("./batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: mocks.automatic }));
 import { recordEmissionZeros, undoEmissionZeros } from "./emission-zeros";
 const ctx = makeTestOrgContext();
 const removalId = "00000000-0000-4000-8000-000000000001";
@@ -36,6 +37,7 @@ beforeEach(() => {
   mocks.facts.mockResolvedValue({ entries: [] });
   mocks.contenders.mockResolvedValue([{ contenderKind: "draft", removalId, creditBatchIds: [creditBatchId], createdAt: "2026-01-01", window: { start: "2026-01-01", end: "2026-02-01" } }]);
   mocks.reservations.mockResolvedValue([]);
+  mocks.automatic.mockResolvedValue({ [creditBatchId]: { automaticFigures: {} } });
 });
 it("records a zero with the pinned binding and trimmed note, capturing the persisted row", async () => {
   expect(await recordEmissionZeros(ctx, input)).toEqual({ entryIds: ["zero"] });
@@ -58,8 +60,8 @@ it("refuses a non-entry-capable line", async () => {
   expect(insert).not.toHaveBeenCalled();
 });
 it("refuses a counted value that this Removal owns", async () => {
-  mocks.facts.mockResolvedValue({ entries: [{ id: "value", componentId: "line", kind: "value", counts: true, creditBatchId, occurredOn: "2026-01-02" }] });
-  await expect(recordEmissionZeros(ctx, input)).rejects.toThrow("already has a value");
+  mocks.facts.mockResolvedValue({ entries: [{ id: "value", componentId: "line", kind: "value", counts: true, creditBatchId, occurredOn: "2026-01-02", values: [], evidenceDocumentIds: [] }] });
+  await expect(recordEmissionZeros(ctx, input)).rejects.toThrow("Only empty lines");
   expect(insert).not.toHaveBeenCalled();
 });
 it("is idempotent for a duplicate zero", async () => {
@@ -81,4 +83,33 @@ it("refuses undo when a zero is reserved", async () => {
 it("refuses a stale optional Removal review token", async () => {
   await expect(recordEmissionZeros(ctx, { ...input, expectedRemovalVersion: 1 })).rejects.toThrow();
   expect(insert).not.toHaveBeenCalled();
+});
+
+it.each(["sent-single", "omitted-production", "automatic-figure", "stale-value"])("refuses %s through the server writer", async (scenario) => {
+  const current = structuredClone(observation);
+  if (scenario === "sent-single") {
+    mocks.facts.mockResolvedValue({ entries: [{ id: "sent", componentId: "line", kind: "value", lineRule: "single", counts: true,
+      creditBatchId, occurredOn: "2026-01-02", sentByRemovalId: "earlier", values: [], evidenceDocumentIds: ["file"] }] });
+  } else if (scenario === "stale-value") {
+    mocks.facts.mockResolvedValue({ entries: [{ id: "stale", componentId: "line", kind: "value", counts: false,
+      creditBatchId, occurredOn: "2026-01-02", values: [], evidenceDocumentIds: [] }] });
+  } else {
+    Object.assign(current.lineSources.line, { automaticSource: "run-electricity" });
+    mocks.automatic.mockResolvedValue({ [creditBatchId]: { automaticFigures: { "run-electricity": { magnitude: "10", unit: "kWh" } } } });
+  }
+  mocks.batch.mockResolvedValue({ batch: { id: creditBatchId, startDate: "2026-01-01",
+    productionEmissionsClaimedByRemovalId: scenario === "omitted-production" ? "earlier" : null }, observation: current });
+  await expect(recordEmissionZeros(ctx, input)).rejects.toThrow("Only empty lines");
+  expect(insert).not.toHaveBeenCalled();
+});
+it("locks the Removal before its batch", async () => {
+  await recordEmissionZeros(ctx, input);
+  expect(mocks.batch).toHaveBeenCalledOnce();
+  // The Removal read has already consumed the first result when the batch lock is requested.
+  mocks.batch.mockImplementationOnce(async () => {
+    expect(rows).toHaveLength(2);
+    return { batch: { id: creditBatchId, startDate: "2026-01-01" }, observation };
+  });
+  rows = [[{ id: removalId, updatedAt: new Date(), metadata: null }], [{ id: "member" }], []];
+  await recordEmissionZeros(ctx, input);
 });

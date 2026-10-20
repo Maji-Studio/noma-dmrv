@@ -1,7 +1,7 @@
+import type { certificationSubmissions } from "@/db/schema/certification";
+import { readRemovalEntrySnapshot } from "@/lib/certification/removal-entry-snapshot";
 import { DomainError } from "@/lib/domain-errors";
-import { SOURCE_IDS } from "@/lib/isometric/template-observations/catalog-sources";
-import { SOURCE_BUCKETS } from "@/lib/isometric/utils/aggregation";
-import { productionClaimContribution } from "./production-claim-policy";
+import { omittedProductionSources } from "@/lib/certification/removal-emission-lines";
 import type { OrgContext } from "@/lib/auth/server";
 import { loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
@@ -50,12 +50,21 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   });
   const batchFacts: BatchEmissionContext = Object.fromEntries(Object.entries(facts).map(([id, batch]) => {
     const member = scope.memberBatches.find((item) => item.id === id);
-    const omitProduction = member && productionClaimContribution(member.productionEmissionsClaimedByRemovalId, scope.removalId) === "delivery-only";
-    const omittedAutomaticSources = omitProduction ? (Object.keys(SOURCE_IDS) as (keyof typeof SOURCE_IDS)[])
-      .filter((key) => SOURCE_BUCKETS[key] === "production").map((key) => SOURCE_IDS[key]) : [];
+    const omittedAutomaticSources = omittedProductionSources(member?.productionEmissionsClaimedByRemovalId, scope.removalId!);
     return [id, { ...batch, ...(frozenEntrySet ? { entries: batch.entries.filter(belongsToFrozenView), entriesWithoutRemoval: [] } : {}), omittedAutomaticSources, automaticFigures: Object.fromEntries(
       Object.entries(batch.automaticFigures).filter(([source]) => !omittedAutomaticSources.some((id) => id === source)),
     ) }];
   }));
   return { contributions, batchFacts, observationId: observation.id, semanticFingerprint: observation.semanticFingerprint };
+}
+
+/** A crashed, unreserved draft must not hide fresh facts from reads or the resume gate. */
+export function frozenEntriesForAttempt(submission: typeof certificationSubmissions.$inferSelect | null, facts: BatchEmissionContext) {
+  if (!submission || submission.status !== "draft" || !submission.payloadSnapshot ||
+    typeof submission.payloadSnapshot !== "object" || !("frozenEntrySet" in submission.payloadSnapshot)) return undefined;
+  const frozen = readRemovalEntrySnapshot(submission).frozenEntrySet;
+  const entries = Object.values(facts).flatMap((batch) => batch.entries);
+  const reserved = frozen.length > 0 && frozen.every((item) => entries.some((entry) =>
+    entry.id === item.entryId && entry.sendReservedBySubmissionId === submission.id));
+  return reserved || isLiveEntryReservation(submission, Date.now()) ? frozen : undefined;
 }

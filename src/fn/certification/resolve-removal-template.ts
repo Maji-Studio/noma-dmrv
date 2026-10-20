@@ -1,7 +1,8 @@
+import { deriveRemovalBatchEmissionLines } from "@/lib/certification/removal-emission-lines";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
 import type { BatchEmissionContext } from "./batch-emission-context";
-import { deriveBatchEmissionLines, type BatchEmissionLine } from "@/lib/certification/emission-lines";
+import { type BatchEmissionLine } from "@/lib/certification/emission-lines";
 import { withRemovedEntryComponents } from "@/lib/certification/emission-line-definition";
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
 import { withTemplateOrder } from "@/lib/isometric/template-observations/template-order";
@@ -37,7 +38,7 @@ export function resolveRemovalTemplate(
   if (facts.lineSourceProblems.length) {
     templateBlockers.push(removalTemplateBlocker("templateLinesNeedReview"));
   }
-  const derive = (batchId?: string) => deriveBatchEmissionLines({
+  const derive = (batchId?: string) => deriveRemovalBatchEmissionLines({
     definition: withRemovedEntryComponents(normalizeTemplateDefinition(facts.template),
       batchId ? batchFacts[batchId]?.entries ?? [] : [],
       batchId ? batchFacts[batchId]?.previousObservations ?? new Map() : new Map()),
@@ -47,20 +48,7 @@ export function resolveRemovalTemplate(
     omittedAutomaticSources: batchId ? batchFacts[batchId]?.omittedAutomaticSources : [],
     entries: (batchId ? batchFacts[batchId]?.entries ?? [] : []).filter((entry) => !contributions || (contributions.ownedEntryIds ?? contributions.selectedEntryIds).includes(entry.id)),
     entriesCanSubmit: !!contributions,
-  }).map((line) => {
-    const batch = batchId ? batchFacts[batchId] : undefined;
-    const contributionBlocker = contributions?.blockers.find((blocker) => blocker.creditBatchId === batchId && blocker.lineRef?.componentId === line.componentId);
-    if (contributionBlocker) return { ...line, ...(["singleLineMultipleEntries", "lineNeedsReview"].includes(contributionBlocker.code) ? { state: "needsReview" as const } : {}), blocker: { ...contributionBlocker, lineRef: { ...contributionBlocker.lineRef!, displayName: line.displayName } } };
-    if (line.contract?.scope === "operating" && line.contract.entryPolicy !== "none" && batch?.entries.some((entry) => entry.componentId === line.componentId && batch.entriesWithoutRemoval?.includes(entry.id))) {
-      return { ...line, blocker: { code: "entryHasNoRemoval" as const, message: "No Removal can carry this entry yet",
-        fixTarget: "emissions" as const, lineRef: { componentId: line.componentId, displayName: line.displayName } } };
-    }
-    const sent = contributions && batchId && batchFacts[batchId]?.entries.some((entry) =>
-      entry.componentId === line.componentId && entry.lineRule === "single" && entry.kind === "value" &&
-      entry.sentByRemovalId && !(contributions.ownedEntryIds ?? contributions.selectedEntryIds).includes(entry.id));
-    if (sent && line.state === "empty") return { ...line, state: "filled" as const, blocker: undefined };
-    return line;
-  });
+  }, batchId, batchId ? batchFacts[batchId] : undefined, contributions);
   const emissionLinesByBatchId: Record<string, BatchEmissionLine[]> = {};
   if (facts.observation) for (const batch of batches) {
     if (batch.id) emissionLinesByBatchId[batch.id] = derive(batch.id);

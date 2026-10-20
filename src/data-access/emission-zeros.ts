@@ -1,3 +1,6 @@
+import { isEnrichmentComplete } from "@/lib/isometric/template-observations/enrichment";
+import { deriveRemovalBatchEmissionLines, isEmptyRemovalEmissionLine, omittedProductionSources } from "@/lib/certification/removal-emission-lines";
+import { loadBatchesEmissionAutomaticFacts } from "./batch-emission-automatic-figures";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, type DbTransaction } from "@/db";
@@ -5,7 +8,7 @@ import { certifierRemovals, certificationSubmissions, creditBatchApplications, e
 import type { OrgContext } from "@/lib/auth/server";
 import { requireEmissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { entryLine } from "@/lib/certification/emission-entry-rules";
-import { isLiveEntryReservation, removalEntryOwner } from "@/lib/certification/removal-emission-contributions";
+import { deriveRemovalEntryContributions, isLiveEntryReservation } from "@/lib/certification/removal-emission-contributions";
 import { validateLineSources } from "@/lib/isometric/template-observations/line-sources";
 import { SafeError } from "@/lib/errors";
 import { recordEmissionZerosSchema, undoEmissionZerosSchema } from "@/schemas/emission-zeros";
@@ -19,10 +22,10 @@ import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deleti
 
 async function lockZeroDraft(ctx: OrgContext, tx: DbTransaction, data: z.infer<typeof undoEmissionZerosSchema>, expectedVersion?: number) {
   requireOrgScope(ctx);
-  const context = await lockedBatch(ctx, tx, data.creditBatchId);
   const [removal] = await tx.select().from(certifierRemovals).where(and(
     eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, data.removalId),
   )).for("update");
+  const context = await lockedBatch(ctx, tx, data.creditBatchId);
   const members = await tx.select({ id: creditBatchApplications.id }).from(creditBatchApplications).where(and(
     eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.creditBatchId, data.creditBatchId),
     eq(creditBatchApplications.removalId, data.removalId),
@@ -50,18 +53,33 @@ export async function recordEmissionZeros(ctx: OrgContext, input: z.input<typeof
     const contenders = await listEmissionEntryDraftContenders(ctx, [batch.id], tx);
     const reservations = await loadEmissionEntryReservations(ctx, entries.flatMap((entry) => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []), tx);
     const problems = validateLineSources(observation.definition, observation.lineSources);
+    const automatic = (await loadBatchesEmissionAutomaticFacts(ctx, [batch.id]))[batch.id];
+    const omittedAutomaticSources = omittedProductionSources(batch.productionEmissionsClaimedByRemovalId, data.removalId);
+    // Ignore this Removal's existing zeros while checking eligibility, retaining idempotent writes.
+    const candidates = entries.filter((entry) => !(entry.kind === "zero" && entry.confirmedForRemovalId === data.removalId));
+    const contributions = deriveRemovalEntryContributions({
+      removalId: data.removalId, memberBatchIds: [batch.id], window: contenders.find((row) => row.removalId === data.removalId)?.window ?? null,
+      contenders, entries: candidates.map((entry) => {
+        const reservation = reservations.find((row) => row.submissionId === entry.sendReservedBySubmissionId);
+        const live = reservation && isLiveEntryReservation(reservation, Date.now());
+        return { ...entry, reservedByRemovalId: live ? reservation.removalId : null, reservationKnownInactive: !live };
+      }), lineSources: observation.lineSources, monitoredInputs: [],
+    });
+    const lines = deriveRemovalBatchEmissionLines({
+      definition: observation.definition, lineSources: observation.lineSources, problems, enrichmentComplete: isEnrichmentComplete(observation.definition, observation.enrichment),
+      entriesCanSubmit: true, omittedAutomaticSources,
+      automaticFigures: Object.fromEntries(Object.entries(automatic.automaticFigures).filter(([source]) => !omittedAutomaticSources.some((id) => id === source))),
+      entries: candidates.filter((entry) => contributions.ownedEntryIds?.includes(entry.id)),
+    }, batch.id, { entries: candidates }, contributions);
     const saved = [];
     for (const componentId of [...new Set(data.componentIds)].sort()) {
       const line = entryLine(observation, componentId);
       if (!line || line.contract.scope !== "operating" || line.entryPolicy === "none" || problems.some((problem) => problem.componentId === componentId)) {
         throw new SafeError("This template line does not allow entries. Review its setup.");
       }
-      if (entries.some((entry) => {
-        const reservation = reservations.find((row) => row.submissionId === entry.sendReservedBySubmissionId);
-        const live = reservation && isLiveEntryReservation(reservation, Date.now());
-        return entry.componentId === componentId && entry.kind === "value" && entry.counts && !entry.unitMismatch &&
-          removalEntryOwner({ ...entry, reservedByRemovalId: live ? reservation.removalId : null, reservationKnownInactive: !live }, contenders) === data.removalId;
-      })) throw new SafeError("This line already has a value for this Removal.");
+      if (!lines.some((line) => line.componentId === componentId && isEmptyRemovalEmissionLine(line))) {
+        throw new SafeError("Only empty lines can be recorded as zero for this Removal.");
+      }
       const existing = entries.find((entry) => entry.componentId === componentId && entry.kind === "zero" && entry.confirmedForRemovalId === data.removalId);
       if (existing) { saved.push(existing.id); continue; }
       const [entry] = await tx.insert(emissionEntries).values({

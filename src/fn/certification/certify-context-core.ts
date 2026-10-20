@@ -1,6 +1,5 @@
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
-import { readRemovalEntrySnapshot } from "./removal-snapshot-readers";
-import { loadRemovalEntryContext } from "./removal-entry-context";
+import { frozenEntriesForAttempt, loadRemovalEntryContext } from "./removal-entry-context";
 import { loadBatchEmissionContext } from "./batch-emission-context";
 import { getRemovalCodes } from "@/data-access/removal-codes";
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
@@ -119,9 +118,7 @@ export async function buildRemovalContext(
       loadLinkedGhgStatementStatus(orgCtx, scope.removal),
     ]);
   const batchEmissionFacts = await loadBatchEmissionContext(orgCtx, scope.facilityId, scope.memberBatches, facilityFacts);
-  const frozenEntrySet = emissionsEntriesEnabled() && latestSubmission?.status === "draft" && latestSubmission.payloadSnapshot &&
-    typeof latestSubmission.payloadSnapshot === "object" && "frozenEntrySet" in latestSubmission.payloadSnapshot
-    ? readRemovalEntrySnapshot(latestSubmission).frozenEntrySet : undefined;
+  const frozenEntrySet = emissionsEntriesEnabled() ? frozenEntriesForAttempt(latestSubmission, batchEmissionFacts) : undefined;
   const loadedRemovalEntries = await loadRemovalEntryContext(orgCtx, scope, batchEmissionFacts, facilityFacts, frozenEntrySet);
   const removalEntryContext = loadedRemovalEntries && { contributions: loadedRemovalEntries.contributions,
     observationId: loadedRemovalEntries.observationId, semanticFingerprint: loadedRemovalEntries.semanticFingerprint };

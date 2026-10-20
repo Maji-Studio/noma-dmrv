@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import { loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
-import { loadRemovalEntryContext } from "./removal-entry-context";
+import { frozenEntriesForAttempt, loadRemovalEntryContext } from "./removal-entry-context";
 import type { BatchEmissionContext } from "./batch-emission-context";
 import type { RemovalScope } from "./removal-scope";
 import type { FacilityCertifierFacts } from "./facility-certifier-facts";
@@ -86,4 +86,23 @@ it("keeps earlier sent singles as omission facts when retrying a frozen set", as
   expect(result?.contributions.sentSingleComponentIds).toEqual(["electricity"]);
   expect(result?.contributions.entrySet).toEqual([]);
   expect(result?.batchFacts.b1.entries).toHaveLength(1);
+});
+
+it("loads edited entries after a crash before reservation and lock expiry", async () => {
+  const loaded = facts();
+  loaded.b1.entries[0].contentRevision = 2;
+  const submission = { id: "crashed", status: "draft", lockedAt: new Date(0), metadata: null,
+    payloadSnapshot: { frozenEntrySet: [{ entryId: "entry-b1", contentRevision: 1 }] } } as Parameters<typeof frozenEntriesForAttempt>[0];
+  const frozen = frozenEntriesForAttempt(submission, loaded);
+  expect(frozen).toBeUndefined();
+  const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, loaded, facility, frozen);
+  expect(result?.contributions.entrySet).toContainEqual({ entryId: "entry-b1", contentRevision: 2 });
+});
+it.each(["reserved", "live", "possible", "confirmed"])("keeps the frozen view for %s attempts", (state) => {
+  const loaded = facts();
+  if (state === "reserved") loaded.b1.entries[0].sendReservedBySubmissionId = "attempt";
+  const frozenEntrySet = [{ entryId: "entry-b1", contentRevision: 1 }];
+  const submission = { id: "attempt", status: "draft", lockedAt: state === "live" ? new Date() : new Date(0),
+    metadata: { externalMutation: state }, payloadSnapshot: { frozenEntrySet } } as Parameters<typeof frozenEntriesForAttempt>[0];
+  expect(frozenEntriesForAttempt(submission, loaded)).toEqual(frozenEntrySet);
 });

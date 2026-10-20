@@ -358,7 +358,7 @@ export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmission
       })
       .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id)))
       .returning();
-    if (entry.kind === "value") await tombstoneEmissionZeros(ctx, tx, saved);
+    if (entry.kind === "value" && contentChanged) await tombstoneEmissionZeros(ctx, tx, saved);
     await recordEmissionEntryActivity(ctx, tx, "updated", entry, { ...saved, values });
     return getEmissionEntry(ctx, entry.id, tx);
   });
@@ -410,7 +410,7 @@ export async function confirmEmissionEntry(ctx: OrgContext, id: string, expected
       })
       .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, id)))
       .returning();
-    if (entry.kind === "value") await tombstoneEmissionZeros(ctx, tx, saved);
+    if (entry.kind === "value" && !emissionEntryCounts(previous, observation, entry.componentId).counts) await tombstoneEmissionZeros(ctx, tx, saved);
     await recordEmissionEntryActivity(ctx, tx, "updated", entry, { ...saved, values: entry.values });
     return getEmissionEntry(ctx, id, tx);
   });

@@ -18,6 +18,10 @@ export async function releaseDeletedRemovalEntries(ctx: OrgContext, tx: DbTransa
   if (rows.some((row) => row.kind === "zero" && row.sentByRemovalId)) throw new SafeError("A Removal with sent recorded zeros cannot be deleted.");
   for (const row of rows) {
     const zeroOwned = row.kind === "zero" && row.confirmedForRemovalId === removalId;
+    if (zeroOwned && row.deletedAt) {
+      await tx.delete(emissionEntries).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, row.id)));
+      continue;
+    }
     const [saved] = await tx.update(emissionEntries).set({
       ...(row.sentByRemovalId === removalId ? { sentByRemovalId: null } : {}),
       ...(row.sendReservedBySubmissionId && submissionIds.includes(row.sendReservedBySubmissionId) ? { sendReservedBySubmissionId: null } : {}),
