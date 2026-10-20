@@ -23,8 +23,9 @@ export function TemplateSetupNotice({
   facilityId: string;
   creditBatchId: string;
 }) {
+  const fixTarget = removalTemplateBlockerDestination(blocker.code);
   const link = batchHealthFixLinkFor(
-    { key: "template", fixTarget: removalTemplateBlockerDestination(blocker.code) },
+    { key: fixTarget === "creditBatchTemplate" ? "templateSet" : "templateLines", fixTarget },
     facilityId,
     creditBatchId,
   );
