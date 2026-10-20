@@ -21,10 +21,12 @@ it("strips the former default-template field from a mapping save", () => {
 
 it("validates setup answers, fingerprints and unique versioned batches", () => {
   const input = { facilityId: "00000000-0000-4000-8000-000000000001", removalTemplateId: "template",
-    fingerprints: { semanticFingerprint: "semantic", fullFingerprint: "full" }, answers: {}, overrides: {}, makeDefault: true,
+    fingerprints: { semanticFingerprint: "semantic", fullFingerprint: "full" }, planFingerprint: "plan", answers: {}, overrides: {}, makeDefault: true,
     batches: [{ id: "00000000-0000-4000-8000-000000000002", expectedVersion: 1 }] };
   expect(applyRemovalTemplateSetupSchema.safeParse(input).success).toBe(true);
   expect(applyRemovalTemplateSetupSchema.safeParse({ ...input, batches: [...input.batches, ...input.batches] }).success).toBe(false);
   expect(applyRemovalTemplateSetupSchema.safeParse({ ...input, fingerprints: {} }).success).toBe(false);
+  expect(applyRemovalTemplateSetupSchema.safeParse({ ...input, planFingerprint: undefined }).success).toBe(false);
+  expect(applyRemovalTemplateSetupSchema.safeParse({ ...input, planFingerprint: "" }).success).toBe(false);
   expect(applyRemovalTemplateSetupSchema.safeParse({ ...input, batches: [{ ...input.batches[0], expectedVersion: 0 }] }).success).toBe(false);
 });

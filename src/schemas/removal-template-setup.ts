@@ -14,6 +14,7 @@ export type SetFacilityDefaultRemovalTemplateInput = z.infer<typeof setFacilityD
 export const loadRemovalTemplateSetupSchema = z.uuid();
 export const applyRemovalTemplateSetupSchema = startRemovalTemplateSetupSchema.extend({
   fingerprints: z.object({ semanticFingerprint: z.string().min(1), fullFingerprint: z.string().min(1) }),
+  planFingerprint: z.string().min(1),
   answers: z.record(z.string().min(1), z.string().min(1)),
   overrides: z.record(z.string().min(1), z.string().min(1)),
   makeDefault: z.boolean(),

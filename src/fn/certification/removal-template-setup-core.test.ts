@@ -3,6 +3,8 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { ApplyRemovalTemplateSetupInput } from "@/schemas/removal-template-setup";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { fullFingerprint, normalizeTemplateDefinition, resolveLineSources, semanticFingerprint, validateLineSources } from "@/lib/isometric/template-observations";
+import { setupPlanFingerprint } from "@/lib/certification/removal-template-setup-fingerprint";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 
 const mocks = vi.hoisted(() => ({ facility: vi.fn(), mapping: vi.fn(), templates: vi.fn(), latest: vi.fn(), previous: vi.fn(), facts: vi.fn(), preview: vi.fn(), apply: vi.fn(), transaction: vi.fn(), batches: vi.fn(), facilityGuard: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
@@ -24,7 +26,7 @@ import { applyRemovalTemplateSetupCore, loadRemovalTemplateSetupCore } from "./r
 afterEach(() => vi.unstubAllEnvs());
 
 const ctx: OrgContext = { organizationId: "org", userId: "user", orgRole: "admin", isPlatformAdmin: false };
-const input: ApplyRemovalTemplateSetupInput = { facilityId: "facility", removalTemplateId: fixture.id, fingerprints: { semanticFingerprint: "semantic", fullFingerprint: "full" }, answers: {}, overrides: {}, makeDefault: true, batches: [] };
+const input: ApplyRemovalTemplateSetupInput = { facilityId: "facility", removalTemplateId: fixture.id, fingerprints: { semanticFingerprint: "semantic", fullFingerprint: "full" }, planFingerprint: "plan", answers: {}, overrides: {}, makeDefault: true, batches: [] };
 const definition = normalizeTemplateDefinition(fixture as Parameters<typeof normalizeTemplateDefinition>[0]);
 const observation = { id: "observation", version: 1, definition, enrichment: {}, lineSources: resolveLineSources({ definition }), ...input.fingerprints };
 beforeEach(() => {
@@ -67,6 +69,52 @@ it("previews an unused template even when it has a stored observation", async ()
   expect(mocks.preview).toHaveBeenCalledWith({}, fixture, [], observation, fixture.project_id);
   expect(mocks.facts).not.toHaveBeenCalled();
   expect(mocks.transaction).not.toHaveBeenCalled();
+});
+it.each(["preview", "observed"])("reports unfixable blockers on fitting templates from %s", async (read) => {
+  const missingFixed = structuredClone(fixture);
+  missingFixed.id = "missing-fixed";
+  const fixedInput = missingFixed.groups.flatMap((group) => group.components.flatMap((component) => component.inputs))
+    .find((input) => input.type === "fixed")!;
+  fixedInput.datapoint_id = null;
+  mocks.templates.mockResolvedValue([missingFixed, fixture]);
+  if (read === "observed") mocks.batches.mockResolvedValue([
+    { id: "missing-batch", removalTemplateId: missingFixed.id }, { id: "complete-batch", removalTemplateId: fixture.id },
+  ]);
+  else mocks.latest.mockResolvedValue(null);
+  const result = await loadRemovalTemplateSetupCore(ctx, input.facilityId);
+  expect(result.fitting).toMatchObject([
+    { id: missingFixed.id, blockedReason: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint },
+    { id: fixture.id, blockedReason: null },
+  ]);
+  expect(result.notFitting).toEqual([]);
+});
+it.each(["preview", "observed"])("reports incomplete enrichment after missing fixed datapoints for %s", async (read) => {
+  const missingFixed = structuredClone(fixture);
+  missingFixed.id = "missing-fixed";
+  missingFixed.groups.flatMap((group) => group.components.flatMap((component) => component.inputs))
+    .find((input) => input.type === "fixed")!.datapoint_id = null;
+  mocks.templates.mockResolvedValue([missingFixed, fixture]);
+  const enrichmentProblems = [{ code: "unread" }];
+  if (read === "observed") {
+    mocks.batches.mockResolvedValue([
+      { id: "missing-batch", removalTemplateId: missingFixed.id }, { id: "complete-batch", removalTemplateId: fixture.id },
+    ]);
+    mocks.facts.mockResolvedValue({ observation, enrichmentProblems, lineSourceProblems: [] });
+  } else mocks.preview.mockResolvedValue({ enrichment: {}, enrichmentProblems, lines: [] });
+  const result = await loadRemovalTemplateSetupCore(ctx, input.facilityId);
+  expect(result.fitting).toMatchObject([
+    { id: missingFixed.id, blockedReason: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint },
+    { id: fixture.id, blockedReason: REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead },
+  ]);
+});
+it("fingerprints a preview without a stored observation the same way as the first observed plan", async () => {
+  mocks.latest.mockResolvedValue(null);
+  const preview = await loadRemovalTemplateSetupCore(ctx, input.facilityId);
+  expect(mocks.facts).not.toHaveBeenCalled();
+  mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, defaultRemovalTemplateId: fixture.id });
+  const stored = await loadRemovalTemplateSetupCore(ctx, input.facilityId);
+  expect(preview.fitting[0].planFingerprint).toBe(setupPlanFingerprint(preview.fitting[0].plan));
+  expect(preview.fitting[0].planFingerprint).toBe(stored.fitting[0].planFingerprint);
 });
 it("keeps an added decision visible when an unused template already has a matching observation", async () => {
   const added = definition.groups.flatMap((group) => group.components)[0];

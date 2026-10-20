@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { db } from "@/db";
-import { activityEvents, certifierProjects, creditBatches, facilities, feedstockTypes, productionProcesses, removalTemplateObservations } from "@/db/schema";
+import { activityEvents, certifierProjects, creditBatches, facilities, feedstockTypes, productionProcesses, removalTemplateObservations, users } from "@/db/schema";
 import { applyRemovalTemplateSetup, loadRemovalTemplateSetup } from "@/fn/certification/removal-template-setup";
 import { requireOrgContext } from "@/lib/auth/server";
 import { listGhgEntryTemplates } from "@/lib/isometric";
@@ -25,10 +25,12 @@ let facilityId: string;
 let feedstockTypeId: string;
 let productionProcessId: string;
 let template: ReturnType<typeof protocolDefaultFixture>;
+let secondAdminId: string | null;
 const scope = () => and(eq(certifierProjects.organizationId, ctx.organizationId), eq(certifierProjects.facilityId, facilityId));
 beforeAll(async () => { await ensureTestOrg(); });
 beforeEach(async () => {
   vi.clearAllMocks();
+  secondAdminId = null;
   vi.mocked(requireOrgContext).mockResolvedValue({ ...ctx, orgRole: "admin" });
   const tag = randomUUID();
   const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, organizationId: ctx.organizationId, timezone: "UTC", code: `SETUP-${tag}`, name: `Setup ${tag}` }).returning();
@@ -58,6 +60,7 @@ afterEach(async () => {
   await db.delete(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.facilityId, facilityId)));
   await db.delete(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId)));
   await db.delete(removalTemplateObservations).where(and(eq(removalTemplateObservations.organizationId, ctx.organizationId), eq(removalTemplateObservations.externalTemplateId, template.id)));
+  if (secondAdminId) await db.delete(users).where(eq(users.id, secondAdminId));
   await db.delete(certifierProjects).where(scope());
   await db.delete(productionProcesses).where(and(eq(productionProcesses.organizationId, ctx.organizationId), eq(productionProcesses.id, productionProcessId)));
   await db.delete(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, facilityId)));
@@ -68,7 +71,7 @@ async function input(): Promise<ApplyRemovalTemplateSetupInput> {
   if (!result.success) throw new Error(result.error);
   const entry = result.data.fitting[0];
   return { facilityId, removalTemplateId: template.id, fingerprints: { semanticFingerprint: entry.semanticFingerprint, fullFingerprint: entry.fullFingerprint },
-    answers: Object.fromEntries(entry.plan.decisions.map((decision) => [decision.id, decision.options[0].id])), overrides: {}, makeDefault: true, batches: [] };
+    planFingerprint: entry.planFingerprint, answers: Object.fromEntries(entry.plan.decisions.map((decision) => [decision.id, decision.options[0].id])), overrides: {}, makeDefault: true, batches: [] };
 }
 async function batch() {
   const [row] = await db.insert(creditBatches).values({ organizationId: ctx.organizationId, facilityId, feedstockTypeId, productionProcessId, code: `CB-${randomUUID()}`, startDate: "2026-01-01", endDate: "2026-01-31" }).returning();
@@ -109,6 +112,41 @@ it("returns a conflict for a stale fingerprint", async () => {
   const result = await applyRemovalTemplateSetup(planned);
   expect(result).toMatchObject({ success: false, code: "stale_version", error: "The template changed in Isometric. Review it again.", conflict: { entity: "removal_template_observation" } });
   await expectUnapplied();
+});
+it("refuses a stale default-only preview after a second Admin changes a choice, preserving the default and batch pins", async () => {
+  const pyrolysis = template.groups.find((group) => group.key === "pyrolysis")!;
+  const electricity = pyrolysis.components.find((component) => component.blueprint_key === "grid_electricity_use")!;
+  pyrolysis.components = [electricity];
+  const row = await batch();
+  const planned = await input();
+  planned.batches = [{ id: row.id, expectedVersion: row.version }];
+  expect(planned.answers).toEqual({});
+  const observationScope = and(eq(removalTemplateObservations.organizationId, ctx.organizationId), eq(removalTemplateObservations.externalTemplateId, template.id));
+  // The first preview has no stored observation to use as a version precondition.
+  expect(await db.select().from(removalTemplateObservations).where(observationScope)).toHaveLength(0);
+
+  secondAdminId = `setup-admin-${randomUUID()}`;
+  await db.insert(users).values({ id: secondAdminId, email: `${secondAdminId}@example.com` });
+  vi.mocked(requireOrgContext).mockResolvedValue({ ...ctx, userId: secondAdminId, orgRole: "admin" });
+  const changed = await input();
+  changed.overrides = { [electricity.id]: "entry" };
+  expect(await applyRemovalTemplateSetup(changed)).toMatchObject({ success: true });
+  const [reviewed] = await db.select().from(removalTemplateObservations).where(observationScope);
+  expect(reviewed.lineSources[electricity.id]).toMatchObject({ scope: "operating", entryPolicy: "additive", origin: "reviewed" });
+  expect(reviewed.lineSources[electricity.id].automaticSource).toBeUndefined();
+  const [mapping] = await db.select().from(certifierProjects).where(scope());
+  expect(mapping.defaultRemovalTemplateId).toBe(template.id);
+
+  vi.mocked(requireOrgContext).mockResolvedValue({ ...ctx, orgRole: "admin" });
+  expect(await applyRemovalTemplateSetup(planned)).toMatchObject({ success: false, code: "stale_version", conflict: { entity: "removal_template_observation" } });
+  const [after] = await db.select().from(removalTemplateObservations).where(observationScope);
+  expect(after.lineSources).toEqual(reviewed.lineSources);
+  expect(after.version).toBe(reviewed.version);
+  expect((await db.select().from(certifierProjects).where(scope()))[0]).toEqual(mapping);
+  const [unpinned] = await db.select().from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, row.id)));
+  expect(unpinned.removalTemplateId).toBeNull();
+  expect(unpinned.version).toBe(row.version);
+  expect(await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.facilityId, facilityId)))).toHaveLength(0);
 });
 it("a batch held by a Removal rolls back default and decisions", async () => {
   await withLineageFixture(async (fixture) => {
