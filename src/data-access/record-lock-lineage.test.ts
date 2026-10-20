@@ -87,3 +87,16 @@ it("shares statement requests across readers only with an explicit request cache
     [{ removalId: "removal", ghgStatementId: "statement" }], true, { statementReads })));
   expect(getGhgStatement).toHaveBeenCalledTimes(1);
 });
+
+
+it.each(["eligible", "unrelated", "remote-mutation", "in-flight", "ordinary-read"])("excludes only a validated refresh predecessor for its successor: %s", async (condition) => {
+  const common = { createdAt: null, submittedAt: null, externalId: null, localEntityId: "removal", payloadHash: "hash" };
+  const predecessor = { ...common, id: "predecessor", version: 2, status: "draft", lockedAt: condition === "in-flight" ? new Date() : new Date(0),
+    metadata: { externalMutation: condition === "remote-mutation" ? "possible" : "none", evidenceRefreshCandidates: [] } };
+  const current = { ...common, id: "current", version: 3, status: "draft", lockedAt: new Date(), metadata: { supersedePreviousId: condition === "unrelated" ? "other" : predecessor.id } };
+  let reads = 0;
+  const tx = { select: () => ({ from: (table: unknown) => ({ where: () => table === certificationSubmissions ? (reads++ === 0 ? [predecessor, current] : []) : [] }) }) } as unknown as Pick<DbTransaction, "select">;
+  const [removal] = await readRecordLockLineage(makeTestOrgContext(), tx, [{ removalId: "removal", ghgStatementId: null }], false,
+    condition === "ordinary-read" ? {} : { excludeSubmissionId: current.id });
+  expect(removal.submissions.map(row => row.id)).toEqual(condition === "eligible" ? [] : condition === "ordinary-read" ? [predecessor.id, current.id] : [predecessor.id]);
+});

@@ -1,3 +1,4 @@
+import { inWindow } from "@/lib/certification/removal-emission-contributions";
 import { emissionCorrectionWindow } from "./emission-entry-corrections";
 import { entryLine, resolveEmissionEntryDate } from "@/lib/certification/emission-entry-rules";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
@@ -183,9 +184,10 @@ export async function tombstoneEmissionZeros(
   )).orderBy(emissionEntries.id).for("update");
   if (!before.length) return;
   const correctableIds = before.filter((zero) => {
-    const window = zero.sentByRemovalId && !zero.sendReservedBySubmissionId
-      ? emissionCorrectionWindow(ctx, tx, zero.creditBatchId, zero.sentByRemovalId) : undefined;
-    return window && entry.occurredOn >= window.start && entry.occurredOn <= window.end;
+    const removalId = zero.sentByRemovalId ?? zero.confirmedForRemovalId;
+    const window = removalId && !zero.sendReservedBySubmissionId
+      ? emissionCorrectionWindow(ctx, tx, zero.creditBatchId, removalId) : undefined;
+    return window && inWindow(entry, window);
   }).map((zero) => zero.id);
   const saved = await tx
     .update(emissionEntries)
@@ -308,10 +310,12 @@ export async function replaceEmissionEntry(ctx: OrgContext, input: ReplaceEmissi
     }, context);
     if (entry.sentByRemovalId) {
       const window = emissionCorrectionWindow(ctx, tx, entry.creditBatchId, entry.sentByRemovalId);
-      if (!window || replacement.occurredOn < window.start || replacement.occurredOn > window.end)
+      if (!window || !inWindow(replacement, window))
         throw new SafeError("Keep the entry date within this Removal's period.");
-      await tx.update(emissionEntries).set({ sentByRemovalId: entry.sentByRemovalId })
-        .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, replacement.id)));
+      const [stored] = await tx.update(emissionEntries).set({ sentByRemovalId: entry.sentByRemovalId,
+        version: nextVersion(emissionEntries.version), updatedAt: new Date() })
+        .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, replacement.id))).returning();
+      await recordEmissionEntryActivity(ctx, tx, "updated", replacement, { ...stored, values: replacement.values });
     }
     // Documents have polymorphic owners, not an entry-document join table.
     // Keep retained evidence and live uploads; failed uploads remain on the old row.
@@ -357,7 +361,7 @@ export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmission
     }
     if (entry.sentByRemovalId && data.occurredOn) {
       const window = emissionCorrectionWindow(ctx, tx, entry.creditBatchId, entry.sentByRemovalId);
-      if (!window || data.occurredOn < window.start || data.occurredOn > window.end)
+      if (!window || !inWindow({ occurredOn: data.occurredOn }, window))
         throw new SafeError("Keep the entry date within this Removal's period.");
     }
     const contentChanged =

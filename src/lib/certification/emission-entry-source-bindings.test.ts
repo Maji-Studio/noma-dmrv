@@ -94,7 +94,7 @@ it("refuses a file attached to two entries with actionable copy and both ids", (
     expect.fail("Expected duplicate evidence to fail");
   } catch (error) {
     expect(error).toBeInstanceOf(EmissionEntryEvidenceError);
-    expect(error).toHaveProperty("message", EMISSION_ENTRY_FILE_DUPLICATE("Emissions entry, Diesel for machinery, 2026-03-14, CB-26-001"));
+    expect(error).toHaveProperty("message", EMISSION_ENTRY_FILE_DUPLICATE("the Diesel for machinery entry of 2026-03-14 (CB-26-001)"));
     expect((error as EmissionEntryEvidenceError).ids).toEqual({ entryId: "other-entry", otherEntryId: "entry", documentId: "document" });
   }
 });

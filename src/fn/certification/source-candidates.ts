@@ -1,4 +1,4 @@
-import { EMISSION_ENTRY_FILE_UNAVAILABLE } from "@/lib/certification/emission-entry-messages";
+import { EMISSION_ENTRY_FILE_UNAVAILABLE, formatEmissionEntryMessageLabel } from "@/lib/certification/emission-entry-messages";
 import { withEmissionEntryEvidenceDiagnostics } from "./emission-entry-evidence-diagnostics";
 import { logger } from "@/lib/log";
 import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
@@ -460,7 +460,13 @@ async function collectEntrySourceDocuments(orgCtx: OrgContext, contributions?: R
           componentId: target.kind === "explicit" ? target.componentId : undefined, inputKey: target.inputKey,
         })),
       }, "Contributing emissions entry file unavailable");
-      throw new SafeError(EMISSION_ENTRY_FILE_UNAVAILABLE(binding.lineage.entityLabel));
+      const target = binding.intendedTarget;
+      const input = contributions?.manifest.find((input) => target.kind === "explicit" &&
+        input.componentId === target.componentId && input.inputKey === target.inputKey);
+      const entry = input?.entries.find((entry) => entry.entryId === binding.lineage.entityId);
+      const messageLabel = formatEmissionEntryMessageLabel({ componentDisplayName: input?.componentDisplayName,
+        occurredOn: entry?.occurredOn, creditBatchCode: entry?.creditBatchCode });
+      throw new SafeError(EMISSION_ENTRY_FILE_UNAVAILABLE(messageLabel));
     }
     return { document, binding };
   });

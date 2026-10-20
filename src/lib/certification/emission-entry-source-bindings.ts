@@ -1,6 +1,6 @@
 import { isInFrozenEntrySet } from "./removal-entry-snapshot";
 import { EmissionEntryEvidenceError } from "./emission-entry-evidence-error";
-import { EMISSION_ENTRIES_CHANGED, EMISSION_ENTRY_FILE_DUPLICATE } from "./emission-entry-messages";
+import { EMISSION_ENTRIES_CHANGED, EMISSION_ENTRY_FILE_DUPLICATE, formatEmissionEntryMessageLabel } from "./emission-entry-messages";
 import type { RemovalEntryContributions } from "./removal-emission-contributions";
 import {
   SOURCE_BINDING_MAPPING_REVISION,
@@ -25,7 +25,9 @@ export function emissionEntrySourceCandidates(
         const existing = candidates.get(documentId);
         if (existing) {
           if (existing.binding.lineage.entityId !== entry.entryId) {
-            throw new EmissionEntryEvidenceError(EMISSION_ENTRY_FILE_DUPLICATE(label), { documentId, entryId: entry.entryId, otherEntryId: existing.binding.lineage.entityId });
+            const messageLabel = formatEmissionEntryMessageLabel({ componentDisplayName: input.componentDisplayName,
+              occurredOn: entry.occurredOn, creditBatchCode: entry.creditBatchCode });
+            throw new EmissionEntryEvidenceError(EMISSION_ENTRY_FILE_DUPLICATE(messageLabel), { documentId, entryId: entry.entryId, otherEntryId: existing.binding.lineage.entityId });
           }
           const targets = [existing.binding.intendedTarget, ...(existing.binding.additionalIntendedTargets ?? [])];
           if (!targets.some((item) => item.kind === "explicit" && item.componentId === target.componentId && item.inputKey === target.inputKey)) {

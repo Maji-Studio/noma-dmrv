@@ -35,6 +35,18 @@ export function allowedEntryPolicies(component: TemplateComponent): EntryPolicy[
     inputs.some((input) => input.key === key && kinds.has(input.quantityKind));
   if (has("initial_readout", ENERGY_KINDS) && has("final_readout", ENERGY_KINDS)) return ["none", "single"];
   if (has("concentration", GAS_CONCENTRATION_KINDS) && has("mass_flow", GAS_MASS_KINDS)) return ["none", "single"];
-  if (has("mass", MASS_KINDS) && has("distance", DISTANCE_KINDS)) return ["none", "single"];
+  if (isMassDistancePair(inputs)) return ["none", "single"];
   return ["none"];
+}
+
+function isMassDistancePair(inputs: TemplateComponent["inputs"]): boolean {
+  return inputs.length === 2 && inputs.some((input) => input.key === "mass" && MASS_KINDS.has(input.quantityKind)) &&
+    inputs.some((input) => input.key === "distance" && DISTANCE_KINDS.has(input.quantityKind));
+}
+
+/** Stored automatic pairs used additive before whole-entry pairing was enforced. */
+export function isLegacyAutomaticPair(component: TemplateComponent, contract: { entryPolicy: EntryPolicy; automaticSource?: string }): boolean {
+  return isMassDistancePair(component.inputs.filter((input) => input.type === "monitored")) &&
+    contract.entryPolicy === "additive" && Boolean(contract.automaticSource) &&
+    allowedEntryPolicies(component).includes("single") && !allowedEntryPolicies(component).includes("additive");
 }

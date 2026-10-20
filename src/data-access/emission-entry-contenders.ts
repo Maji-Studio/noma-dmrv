@@ -1,10 +1,10 @@
-import { isRemovalCorrectionWindowOpen } from "@/lib/record-lock";
+import { isSubmittedAttempt, isRemovalCorrectionWindowOpen } from "@/lib/record-lock";
 import { getCertifiedLineageForBatches } from "./certification-lineage-guards";
 import { emissionCorrectionBatchIds } from "./emission-entry-corrections";
 import type { StatementReads } from "./record-lock-lineage";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { applications } from "@/db/schema/application";
 import { certifierRemovals, certificationSubmissions } from "@/db/schema/certification";
@@ -14,7 +14,7 @@ import { deriveRemovalEntryWindow, type EntryContender } from "@/lib/certificati
 import { requireOrgScope, type Executor } from "./utils";
 
 /** Every unsubmitted Removal is a contender, even before it acquires a ledger row. */
-export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBatchIds: string[], executor: Executor & Pick<typeof db, "selectDistinct"> = db): Promise<EntryContender[]> {
+export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBatchIds: string[], executor: Executor & Pick<typeof db, "selectDistinct"> = db, claimedAttempt?: { removalId: string; submissionId: string }): Promise<EntryContender[]> {
   requireOrgScope(ctx);
   if (!creditBatchIds.length) return [];
   const enabled = emissionsEntriesEnabled();
@@ -39,12 +39,22 @@ export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBa
     return window ? [{ contenderKind: "draft" as const, removalId, createdAt: group[0].createdAt.toISOString(),
       creditBatchIds: [...new Set(group.map((row) => row.creditBatchId))], window }] : [];
   });
+  let excludeSubmissionId: string | undefined;
+  if (claimedAttempt && ids.includes(claimedAttempt.removalId)) {
+    const [latest] = await executor.select({ id: certificationSubmissions.id, status: certificationSubmissions.status,
+      version: certificationSubmissions.version }).from(certificationSubmissions).where(and(
+      eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.provider, "isometric"),
+      eq(certificationSubmissions.localEntityType, "removal"), eq(certificationSubmissions.submissionType, "removal"),
+      eq(certificationSubmissions.localEntityId, claimedAttempt.removalId),
+    )).orderBy(desc(certificationSubmissions.version)).limit(1);
+    if (latest?.id === claimedAttempt.submissionId && latest.status === "draft" && latest.version > 1) excludeSubmissionId = latest.id;
+  }
   const statementReads: StatementReads = new Map();
   const lineageReads = new Map<string, ReturnType<typeof getCertifiedLineageForBatches>>();
   const lineageByBatch = new Map(await Promise.all([...new Set(rows.map((row) => row.creditBatchId))].map(async (batchId) => {
     const union = await emissionCorrectionBatchIds(ctx, executor, batchId);
     const key = JSON.stringify([...union].sort());
-    if (!lineageReads.has(key)) lineageReads.set(key, getCertifiedLineageForBatches(ctx, executor, union, statementReads));
+    if (!lineageReads.has(key)) lineageReads.set(key, getCertifiedLineageForBatches(ctx, executor, union, statementReads, excludeSubmissionId));
     const lineage = await lineageReads.get(key)!;
     return [batchId, lineage.map((row) => row.recordLockRemoval)] as const;
   })));
@@ -55,10 +65,10 @@ export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBa
     if (!fact) return [];
     const eligibleBatchIds = group.map((row) => row.creditBatchId).filter((id) => {
       const shared = lineageByBatch.get(id);
-      return !!fact && !!shared && isRemovalCorrectionWindowOpen(fact, shared);
+      return !!shared && isRemovalCorrectionWindowOpen(fact, shared);
     });
     const correction = eligibleBatchIds.length > 0;
-    const submitted = fact?.submissions.some((submission) => submission.submittedAt || ["submitted", "accepted"].includes(submission.status));
+    const submitted = fact.submissions.some(isSubmittedAttempt);
     if (submitted && !correction) return [];
     const window = deriveRemovalEntryWindow(group, group.map((row) => row.applicationDate));
     return window ? [{ contenderKind: correction ? "correction" as const : "draft" as const, removalId, createdAt: group[0].createdAt.toISOString(),

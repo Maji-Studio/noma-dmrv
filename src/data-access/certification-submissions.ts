@@ -392,8 +392,14 @@ async function createDraft<H>(
   try {
     const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
       await lockAndVerifyMapping(ctx, tx, args.guard);
-      if (args.key.localEntityType === "removal" && args.key.submissionType === "removal")
-        await lockRemovalEntryCorrectionAttempt(ctx, tx, args.key.localEntityId);
+      if (args.key.localEntityType === "removal" && args.key.submissionType === "removal") {
+        const candidate = await getLatestSubmissionWithExecutor(ctx, tx, args.key);
+        const recovery = decideSubmissionClaim({ latest: candidate, payloadHash: args.hashOf(args.tentativeInputs),
+          now: Date.now(), lockTtlMs: LOCK_TTL_MS, policy: args.policy });
+        const predecessorId = recovery.kind === "create-new-version" && recovery.reason === "evidence-refresh"
+          ? recovery.supersedePreviousId ?? undefined : undefined;
+        await lockRemovalEntryCorrectionAttempt(ctx, tx, args.key.localEntityId, predecessorId);
+      }
       await lockSubmissionArtifact(tx, args.key);
       if (await isRemovalDeletionLeased(ctx, args.key, tx)) return { kind: "blocked", reason: "in-flight" };
       // Recovery may delete a purely local Removal after the optimistic

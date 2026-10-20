@@ -337,3 +337,21 @@ it("keeps separate mass and distance inputs single and flags stored additive con
     [pair.id]: { scope: "operating", origin: "reviewed", entryPolicy: "additive" },
   })).toContainEqual({ code: "disallowed-entry-policy", componentId: pair.id });
 });
+
+
+it.each([1, 2])("normalizes stored automatic transport pairs for fixture %s, preserving reviewed decisions", (index) => {
+  const definition = definitions[index];
+  const id = index === 1 ? "rtc_1M2QJGQS21S0XCMB" : "rtc_1KWKNGJZY1S0D548";
+  for (const origin of ["bootstrap", "carried", "proposed", "reviewed"] as const) {
+    const lineSources = resolveLineSources({ definition });
+    lineSources[id] = { ...lineSources[id], automaticSource: "feedstock-transport", entryPolicy: "additive", origin };
+    const resolved = resolveLineSources({ definition, previous: { definition, lineSources } });
+    expect(resolved[id].entryPolicy).toBe(origin === "reviewed" ? "additive" : "none");
+    expect(validateLineSources(definition, resolved, { entriesEnabled: false })).toEqual(origin === "proposed" ? [{ code: "unassigned", componentId: id }] : []);
+    const problems = validateLineSources(definition, resolved, { entriesEnabled: true });
+    expect(problems).toEqual(origin === "reviewed" ? [{ code: "disallowed-entry-policy", componentId: id }] : origin === "proposed" ? [{ code: "unassigned", componentId: id }] : []);
+    expect(lineNeedsReview(id, resolved[id], problems)).toBe(origin === "reviewed" || origin === "proposed");
+    // A second observation must never silently normalize an admin's decision.
+    expect(resolveLineSources({ definition, previous: { definition, lineSources: resolved } })[id].entryPolicy).toBe(resolved[id].entryPolicy);
+  }
+});

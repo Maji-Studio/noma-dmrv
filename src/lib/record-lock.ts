@@ -67,6 +67,14 @@ export function isRemoteSubmission(submission: RecordLockSubmission): boolean {
   return REMOTELY_SUBMITTED_STATUSES.has(submission.status as LocalSubmissionStatus) || submissionHasRemoteEffect(submission);
 }
 
+export function isSubmittedAttempt(submission: RecordLockSubmission): boolean {
+  return Boolean(submission.submittedAt) || REMOTELY_SUBMITTED_STATUSES.has(submission.status as LocalSubmissionStatus);
+}
+
+function isIdleAttempt(submission: RecordLockSubmission): boolean {
+  return !submission.inFlight && isTerminalAttemptStatus(submission.status);
+}
+
 export function isReturnedStatement(statement: RecordLockStatement): boolean {
   return statement.fresh && !statement.inFlight &&
     (statement.status === "FAILED_VERIFICATION" || (statement.status === "DRAFT" && statement.submittedToVerifier));
@@ -150,7 +158,7 @@ export function isInterruptedRemoval(removal: RecordLockRemoval): boolean {
 
 export function isSentRemoval(removal: RecordLockRemoval): boolean {
   const unknownOrInFlight = removal.submissions.some(submission =>
-    submission.inFlight || !isTerminalAttemptStatus(submission.status),
+    !isIdleAttempt(submission),
   );
   if (unknownOrInFlight) return true;
   const allStatementsSafe = removal.statements.length > 0 && removal.statements.every(isReturnedStatement);
@@ -179,9 +187,10 @@ export function isReturnedRemoval(removal: RecordLockRemoval): boolean {
 /** Entry corrections use the existing returned state and every shared lineage holder. */
 export function isRemovalCorrectionWindowOpen(removal: RecordLockRemoval, lineage: readonly RecordLockRemoval[] = [removal]): boolean {
   return isReturnedRemoval(removal) && lineage.every((holder) =>
-    holder.submissions.every((submission) => !submission.inFlight && isTerminalAttemptStatus(submission.status)) &&
-    holder.statements.every((statement) => statement.fresh && !statement.inFlight &&
-      (statement.status === "DRAFT" || statement.status === "FAILED_VERIFICATION")));
+    holder.submissions.every(isIdleAttempt) &&
+    // An unsubmitted DRAFT on another holder has never locked its lineage.
+    holder.statements.every((statement) => isReturnedStatement(statement) ||
+      (statement.fresh && !statement.inFlight && statement.status === "DRAFT" && !statement.submittedToVerifier)));
 }
 
 function returnedBy(facts: RecordLockFacts): Pick<RecordLock, "returnedBy"> {

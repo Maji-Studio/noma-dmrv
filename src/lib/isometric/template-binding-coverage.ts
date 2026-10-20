@@ -19,12 +19,12 @@ export interface UnbindableTemplateInput {
 
 export function findUnbindableTemplateInputs(
   template: components["schemas"]["GhgEntryTemplate"],
-  options: { lineSources?: LineSources; enrichmentComplete?: boolean; entriesCanSubmit?: boolean } = {},
+  options: { lineSources?: LineSources; enrichmentComplete?: boolean; entriesCanSubmit?: boolean; entriesEnabled?: boolean } = {},
 ): UnbindableTemplateInput[] {
   if (options.enrichmentComplete === false) return [];
   const definition = normalizeTemplateDefinition(template);
   const lineSources = options.lineSources ?? {};
-  const problems = validateLineSources(definition, lineSources);
+  const problems = validateLineSources(definition, lineSources, { entriesEnabled: options.entriesEnabled ?? options.entriesCanSubmit ?? false });
   const componentsById = new Map(definition.groups.flatMap((group) => group.components.map((component) => [component.id, component] as const)));
   return template.groups.flatMap((group) => group.components.flatMap((rawComponent) => {
     const component = componentsById.get(rawComponent.id)!;

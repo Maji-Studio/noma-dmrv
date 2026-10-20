@@ -534,9 +534,9 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
       ...(facts.emissionLines != null ? [{
         key: "emissions" as const, label: "Emissions", fixTarget: "emissions" as const,
         status: emissionIssues.size ? "unmet" as const : "met" as const,
-        detail: [[...emissionIssues.values()].map((line) => line.blocker?.code === "entryHasNoRemoval"
+        detail: [...emissionIssues.values()].map((line) => line.blocker?.code === "entryHasNoRemoval"
           ? line.blocker.message : line.blocker?.code === "entryMissingEvidence"
-          ? `Add a file for ${line.displayName}.` : `Check the manual entry on ${line.displayName}.`).join(" ")].filter(Boolean).join(" ") || undefined,
+          ? `Add a file for ${line.displayName}.` : `Check the manual entry on ${line.displayName}.`).join(" ") || undefined,
       }] : []),
       // Template line blockers (no source, unassigned, not set up) are
       // facility-level and stay in Removal readiness, like the rest of coverage.

@@ -21,7 +21,7 @@ export async function assertClaimedRemovalPayloadFresh(args: {
       reason,
       preserveForReconciliation: args.preserveForReconciliation,
     });
-  const freshCtx = await loadRemovalSubmissionContext(orgCtx, removalId, { refreshEnrichment: true });
+  const freshCtx = await loadRemovalSubmissionContext(orgCtx, removalId, { refreshEnrichment: true, claimedSubmissionId: row.id });
   const { prepared, blockers } = prepareRemovalSubmission(freshCtx);
   if (blockers.length > 0 || !prepared) {
     const durabilityOnly = blockers.length > 0 && blockers.every(

@@ -96,6 +96,7 @@ export async function buildRemovalContext(
   orgCtx: OrgContext,
   scope: RemovalScope,
   facilityFacts: FacilityCertifierFacts,
+  claimedSubmissionId?: string,
 ): Promise<RemovalSubmissionContext> {
   // Load removal-owned facts up-front so every short-circuit carries them.
   const [latestSubmission, hasFinalized, linkedGhgStatement] =
@@ -118,7 +119,8 @@ export async function buildRemovalContext(
         : Promise.resolve(false),
       loadLinkedGhgStatementStatus(orgCtx, scope.removal),
     ]);
-  const batchEmissionFacts = await loadBatchEmissionContext(orgCtx, scope.facilityId, scope.memberBatches, facilityFacts);
+  const batchEmissionFacts = await loadBatchEmissionContext(orgCtx, scope.facilityId, scope.memberBatches, facilityFacts,
+    claimedSubmissionId && scope.removalId ? { removalId: scope.removalId, submissionId: claimedSubmissionId } : undefined);
   const frozenEntrySet = emissionsEntriesEnabled() ? frozenEntriesForAttempt(latestSubmission, batchEmissionFacts) : undefined;
   const loadedRemovalEntries = await loadRemovalEntryContext(orgCtx, scope, batchEmissionFacts, facilityFacts, frozenEntrySet);
   const removalEntryContext = loadedRemovalEntries && { contributions: loadedRemovalEntries.contributions,
@@ -435,7 +437,7 @@ export async function buildRemovalContext(
 export async function loadRemovalSubmissionContext(
   orgCtx: OrgContext,
   removalId: string,
-  options: { refreshEnrichment?: boolean } = {},
+  options: { refreshEnrichment?: boolean; claimedSubmissionId?: string } = {},
 ): Promise<RemovalSubmissionContext> {
   const scope = await resolveScopeForRemoval(orgCtx, removalId);
   const facilityFacts = await loadFacilityCertifierFacts(
@@ -443,7 +445,7 @@ export async function loadRemovalSubmissionContext(
     scope.facilityId,
     options,
   );
-  return buildRemovalContext(orgCtx, scope, facilityFacts);
+  return buildRemovalContext(orgCtx, scope, facilityFacts, options.claimedSubmissionId);
 }
 
 function projectUiContext(

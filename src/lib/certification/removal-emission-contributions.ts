@@ -66,7 +66,7 @@ export function isLiveEntryReservation(row: {
   if (row.status !== "draft") return true;
   return nowMs - (row.lockedAt?.getTime() ?? 0) < LOCK_TTL_MS;
 }
-function inWindow(entry: RemovalEntryFact, window: RemovalEntryWindow) {
+export function inWindow(entry: { occurredOn: string }, window: RemovalEntryWindow) {
   return entry.occurredOn >= window.start && entry.occurredOn <= window.end;
 }
 export function removalEntryOwner(entry: RemovalEntryFact, contenders: readonly EntryContender[]): string | null {

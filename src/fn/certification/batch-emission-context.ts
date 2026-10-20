@@ -28,6 +28,7 @@ export async function loadBatchEmissionContext(
   ctx: OrgContext, facilityId: string,
   batches: readonly { id: string; removalTemplateId: string | null }[],
   facilityFacts: EntryTemplateContext,
+  claimedAttempt?: { removalId: string; submissionId: string },
 ): Promise<BatchEmissionContext> {
   const result: BatchEmissionContext = {};
   if (!emissionsEntriesEnabled()) return result;
@@ -48,7 +49,7 @@ export async function loadBatchEmissionContext(
   const [storedEntries, automatic, contenders, availableApplications] = await Promise.all([
     listEmissionEntriesForBatches(ctx, ids),
     loadBatchesEmissionAutomaticFacts(ctx, ids),
-    listEmissionEntryDraftContenders(ctx, ids),
+    listEmissionEntryDraftContenders(ctx, ids, undefined, claimedAttempt),
     listEmissionEntryAvailableApplications(ctx, ids),
   ]);
   const reservations = await loadEmissionEntryReservations(ctx, [...new Set(storedEntries.flatMap((entry) => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []))]);

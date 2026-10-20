@@ -433,8 +433,8 @@ const LINEAGE_TARGET_COLUMNS = {
 } as const;
 
 /** Advisory counterpart of the locked batch-union reader. Cache belongs to its caller. */
-export async function getCertifiedLineageForBatches(ctx: OrgContext, tx: Pick<DbTransaction, "select" | "selectDistinct">, batchIds: readonly string[], statementReads: StatementReads) {
+export async function getCertifiedLineageForBatches(ctx: OrgContext, tx: Pick<DbTransaction, "select" | "selectDistinct">, batchIds: readonly string[], statementReads: StatementReads, excludeSubmissionId?: string) {
   requireOrgScope(ctx);
   if (!batchIds.length) return [];
-  return resolveLineage(ctx, tx, inArray(creditBatches.id, [...batchIds]), true, { statementReads });
+  return resolveLineage(ctx, tx, inArray(creditBatches.id, [...batchIds]), true, { statementReads, excludeSubmissionId });
 }
