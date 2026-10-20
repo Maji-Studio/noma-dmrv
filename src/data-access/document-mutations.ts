@@ -10,7 +10,7 @@ import { SafeError } from "@/lib/errors";
 import { acquireMirrorLock } from "@/lib/isometric/utils/source-lock";
 import { metadataRecord } from "@/lib/documents/metadata";
 import { setVisibilitySchema, updateApplicationEvidenceMetadataSchema } from "@/schemas/documents";
-import { releaseUnreferencedIsometricMapping, type DocumentRow } from "./documents";
+import { DOCUMENT_REGISTRY_ROLE_ERROR, releaseUnreferencedIsometricMapping, type DocumentRow } from "./documents";
 import { changedOwner, assertDocumentOwnerWritable, documentNotFound, lockDocumentOwner, readDocumentForWrite } from "./document-write-scope";
 import { enqueueDocumentKeys } from "./document-storage-deletions";
 import { assertRowVersion, nextVersion } from "./row-version";
@@ -31,6 +31,7 @@ export async function deleteDocumentInTransaction(ctx: OrgContext, tx: DbTransac
   const row = await lockDocument(ctx, tx, input.documentId, true);
   assertRowVersion({ entity: "document", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });
   const release = await releaseUnreferencedIsometricMapping(ctx, tx, row.id);
+  if (release === "registry-role") throw new DomainError("forbidden", DOCUMENT_REGISTRY_ROLE_ERROR);
   if (release !== "released") throw new DomainError("certification_locked", release === "reviewed-evidence" ? "This document belongs to reviewed certification evidence and cannot be deleted or replaced." : "This document belongs to submitted certification history and cannot be deleted or replaced. The Isometric Source and audit history remain unchanged.");
   const [mapping] = await tx.select({ id: certifierDocumentUploads.id }).from(certifierDocumentUploads).where(and(eq(certifierDocumentUploads.documentId, row.id), eq(certifierDocumentUploads.organizationId, ctx.organizationId))).limit(1);
   if (mapping) throw new DomainError("conflict", "This document is mirrored to a certification provider and cannot be deleted.");

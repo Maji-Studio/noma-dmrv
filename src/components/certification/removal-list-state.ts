@@ -27,6 +27,8 @@ export interface RemovalListRow {
   submissionInterrupted: boolean;
   hasFinalizedSubmission: boolean;
   registryBoundaryOpened: boolean;
+  /** A fresh Removal deletion lease hides Delete for every viewer. */
+  deletionInProgress: boolean;
   readiness: RemovalPreflightSummary["readiness"] | null;
   evidenceHealth: RemovalPreflightSummary["evidenceHealth"];
   evidenceLinks: RemovalPreflightSummary["evidenceLinks"] | null;
@@ -81,6 +83,8 @@ export function buildRemovalListRows(
       registryBoundaryOpened:
         lifecycleData?.registryBoundaryOpened ??
         identity.registryBoundaryOpened,
+      deletionInProgress:
+        lifecycleData?.deletionInProgress ?? identity.deletionInProgress,
       readiness: lifecycleData?.readiness ?? null,
       evidenceHealth: data?.evidenceHealth ?? null,
       evidenceLinks: data?.evidenceLinks ?? null,
@@ -130,6 +134,7 @@ type RemovalDeleteFacts = Pick<
   | "submissionInterrupted"
   | "hasFinalizedSubmission"
   | "registryBoundaryOpened"
+  | "deletionInProgress"
 >;
 
 /**
@@ -140,12 +145,14 @@ type RemovalDeleteFacts = Pick<
  * interrupted. Members may delete only a Removal that never touched the
  * registry; once it did, the viewer must meet the role floor. Unknown access
  * hides the action rather than offering one the server would refuse. The
- * server re-checks every rule under its own locks.
+ * server re-checks every rule under its own locks. A fresh Removal deletion
+ * lease hides Delete for every role, including ledgerless and rejected rows.
  */
 export function canDeleteRemovalRow(
   row: RemovalDeleteFacts,
   access: RemovalDeleteAccess,
 ): boolean {
+  if (row.deletionInProgress) return false;
   const neverFinalized =
     !row.hasFinalizedSubmission &&
     (row.local === null || row.local === "draft" || row.local === "rejected");

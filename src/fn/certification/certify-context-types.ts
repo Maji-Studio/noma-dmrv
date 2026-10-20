@@ -91,6 +91,8 @@ export interface RemovalCertifyContext {
   // A submit attempt opened the registry boundary (Source mirroring) before
   // any ledger row existed. Deletion treats it as registry exposure.
   registryBoundaryOpened: boolean;
+  /** A fresh Removal deletion lease hides Delete for every viewer. */
+  deletionInProgress: boolean;
   // The GHG Statement this removal rolls into + its verifier status, or null
   // when the removal isn't linked to one. See `LinkedGhgStatementStatus`.
   linkedGhgStatement: LinkedGhgStatementStatus | null;

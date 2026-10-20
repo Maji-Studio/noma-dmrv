@@ -428,6 +428,7 @@ function makeContext(
     latestSubmission: null,
     hasFinalizedSubmission: false,
     registryBoundaryOpened: false,
+    deletionInProgress: false,
     linkedGhgStatement: null,
     isProduction: false,
     lineages: [

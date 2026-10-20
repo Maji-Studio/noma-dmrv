@@ -723,3 +723,9 @@ Three failure-path gaps, each a surprising mode before a registry write:
 - **Anchor**: `src/lib/isometric/production-batches.ts:createProductionBatch` and `src/data-access/certifier-removal-deletion.ts:finalizeRemovalDeletion`.
 - **Current handling**: Certify has no PATCH for Production Batches or MeasurementSamples. Before finalization, deleting the Removal removes the owned registry records and is the correction path. After finalization, noma builds no replacement flow: the operator is told to contact an admin or Isometric.
 - **Parked** on 2026-10-19 (Kenji, epic #632): #1112 (replace a registered batch) and #1113 (show superseded resources) are closed until a real case appears. Reopening this starts with asking Isometric whether it accepts a replacement resource after finalization or amends on its side.
+
+### Documents UI still offers Delete on mirrored documents to Members (`isometric/mirrored-document-delete-ui`, opened 2026-10-20) - **deferred**
+
+- **Anchor**: `src/data-access/documents.ts:releaseUnreferencedIsometricMapping` and the document panels that offer Delete (for example `src/components/samples/sample-documents-panel.tsx`).
+- **Current handling**: since #1188 the server refuses a Member who deletes a document with an Isometric mapping, or a parent record holding one (for example a credit batch), and shows the role message. The documents UI does not know about mappings, so it still offers Delete.
+- **To resolve**: expose the mapping as a document fact and hide or disable Delete for viewers below `REMOVAL_REGISTRY_DELETION_MIN_ROLE`, on document panels and on parent records.

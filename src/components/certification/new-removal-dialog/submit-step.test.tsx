@@ -353,6 +353,7 @@ describe("SubmitStep", () => {
     const MARKER_CONTEXT = {
       ...CONTEXT,
       registryBoundaryOpened: true,
+      deletionInProgress: false,
     } as RemovalCertifyContext;
 
     async function renderStep(ctx: RemovalCertifyContext) {

@@ -512,6 +512,7 @@ export function makeContext(
     latestSubmission: latest,
     hasFinalizedSubmission: false,
     registryBoundaryOpened: false,
+    deletionInProgress: false,
     linkedGhgStatement: null,
     isProduction: false,
     lineages: [makeLineage({ biocharMassKg })],
