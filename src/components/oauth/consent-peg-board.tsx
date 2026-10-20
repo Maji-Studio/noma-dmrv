@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { groupState, togglePeg, toggleAll, type ConsentArea } from "./consent-areas";
 import { NewTag, Peg, SettledPeg } from "./consent-pegs";
 
-const PEG_COLUMN = "w-[56px]";
+const PEG_COLUMN = "w-56";
 const ROW = "border-b border-[var(--color-border-tertiary)]";
 const HEAD_CELL = "py-8 text-center body-small font-medium text-[var(--color-text-secondary)]";
 
