@@ -202,11 +202,13 @@ type SideSheetState =
 interface BiocharProductMassSummaryProps {
   stats: Pick<BiocharProductStats, "totalWetMassKg" | "totalDryBiocharMassKg"> | undefined;
   isLoading?: boolean;
+  isError?: boolean;
 }
 
 export function BiocharProductMassSummary({
   stats,
   isLoading = false,
+  isError = false,
 }: BiocharProductMassSummaryProps) {
   return (
     <StatCard
@@ -223,6 +225,7 @@ export function BiocharProductMassSummary({
       valueLayout="breakdown"
       icon={<ScalesIcon size={24} weight="bold" />}
       isLoading={isLoading}
+      isError={isError}
     />
   );
 }
@@ -329,7 +332,7 @@ export function BiocharProductList() {
     toast,
   ]);
 
-  const { data: statsData, isLoading: statsLoading } = useBiocharProductStats(
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useBiocharProductStats(
     contextFacilityId || undefined,
     { enabled: !!contextFacilityId },
   );
@@ -477,8 +480,9 @@ export function BiocharProductList() {
           description="All products in this facility"
           icon={<CubeIcon size={24} weight="bold" />}
           isLoading={statsLoading}
+          isError={statsError}
         />
-        <BiocharProductMassSummary stats={statsData} isLoading={statsLoading} />
+        <BiocharProductMassSummary stats={statsData} isLoading={statsLoading} isError={statsError} />
       </div>
 
       <RecordLockListNotice read={productLocks} />

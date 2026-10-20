@@ -223,7 +223,7 @@ export function OrderList() {
     isLoading,
     setCurrentPage,
   });
-  const { data: statsData, isLoading: statsLoading } = useOrderStats(facilityId || undefined, { enabled: !!facilityId });
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useOrderStats(facilityId || undefined, { enabled: !!facilityId });
 
   // Side sheet helpers
   const openCreate = () => {
@@ -376,9 +376,9 @@ export function OrderList() {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
-        <StatCard title="Total orders" value={statsData?.totalOrders ?? 0} description="All orders in this facility" icon={<PackageIcon size={24} weight="bold" />} isLoading={statsLoading} />
-        <StatCard title="Total deliveries" value={statsData?.totalDeliveries ?? 0} description="On all orders in this facility" icon={<TruckIcon size={24} weight="bold" />} isLoading={statsLoading} />
-        <StatCard title="Total quantity" value={`${(statsData?.totalQuantityKg ?? 0).toLocaleString()} kg`} description="Ordered across all orders in this facility" icon={<PackageIcon size={24} weight="bold" />} isLoading={statsLoading} />
+        <StatCard title="Total orders" value={statsData?.totalOrders ?? 0} description="All orders in this facility" icon={<PackageIcon size={24} weight="bold" />} isLoading={statsLoading} isError={statsError} />
+        <StatCard title="Total deliveries" value={statsData?.totalDeliveries ?? 0} description="On all orders in this facility" icon={<TruckIcon size={24} weight="bold" />} isLoading={statsLoading} isError={statsError} />
+        <StatCard title="Total quantity" value={`${(statsData?.totalQuantityKg ?? 0).toLocaleString()} kg`} description="Ordered across all orders in this facility" icon={<PackageIcon size={24} weight="bold" />} isLoading={statsLoading} isError={statsError} />
       </div>
 
       <RecordLockListNotice read={orderLocks} />
