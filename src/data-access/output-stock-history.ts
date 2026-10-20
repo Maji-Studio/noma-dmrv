@@ -11,7 +11,8 @@ import { getOutputStockAllocationProjection, readOutputBinAllLayers, UnresolvedO
 import { getOutputMovementCertificationLocks, outputMovementLockReason } from './output-stock-edit-lock';
 import { requireOrgScope } from './utils';
 import { deliveryAppliedLockedReason } from '@/lib/output-stock/labels';
-import { entryIngredientSolids } from '@/lib/output-stock/entry-ingredient-solids';
+import { entryIngredientSolids, type EntryDraw } from '@/lib/output-stock/entry-ingredient-solids';
+import { rationalToNumber, readRational } from '@/lib/output-stock/exact';
 import { savedIngredientSolids } from './output-stock-ingredients';
 
 /**
@@ -34,9 +35,13 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   const deletedPlacements = products.length === 0 ? [] : await deletedProductReversals(ctx, reader, products.map(product => product.id));
   const runCode = new Map(runs.map(r => [r.id, r.code]));
   const productCode = new Map(products.map(p => [p.id, p.code]));
+  // Each movement's batches with the exact solids they froze, so a draw whose dry biochar rounds to zero still splits its ingredients.
+  const exactDraws = new Map<string, EntryDraw[]>();
   const history: OutputStockHistoryEntry[] = movements.filter(({ movement: m }) => m.outputKind).flatMap(({ movement: m, actorName }) => {
     const effects = rows.filter(r => r.movement.id === m.id);
     const allocations = [...new Map(effects.map(e => [e.allocation.id, e.allocation])).values()];
+    exactDraws.set(m.id, allocations.map(a => ({ layerId: (a.biocharProductId ?? a.productionRunId)!, dryMassKg: Number(a.dryMassKg),
+      solidsKg: frozenSolidsKg(a.basisSnapshot.solidsKg) })));
     const kind = m.inputSnapshot?.kind;
     const preview = m.inputSnapshot?.preview as Partial<OutputStockPreview> | undefined;
     const direction = m.outputKind === 'reversal' ? -1 : 1;
@@ -114,7 +119,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     // Each entry's ingredient solids by material, in the shares its products saved: the history's per-part changes.
     const saved = await savedIngredientSolids(ctx, products.map(p => p.id), reader);
     for (const entry of history) {
-      const parts = entryIngredientSolids({ dryChangeKg: -entry.dryMassKg, solidsChangeKg: entry.solidsDeltaKg ?? null, draws: entry.allocations, productDryKg, saved });
+      const parts = entryIngredientSolids({ dryChangeKg: -entry.dryMassKg, solidsChangeKg: entry.solidsDeltaKg ?? null, draws: exactDraws.get(entry.id) ?? entry.allocations, productDryKg, saved });
       if (parts.some(part => part.solidsKg !== 0)) entry.ingredientSolidsDeltas = parts;
     }
   }
@@ -150,6 +155,15 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     if (original) entry.editLockedReason = code ? deliveryAppliedLockedReason(code) : await outputMovementLockReason(ctx, storageLocationId, original.id, reader, { original, facilityId: bin.facilityId, all: rows, layers, certificationLocks: certificationLocks.get(original.id) ?? [] });
   }
   return history;
+}
+
+/** An allocation's frozen exact solids, or null when the snapshot has none to read; display only. */
+function frozenSolidsKg(value: unknown): number | null {
+  try {
+    return rationalToNumber(readRational(value));
+  } catch {
+    return null;
+  }
 }
 
 /** The "Moisture updated" row a movement's readings add to the bin's history. */

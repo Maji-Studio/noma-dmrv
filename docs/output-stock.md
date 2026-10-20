@@ -155,7 +155,13 @@ not water. The output chart cancels each corrected entry with its reversal when
 both are present and plots only the live effect in physical-time order; history
 keeps every row. Unmatched reversals remain in the chart replay so totals add up.
 Explanatory moisture rows are not counted twice. Missing
-historical wet or solids bases leave water unknown. Bay, pile-band and chart
+historical wet or solids bases leave water unknown. Wet mass below the solids
+(removals wetter than the bin) has no water figure either: the chart and history
+leave water out rather than show 0 kg (`stockWaterKg` in `stock-replay.ts`).
+Water is display only; no balance, guard, preview or posting reads it. The
+replay re-bases an unknown wet or solids figure on a movement's saved
+after-balance only while no earlier-dated entry was recorded after that balance
+was saved. Bay, pile-band and chart
 point details open on hover, keyboard focus or tap. A product bin's bays and
 pile bands name their parts as the product composition does (dry biochar,
 "<ingredient> solids", estimated water): `getOutputSubBins` splits each layer's

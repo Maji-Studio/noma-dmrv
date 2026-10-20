@@ -11,6 +11,11 @@ export interface OpenCreateIntentOptions {
   initialOpen?: boolean;
   contextParam?: string;
   initialContext?: string | null;
+  /**
+   * Opens the caller's own create sheet on a client navigation, given the
+   * context parameter's value, instead of this hook holding the open state.
+   */
+  onOpen?: (context: string | null) => void;
 }
 
 /**
@@ -22,10 +27,10 @@ export interface OpenCreateIntentOptions {
 export function useOpenCreateIntent(
   optionsOrLegacyCallback: OpenCreateIntentOptions | (() => void) = {},
 ) {
-  const legacyCallback =
+  const legacyCallback: ((context: string | null) => void) | null =
     typeof optionsOrLegacyCallback === "function"
       ? optionsOrLegacyCallback
-      : null;
+      : (optionsOrLegacyCallback.onOpen ?? null);
   const initialOpen =
     typeof optionsOrLegacyCallback === "function"
       ? false
@@ -60,10 +65,10 @@ export function useOpenCreateIntent(
     }
 
     handledRef.current = true;
+    const context = contextParam ? searchParams.get(contextParam) : null;
     if (legacyCallback) {
-      legacyCallback();
+      legacyCallback(context);
     } else {
-      const context = contextParam ? searchParams.get(contextParam) : null;
       queueMicrotask(() => setIntent({ context }));
     }
 

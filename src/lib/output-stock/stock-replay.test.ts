@@ -41,6 +41,21 @@ describe("replayStock", () => {
     expect(steps[3].after).toMatchObject({ dryKg: 117, wetKg: 144 });
   });
 
+  it("never re-bases on a frozen balance saved before a back-dated batch without a moisture reading", () => {
+    // The delivery at 12:00 saw 100 kg wet before it and froze 75 kg after it.
+    const draw = entry({ id: "d1", kind: "delivery", occurredAt: AT(12), recordedAt: AT(12), dryMassKg: 20, wetDeltaKg: -25, solidsDeltaKg: -20, afterWetKg: 75, afterSolidsKg: 60 });
+    // Recorded at 14:00 but dated 11:00, before the delivery: its frozen balance never saw this batch.
+    const backDated = { ...unmeasured, occurredAt: AT(11), recordedAt: AT(14) };
+    expect(last([measured, draw])).toMatchObject({ dryKg: 60, wetKg: 75 });
+    expect(last([measured, backDated, draw])).toMatchObject({ dryKg: 110, solidsKg: 110, wetKg: null });
+  });
+
+  it("still re-bases on a frozen balance saved after every earlier-dated entry", () => {
+    const count = entry({ id: "c1", kind: "count", occurredAt: AT(12), recordedAt: AT(15), dryMassKg: 0, wetDeltaKg: null, solidsDeltaKg: 0, afterWetKg: 160, afterSolidsKg: 130 });
+    const backDated = { ...unmeasured, occurredAt: AT(11), recordedAt: AT(14) };
+    expect(last([measured, backDated, count])).toMatchObject({ wetKg: 160, solidsKg: 130 });
+  });
+
   it("keeps the running wet mass over a frozen balance once it is known", () => {
     const count = entry({ id: "c1", kind: "count", occurredAt: AT(11), recordedAt: AT(11), dryMassKg: 0, wetDeltaKg: -10, solidsDeltaKg: 0, afterWetKg: 75 });
     expect(last([measured, count])?.wetKg).toBe(90);
