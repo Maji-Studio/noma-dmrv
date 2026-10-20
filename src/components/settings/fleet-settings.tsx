@@ -1,5 +1,5 @@
 /**
- * Settings → Vehicles and crew. The organization's vehicles, drivers and
+ * Vehicles and crew. The organization's vehicles, drivers and
  * operators in one place, each editable and deletable. The pickers on intake,
  * delivery and production forms create and edit the same records.
  */
