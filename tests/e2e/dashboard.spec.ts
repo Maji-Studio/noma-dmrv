@@ -278,13 +278,15 @@ test.describe("Credit batch view sheet (Phase 5)", () => {
     // Sentence case (docs/design-system.md › Label casing); `exact: true` is
     // case-sensitive, so this string must match the UI's casing exactly.
     await expect(sheet.getByText("Feedstock type", { exact: true })).toBeVisible();
-    // This fixture has no preview: no summary metric, and an explicit missing figure.
+    // This fixture has no preview: no summary metric, and the derived figure is left out, not a placeholder.
     await expect(sheet.getByText("Estimated CO₂e stored", { exact: true })).toHaveCount(0);
     const carbonEstimate = sheet.getByRole("region", {
       name: "Carbon estimate, before project emissions",
       exact: true,
     });
-    await expect(carbonEstimate.getByText("Not available", { exact: true })).toBeVisible();
+    await expect(carbonEstimate).toBeVisible();
+    await expect(carbonEstimate).not.toContainText("≈");
+    await expect(carbonEstimate).not.toContainText("Not available");
     await expect(sheet.getByText("Durability", { exact: true })).toBeVisible();
     await expect(
       sheet.getByText("Production runs", { exact: true }),

@@ -46,6 +46,8 @@ export interface RemovalCertifyContext {
   unbindableTemplateInputs: UnbindableTemplateInput[];
   memberBatches: MemberCreditBatch[];
   emissionsLedger: RemovalLedgerPreview;
+  /** The emissions entries switch (server-side; always set on the UI payload). Off: no entries, recorded zeros or empty components. */
+  emissionsEntriesEnabled?: boolean;
   feedstockTypeMappingGaps: FeedstockTypeMappingGap[];
   transportCoverage: TransportCoverage;
   requiredTransportCategories: TransportCategory[];
@@ -106,6 +108,8 @@ export interface RemovalCertifyContext {
 // Kept server-internal so the cached UI payload stays lean.
 export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "emissionsLedger"> {
   facilityTimezone: string;
+  /** Datapoints fixed in the template, for the compiled review's value column. */
+  fixedInputValues?: readonly { componentId: string; inputKey: string; magnitude: number; unit: string }[];
   removalEntryContext?: Omit<NonNullable<Awaited<ReturnType<typeof loadRemovalEntryContext>>>, "batchFacts">;
   lineages: ChainOfCustodyData[];
   runs: ProductionRunForCertification[];

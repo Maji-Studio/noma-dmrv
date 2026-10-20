@@ -49,4 +49,27 @@ describe("checkMigrations", () => {
     entries[11].when = entries[10].when + 1;
     expect(checkMigrations(entries, files)).toHaveLength(1);
   });
+
+  describe("against staging", () => {
+    const STAGING = [ENTRIES[0], { idx: 1, tag: "0001_staging_take", when: 150 }];
+
+    it("accepts a branch that contains staging plus its own new migration", () => {
+      const branch = [...STAGING, { idx: 2, tag: "0002_mine", when: 300 }];
+      expect(checkMigrations(branch, branch.map((e) => `${e.tag}.sql`), STAGING)).toEqual([]);
+    });
+
+    it("accepts staging itself", () => {
+      expect(checkMigrations(STAGING, STAGING.map((e) => `${e.tag}.sql`), STAGING)).toEqual([]);
+    });
+
+    it("rejects a branch-only migration whose number staging already took", () => {
+      expect(checkMigrations(ENTRIES, FILES, STAGING)).toEqual([
+        "0001 already exists on staging as 0001_staging_take. Run pnpm db:renumber",
+      ]);
+    });
+
+    it("skips the staging comparison when staging is unavailable", () => {
+      expect(checkMigrations(ENTRIES, FILES, undefined)).toEqual([]);
+    });
+  });
 });

@@ -71,11 +71,11 @@ export function ApplicationEvidenceDocumentList({
                 {doc.fileName}
               </span>
               <span className="body-caption text-[var(--color-text-tertiary)]">
-                {formatFileSize(doc.fileSizeBytes)}
-                {doc.capturedAt ? ` · ${formatDate(doc.capturedAt)}` : ""}
-                {evidenceRole
-                  ? ` · ${APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS[evidenceRole]}`
-                  : ""}
+                {[
+                  doc.fileSizeBytes == null ? null : formatFileSize(doc.fileSizeBytes),
+                  doc.capturedAt ? formatDate(doc.capturedAt) : null,
+                  evidenceRole ? APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS[evidenceRole] : null,
+                ].filter(Boolean).join(" · ")}
               </span>
               {missingExif && (
                 <span className="inline-flex items-center gap-4 body-caption text-[var(--color-signal-orange-strong)]">

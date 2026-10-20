@@ -116,3 +116,14 @@ it("uses new entries after a crashed unreserved attempt acquires a fresh lock", 
   const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, loaded, facility, frozen);
   expect(result?.contributions.entrySet).toHaveLength(2);
 });
+
+it.each([false, true])("preserves an empty snapshot only after reservation (%s)", async (reserved) => {
+  const loaded = facts(); // Entries added after the empty snapshot was built.
+  loaded.b1.productionReservationSubmissionId = reserved ? "attempt" : null;
+  const submission = { id: "attempt", status: "draft", metadata: null,
+    payloadSnapshot: { frozenEntrySet: [] } } as Parameters<typeof frozenEntriesForAttempt>[0];
+  const frozen = frozenEntriesForAttempt(submission, loaded);
+  expect(frozen).toEqual(reserved ? [] : undefined);
+  const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, loaded, facility, frozen);
+  expect(result?.contributions.entrySet).toHaveLength(reserved ? 0 : 2);
+});

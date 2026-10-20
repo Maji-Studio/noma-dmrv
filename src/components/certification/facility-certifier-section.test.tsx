@@ -7,6 +7,7 @@ import { FacilityCertifierForm } from "./facility-certifier-dialog";
 import { FacilityCertifierSection } from "./facility-certifier-section";
 import { EntitySelect } from "@/components/forms/entity-select/entity-select";
 import type { EntitySelectProps } from "@/components/forms/entity-select/types";
+import { NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
 
 vi.mock("@/components/forms/entity-select/entity-select", () => ({
   EntitySelect: ({ id, value, options, placeholder }: EntitySelectProps) => (
@@ -296,5 +297,59 @@ describe("FacilityCertifierSection", () => {
     expect(markup).not.toContain(">Edit<");
     expect(markup).toContain("prj_test");
     expect(markup).toContain("Not set. Add the Isometric facility ID to register production batches.");
+  });
+  it("shows saved IDs without claiming they are gone when registry keys are not configured", () => {
+    vi.mocked(useFacilityCertifierMapping).mockReturnValueOnce({
+      data: {
+        mapping: {
+          externalProjectId: "prj_saved",
+          protocolSlug: "biochar",
+          defaultRemovalTemplateId: "tpl_saved",
+          externalFacilityId: "",
+        },
+        availableProjects: [],
+        availableTemplates: [],
+        linkHints: [],
+        isProduction: false,
+        isConfigured: false,
+      },
+      isLoading: false,
+      error: null,
+    } as never);
+
+    const markup = renderToStaticMarkup(
+      <FacilityCertifierSection facilityId="facility-1" canManage embedded linkPresentation="inline" />,
+    );
+
+    expect(markup).toContain("prj_saved");
+    expect(markup).toContain("tpl_saved");
+    expect(markup).not.toContain(NOT_FOUND_ON_ISOMETRIC);
+  });
+
+  it("says a saved ID is not found once a configured lookup misses it", () => {
+    vi.mocked(useFacilityCertifierMapping).mockReturnValueOnce({
+      data: {
+        mapping: {
+          externalProjectId: "prj_gone",
+          protocolSlug: "biochar",
+          defaultRemovalTemplateId: null,
+          externalFacilityId: "",
+        },
+        availableProjects: [],
+        availableTemplates: [],
+        linkHints: [],
+        isProduction: false,
+        isConfigured: true,
+      },
+      isLoading: false,
+      error: null,
+    } as never);
+
+    const markup = renderToStaticMarkup(
+      <FacilityCertifierSection facilityId="facility-1" canManage embedded linkPresentation="dialog" />,
+    );
+
+    expect(markup).toContain(NOT_FOUND_ON_ISOMETRIC);
+    expect(markup).toContain("prj_gone");
   });
 });

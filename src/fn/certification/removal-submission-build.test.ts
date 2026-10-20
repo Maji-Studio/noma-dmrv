@@ -153,7 +153,6 @@ describe("buildRemovalSubmissionBuild", () => {
         } as never,
         blueprintsByKey: new Map(),
         externalProjectId: "prj-test",
-        allowPeriodInputStub: false,
         hasDurabilityComponents: false,
       },
     });
@@ -184,7 +183,6 @@ describe("buildRemovalSubmissionBuild", () => {
         } as never,
         blueprintsByKey: new Map(),
         externalProjectId: "prj-test",
-        allowPeriodInputStub: false,
         hasDurabilityComponents: false,
       },
       sourceIds: ["src-test"],
@@ -277,7 +275,6 @@ describe("buildRemovalSubmissionBuild", () => {
           removalTemplate: { groups: [] } as never,
           blueprintsByKey: new Map(),
           externalProjectId: "prj-test-missing-readiness",
-          allowPeriodInputStub: false,
           hasDurabilityComponents: false,
         },
       }),
@@ -308,7 +305,6 @@ describe("buildRemovalSubmissionBuild", () => {
           removalTemplate: { groups: [] } as never,
           blueprintsByKey: new Map(),
           externalProjectId: "prj-test-1",
-          allowPeriodInputStub: false,
           hasDurabilityComponents: false,
         },
       }),
@@ -338,7 +334,6 @@ describe("buildRemovalSubmissionBuild", () => {
         removalTemplate: { groups: [] } as never,
         blueprintsByKey: new Map(),
         externalProjectId: "prj-test",
-        allowPeriodInputStub: false,
         hasDurabilityComponents: false,
       },
     })).rejects.toThrow("Removal submission blocked:\nFeedstock FS-2 has no usable transport leg.");
@@ -355,7 +350,7 @@ describe("buildRemovalSubmissionBuild", () => {
       orgCtx: TEST_ORG_CONTEXT, removalId: "rem-missing-proof", ctx,
       prepared: {
         lineSources: {}, removalTemplate: { groups: [] } as never, blueprintsByKey: new Map(),
-        externalProjectId: "prj-test", allowPeriodInputStub: false, hasDurabilityComponents: false },
+        externalProjectId: "prj-test", hasDurabilityComponents: false },
     })).rejects.toThrow("Delivery D-0012 has no proof of delivery");
   });
 
@@ -374,7 +369,7 @@ describe("buildRemovalSubmissionBuild", () => {
       prepared: {
         lineSources: {},
         removalTemplate: { groups: [] } as never, blueprintsByKey: new Map(),
-        externalProjectId: "prj-test", allowPeriodInputStub: false, hasDurabilityComponents: false,
+        externalProjectId: "prj-test", hasDurabilityComponents: false,
       },
     })).rejects.toThrow("Delivery DL-1 has no positive transport distance");
   });
@@ -549,7 +544,6 @@ describe("buildRemovalSubmissionBuild", () => {
         removalTemplate: template,
         blueprintsByKey,
         externalProjectId: "project-1",
-        allowPeriodInputStub: false,
         hasDurabilityComponents: false,
       },
       candidateSourceDocuments: [sourceCandidate],
@@ -763,7 +757,7 @@ it.each([unsupportedTemplate(), production as RegistryComponents["schemas"]["Ghg
     orgCtx: TEST_ORG_CONTEXT, removalId: "blocked-removal", ctx: { facilityTimezone: "Africa/Dar_es_Salaam" } as RemovalSubmissionContext,
     prepared: {
         lineSources: reviewedTemplateSources(removalTemplate),
-        removalTemplate, blueprintsByKey: new Map(), externalProjectId: "project", allowPeriodInputStub: false, hasDurabilityComponents: true },
+        removalTemplate, blueprintsByKey: new Map(), externalProjectId: "project", hasDurabilityComponents: true },
   });
   expect(builder).not.toHaveBeenCalled();
   builder.mockRestore();
