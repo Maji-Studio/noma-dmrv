@@ -272,6 +272,8 @@ interface CreditBatchSheetSectionsOptions extends CreditBatchRunsContentProps {
   locked?: boolean;
   /** The deep-link focus target the sheet was opened with. */
   activeFocusTarget?: string | null;
+  /** A Removal holds biochar from this batch (`isCreditBatchMembershipLocked`). */
+  inRemoval?: boolean;
   /** Applied dry biochar (kg) from the page model; undefined while it loads, null when it failed. */
   appliedDryKg?: number | null;
   /** The server's EMISSIONS_ENTRIES_ENABLED flag; set it to mount the Emissions panel between Production runs and Notes. */
@@ -290,6 +292,7 @@ export function creditBatchSheetSections({
   canManage = false,
   locked = false,
   activeFocusTarget,
+  inRemoval = false,
   appliedDryKg,
   emissionsEntriesEnabled,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
@@ -339,6 +342,7 @@ export function creditBatchSheetSections({
           locked={locked}
           activeFocusTarget={activeFocusTarget}
           linesToDecide={healthSummary?.linesToDecide ?? 0}
+          inRemoval={inRemoval}
         />
       ),
     },

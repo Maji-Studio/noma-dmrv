@@ -20,7 +20,7 @@ vi.mock("@/hooks/use-certification", () => ({
 }));
 vi.mock("./credit-batch-template-switch-dialog", () => ({ CreditBatchTemplateSwitchDialog: () => null }));
 
-function mount(canManage: boolean, locked = false, activeFocusTarget?: string) {
+function mount(canManage: boolean, locked = false, activeFocusTarget?: string, inRemoval = false) {
   render(
     <CreditBatchRemovalTemplate
       creditBatch={{ id: "batch-1", code: "CB-26-001", facilityId: "facility-1", version: 2, removalTemplateId: mocks.pin }}
@@ -28,6 +28,7 @@ function mount(canManage: boolean, locked = false, activeFocusTarget?: string) {
       locked={locked}
       activeFocusTarget={activeFocusTarget}
       linesToDecide={mocks.linesToDecide}
+      inRemoval={inRemoval}
     />,
   );
 }
@@ -88,10 +89,14 @@ describe("CreditBatchRemovalTemplate", () => {
       );
     });
 
-    it("keeps it for a batch a Removal locks", () => {
+    it("says another Removal once a Removal holds the batch", () => {
       mocks.linesToDecide = 1;
-      mount(false, true);
-      expect(screen.getByText("1 line to decide, so this credit batch can't go into a Removal. An Owner or Admin decides it in Removal templates.")).toBeTruthy();
+      mount(false, true, undefined, true);
+      expect(screen.getByText("1 line to decide, so this credit batch can't go into another Removal. An Owner or Admin decides it in Removal templates.")).toBeTruthy();
+      cleanup();
+      mocks.linesToDecide = 17;
+      mount(true, false, undefined, true);
+      expect(screen.getByText("17 lines to decide, so this credit batch can't go into another Removal.")).toBeTruthy();
     });
 
     it("says nothing when every line is decided or the pin is gone", () => {

@@ -44,6 +44,8 @@ export interface CreditBatchRemovalTemplateProps {
    * page or the list already loads; 0 when none or not loaded yet.
    */
   linesToDecide: number;
+  /** A Removal already holds biochar from this batch, so a further one is what waits. */
+  inRemoval?: boolean;
 }
 
 /**
@@ -51,8 +53,8 @@ export interface CreditBatchRemovalTemplateProps {
  * decides them. Owners and Admins get the Decide lines link instead of the
  * second sentence.
  */
-export function linesToDecideNoticeText(count: number, canManage: boolean): string {
-  const lead = `${linesToDecideLabel(count)}, so this credit batch can't go into a Removal.`;
+export function linesToDecideNoticeText(count: number, canManage: boolean, inRemoval = false): string {
+  const lead = `${linesToDecideLabel(count)}, so this credit batch can't go into ${inRemoval ? "another" : "a"} Removal.`;
   if (canManage) return lead;
   return `${lead} ${linesDecidedByOwnerOrAdmin(count)}`;
 }
@@ -63,6 +65,7 @@ export function CreditBatchRemovalTemplate({
   locked,
   activeFocusTarget,
   linesToDecide: undecidedLines,
+  inRemoval = false,
 }: CreditBatchRemovalTemplateProps) {
   const [switching, setSwitching] = useState(false);
   // The sheet holds a snapshot; the pin and version come from the live record
@@ -134,7 +137,7 @@ export function CreditBatchRemovalTemplate({
             </Link>
           ) : undefined}
         >
-          {linesToDecideNoticeText(linesToDecide, canManage)}
+          {linesToDecideNoticeText(linesToDecide, canManage, inRemoval)}
         </Notice>
       )}
       {pinnedId && (

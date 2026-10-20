@@ -231,7 +231,7 @@ function DetailsPanel() {
           <DetailRow label="Notes" value={batch.siteManagementNotes?.trim() || null} />
         </dl>
         <div className="border-t border-[var(--color-border-secondary)] pt-16">
-          <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} locked={sent} activeFocusTarget={focus} linesToDecide={linesToDecide} />
+          <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} locked={sent} activeFocusTarget={focus} linesToDecide={linesToDecide} inRemoval={membershipLocked} />
         </div>
       </PagePanel>
     </FocusRow>
