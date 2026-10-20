@@ -598,9 +598,9 @@ formula version, held allocations. It sits behind an (i).
   earlier answer makes it relevant (a cancellation reason, an over-allocation
   justification). Keep long sheets calm by grouping, pairing and unit
   suffixes, never by hiding.
-- **No presentation state.** There is no provider, no `detailToggle` on
-  `EntitySideSheet` and no level to test. A test of a block asserts the inline
-  content, then opens the (i) and asserts the explanation.
+- **No presentation state.** There is no provider, no sheet prop and no level to
+  test. A test of a block asserts the inline content, then opens the (i) and
+  asserts the explanation.
 
 ### Derived blocks
 
