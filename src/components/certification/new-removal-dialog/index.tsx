@@ -38,6 +38,9 @@ import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { SelectBatchesStep } from "./select-batches-step";
 import { SubmitStep } from "./submit-step";
 import { shouldBlockRemovalResume } from "./resume-state";
+import { parseAsString, useQueryState } from "nuqs";
+import { PrototypeWizard } from "./prototype-wizard";
+import type { ProtoScenario, ProtoVariant } from "./prototype-fixtures";
 
 const STEPS: StepFlowStep[] = [
   { key: "select", label: "Select batches" },
@@ -69,6 +72,13 @@ export function NewRemovalDialog({
   const closeIfIdle = () => {
     if (!submissionPending) onClose();
   };
+  // PROTOTYPE ONLY (#1058 PR 4): ?proto=a|b|c swaps the body for fixture variants.
+  const [proto] = useQueryState("proto", parseAsString);
+  const [scenario] = useQueryState("scenario", parseAsString);
+  const [protoStep] = useQueryState("step", parseAsString);
+  const [confirmed] = useQueryState("confirmed", parseAsString);
+  const [note] = useQueryState("note", parseAsString);
+  const variant = proto === "a" || proto === "b" || proto === "c" ? (proto as ProtoVariant) : null;
 
   return (
     <Modal
@@ -85,6 +95,19 @@ export function NewRemovalDialog({
       dismissOnClickOutside={false}
       dismissible={!submissionPending}
     >
+      {variant ? (
+        <PrototypeWizard
+          key={`${variant}-${scenario}-${protoStep}-${confirmed}`}
+          variant={variant}
+          scenario={(scenario === "two" ? "two" : "one") as ProtoScenario}
+          initialStep={protoStep === "empty" || protoStep === "submit" ? protoStep : "select"}
+          startConfirmed={confirmed === "all"}
+          initialNote={note ?? ""}
+          facilityId={facilityId}
+          facilityName={facilityName}
+          onClose={closeIfIdle}
+        />
+      ) : (
       <WizardBody
         facilityId={facilityId}
         facilityName={facilityName}
@@ -92,6 +115,7 @@ export function NewRemovalDialog({
         resumeRemovalId={resumeRemovalId}
         submitMutation={submitMutation}
       />
+      )}
     </Modal>
   );
 }

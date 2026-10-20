@@ -11,7 +11,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 
@@ -30,10 +30,12 @@ export function CertificationRegistryGuard({
     !!facilityId,
   );
 
+  // PROTOTYPE ONLY (#1058 PR 4): the fixture variants need no registry link.
+  const prototype = useSearchParams().has("proto");
   const onSettings =
     pathname === SETTINGS_PATH || pathname.startsWith(`${SETTINGS_PATH}/`);
   // Only guard once a facility is selected; Settings is always allowed through.
-  const guarded = !onSettings && !!facilityId;
+  const guarded = !onSettings && !!facilityId && !prototype;
   const hasRegistry = Boolean(data?.mapping);
   const shouldRedirect = guarded && !isLoading && !hasRegistry;
 
