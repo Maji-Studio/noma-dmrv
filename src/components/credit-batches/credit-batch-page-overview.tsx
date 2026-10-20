@@ -58,7 +58,15 @@ function OpenItemRow({ item }: { item: CreditBatchOpenItem }) {
     </>
   );
   const rowClass = itemRowClass(!!item.why);
-  const target = "href" in item.target ? (
+  // A row the viewer can't act on reads as text: no arrow, no hover, no link.
+  const target = item.target === null ? (
+    <div className={cn("flex min-h-44 items-center py-12", item.why && "pr-12")}>
+      <span className="flex min-w-0 flex-col gap-2">
+        <span className="body-medium font-medium">{item.title}</span>
+        {item.detail && <span className={cn("body-small", MUTED_TEXT)}>{item.detail}</span>}
+      </span>
+    </div>
+  ) : "href" in item.target ? (
     <Link href={item.target.href} className={rowClass}>
       {body}
     </Link>

@@ -26,7 +26,7 @@ import { useCreditBatch } from "@/hooks/use-credit-batches";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
 import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL } from "@/lib/certification/links";
-import { linesToDecideLabel } from "@/lib/certification/requirement-labels";
+import { linesDecidedByOwnerOrAdmin, linesToDecideLabel } from "@/lib/certification/requirement-labels";
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { RawIdentifiers } from "@/components/certification/removal-template-mapping-view";
 import { CreditBatchTemplateSwitchDialog } from "./credit-batch-template-switch-dialog";
@@ -54,7 +54,7 @@ export interface CreditBatchRemovalTemplateProps {
 export function linesToDecideNoticeText(count: number, canManage: boolean): string {
   const lead = `${linesToDecideLabel(count)}, so this credit batch can't go into a Removal.`;
   if (canManage) return lead;
-  return `${lead} An Owner or Admin decides ${count === 1 ? "it" : "them"} in Removal templates.`;
+  return `${lead} ${linesDecidedByOwnerOrAdmin(count)}`;
 }
 
 export function CreditBatchRemovalTemplate({

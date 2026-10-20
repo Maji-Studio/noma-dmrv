@@ -6,7 +6,7 @@ import {
 } from "@/lib/calculations/biochar-eligibility";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import type { BatchHealth } from "@/lib/certification/batch-health";
-import { certCheckLabel } from "@/lib/certification/requirement-labels";
+import { certCheckLabel, linesDecidedByOwnerOrAdmin } from "@/lib/certification/requirement-labels";
 import {
   batchHealthFixLinkFor,
   resolveBatchHealthFixTarget,
@@ -34,9 +34,11 @@ export interface CreditBatchOpenItem {
   detail?: string;
   /** The protocol reasoning behind a requirement, shown behind an ⓘ. */
   why?: string;
+  /** Where the row leads; null when the viewer can't act on it (a member and lines to decide). */
   target:
     | { tab: "overview" | "production" | "samples" | "emissions" | "removals"; rowId?: string }
-    | { href: string };
+    | { href: string }
+    | null;
 }
 
 export interface CreditBatchOpenItemsInput {
@@ -46,6 +48,8 @@ export interface CreditBatchOpenItemsInput {
   durability?: DurabilityBatchSummary;
   emissionLines?: readonly BatchEmissionLine[];
   pageModel?: CreditBatchPageModel;
+  /** Owner or Admin. Members get no Decide lines link, since Removal templates is theirs. Defaults to true. */
+  canManage?: boolean;
 }
 
 function outlierTitle(replicate: DurabilitySummaryReplicate): string {
@@ -80,6 +84,7 @@ const DOCUMENT_WARNING_ITEMS: Record<SampleDocumentWarningKey, CreditBatchOpenIt
 };
 
 export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
+  const canManage = input.canManage ?? true;
   const blocking: CreditBatchOpenItem[] = [];
   const check: CreditBatchOpenItem[] = [];
   const waiting: CreditBatchOpenItem[] = [];
@@ -88,7 +93,11 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     if (healthCheck.status !== "unmet") continue;
     const fix = resolveBatchHealthFixTarget(healthCheck);
     let target: CreditBatchOpenItem["target"];
-    if (fix === "labSamples") {
+    let detail = healthCheck.detail;
+    if (fix === "templateLineReview" && !canManage) {
+      target = null;
+      detail = linesDecidedByOwnerOrAdmin(healthCheck.linesToDecide ?? 0);
+    } else if (fix === "labSamples") {
       target = { tab: "samples" };
     } else if (fix === "emissions") {
       target = { tab: "emissions" };
@@ -108,7 +117,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     blocking.push({
       id: `health:${healthCheck.key}:${healthCheck.issueKey ?? fix}`,
       title: certCheckLabel(healthCheck),
-      detail: healthCheck.detail,
+      detail,
       ...(healthCheck.whyDetail ? { why: healthCheck.whyDetail } : {}),
       target,
     });
@@ -141,7 +150,8 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       const fixTarget = line.blocker?.fixTarget;
       const settingsFix = fixTarget === "templateLineReview" || fixTarget === "templateLines" ||
         fixTarget === "certificationTemplates" || fixTarget === "certificationEmissions";
-      const target: CreditBatchOpenItem["target"] = settingsFix
+      const memberCannotDecide = fixTarget === "templateLineReview" && !canManage;
+      const target: CreditBatchOpenItem["target"] = memberCannotDecide ? null : settingsFix
         ? { href: batchHealthFixLinkFor(
             { key: "emissions", fixTarget },
             input.facilityId,
@@ -151,7 +161,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       check.push({
         id: `emission:${line.componentId}`,
         title: `${line.displayName}: ${EMISSION_LINE_STATE_LABELS.needsReview}`,
-        detail: line.blocker?.message,
+        detail: memberCannotDecide ? linesDecidedByOwnerOrAdmin(1) : line.blocker?.message,
         target,
       });
     }

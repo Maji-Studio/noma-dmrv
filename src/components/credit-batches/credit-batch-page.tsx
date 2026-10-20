@@ -220,6 +220,7 @@ export function CreditBatchPage({
     emissionLines: emissionsEntriesEnabled ? emissionLines.data : undefined,
     durability: durability.data ?? undefined,
     pageModel: pageModel.data,
+    canManage,
   });
   const blocking = health.data ? openItems.blocking : undefined;
   const editable = isRecordEditable(lock);
@@ -239,6 +240,7 @@ export function CreditBatchPage({
   };
 
   const openItem = (item: CreditBatchOpenItem) => {
+    if (!item.target) return;
     if ("href" in item.target) {
       router.push(item.target.href);
       return;

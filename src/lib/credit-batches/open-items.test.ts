@@ -201,6 +201,29 @@ describe("buildCreditBatchOpenItems", () => {
       : { href: batchHealthFixLinkFor({ key: "emissions", fixTarget }, "facility", "batch").href });
   });
 
+  it("gives a member no Decide lines link, only who decides the lines", () => {
+    const check = { key: "templateLines" as const, label: "Lines decided", requirementLabel: "Lines decided", unmetLabel: "5 lines to decide",
+      status: "unmet" as const, fixTarget: "templateLineReview" as const, linesToDecide: 5, detail: "Decide them in Removal templates." };
+    const line = {
+      componentId: "diesel", displayName: "Diesel", state: "needsReview" as const, groupKey: "production", groupName: "Production", groupPosition: 0, position: 0,
+      description: null, entryPolicy: "additive" as const, records: null,
+      blueprintKey: "production", contract: undefined, automaticFigure: null, entries: [], total: null,
+      blocker: { code: "lineNeedsReview" as const, message: "Decide it in Removal templates.", fixTarget: "templateLineReview" as const },
+    };
+    const input = { ...batchContext, health: { state: "incomplete" as const, issueCount: 1, checks: [check] }, emissionLines: [line] };
+
+    const member = buildCreditBatchOpenItems({ ...input, canManage: false });
+    expect(member.blocking[0]).toMatchObject({
+      title: "5 lines to decide", detail: "An Owner or Admin decides them in Removal templates.", target: null,
+    });
+    expect(member.check[0]).toMatchObject({ detail: "An Owner or Admin decides it in Removal templates.", target: null });
+
+    const owner = buildCreditBatchOpenItems({ ...input, canManage: true });
+    expect(owner.blocking[0]).toMatchObject({ detail: "Decide them in Removal templates." });
+    expect(owner.blocking[0].target).toEqual({ href: batchHealthFixLinkFor(check, "facility", "batch").href });
+    expect(owner.check[0].target).toEqual({ href: batchHealthFixLinkFor({ key: "emissions", fixTarget: "templateLineReview" }, "facility", "batch").href });
+  });
+
   it("groups threshold, pairing, emission review and waiting items", () => {
     const input = {
       ...fixture(),
