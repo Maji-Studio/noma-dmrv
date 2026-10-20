@@ -20,7 +20,6 @@ import { loadGhgStatementsForFacility } from "@/fn/certification/ghg-statements"
 import { loadRemovalsForFacility } from "@/fn/certification/removals-hub";
 import * as authServer from "@/lib/auth/server";
 import { REGISTRY_DISCOVERY_SOURCE } from "@/lib/certification/submission-source";
-import { submittedOnState } from "@/lib/certification/submitted-on";
 import {
   GHG_STATEMENT_ENTITY_TYPE,
   GHG_STATEMENT_SUBMISSION_TYPE,
@@ -158,11 +157,11 @@ describe("submitted on list payloads (real DB)", () => {
     const entries = new Map(result.data.removals.map((entry) => [entry.removal.id, entry]));
     expect([...entries.keys()].sort()).toEqual([empty.id, draft.id, submitted.id].sort());
     expect(entries.get(empty.id)?.latestSubmission).toBeNull();
-    expect(submittedOnState(entries.get(empty.id)!.latestSubmission)).toEqual({ kind: "never" });
+    expect(entries.get(empty.id)!.submittedOn).toEqual({ kind: "never" });
     expect(entries.get(draft.id)?.latestSubmission?.status).toBe("draft");
-    expect(submittedOnState(entries.get(draft.id)!.latestSubmission)).toEqual({ kind: "never" });
+    expect(entries.get(draft.id)!.submittedOn).toEqual({ kind: "never" });
     expect(entries.get(submitted.id)?.latestSubmission).toEqual(latest);
-    expect(submittedOnState(entries.get(submitted.id)!.latestSubmission)).toEqual({
+    expect(entries.get(submitted.id)!.submittedOn).toEqual({
       kind: "submitted", at: LATEST_SUBMITTED_AT,
     });
     expect(lookup).toHaveBeenCalledExactlyOnceWith(makeTestOrgContext(), {
@@ -173,7 +172,7 @@ describe("submitted on list payloads (real DB)", () => {
     });
   });
 
-  it("uses a latest draft even when an older Removal version was submitted", async () => {
+  it("keeps the earlier submission date for a Removal whose latest version is a draft", async () => {
     const facility = await createFacility();
     const removal = await createRemoval(facility);
     await insertSubmission(removal, REMOVAL_ENTITY_TYPE, {
@@ -188,8 +187,27 @@ describe("submitted on list payloads (real DB)", () => {
     if (!result.success) throw new Error(result.error);
     const [entry] = result.data.removals;
     expect(entry.latestSubmission).toEqual(latest);
-    expect(submittedOnState(entry.latestSubmission)).toEqual({ kind: "never" });
+    // The date is the latest SUBMISSION, not the latest version.
+    expect(entry.submittedOn).toEqual({ kind: "submitted", at: FIRST_SUBMITTED_AT });
     expect(entry.hasFinalizedSubmission).toBe(true);
+  });
+
+  it("keeps the earlier submission date for a GHG Statement whose latest version is a draft", async () => {
+    const facility = await createFacility();
+    const statement = await createStatement(facility);
+    await insertSubmission(statement, GHG_STATEMENT_ENTITY_TYPE, {
+      status: "superseded", submittedAt: FIRST_SUBMITTED_AT,
+    });
+    const draft = await insertSubmission(statement, GHG_STATEMENT_ENTITY_TYPE, {
+      version: LATEST_VERSION,
+    });
+
+    const result = await loadGhgStatementsForFacility(facility.id);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error(result.error);
+    const [entry] = result.data;
+    expect(entry.latestSubmission).toEqual(draft);
+    expect(entry.submittedOn).toEqual({ kind: "submitted", at: FIRST_SUBMITTED_AT });
   });
 
   it("loads never-submitted and latest submitted GHG Statements", async () => {
@@ -213,11 +231,11 @@ describe("submitted on list payloads (real DB)", () => {
     const entries = new Map(result.data.map((entry) => [entry.statement.id, entry]));
     expect([...entries.keys()].sort()).toEqual([empty.id, draft.id, submitted.id].sort());
     expect(entries.get(empty.id)?.latestSubmission).toBeNull();
-    expect(submittedOnState(entries.get(empty.id)!.latestSubmission)).toEqual({ kind: "never" });
+    expect(entries.get(empty.id)!.submittedOn).toEqual({ kind: "never" });
     expect(entries.get(draft.id)?.latestSubmission?.status).toBe("draft");
-    expect(submittedOnState(entries.get(draft.id)!.latestSubmission)).toEqual({ kind: "never" });
+    expect(entries.get(draft.id)!.submittedOn).toEqual({ kind: "never" });
     expect(entries.get(submitted.id)?.latestSubmission).toEqual(latest);
-    expect(submittedOnState(entries.get(submitted.id)!.latestSubmission)).toEqual({
+    expect(entries.get(submitted.id)!.submittedOn).toEqual({
       kind: "submitted", at: LATEST_SUBMITTED_AT,
     });
   });
@@ -237,7 +255,7 @@ describe("submitted on list payloads (real DB)", () => {
     expect(result.success).toBe(true);
     if (!result.success) throw new Error(result.error);
     expect(result.data[0].latestSubmission).toEqual(discovered);
-    expect(submittedOnState(result.data[0].latestSubmission)).toEqual({ kind: "registryDiscovered" });
+    expect(result.data[0].submittedOn).toEqual({ kind: "registryDiscovered" });
   });
 
   it("excludes another organization's entities and refuses its facility", async () => {

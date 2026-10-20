@@ -5,6 +5,7 @@ import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import {
   getCertifierProjectByFacility,
   getLatestSubmissionsForEntities,
+  getLatestSubmittedForEntities,
   getSubmissionById,
   listRecentSyncEvents,
   type CertificationSubmissionRow,
@@ -44,6 +45,7 @@ import { withFacilityCertificationBoundarySessionLock } from "@/data-access/faci
 import { requireOrgFacility } from "@/data-access/utils";
 import { redactReportSecrets } from "@/lib/certification/report-url";
 import { overlayLiveRemoteStatus } from "@/lib/certification/from-submission";
+import { submittedOnState, type SubmittedOnState } from "@/lib/certification/submitted-on";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import {
@@ -151,6 +153,8 @@ export interface GhgStatementState {
 export interface GhgStatementListItem {
   statement: CertifierGhgStatementRow;
   latestSubmission: CertificationSubmissionRow | null;
+  /** Date of the latest submission, even when a newer draft version exists. */
+  submittedOn: SubmittedOnState;
   linkedRemovalCount: number;
   effectiveReportingPeriodEndOn: string;
   remotePeriodMissing: boolean;
@@ -798,19 +802,22 @@ export async function loadGhgStatementsForFacility(
     // statement and the linked-removal count per statement — instead of a
     // pair of queries per row.
     const statementIds = statements.map((statement) => statement.id);
-    const [submissions, removalCounts] = await Promise.all([
-      getLatestSubmissionsForEntities(orgCtx, {
-        provider: ISOMETRIC_PROVIDER,
-        submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
-        localEntityType: GHG_STATEMENT_ENTITY_TYPE,
-        localEntityIds: statementIds,
-      }),
+    const submissionKey = {
+      provider: ISOMETRIC_PROVIDER,
+      submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+      localEntityType: GHG_STATEMENT_ENTITY_TYPE,
+      localEntityIds: statementIds,
+    };
+    const [submissions, submittedRows, removalCounts] = await Promise.all([
+      getLatestSubmissionsForEntities(orgCtx, submissionKey),
+      getLatestSubmittedForEntities(orgCtx, submissionKey),
       countRemovalsByGhgStatementIds(orgCtx, statementIds),
     ]);
 
     return statements.map((statement) => ({
       statement,
       latestSubmission: submissions.get(statement.id) ?? null,
+      submittedOn: submittedOnState(submittedRows.get(statement.id) ?? null),
       linkedRemovalCount: removalCounts.get(statement.id) ?? 0,
       effectiveReportingPeriodEndOn:
         getEffectiveReportingPeriodEndOn(statement),

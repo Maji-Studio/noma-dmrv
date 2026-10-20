@@ -1,7 +1,7 @@
 import { formatCertifierMappingLockMessage } from "@/lib/certification/lineage-lock-message";
 import { DomainError } from "@/lib/domain-errors";
 import { insertDocument } from "./documents";
-import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
 import {
@@ -645,6 +645,42 @@ export async function getLatestSubmissionsForEntities(
       )
       .map((row) => [row.localEntityId, row]),
   );
+}
+
+// Sibling of getLatestSubmissionsForEntities for "when was this last
+// submitted": the highest-version row per entity whose submittedAt is set, so a
+// later draft version does not hide an earlier submission. One org-scoped
+// round-trip for N entities; entities never submitted are absent.
+export async function getLatestSubmittedForEntities(
+  ctx: OrgContext,
+  key: {
+    provider: CertifierProvider;
+    submissionType: string;
+    localEntityType: string;
+    localEntityIds: string[];
+  },
+  executor: Tx | typeof db = db,
+): Promise<Map<string, CertificationSubmissionRow>> {
+  requireOrgScope(ctx);
+  if (key.localEntityIds.length === 0) return new Map();
+  const rows = await executor
+    .selectDistinctOn([certificationSubmissions.localEntityId])
+    .from(certificationSubmissions)
+    .where(
+      and(
+        eq(certificationSubmissions.provider, key.provider),
+        eq(certificationSubmissions.submissionType, key.submissionType),
+        eq(certificationSubmissions.localEntityType, key.localEntityType),
+        inArray(certificationSubmissions.localEntityId, key.localEntityIds),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+        isNotNull(certificationSubmissions.submittedAt),
+      ),
+    )
+    .orderBy(
+      certificationSubmissions.localEntityId,
+      desc(certificationSubmissions.version),
+    );
+  return new Map(rows.map((row) => [row.localEntityId, row]));
 }
 
 export async function getSubmissionById(

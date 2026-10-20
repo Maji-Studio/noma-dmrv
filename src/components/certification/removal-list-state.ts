@@ -1,6 +1,6 @@
 import type { RemovalHubEntry } from "@/fn/certification/certify-context";
 import type { RemovalPreflightSummary } from "@/fn/certification/overview";
-import { submittedOnState, type SubmittedOnState } from "@/lib/certification/submitted-on";
+import type { SubmittedOnState } from "@/lib/certification/submitted-on";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { isRemovalSubmissionInterruptedFromSubmission } from "@/lib/certification/from-submission";
 
@@ -67,7 +67,7 @@ export function buildRemovalListRows(
       externalId:
         data?.externalId ?? identity.latestSubmission?.externalId ?? null,
       version: data?.version ?? identity.latestSubmission?.version ?? null,
-      submittedOn: submittedOnState(identity.latestSubmission),
+      submittedOn: identity.submittedOn,
       local,
       lockInFlight:
         lifecycleData?.lockInFlight ??
