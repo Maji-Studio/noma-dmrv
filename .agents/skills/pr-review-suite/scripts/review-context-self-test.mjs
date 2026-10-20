@@ -24,6 +24,7 @@ export function selfTestDesignContext() {
     "docs/design-system.md",
     "docs/ux-writing.md",
     "docs/design-decisions.md",
+    "docs/forms.md",
   ];
   deepStrictEqual(selectDesignContextPaths(basePaths, ["design"]), [
     ...projectPaths, ...docs,

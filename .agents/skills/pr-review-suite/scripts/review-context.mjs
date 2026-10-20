@@ -9,6 +9,7 @@ const DESIGN_DOC_PATHS = [
   "docs/design-system.md",
   "docs/ux-writing.md",
   "docs/design-decisions.md",
+  "docs/forms.md",
 ];
 const GLOBAL_DESIGN_SKILL_PATH = "global-skills/maji-design-app/SKILL.md";
 const GLOBAL_DESIGN_SKILL_CANDIDATES = [
