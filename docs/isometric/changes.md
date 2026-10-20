@@ -10,6 +10,13 @@ selector uses the same coverage check and supplies no implicit zeros.
 See [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md)
 and [plan §4.5, Guard](../plans/2026-10-15-template-driven-emissions.md#45-submission-snapshots-and-claims-pr-4).
 
+## 2026-10-20: Emissions entry evidence binding
+
+Entry files now bind as `emission_entry` Sources to every contributed component/input
+in the frozen manifest. Explicit targets fail closed outside the template or entry
+set. Automatic targets and ordering are unchanged; the Source mapping revision
+includes the new explicit-target vocabulary. No schema change or backfill.
+
 ## 2026-10-20: Removal entry claims and frozen payloads (#1242)
 
 With `EMISSIONS_ENTRIES_ENABLED` on, emissions entries and recorded zeros feed

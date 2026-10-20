@@ -112,3 +112,12 @@ describe("verifyRemovalSourceBindings", () => {
     expect(client.get).not.toHaveBeenCalled();
   });
 });
+
+it.each([true, false])("verifies emission entry targets through their attributed datapoints (%s)", async (attached) => {
+  const entries = plan.map((entry) => ({ ...entry, nomaRole: "emission_entry" as const,
+    lineage: { entityType: "emission_entry", entityId: "entry", entityLabel: "Emissions entry entry" },
+    intendedTarget: { ...entry.intendedTarget, creditBatchIds: [] },
+  }));
+  const result = await verifyRemovalSourceBindings(clientWithTarget(attached ? ["source-feedstock"] : []), "ghg-entry-1", entries);
+  expect(result.state).toBe(attached ? "verified" : "mismatch");
+});

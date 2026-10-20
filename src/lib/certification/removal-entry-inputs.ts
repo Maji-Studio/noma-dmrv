@@ -26,7 +26,7 @@ export function deriveRemovalEntryInputs(args: Omit<Parameters<typeof deriveRemo
       if (input.type !== "monitored") return [];
       const enriched = args.observation.enrichment[component.id]?.[input.key];
       const unit = enriched && !("status" in enriched) ? canonicalUnit(input.quantityKind, enriched.unit) : undefined;
-      return unit ? [{ componentId: component.id, inputKey: input.key, unit }] : [];
+      return unit ? [{ componentId: component.id, componentDisplayName: component.displayName, inputKey: input.key, unit }] : [];
     }))),
   });
 }

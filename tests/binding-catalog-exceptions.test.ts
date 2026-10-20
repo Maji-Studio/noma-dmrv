@@ -44,8 +44,8 @@ import {
   projectSequestrationInputBindings,
 } from "@/lib/isometric/semantic-binding-projections";
 
-const PRE_638_SOURCE_BINDING_MAPPING_REVISION =
-  "61cf0d32ae78a9b1fe43165258a5ddbc819c0a3484f00fb99c043095450a4118";
+const ENTRY_SOURCE_BINDING_MAPPING_REVISION =
+  "d9d2992461eaf4b31b20b66f9f133a77419bec8c85c76587a8194d241eb238db";
 
 const PRE_638_STORAGE_CLASSIFICATION = {
   "carbon_rich_substance_sequestration": {
@@ -376,8 +376,8 @@ describe("component disambiguation", () => {
 });
 
 describe("Source evidence targets", () => {
-  it("keep the Source binding revision", () => {
-    expect(SOURCE_BINDING_MAPPING_REVISION).toBe(PRE_638_SOURCE_BINDING_MAPPING_REVISION);
+  it("pins the Source binding revision including explicit entry targets", () => {
+    expect(SOURCE_BINDING_MAPPING_REVISION).toBe(ENTRY_SOURCE_BINDING_MAPPING_REVISION);
   });
 
   it("keep the optional evidence targets", () => {

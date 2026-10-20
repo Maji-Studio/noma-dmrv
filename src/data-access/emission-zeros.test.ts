@@ -32,8 +32,9 @@ let rows: unknown[][];
 let dbRows: unknown[][];
 const insert = vi.fn();
 const update = vi.fn();
+const rowLock = vi.fn();
 function query(result: unknown[]) {
-  const q = { from: () => q, innerJoin: () => q, where: () => q, for: () => q, orderBy: () => q, returning: () => q,
+  const q = { from: () => q, innerJoin: () => q, where: () => q, for: (mode: string) => { rowLock(mode); return q; }, orderBy: () => q, returning: () => q,
     then: (resolve: (value: unknown[]) => unknown) => Promise.resolve(result).then(resolve) };
   return q;
 }
@@ -202,3 +203,9 @@ it.each(["empty", "future-application", "orphan", "sent-single", "automatic", "o
     expect(mocks.reservations).toHaveBeenLastCalledWith(ctx, [], tx);
   },
 );
+
+it.each(["record", "undo"])("uses a Removal lock compatible with stamping for %s", async (action) => {
+  if (action === "record") await recordEmissionZeros(ctx, input);
+  else { rows.push([]); await undoEmissionZeros(ctx, input); }
+  expect(rowLock).toHaveBeenNthCalledWith(1, "no key update");
+});
