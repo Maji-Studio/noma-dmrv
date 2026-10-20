@@ -1,3 +1,4 @@
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
@@ -109,7 +110,7 @@ export async function loadTransportLegsByCategory(
           loadMassKg: tonnesToKg(lineage.application.biocharAppliedTons ?? 0),
         })))
       : [],
-    getTransportLegsWithEvidenceForEntities(orgCtx, "sample", entityIds.sampleIds),
+    emissionsEntriesEnabled() ? [] : getTransportLegsWithEvidenceForEntities(orgCtx, "sample", entityIds.sampleIds),
   ]);
   return { feedstock, biochar, sample };
 }

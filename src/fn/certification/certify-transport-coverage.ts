@@ -1,3 +1,4 @@
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { missingFeedstockTransportIds } from "@/lib/certification/submission-readiness";
 import { aggregateBiocharTransportMassDistance, transportVehicleAdvisories } from "@/lib/isometric/utils/aggregation";
 import {
@@ -58,13 +59,14 @@ export function deriveRequiredTransportCategories(
       }
     }
   }
-  return TRANSPORT_CATEGORIES.filter((category) => seen.has(category));
+  return TRANSPORT_CATEGORIES.filter((category) => seen.has(category) && (category !== "sample" || !emissionsEntriesEnabled()));
 }
 
 export function buildTransportCoverage(
   legs: TransportLegsByCategory,
   entityIds: ReturnType<typeof collectTransportEntityIds>,
 ): TransportCoverage {
+  const sampleLegs = emissionsEntriesEnabled() ? [] : legs.sample;
   return {
     feedstock: {
       missingEntityIds: missingFeedstockTransportIds(entityIds.feedstockIds, legs.feedstock),
@@ -87,13 +89,13 @@ export function buildTransportCoverage(
       aggregationWarning: aggregateBiocharTransportMassDistance(legs.biochar).warning,
     },
     sample: {
-      vehicleAdvisories: transportVehicleAdvisories(legs.sample, "Sample"),
-      count: legs.sample.length,
-      entityIds: entityIds.sampleIds,
-      legIds: legs.sample.map((leg) => leg.id),
-      firstLegEntityId: legs.sample[0]?.entityId ?? null,
+      vehicleAdvisories: transportVehicleAdvisories(sampleLegs, "Sample"),
+      count: sampleLegs.length,
+      entityIds: emissionsEntriesEnabled() ? [] : entityIds.sampleIds,
+      legIds: sampleLegs.map((leg) => leg.id),
+      firstLegEntityId: sampleLegs[0]?.entityId ?? null,
       aggregationWarning: aggregateTransportMassDistance(
-        legs.sample,
+        sampleLegs,
         "Sample",
       ).warning,
     },

@@ -1,5 +1,7 @@
 "use server";
 
+import { automaticSourceAvailable } from "@/lib/isometric/template-observations/catalog-sources";
+
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 
 import { getCreditBatchById } from "@/data-access/credit-batches";
@@ -22,6 +24,15 @@ import { loadRemovalTemplateFacts } from "./removal-template-facts";
 import { enrichmentForObservation } from "./observe-removal-template";
 import { ISOMETRIC_PROVIDER } from "./shared";
 
+/** The browser validates these contracts without access to the server's gate. */
+function reviewLineSources(lineSources: LineSources): LineSources {
+  return Object.fromEntries(Object.entries(lineSources).map(([id, contract]) => [id,
+    contract.automaticSource && !automaticSourceAvailable(contract.automaticSource)
+      ? { ...contract, automaticSource: undefined }
+      : contract,
+  ]));
+}
+
 function reviewLines(definition: TemplateDefinition, lineSources: LineSources, changes: Record<string, ComponentChange>) {
   return definition.groups.flatMap((group) => group.components.map((component) => ({
     component, groupKey: group.key, groupName: group.displayName,
@@ -38,9 +49,10 @@ export async function loadRemovalTemplateReview(facilityId: string) {
     const facts = await loadFacilityCertifierFacts(ctx, id);
     return Promise.all(facts.removalTemplateIds.map(async (templateId) => {
       const current = facts.templatesById[templateId];
-      const observation = current?.observation ?? null;
-      const previous = observation ? await getPreviousTemplateObservation(ctx, ISOMETRIC_PROVIDER, templateId, observation.id) : null;
-      const changes = observation && previous ? compareTemplateObservations(previous, observation) : {};
+      const stored = current?.observation ?? null;
+      const observation = stored ? { ...stored, lineSources: reviewLineSources(stored.lineSources) } : null;
+      const previous = stored ? await getPreviousTemplateObservation(ctx, ISOMETRIC_PROVIDER, templateId, stored.id) : null;
+      const changes = stored && previous ? compareTemplateObservations(previous, stored) : {};
       const definition = observation?.definition ?? (current ? normalizeTemplateDefinition(current.template) : null);
       return {
         templateId, template: current?.template ?? null, observation,
@@ -139,7 +151,7 @@ export async function loadRemovalTemplateReviewEntry(input: RemovalTemplateRevie
       availability: "listed" as const,
       enrichment,
       changes: {} as Record<string, ComponentChange>,
-      lines: reviewLines(definition, lineSources, {}),
+      lines: reviewLines(definition, reviewLineSources(lineSources), {}),
       enrichmentProblems,
       lineSourceProblems,
     };

@@ -4,6 +4,9 @@ import {
 } from "../semantic-binding-catalog";
 import { compareIds } from "./normalize";
 import type { TemplateComponent, TemplateInput } from "./types";
+import { RETIRED_SOURCE_FACT, sourceFactAvailable } from "./source-fact-availability";
+
+export { sourceFactAvailable } from "./source-fact-availability";
 
 /** Stable persisted IDs. Tuples and group permissions stay in the catalog. */
 export const SOURCE_IDS = {
@@ -12,13 +15,18 @@ export const SOURCE_IDS = {
   totalElectricityKwh: "run-electricity",
   feedstockTransportMassDistanceTonneKm: "feedstock-transport",
   biocharTransportMassDistanceTonneKm: "delivery-transport",
-  sampleTransportMassDistanceTonneKm: "sample-transport",
+  [RETIRED_SOURCE_FACT]: "sample-transport",
   totalFeedstockDryMassKg: "feedstock-dry-mass",
   totalBiocharDryMassKg: "biochar-dry-mass",
   weightedOrganicCarbonPercent: "sequestration",
 } as const satisfies Partial<Record<SourceFactKey, string>>;
 
 export type AutomaticSourceId = typeof SOURCE_IDS[keyof typeof SOURCE_IDS] | "safety-margin";
+
+/** Runtime availability is separate from the stable catalog/hash projections. */
+export function automaticSourceAvailable(source: AutomaticSourceId): boolean {
+  return source !== SOURCE_IDS[RETIRED_SOURCE_FACT] || sourceFactAvailable(RETIRED_SOURCE_FACT);
+}
 
 function roleSources(role: BindingRole, groupKey: string): AutomaticSourceId[] {
   if (role.strategy === "project-scope-forbidden") return [];
@@ -61,10 +69,10 @@ export function catalogCandidates(component: TemplateComponent, groupKey: string
         const role = ownValue(binding.roles, groupKey);
         return binding.datapoint?.expectedQuantityKind === "mass_distance" && role ? roleSources(role, groupKey) : [];
       }),
-    ))].sort(compareIds);
+    ))].filter(automaticSourceAvailable).sort(compareIds);
   }
   const candidates = monitored.map((input) => inputCandidates(component.blueprintKey, input, groupKey));
-  return [...new Set(candidates[0].filter((id) => candidates.every((options) => options.includes(id))))].sort(compareIds);
+  return [...new Set(candidates[0].filter((id) => automaticSourceAvailable(id) && candidates.every((options) => options.includes(id))))].sort(compareIds);
 }
 
 export function hasCatalogDisambiguation(blueprintKey: string): boolean {

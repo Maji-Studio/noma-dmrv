@@ -1,3 +1,4 @@
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { sampleDocumentWarnings } from "@/lib/certification/sample-document-warnings";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import type {
@@ -122,6 +123,7 @@ export function buildEntityReadinessResult(
   }
 
   for (const category of requiredTransportCategories) {
+    if (category === "sample" && emissionsEntriesEnabled()) continue;
     const legs = transportLegs[category];
     legs.forEach((leg, index) => {
       const legCode = `${category} transport ${index + 1}`;

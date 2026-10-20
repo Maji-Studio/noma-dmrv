@@ -1,3 +1,5 @@
+beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
+afterEach(() => { vi.unstubAllEnvs(); });
 import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
 /**
  * Parity for the semantic binding catalog (#636): the catalog's projections
@@ -10,7 +12,7 @@ import type { LineContract } from "@/lib/isometric/template-observations/line-so
  * with transform functions reduced to their transformRevision. Change them
  * only together with an intentional binding change.
  */
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import {
   lookupSourceFact,
   SEMANTIC_BINDING_CATALOG,
@@ -283,4 +285,26 @@ describe("semantic binding catalog parity", () => {
     };
     expect(() => projectPeriodInputTuples(broken)).toThrow(/no named component carve-out/);
   });
+});
+
+it.each([false, true])("keeps the mapping revision stable while retiring sample runtime lookups (gate: %s)", async (enabled) => {
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
+  const { buildMappingRevisionInput } = await import("@/lib/isometric/transformers/datapoint");
+  const { payloadHash } = await import("@/lib/isometric/utils/payload-hash");
+  expect(payloadHash(buildMappingRevisionInput())).toBe(PRE_CATALOG_MAPPING_REVISION);
+  expect(MAPPING_REVISION).toBe(PRE_CATALOG_MAPPING_REVISION);
+  expect(INPUT_MAPPING["sampling-required-for-mrv"].mass_distance_based_ci_emissions.mass_distance.source).toBe("sampleTransportMassDistanceTonneKm");
+  expect(lookupInputMapping("sampling-required-for-mrv", "mass_distance_based_ci_emissions", "mass_distance") === undefined).toBe(enabled);
+  expect(lookupSourceFact("sampleTransportMassDistanceTonneKm") === undefined).toBe(enabled);
+});
+
+it("keeps fresh module-load projections identical across activation states", async () => {
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
+  vi.resetModules();
+  const activated = await import("@/lib/isometric/transformers/datapoint");
+  expect(activated.MAPPING_REVISION).toBe(PRE_CATALOG_MAPPING_REVISION);
+  expect(JSON.parse(JSON.stringify(activated.INPUT_MAPPING))).toEqual(PRE_CATALOG_INPUT_MAPPING);
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false");
+  vi.resetModules();
+  expect((await import("@/lib/isometric/transformers/datapoint")).MAPPING_REVISION).toBe(activated.MAPPING_REVISION);
 });

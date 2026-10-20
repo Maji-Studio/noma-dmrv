@@ -91,8 +91,11 @@ integer columns.
 
 **`EMISSIONS_ENTRIES_ENABLED`** accepts `true` or `false` and defaults to `false`.
 The server refuses emissions entry writes and evidence changes while disabled.
-Existing entries stay visible in the batch display. Enabling it also refuses new sample transport legs. Keep
-it disabled until entry submission support is deployed.
+Existing entries stay visible in the batch display. Enabling it refuses new sample
+transport legs and retires sample legs from automatic figures, aggregation,
+catalog availability, transport coverage, readiness and dashboards. At activation,
+the hand-run retirement CLI deletes old sample legs, skipping certification-locked
+legs. Keep it disabled until entry submission support is deployed.
 
 **App environment list: the `envSchema` object in `src/config/env.ts`.**
 The logger validates `LOG_LEVEL` locally; standalone Isometric scripts and health
@@ -189,6 +192,10 @@ The application hook owns reuse and revocation; the patch is its backstop.
 
 Read directly from `process.env`, **not** validated by `env.ts`:
 
+- `EMISSIONS_ENTRIES_ENABLED` — `src/lib/certification/emissions-entry-gate.ts`
+  parses the same shared schema used by `envSchema` directly from `process.env`.
+  It always reads off in browser bundles, where this private variable is absent.
+  Client code must receive gate-dependent results from the server.
 - `LOG_LEVEL` — validated in `src/lib/log/index.ts`: `trace`, `debug`, `info`,
   `warn`, `error`, `fatal`, or `silent`. Unset/blank defaults to `info` in
   production and `debug` otherwise; invalid values are rejected.

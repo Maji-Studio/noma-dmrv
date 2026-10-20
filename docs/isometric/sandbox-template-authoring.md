@@ -103,7 +103,6 @@ declares them:
 |---|---|---|---|
 | `biomass-feedstock-transport` | `mass_distance_based_ci_emissions` | `mass_distance` | Feedstock transport tonne-km |
 | `biochar-transport` | `mass_distance_based_ci_emissions` | `mass_distance` | Biochar delivery transport tonne-km |
-| `sampling-required-for-mrv` | `mass_distance_based_ci_emissions` | `mass_distance` | Sample transport tonne-km |
 | `pyrolysis` | `grid_electricity_use` | `electricity_use` | Production electricity kWh |
 | `pyrolysis` | `fuel_usage_by_volume` | `volume_of_fuel` | Component-specific diesel litres |
 | `miscellaneous` | `mass_based_ci_emissions` | `mass` | Safety-margin dry biochar mass only |

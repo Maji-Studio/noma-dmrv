@@ -1,3 +1,4 @@
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
 import { sumFigures, type BatchEmissionLineFacts, type EmissionFigure } from "./emission-lines";
 import { multiplyEntryDecimals } from "./emission-entry-rules";
@@ -39,7 +40,7 @@ export function batchAutomaticFigures(runs: ProductionRunForCertification[], leg
     figures[source as keyof typeof RUN_SOURCE_FIELDS] = sumFigures(values);
   }
   for (const category of ["feedstock", "biochar", "sample"] as const) {
-    const categoryLegs = legs[category];
+    const categoryLegs = category === "sample" && emissionsEntriesEnabled() ? [] : legs[category];
     const valid = transportMassDistanceAvailable(categoryLegs, category === "biochar");
     if (!valid) {
       figures[sourceForCategory(category)] = null;

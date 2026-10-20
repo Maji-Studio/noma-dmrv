@@ -14,11 +14,12 @@ import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { TEST_SITE_POSITION, TEST_ORG_ID, ensureTestOrg, makeTestOrgContext } from "./helpers/test-org";
 
 // Real DB and writers. Only the feature switch is controlled by the suite.
-const flag = vi.hoisted(() => ({ enabled: true }));
-vi.mock("@/config/env", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/config/env")>();
-  return { ...original, env: { ...original.env, get EMISSIONS_ENTRIES_ENABLED() { return flag.enabled; } } };
-});
+// The gate reads process.env, so the switch is the real variable.
+const flag = {
+  get enabled() { return process.env.EMISSIONS_ENTRIES_ENABLED === "true"; },
+  set enabled(value: boolean) { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", value ? "true" : "false"); },
+};
+flag.enabled = true;
 
 const tag = crypto.randomUUID();
 const userId = `batch-entry-dates-${tag}`;

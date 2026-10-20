@@ -1,3 +1,5 @@
+beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
+afterEach(() => { vi.unstubAllEnvs(); });
 /**
  * Parity for the #637 catalog projections: the certify field registry's input
  * tuples, the required transport categories, and the transport repair
@@ -9,7 +11,7 @@
  * feeds a bound input (moisture, the Safety margin, the transport-derived
  * distances and masses).
  */
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import {
   CERTIFY_FIELD_REGISTRY,
   resolveCertifyFieldInputTuples,
@@ -258,4 +260,12 @@ describe("one catalog edit", () => {
       "sample",
     ]);
   });
+});
+
+it.each([false, true])("filters sample coverage and field tuples without changing projections (gate: %s)", (enabled) => {
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
+  const sampleTriple: [string, string, string] = ["sampling-required-for-mrv", "mass_distance_based_ci_emissions", "mass_distance"];
+  expect(deriveRequiredTransportCategories(templateOf([sampleTriple]))).toEqual(enabled ? [] : ["sample"]);
+  expect(resolvedFieldTuples()["transportLeg.distanceKm"].includes(sampleTriple.join("/"))).toBe(!enabled);
+  expect(projectTransportCategories()[sampleTriple[0]][sampleTriple[1]][sampleTriple[2]]).toBe("sample");
 });
