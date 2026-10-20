@@ -16,15 +16,15 @@ import {
 import { requireOrgScope } from "./utils";
 
 /**
- * Correlates a product-list row with a credit batch through
+ * Correlates a product and a credit batch (either may be a list row) through
  * the batch's production-run membership. This is the same lineage used by
  * credit-batch accounting, so operational list filters cannot drift from the
  * certification checklist.
  */
 export function inCreditBatchLineage(
   ctx: OrgContext,
-  creditBatchId: string,
-  biocharProductId: SQLWrapper,
+  creditBatchId: string | SQLWrapper,
+  biocharProductId: string | SQLWrapper,
 ): SQL {
   requireOrgScope(ctx);
 

@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  applications,
+  applications, biocharProducts,
   creditBatchApplications, creditBatchProductionRuns, creditBatches, deliveries,
   feedstocks,
   productionRunFeedstocks, productionRuns,
@@ -10,7 +10,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { RecordCreditBatchesInput } from "@/schemas/record-credit-batches";
 import type { RecordCreditBatch, RecordCreditBatches } from "@/types/record-credit-batches";
 import { getMixBinHeldApplicationIds } from "./mix-bin-credit-hold";
-import { inApplicationCreditBatchLineage, inDeliveryCreditBatchLineage } from "./credit-batch-lineage-filter";
+import { inApplicationCreditBatchLineage, inCreditBatchLineage, inDeliveryCreditBatchLineage } from "./credit-batch-lineage-filter";
 import { assertSameOrg, requireOrgScope } from "./utils";
 
 const batchSelection = {
@@ -26,8 +26,20 @@ export async function getRecordCreditBatches(
   input: RecordCreditBatchesInput,
 ): Promise<RecordCreditBatches> {
   requireOrgScope(ctx);
-  const table = { feedstock: feedstocks, delivery: deliveries, application: applications }[input.kind];
+  const table = {
+    feedstock: feedstocks, "biochar-product": biocharProducts,
+    delivery: deliveries, application: applications,
+  }[input.kind];
   await assertSameOrg(ctx, table, input.id);
+
+  if (input.kind === "biochar-product") {
+    const batches = await db.select(batchSelection).from(creditBatches).where(and(
+      eq(creditBatches.organizationId, ctx.organizationId),
+      inCreditBatchLineage(ctx, creditBatches.id, input.id),
+    )).orderBy(creditBatches.startDate, creditBatches.code);
+    // ADR 0030 holds out application slices, not the product's source provenance.
+    return { batches, heldOut: false };
+  }
 
   if (input.kind === "application") {
     const held = await getMixBinHeldApplicationIds(ctx, db, [input.id]);

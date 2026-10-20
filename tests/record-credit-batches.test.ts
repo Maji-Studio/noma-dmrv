@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { db } from "@/db";
 import {
   applicationOutputAllocations, applications, biocharProducts, biocharProductSourceAllocations,
@@ -29,7 +29,7 @@ const RUN_SPACING_MS = 2 * 60 * 60 * 1_000;
 const RECORD_DATE = new Date("2026-06-01T12:00:00Z");
 const EARLY_WINDOW = { startDate: "2025-01-01", endDate: "2025-01-15" };
 const LATE_WINDOW = { startDate: "2025-01-16", endDate: "2025-01-31" };
-const KINDS = ["feedstock", "delivery", "application"] as const;
+const KINDS = ["feedstock", "biochar-product", "delivery", "application"] as const;
 
 describe("saved record credit batches (real database)", () => {
   const organizationId = `org_record_batches_${randomUUID()}`;
@@ -117,6 +117,13 @@ describe("saved record credit batches (real database)", () => {
       ...org, biocharProductId: product.id, productionRunId: run.id,
       sourceStorageLocationId: outputBin.id, allocatedDryMassKg: MASS_KG, allocatedWetMassKg: MASS_KG,
     })));
+    // Neither a shared source bin nor linkedProductionRunId replaces saved allocations.
+    const [emptyProduct] = await db.insert(biocharProducts).values(await outputProductFixtureValues(db, {
+      ...org, facilityId: facility.id, code: `BP-EMPTY-${tag}`,
+      linkedProductionRunId: runA.id, placedAt: RUN_END,
+      formulationId: product.formulationId, storageLocationId: product.storageLocationId,
+      sourceBiocharStorageLocationId: outputBin.id,
+    })).returning();
     const [customer] = await db.insert(customers).values({
       ...org, code: `CU-${tag}`, name: `E2E Customer ${tag}`,
     }).returning();
@@ -139,8 +146,8 @@ describe("saved record credit batches (real database)", () => {
         biocharAppliedTons: APPLIED_TONNES, biocharAppliedDryTons: APPLIED_TONNES, fieldSizeHa: FIELD_SIZE_HA,
       })), row => row);
     return {
-      ids: { feedstock: feedstock.id, delivery: delivery.id, application: application.id },
-      emptyIds: { feedstock: emptyFeedstock.id, delivery: emptyDelivery.id, application: emptyApplication.id },
+      ids: { feedstock: feedstock.id, "biochar-product": product.id, delivery: delivery.id, application: application.id },
+      emptyIds: { feedstock: emptyFeedstock.id, "biochar-product": emptyProduct.id, delivery: emptyDelivery.id, application: emptyApplication.id },
       early, late, product, delivery, application, runs, runB,
     };
   }
@@ -167,10 +174,53 @@ describe("saved record credit batches (real database)", () => {
     await expect(getRecordCreditBatches(ctx, { kind, id: randomUUID() })).rejects.toThrow(/not found in this organization/i);
   });
 
-  it("requires an organization scope", async () => {
+  it.each(KINDS)("%s requires an organization scope", async kind => {
     await expect(getRecordCreditBatches({ ...ctx, organizationId: "" }, {
-      kind: "feedstock", id: randomUUID(),
+      kind, id: randomUUID(),
     })).rejects.toThrow("Unauthorized");
+  });
+
+  it("returns no product batches when its saved source runs have no batch membership", async () => {
+    const f = await fixture();
+    await db.delete(creditBatchProductionRuns).where(and(
+      eq(creditBatchProductionRuns.organizationId, organizationId),
+      inArray(creditBatchProductionRuns.productionRunId, f.runs.map(run => run.id)),
+    ));
+    expect(await getRecordCreditBatches(ctx, { kind: "biochar-product", id: f.product.id }))
+      .toEqual({ batches: [], heldOut: false });
+  });
+
+  it("retains a mix-bin product's source batches while holding out its downstream application", async () => {
+    const f = await fixture();
+    const sourceBinId = f.product.sourceBiocharStorageLocationId!;
+    const drawMassKg = f.runs.length * MASS_KG;
+    await db.update(storageLocations).set({ stockMode: "mix" }).where(and(
+      eq(storageLocations.organizationId, organizationId),
+      eq(storageLocations.id, sourceBinId),
+    ));
+    const [movement] = await db.insert(binMovements).values({
+      ...org, storageLocationId: sourceBinId, lane: "biochar",
+      movementType: "adjustment", massDeltaKg: -drawMassKg, reason: "E2E mix product draw",
+      outputKind: "product_draw", occurredAt: f.product.placedAt, idempotencyKey: randomUUID(),
+      basisFingerprint: "fixture-mix-product", inputSnapshot: {}, outputDryDeltaKg: String(-drawMassKg),
+      balanceBeforeDryKg: String(drawMassKg), balanceAfterDryKg: "0",
+    }).returning();
+    // Persist live pro-rata draws, not merely a bin's current stock mode.
+    const draws = await db.insert(outputStockAllocations).values(f.runs.map(run => ({
+      ...org, movementId: movement.id, sourceStorageLocationId: sourceBinId,
+      productionRunId: run.id, targetBiocharProductId: f.product.id,
+      dryMassKg: String(MASS_KG), wetMassKg: String(MASS_KG),
+      basisSnapshot: { policy: PRO_RATA_POLICY },
+    }))).returning();
+    await db.insert(outputStockRunAllocations).values(draws.map(draw => ({
+      ...org, allocationId: draw.id, productionRunId: draw.productionRunId!, dryMassKg: String(MASS_KG),
+    })));
+
+    // The credit hold applies to application slices; product provenance remains visible.
+    expect(await getRecordCreditBatches(ctx, { kind: "biochar-product", id: f.product.id }))
+      .toEqual({ batches: [batch(f.early), batch(f.late)], heldOut: false });
+    expect(await getRecordCreditBatches(ctx, { kind: "application", id: f.application.id }))
+      .toEqual({ batches: [], heldOut: true });
   });
 
   it("uses code as the tie-breaker when batch start dates match", async () => {

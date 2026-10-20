@@ -3,7 +3,7 @@ import { uuidSchema } from "./helpers";
 
 /** Only persisted records have provenance to resolve. */
 export const recordCreditBatchesSchema = z.object({
-  kind: z.enum(["feedstock", "delivery", "application"]),
+  kind: z.enum(["feedstock", "biochar-product", "delivery", "application"]),
   id: uuidSchema(),
 });
 
