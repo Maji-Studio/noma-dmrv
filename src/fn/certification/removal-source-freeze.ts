@@ -20,9 +20,10 @@ function isGeneratedEvidence(candidate: CandidateSourceDocument): boolean {
 
 /**
  * A blocking Removal submission freezes its operator evidence tuple, not just
- * document IDs. Draft retries are exact. A terminal claim may be superseded
- * with freshly generated deterministic ledgers, while operator uploads remain
- * fixed to the reviewed snapshot. Superseded/rejected attempts rebuild live.
+ * document IDs. Draft retries preserve reviewed operator uploads and ledgers.
+ * A terminal claim may use freshly generated ledgers. Entry files always follow
+ * the current contribution manifest, which applies the frozen or live entry set
+ * for the attempt. Superseded/rejected attempts rebuild live.
  */
 export function filterCandidateSourcesForSubmissionLifecycle(
   candidates: CandidateSourceDocument[],
@@ -38,21 +39,24 @@ export function filterCandidateSourcesForSubmissionLifecycle(
   const frozenCandidates = readRemovalCandidateSources(latestSubmission);
   if (latestSubmission.status === "draft") {
     const refreshed = getMetadataValue(latestSubmission.metadata, SUBMISSION_METADATA_KEYS.evidenceRefreshCandidates);
-    if (!refreshed) return frozenCandidates;
+    if (!refreshed) return [
+      ...frozenCandidates.filter((candidate) => candidate.binding?.nomaRole !== "emission_entry"),
+      ...candidates.filter((candidate) => candidate.binding?.nomaRole === "emission_entry"),
+    ];
     const reviewed = readRemovalCandidateSources({ ...latestSubmission, payloadSnapshot: { semantic: { candidateSources: refreshed } } });
     return [
-      ...reviewed.filter((candidate) => !isGeneratedEvidence(candidate)),
-      ...candidates.filter(isGeneratedEvidence),
+      ...reviewed.filter((candidate) => !isGeneratedEvidence(candidate) && candidate.binding?.nomaRole !== "emission_entry"),
+      ...candidates.filter((candidate) => isGeneratedEvidence(candidate) || candidate.binding?.nomaRole === "emission_entry"),
     ];
   }
 
-  const currentGeneratedCandidates = candidates.filter(isGeneratedEvidence);
+  const currentManifestCandidates = candidates.filter((candidate) => isGeneratedEvidence(candidate) || candidate.binding?.nomaRole === "emission_entry");
   const frozenOperatorCandidates = frozenCandidates.filter(
-    (candidate) => !isGeneratedEvidence(candidate),
+    (candidate) => !isGeneratedEvidence(candidate) && candidate.binding?.nomaRole !== "emission_entry",
   );
   return Array.from(
     new Map(
-      [...frozenOperatorCandidates, ...currentGeneratedCandidates].map(
+      [...frozenOperatorCandidates, ...currentManifestCandidates].map(
         (candidate) => [candidate.documentId, candidate],
       ),
     ).values(),

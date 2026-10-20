@@ -1,5 +1,5 @@
 import { documents } from "@/db/schema";
-import { insertDocument } from "@/data-access/documents";
+import { insertDocument, listDocumentsForEntity, listEmissionEntryDocumentsByIds } from "@/data-access/documents";
 import { collectCandidateSourceDocumentsForRemoval } from "@/fn/certification/source-candidates";
 import { planRemovalEvidence } from "@/fn/certification/removal-evidence-plan";
 import { frozenEntriesForAttempt } from "@/fn/certification/removal-entry-context";
@@ -7,7 +7,7 @@ import { discardLocalRemovalDraft } from "@/data-access/certifier-removals";
 import { deleteCreditBatchApplicationSlices } from "@/data-access/credit-batch-delete-slices";
 /** Real PostgreSQL coverage. Deliberately not run by the offline implementation verification. */
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, certificationSubmissions, creditBatchApplications, creditBatches, emissionEntries, emissionEntryValues,
   removalTemplateObservations, users, certifierRemovals, organizations, facilities } from "@/db/schema";
@@ -29,6 +29,7 @@ const ctx = { ...makeTestOrgContext(userId), orgRole: "owner" as const };
 let fixture: LineageFixture;
 let second: LineageFixture | undefined;
 let observation: typeof removalTemplateObservations.$inferSelect;
+const NEWER_DOCUMENT_COUNT = 201;
 const shape = [{ key: "electricity_use", type: "monitored" as const, quantityKind: "energy" as const }];
 beforeAll(async () => { await ensureTestOrg(); });
 beforeEach(async () => {
@@ -253,5 +254,42 @@ it("plans the exact file of an entry on the submitted contribution path", async 
     expect(evidence.sourceBindingPlan).toHaveLength(1);
   } finally {
     await db.delete(documents).where(and(eq(documents.organizationId, ctx.organizationId), eq(documents.id, document.id)));
+  }
+});
+
+it("finds an uploaded manifest file behind more than the listing cap of pending documents", async () => {
+  const entry = await value();
+  const document = await insertDocument(ctx, { entityType: "emission_entry", entityId: entry.id,
+    documentType: "pdf", fileName: "Manifest evidence.pdf", fileUrl: "https://example.test/evidence.pdf" });
+  // The operator listing caps at 200, regardless of upload status.
+  try {
+    await db.insert(documents).values(Array.from({ length: NEWER_DOCUMENT_COUNT }, (_, index) => ({
+      organizationId: ctx.organizationId, entityType: "emission_entry" as const, entityId: entry.id,
+      documentType: "pdf" as const, fileName: "Pending.pdf", fileUrl: "", uploadStatus: "pending" as const,
+      storageProvider: "local-fs", storageBucket: "test",
+      storageKey: `pending/${entry.id}/${index}`, uploadStorageKey: `uploads/${entry.id}/${index}`,
+      createdAt: new Date("2099-01-01"),
+    })));
+    expect((await listDocumentsForEntity(ctx, "emission_entry", entry.id)).some((row) => row.id === document.id)).toBe(false);
+    const { entries } = await loadBatchEmissionEntryFacts(ctx, fixture.batchId, observation);
+    const contributions = deriveRemovalEntryContributions({ removalId: fixture.removalId,
+      memberBatchIds: [fixture.batchId], window: { start: "2026-06-01", end: "2026-06-16" },
+      contenders: [{ contenderKind: "draft", removalId: fixture.removalId, createdAt: "2026-06-16",
+        creditBatchIds: [fixture.batchId], window: { start: "2026-06-01", end: "2026-06-16" } }],
+      entries, lineSources: observation.lineSources,
+      monitoredInputs: [{ componentId: "line", inputKey: "electricity_use", unit: "kWh" }],
+    });
+    expect(contributions.manifest[0].entries[0].evidenceDocumentIds).toEqual([document.id]);
+    expect(await collectCandidateSourceDocumentsForRemoval(ctx, {
+      removalId: fixture.removalId, lineages: [], entryContributions: contributions,
+    })).toMatchObject([{ documentId: document.id }]);
+    expect(await listEmissionEntryDocumentsByIds({ ...ctx, organizationId: "other-organization" }, [entry.id], [document.id])).toEqual([]);
+    expect(await listEmissionEntryDocumentsByIds(ctx, [crypto.randomUUID()], [document.id])).toEqual([]);
+    await db.update(documents).set({ entityType: "credit_batch", entityId: fixture.batchId })
+      .where(and(eq(documents.organizationId, ctx.organizationId), eq(documents.id, document.id)));
+    expect(await listEmissionEntryDocumentsByIds(ctx, [fixture.batchId], [document.id])).toEqual([]);
+  } finally {
+    await db.delete(documents).where(and(eq(documents.organizationId, ctx.organizationId),
+      or(eq(documents.id, document.id), and(eq(documents.entityType, "emission_entry"), eq(documents.entityId, entry.id)))));
   }
 });

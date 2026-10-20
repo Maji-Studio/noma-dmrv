@@ -32,7 +32,7 @@ export function emissionEntrySourceCandidates(
         } else {
           candidates.set(documentId, { documentId, binding: {
             nomaRole: "emission_entry", nomaRoleLabel: "Emissions entry",
-            lineage: { entityType: "emission_entry", entityId: entry.entryId, entityLabel: `Emissions entry ${entry.entryId}` },
+            lineage: { entityType: "emission_entry", entityId: entry.entryId, entityLabel: ["Emissions entry", input.componentDisplayName, entry.occurredOn, entry.creditBatchCode].filter(Boolean).join(", ") },
             intendedTarget: target, mappingRevision: SOURCE_BINDING_MAPPING_REVISION,
           } });
         }

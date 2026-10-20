@@ -41,8 +41,8 @@ export interface RemovalEntryFact {
   values: readonly RemovalEntryValue[]; evidenceDocumentIds: readonly string[];
 }
 export interface EntryInputManifest {
-  componentId: string; inputKey: string;
-  entries: { entryId: string; creditBatchId: string; contentRevision: number; kind: "value" | "zero";
+  componentId: string; inputKey: string; componentDisplayName?: string;
+  entries: { entryId: string; creditBatchId: string; creditBatchCode?: string; occurredOn?: string; contentRevision: number; kind: "value" | "zero";
     value: EmissionFigure; massDistanceDetail?: RemovalEntryValue["massDistanceDetail"];
     evidenceDocumentIds: string[] }[];
 }
@@ -96,7 +96,8 @@ export function deriveRemovalEntryContributions(args: {
   removalId: string; memberBatchIds: readonly string[]; window: RemovalEntryWindow | null;
   contenders: readonly EntryContender[]; entries: readonly RemovalEntryFact[]; lineSources: LineSources;
   entriesWithoutRemoval?: readonly string[];
-  monitoredInputs: readonly { componentId: string; inputKey: string; unit: string }[];
+  creditBatchCodes?: Readonly<Record<string, string>>;
+  monitoredInputs: readonly { componentId: string; inputKey: string; unit: string; componentDisplayName?: string }[];
 }): RemovalEntryContributions {
   const result: RemovalEntryContributions = { manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], ownedEntryIds: [], sentSingleComponentIds: [], blockers: [] };
   const relevant = args.entries.filter((entry) => !entry.deletedAt && args.memberBatchIds.includes(entry.creditBatchId));
@@ -136,14 +137,16 @@ export function deriveRemovalEntryContributions(args: {
     // A value supersedes that batch's zero, even if a caller supplied stale facts.
     const counting = entries.filter((entry) => entry.kind === "value" || !values.some((value) => value.creditBatchId === entry.creditBatchId));
     for (const input of args.monitoredInputs.filter((input) => input.componentId === componentId).sort((a, b) => a.inputKey.localeCompare(b.inputKey))) {
-      const manifest: EntryInputManifest = { componentId, inputKey: input.inputKey, entries: [] };
+      const manifest: EntryInputManifest = { componentId, inputKey: input.inputKey,
+        ...(input.componentDisplayName ? { componentDisplayName: input.componentDisplayName } : {}), entries: [] };
       for (const entry of counting) {
         const value = entry.kind === "zero" ? { magnitude: "0", unit: input.unit } : entry.values.find((value) => value.inputKey === input.inputKey);
         if (!value || value.unit !== input.unit || canonicalDecimal(value.magnitude) === undefined) {
           result.blockers.push({ code: "lineNeedsReview", message: "Enter the values again for the current component.", fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: { componentId: entry.componentId, displayName: entry.componentId } });
           continue;
         }
-        manifest.entries.push({ entryId: entry.id, creditBatchId: entry.creditBatchId, contentRevision: entry.contentRevision, kind: entry.kind,
+        manifest.entries.push({ entryId: entry.id, creditBatchId: entry.creditBatchId, occurredOn: entry.occurredOn,
+          ...(args.creditBatchCodes?.[entry.creditBatchId] ? { creditBatchCode: args.creditBatchCodes[entry.creditBatchId] } : {}), contentRevision: entry.contentRevision, kind: entry.kind,
           value: { magnitude: canonicalDecimal(value.magnitude)!, unit: value.unit },
           ...("massDistanceDetail" in value && value.massDistanceDetail ? { massDistanceDetail: value.massDistanceDetail } : {}),
           evidenceDocumentIds: entry.kind === "zero" ? [] : [...entry.evidenceDocumentIds].sort() });

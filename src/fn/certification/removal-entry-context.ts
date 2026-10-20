@@ -8,11 +8,10 @@ import { loadEmissionEntryReservations } from "@/data-access/emission-entry-cont
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { deriveRemovalEntryWindow } from "@/lib/certification/removal-emission-contributions";
 import { deriveRemovalEntryInputs } from "@/lib/certification/removal-entry-inputs";
-import type { BatchEmissionContext } from "./batch-emission-context";
-import type { FacilityCertifierFacts } from "./facility-certifier-facts";
+import type { BatchEmissionContext, EntryTemplateContext } from "./batch-emission-context";
 import type { RemovalScope } from "./removal-scope";
 
-export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalScope, facts: BatchEmissionContext, facility: FacilityCertifierFacts, frozenEntrySet?: { entryId: string; contentRevision: number }[]) {
+export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalScope, facts: BatchEmissionContext, facility: EntryTemplateContext, frozenEntrySet?: { entryId: string; contentRevision: number }[]) {
   if (!emissionsEntriesEnabled() || !scope.removalId) return undefined;
   const observation = facility.templatesById[scope.memberBatches[0]?.removalTemplateId ?? ""]?.observation;
   if (!observation) return undefined;
@@ -30,6 +29,7 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   const contributions = deriveRemovalEntryInputs({
     removalId: scope.removalId, memberBatchIds: scope.memberBatches.map((batch) => batch.id),
     window: deriveRemovalEntryWindow(scope.memberBatches, scope.lineages.map((lineage) => lineage.application.applicationDate)),
+    creditBatchCodes: Object.fromEntries(scope.memberBatches.map((batch) => [batch.id, batch.code])),
     contenders, entries, reservations, nowMs: Date.now(), frozen: !!frozenEntrySet, observation,
     entriesWithoutRemoval: frozenEntrySet ? [] : Object.values(facts).flatMap((batch) => batch.entriesWithoutRemoval ?? []),
   });

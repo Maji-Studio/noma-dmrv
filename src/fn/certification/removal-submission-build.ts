@@ -62,7 +62,7 @@ import {
 } from "./production-claim-policy";
 import { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
 import { planRemovalEvidence } from "./removal-evidence-plan";
-import type { PreparedRemovalSubmission } from "./removal-submission-prepare";
+import { removalSubmissionBindingOptions, type PreparedRemovalSubmission } from "./removal-submission-prepare";
 
 export { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
 
@@ -239,7 +239,10 @@ export async function compileRemovalSubmission(
     allowPendingSources?: boolean;
   },
 ): Promise<CompiledRemovalSubmission> {
-  const unbindable = findUnbindableTemplateInputs(args.prepared.removalTemplate, { lineSources: args.prepared.lineSources });
+  const unbindable = findUnbindableTemplateInputs(
+    args.prepared.removalTemplate,
+    removalSubmissionBindingOptions(args.ctx, args.prepared.lineSources),
+  );
   if (unbindable.length > 0) {
     return {
       review: emptyReview(args.prepared.removalTemplate),

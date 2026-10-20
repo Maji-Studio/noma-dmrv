@@ -349,7 +349,8 @@ catalog declares on each input:
   contribution manifest, validated against the frozen entry set. Paired inputs
   each receive the entry's files; recorded zeros and tombstoned entries add none.
   Datapoints receive the sorted, deduplicated union of automatic and entry Sources.
-  Source descriptions identify the emissions entry by ID.
+  Source descriptions identify the emissions entry by component name, entry date,
+  and credit batch code. The lineage retains the entry ID.
 
 Confirmed Application-owned photos, PDFs, weighbridge tickets, and affidavits
 are also mirrored as Sources and attached to each corresponding Biochar

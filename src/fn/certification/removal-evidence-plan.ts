@@ -146,6 +146,7 @@ export async function planRemovalEvidence(args: {
       sourceBindingCandidates,
     ),
     sourceBindingPlan: buildRemovalSourceBindingPlan({
+      removalId,
       candidates: datapointSourceCandidates,
       template,
       lineSources: ctx.lineSources,
@@ -155,6 +156,7 @@ export async function planRemovalEvidence(args: {
     // The semantic plan includes pending files with placeholder Source IDs. The
     // operational plan above remains strict, so placeholders never reach the API.
     semanticSourceBindingPlan: buildRemovalSourceBindingPlan({
+      removalId,
       candidates: candidateSourceDocuments
         .filter(hasBinding)
         .map((candidate) => ({

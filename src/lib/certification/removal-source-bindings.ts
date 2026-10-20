@@ -1,3 +1,4 @@
+import { logger } from "@/lib/log";
 import type { RemovalEntryContributions } from "./removal-emission-contributions";
 import { effectiveContract, type LineContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
@@ -423,6 +424,7 @@ export function listOptionalRemovalEvidenceTargets(): OptionalRemovalEvidenceTar
  */
 export function buildRemovalSourceBindingPlan(args: {
   candidates: SourceBindingCandidate[];
+  removalId?: string;
   entryContributions?: Pick<RemovalEntryContributions, "manifest" | "entrySet">;
   lineSources?: LineSources;
   template: IsometricGhgEntryTemplate;
@@ -453,7 +455,10 @@ export function buildRemovalSourceBindingPlan(args: {
               frozen.entryId === entry.entryId && frozen.contentRevision === entry.contentRevision)) ?? [];
           if (binding.nomaRole !== "emission_entry" || binding.lineage.entityType !== "emission_entry" ||
             matches.length !== 1 || entries.length !== 1) {
-            throw new SafeError(`Noma evidence role "${binding.nomaRole}" could not bind component "${target.componentId}/${target.inputKey}"; expected exactly one template target and contributing entry.`);
+            logger.warn({ removalId: args.removalId, componentId: target.componentId, inputKey: target.inputKey,
+              entryId: binding.lineage.entityId, documentId, role: binding.nomaRole,
+            }, "Emissions entry file did not match its contributing component");
+            throw new SafeError("An emissions entry file no longer matches this Removal's entries. Refresh the Removal and submit again.");
           }
           const { group, component } = matches[0];
           return [{ documentId, sourceId, nomaRole: binding.nomaRole, lineage: binding.lineage,
@@ -462,7 +467,10 @@ export function buildRemovalSourceBindingPlan(args: {
             mappingRevision: binding.mappingRevision }];
         }
         if (binding.nomaRole === "emission_entry") {
-          throw new SafeError("Emissions entry evidence requires an explicit component target.");
+          logger.warn({ removalId: args.removalId, inputKey: target.inputKey,
+            entryId: binding.lineage.entityId, documentId,
+          }, "Emissions entry file has no explicit component target");
+          throw new SafeError("An emissions entry file no longer matches this Removal's entries. Refresh the Removal and submit again.");
         }
         const matchingComponents = args.template.groups
           .filter((group) => group.key === target.groupKey)
