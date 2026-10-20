@@ -44,19 +44,12 @@ import {
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
 
-const flag = vi.hoisted(() => ({ enabled: true }));
-vi.mock("@/config/env", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/config/env")>();
-  return {
-    ...original,
-    env: {
-      ...original.env,
-      get EMISSIONS_ENTRIES_ENABLED() {
-        return flag.enabled;
-      },
-    },
-  };
-});
+// The gate reads process.env, so the switch is the real variable.
+const flag = {
+  get enabled() { return process.env.EMISSIONS_ENTRIES_ENABLED === "true"; },
+  set enabled(value: boolean) { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", value ? "true" : "false"); },
+};
+flag.enabled = true;
 const userId = `emission-entry-user-${crypto.randomUUID()}`;
 const ctx = makeTestOrgContext(userId);
 const otherOrg = `emission-entry-org-${crypto.randomUUID()}`;

@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
+afterEach(() => { vi.unstubAllEnvs(); });
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
 import { deriveBatchEmissionLines, EMISSION_LINE_STATE_LABELS, type BatchEmissionLineFacts, type EmissionLineEntryFact } from "./emission-lines";
@@ -150,4 +152,24 @@ it("reports catalog transport and stored sources using their record kinds", () =
     .toEqual({ source: "deliveries", count: 4, figure: null });
   expect(lines.find((line) => line.contract?.automaticSource === "sequestration")?.records)
     .toEqual({ source: "applications", count: 5, figure: null });
+});
+
+it.each([false, true])("discards stale sample automatic facts while retaining additive entries (gate: %s)", (enabled) => {
+  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
+  const f = facts();
+  const component = f.definition.groups[0].components[0];
+  component.blueprintKey = "mass_distance_based_ci_emissions";
+  component.inputs = [{ key: "mass_distance", type: "monitored", quantityKind: "mass_distance" }];
+  f.definition.groups[0].key = "sampling-required-for-mrv";
+  f.lineSources[component.id] = { scope: "operating", automaticSource: "sample-transport", entryPolicy: "additive", origin: "reviewed" };
+  f.automaticFigures = { "sample-transport": { magnitude: "20", unit: "km * tonne" } };
+  f.automaticRecordCounts = { "sample-transport": 3 };
+  f.entries = [entry(f, { total: { magnitude: "5", unit: "km * tonne" } })];
+  const [line] = deriveBatchEmissionLines(f);
+  expect(line.state).toBe("filled");
+  expect(line.entryPolicy).toBe("additive");
+  expect(line.total).toEqual({ magnitude: enabled ? "5" : "25", unit: "km * tonne" });
+  expect(line.records === null).toBe(enabled);
+  f.entries = [];
+  expect(deriveBatchEmissionLines(f)[0].state).toBe(enabled ? "empty" : "filled");
 });

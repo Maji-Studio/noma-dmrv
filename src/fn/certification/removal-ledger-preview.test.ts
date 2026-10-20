@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
+afterEach(() => { vi.unstubAllEnvs(); });
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import {
   aggregateProductionRuns,
   enrichWithTransportLegs,
@@ -54,7 +56,8 @@ describe("buildRemovalLedgerPreview", () => {
     vi.mocked(enrichWithTransportLegs).mockReturnValue(AGGREGATE as never);
   });
 
-  it("projects mixed production claims, transport inputs, and batch-aware links", () => {
+  it.each([false, true])("projects mixed production claims, transport inputs, and batch-aware links (gate: %s)", (enabled) => {
+    vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
     const preview = buildRemovalLedgerPreview({
       removalId: "removal-current",
       memberBatchClaims: [
@@ -107,7 +110,7 @@ describe("buildRemovalLedgerPreview", () => {
       "grid-electricity",
       "feedstock-transport",
       "biochar-transport",
-      "sample-transport",
+      ...(!enabled ? ["sample-transport"] : []),
     ]);
     expect(preview.applications).toEqual([
       expect.objectContaining({

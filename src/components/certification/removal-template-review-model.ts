@@ -74,6 +74,7 @@ const PROBLEM_COPY: Partial<Record<LineSourceProblem["code"], string>> = {
   "single-with-automatic-source":
     "One entry per batch cannot add to automatic datapoints. Remove the automatic datapoints.",
   "foreign-automatic-source": "These automatic datapoints do not fit this line. Choose others.",
+  "retired-automatic-source": "These automatic datapoints are no longer available. Choose others or allow entries for this component.",
   "disallowed-entry-policy": "This entry rule does not fit the line's inputs. Choose another one.",
   ambiguous: "Another line uses the same automatic datapoints. Give them to one line only.",
   "missing-contract": "This line has no contract yet. Assign one.",
