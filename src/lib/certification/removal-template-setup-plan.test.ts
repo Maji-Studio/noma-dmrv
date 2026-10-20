@@ -10,7 +10,7 @@ const template = sandbox as GhgEntryTemplate;
 function planFor(value: GhgEntryTemplate) {
   const definition = normalizeTemplateDefinition(value);
   const sources = reviewLineSources(resolveLineSources({ definition }));
-  return setupPlan(definition, sources, validateLineSources(definition, sources), {});
+  return setupPlan(definition, sources, validateLineSources(definition, sources));
 }
 
 it("the October 15 sandbox bootstrap needs no decisions or assignments", () => {
@@ -31,15 +31,59 @@ it("Protocol default asks for the electricity owner and the diesel source", () =
   expect(validateLineSources(definition, sources)).toEqual([]);
 });
 
-it("an added component on a previously reviewed template needs an explicit answer", () => {
+it("keeps source and clash decisions on a previously reviewed template", () => {
   const definition = normalizeTemplateDefinition(protocolDefaultFixture());
   const sources = resolveLineSources({ definition });
   const diesel = definition.groups.flatMap((group) => group.components).find((component) => component.blueprintKey === "fuel_usage_by_volume")!;
   const storage = definition.groups.find((group) => group.key === "co2-stored")!.components[0];
   sources[storage.id] = { ...sources[storage.id], origin: "reviewed" };
-  const plan = setupPlan(definition, sources, validateLineSources(definition, sources), { [diesel.id]: "added" });
-  expect(plan.decisions.find((decision) => decision.id === diesel.id)?.kind).toBe("added");
+  const plan = setupPlan(definition, sources, validateLineSources(definition, sources));
+  expect(plan.decisions.find((decision) => decision.id === diesel.id)?.kind).toBe("source");
+  expect(plan.decisions.some((decision) => decision.kind === "clash")).toBe(true);
   expect(() => assignmentsFromPlan(plan, {}, {})).toThrow("Answer every");
+});
+
+it.each(["grid_electricity_use", "unknown"])("keeps an unanswered %s addition explicit after an unrelated revision", (blueprintKey) => {
+  const definition = normalizeTemplateDefinition(protocolDefaultFixture());
+  const pyrolysis = definition.groups.find((group) => group.key === "pyrolysis")!;
+  const added = { ...pyrolysis.components[0], id: "added-component", blueprintKey };
+  definition.groups = definition.groups.filter((group) => group.key === "co2-stored");
+  const sources = resolveLineSources({ definition });
+  for (const contract of Object.values(sources)) contract.origin = "reviewed";
+  const withAddition = structuredClone(definition);
+  withAddition.groups.push({ ...pyrolysis, components: [added] });
+  const pending = resolveLineSources({ definition: withAddition, previous: { definition, lineSources: sources } });
+  const firstPlan = setupPlan(withAddition, pending, validateLineSources(withAddition, pending));
+  expect(firstPlan.decisions).toContainEqual(expect.objectContaining({ id: added.id, kind: "added" }));
+
+  const revised = structuredClone(withAddition);
+  revised.groups[0].displayName += " renamed";
+  const carried = resolveLineSources({ definition: revised, previous: { definition: withAddition, lineSources: pending } });
+  // Planning has no change-map dependency, including when the caller has no changes.
+  const plan = setupPlan(revised, carried, validateLineSources(revised, carried));
+  expect(carried[added.id].origin).toBe("proposed");
+  expect(plan.defaults).toEqual([]);
+  expect(plan.decisions).toHaveLength(1);
+  expect(plan.decisions[0]).toMatchObject({ id: added.id, kind: "added" });
+  const proposal = blueprintKey === "grid_electricity_use" ? "run-electricity" : "entry";
+  expect(plan.decisions[0].options[0].id).toBe(proposal);
+  expect(() => assignmentsFromPlan(plan, {}, {})).toThrow("Answer every component decision before applying setup.");
+  expect(assignmentsFromPlan(plan, { [added.id]: proposal }, {})[added.id]).toMatchObject({ scope: "operating" });
+});
+
+it("keeps direct production emissions operating and refuses project-level omission", () => {
+  const definition = normalizeTemplateDefinition(template);
+  definition.groups = definition.groups.filter((group) => group.key === "direct-emissions");
+  for (const group of definition.groups) for (const component of group.components) component.id = `unreviewed-${component.id}`;
+  const sources = resolveLineSources({ definition });
+  const plan = setupPlan(definition, sources, validateLineSources(definition, sources));
+  expect(plan.defaults).toHaveLength(definition.groups[0].components.length);
+  for (const line of plan.defaults) {
+    expect(line.component.blueprintKey).toBe("ghg_direct_emissions");
+    expect(line.options.map((option) => option.id)).toEqual(["entry"]);
+    expect(() => assignmentsFromPlan(plan, {}, { [line.component.id]: "project" })).toThrow("Choose an offered option for this component.");
+  }
+  expect(Object.values(assignmentsFromPlan(plan, {}, {})).every((assignment) => assignment.scope === "operating")).toBe(true);
 });
 
 it("offers entries for no candidate and no entry for fixed-only or unsupported shapes", () => {
@@ -50,7 +94,7 @@ it("offers entries for no candidate and no entry for fixed-only or unsupported s
     { id: "unsupported", displayName: "Unsupported", description: null, blueprintKey: "unknown", inputs: [{ key: "unknown", type: "monitored", quantityKind: "mass" }] },
   ] }];
   const sources = resolveLineSources({ definition });
-  const plan = setupPlan(definition, sources, validateLineSources(definition, sources), {});
+  const plan = setupPlan(definition, sources, validateLineSources(definition, sources));
   expect(assignmentsFromPlan(plan, {}, {})).toEqual({
     entry: { scope: "operating", entryPolicy: "additive" },
     fixed: { scope: "operating", entryPolicy: "none" },
@@ -74,7 +118,7 @@ it("puts noma's existing proposal first for an added component without answering
   const storage = definition.groups.find((group) => group.key === "co2-stored")!.components[0];
   sources[storage.id] = { ...sources[storage.id], origin: "reviewed" };
   sources[diesel.id] = { scope: "operating", automaticSource: "run-startup-diesel", entryPolicy: "additive", origin: "proposed" };
-  const plan = setupPlan(definition, sources, validateLineSources(definition, sources), { [diesel.id]: "added" });
+  const plan = setupPlan(definition, sources, validateLineSources(definition, sources));
   expect(plan.decisions.find((decision) => decision.id === diesel.id)?.options[0].id).toBe("run-startup-diesel");
   expect(() => assignmentsFromPlan(plan, {}, {})).toThrow("Answer every");
 });

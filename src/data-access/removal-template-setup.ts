@@ -12,7 +12,7 @@ import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-
 import { assignmentsFromPlan, setupPlan, templateFitsFacility } from "@/lib/certification/removal-template-setup-plan";
 import { reviewLineSources } from "@/lib/certification/removal-template-review-sources";
 import { hasMissingFixedDatapoint } from "@/lib/certification/template-fixed-datapoints";
-import { compareTemplateObservations, enrichmentProblems, lineNeedsReview, validateLineSources } from "@/lib/isometric/template-observations";
+import { enrichmentProblems, lineNeedsReview, validateLineSources } from "@/lib/isometric/template-observations";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { ApplyRemovalTemplateSetupInput } from "@/schemas/removal-template-setup";
 import { requireOrgScope } from "./utils";
@@ -36,7 +36,7 @@ export async function listSetupCreditBatches(ctx: OrgContext, facilityId: string
 
 /** All setup mutations share this transaction. Locks: boundary, observation, batches. */
 export async function applySetupInTransaction(ctx: OrgContext, tx: DbTransaction, input: ApplyRemovalTemplateSetupInput,
-  template: IsometricGhgEntryTemplate, observed: RemovalTemplateObservation, previous: RemovalTemplateObservation | null) {
+  template: IsometricGhgEntryTemplate, observed: RemovalTemplateObservation) {
   requireOrgScope(ctx);
   requireOrgRole(ctx, "admin");
   await acquireFacilityCertificationBoundaryLock(ctx, tx, input.facilityId);
@@ -50,7 +50,7 @@ export async function applySetupInTransaction(ctx: OrgContext, tx: DbTransaction
   let row = await getLatestTemplateObservation(ctx, "isometric", template.id, tx);
   if (!row || row.id !== observed.id || row.version !== observed.version || row.semanticFingerprint !== input.fingerprints.semanticFingerprint || row.fullFingerprint !== input.fingerprints.fullFingerprint) throw staleSetupTemplate(template.id);
   const sources = reviewLineSources(row.lineSources);
-  const plan = setupPlan(row.definition, sources, validateLineSources(row.definition, row.lineSources), previous ? compareTemplateObservations(previous, row) : {});
+  const plan = setupPlan(row.definition, sources, validateLineSources(row.definition, row.lineSources));
   const assignments = assignmentsFromPlan(plan, input.answers, input.overrides);
   if (Object.keys(assignments).length) row = await reviewLineContractsInTransaction(ctx, tx, { observationId: row.id, expectedVersion: row.version, assignments });
   const reviewedSources = reviewLineSources(row.lineSources);

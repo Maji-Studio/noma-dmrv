@@ -5,7 +5,7 @@ import { assertSequestrationTemplateSelectable } from "@/lib/isometric/transform
 import { catalogCandidates, hasCatalogDisambiguation, type AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
 import { allowedEntryPolicies } from "@/lib/isometric/template-observations/entry-policies";
 import { isAcceptableProposal, lineNeedsReview, type LineContract, type LineSources, type LineSourceProblem } from "@/lib/isometric/template-observations/line-sources";
-import type { ComponentChange, TemplateComponent, TemplateDefinition } from "@/lib/isometric/template-observations";
+import type { TemplateComponent, TemplateDefinition } from "@/lib/isometric/template-observations";
 import { SOURCE_LABELS } from "./removal-template-source-labels";
 
 export type SetupAssignment = Pick<LineContract, "scope" | "automaticSource" | "entryPolicy">;
@@ -35,14 +35,11 @@ function componentOptions(line: SetupComponent): SetupOption[] {
     assignments: { [component.id]: { scope: "operating", automaticSource: source, entryPolicy: entryPolicy === "single" ? "none" : entryPolicy } },
   }));
   options.push({ id: "entry", label: options.length ? "Neither, entry" : "Entry", assignments: { [component.id]: { scope: "operating", entryPolicy } } });
-  if (groupKey === "direct-emissions" && component.blueprintKey === "ghg_direct_emissions") {
-    options.push({ id: "project", label: "Project level (not sent)", assignments: { [component.id]: { scope: "forbidden", entryPolicy: "none" } } });
-  }
   return options;
 }
 
 /** Each component appears once. A clash is one joint choice, preventing duplicate source assignments. */
-export function setupPlan(definition: TemplateDefinition, lineSources: LineSources, problems: readonly LineSourceProblem[], changes: Record<string, ComponentChange>): RemovalTemplateSetupPlan {
+export function setupPlan(definition: TemplateDefinition, lineSources: LineSources, problems: readonly LineSourceProblem[]): RemovalTemplateSetupPlan {
   const plan: RemovalTemplateSetupPlan = { decided: [], defaults: [], decisions: [] };
   const pending: SetupComponent[] = [];
   for (const group of definition.groups) for (const component of group.components) {
@@ -74,11 +71,12 @@ export function setupPlan(definition: TemplateDefinition, lineSources: LineSourc
     const proposal = acceptable
       ? options.find((option) => option.id === line.contract?.automaticSource) ?? options[0]
       : options[0];
-    if (hasReviewed && changes[id] === "added") {
+    if (!acceptable && hasCatalogDisambiguation(line.component.blueprintKey) && candidates.length > 1) {
+      plan.decisions.push({ id, kind: "source", components: [line], options });
+    } else if (hasReviewed) {
+      // Pending additions stay explicit across later, unrelated observations.
       plan.decisions.push({ id, kind: "added", components: [line],
         options: [proposal, ...options.filter((option) => option !== proposal)] });
-    } else if (!acceptable && hasCatalogDisambiguation(line.component.blueprintKey) && candidates.length > 1) {
-      plan.decisions.push({ id, kind: "source", components: [line], options });
     } else {
       plan.defaults.push({ ...line, proposal, options });
     }

@@ -50,8 +50,8 @@ export async function loadRemovalTemplateSetupCore(ctx: OrgContext, facilityId: 
       semanticFingerprint: semanticFingerprint(definition, enrichment),
       fullFingerprint: fullFingerprint(definition, enrichment),
     };
-    // A matching preview still needs the preceding observation to label added
-    // components. Comparing it with itself would hide the decision Apply asks.
+    // A matching preview still needs the preceding observation to label
+    // component changes in the review lines.
     const matchingLatest = latest?.semanticFingerprint === fingerprints.semanticFingerprint &&
       latest.fullFingerprint === fingerprints.fullFingerprint ? latest : null;
     const currentObservation = observation ?? matchingLatest;
@@ -64,7 +64,7 @@ export async function loadRemovalTemplateSetupCore(ctx: OrgContext, facilityId: 
       enrichmentProblems: facts?.enrichmentProblems ?? preview?.enrichmentProblems ?? [], lineSourceProblems: problems,
       lines: removalTemplateReviewLines(definition, sources, changes, blueprints, template) };
     fitting.push({ id: template.id, name: template.display_name,
-      componentCount: entry.lines.length, plan: setupPlan(definition, sources, problems, changes),
+      componentCount: entry.lines.length, plan: setupPlan(definition, sources, problems),
       ready: isTemplateReady(entry), toDecideCount: linesToDecideCount(entry),
       ...fingerprints,
     });
@@ -92,6 +92,5 @@ export async function applyRemovalTemplateSetupCore(ctx: OrgContext, input: Appl
   const observation = facts.observation;
   if (!observation) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
   if (observation.semanticFingerprint !== input.fingerprints.semanticFingerprint || observation.fullFingerprint !== input.fingerprints.fullFingerprint) throw staleSetupTemplate(template.id);
-  const previous = await getPreviousTemplateObservation(ctx, "isometric", template.id, observation.id);
-  return db.transaction((tx) => applySetupInTransaction(ctx, tx, input, template, observation, previous));
+  return db.transaction((tx) => applySetupInTransaction(ctx, tx, input, template, observation));
 }
