@@ -59,7 +59,7 @@ interface SourceChipsProps {
   onEntries?: () => void;
   /** Read-only chips: no links, no buttons. */
   interactive?: boolean;
-  /** Show "No records source" when there are no chips at all. */
+  /** Show "No automatic datapoints" when there are no chips at all. */
   quietText?: boolean;
   /** Shown in place of the quiet text when there are no chips, such as Add manual entry. */
   emptyAction?: ReactNode;
@@ -145,7 +145,7 @@ export function SourceChips({ line, ids, onEntries, interactive = true, quietTex
   if (!chips.length) {
     if (emptyAction) return emptyAction;
     if (!quietText) return null;
-    const text = line.entryPolicy === "single" ? "One manual entry per credit batch" : "No records source";
+    const text = line.entryPolicy === "single" ? "One manual entry per credit batch" : "No automatic datapoints";
     return <span className="body-caption text-[var(--color-text-tertiary)]">{text}</span>;
   }
   return <span className="flex flex-wrap items-center gap-x-8 md:gap-x-6 md:gap-y-4">{chips}</span>;

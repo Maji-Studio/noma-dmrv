@@ -69,7 +69,7 @@ export function emissionLineBindingDecision(args: {
       state: entryOnly ? "empty" : "needsSetup", reason: "unmapped", inputKeys: component.blueprintKey === TRANSPORT_BLUEPRINT_KEY ? [keys[0]] : unmappedKeys.length ? unmappedKeys : keys,
       blocker: { code: entryOnly ? "lineHasNoSource" : "lineNeedsSetup", message: component.blueprintKey === TRANSPORT_BLUEPRINT_KEY
         ? LINE_TRANSPORT_REPLACEMENT_MESSAGE
-        : LINE_NO_MAPPING_MESSAGE, fixTarget: "templateLineReview", lineRef },
+        : LINE_NO_MAPPING_MESSAGE, fixTarget: "templateReplacement", lineRef },
     };
   }
   return undefined;

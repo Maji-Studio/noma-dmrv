@@ -1,11 +1,11 @@
 /**
  * One line of a Removal template in the line review: what the line is, its
- * inputs with their quantity kind and unit, where its figure comes from (scope,
- * automatic figure, emissions entries), and for an Owner or Admin the controls
- * to accept a proposal or assign a contract. Only a line that needs review
+ * inputs with their quantity kind and unit, where its values come from (scope,
+ * automatic datapoints, emissions entries), and for an Owner or Admin the controls
+ * to accept a proposal or assign a contract. Only a line to decide
  * takes an assignment; a settled line is read-only, as the server enforces.
  *
- * A line that needs review carries the open-check treatment the credit batch
+ * A line to decide carries the open-check treatment the credit batch
  * checklist uses (a left rule on the sea wash), so the lines that block a
  * Removal read as a short list among the reviewed ones.
  */
@@ -31,6 +31,7 @@ import {
   SCOPE_LABELS,
   SOURCE_LABELS,
   sourceLabel,
+  TO_DECIDE_LABEL,
   updateAssignment,
   assignmentFromContract,
   type LineAssignment,
@@ -40,7 +41,7 @@ import {
 
 const NO_SOURCE_VALUE = "";
 const SCOPE_FIELD_LABEL = "Scope";
-const SOURCE_FIELD_LABEL = "Automatic figure";
+const SOURCE_FIELD_LABEL = "Automatic datapoints";
 const ENTRIES_FIELD_LABEL = "Emissions entries";
 
 export interface RemovalTemplateLineRowProps {
@@ -141,7 +142,7 @@ function ContractEditor({
           value={value.automaticSource ?? NO_SOURCE_VALUE}
           disabled={!operating || value.entryPolicy === "single" || sources.length === 0}
           options={[
-            { value: NO_SOURCE_VALUE, label: "No automatic figure" },
+            { value: NO_SOURCE_VALUE, label: "No automatic datapoints" },
             ...sources.map((source) => ({ value: source, label: SOURCE_LABELS[source] })),
           ]}
           onChange={(event) => onChange(updateAssignment(value, {
@@ -210,7 +211,7 @@ export function RemovalTemplateLineRow({
           {draft ? (
             <StatusBadge status="running" label="Not saved" size="small" />
           ) : needsReview ? (
-            <StatusBadge status="pending" label="Needs review" size="small" />
+            <StatusBadge status="pending" label={TO_DECIDE_LABEL} size="small" />
           ) : null}
           {changeLabel && <StatusBadge status="draft" label={changeLabel} size="small" />}
         </div>

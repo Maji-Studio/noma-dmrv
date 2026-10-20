@@ -88,7 +88,7 @@ describe("CreditBatchTemplateSwitchDialog", () => {
     expect(mocks.preview).not.toHaveBeenCalled();
   });
 
-  it("previews how many lines of the chosen template need review without blocking the switch", async () => {
+  it("previews how many lines of the chosen template are to decide without blocking the switch", async () => {
     mocks.preview.mockReturnValue(previewResult({ needsReviewCount: 2 }));
     mount();
     await screen.findByRole("dialog", { name: "Switch template" });
@@ -97,9 +97,9 @@ describe("CreditBatchTemplateSwitchDialog", () => {
     });
 
     expect(mocks.preview).toHaveBeenLastCalledWith(FACILITY_ID, "rvt_new", true);
-    expect(screen.getByText("2 lines need review")).toBeTruthy();
-    expect(screen.getByText("Removals for CB-26-001 stay blocked until an Owner or Admin reviews them.")).toBeTruthy();
-    const link = screen.getByRole("link", { name: "Review lines in a new tab" });
+    expect(screen.getByText("2 lines to decide")).toBeTruthy();
+    expect(screen.getByText("Removals for CB-26-001 stay blocked until an Owner or Admin decides them.")).toBeTruthy();
+    const link = screen.getByRole("link", { name: /^Decide lines/ });
     // Straight to the chosen template, in a new tab so the unsaved choice stays here.
     expect(link.getAttribute("href")).toContain("section=removal-templates");
     expect(link.getAttribute("href")).toContain("template=rvt_new");
@@ -120,6 +120,9 @@ describe("CreditBatchTemplateSwitchDialog", () => {
 
     expect(screen.getByText("Template not fully read")).toBeTruthy();
     expect(screen.getByText(/stay blocked until the template is read in full/)).toBeTruthy();
+    // No lines to decide, so the link does not say "Decide lines".
+    expect(screen.queryByRole("link", { name: /^Decide lines/ })).toBeNull();
+    expect(screen.getByRole("link", { name: /^Open Removal templates/ }).getAttribute("href")).toContain("template=rvt_new");
   });
 
   it("confirms a chosen template whose lines are all reviewed", async () => {
@@ -129,9 +132,9 @@ describe("CreditBatchTemplateSwitchDialog", () => {
       fireEvent.change(document.getElementById("removalTemplateId")!, { target: { value: "rvt_new" } });
     });
 
-    expect(screen.getByText("All lines in this template are reviewed.")).toBeTruthy();
-    expect(screen.queryByText(/need review/)).toBeNull();
-    expect(screen.queryByRole("link", { name: "Review lines in a new tab" })).toBeNull();
+    expect(screen.getByText("All lines in this template are decided.")).toBeTruthy();
+    expect(screen.queryByText(/to decide/)).toBeNull();
+    expect(screen.queryByRole("link", { name: /Decide lines/ })).toBeNull();
   });
 
   it("offers a retry when the preview cannot be read and still allows the switch", async () => {

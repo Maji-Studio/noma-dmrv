@@ -53,8 +53,8 @@ _Avoid_: sensor dump, log file, reactor-day file, channel mapping.
 
 **Emissions entry**:
 An operating-emissions measurement recorded on one credit batch and bound to a
-Removal-template line. Its typed values and evidence supplement automatic run
-figures where the line allows it.
+Removal-template line. Its typed values and evidence supplement the line's
+**automatic datapoints** where the line allows it.
 _On screen_: manual entry; the screen calls the part that comes from forms and
 routes "From records".
 _Avoid_: activity (reserved for the history log).
@@ -515,6 +515,40 @@ the same for every submission. Contrast **monitored input**.
 A placeholder mapping that emits `0` for a **monitored input** noma
 cannot yet source. A template carrying any zero stub must not be used
 against a production registry project.
+
+**Removal template**:
+The Isometric template (credit type REMOVAL) a **Removal** is built from. It
+lists the template lines Isometric expects, in groups. Each facility has one
+default Removal template; a new **credit batch** starts on it, and an Owner or
+Admin can switch a batch to another. A template is set up in Settings, Removal
+templates, where its lines are decided.
+_Avoid_: GHG entry template (the registry's API name), template pin, active
+template.
+
+**Template line**:
+One component of a **Removal template**, named as Isometric names it. Its
+decision covers its scope, its **automatic datapoints** and whether it takes
+**emissions entries**. A template's line decisions are made once, and every
+facility and credit batch using that template follows them. noma proposes a
+decision where it can; an Owner or Admin decides.
+_Avoid_: component (the registry's API name), template input.
+
+**Lines to decide**:
+The template lines without a saved decision, always shown with their count
+("3 lines to decide"). A Removal template with lines to decide blocks the
+Removals of every credit batch on it. The link to settle them always reads
+"Decide lines" and opens Removal templates; a decided line noma cannot fill
+links "Open Removal templates" instead. In the New Removal checks this is
+the **Lines decided** check; the batch's own template choice is the **Template
+set** check.
+_Avoid_: needs review, unresolved, template review.
+
+**Automatic datapoints**:
+The noma records that fill a template line by themselves, for example
+feedstock transport legs or generator diesel from production runs. Isometric
+calls each submitted value a Datapoint, and one line can take several (a
+transport line takes distance and mass).
+_Avoid_: automatic figure, records source.
 
 ### Provenance & lineage
 

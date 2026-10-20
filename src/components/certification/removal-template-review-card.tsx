@@ -42,6 +42,7 @@ import {
   problemMessages,
   reviewCountSummary,
   TEMPLATE_NOT_FULLY_READ_TITLE,
+  TO_DECIDE_LABEL,
   templateName,
   type LineAssignment,
   type RemovalTemplateReviewEntry,
@@ -218,7 +219,7 @@ export function RemovalTemplateReviewCard({
           >
             {entry.preview && (
               <Notice tone="info" title="Not in use yet">
-                No facility default or credit batch uses this template. Switch a credit batch to it to review and save its lines.
+                No facility default or credit batch uses this template. Switch a credit batch to it to decide its lines.
               </Notice>
             )}
             {notFullyRead && (
@@ -236,7 +237,7 @@ export function RemovalTemplateReviewCard({
             )}
             {!canManage && reviewCount > 0 && (
               <Notice tone="info">
-                Ask an Owner or Admin to review the lines marked Needs review.
+                Ask an Owner or Admin to decide the lines marked {TO_DECIDE_LABEL}.
               </Notice>
             )}
             <DeprecationFact entry={entry} />

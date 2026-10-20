@@ -18,6 +18,8 @@ import {
 import type { ComponentEnrichment, EntryPolicy, QuantityKind } from "@/lib/isometric/template-observations/types";
 import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
 
+export { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE } from "@/lib/certification/requirement-labels";
+
 export type RemovalTemplateReviewEntry = NonNullable<
   ReturnType<typeof useRemovalTemplateReview>["data"]
 >[number];
@@ -56,7 +58,7 @@ export const SOURCE_LABELS: Record<AutomaticSourceId, string> = {
 export const ORIGIN_LABELS: Record<LineContract["origin"], string> = {
   bootstrap: "Set by noma",
   carried: "Kept from the last read",
-  reviewed: "Reviewed",
+  reviewed: "Decided",
   proposed: "Proposed by noma",
 };
 
@@ -67,17 +69,18 @@ export const CHANGE_LABELS: Partial<Record<ComponentChange, string>> = {
   cosmetic: "Wording changed",
 };
 
-/** `unassigned` is shown as the Needs review badge, not as a sentence. */
+/** `unassigned` is shown as the To decide badge, not as a sentence. */
 const PROBLEM_COPY: Partial<Record<LineSourceProblem["code"], string>> = {
   "single-with-automatic-source":
-    "One entry per batch cannot add to an automatic figure. Remove the automatic figure.",
-  "foreign-automatic-source": "This automatic figure does not fit this line. Choose another one.",
+    "One entry per batch cannot add to automatic datapoints. Remove the automatic datapoints.",
+  "foreign-automatic-source": "These automatic datapoints do not fit this line. Choose others.",
   "disallowed-entry-policy": "This entry rule does not fit the line's inputs. Choose another one.",
-  ambiguous: "Another line uses the same automatic figure. Give each figure to one line.",
+  ambiguous: "Another line uses the same automatic datapoints. Give them to one line only.",
   "missing-contract": "This line has no contract yet. Assign one.",
 };
 
-export const TEMPLATE_NOT_FULLY_READ_TITLE = "Template not fully read";
+/** The badge on a line without a saved decision. */
+export const TO_DECIDE_LABEL = "To decide";
 export const DEPRECATED_FACTORS_LABEL = "Deprecated factors";
 
 export function sourceLabel(source: AutomaticSourceId | undefined): string {
@@ -138,7 +141,7 @@ export function assignmentFromContract(contract: LineContract): LineAssignment {
 /**
  * Applies one select change and keeps the draft valid where the server would
  * refuse it: only operating lines take a source or entries, and a single entry
- * never adds to an automatic figure.
+ * never adds to automatic datapoints.
  */
 export function updateAssignment(current: LineAssignment, change: Partial<LineAssignment>): LineAssignment {
   const next: LineAssignment = { ...current, ...change };
@@ -183,9 +186,10 @@ export function changeSummary(changes: RemovalTemplateReviewEntry["changes"]): s
   return parts.length === 0 ? "No changes since the last read." : `Since the last read: ${parts.join(", ")}.`;
 }
 
-export function reviewCountSummary(lineCount: number, needsReview: number): string {
-  const lines = plural(lineCount, "line", "lines");
-  return needsReview === 0 ? `${lines}. All reviewed.` : `${lines}. ${needsReview} ${needsReview === 1 ? "needs" : "need"} review.`;
+export function reviewCountSummary(lineCount: number, toDecide: number): string {
+  return toDecide === 0
+    ? `${plural(lineCount, "line", "lines")}, all decided.`
+    : `${toDecide} of ${plural(lineCount, "line", "lines")} to decide.`;
 }
 
 /** Lines in template order, grouped under their template group. */

@@ -139,7 +139,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
   for (const line of input.emissionLines ?? []) {
     if (line.state === "needsReview") {
       const fixTarget = line.blocker?.fixTarget;
-      const settingsFix = fixTarget === "templateLineReview" ||
+      const settingsFix = fixTarget === "templateLineReview" || fixTarget === "templateLines" ||
         fixTarget === "certificationTemplates" || fixTarget === "certificationEmissions";
       const target: CreditBatchOpenItem["target"] = settingsFix
         ? { href: batchHealthFixLinkFor(

@@ -7,8 +7,8 @@
  * version; both come back as the form error and the dialog stays open.
  *
  * Once another template is chosen, the dialog previews its line review: how
- * many lines need review (they block the batch's Removals until an Owner or
- * Admin reviews them) or that all are reviewed. The preview informs the choice
+ * many lines are to decide (they block the batch's Removals until an Owner or
+ * Admin decides them) or that all are decided. The preview informs the choice
  * and never blocks the switch.
  *
  * The form sends the batch version it opened on, never a refetched one, so a

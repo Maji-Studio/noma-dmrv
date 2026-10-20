@@ -132,10 +132,10 @@ describe("deriveRemovalReadiness — blocked: linkage & template", () => {
   });
 
   it("names the template check 'No Removal template chosen' in the checklist when none is chosen", () => {
-    const check = checkFor(buildRemovalRequirementsChecklist(ready({ hasRemovalTemplate: false })), "template");
+    const check = checkFor(buildRemovalRequirementsChecklist(ready({ hasRemovalTemplate: false })), "templateSet");
     expect(check.status).toBe("unmet");
     expect(check.unmetLabel).toBe("No Removal template chosen");
-    expect(checkFor(buildRemovalRequirementsChecklist(ready()), "template").unmetLabel).toBe(CERT_REQUIREMENT_META.template.unmetLabel);
+    expect(checkFor(buildRemovalRequirementsChecklist(ready()), "templateSet").unmetLabel).toBe(CERT_REQUIREMENT_META.templateSet.unmetLabel);
   });
 
   it("blocks when no default template is selected", () => {
@@ -410,7 +410,7 @@ describe("buildRemovalRequirementsChecklist — row semantics", () => {
       status: "unmet",
       detail: "Organization Isometric credentials are not configured",
     });
-    expect(checkFor(checks, "template").status).toBe("skipped");
+    expect(checkFor(checks, "templateSet").status).toBe("skipped");
     expect(checkFor(checks, "transport").status).toBe("skipped");
     expect(checkFor(checks, "transportUniformity").status).toBe("skipped");
   });
@@ -419,8 +419,8 @@ describe("buildRemovalRequirementsChecklist — row semantics", () => {
     const checks = buildRemovalRequirementsChecklist(
       ready({ hasRemovalTemplate: false, templateBlockers: [removalTemplateBlocker("templateNotFound")] }),
     );
-    expect(checkFor(checks, "template")).toMatchObject({
-      key: "template",
+    expect(checkFor(checks, "templateSet")).toMatchObject({
+      key: "templateSet",
       status: "unmet",
       detail: "Template no longer exists in Isometric.",
     });
@@ -539,7 +539,8 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
     expect(checks.map((c) => c.key)).toEqual([
       "mapping",
       "credentials",
-      "template",
+      "templateSet",
+      "templateLines",
       "transport",
       "transportUniformity",
       "production",
@@ -560,7 +561,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
       ready({ hasMapping: false }),
     );
     expect(checkFor(checks, "mapping").status).toBe("unmet");
-    expect(checkFor(checks, "template").status).toBe("skipped");
+    expect(checkFor(checks, "templateSet").status).toBe("skipped");
     expect(checkFor(checks, "transportUniformity").status).toBe("skipped");
     expect(checkFor(checks, "feedstockTypeMapping").status).toBe("skipped");
   });
@@ -569,7 +570,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
     const checks = buildRemovalRequirementsChecklist(
       ready({ hasRemovalTemplate: false }),
     );
-    expect(checkFor(checks, "template").status).toBe("unmet");
+    expect(checkFor(checks, "templateSet").status).toBe("unmet");
     expect(checkFor(checks, "transportUniformity").status).toBe("skipped");
     expect(checkFor(checks, "feedstockTypeMapping").status).toBe("skipped");
   });

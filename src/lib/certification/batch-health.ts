@@ -1,3 +1,4 @@
+import { templateLineFixTarget } from "./template-fix-targets";
 import type { BatchEmissionLine } from "./emission-lines";
 import type { SampleDocumentWarningKey } from "./sample-document-warnings";
 /**
@@ -23,7 +24,7 @@ import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "./production-readiness";
-import { CERT_REQUIREMENT_META, entityFieldUnmetLabel, NO_REMOVAL_TEMPLATE_LABEL } from "./requirement-labels";
+import { CERT_REQUIREMENT_META, entityFieldUnmetLabel, NO_REMOVAL_TEMPLATE_LABEL, templateLinesUnmetLabel } from "./requirement-labels";
 import {
   removalTemplateBlockerDestination,
   type RemovalTemplateBlocker,
@@ -39,7 +40,8 @@ export type BatchHealthState =
 
 export type BatchHealthCheckKey =
   | "emissions"
-  | "template"
+  | "templateSet"
+  | "templateLines"
   | "carbon" // carbon & durability lab inputs resolved
   | "facilityEmissions" // facility emission-estimate inputs resolved
   | "feedstockTypeMapping" // declared pyrolysis feedstock type linked to Isometric
@@ -52,6 +54,8 @@ export type BatchHealthFixTarget =
   | "certificationTemplates"
   | "creditBatchTemplate"
   | "templateLineReview"
+  | "templateLines"
+  | "templateReplacement"
   | "batchDetails"
   | "orders"
   | "deliveries"
@@ -171,6 +175,8 @@ export interface BatchHealthFacts {
    */
   facilitySetupComplete: boolean;
   templateBlockers?: RemovalTemplateBlocker[];
+  /** Current template lines without a saved, unambiguous decision. */
+  undecidedLineIds?: readonly string[];
   /**
    * Transport coverage for the categories the facility's default template
    * requires. Empty when the template requires none — or when facility setup is
@@ -493,14 +499,29 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
   const emissionIssues = new Map(facts.emissionLines
     ?.filter((line) => line.blocker?.fixTarget === "emissions")
     .map((line) => [line.componentId, line]));
+  const linesToDecide = new Set(facts.undecidedLineIds).size;
+  const pinBlockers = (facts.templateBlockers ?? []).filter(
+    (blocker) => removalTemplateBlockerDestination(blocker.code) === "creditBatchTemplate",
+  );
+  const onlyUnpinned = pinBlockers.length > 0 &&
+    pinBlockers.every((blocker) => blocker.code === "unpinnedTemplate");
+  // Batch health keeps its blockers (template blockers only); the shared
+  // undecided set only names the count, so batch selection is unchanged.
+  const templateBlockers = facts.templateBlockers ?? [];
   const checks = mergeUnmetChecksByDestination(
     [
       // A pin problem is fixed on the batch; a line problem in the template review.
-      ...(facts.templateBlockers ?? []).map((blocker): BatchHealthCheckBase => ({
-        key: "template", label: "Removal template reviewed", status: "unmet", detail: blocker.message,
-        fixTarget: removalTemplateBlockerDestination(blocker.code),
-        ...(blocker.code === "unpinnedTemplate" ? { unmetLabel: NO_REMOVAL_TEMPLATE_LABEL } : {}),
-      })),
+      ...templateBlockers.map((blocker): BatchHealthCheckBase => {
+        const fixTarget = templateLineFixTarget(blocker);
+        const key = fixTarget === "creditBatchTemplate" ? "templateSet" : "templateLines";
+        return {
+          key, label: CERT_REQUIREMENT_META[key].requirementLabel, status: "unmet",
+          detail: blocker.message, fixTarget,
+          unmetLabel: key === "templateLines"
+            ? templateLinesUnmetLabel(fixTarget === "templateLineReview" ? linesToDecide : 0, [blocker.code])
+            : onlyUnpinned ? NO_REMOVAL_TEMPLATE_LABEL : CERT_REQUIREMENT_META.templateSet.unmetLabel,
+        };
+      }),
       ...(facts.emissionLines != null ? [{
         key: "emissions" as const, label: "Emissions", fixTarget: "emissions" as const,
         status: emissionIssues.size ? "unmet" as const : "met" as const,

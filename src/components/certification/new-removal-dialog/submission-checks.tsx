@@ -15,10 +15,9 @@ import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { certCheckLabel } from "@/lib/certification/requirement-labels";
 import { transportRepairDestination } from "@/lib/isometric/semantic-binding-catalog";
 import { certificationSettingsHref } from "@/lib/certification/links";
-import {
-  removalTemplateBlockerDestination,
-  type RemovalTemplateBlockerCode,
-} from "@/lib/certification/removal-template-blockers";
+import type { RemovalBlockerCode } from "@/lib/certification/removal-blockers";
+import { templateFixTarget, type TemplateFixTarget } from "@/lib/certification/template-fix-targets";
+import { isTemplateRoutedCode } from "@/lib/certification/removal-template-blockers";
 import {
   buildFeedstockTypeEditDeepLink,
   FEEDSTOCK_TYPE_EDIT_LABEL,
@@ -42,40 +41,43 @@ interface SubmissionChecksProps {
   creditBatches?: readonly CheckCreditBatch[];
 }
 
-/**
- * A pin blocker is fixed on each credit batch (Switch template); a line blocker
- * in the template line review. Without codes, fall back to Settings.
- */
-function templateFixLinks(
-  codes: readonly RemovalTemplateBlockerCode[],
+function perBatchLinks(
+  target: Parameters<typeof batchHealthFixLinkFor>[0],
   facilityId: string,
   creditBatches: readonly CheckCreditBatch[],
 ): { label: string; href: string }[] {
-  const destinations = new Set(
-    codes.map(removalTemplateBlockerDestination),
-  );
+  if (creditBatches.length === 0) return [batchHealthFixLinkFor(target, facilityId)];
+  return creditBatches.map((batch) => {
+    const link = batchHealthFixLinkFor(target, facilityId, batch.id);
+    return creditBatches.length === 1 ? link : { ...link, label: `${link.label} on ${batch.code}` };
+  });
+}
+
+/** Keep decision, filling and batch-template repairs distinct. */
+function templateFixLinks(
+  codes: readonly RemovalBlockerCode[],
+  facilityId: string,
+  creditBatches: readonly CheckCreditBatch[],
+  targets?: readonly TemplateFixTarget[],
+): { label: string; href: string }[] {
+  const destinations = new Set(targets ?? codes.filter(isTemplateRoutedCode).map(templateFixTarget));
   if (destinations.size === 0) {
-    return [{ label: "Open settings", href: certificationSettingsHref(facilityId) }];
+    return [batchHealthFixLinkFor({ key: "templateLines", fixTarget: "templateLines" }, facilityId)];
   }
-  const links: { label: string; href: string }[] = [];
-  if (destinations.has("creditBatchTemplate")) {
-    const target = { key: "template", fixTarget: "creditBatchTemplate" } as const;
-    if (creditBatches.length === 0) links.push(batchHealthFixLinkFor(target, facilityId));
-    for (const batch of creditBatches) {
-      const link = batchHealthFixLinkFor(target, facilityId, batch.id);
-      links.push(creditBatches.length === 1 ? link : { ...link, label: `${link.label} on ${batch.code}` });
-    }
-  }
-  if (destinations.has("templateLineReview")) {
-    links.push(batchHealthFixLinkFor({ key: "template", fixTarget: "templateLineReview" }, facilityId));
-  }
-  return links;
+  // Both open the same review page. Keep the specific decision action when needed.
+  if (destinations.has("templateLineReview")) destinations.delete("templateLines");
+  return [...destinations].flatMap((fixTarget) => {
+    const target = { key: "templateLines", fixTarget } as const;
+    return fixTarget === "creditBatchTemplate" || fixTarget === "templateReplacement"
+      ? perBatchLinks(target, facilityId, creditBatches)
+      : [batchHealthFixLinkFor(target, facilityId)];
+  }).filter((link, index, links) => links.findIndex((item) => item.href === link.href) === index);
 }
 
 function fixLinksFor(
   check: Pick<
     RemovalRequirementCheck,
-    "key" | "fixTarget" | "fixTargetId" | "transportCategory" | "lineageIssues" | "templateBlockerCodes"
+    "key" | "fixTarget" | "fixTargetId" | "transportCategory" | "lineageIssues" | "templateBlockerCodes" | "templateFixTargets"
   >,
   facilityId: string,
   creditBatches: readonly CheckCreditBatch[] = [],
@@ -107,8 +109,13 @@ function fixLinksFor(
       return [
         { label: "Open settings", href: certificationSettingsHref(facilityId) },
       ];
-    case "template":
-      return templateFixLinks(check.templateBlockerCodes ?? [], facilityId, creditBatches);
+    case "templateSet":
+    case "templateLines":
+      return check.key === "templateSet" && !check.templateBlockerCodes?.length
+        ? [{ label: "Open settings", href: certificationSettingsHref(facilityId) }]
+        : templateFixLinks(check.templateBlockerCodes ?? [], facilityId, creditBatches, check.templateFixTargets);
+    case "emissions":
+      return perBatchLinks({ key: "emissions" }, facilityId, creditBatches);
     case "measurementDates":
       if (check.fixTarget === "productionRuns") return [productionRuns];
       if (check.fixTarget === "labSamples") return [labSamples];

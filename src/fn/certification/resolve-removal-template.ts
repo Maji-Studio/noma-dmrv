@@ -1,3 +1,4 @@
+import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 import type { BatchEmissionContext } from "./batch-emission-context";
 import { deriveBatchEmissionLines, type BatchEmissionLine } from "@/lib/certification/emission-lines";
 import { withRemovedEntryComponents } from "@/lib/certification/emission-line-definition";
@@ -5,7 +6,7 @@ import { normalizeTemplateDefinition } from "@/lib/isometric/template-observatio
 import { withTemplateOrder } from "@/lib/isometric/template-observations/template-order";
 import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
-import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
+import { lineNeedsReview, validateLineSources, type LineSources } from "@/lib/isometric/template-observations/line-sources";
 import { removalTemplateBlocker, type RemovalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 import type { FacilityCertifierFacts } from "./facility-certifier-facts";
 
@@ -16,6 +17,7 @@ export function resolveRemovalTemplate(
   batchFacts: BatchEmissionContext = {},
 ) {
   const unresolved = (code: "unpinnedTemplate" | "mixedTemplatePins" | "templateNotFound") => ({
+    undecidedLineIds: [] as string[],
     emissionLinesByBatchId: {} as Record<string, BatchEmissionLine[]>,
     emissionLines: null as BatchEmissionLine[] | null,
     removalTemplate: null as IsometricGhgEntryTemplate | null, lineSources: {} as LineSources,
@@ -34,8 +36,15 @@ export function resolveRemovalTemplate(
   if (facts.lineSourceProblems.length) {
     templateBlockers.push(removalTemplateBlocker("templateLinesNeedReview"));
   }
+  const definition = normalizeTemplateDefinition(facts.template);
+  const sources = facts.observation?.lineSources;
+  const problems = sources ? [...facts.lineSourceProblems, ...validateLineSources(definition, sources)] : [];
+  // Only current template components count, never removed components kept for stale entries.
+  const undecidedLineIds = sources ? [...new Set(definition.groups.flatMap((group) => group.components
+    .filter((component) => lineNeedsReview(component.id, ownValue(sources, component.id), problems))
+    .map((component) => component.id)))] : [];
   const derive = (batchId?: string) => deriveBatchEmissionLines({
-    definition: withRemovedEntryComponents(normalizeTemplateDefinition(facts.template),
+    definition: withRemovedEntryComponents(definition,
       batchId ? batchFacts[batchId]?.entries ?? [] : [],
       batchId ? batchFacts[batchId]?.previousObservations ?? new Map() : new Map()),
     lineSources: withTemplateOrder(facts.template, facts.observation!.lineSources),
@@ -50,7 +59,7 @@ export function resolveRemovalTemplate(
   const emissionLines = !facts.observation ? null : Object.keys(emissionLinesByBatchId).length
     ? Object.values(emissionLinesByBatchId).flat() : derive();
   return {
-    emissionLines, emissionLinesByBatchId,
+    emissionLines, emissionLinesByBatchId, undecidedLineIds,
     removalTemplate: facts.template, lineSources: facts.observation?.lineSources ?? {}, templateBlockers,
     blueprintsForTemplate: facts.blueprintsForTemplate, unresolvedBlueprintKeys: facts.unresolvedBlueprintKeys,
     unbindableTemplateInputs: facts.unbindableTemplateInputs, requiredTransportCategories: facts.requiredTransportCategories,

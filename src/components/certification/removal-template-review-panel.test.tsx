@@ -104,13 +104,13 @@ describe("RemovalTemplateReviewPanel", () => {
     expect(screen.queryByText("No Removal templates yet")).toBeNull();
   });
 
-  it("is read-only for members and still flags the line that needs review", () => {
+  it("is read-only for members and still flags the line to decide", () => {
     render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage={false} />);
 
     expect(screen.getByText("Dark Earth Carbon Template")).toBeTruthy();
     expect(screen.getByText("Default")).toBeTruthy();
-    expect(screen.getByText("Needs review")).toBeTruthy();
-    expect(screen.getByText("Ask an Owner or Admin to review the lines marked Needs review.")).toBeTruthy();
+    expect(screen.getByText("To decide")).toBeTruthy();
+    expect(screen.getByText("Ask an Owner or Admin to decide the lines marked To decide.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Accept proposal/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Change/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
@@ -189,7 +189,7 @@ describe("RemovalTemplateReviewPanel", () => {
     }));
   });
 
-  it("offers assignment only on lines that need review", () => {
+  it("offers assignment only on lines to decide", () => {
     mocks.data = [entry({
       lineSourceProblems: [{ code: "ambiguous", componentId: "cmp_lab" }],
       lines: [
