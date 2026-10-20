@@ -273,7 +273,6 @@ export function FacilityList() {
       <PageHeader
         area="infrastructure"
         title="Facilities"
-        subtitle="Production sites, reactors, and registry links"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -287,7 +286,7 @@ export function FacilityList() {
           title={showArchived ? "Archived facilities" : "Active facilities"}
           value={totalFacilities}
           icon={<FactoryIcon size={24} weight="bold" />}
-          description="Facilities matching the current filters"
+          description="Matching the current filters"
           isLoading={isLoading}
         />
         <StatCard

@@ -504,7 +504,6 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         <PageHeader
           area="production"
           title="Feedstocks"
-          subtitle="Track incoming biomass deliveries and bin allocations"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its feedstock deliveries." />
       </div>
@@ -545,7 +544,6 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       <PageHeader
         area="production"
         title="Feedstocks"
-        subtitle="Track incoming biomass deliveries and bin allocations"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />

@@ -310,7 +310,6 @@ export function FormulationList() {
       <PageHeader
         area="production"
         title="Formulations"
-        subtitle="Biochar product recipes and blend ratios"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -325,7 +324,6 @@ export function FormulationList() {
           title={showArchived ? "Archived formulations" : "Active formulations"}
           value={totalFormulations}
           icon={<ListChecksIcon size={24} weight="bold" />}
-          description="Biochar product recipes"
           isLoading={isLoading}
         />
       </div>

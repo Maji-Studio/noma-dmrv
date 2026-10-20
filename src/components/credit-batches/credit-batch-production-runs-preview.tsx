@@ -175,7 +175,7 @@ export function CreditBatchProductionRunsPreview({
         <EmptyState
           icon={<FactoryIcon size={32} weight="bold" aria-hidden />}
           title="No matching production runs"
-          description="You can create the batch now; matching completed runs will attach automatically."
+          description="Matching completed runs attach automatically."
           padding="sm"
         />
       ) : (

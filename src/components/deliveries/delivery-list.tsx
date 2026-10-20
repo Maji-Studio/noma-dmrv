@@ -475,7 +475,6 @@ export function DeliveryList() {
         <PageHeader
           area="distribution"
           title="Deliveries"
-          subtitle="Track outbound biochar product deliveries"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its deliveries." />
       </div>
@@ -511,7 +510,6 @@ export function DeliveryList() {
       <PageHeader
         area="distribution"
         title="Deliveries"
-        subtitle="Track outbound biochar product deliveries"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />
@@ -544,7 +542,6 @@ export function DeliveryList() {
           title="Delivered"
           value={statsData?.deliveredCount ?? 0}
           icon={<TruckIcon size={24} weight="bold" />}
-          description="Completed deliveries"
           isLoading={statsLoading}
         />
       </div>

@@ -20,7 +20,6 @@ export default async function VehiclesAndCrewSettingsPage() {
       title="Vehicles and crew"
       caption="The vehicles, drivers and operators your records name. Vehicle type and model year are kept as transport evidence."
       access="All members"
-      subtitle="Manage the vehicles, drivers and operators your organization records."
       canManageDefaults={canManageDefaults}
       canManageApiKeys={canOwnApiKey(ctx.orgRole)}
       isPlatformAdmin={ctx.isPlatformAdmin}

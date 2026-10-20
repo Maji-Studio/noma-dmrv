@@ -402,7 +402,6 @@ export function SupplierList() {
       <PageHeader
         area="distribution"
         title="Suppliers"
-        subtitle="Biomass suppliers and their source sites"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -417,7 +416,6 @@ export function SupplierList() {
           title={showArchived ? "Archived suppliers" : "Active suppliers"}
           value={totalSuppliers}
           icon={<UsersIcon size={24} weight="bold" />}
-          description="Biomass feedstock providers"
           isLoading={isLoading}
         />
       </div>

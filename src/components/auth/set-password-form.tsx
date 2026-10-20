@@ -106,9 +106,6 @@ function SetPasswordFormContent() {
             <h2 className="body-large-bold text-[var(--color-text-primary)]">
               Set your password
             </h2>
-            <p className="body-small text-[var(--color-text-secondary)] mt-16">
-              Create a secure password for your account
-            </p>
           </div>
 
           <FormField

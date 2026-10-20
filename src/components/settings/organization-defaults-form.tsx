@@ -235,10 +235,6 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
         </FormField>
       </FormSection>
 
-      <p className="body-caption text-[var(--color-text-tertiary)]">
-        These only seed new records. Nothing already saved changes.
-      </p>
-
       <FormActions
         control={control}
         isSubmitting={saveMutation.isPending}

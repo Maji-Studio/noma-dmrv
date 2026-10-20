@@ -819,7 +819,6 @@ export function TraceabilityPage() {
       <div className="container-max page-shell">
         <PageHeader
           title="Traceability"
-          subtitle="Trace a credit batch's provenance back through production to feedstock."
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to trace its provenance." />
       </div>

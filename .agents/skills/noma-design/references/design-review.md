@@ -21,6 +21,7 @@ For every item, check the changed code and the 1440 and 390 screenshots.
 
 - Dates and times go through the shared formatters in `src/lib/format-utils.ts` (`formatDate`, `formatDateTime`, `formatDateRange`, `formatFacilityDateTime`, `formatFacilityDay`, `formatDayString`), never `toLocaleDateString` or `Intl.DateTimeFormat` in a component: `docs/design-system.md` § Date and time display. `src/lib/date-utils.ts` holds the facility clock and input-side helpers.
 - Copy follows the terms, structure and review checklist, with no en or em dashes: `docs/ux-writing.md` § Review checklist (and § Core rules, § Message structure for wording).
+- A list-page `PageHeader` subtitle stays only when it adds information: `docs/design-system.md` § PageHeader.
 
 ## Phone (390)
 

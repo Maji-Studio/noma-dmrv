@@ -578,7 +578,6 @@ export function SampleList({
         <PageHeader
           area="verification"
           title="Lab Samples"
-          subtitle="Lab analysis of biochar Samples and carbon permanence"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its lab Samples." />
       </div>
@@ -600,7 +599,6 @@ export function SampleList({
       <PageHeader
         area="verification"
         title="Lab Samples"
-        subtitle="Lab analysis of biochar Samples and carbon permanence"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -610,8 +608,8 @@ export function SampleList({
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
-        <StatCard title="Total Samples" value={statsData?.totalSamples ?? 0} icon={<FlaskIcon size={24} weight="bold" />} description="All lab Samples" isLoading={statsLoading} />
-        <StatCard title="Avg carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? MISSING_VALUE.notAvailable} icon={<LeafIcon size={24} weight="bold" />} description="Average total carbon" isLoading={statsLoading} />
+        <StatCard title="Total Samples" value={statsData?.totalSamples ?? 0} icon={<FlaskIcon size={24} weight="bold" />} isLoading={statsLoading} />
+        <StatCard title="Avg total carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? MISSING_VALUE.notAvailable} icon={<LeafIcon size={24} weight="bold" />} isLoading={statsLoading} />
         <StatCard title="200-Year" value={statsData?.samples200Year ?? 0} icon={<FireIcon size={24} weight="bold" />} description="Standard durability" isLoading={statsLoading} />
         <StatCard title="1000-Year" value={statsData?.samples1000Year ?? 0} icon={<CertificateIcon size={24} weight="bold" />} description="Enhanced durability" isLoading={statsLoading} />
       </div>
