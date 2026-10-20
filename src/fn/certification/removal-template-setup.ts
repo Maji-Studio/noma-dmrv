@@ -1,5 +1,7 @@
 "use server";
 
+import { applyRemovalTemplateSetupCore, loadRemovalTemplateSetupCore } from "./removal-template-setup-core";
+import { applyRemovalTemplateSetupSchema, loadRemovalTemplateSetupSchema, type ApplyRemovalTemplateSetupInput } from "@/schemas/removal-template-setup";
 import { getCertifierProjectByFacility, updateFacilityDefaultRemovalTemplate, type CertifierProjectRow } from "@/data-access/certification";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { requireOrgFacility } from "@/data-access/utils";
@@ -49,5 +51,16 @@ export async function startRemovalTemplateSetup(input: StartRemovalTemplateSetup
     const target = await loadSetupTarget(ctx, parsed);
     const facts = await loadRemovalTemplateFacts(ctx, { ...target, blueprints: await listComponentBlueprints(target.client) });
     if (!facts.observation) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
+  });
+}
+
+export async function loadRemovalTemplateSetup(facilityId: string) {
+  return withAction(async (ctx) => loadRemovalTemplateSetupCore(ctx, loadRemovalTemplateSetupSchema.parse(facilityId)));
+}
+
+export async function applyRemovalTemplateSetup(input: ApplyRemovalTemplateSetupInput) {
+  return withAction(async (ctx) => {
+    requireOrgRole(ctx, "admin");
+    return applyRemovalTemplateSetupCore(ctx, applyRemovalTemplateSetupSchema.parse(input));
   });
 }

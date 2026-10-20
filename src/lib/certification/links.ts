@@ -165,3 +165,10 @@ export function traceabilityActivityHref(
   });
   return `/traceability?${params.toString()}`;
 }
+
+export function removalTemplateSetupHref(facilityId: string, { templateId, step }: { templateId?: string; step?: "template" | "decisions" | "apply" } = {}): string {
+  const params = new URLSearchParams({ facility: facilityId });
+  if (templateId) params.set("template", templateId);
+  if (step) params.set("step", step);
+  return `/certification/settings/removal-template-setup?${params.toString()}`;
+}

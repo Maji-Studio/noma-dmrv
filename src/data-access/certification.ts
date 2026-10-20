@@ -3,7 +3,7 @@ import { DomainError } from "@/lib/domain-errors";
 import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import { insertDocument } from "./documents";
 import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
 import {
   certifierGhgStatements,
@@ -365,24 +365,31 @@ export async function updateFacilityDefaultRemovalTemplate(
 ): Promise<CertifierProjectRow> {
   requireOrgScope(ctx);
   requireOrgRole(ctx, "admin");
-  return db.transaction(async (tx) => {
-    const [facility] = await tx.select({ id: facilities.id }).from(facilities).where(and(
-      eq(facilities.organizationId, ctx.organizationId),
-      eq(facilities.id, input.facilityId),
-      isNull(facilities.archivedAt),
-    )).for("share");
-    if (!facility) throw new SafeError("Facility not found or archived.");
-    const [row] = await tx.update(certifierProjects).set({
-      defaultRemovalTemplateId: input.removalTemplateId, updatedAt: sql`now()`,
-    }).where(and(
-      eq(certifierProjects.organizationId, ctx.organizationId),
-      eq(certifierProjects.facilityId, input.facilityId),
-      eq(certifierProjects.provider, "isometric"),
-      eq(certifierProjects.externalProjectId, input.externalProjectId),
-    )).returning();
-    if (!row) throw new SafeError("The facility's Isometric project link changed. Refresh and try again.");
-    return row;
-  });
+  return db.transaction((tx) => updateFacilityDefaultRemovalTemplateInTransaction(ctx, tx, input));
+}
+
+export async function updateFacilityDefaultRemovalTemplateInTransaction(
+  ctx: OrgContext, tx: DbTransaction,
+  input: { facilityId: string; externalProjectId: string; removalTemplateId: string },
+): Promise<CertifierProjectRow> {
+  requireOrgScope(ctx);
+  requireOrgRole(ctx, "admin");
+  const [facility] = await tx.select({ id: facilities.id }).from(facilities).where(and(
+    eq(facilities.organizationId, ctx.organizationId),
+    eq(facilities.id, input.facilityId),
+    isNull(facilities.archivedAt),
+  )).for("share");
+  if (!facility) throw new SafeError("Facility not found or archived.");
+  const [row] = await tx.update(certifierProjects).set({
+    defaultRemovalTemplateId: input.removalTemplateId, updatedAt: sql`now()`,
+  }).where(and(
+    eq(certifierProjects.organizationId, ctx.organizationId),
+    eq(certifierProjects.facilityId, input.facilityId),
+    eq(certifierProjects.provider, "isometric"),
+    eq(certifierProjects.externalProjectId, input.externalProjectId),
+  )).returning();
+  if (!row) throw new SafeError("The facility's Isometric project link changed. Refresh and try again.");
+  return row;
 }
 
 export interface FacilityEmissionConfigInput {
