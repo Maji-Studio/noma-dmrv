@@ -77,7 +77,7 @@ beforeEach(() => {
 describe("setOrgCertifierCredentialsFn", () => {
   it("requires an active organization context before writing credentials", async () => {
     vi.mocked(requireOrgContext).mockRejectedValue(
-      new Error("Select an Organization to continue"),
+      new Error("Select an organization to continue"),
     );
 
     const result = await setOrgCertifierCredentialsFn({

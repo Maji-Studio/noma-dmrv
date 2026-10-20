@@ -323,7 +323,7 @@ describe.each(Object.entries(endpoints))(
       expect(response.status).toBe(403);
       await expect(response.json()).resolves.toEqual({
         success: false,
-        error: "Select an Organization to continue.",
+        error: "Select an organization to continue.",
       });
       expect(mocks.requireOrgFacility).not.toHaveBeenCalled();
     });
