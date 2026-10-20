@@ -273,7 +273,7 @@ export function ReactorList() {
           title="Throughput on this page"
           value={totalThroughputValue}
           icon={<FlaskIcon size={24} weight="bold" />}
-          description="Combined nominal throughput on this page"
+          description="Combined nominal throughput"
           isLoading={isLoading}
         />
       </div>

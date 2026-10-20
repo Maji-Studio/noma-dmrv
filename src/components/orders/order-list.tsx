@@ -379,8 +379,8 @@ export function OrderList() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard title="Total orders" value={totalOrders} icon={<PackageIcon size={24} weight="bold" />} isLoading={isLoading} />
-        <StatCard title="Total deliveries" value={totalDeliveries} icon={<TruckIcon size={24} weight="bold" />} description="Deliveries on this page" isLoading={isLoading} />
-        <StatCard title="Total quantity" value={`${totalQuantityKg.toLocaleString()} kg`} icon={<PackageIcon size={24} weight="bold" />} description="Quantity on this page" isLoading={isLoading} />
+        <StatCard title="Deliveries on this page" value={totalDeliveries} icon={<TruckIcon size={24} weight="bold" />} isLoading={isLoading} />
+        <StatCard title="Quantity on this page" value={`${totalQuantityKg.toLocaleString()} kg`} icon={<PackageIcon size={24} weight="bold" />} isLoading={isLoading} />
       </div>
 
       <RecordLockListNotice read={orderLocks} />
