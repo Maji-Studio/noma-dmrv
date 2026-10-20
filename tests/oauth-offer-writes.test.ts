@@ -1,4 +1,4 @@
-import { and, eq, like } from "drizzle-orm";
+import { and, eq, inArray, like } from "drizzle-orm";
 import { afterEach, beforeAll, expect, it, vi } from "vitest";
 import { createOAuthFlowFixture, type OAuthFlowFixture } from "./helpers/oauth-flow";
 import { OAUTH_STEP_UP_TTL_MS } from "@/config/oauth";
@@ -16,6 +16,26 @@ afterEach(async () => {
   // This fixture owns the random user ID embedded in every matching tuple.
   await f.db.delete(f.tables.verifications).where(like(f.tables.verifications.identifier, `oauth-step-up:%${f.userId}%`));
   await f.cleanup();
+});
+
+it("replays the actual 401 discovery scopes for an admin-registered read-only client", async () => {
+  const registeredScope = "feedstocks:read offline_access";
+  f = await createOAuthFlowFixture({ scope: registeredScope });
+  request.headers = f.headers;
+  const { GET } = await import("@/app/api/v1/me/route");
+  const response = await GET(new Request(`${f.config.rest}/me`));
+  expect(response.status).toBe(401);
+  const scope = /\bscope="([^"]+)"/.exec(response.headers.get("www-authenticate") ?? "")?.[1];
+  expect(scope).toContain("feedstocks:write");
+  const flow = await f.authorize({ resource: f.config.rest, scope });
+  expect(flow.status).toBe(302);
+  expect(flow.location.pathname).toBe("/oauth/consent");
+  expect(flow.location.searchParams.get("error")).toBeNull();
+  expect(flow.location.searchParams.get("scope")?.split(" ").sort()).toEqual(registeredScope.split(" ").sort());
+  const { getOAuthConsentViewFn } = await import("@/fn/oauth");
+  expect(await getOAuthConsentViewFn({ oauthQuery: flow.location.search.slice(1) })).toMatchObject({ success: true, data: {
+    newlyRequestedScopes: ["feedstocks:read"], offlineAccessRequested: true,
+  } });
 });
 
 it.each(["mcp", "rest"] as const)("offers writes initially, preserves read-only tokens and remembers a %s refusal", async audience => {
@@ -86,4 +106,31 @@ it("ignores an expired pending hint in consent even when all scopes are requeste
   expect(await getOAuthConsentViewFn({ oauthQuery: flow.location.search.slice(1) })).toMatchObject({ success: true, data: {
     newlyRequestedScopes: ["feedstocks:write"], stepUpScopes: [], isStepUp: true,
   } });
+});
+
+it("purges expired step-up hints while preserving live hints and other expired verification namespaces", async () => {
+  f = await createOAuthFlowFixture();
+  const { recordOAuthStepUp } = await import("@/data-access/oauth-step-up");
+  const { purgeExpiredOAuthStepUpHints } = await import("@/data-access/oauth-purge");
+  const binding = { userId: f.userId, clientId: f.clientId, organizationId: f.orgIds[0] };
+  const now = new Date();
+  await recordOAuthStepUp(binding, ["feedstocks:write"], new Date(now.getTime() - OAUTH_STEP_UP_TTL_MS));
+  await recordOAuthStepUp({ ...binding, organizationId: f.orgIds[1] }, ["orders:write"], now);
+  const hints = await f.db.select().from(f.tables.verifications)
+    .where(like(f.tables.verifications.identifier, `oauth-step-up:%${f.userId}%`));
+  expect(hints).toHaveLength(2);
+  const expired = hints.find(hint => hint.expiresAt.getTime() === now.getTime())!;
+  const live = hints.find(hint => hint.expiresAt.getTime() > now.getTime())!;
+  const unrelatedId = `other-verification:${f.userId}`;
+  await f.db.insert(f.tables.verifications).values({ id: unrelatedId, identifier: `password-reset:${f.userId}`,
+    value: "unrelated", expiresAt: now, createdAt: now, updatedAt: now });
+  try {
+    await purgeExpiredOAuthStepUpHints(now);
+    const remaining = await f.db.select().from(f.tables.verifications)
+      .where(inArray(f.tables.verifications.id, [expired.id, live.id, unrelatedId]));
+    expect(remaining.map(row => row.id).sort()).toEqual([live.id, unrelatedId].sort());
+    expect(remaining.find(row => row.id === live.id)).toEqual(live);
+  } finally {
+    await f.db.delete(f.tables.verifications).where(eq(f.tables.verifications.id, unrelatedId));
+  }
 });
