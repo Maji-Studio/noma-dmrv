@@ -30,7 +30,8 @@ export interface RemovalTemplateSetupPageProps {
 
 export function RemovalTemplateSetupPage({ facilityParam, templateParam, stepParam, makeDefaultParam }: RemovalTemplateSetupPageProps) {
   const { facilityId: contextFacilityId, isLoading, isResolving } = useFacilityContext();
-  const facilityId = facilityParam ?? contextFacilityId ?? "";
+  // The live facility wins: a sidebar switch must never leave setup reading or writing the old one. The link param only covers the first resolve.
+  const facilityId = contextFacilityId ?? facilityParam ?? "";
   const query = useRemovalTemplateSetup(facilityId, !!facilityId);
   const [reloads, setReloads] = useState(0);
 
@@ -64,7 +65,7 @@ export function RemovalTemplateSetupPage({ facilityParam, templateParam, stepPar
         </div>
       ) : (
         <RemovalTemplateSetupFlow
-          key={reloads}
+          key={`${facilityId}-${reloads}`}
           data={query.data}
           facilityId={facilityId}
           templateId={templateParam ?? null}

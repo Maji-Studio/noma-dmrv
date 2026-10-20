@@ -239,7 +239,7 @@ function SwitchTemplateForm({
                 <Link
                   href={toDecide > 0
                     ? removalTemplateSetupHref(creditBatch.facilityId, { templateId: template.id, step: "decisions", makeDefault: false })
-                    : certificationRemovalTemplatesHref(creditBatch.facilityId, template.id)}
+                    : certificationRemovalTemplatesHref(creditBatch.facilityId)}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-4 body-small underline underline-offset-2"

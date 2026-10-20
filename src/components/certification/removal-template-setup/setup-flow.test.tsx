@@ -170,6 +170,10 @@ describe("RemovalTemplateSetupFlow", () => {
     renderFlow(setupData({ fitting: [nothingToDecide], notFitting: [unfit] }), { templateId: "tpl-unfit", step: "decisions" });
     expect(screen.getByRole("heading", { name: "Pick the template" })).toBeTruthy();
     expect(screen.getByText(/Wrong tier is not offered for this facility\./)).toBeTruthy();
+    // The one template that fits stays selectable, so the operator is never stuck.
+    fireEvent.click(screen.getByRole("radio", { name: /Sandbox template/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByRole("heading", { name: "Apply the setup" })).toBeTruthy();
   });
 
   it("hides Now to After and Make default for the template that is already the default", () => {

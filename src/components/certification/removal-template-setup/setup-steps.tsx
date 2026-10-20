@@ -69,12 +69,12 @@ export function TemplateStep({ data, templateId, onChange, invalid, notOffered, 
           {`No Removal template in ${project} fits this facility. Check the facility's durability tier or add a template in Isometric.`}
         </Notice>
       )}
-      {only ? (
+      {only && templateId === only.id ? (
         <div className="flex flex-col gap-4 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 py-10">
           <span className="body-small font-medium text-[var(--color-text-primary)]">{only.name}</span>
           <span className="body-caption text-[var(--color-text-tertiary)]">{describe(only)}</span>
         </div>
-      ) : data.fitting.length > 1 && (
+      ) : data.fitting.length > 0 && (
         <ChoiceCardGroup
           legend="Removal template"
           value={templateId}
