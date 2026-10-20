@@ -105,8 +105,8 @@ describe("Interrupted display", () => {
     const tag = (lock: RecordLockView) => recordLockSheetProps({ lock, status: "ready" }).titleBadge;
     const { unmount } = render(<>{tag(allInterrupted)}</>);
     expect(screen.getByText("Interrupted").getAttribute("data-record-lock")).toBe("sent");
-    // Interrupted waits on someone, so it takes the warning colour, not Sent's.
-    expect(screen.getByText("Interrupted").className).toContain("--st-wait");
+    // Interrupted takes the red of the Removal's own "Submission interrupted" badge, not Sent's.
+    expect(screen.getByText("Interrupted").className).toContain("--st-bad");
     expect(screen.queryByText("Sent")).toBeNull();
     unmount();
     for (const lock of [mixed, normal]) {

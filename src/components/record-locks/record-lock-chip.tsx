@@ -9,8 +9,8 @@ import {
 } from "./record-lock-labels";
 
 const CHIP_ICON_SIZE = 14;
-/** Interrupted waits on someone to resume or delete the Removal: the warning colour, as "Needs review" uses. */
-const INTERRUPTED_CHIP_CLASSES = STATUS_STATE_BADGE_CLASSES.warning;
+/** Interrupted matches the Removal's own red "Submission interrupted" badge. */
+const INTERRUPTED_CHIP_CLASSES = STATUS_STATE_BADGE_CLASSES.error;
 
 
 /** Open lock, link, closed lock: the icon repeats the level for colour-blind readers. */
@@ -61,7 +61,7 @@ export function RecordLockSentMark({ lock, className }: { lock: RecordLockView |
       aria-label={interrupted ? RECORD_LOCK_INTERRUPTED_LABEL : RECORD_LOCK_LEVEL_LABELS.sent}
       title={interrupted ? RECORD_LOCK_INTERRUPTED_TITLE : RECORD_LOCK_SENT_TITLE}
       data-record-lock="sent"
-      className={cn("inline-flex shrink-0", interrupted ? "text-[var(--st-wait)]" : "text-[var(--st-run)]", className)}
+      className={cn("inline-flex shrink-0", interrupted ? "text-[var(--st-bad)]" : "text-[var(--st-run)]", className)}
     >
       <LockSimpleIcon size={SENT_MARK_SIZE} weight="bold" aria-hidden />
     </span>
