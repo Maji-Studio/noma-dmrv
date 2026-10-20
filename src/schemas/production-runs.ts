@@ -38,17 +38,16 @@ import {
   getFutureProductionRunTimeFields,
   PRODUCTION_RUN_FUTURE_TIME_MESSAGES,
 } from "@/lib/production-runs/time-validation";
-import { resolveRunWindow } from "@/lib/production-runs/run-window";
+import { resolveRunWindow, WALL_CLOCK_TIME_RE } from "@/lib/production-runs/run-window";
 
 // ============================================
 // Time-window helpers (start/end date + time pairs)
 // ============================================
 
-const TIME_ONLY_RE = /^\d{2}:\d{2}$/;
 const RESIDENCE_TIME_INTEGER_MESSAGE = "Enter residence time as a whole number of minutes.";
 const START_DATE_REQUIRED_MESSAGE = "Enter the start date.";
 const START_TIME_REQUIRED_MESSAGE = "Enter a start time.";
-const START_TIME_INVALID_MESSAGE = "Enter a valid start time.";
+export const START_TIME_INVALID_MESSAGE = "Enter a valid start time.";
 const END_TIME_INVALID_MESSAGE = "Enter a valid end time.";
 export const CANCELLATION_REASON_MAX_LENGTH = 2000;
 export { DRY_MASS_BALANCE_MESSAGE } from "@/lib/production-runs/lifecycle";
@@ -164,7 +163,7 @@ const productionRunFormObject = z.object({
   // re-validation of an already-combined instant).
   startTime: dateOrStringSchema(START_TIME_REQUIRED_MESSAGE, (text) =>
     text.min(1, START_TIME_REQUIRED_MESSAGE).transform((val, ctx) => {
-      if (TIME_ONLY_RE.test(val)) return val;
+      if (WALL_CLOCK_TIME_RE.test(val)) return val;
       const date = new Date(val);
       if (isNaN(date.getTime())) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: START_TIME_INVALID_MESSAGE });
@@ -177,7 +176,7 @@ const productionRunFormObject = z.object({
     .optional()
     .transform((val, ctx) => {
       if (val === undefined || val === null || val === "") return undefined;
-      if (typeof val === "string" && TIME_ONLY_RE.test(val)) return val;
+      if (typeof val === "string" && WALL_CLOCK_TIME_RE.test(val)) return val;
       if (typeof val === "string") {
         const date = new Date(val);
         if (isNaN(date.getTime())) {

@@ -16,7 +16,7 @@ import {
   facilityTimeHelperText,
 } from "@/lib/date-utils";
 import { resolveRunWindow, type RunWindowValues } from "@/lib/production-runs/run-window";
-import { makeProductionRunFormSchema, type ProductionRunStatus } from "@/schemas/production-runs";
+import { makeProductionRunFormSchema, START_TIME_INVALID_MESSAGE, type ProductionRunStatus } from "@/schemas/production-runs";
 
 /** date-fns pattern matching what `<input type="time">` accepts and emits. */
 export const TIME_INPUT_FORMAT = "HH:mm";
@@ -125,7 +125,7 @@ export function buildProductionRunWindow(input: RunWindowValues & {
     endTime: input.includeEndTime && !input.clearEndTime ? input.endTime : undefined,
   }, input.timeZone);
   if (!start) {
-    return { ok: false, field: "startTime", message: startError ?? "Enter a valid start time." };
+    return { ok: false, field: "startTime", message: startError ?? START_TIME_INVALID_MESSAGE };
   }
   if (input.clearEndTime) return { ok: true, startTime: start, endTime: null };
   if (endError) return { ok: false, field: "endTime", message: endError };

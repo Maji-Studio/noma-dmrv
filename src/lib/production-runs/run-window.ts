@@ -7,7 +7,8 @@ import {
 } from "@/lib/date-utils";
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
-const TIME_ONLY_RE = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+/** A 24-hour "HH:MM" wall clock, as `<input type="time">` emits it. */
+export const WALL_CLOCK_TIME_RE = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 
 export type RunWindowValues = {
   startDate: unknown;
@@ -27,7 +28,7 @@ function resolvePair(date: unknown, time: unknown, timeZone: string): { instant:
   if (time instanceof Date) {
     return { instant: Number.isNaN(time.getTime()) ? null : time, error: null };
   }
-  if (typeof time !== "string" || !TIME_ONLY_RE.test(time)) {
+  if (typeof time !== "string" || !WALL_CLOCK_TIME_RE.test(time)) {
     return { instant: null, error: null };
   }
   // Form schemas parse calendar dates at local midnight; read the same day back.
