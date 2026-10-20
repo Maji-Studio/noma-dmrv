@@ -8,12 +8,12 @@ For every item, check the changed code and the 1440 and 390 screenshots.
 
 - Radius is `none`, `full`, `4` or `8`, never a default Tailwind radius or an arbitrary value: `docs/design-system.md` § The invariants that break code silently.
 - No shadow on controls or panels: `docs/design-system.md` § Color System, and § Flat controls.
-- Spacing comes from the scale, and a default Tailwind spacing or radius class (`p-4`, `gap-3`, `rounded-md`) is a bug, not a size: `docs/design-system.md` § The invariants that break code silently.
+- Spacing uses the 1px scale (`p-4` is 4px, not 16px), and a deleted default class such as `rounded-md` renders nothing: `docs/design-system.md` § The invariants that break code silently.
 
 ## Components
 
 - `Button`, not a raw `<button>`: `docs/design-system.md` § Button.
-- Dialog actions sit bottom left, primary first: `docs/design-system.md` § Modal (also `.greptile/rules.md` § UI action order).
+- Dialog actions sit bottom left, primary first: `docs/design-system.md` § Modal (also `.greptile/config.json` rule `ui-action-order`).
 - A surface with nothing in it uses `EmptyState`, not bare text: `docs/design-system.md` § Other primitives (and § Missing values for what `EmptyState` is not for); copy in `docs/ux-writing.md` § Empty states.
 - Wet mass comes first, with moisture and dry mass derived after it: `docs/design-system.md` § Wet mass, moisture, dry mass; `docs/forms.md` § Stock blocks lead with wet mass.
 
@@ -24,12 +24,12 @@ For every item, check the changed code and the 1440 and 390 screenshots.
 
 ## Phone (390)
 
-Judge these on the 390 screenshot. This list is their only home; the related sections are `docs/design-system.md` § Modal (dialog width), § Button (40px size), § Canonical Page Shell (responsive spacing) and § List-page idiom (mobile cards).
+Judge these on the 390 screenshot. This list is their only home; the related sections are `docs/design-system.md` § Modal (dialog width), § Canonical Page Shell (responsive spacing) and § List-page idiom (mobile cards).
 
 - No sideways page scroll.
 - A wide table becomes cards or scrolls inside its own box.
 - The page reads top to bottom in task order.
-- Tap targets are about 40px (the `Button` default).
+- Tap targets meet the 44px minimum and its named exceptions: `docs/design-system.md` § The invariants that break code silently.
 - Dialogs fit the screen, actions included.
 
 ## Consistency and history

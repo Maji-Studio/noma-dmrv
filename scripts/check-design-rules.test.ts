@@ -5,6 +5,7 @@ import {
   loadRadiusValues,
   matchClass,
   parseArgs,
+  selectExplicitFiles,
   stripVariants,
 } from "./check-design-rules";
 
@@ -68,6 +69,15 @@ describe("design class matcher", () => {
       "shadow", "rounded-br-lg", "rounded-md", "shadow-sm", "md:rounded-[length:var(--r)]",
     ]);
     expect(hits.map((hit) => hit.line)).toEqual([1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5]);
+  });
+
+  it("scans ClassName props and ignores unrelated string attributes", () => {
+    expect(scan('<Modal contentClassName="rounded-md shadow-sm" />')
+      .map(({ rule, value }) => ({ rule, value }))).toEqual([
+      { rule: "radius", value: "rounded-md" },
+      { rule: "shadow", value: "shadow-sm" },
+    ]);
+    expect(scan('<Foo title="rounded-md" />')).toEqual([]);
   });
 
   it("reports one-based lines and columns for classes, buttons and formatting", () => {
@@ -171,6 +181,23 @@ describe("design review arguments", () => {
 
   it("recognizes help", () => {
     expect(parseArgs(["--help"]).help).toBe(true);
+  });
+});
+
+describe("explicit source file selection", () => {
+  it("rejects a missing explicit path even outside the scan scope", () => {
+    for (const file of ["src/does-not-exist.tsx", "docs/missing.md"]) {
+      expect(() => selectExplicitFiles([file], () => false)).toThrow(`File does not exist: ${file}`);
+    }
+  });
+
+  it("warns once for each excluded path and keeps normalized supported files", () => {
+    const excluded = ["docs/forms.md", "scripts/example.ts", "src/app/globals.css", "src/example.test.ts", "src/example.spec.tsx"];
+    expect(selectExplicitFiles([COMPONENT_FILE, `./${COMPONENT_FILE}`, ...excluded, excluded[0]], () => true))
+      .toEqual({
+        files: [COMPONENT_FILE],
+        warnings: excluded.map((file) => `skipped: ${file} (outside the design scan scope)`),
+      });
   });
 });
 

@@ -85,13 +85,31 @@ export function parseArgs(args: readonly string[]): CliOptions {
   return options;
 }
 
+function isDesignScanPath(file: string): boolean {
+  return file.startsWith(`${SOURCE_DIR}/`) && EXTENSIONS.has(extname(file)) && !TEST_FILE.test(file);
+}
+
 export function filterChangedFiles(
   paths: readonly string[],
   exists: (file: string) => boolean = (file) => existsSync(join(ROOT, file)),
 ): string[] {
   return [...new Set(paths.map((file) => posix.normalize(file)))].filter((file) =>
-    file.startsWith(`${SOURCE_DIR}/`) && EXTENSIONS.has(extname(file)) &&
-    !TEST_FILE.test(file) && exists(file)).sort();
+    isDesignScanPath(file) && exists(file)).sort();
+}
+
+export function selectExplicitFiles(
+  paths: readonly string[],
+  exists: (file: string) => boolean = (file) => existsSync(join(ROOT, file)),
+): { files: string[]; warnings: string[] } {
+  const files = new Set<string>();
+  const warnings: string[] = [];
+  for (const path of new Set(paths)) {
+    const file = relative(ROOT, resolve(ROOT, path));
+    if (!exists(file)) throw new Error(`File does not exist: ${path}`);
+    if (isDesignScanPath(file)) files.add(file);
+    else warnings.push(`skipped: ${path} (outside the design scan scope)`);
+  }
+  return { files: [...files].sort(), warnings };
 }
 
 function changedFiles(base: string): string[] {
@@ -160,7 +178,10 @@ export function matchClass(token: string, radiusValues: ReadonlySet<string>): Ru
 
 function isClassContext(node: ts.Node): boolean {
   for (let parent = node.parent; parent; parent = parent.parent) {
-    if (ts.isJsxAttribute(parent)) return parent.name.getText() === "className";
+    if (ts.isJsxAttribute(parent)) {
+      const name = parent.name.getText();
+      return name === "className" || name.endsWith("ClassName");
+    }
     if (ts.isCallExpression(parent) && /^(?:cn|cva|clsx)$/.test(parent.expression.getText())) return true;
     if (ts.isVariableDeclaration(parent) && /class|style|variant/i.test(parent.name.getText())) return true;
   }
@@ -217,8 +238,10 @@ function main(): void {
     console.log(USAGE);
     return;
   }
-  const files = options.files.length
-    ? filterChangedFiles(options.files.map((file) => relative(ROOT, resolve(ROOT, file))))
+  const explicit = options.files.length ? selectExplicitFiles(options.files) : undefined;
+  for (const warning of explicit?.warnings ?? []) console.error(warning);
+  const files = explicit
+    ? explicit.files
     : options.changedBase !== undefined
       ? changedFiles(options.changedBase)
       : filterChangedFiles(walkFiles(join(ROOT, SOURCE_DIR)).map((file) => relative(ROOT, file)));
