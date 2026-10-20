@@ -1,9 +1,8 @@
 import { z } from "zod";
+import { API_PRODUCTION_RUN_MAX_DRAWS } from "@/config/api-rest";
 import { PRODUCTION_RUN_STATUSES } from "@/lib/production-runs/lifecycle";
 import { stockEventInstantSchema, uuidSchema } from "./helpers";
 
-/** Bounds the source bins one preview may name, as for run draws. */
-export const MAX_PREVIEW_SOURCE_BINS = 200;
 
 /**
  * The unsaved Production Run form values that decide its credit batch. Every
@@ -18,8 +17,8 @@ export const productionRunCreditBatchPreviewSchema = z.object({
   status: z.enum(PRODUCTION_RUN_STATUSES),
   startTime: stockEventInstantSchema().nullable(),
   endTime: stockEventInstantSchema().nullable(),
-  /** Feedstock source bins chosen in the draw rows, blanks left out. */
-  feedstockStorageLocationIds: z.array(uuidSchema()).max(MAX_PREVIEW_SOURCE_BINS),
+  /** Feedstock source bins chosen in the draw rows, blanks left out; bounded like the run's draws. */
+  feedstockStorageLocationIds: z.array(uuidSchema()).max(API_PRODUCTION_RUN_MAX_DRAWS),
 });
 
 export type ProductionRunCreditBatchPreviewInput = z.input<typeof productionRunCreditBatchPreviewSchema>;

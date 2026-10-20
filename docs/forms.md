@@ -372,7 +372,7 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
   rendered under the error summary and the Save blocker, directly above the
   buttons: what saving associates the record with. The Production Run form
   shows the credit batch the run joins, is expected to join, or belongs to
-  (#1164); the other operational forms will reuse the slot. The server answers
+  (#1164). The server answers
   from the unsaved values with the save path's own rule, so the browser holds
   no copy of it. The line never blocks Save, and it shows "Checking" whenever
   its last answer is not for the current inputs.

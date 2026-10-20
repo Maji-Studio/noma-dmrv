@@ -46,13 +46,15 @@ function Harness() {
   return (
     <>
       <input aria-label="End date" type="date" {...register("endDate")} />
-      <PreviewLine control={control} facilityId={FACILITY_ID} productionRunId={undefined} timeZone={TIME_ZONE} />
+      <PreviewLine control={control} facilityId={FACILITY_ID} productionRunId={undefined} timeZone={TIME_ZONE} clearEndTime={false} />
     </>
   );
 }
 
+let client: QueryClient;
+
 function renderLine() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <Harness />
@@ -69,7 +71,7 @@ afterEach(() => {
 
 describe("buildCreditBatchPreviewInput", () => {
   it("resolves the facility wall clock to instants, as the save does", () => {
-    expect(buildCreditBatchPreviewInput(VALUES, { facilityId: FACILITY_ID, productionRunId: undefined, timeZone: TIME_ZONE })).toEqual({
+    expect(buildCreditBatchPreviewInput(VALUES, { facilityId: FACILITY_ID, productionRunId: undefined, timeZone: TIME_ZONE, clearEndTime: false })).toEqual({
       facilityId: FACILITY_ID,
       productionRunId: null,
       status: "complete",
@@ -83,7 +85,7 @@ describe("buildCreditBatchPreviewInput", () => {
   it("reads an end time without an end date on the start date, and drops blank or repeated bins", () => {
     const input = buildCreditBatchPreviewInput(
       { ...VALUES, endDate: "", feedstockDraws: [{ storageLocationId: "" }, { storageLocationId: BIN_ID }, { storageLocationId: BIN_ID }] },
-      { facilityId: "", productionRunId: "run", timeZone: TIME_ZONE },
+      { facilityId: "", productionRunId: "run", timeZone: TIME_ZONE, clearEndTime: false },
     );
     expect(input.endTime).toBe("2026-09-30T13:00:00.000Z");
     expect(input.feedstockStorageLocationIds).toEqual([BIN_ID]);
@@ -91,8 +93,17 @@ describe("buildCreditBatchPreviewInput", () => {
     expect(input.productionRunId).toBe("run");
   });
 
+  it("drops the end time a reopened run's save clears", () => {
+    const input = buildCreditBatchPreviewInput(
+      { ...VALUES, status: "running" },
+      { facilityId: FACILITY_ID, productionRunId: "run", timeZone: TIME_ZONE, clearEndTime: true },
+    );
+    expect(input.endTime).toBeNull();
+    expect(input.startTime).toBe("2026-09-30T05:00:00.000Z");
+  });
+
   it("leaves unfinished times empty instead of guessing", () => {
-    const input = buildCreditBatchPreviewInput({ ...VALUES, endTime: "", startTime: undefined }, { facilityId: FACILITY_ID, productionRunId: undefined, timeZone: TIME_ZONE });
+    const input = buildCreditBatchPreviewInput({ ...VALUES, endTime: "", startTime: undefined }, { facilityId: FACILITY_ID, productionRunId: undefined, timeZone: TIME_ZONE, clearEndTime: false });
     expect(input.startTime).toBeNull();
     expect(input.endTime).toBeNull();
   });
@@ -134,6 +145,28 @@ describe("ProductionRunCreditBatchPreview", () => {
     fireEvent.change(screen.getByLabelText("End date"), { target: { value: "2026-10-01" } });
     expect(status().textContent).toContain("Checking credit batch...");
     expect(status().getAttribute("aria-busy")).toBe("true");
+  });
+
+  it("hides the last answer while the same inputs are checked again", async () => {
+    renderLine();
+    await waitFor(() => expect(calls).toHaveLength(1));
+    await act(async () => {
+      calls[0].resolve({ success: true, data: { state: "match", batch: SEPTEMBER, basis: { ...BASIS, day: "2026-09-30" }, expected: false } });
+    });
+    await waitFor(() => expect(status().textContent).toContain("CB-26-009"));
+
+    // A batch changed elsewhere (another tab, a save): the preview refetches.
+    await act(async () => {
+      void client.invalidateQueries();
+    });
+    await waitFor(() => expect(calls).toHaveLength(2));
+    expect(status().textContent).toContain("Checking credit batch...");
+    expect(status().textContent).not.toContain("CB-26-009");
+
+    await act(async () => {
+      calls[1].resolve({ success: true, data: { state: "no-match", basis: { ...BASIS, day: "2026-09-30" }, expected: false } });
+    });
+    await waitFor(() => expect(status().textContent).toContain("No credit batch covers Sep 30, 2026 yet."));
   });
 
   it("checks again when the inputs go back to earlier values", async () => {

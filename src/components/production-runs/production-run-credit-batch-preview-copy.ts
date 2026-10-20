@@ -73,13 +73,13 @@ function windowLabel(batch: CreditBatchPreviewBatch): string {
   return ` (${formatDateRange(batch.startDate, batch.endDate)})`;
 }
 
-/** "Oct 2, 2026", or "Sep 30, 2026 (start day)" while the start day stands in. */
-function dayLabel(basis: ProductionRunCreditBatchPreviewBasis): string {
-  return `${formatDayString(basis.day)}${basis.dayBasis === "start" ? " (start day)" : ""}`;
-}
-
-function startDaySuffix(basis: ProductionRunCreditBatchPreviewBasis): string {
-  return basis.dayBasis === "start" ? ", by start day," : "";
+/**
+ * The one visible start-day qualifier, a trailing clause: ", by start day"
+ * when the start day stood in, "" when the end day decided. The ⓘ explains
+ * it through `provisional`.
+ */
+function byStartDay(basis: ProductionRunCreditBatchPreviewBasis): string {
+  return basis.dayBasis === "start" ? ", by start day" : "";
 }
 
 /** Leads with the stand-in caveat whenever the start day decided the answer. */
@@ -164,7 +164,7 @@ export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreview
         ...BASE,
         lead: view.expected ? "Expected credit batch: " : "Joins credit batch ",
         batches: [view.batch],
-        tail: `${windowLabel(view.batch)}${view.basis.dayBasis === "start" ? ", by start day" : ""}`,
+        tail: `${windowLabel(view.batch)}${byStartDay(view.basis)}`,
         info: joinInfo(view.basis, view.expected),
       };
     case "locked":
@@ -173,7 +173,7 @@ export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreview
         tone: "warning",
         lead: view.expected ? "Expected credit batch " : "Credit batch ",
         batches: [view.batch],
-        tail: `${startDaySuffix(view.basis)} is locked, so the run ${view.expected ? "would stay" : "stays"} unassigned.`,
+        tail: ` is locked${byStartDay(view.basis)}, so the run ${view.expected ? "would stay" : "stays"} unassigned.`,
         info: provisional(
           view.basis,
           `Its Removal was submitted, so runs do not join it. If the registry returned the Removal for revision, the save checks again and the run can still join. You can save the run either way. ${matchedOn(view.basis)}`,
@@ -183,7 +183,7 @@ export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreview
       return {
         ...BASE,
         tone: "warning",
-        lead: `More than one credit batch covers ${dayLabel(view.basis)}: `,
+        lead: `More than one credit batch covers ${formatDayString(view.basis.day)}${byStartDay(view.basis)}: `,
         batches: view.batches,
         tail: ".",
         info: provisional(
@@ -194,10 +194,10 @@ export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreview
     case "no-match":
       return {
         ...BASE,
-        lead: `No credit batch covers ${dayLabel(view.basis)} yet.`,
+        lead: `No credit batch covers ${formatDayString(view.basis.day)} yet${byStartDay(view.basis)}. ${view.expected ? "Once completed, the run" : "The run"} joins one when it is created.`,
         info: provisional(
           view.basis,
-          `You can save the run. ${view.expected ? "Once completed, it" : "It"} joins a credit batch automatically when one is created that covers its end day at ${view.basis.facilityName} with ${view.basis.feedstockTypeName}.`,
+          `You can save the run. A credit batch created for its end day at ${view.basis.facilityName} with ${view.basis.feedstockTypeName} takes it in automatically.`,
         ),
       };
   }

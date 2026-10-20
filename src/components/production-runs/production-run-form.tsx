@@ -887,6 +887,11 @@ export function ProductionRunForm({
             facilityId={watchedFacilityId}
             productionRunId={productionRun?.id}
             timeZone={formTimezone}
+            clearEndTime={shouldClearProductionRunEndTime({
+              from: transitionFrom,
+              to: watchedStatus,
+              existingEndTime: productionRun?.endTime,
+            })}
           />
         }
       />

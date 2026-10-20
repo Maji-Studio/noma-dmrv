@@ -67,7 +67,10 @@ describe("describeCreditBatchPreview", () => {
     const failed = describeCreditBatchPreview({ state: "error" });
     expect(failed.lead).toBe("Credit batch could not be checked.");
     expect(failed.retry).toBe(true);
-    expect(line({ state: "no-match", basis: END_BASIS, expected: false })).toBe("No credit batch covers Oct 2, 2026 yet.");
+    expect(line({ state: "no-match", basis: END_BASIS, expected: false }))
+      .toBe("No credit batch covers Oct 2, 2026 yet. The run joins one when it is created.");
+    expect(line({ state: "no-match", basis: START_BASIS, expected: true }))
+      .toBe("No credit batch covers Sep 30, 2026 yet, by start day. Once completed, the run joins one when it is created.");
     expect(describeCreditBatchPreview({ state: "no-match", basis: END_BASIS, expected: false }).retry).toBe(false);
   });
 
@@ -93,7 +96,7 @@ describe("describeCreditBatchPreview", () => {
   ];
   it.each(START_DAY_VIEWS)("qualifies a $state answer decided by the start day", (view) => {
     const copy = describeCreditBatchPreview(view);
-    expect(line(view)).toMatch(/start day/);
+    expect(line(view)).toContain(", by start day");
     expect(copy.info).toContain("no end time yet, so its start day stands in");
   });
 

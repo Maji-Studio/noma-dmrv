@@ -46,6 +46,8 @@ export interface CreditBatchPreviewContext {
   productionRunId: string | undefined;
   /** The selected facility's zone, as the save path resolves the times. */
   timeZone: string;
+  /** Reopening a finished run: the save clears its end time, so the preview ignores it. */
+  clearEndTime: boolean;
 }
 
 const WATCHED_FIELDS = ["status", "startDate", "startTime", "endDate", "endTime", "feedstockDraws"] as const;
@@ -84,7 +86,7 @@ export function buildCreditBatchPreviewInput(
     productionRunId: context.productionRunId ?? null,
     status: values.status,
     startTime: instant(startDate, values.startTime, context.timeZone),
-    endTime: instant(endDate, values.endTime, context.timeZone),
+    endTime: context.clearEndTime ? null : instant(endDate, values.endTime, context.timeZone),
     feedstockStorageLocationIds: [...new Set(binIds)].sort(),
   };
 }
@@ -108,10 +110,11 @@ export function ProductionRunCreditBatchPreview<TFieldValues extends CreditBatch
     JSON.parse(settledKey) as ProductionRunCreditBatchPreviewInput,
   );
 
-  // Only an answer for exactly the current inputs is shown: while they settle
-  // or a check runs, the line says so instead of keeping the last match.
+  // Only a settled answer for exactly the current inputs is shown: while they
+  // settle or any check runs (a refetch on focus or after a save elsewhere
+  // included), the line says so instead of keeping the last match.
   const view: ProductionRunCreditBatchPreviewView =
-    settledKey !== requestKey
+    settledKey !== requestKey || query.isFetching
       ? { state: "pending" }
       : query.isError
         ? { state: "error" }
