@@ -99,7 +99,7 @@ describe("ApplicationForm server refusals", () => {
   });
 
   it("shows a date before the delivery at the application date", async () => {
-    const message = "Application date cannot be before the delivery date of DL-26-001 (Sep 22, 2026).";
+    const message = "Application date cannot be before the delivery date of DL-26-001 (Sep 22, 2026). Choose that day or a later one.";
     const onSubmit = renderRefused(refusal("applicationDate", message));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect((await screen.findAllByText(new RegExp(message.replace(/[().]/g, "\\$&")))).length).toBeGreaterThanOrEqual(2);

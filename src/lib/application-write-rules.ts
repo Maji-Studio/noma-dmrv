@@ -36,6 +36,6 @@ export function resolveApplicationDryMassTons(input: {
 export function assertApplicationDate(date: Date, deliveredAt: Date, zone: string, deliveryCode: string, now: Date | null = new Date()): void {
   const day = formatUtcDate(date);
   const deliveryDay = formatFacilityDate(deliveredAt, zone);
-  if (day < deliveryDay) throw applicationRefusal("validation_failed", "applicationDate", `Application date cannot be before the delivery date of ${deliveryCode} (${formatDayString(deliveryDay)}).`);
+  if (day < deliveryDay) throw applicationRefusal("validation_failed", "applicationDate", `Application date cannot be before the delivery date of ${deliveryCode} (${formatDayString(deliveryDay)}). Choose that day or a later one.`);
   if (now !== null && day > formatFacilityDate(now, zone)) throw applicationRefusal("validation_failed", "applicationDate", "Application date is in the future. Choose today or an earlier date.");
 }

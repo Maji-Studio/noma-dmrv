@@ -31,7 +31,12 @@ const LIST_HEIGHT_CLASS = "max-h-[20dvh] overflow-y-auto";
 
 /** Read once per refused save; the visible title keeps the live count. */
 const ANNOUNCEMENT = "Not saved. Fix the fields that show an error.";
-const LOCKED_ANNOUNCEMENT = "Not saved. The fields you changed are locked.";
+/** "Not saved. 1 field is locked. Undo that change to save." */
+function lockedAnnouncement(count: number): string {
+  return count === 1
+    ? "Not saved. 1 field is locked. Undo that change to save."
+    : `Not saved. ${count} ${pluralize(count, "field")} are locked. Undo those changes to save.`;
+}
 
 /** `setError` type of a lock refusal (see `useSaveRefusal`): worded apart from a fix. */
 export const LOCKED_ERROR_TYPE = "locked";
@@ -195,13 +200,14 @@ export function FormErrorSummary<
   // The attempt whose refusal listed fields. Adjusted while rendering, so a
   // save that failed without field errors (a thrown action) never claims
   // fields, and a list that empties and refills keeps the same line.
-  const [announced, setAnnounced] = useState({ attempt: 0, lockedOnly: false });
-  const lockedOnly = items.every((item) => item.locked);
+  const [announced, setAnnounced] = useState({ attempt: 0, lockedOnly: 0 });
+  // Locked items when every listed item is a lock, else 0.
+  const lockedOnly = items.length > 0 && items.every((item) => item.locked) ? items.length : 0;
   if (visible && announced.attempt !== submitCount) setAnnounced({ attempt: submitCount, lockedOnly });
   const announcedAttempt = announced.attempt;
   const announcement = announcedAttempt === submitCount && submitCount > 0 && !isSubmitSuccessful ? (
     <p key={submitCount} role="alert" className="sr-only">
-      {announced.lockedOnly ? LOCKED_ANNOUNCEMENT : ANNOUNCEMENT}
+      {announced.lockedOnly > 0 ? lockedAnnouncement(announced.lockedOnly) : ANNOUNCEMENT}
     </p>
   ) : null;
 
