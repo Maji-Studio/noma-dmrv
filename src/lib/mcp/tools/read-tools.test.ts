@@ -89,7 +89,7 @@ it("uses the shared pagination summary for each new list read", () => {
     expect(named(name).summarize({ data: [{}], nextCursor: "cursor" })).toBe(`1 ${singular}. More results: pass nextCursor.`);
   }
   expect(named("get_order").summarize({ data: { code: "OR-1", version: 1 } })).toBe("Order OR-1, version 1.");
-  expect(named("get_order_balance").summarize({ data: { remainingWetMassKg: 100, fulfillmentStatus: "partial" } })).toBe("Order balance: 100 wet kg remaining (partial).");
+  expect(named("get_order_balance").summarize({ data: { remainingWetMassKg: 100, fulfillmentStatus: "partial" } })).toBe("Order balance: 100 kg wet mass remaining (partial).");
 });
 it("describes balance freshness, reservation limits and delivery grounding", () => {
   expect(named("get_order_balance").description).toContain("without changing the order version");

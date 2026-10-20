@@ -254,10 +254,12 @@ describe("TransportLegsEditor route rail", () => {
     expect(rendered).not.toContain("null km");
   });
 
-  it("says a single leg's load is not recorded instead of dropping it", () => {
+  it("leaves the load out of a single leg that records none", () => {
     mocks.legs = [savedLeg({ loadMassKg: null })];
+    const rendered = text(renderEditor({ readOnly: true }));
 
-    expect(text(renderEditor({ readOnly: true }))).toContain("Load: Not recorded");
+    expect(rendered).toContain("Distance source: Manual entry");
+    expect(rendered).not.toContain("Load:");
   });
 
   it("names an unrecorded stop rather than leaving the node blank", () => {

@@ -1,0 +1,65 @@
+import { describe, expect, it } from "vitest";
+import type { OutputStockHistoryEntry } from "@/types/output-stock";
+import { replayStock } from "./stock-replay";
+
+const AT = (hour: number) => `2026-10-14T${String(hour).padStart(2, "0")}:00:00.000Z`;
+
+function entry(values: Partial<OutputStockHistoryEntry> & Pick<OutputStockHistoryEntry, "id" | "kind">): OutputStockHistoryEntry {
+  return { occurredAt: AT(9), recordedAt: AT(9), actorName: null, reason: "", wetMassKg: null, moisturePercent: 20, dryMassKg: 0,
+    beforeDryKg: 0, afterDryKg: 0, correctsMovementId: null, deliveryId: null, allocations: [], ...values };
+}
+
+/** 100 kg wet at 20 % moisture: 80 kg dry biochar. */
+const measured = entry({ id: "b1", kind: "intake", wetMassKg: 100, dryMassKg: -80, wetDeltaKg: 100, solidsDeltaKg: 80 });
+/** A batch added without a moisture reading: 50 kg dry biochar, no wet figure. */
+const unmeasured = entry({ id: "b2", kind: "intake", occurredAt: AT(10), recordedAt: AT(10), moisturePercent: null, dryMassKg: -50, wetDeltaKg: null, solidsDeltaKg: 50 });
+
+const last = (entries: OutputStockHistoryEntry[]) => replayStock(entries).at(-1)?.after;
+
+describe("replayStock", () => {
+  it("turns wet mass unknown from a batch added without a moisture reading", () => {
+    const draw = entry({ id: "d1", kind: "delivery", occurredAt: AT(11), recordedAt: AT(11), dryMassKg: 20, wetDeltaKg: -25, solidsDeltaKg: -20 });
+    expect(last([measured, unmeasured])).toMatchObject({ dryKg: 130, solidsKg: 130, wetKg: null });
+    // A later draw still has no wet basis for what is left.
+    expect(last([measured, unmeasured, draw])).toMatchObject({ dryKg: 110, wetKg: null });
+  });
+
+  it("knows wet mass again once the bin is emptied", () => {
+    const emptied = entry({ id: "d1", kind: "delivery", occurredAt: AT(11), recordedAt: AT(11), dryMassKg: 130, wetDeltaKg: null, solidsDeltaKg: -130 });
+    const refill = { ...measured, id: "b3", occurredAt: AT(12), recordedAt: AT(12) };
+    const steps = replayStock([measured, unmeasured, emptied, refill]);
+    expect(steps[2].after).toMatchObject({ dryKg: 0, solidsKg: 0, wetKg: 0 });
+    expect(steps[3].after).toMatchObject({ dryKg: 80, solidsKg: 80, wetKg: 100 });
+  });
+
+  it("re-bases wet mass on a count's frozen balance after its reading", () => {
+    // The count's preview had no wet figure before and 160 kg after: its frozen change is unknown.
+    const count = entry({ id: "c1", kind: "count", occurredAt: AT(11), recordedAt: AT(11), dryMassKg: 0, wetDeltaKg: null, solidsDeltaKg: 0, afterWetKg: 160, afterSolidsKg: 130 });
+    const draw = entry({ id: "d1", kind: "delivery", occurredAt: AT(12), recordedAt: AT(12), dryMassKg: 13, wetDeltaKg: -16, solidsDeltaKg: -13 });
+    const steps = replayStock([measured, unmeasured, count, draw]);
+    expect(steps[2].after).toMatchObject({ wetKg: 160, solidsKg: 130 });
+    expect(steps[3].after).toMatchObject({ dryKg: 117, wetKg: 144 });
+  });
+
+  it("keeps the running wet mass over a frozen balance once it is known", () => {
+    const count = entry({ id: "c1", kind: "count", occurredAt: AT(11), recordedAt: AT(11), dryMassKg: 0, wetDeltaKg: -10, solidsDeltaKg: 0, afterWetKg: 75 });
+    expect(last([measured, count])?.wetKg).toBe(90);
+  });
+
+  it("never re-bases on a reversal, which carries its target's balance", () => {
+    const reversal = entry({ id: "r1", kind: "reversal", correctsMovementId: "absent", occurredAt: AT(11), recordedAt: AT(11), dryMassKg: 0, wetDeltaKg: null, afterWetKg: 999 });
+    expect(last([measured, unmeasured, reversal])?.wetKg).toBeNull();
+  });
+
+  it("skips cancelled pairs, mode changes and reading rows", () => {
+    const loss = entry({ id: "l1", kind: "loss", occurredAt: AT(11), recordedAt: AT(11), dryMassKg: 8, wetDeltaKg: -10, solidsDeltaKg: -8 });
+    const undo = entry({ id: "r1", kind: "reversal", correctsMovementId: "l1", occurredAt: AT(11), recordedAt: AT(12), dryMassKg: -8, wetDeltaKg: 10, solidsDeltaKg: 8 });
+    const merge = entry({ id: "m1", kind: "merge", occurredAt: AT(12), recordedAt: AT(12), dryMassKg: 0 });
+    const reading = entry({ id: "l1:moisture", kind: "moisture_update", occurredAt: AT(11), recordedAt: AT(11), wetDeltaKg: -10 });
+    const steps = replayStock([measured, loss, undo, merge, reading]);
+    expect(steps.map(step => [step.entry.id, step.live, step.moves])).toEqual([
+      ["b1", true, true], ["l1", false, false], ["l1:moisture", true, false], ["r1", false, false], ["m1", true, false],
+    ]);
+    expect(steps.at(-1)?.after).toMatchObject({ dryKg: 80, wetKg: 100 });
+  });
+});

@@ -417,7 +417,7 @@ async function getProductionRunLineage(
       id: productionRuns.id,
       code: productionRuns.code,
       status: productionRuns.status,
-      date: productionRunDateExpr(),
+      date: productionRunDateExpr(ctx.organizationId),
       biocharStorageName: storageLocations.name,
       biocharOutputKg: productionRuns.biocharOutputKg,
       biocharDryMassKg: productionRuns.biocharDryMassKg,

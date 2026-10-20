@@ -280,8 +280,8 @@ export function formatWetDryMass({
 
 /**
  * Stock pair in the words of the selected bin caption, for option subtitles
- * and captions: "2,500 kg wet, 1,500 kg dry biochar". An estimated wet figure
- * reads "≈ 2,500 kg wet"; a missing figure keeps its side and names the gap
+ * and captions: "2,500 kg wet mass, 1,500 kg dry biochar". An estimated wet figure
+ * reads "≈ 2,500 kg wet mass"; a missing figure keeps its side and names the gap
  * ("dry biochar not available").
  */
 export function formatWetDryStock({
@@ -299,8 +299,8 @@ export function formatWetDryStock({
   const recorded = (kg: number | null | undefined): kg is number =>
     kg != null && Number.isFinite(kg);
   const wet = recorded(wetKg)
-    ? `${estimatedWet ? "≈ " : ""}${formatSplitMass(wetKg)} wet`
-    : `wet ${gap}`;
+    ? `${estimatedWet ? "≈ " : ""}${formatSplitMass(wetKg)} wet mass`
+    : `wet mass ${gap}`;
   const dry = recorded(dryKg) ? `${formatSplitMass(dryKg)} dry biochar` : `dry biochar ${gap}`;
   return `${wet}, ${dry}`;
 }
@@ -310,7 +310,7 @@ export function formatWetDryStock({
  * geometry carries the meaning visually and conveys nothing to a screen reader.
  */
 export function describeMassSplit(split: MassSplit): string {
-  return `${formatSplitMass(split.wetKg)} wet: ${formatSplitMass(split.dryKg)} dry mass and ${formatSplitMass(split.waterKg)} water at ${formatMoisturePercent(split.moisturePercent)} moisture.`;
+  return `${formatSplitMass(split.wetKg)} wet mass: ${formatSplitMass(split.dryKg)} dry mass and ${formatSplitMass(split.waterKg)} water at ${formatMoisturePercent(split.moisturePercent)} moisture.`;
 }
 
 /** Screen-reader sentence for a split that distinguishes newly added water. */

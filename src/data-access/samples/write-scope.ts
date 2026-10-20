@@ -2,16 +2,18 @@
  * The lock order every lab Sample writer shares, and the checks that read the
  * locked credit batch (Phase 5a, plan review items 1 and 4):
  *
- * 1. Certification artifacts: the union of every lineage the write touches
+ * 1. Discover batch facilities without row locks, then lock those facilities
+ *    FOR SHARE in id order before any other locks or facility-local date reads.
+ * 2. Certification artifacts: the union of every lineage the write touches
  *    (the Sample's own, the target batch on a create or move), one sorted pass.
- * 2. Credit batch rows `FOR UPDATE`, sorted by id. Membership writers lock the
+ * 3. Credit batch rows `FOR UPDATE`, sorted by id. Membership writers lock the
  *    batch before its samples, and the sample's batch FK is checked on write.
- * 3. The Sample row `FOR UPDATE`.
- * 4. Lineage re-resolved against the artifacts held. A Removal assigned while
+ * 4. The Sample row `FOR UPDATE`.
+ * 5. Lineage re-resolved against the artifacts held. A Removal assigned while
  *    this writer waited refuses the write; its artifact is never locked late.
  *
  * Batch existence, archive state, facility, window and zone are all read after
- * step 2, so a batch archive, delete or window edit either finished first and
+ * step 3, so a batch archive, delete or window edit either finished first and
  * is seen, or waits for this write. Every read goes through `tx`: a global
  * `db` read inside a runner transaction waits on itself at pool size 1.
  */
@@ -67,15 +69,23 @@ function asCertificationLocked<T>(work: () => Promise<T>): Promise<T> {
   return withFeedstockErrors(work, "certification_locked");
 }
 
-/** Steps 1 to 4 above. `creditBatchIds` may hold omitted update targets and repeats. */
+/** Steps 1 to 5 above. `creditBatchIds` may hold omitted update targets and repeats. */
 export async function lockSampleWriteScope(
   ctx: OrgContext,
   tx: DbTransaction,
   args: { lineage: CertifiedLineageCheck[]; creditBatchIds: (string | undefined)[]; sampleId?: string },
 ): Promise<SampleWriteScope> {
   requireOrgScope(ctx);
-  const lockedKeys = await asCertificationLocked(() => lockCertifiedLineageArtifacts(ctx, tx, args.lineage.map((check) => check.target)));
   const batchIds = [...new Set(args.creditBatchIds.filter((id): id is string => !!id))].sort();
+  const discovered = batchIds.length === 0 ? [] : await tx
+    .select({ id: creditBatches.id, facilityId: creditBatches.facilityId })
+    .from(creditBatches)
+    .where(and(inArray(creditBatches.id, batchIds), eq(creditBatches.organizationId, ctx.organizationId)));
+  const facilityIds = [...new Set(discovered.map((batch) => batch.facilityId))].sort();
+  if (facilityIds.length > 0) await tx.select({ id: facilities.id }).from(facilities)
+    .where(and(inArray(facilities.id, facilityIds), eq(facilities.organizationId, ctx.organizationId)))
+    .orderBy(facilities.id).for("share");
+  const lockedKeys = await asCertificationLocked(() => lockCertifiedLineageArtifacts(ctx, tx, args.lineage.map((check) => check.target)));
   const batchRows = batchIds.length === 0 ? [] : await tx
     .select({
       id: creditBatches.id, code: creditBatches.code, facilityId: creditBatches.facilityId,
@@ -86,6 +96,13 @@ export async function lockSampleWriteScope(
     .where(and(inArray(creditBatches.id, batchIds), eq(creditBatches.organizationId, ctx.organizationId)))
     .orderBy(creditBatches.id)
     .for("update");
+  // A batch may have moved while SHARE was waiting. Refuse instead of taking
+  // a newly discovered facility lock after artifacts or batch locks.
+  for (const batch of batchRows) {
+    if (discovered.find((row) => row.id === batch.id)?.facilityId !== batch.facilityId) {
+      throw staleRowVersion("creditBatch", batch.id);
+    }
+  }
   const [sample] = args.sampleId === undefined ? [] : await tx
     .select()
     .from(samples)

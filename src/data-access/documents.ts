@@ -3,7 +3,8 @@ import { type ActivityScope, recordDocumentActivity } from "./write-activity";
 import type { ActivityEventInput } from "./activity-events";
 import { enqueueDocumentKeys } from "./document-storage-deletions";
 import { and, desc, eq, getTableColumns, inArray, isNull, or, sql } from "drizzle-orm";
-import type { OrgContext } from "@/lib/auth/server";
+import { hasOrgRole, type OrgContext } from "@/lib/auth/server";
+import { REMOVAL_REGISTRY_DELETION_MIN_ROLE } from "@/lib/certification/removal-deletion-role";
 import { db, type DbTransaction } from "@/db";
 import {
   applications,
@@ -52,6 +53,10 @@ const MAX_DOCUMENTS_PER_ENTITY = 200;
 const TRANSPORT_LEDGER_DOCUMENT_ENTITY_TYPE = "credit_batch";
 const TRANSPORT_LEDGER_DOCUMENT_TYPE = "pdf";
 
+export const DOCUMENT_REGISTRY_ROLE_ERROR =
+  "Only Owners and Admins can delete a document that has a Source on Isometric. Ask an Owner or Admin to delete it.";
+export const PARENT_DOCUMENT_REGISTRY_ROLE_ERROR =
+  "Only Owners and Admins can delete this record while one of its documents has a Source on Isometric. Ask an Owner or Admin to delete it.";
 
 export type DocumentRow = typeof documents.$inferSelect;
 export type NewDocumentRow = typeof documents.$inferInsert;
@@ -451,14 +456,18 @@ async function isReviewedCertificationEvidence(
   return Boolean(reviewedEvidence);
 }
 
-type IsometricMappingRelease = "released" | "reviewed-evidence" | "referenced";
+type IsometricMappingRelease = "released" | "reviewed-evidence" | "referenced" | "registry-role";
 
 /**
  * Retire the document's Isometric Source mapping unless live certification
  * history still needs it, under the caller's mirror lock. Returns why the
  * mapping must stay instead of throwing, so each caller can word the refusal
- * for its own record. The remote Source is deliberately untouched. The
- * recheck after the delete guards against a future submission entry point
+ * for its own record. The remote Source is deliberately untouched, so releasing
+ * an existing mapping crosses the registry boundary and requires the shared
+ * REMOVAL_REGISTRY_DELETION_MIN_ROLE floor (issue #1188). This protects every
+ * mirrored Source, including pre-ledger failures, whether or not a Removal
+ * has a ledger row. Documents without mappings do not require that role.
+ * The recheck after the delete guards against a future submission entry point
  * that forgets to take the mirror lock.
  */
 export async function releaseUnreferencedIsometricMapping(
@@ -485,6 +494,7 @@ export async function releaseUnreferencedIsometricMapping(
       tx,
     );
   if (await referenced()) return "referenced";
+  if (!hasOrgRole(ctx, REMOVAL_REGISTRY_DELETION_MIN_ROLE)) return "registry-role";
   await deleteDocumentUploadByDocument(ctx, ISOMETRIC_PROVIDER, documentId, tx);
   if (await referenced()) throw new SafeError(SOURCE_RELEASE_RACE_ERROR);
   return "released";
@@ -609,13 +619,17 @@ async function retireOwnedDocuments(
 
   // Isometric is the only provider whose local mapping may be retired here,
   // and only while no live certification history references the Source. A
-  // mapping a deleted Removal left behind is released; one a real submission
-  // still cites, or any other provider's mapping, keeps the record in place.
+  // mapping a deleted Removal left behind requires the registry role floor;
+  // one a real submission still cites, or any other provider's mapping,
+  // keeps the record in place.
   for (const mirror of mirrors) {
     const release =
       mirror.provider === ISOMETRIC_PROVIDER
         ? await releaseUnreferencedIsometricMapping(ctx, tx, mirror.documentId)
         : "referenced";
+    if (release === "registry-role") {
+      throw new SafeError(PARENT_DOCUMENT_REGISTRY_ROLE_ERROR);
+    }
     if (release !== "released") {
       throw new SafeError(MIRRORED_DOCUMENT_BLOCKS_PARENT_DELETE_MESSAGE);
     }

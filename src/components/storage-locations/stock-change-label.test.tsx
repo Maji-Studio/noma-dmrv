@@ -9,10 +9,10 @@ describe("StockChangeLabel", () => {
   it("distinguishes wet draws and additions", () => {
     const source = renderToStaticMarkup(<StockChangeLabel name="Source bin" preview={preview} available />);
     expect(source).toContain("Source bin");
-    expect(source).toContain("−100 kg wet");
+    expect(source).toContain("−100 kg wet mass");
     expect(source).toContain("--st-wait");
     const destination = renderToStaticMarkup(<StockChangeLabel name="Product bin" preview={{ ...preview, removedWetKg: -400 }} available />);
-    expect(destination).toContain("+400 kg wet");
+    expect(destination).toContain("+400 kg wet mass");
     expect(destination).toContain("--st-ok");
   });
 

@@ -258,8 +258,10 @@ batches `FOR SHARE`, deliveries `FOR UPDATE`, application `FOR UPDATE` with its
 version check, revalidation, then application slices `FOR UPDATE` and writes.
 Changed lineage, parent or discovered sets return retryable `conflict` to the
 client; no new locks are taken late. Explicit credit-batch membership takes
-artifacts before facilities and runs, then process scope and batch. Scalar
-edits and delete take no member run locks; late auto-membership acquisition is
+facilities before facility-local date reads, artifacts and runs, then process
+scope and batch. Sample writers likewise take facilities before artifacts and
+batch/Sample rows. Scalar edits and delete take no member run locks; late
+auto-membership acquisition is
 non-blocking `SKIP LOCKED` and refuses a missed row. See
 [Database boundaries](./architecture.md#database-boundaries) for the full order.
 `src/lib/db/transaction-retry.ts` shares the runner's bounded retry policy with

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MapControls } from "@/components/map";
+import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-block-context";
 import { FormActions, reserveStickyFooterSpace } from "./form-actions";
 
 describe("FormActions", () => {
@@ -84,6 +85,55 @@ describe("FormActions", () => {
     );
 
     expect(markup).toContain("Cancel");
+  });
+});
+
+describe("FormActions preview slot", () => {
+  const PREVIEW = <p data-testid="association-preview">Joins credit batch CB-1</p>;
+
+  it("renders the preview after the action error and directly above the buttons", () => {
+    const markup = renderToStaticMarkup(
+      <FormActions errorMessage="Action failed" submitLabel="Save record" preview={PREVIEW} />,
+    );
+    const alertIndex = markup.indexOf('role="alert"');
+    const previewIndex = markup.indexOf('data-testid="association-preview"');
+    const buttonRowIndex = markup.indexOf('class="flex items-center justify-start gap-16"');
+
+    expect(alertIndex).toBeGreaterThanOrEqual(0);
+    expect(previewIndex).toBeGreaterThan(alertIndex);
+    expect(buttonRowIndex).toBeGreaterThan(previewIndex);
+    expect(markup.indexOf("sticky bottom-0")).toBeLessThan(previewIndex);
+  });
+
+  it("sits below why Save is off, and never disables Save itself", () => {
+    const block: SubmitBlock = { reason: "Checking the record lock.", tone: "info", readOnly: false };
+    const blocked = renderToStaticMarkup(
+      <SubmitBlockContext.Provider value={block}>
+        <FormActions submitLabel="Save record" preview={PREVIEW} />
+      </SubmitBlockContext.Provider>,
+    );
+    expect(blocked.indexOf("Checking the record lock.")).toBeLessThan(blocked.indexOf("association-preview"));
+
+    const open = renderToStaticMarkup(<FormActions submitLabel="Save record" preview={PREVIEW} />);
+    expect(open).toContain("association-preview");
+    const submit = open.match(/<button[^>]*type="submit"[^>]*>/)?.[0] ?? "";
+    expect(submit).not.toBe("");
+    expect(submit).not.toMatch(/\sdisabled(="[^"]*")?[\s>]/);
+  });
+
+  it("is hidden with the footer on a read-only form", () => {
+    const block: SubmitBlock = { reason: "Sent", tone: "error", readOnly: true };
+    const markup = renderToStaticMarkup(
+      <SubmitBlockContext.Provider value={block}>
+        <FormActions submitLabel="Save record" preview={PREVIEW} />
+      </SubmitBlockContext.Provider>,
+    );
+    expect(markup).not.toContain("association-preview");
+  });
+
+  it("keeps the submit button tied to its form id", () => {
+    const markup = renderToStaticMarkup(<FormActions submitLabel="Save record" formId="run-form" preview={PREVIEW} />);
+    expect(markup).toMatch(/<button[^>]*form="run-form"/);
   });
 });
 

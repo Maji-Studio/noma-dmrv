@@ -110,6 +110,11 @@ export interface OutputStockHistoryEntry {
   /** Frozen changes for the chart; null means the wet or solids basis is unresolved. */
   wetDeltaKg?: number | null;
   solidsDeltaKg?: number | null;
+  /** Movements: the frozen wet and solids balance right after this one, which re-base a replay whose figure turned unknown. */
+  afterWetKg?: number | null;
+  afterSolidsKg?: number | null;
+  /** Product bins: the ingredient solids this entry moved, by material, signed like the stock change. */
+  ingredientSolidsDeltas?: SubBinIngredient[];
   allocations: OutputStockAllocationView[];
   /** Split draws: the sub-bins and readings the entry was posted with. */
   sources?: { layerId: string; moisturePercent: number }[];

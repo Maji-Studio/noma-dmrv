@@ -11,9 +11,8 @@ import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import { listComponentBlueprints, listGhgEntryTemplates, type IsometricClient, type IsometricComponentBlueprint, type IsometricGhgEntryTemplate } from "@/lib/isometric";
-import { lineNeedsReview, compareTemplateObservations, enrichmentProblems, normalizeTemplateDefinition, resolveLineSources, validateLineSources, withoutUnacceptableProposals, type ComponentChange } from "@/lib/isometric/template-observations";
-import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/load-enrichment";
-import { canonicalJson } from "@/lib/canonical-json";
+import { compareTemplateObservations, enrichmentProblems, normalizeTemplateDefinition, lineSourcesForObservation, validateLineSources, type ComponentChange } from "@/lib/isometric/template-observations";
+import { enrichmentForObservation } from "./observe-removal-template";
 import {
   loadRemovalTemplateReviewSchema, removalTemplateReviewPreviewSchema, reviewRemovalTemplateLinesSchema, switchCreditBatchRemovalTemplateSchema,
   type RemovalTemplateReviewPreviewInput, type ReviewRemovalTemplateLinesInput, type SwitchCreditBatchRemovalTemplateInput,
@@ -27,13 +26,14 @@ import type { RemovalTemplateObservation } from "@/db/schema/removal-template-ob
 
 async function readOnlyEntry(
   client: IsometricClient, template: IsometricGhgEntryTemplate, blueprints: IsometricComponentBlueprint[],
-  latest: RemovalTemplateObservation | null,
+  latest: RemovalTemplateObservation | null, externalProjectId: string,
 ) {
   const definition = normalizeTemplateDefinition(template);
-  const enrichment = await loadTemplateEnrichment(client, template, blueprints);
-  const lineSources = latest && canonicalJson(latest.definition) === canonicalJson(definition)
-    ? withoutUnacceptableProposals(definition, latest.lineSources)
-    : resolveLineSources({ definition, previous: latest ?? undefined });
+  const { enrichment } = await enrichmentForObservation({
+    client, template, definition, previous: latest, externalProjectId,
+    loadBlueprints: async () => blueprints,
+  });
+  const lineSources = lineSourcesForObservation({ definition, enrichment, latest });
   return {
     templateId: template.id, template, observation: null, preview: true,
     availability: "listed" as const, enrichment,
@@ -70,7 +70,7 @@ export async function loadRemovalTemplateReview(facilityId: string) {
       const latest = template && !isDefault && !isPinned
         ? await getLatestTemplateObservation(ctx, ISOMETRIC_PROVIDER, templateId) : null;
       if (template && !isDefault && !isPinned && !latest) {
-        entries.push({ ...await readOnlyEntry(client, template, blueprints, null), isDefault, isPinned });
+        entries.push({ ...await readOnlyEntry(client, template, blueprints, null, mapping.externalProjectId), isDefault, isPinned });
         continue;
       }
       const current = template ? await loadRemovalTemplateFacts(ctx, {
@@ -144,39 +144,12 @@ export async function switchCreditBatchRemovalTemplate(input: SwitchCreditBatchR
   });
 }
 
-/** Any org member can preview a listed target, including one no batch has pinned yet. */
-export async function loadRemovalTemplateReviewPreview(input: RemovalTemplateReviewPreviewInput) {
-  return withAction(async (ctx) => {
-    const { facilityId, removalTemplateId } = removalTemplateReviewPreviewSchema.parse(input);
-    await requireOrgFacility(ctx, facilityId);
-    const mapping = await getCertifierProjectByFacility(ctx, facilityId, ISOMETRIC_PROVIDER);
-    if (!mapping) throw new SafeError("Link a facility to an Isometric project first.");
-    const client = await resolveIsometricClient(ctx);
-    const templates = await listGhgEntryTemplates(client, mapping.externalProjectId);
-    const template = templates.find((candidate) => candidate.id === removalTemplateId);
-    if (!template) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFound);
-    if (template.credit_type !== "REMOVAL") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.notRemovalTemplate);
-    const facts = await loadRemovalTemplateFacts(ctx, {
-      client, template, externalProjectId: mapping.externalProjectId, blueprints: await listComponentBlueprints(client),
-    });
-    const definition = normalizeTemplateDefinition(template);
-    return {
-      templateId: template.id,
-      needsReviewCount: definition.groups.flatMap((group) => group.components).filter((component) =>
-        lineNeedsReview(component.id, facts.observation?.lineSources[component.id], facts.lineSourceProblems),
-      ).length,
-      enrichmentProblems: facts.enrichmentProblems,
-      lineSourceProblems: facts.lineSourceProblems,
-    };
-  });
-}
-
 /**
  * One listed Removal template, read for review without observing it. The
  * switch dialog's warning deep-links here for a template no credit batch pins
  * yet, so nothing is stored: lines come from the latest stored observation
  * when the template still matches it, else from the proposals an observation
- * would make, and units and factors are read live. The entry is read-only
+ * would make, and enrichment uses the same TTL as Switch. The entry is read-only
  * (`observation: null`), because a draft needs an observation to save against.
  */
 export async function loadRemovalTemplateReviewEntry(input: RemovalTemplateReviewPreviewInput) {
@@ -196,7 +169,7 @@ export async function loadRemovalTemplateReviewEntry(input: RemovalTemplateRevie
       listPinnedRemovalTemplateIds(ctx, facilityId),
     ]);
     return {
-      ...await readOnlyEntry(client, template, blueprints, latest),
+      ...await readOnlyEntry(client, template, blueprints, latest, mapping.externalProjectId),
       isDefault: template.id === mapping.defaultRemovalTemplateId,
       isPinned: pinnedIds.includes(template.id),
     };
