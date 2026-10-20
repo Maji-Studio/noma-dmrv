@@ -4,7 +4,10 @@ const mocks = vi.hoisted(() => ({
   consume: vi.fn(),
   env: { NODE_ENV: "test", API_WRITES_DISABLED: false, API_FUZZ_DISABLE_RATE_LIMIT: false },
 }));
-vi.mock("@/config/env", () => ({ env: mocks.env }));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: mocks.env };
+});
 vi.mock("@/data-access/api-rate-limits", () => ({ consumeRateLimit: mocks.consume }));
 import { preAuthGuard, postAuthGuard } from "./guards";
 const ctx = { credentialId: "credential", organizationId: "organization" } as ApiContext;

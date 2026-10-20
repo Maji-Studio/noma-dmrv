@@ -1,0 +1,32 @@
+#!/bin/sh
+# Pre-push: run only the unit tests related to what this branch changed.
+# Catches tests that vi.mock a module you edited (#1278, #1279). Not the full
+# suite (15 to 55 min); CI still runs that. Skip once with `git push --no-verify`.
+# See docs/testing.md#stale-mocks-lint-rule-and-pre-push-hook.
+
+BASE_REF=origin/staging
+
+root=$(git rev-parse --show-toplevel) || exit 0
+cd "$root" || exit 0
+
+if ! git rev-parse --verify --quiet "$BASE_REF" >/dev/null; then
+  echo "pre-push: $BASE_REF not found; skipping related tests (git fetch origin staging)"
+  exit 0
+fi
+
+base=$(git merge-base "$BASE_REF" HEAD) || exit 0
+
+# Added, copied, modified, renamed files; deleted files cannot be related-tested.
+changed=$(git diff --name-only --diff-filter=ACMR "$base" HEAD)
+[ -n "$changed" ] || exit 0
+
+# Only source and test files can affect a unit test; docs-only pushes skip.
+files=$(printf '%s\n' "$changed" | grep -E '^(src|tests)/.*\.(ts|tsx|mts|cts|js|jsx|json)$')
+if [ -z "$files" ]; then
+  echo "pre-push: no source or test changes against $BASE_REF; skipping related tests"
+  exit 0
+fi
+
+echo "pre-push: running related unit tests ($(printf '%s\n' "$files" | wc -l | tr -d ' ') changed files). Skip once with: git push --no-verify"
+# shellcheck disable=SC2086 -- file paths in this repo hold no spaces
+printf '%s\n' "$files" | xargs pnpm vitest related --run

@@ -153,6 +153,8 @@ cmd_new() {
   info "migrating $test_db"
   (cd "$path" && DATABASE_URL="$test_url" pnpm -s db:migrate >/dev/null)
   trap - ERR
+  # Tracked hooks (.githooks/pre-push). --worktree keeps it out of the main checkout's config.
+  git -C "$path" config --worktree core.hooksPath .githooks
 
   cat <<EOF
 

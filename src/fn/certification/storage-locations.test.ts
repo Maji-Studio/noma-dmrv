@@ -17,7 +17,10 @@ const mocks = vi.hoisted(() => ({
   client: { get: vi.fn(), post: vi.fn(), patch: vi.fn() },
 }));
 
-vi.mock("@/config/env", () => ({ env: mocks.env }));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: mocks.env };
+});
 
 // Spread the real module so withStorageLocationRegistrationLocks keeps
 // running against the mocked @/db advisory lock below.
