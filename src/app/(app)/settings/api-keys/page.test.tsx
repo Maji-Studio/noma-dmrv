@@ -10,7 +10,6 @@ vi.mock("@/components/settings", () => ({ SettingsConsole: () => null }));
 describe("API key settings route", () => {
   it.each([
     ["admin", false, true],
-    ["admin", false, true],
     ["member", false, false],
     [null, true, false],
     ["member", true, false],

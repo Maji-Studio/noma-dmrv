@@ -222,7 +222,7 @@ these areas; the entry rules and invariants live in
   typo at onboarding is permanent and shows in the sidebar brand, the settings
   subtitle, and every invitation email.
 - **To resolve:** add `updateOrganization` plus a name/slug field on
-  `/settings/organization` for Owners. A slug change needs a decision on
+  `/settings/organization` for Admins. A slug change needs a decision on
   existing invitation-accept URLs, which embed the invitation id rather than the
   slug — so probably none, but confirm before assuming.
 

@@ -1,3 +1,4 @@
+import { retainFixtureAdmin } from "./helpers/retained-admin";
 /** Real handlers and Postgres. Written for reviewer execution; never run by the implementation agent. */
 import { apiActivityWhere, stringifyWithBigint } from "./helpers/api-activity";
 import { randomUUID } from "node:crypto";
@@ -283,7 +284,10 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
   it.each(["revoked", "owner removed"])("re-authenticates a stored POST replay after %s", async (change) => {
     const saved = await create();
     if (change === "revoked") await revokeApiKey(a.ctx, { id: credentialIdA, expectedVersion: 1 });
-    else await db.delete(members).where(eq(members.userId, a.ctx.userId));
+    else {
+      await retainFixtureAdmin(a.ctx.organizationId);
+      await db.delete(members).where(eq(members.userId, a.ctx.userId));
+    }
     const replay = await POST(request("POST", "", saved.body, { "idempotency-key": saved.key }));
     expect(replay.status).toBe(401);
     expect(replay.headers.get("idempotent-replayed")).toBeNull();

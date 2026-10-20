@@ -1,3 +1,4 @@
+import { retainFixtureAdmin } from "./helpers/retained-admin";
 import { apiActivityWhere } from "./helpers/api-activity";
 /** Real server actions, REST and MCP over the worktree test database. */
 import { randomUUID } from "node:crypto";
@@ -190,6 +191,7 @@ it("validates Q79 on the merged update state equally", async () => {
 }, TIMEOUT);
 it("refuses submitted lineage updates and deletes equally", async () => {
   await ensureTestOrg(); const f = fixtures.get("action")!; const ctx = makeTestOrgContext(f.ctx.userId); const memberId = randomUUID();
+  await retainFixtureAdmin(ctx.organizationId);
   await db.insert(members).values({ id: memberId, organizationId: ctx.organizationId, userId: ctx.userId, role: "admin" });
   const credential = await createApiKey(ctx, { name: "Parity submitted applications", scopes: ["applications:read", "applications:write", "applications:delete"], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS });
   const lineage = await createLineageFixture("removal");

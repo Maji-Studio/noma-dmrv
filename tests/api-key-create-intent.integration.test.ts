@@ -1,3 +1,4 @@
+import { retainFixtureAdmin } from "./helpers/retained-admin";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Pool } from "pg";
@@ -44,6 +45,8 @@ beforeEach(async () => {
     id: organizationId, name: "API intent fixture", slug: organizationId,
   })));
   await db.insert(users).values({ id: ctx.userId, name: "API intent owner", email: `${ctx.userId}@example.test`, emailVerified: true });
+  await retainFixtureAdmin(ctx.organizationId);
+  await retainFixtureAdmin(other.organizationId);
   await db.insert(members).values([ctx, other].map(({ organizationId }) => ({
     id: randomUUID(), organizationId, userId: ctx.userId, role: "admin",
   })));

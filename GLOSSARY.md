@@ -747,7 +747,8 @@ _Avoid_: teammate, seat.
 
 **Admin**:
 An Organization role with full control of its settings and members, including
-registry-facing submissions and organization deletion. The first member is an
+registry-facing submissions. Organization deletion through the plugin is refused;
+organization lifecycle belongs to Platform Admins. The first member is an
 Admin. An Organization must keep at least one Admin: the last Admin cannot be
 demoted, removed, or leave until another member becomes an Admin. Replaces the
 former Owner role. Distinct from **Platform Admin**.

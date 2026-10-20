@@ -7,7 +7,7 @@ import { createOAuthCimdPlugins } from "./oauth-cimd";
 import { oauthBefore } from "./oauth-hooks";
 import { OAUTH_ENDPOINT_LIMITS } from "@/config/oauth";
 import { apiKey } from "@better-auth/api-key";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { createAccessControl } from "better-auth/plugins/access";
 import { defaultStatements, ownerAc, memberAc } from "better-auth/plugins/organization/access";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS, API_KEY_LIVE_PREFIX, API_KEY_MAX_EXPIRY_DAYS, API_KEY_TEST_PREFIX } from "@/config/api-keys";
@@ -18,6 +18,7 @@ import { oauthRolePolicy } from "./oauth-role-policy";
 import { canOwnApiKey } from "./api-scopes";
 import { assertOrganizationRole, translateLastAdminError, validateOrganizationRoleInput } from "./organization-role-policy";
 import { betterAuth } from "better-auth";
+import { withLastAdminGuard } from "./last-admin-adapter";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
@@ -169,7 +170,16 @@ export const auth = betterAuth({
       if (env.OAUTH_PROVIDER_ENABLED) return oauthBefore(ctx);
     }),
     after: createAuthMiddleware(async (ctx) => {
-      translateLastAdminError(ctx.context.returned);
+      const returned = ctx.context.returned;
+      if (returned instanceof APIError && returned.body?.code?.startsWith("YOU_CANNOT_LEAVE_THE_ORGANIZATION")) {
+        const session = await getSessionFromCtx(ctx);
+        const organizationId = ctx.body?.organizationId ?? session?.session.activeOrganizationId;
+        const member = session && organizationId ? await ctx.context.adapter.findOne<{ role: string }>({
+          model: "member",
+          where: [{ field: "organizationId", value: organizationId }, { field: "userId", value: session.user.id }],
+        }) : null;
+        translateLastAdminError(returned, member?.role);
+      }
       // Better Auth's leave endpoint does not invoke afterRemoveMember.
       // Only a successful, server-returned member can trigger this revocation,
       // and only once that membership row is gone. A refused leave returns an
@@ -181,7 +191,7 @@ export const auth = betterAuth({
       await revokeDeletedMemberOAuthGrants(result.data);
     }),
   },
-  database: drizzleAdapter(db, {
+  database: withLastAdminGuard(drizzleAdapter(db, {
     provider: "pg",
     // Better Auth composes several writes (for example user + credential
     // account) through adapter transactions. Drizzle leaves this disabled by
@@ -204,7 +214,7 @@ export const auth = betterAuth({
       member: schema.members,
       invitation: schema.invitations,
     },
-  }),
+  })),
   user: {
     additionalFields: {
       // Surfaces the `role` column (admin | user) on the session user so
@@ -403,7 +413,8 @@ export const auth = betterAuth({
     }),
     organization({
       // 1.7.10 uses creatorRole in remove, demote, invite and leave checks.
-      // ownerAc supplies organization:delete, which adminAc omits.
+      // Keep full member management, but reserve lifecycle for Platform Admins.
+      disableOrganizationDeletion: true,
       creatorRole: "admin",
       ac: organizationAccess,
       roles: {

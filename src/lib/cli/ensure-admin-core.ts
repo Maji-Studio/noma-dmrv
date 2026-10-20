@@ -19,8 +19,8 @@ import {
 export type EnsureAdminDb = NodePgDatabase<typeof schema>;
 
 // Fixed bootstrap identifiers so reseeds are stable across environments.
-// A dev teammate (org member, not admin) gives local member-management flows a
-// second member to change roles on or remove.
+// A dev teammate is an organization Admin, not a Platform Admin, so local
+// sessions can exercise organization management without platform privileges.
 const TEAMMATE_EMAIL = 'teammate@darkearthcarbon.dev';
 const TEAMMATE_NAME = 'Dev Teammate';
 const CREDENTIAL_PROVIDER = 'credential';

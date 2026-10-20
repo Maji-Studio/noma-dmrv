@@ -1184,6 +1184,13 @@
       "when": 1792510768318,
       "tag": "0168_merge-org-owner-into-admin",
       "breakpoints": true
+    },
+    {
+      "idx": 169,
+      "version": "7",
+      "when": 1792513211518,
+      "tag": "0169_preserve-last-admin",
+      "breakpoints": true
     }
   ]
 }

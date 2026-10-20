@@ -28,12 +28,27 @@ export function assertOrganizationRole(role: unknown) {
 }
 
 /** Keep the upstream codes internal; creatorRole makes these Admin refusals. */
-export function translateLastAdminError(result: unknown) {
+export function translateLastAdminError(result: unknown, actingRole?: string) {
   if (!(result instanceof APIError)) return;
   if (result.body?.code && LAST_ADMIN_ERROR_CODES.has(result.body.code)) {
+    if (result.body.code === "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER" && actingRole !== "admin") {
+      throw new APIError("BAD_REQUEST", { code: "YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER", message: "You are not allowed to remove this member." });
+    }
     throw new APIError("BAD_REQUEST", {
       code: "LAST_ADMIN",
       message: LAST_ADMIN_MESSAGE,
     });
   }
+}
+
+/** PostgreSQL check violation from the members trigger, possibly wrapped by Drizzle. */
+export function isLastAdminDatabaseError(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  while (error && typeof error === "object" && !seen.has(error)) {
+    seen.add(error);
+    if ("code" in error && error.code === "23514" &&
+        "constraint" in error && error.constraint === "members_last_admin") return true;
+    error = "cause" in error ? error.cause : undefined;
+  }
+  return false;
 }

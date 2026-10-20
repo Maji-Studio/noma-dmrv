@@ -1,5 +1,5 @@
 import { createHmac, randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { certifierProjects, facilities, members, organizations, removalTemplateObservations, sessions, users } from "@/db/schema";
@@ -86,9 +86,8 @@ afterAll(async () => {
   await db.delete(certifierProjects).where(eq(certifierProjects.organizationId, organizationId));
   await db.delete(facilities).where(eq(facilities.organizationId, organizationId));
   await db.delete(sessions).where(eq(sessions.userId, userId));
-  await db.delete(members).where(and(eq(members.organizationId, organizationId), eq(members.userId, userId)));
-  await db.delete(users).where(eq(users.id, userId));
   await db.delete(organizations).where(eq(organizations.id, organizationId));
+  await db.delete(users).where(eq(users.id, userId));
 });
 
 function storedObservations() {

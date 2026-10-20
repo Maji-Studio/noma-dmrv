@@ -1,3 +1,4 @@
+import { retainFixtureAdmin } from "./helpers/retained-admin";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -53,6 +54,8 @@ async function prepareFoundation(): Promise<FoundationSnapshot> {
         )
         .limit(1)
     : [];
+
+  await retainFixtureAdmin(DEC_ORG_ID);
 
   if (teammateMembership) {
     await db.delete(members).where(eq(members.id, teammateMembership.id));

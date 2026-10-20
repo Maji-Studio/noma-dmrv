@@ -1,3 +1,4 @@
+import { retainFixtureAdmin } from "./helpers/retained-admin";
 import { apiActivityWhere } from "./helpers/api-activity";
 /** Real MCP endpoint, REST handlers, credentials and Postgres. Run only by explicit path. */
 import { randomUUID } from "node:crypto";
@@ -96,6 +97,7 @@ it("hides foreign applications and deliveries for reads, filters and writes", as
 }, TIMEOUT);
 it("refuses submitted lineage updates and deletes with certification_locked", async () => {
   await ensureTestOrg(); const ctx = makeTestOrgContext(f.ctx.userId); const memberId = randomUUID();
+  await retainFixtureAdmin(ctx.organizationId);
   await db.insert(members).values({ id: memberId, organizationId: ctx.organizationId, userId: ctx.userId, role: "admin" });
   const credential = await createApiKey(ctx, { name: "Application lineage MCP", scopes: ["applications:read", "applications:write", "applications:delete"], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS });
   const lineage = await createLineageFixture("removal");

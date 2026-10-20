@@ -71,7 +71,10 @@ organization, and only Platform Admins may verify another organization. It
 returns only the project count from `listProjects`.
 
 The organization plugin uses `creatorRole: "admin"` and grants Admin the former
-Owner permissions, including organization deletion. Both the plugin and the
+Owner member-management permissions. `disableOrganizationDeletion: true` refuses
+plugin organization deletion; lifecycle belongs to Platform Admins. A database
+trigger serializes removal of Admins on the organization row and refuses losing
+the last Admin, including concurrent plugin writes. Both the plugin and the
 Platform Admin membership writers refuse demoting, removing, or leaving as the
 last Admin. Plugin errors tell the user to promote another member first. Role
 inputs accept only a single `admin` or `member`; the plugin's built-in `owner`

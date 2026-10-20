@@ -1,3 +1,4 @@
+import { retainFixtureAdmin } from "./helpers/retained-admin";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { members } from "@/db/schema";
@@ -37,6 +38,7 @@ it("lets an Admin disconnect another person but refuses a Member", async () => {
   await selectOAuthOrganization(attempt);
   const grant = await resolveAttemptGrant({ ...attempt, clientId: f.clientId, resource: OAUTH_TEST_RESOURCE });
   await f.consent(grant.id);
+  await retainFixtureAdmin(f.ctx.organizationId);
   await db.update(members).set({ role: "member" }).where(and(eq(members.userId, f.actorId), eq(members.organizationId, f.ctx.organizationId)));
   const actor = { ...f.ctx, userId: f.actorId };
   await expect(revokeOAuthGrant(actor, { id: grant.id, expectedVersion: 1 })).rejects.toMatchObject({ code: "forbidden" });
