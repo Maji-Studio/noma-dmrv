@@ -522,7 +522,8 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
           unmetLabel: key === "templateLines"
             ? templateLinesUnmetLabel(fixTarget === "templateLineReview" ? linesToDecide : 0, [blocker.code])
             : onlyUnpinned ? NO_REMOVAL_TEMPLATE_LABEL : CERT_REQUIREMENT_META.templateSet.unmetLabel,
-          ...(key === "templateLines" && linesToDecide > 0 ? { linesToDecide } : {}),
+          // Only the check whose label counts the lines carries the count.
+          ...(fixTarget === "templateLineReview" && linesToDecide > 0 ? { linesToDecide } : {}),
         };
       }),
       ...(facts.emissionLines != null ? [{
@@ -554,7 +555,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
 
 /** The lines-to-decide count behind the batch's Lines decided check, or 0. One source with the check's label. */
 export function batchLinesToDecide(health: BatchHealth | undefined | null): number {
-  return health?.checks.find((check) => check.key === "templateLines" && check.status === "unmet")?.linesToDecide ?? 0;
+  return health?.checks.find((check) => check.status === "unmet" && check.linesToDecide)?.linesToDecide ?? 0;
 }
 
 // Attach the one plain-language requirement label (+ why) every readiness

@@ -8,7 +8,6 @@ import { certCheckLabel } from "./requirement-labels";
 import { removalTemplateBlocker } from "./removal-template-blockers";
 import type { RemovalBlocker } from "./removal-blockers";
 import { batchLinesToDecide, deriveBatchHealth, type BatchHealthFacts } from "./batch-health";
-import { deriveBatchEmissionLines } from "./emission-lines";
 
 function facts(overrides: Partial<RemovalReadinessFacts> = {}): RemovalReadinessFacts {
   return {
@@ -41,37 +40,23 @@ function batchFacts(overrides: Partial<BatchHealthFacts> = {}): BatchHealthFacts
 }
 
 describe("batch lines to decide", () => {
-  it("shares the distinct line count with the merged Lines decided check's label", () => {
-    const lines = deriveBatchEmissionLines({
-      definition: { groups: [{
-        id: "group", key: "pyrolysis", displayName: "Pyrolysis", description: "",
-        components: ["one", "two"].map((id) => ({
-          id, displayName: id, description: null, blueprintKey: "grid_electricity_use",
-          inputs: [{ key: "electricity_use", type: "monitored", quantityKind: "energy" }],
-        })),
-      }] },
-      lineSources: {}, problems: [], enrichmentComplete: true, automaticFigures: {}, entries: [],
-    });
+  it("carries the undecided line count on the Decide lines check only, as its label does", () => {
     const health = deriveBatchHealth(batchFacts({
       templateBlockers: [
         removalTemplateBlocker("templateNotFound"),
         removalTemplateBlocker("templateNotFullyRead"),
         removalTemplateBlocker("templateLinesNeedReview"),
       ],
-      emissionLines: [...lines, ...lines, {
-        ...lines[0], componentId: "entry-review",
-        blocker: { ...lineBlocker(), fixTarget: "emissions" },
-      }],
+      undecidedLineIds: ["one", "two", "two"],
+      emissionLines: [],
     }));
-    const checks = health.checks.filter((check) => check.key === "templateLines");
-    expect(checks).toHaveLength(1);
-    expect(checks[0]).toMatchObject({ status: "unmet", linesToDecide: 2 });
-    expect(certCheckLabel(checks[0])).toBe("2 lines to decide");
+    const counted = health.checks.filter((check) => check.linesToDecide !== undefined);
+    expect(counted).toHaveLength(1);
+    expect(counted[0]).toMatchObject({ key: "templateLines", status: "unmet", fixTarget: "templateLineReview", linesToDecide: 2 });
+    expect(certCheckLabel(counted[0])).toBe("2 lines to decide");
     expect(batchLinesToDecide(health)).toBe(2);
-    expect(health.checks.filter((check) => check.key !== "templateLines")
-      .every((check) => !("linesToDecide" in check))).toBe(true);
     for (const status of ["met", "skipped"] as const) {
-      expect(batchLinesToDecide({ ...health, checks: [{ ...checks[0], status }] })).toBe(0);
+      expect(batchLinesToDecide({ ...health, checks: [{ ...counted[0], status }] })).toBe(0);
     }
   });
 
