@@ -96,6 +96,13 @@ describe("sentComponentRows", () => {
     expect(row.value).toBe("0.5 kg");
   });
 
+  it("shows the quantities from records, not the emission factors fixed beside them in the template", () => {
+    const [row] = sentComponentRows([[line({ componentId: "ship", displayName: "Transport", state: "filled" })]] as never, {
+      review: review([binding("ship", 0.272, "kgCO2e/kilometer/metric_ton", "fixed"), binding("ship", 40, "t·km")]),
+    });
+    expect(row.value).toBe("40 t·km");
+  });
+
   it("shows a component left out of a follow-up Removal as not sent, never as none or not recorded", () => {
     const [row] = sentComponentRows([[line({ componentId: "prod", displayName: "Diesel", state: "filled" })]] as never, {
       review: review([], ["prod"]),

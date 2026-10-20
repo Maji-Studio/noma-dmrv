@@ -129,8 +129,13 @@ export function sentComponentRows(
       // Compiled from Samples and applications, shown in the Carbon ledger.
       return { ...common, source: SENT_SOURCE.samples, value: CARBON_LEDGER_POINTER, valuePointer: true };
     }
-    const figures = bindings
-      .filter((binding) => binding.binding !== "measurement-sample")
+    // The quantities the operator's records supply. Fixed datapoints (emission
+    // factors, warming potentials) only stand in when the component has no such input.
+    const monitored = bindings.filter((binding) => binding.binding === "monitored");
+    const shown = monitored.length > 0
+      ? monitored
+      : bindings.filter((binding) => binding.binding === "fixed");
+    const figures = shown
       .map(figure)
       .filter((value): value is string => value !== null);
     const parts = sourceParts(lines);
