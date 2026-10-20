@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { getCreditBatchById } from "@/data-access/credit-batches";
@@ -40,7 +40,6 @@ const id = "00000000-0000-4000-8000-000000000001";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false");
   vi.mocked(getLatestTemplateObservation).mockResolvedValue(null);
   vi.mocked(listPinnedRemovalTemplateIds).mockResolvedValue([]);
   vi.mocked(listComponentBlueprints).mockResolvedValue([]);
@@ -50,8 +49,6 @@ beforeEach(() => {
   vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id } as never);
   vi.mocked(listGhgEntryTemplates).mockResolvedValue([fixture as IsometricGhgEntryTemplate]);
 });
-
-afterEach(() => { vi.unstubAllEnvs(); });
 
 describe("project template listing", () => {
   it("lists unused templates as read-only without observing them, even without a default", async () => {
@@ -160,7 +157,6 @@ describe("switch readiness", () => {
   });
 
   it.each(["stored", "refreshed"])("refuses a settled retired source with no entries in the %s read", async (phase) => {
-    vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
     const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
     const componentId = "rtc_1M4ZRPH1RSBXADG2";
     const lineSources = resolveLineSources({ definition });
@@ -335,7 +331,6 @@ describe("loadRemovalTemplateReviewEntry", () => {
   });
 
   it("keeps a sample shipping proposal's scope and entry policy once its source is retired", async () => {
-    vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
     const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
     const lineSources = resolveLineSources({ definition });
     const componentId = "rtc_1M4ZRPH1RSBXADG2";
@@ -367,8 +362,7 @@ describe("loadRemovalTemplateReviewEntry", () => {
   });
 });
 
-it.each([false, true])("sends gate-adjusted contracts and candidates for client proposal validation (gate: %s)", async (enabled) => {
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
+it("sends retired-source contracts and candidates for client proposal validation", async () => {
   const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
   const lineSources = resolveLineSources({ definition });
   const ids = ["rtc_1M4ZRPH1RSBXADG2", "rtc_1M4ZRRN6PSBXHQ7C"];
@@ -386,21 +380,18 @@ it.each([false, true])("sends gate-adjusted contracts and candidates for client 
   const entry = result.data[0];
   expect(entry.observation?.id).toBe(id);
   expect(lineSources).toEqual(before);
-  if (enabled) expect(Object.values(entry.observation!.lineSources).some((contract) => contract.automaticSource === "sample-transport")).toBe(false);
-  // Private environment variables are absent in the browser after this server read.
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", undefined);
+  expect(Object.values(entry.observation!.lineSources).some((contract) => contract.automaticSource === "sample-transport")).toBe(false);
   for (const componentId of ids) {
     const line = entry.lines.find((candidate) => candidate.component.id === componentId)!;
     expect(line.contract).toEqual(entry.observation?.lineSources[componentId]);
     expect(line.contract).toMatchObject({ scope: "operating", entryPolicy: "additive", origin: "proposed" });
-    expect(line.contract.automaticSource).toBe(enabled ? undefined : "sample-transport");
-    expect(line.catalogCandidates.includes("sample-transport")).toBe(!enabled);
-    expect(canAcceptProposal(entry, line, {})).toBe(enabled);
+    expect(line.contract.automaticSource).toBe(undefined);
+    expect(line.catalogCandidates.includes("sample-transport")).toBe(false);
+    expect(canAcceptProposal(entry, line, {})).toBe(true);
   }
 });
 
 it("preserves the server's retired-source review problem and operator guidance after stripping the source", async () => {
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
   const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
   const lineSources = resolveLineSources({ definition });
   const componentId = "rtc_1M4ZRPH1RSBXADG2";

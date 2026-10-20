@@ -4,13 +4,12 @@ import { documents, emissionEntries, emissionEntryValues } from "@/db/schema";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), latest: vi.fn(), previous: vi.fn(), activity: vi.fn(), gate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), latest: vi.fn(), previous: vi.fn(), activity: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 vi.mock("./batch-emission-automatic-figures", () => ({ loadBatchAutomaticFigures: vi.fn() }));
 vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: vi.fn() }));
 vi.mock("./removal-template-observations", () => ({ getLatestTemplateObservation: mocks.latest, getTemplateObservationById: mocks.previous }));
 vi.mock("./emission-entry-activity", () => ({ recordEmissionEntryActivity: mocks.activity }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ requireEmissionsEntriesEnabled: mocks.gate }));
 import { replaceEmissionEntry } from "./emission-entries";
 
 const ctx = makeTestOrgContext();
@@ -137,10 +136,8 @@ it("refuses a foreign or missing entry before locking or writing", async () => {
   expect(update).not.toHaveBeenCalled();
 });
 
-it("checks organization scope and the feature gate before opening a transaction", async () => {
+it("checks organization scope before opening a transaction", async () => {
   await expect(replaceEmissionEntry({ ...ctx, organizationId: "" }, input)).rejects.toThrow("Unauthorized");
-  mocks.gate.mockImplementation(() => { throw new Error("Disabled"); });
-  await expect(replaceEmissionEntry(ctx, input)).rejects.toThrow("Disabled");
   expect(mocks.transaction).not.toHaveBeenCalled();
 });
 

@@ -50,7 +50,7 @@ function facts(template: GhgEntryTemplate): FacilityCertifierFacts {
     facilityTimezone: "UTC",
     hasOrgCredentials: true, mapping: { externalProjectId: template.project_id },
     templatesById: { [template.id]: {
-      template, observation: { lineSources },
+      template, observation: { id: "observation", definition: normalizeTemplateDefinition(template), enrichment: {}, lineSources },
       enrichmentProblems: [], lineSourceProblems: [], blueprintsForTemplate: [], unresolvedBlueprintKeys: [],
       unbindableTemplateInputs: findUnbindableTemplateInputs(template, { lineSources }),
       requiredTransportCategories: deriveRequiredTransportCategories(template),
@@ -96,13 +96,11 @@ vi.mock("@/data-access/utils", async (original) => ({ ...await original<typeof i
 vi.mock("@/data-access/removal-codes", () => ({ getRemovalCodes: vi.fn(async () => new Map()) }));
 vi.mock("./batch-emission-context", () => ({ loadBatchEmissionContext: vi.fn(async () => ({})) }));
 vi.mock("@/data-access/emission-entry-contenders", () => ({ loadEmissionEntryReservations: vi.fn(async () => []) }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: vi.fn(() => false), requireEmissionsEntriesEnabled: vi.fn() }));
 vi.mock("@/data-access/certification", () => ({ listRecentSyncEvents: vi.fn(async () => []) }));
 vi.mock("@/data-access/certifier-removals", () => ({ listRemovalsForFacility: vi.fn(), listUngroupedCreditBatches: vi.fn(async () => []), getCertifierRemovalById: vi.fn() }));
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntriesForBatches: vi.fn(async () => []) }));
 vi.mock("./biochar-application-source-readback", () => ({ refreshRemovalEvidenceLinks: vi.fn(async () => []) }));
 vi.mock("../with-action", () => ({ withAction: async (fn: (org: typeof ctx) => unknown) => ({ success: true, data: await fn(ctx) }) }));
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { getLatestSubmission } from "@/data-access/certification-submissions";
 import { listRemovalsForFacility, getCertifierRemovalById } from "@/data-access/certifier-removals";
 import { loadBatchEmissionContext } from "./batch-emission-context";
@@ -110,7 +108,6 @@ import { loadCertificationOverview } from "./overview";
 import { loadRemovalEmptyLines } from "./removal-empty-lines-core";
 
 it.each([new Date(0), new Date()])("loads context, Empty lines and overview after an unreserved draft entry changes (lock %s)", async (lockedAt) => {
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(true);
   const template = structuredClone(fixture) as GhgEntryTemplate;
   const facility = facts(template);
   const observation = facility.templatesById[template.id]!.observation!;
@@ -129,7 +126,6 @@ it.each([new Date(0), new Date()])("loads context, Empty lines and overview afte
   await expect(loadRemovalSubmissionContext(ctx, "removal-1")).resolves.toMatchObject({ latestSubmission: { id: "crashed" } });
   await expect(loadRemovalEmptyLines(ctx, "removal-1")).resolves.toHaveProperty("batches");
   await expect(loadCertificationOverview(scope.facilityId)).resolves.toMatchObject({ success: true, data: { removals: [{ removalId: scope.removalId }] } });
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(false);
 });
 
 it.each(["Africa/Dar_es_Salaam", "America/Los_Angeles"])("passes the scoped facility zone to future measurement readiness (%s)", async (timezone) => {

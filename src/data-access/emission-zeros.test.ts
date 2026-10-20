@@ -6,7 +6,6 @@ vi.mock("./emission-entries", () => ({ lockedBatch: mocks.batch, listEmissionEnt
 vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: mocks.facts }));
 vi.mock("./emission-entry-contenders", () => ({ listEmissionEntryAvailableApplications: mocks.available, listEmissionEntryDraftContenders: mocks.contenders, loadEmissionEntryReservations: mocks.reservations }));
 vi.mock("./emission-entry-activity", () => ({ recordEmissionEntryActivity: mocks.activity }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ requireEmissionsEntriesEnabled: vi.fn(), emissionsEntriesEnabled: () => true }));
 vi.mock("./batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: mocks.automatic }));
 vi.mock("@/fn/certification/certify-context-core", () => ({ loadRemovalSubmissionContext: mocks.context }));
 vi.mock("./certifier-removals", () => ({ getCertifierRemovalById: vi.fn(async () => ({ updatedAt: new Date("2026-01-01") })) }));
@@ -139,7 +138,6 @@ it("refuses undo with a stale Removal review token", async () => {
   await expect(undoEmissionZeros(ctx, { removalId, creditBatchId, expectedRemovalVersion: 1 })).rejects.toMatchObject({ code: "stale_version" });
   expect(update).not.toHaveBeenCalled();
 });
-
 
 it.each(["empty", "future-application", "orphan", "sent-single", "automatic", "omitted-production", "stale", "other-batch-single"])(
   "read and transactional writer agree on empty components: %s", async (scenario) => {

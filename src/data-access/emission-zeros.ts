@@ -7,7 +7,6 @@ import { z } from "zod";
 import { db, type DbTransaction } from "@/db";
 import { certifierRemovals, certificationSubmissions, creditBatchApplications, creditBatches, emissionEntries } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { requireEmissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { entryLine } from "@/lib/certification/emission-entry-rules";
 import { entriesWithoutRemoval, isLiveEntryReservation } from "@/lib/certification/removal-emission-contributions";
 import { validateLineSources } from "@/lib/isometric/template-observations/line-sources";
@@ -49,7 +48,6 @@ async function lockZeroDraft(ctx: OrgContext, tx: DbTransaction, data: z.infer<t
 
 export async function recordEmissionZeros(ctx: OrgContext, input: z.input<typeof recordEmissionZerosSchema>) {
   requireOrgScope(ctx);
-  requireEmissionsEntriesEnabled();
   const data = recordEmissionZerosSchema.parse(input);
   return db.transaction(async (tx) => {
     const { batch, observation, memberBatches } = await lockZeroDraft(ctx, tx, data, data.expectedRemovalVersion);
@@ -106,7 +104,6 @@ export async function recordEmissionZeros(ctx: OrgContext, input: z.input<typeof
 
 export async function undoEmissionZeros(ctx: OrgContext, input: z.input<typeof undoEmissionZerosSchema>) {
   requireOrgScope(ctx);
-  requireEmissionsEntriesEnabled();
   const data = undoEmissionZerosSchema.parse(input);
   return db.transaction(async (tx) => {
     await lockZeroDraft(ctx, tx, data, data.expectedRemovalVersion);

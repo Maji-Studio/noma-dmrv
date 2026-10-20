@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, certificationSubmissions, creditBatches, documents, emissionEntries,
@@ -9,7 +9,6 @@ import { cleanupLineageFixture, createLineageFixture, type LineageFixture } from
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 // DB-backed: written for a separately provisioned throwaway database. Do not run in offline verification.
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ requireEmissionsEntriesEnabled: vi.fn() }));
 const userId = `replace-entry-${crypto.randomUUID()}`;
 const ctx = makeTestOrgContext(userId);
 const templateId = `replace-template-${crypto.randomUUID()}`;

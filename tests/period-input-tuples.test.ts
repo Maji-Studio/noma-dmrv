@@ -1,5 +1,3 @@
-beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
-afterEach(() => { vi.unstubAllEnvs(); });
 import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
 // Tests for the ADR 0005 period-input scope guard + INPUT_MAPPING cleanup.
 //
@@ -16,7 +14,7 @@ import type { LineContract } from "@/lib/isometric/template-observations/line-so
 //      keeps an additional runtime tripwire so a future re-introduction
 //      from a merge or refactor surfaces immediately.
 
-import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import { allowsPeriodInputStub } from "@/lib/isometric/datapoint-mapping";
 import { SafeError } from "@/lib/errors";
 import type { components } from "@/lib/isometric/generated/certify";
@@ -336,8 +334,7 @@ it.each([
   expect(allowsPeriodInputStub(environment)).toBe(expected);
 });
 
-it.each([false, true])("retires only sample automatic mass-distance, preserving project-owned sample inputs (gate: %s)", (enabled) => {
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
-  expect(lookupInputMapping("sampling-required-for-mrv", "mass_distance_based_ci_emissions", "mass_distance") === undefined).toBe(enabled);
+it("retires only sample automatic mass-distance, preserving project-owned sample inputs", () => {
+  expect(lookupInputMapping("sampling-required-for-mrv", "mass_distance_based_ci_emissions", "mass_distance") === undefined).toBe(true);
   expect(lookupPeriodInputTuple("sampling-required-for-mrv", "grid_electricity_use", "electricity_use")).toEqual({ category: "lab_electricity" });
 });

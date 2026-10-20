@@ -1,5 +1,10 @@
 # Isometric Docs Change Log
 
+## 2026-10-20: Emissions entries always on
+
+The activation flag is removed. Entries and sample-leg retirement apply in every environment.
+No binding, revision or schema change. Run the retirement CLI per organization to delete old sample legs.
+
 ## 2026-10-20: Emissions entry evidence binding
 
 Entry files now bind as `emission_entry` Sources to every contributed component/input

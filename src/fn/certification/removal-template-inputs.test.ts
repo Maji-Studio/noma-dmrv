@@ -1,6 +1,4 @@
-beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
-afterEach(() => { vi.unstubAllEnvs(); });
-import { beforeEach, expect, it, vi, afterEach } from "vitest";
+import { expect, it } from "vitest";
 import sandboxFixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import culaFixture from "../../../tests/fixtures/isometric/cula-template-2026-10-15.json";
 import enrichment from "../../../tests/fixtures/isometric/sandbox-enrichment-2026-10-15.json";
@@ -48,8 +46,7 @@ it("keeps the shared Isometric-editor guidance for an unset fixed value during c
   expect(() => compile(changed, lineSources)).toThrow(REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint);
 });
 
-it.each([["sandbox 15 Oct", sandbox, false], ["sandbox 15 Oct", sandbox, true], ["Cula", cula, false], ["Cula", cula, true]] as const)("compiles supported automatic lines from %s (gate: %s)", (_, fixture, enabled) => {
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
+it.each([["sandbox 15 Oct", sandbox], ["Cula", cula]] as const)("compiles supported automatic lines from %s", (_, fixture) => {
   const definition = normalizeTemplateDefinition(fixture);
   const lineSources = resolveLineSources({ definition });
   const findings = findUnbindableTemplateInputs(fixture, { lineSources });

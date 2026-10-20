@@ -2,7 +2,6 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { creditBatches } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { emissionEntryFlows } from "@/lib/energy/emission-entry-flows";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 import type { EnergyFlow } from "@/lib/energy/types";
@@ -12,7 +11,6 @@ import { listEmissionEntriesForBatches } from "./emission-entries";
 
 export async function loadFacilityEmissionEntryFlows(ctx: OrgContext, facilityId: string): Promise<EnergyFlow[]> {
   requireOrgScope(ctx);
-  if (!emissionsEntriesEnabled()) return [];
   await requireOrgFacility(ctx, facilityId);
   const batches = await db.select({ id: creditBatches.id, removalTemplateId: creditBatches.removalTemplateId })
     .from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId),
