@@ -177,10 +177,9 @@ describe("credit batch CO₂e stored", () => {
     }).find((entry) => entry.title === "Batch definition");
 
     // The result is a field; how it was reached is explanation behind an (i).
-    expect(section?.fields).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "Durability estimate (capped)", value: "95.0%" }),
-    ]));
-    const explanation = renderToStaticMarkup(<>{section?.explanation}</>);
+    const field = section?.fields.find((entry) => entry.label === "Durability estimate (capped)");
+    expect(field).toEqual(expect.objectContaining({ value: "95.0%", explanationTitle: "Durability estimate" }));
+    const explanation = renderToStaticMarkup(<>{field?.explanation}</>);
     expect(explanation).toContain("Raw durability estimate");
     expect(explanation).toContain("97.0%");
     expect(explanation).toContain("Durability cap applied");
