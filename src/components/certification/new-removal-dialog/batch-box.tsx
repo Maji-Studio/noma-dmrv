@@ -24,6 +24,10 @@ import { cn } from "@/lib/utils";
 
 const STATUS_ICON = 14;
 const LINK_ICON = 12;
+/** A 44px tall hit area around an inline link without growing its row. */
+const HIT_AREA = "relative after:absolute after:inset-x-0 after:-inset-y-12 after:content-['']";
+/** The same from sm; below it the link has its own 44px row. */
+const HIT_AREA_FROM_SM = "sm:relative sm:after:absolute sm:after:inset-x-0 sm:after:-inset-y-12 sm:after:content-['']";
 
 /** The link text that leads from a not-ready box to the batch page's open to-dos. */
 export const OPEN_CHECKLIST_LABEL = "Open checklist";
@@ -67,7 +71,7 @@ function BatchCodeLink({ batch, facilityId }: { batch: SelectableBatch; facility
       href={creditBatchDeepLinkHref(batch.id, facilityId)}
       target="_blank"
       rel="noopener noreferrer"
-      className="-my-12 inline-flex min-h-44 items-center gap-4 body-small font-medium font-mono text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline"
+      className={cn(HIT_AREA, "inline-flex items-center gap-4 body-small font-medium font-mono text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline")}
     >
       {batch.code}
       <ArrowSquareOutIcon size={LINK_ICON} aria-hidden />
@@ -172,7 +176,7 @@ export function NotReadyBatchBox({
         target="_blank"
         rel="noopener noreferrer"
         aria-label={`${OPEN_CHECKLIST_LABEL} for ${batch.code}`}
-        className="col-start-1 row-start-3 inline-flex min-h-44 items-center gap-4 justify-self-start body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline sm:col-start-2 sm:row-start-2 sm:-my-12 sm:justify-self-end"
+        className={cn(HIT_AREA_FROM_SM, "col-start-1 row-start-3 inline-flex min-h-44 items-center gap-4 justify-self-start body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline sm:col-start-2 sm:row-start-2 sm:min-h-0 sm:justify-self-end")}
       >
         {OPEN_CHECKLIST_LABEL}
         <ArrowSquareOutIcon size={LINK_ICON} aria-hidden />
