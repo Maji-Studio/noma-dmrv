@@ -16,6 +16,7 @@ import type { TransportDistanceDrift } from "@/data-access/transport-distance-dr
 import { useRefreshTransportDistance, useTransportDistanceDrift } from "@/hooks/use-transport-distance-refresh";
 import { formatDistanceKm } from "@/lib/format-utils";
 import { toSaveErrorMessage } from "@/lib/stale-version";
+import { SAVED_DETAILS_UNAVAILABLE } from "@/lib/copy-utils";
 import type { TransportDistanceTarget } from "@/schemas/transport-distance-refresh";
 
 export const REFRESH_FROM_LOCATION_LABEL = "Refresh from location";
@@ -24,7 +25,7 @@ const CONFIRM_TITLE = "Refresh distance from location?";
 // Short, so it fits beside Cancel in the 400px confirm dialog; the title names the location.
 const CONFIRM_LABEL = "Refresh";
 const REFRESH_FAILED_MESSAGE = "The distance was not refreshed. Try again.";
-const RELOAD_FAILED_MESSAGE = "The distance was refreshed, but the form could not reload it. Close the record and open it again before saving.";
+const REOPEN_BEFORE_SAVING = "Close it and open it again before saving.";
 
 const RECORD_NOUNS: Record<TransportDistanceTarget["entityType"], string> = {
   feedstock: "feedstock",
@@ -93,8 +94,9 @@ function DistanceRefreshDialog({
       setReloading(false);
     }
     close();
-    toast.success(`Distance for ${recordCode} refreshed to ${formatDistanceKm(refreshed.recordedDistanceKm)}.`);
-    if (!reloaded) toast.error(RELOAD_FAILED_MESSAGE);
+    const done = `Distance for ${recordCode} refreshed to ${formatDistanceKm(refreshed.recordedDistanceKm)}.`;
+    if (reloaded) toast.success(done);
+    else toast.warning(`${done} ${SAVED_DETAILS_UNAVAILABLE} ${REOPEN_BEFORE_SAVING}`);
   };
 
   return (
@@ -183,34 +185,43 @@ interface DistanceDriftActionProps extends TransportDistanceDriftNoticeProps {
  */
 export function DistanceDriftAction({ target, recordCode, disabledReason, onRefreshed }: DistanceDriftActionProps) {
   const drift = useTransportDistanceDrift(target);
-  const [confirming, setConfirming] = useState(false);
-  const data = drift.data;
-  if (!visibleDrift(data)) return null;
+  // The drift the dialog opened on. A successful refresh clears the live
+  // drift before the form has reloaded; the dialog stays on this snapshot,
+  // pending, until the reload lands.
+  const [confirmingDrift, setConfirmingDrift] = useState<VisibleDrift | null>(null);
+  const visible = visibleDrift(drift.data) ? drift.data : null;
+  // A refused attempt refetches: the live drift carries the version to retry with.
+  const dialogDrift = visible ?? confirmingDrift;
+  if (!dialogDrift) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-8" data-testid="transport-distance-drift-action">
-      <p className="body-caption text-[var(--color-text-secondary)]">
-        {`Location now ${formatDistanceKm(data.currentDistanceKm)}.`}
-        {disabledReason ? ` ${disabledReason}` : ""}
-      </p>
-      <Button
-        type="button"
-        size="small"
-        variant="noOutline"
-        disabled={!!disabledReason}
-        onClick={() => setConfirming(true)}
-      >
-        {REFRESH_FROM_LOCATION_LABEL}
-      </Button>
+    <>
+      {visible && (
+        <div className="flex flex-wrap items-center gap-x-8" data-testid="transport-distance-drift-action">
+          <p className="body-caption text-[var(--color-text-secondary)]">
+            {`Location now ${formatDistanceKm(visible.currentDistanceKm)}.`}
+            {disabledReason ? ` ${disabledReason}` : ""}
+          </p>
+          <Button
+            type="button"
+            size="small"
+            variant="noOutline"
+            disabled={!!disabledReason}
+            onClick={() => setConfirmingDrift(visible)}
+          >
+            {REFRESH_FROM_LOCATION_LABEL}
+          </Button>
+        </div>
+      )}
       <DistanceRefreshDialog
-        open={confirming}
-        onClose={() => setConfirming(false)}
+        open={!!confirmingDrift}
+        onClose={() => setConfirmingDrift(null)}
         target={target}
-        drift={data}
+        drift={dialogDrift}
         recordCode={recordCode}
         onRefused={() => void drift.refetch()}
         onRefreshed={onRefreshed}
       />
-    </div>
+    </>
   );
 }

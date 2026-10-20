@@ -80,8 +80,7 @@ interface DeliveryFormProps {
   submitLabel?: string;
   deferredAttachments?: UseDeferredAttachmentsResult;
   focusTarget?: EntityFocusTarget | null;
-  /** A refresh from location saved a new version: reopen the form on it. */
-  /** Resolves once the sheet holds the refreshed record (and its new version). */
+  /** A refresh from location saved a new version: reopen the form on it; resolves once the sheet holds it. */
   onDistanceRefreshed?: () => Promise<void>;
 }
 

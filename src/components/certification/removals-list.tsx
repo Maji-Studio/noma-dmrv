@@ -377,6 +377,9 @@ function ListBody({
           <DataTable
             columns={columns}
             data={rows}
+            // Rows carry `removalId`, not `id`: key by it so an open status
+            // history stays with its Removal when rows shift.
+            getRowId={(row) => row.removalId}
             enableFiltering
             enablePagination
             globalFilter={searchQuery}

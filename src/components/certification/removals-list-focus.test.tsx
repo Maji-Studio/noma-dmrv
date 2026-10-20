@@ -7,9 +7,10 @@ import { RemovalsList } from "./removals-list";
 
 const FACILITY_ID = "facility-1";
 const REMOVAL_ID = "11111111-1111-4111-8111-111111111111";
+const NEWER_REMOVAL_ID = "22222222-2222-4222-8222-222222222222";
 const BADGE_NAME = "Blocked, status history";
 
-const mocks = vi.hoisted(() => ({ fetchCount: 0, lockReads: 0 }));
+const mocks = vi.hoisted(() => ({ fetchCount: 0, lockReads: 0, removalIds: [] as string[] }));
 
 vi.mock("nuqs", () => ({
   parseAsString: { withOptions: () => ({}) },
@@ -29,7 +30,7 @@ vi.mock("@/hooks/use-certification", () => ({
       queryFn: async () => ({
         isProduction: false,
         fetchedAt: ++mocks.fetchCount,
-        removals: [{ removal: { id: REMOVAL_ID } }],
+        removals: mocks.removalIds.map((id) => ({ removal: { id } })),
       }),
     }),
   useRemovalPreflightSummaries: () => ({}),
@@ -45,7 +46,7 @@ vi.mock("./removal-list-state", () => ({
   buildRemovalListRows: (identities: { removal: { id: string } }[]) =>
     identities.map((identity) => ({
       removalId: identity.removal.id,
-      code: "RM-0001",
+      code: identity.removal.id === REMOVAL_ID ? "RM-0001" : "RM-0002",
       startedOn: null,
       completedOn: null,
       memberBatchCodes: [],
@@ -64,14 +65,18 @@ vi.mock("./removal-detail-sheet", () => ({ RemovalDetailSheet: () => null }));
 
 let client: QueryClient;
 
-// The desktop table; the phone cards repeat the badge.
-function tableBadge() {
-  return within(screen.getByRole("table", { name: "Removals" })).getByRole("button", { name: BADGE_NAME });
+// The desktop table; the phone cards repeat the badge. Each row's badge has the same name.
+function tableBadge(code = "RM-0001") {
+  const table = screen.getByRole("table", { name: "Removals" });
+  const row = within(table).getByText(code).closest("tr");
+  if (!row) throw new Error(`No row for ${code}`);
+  return within(row).getByRole("button", { name: BADGE_NAME });
 }
 
 beforeEach(() => {
   mocks.fetchCount = 0;
   mocks.lockReads = 0;
+  mocks.removalIds = [REMOVAL_ID];
   client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } });
 });
 afterEach(() => {
@@ -122,5 +127,18 @@ describe("Removals status history focus", () => {
     expect(screen.getByRole("dialog", { name: "Status history" })).toBeTruthy();
     await pressEscape();
     await waitFor(() => expect(document.activeElement).toBe(tableBadge()));
+  });
+
+  it("keeps the open history with its Removal when a refetch puts a newer Removal first", async () => {
+    await openHistoryFromKeyboard();
+    mocks.removalIds = [NEWER_REMOVAL_ID, REMOVAL_ID];
+    await act(async () => {
+      await client.invalidateQueries();
+    });
+    await waitFor(() => expect(tableBadge("RM-0002")).toBeTruthy());
+    expect(tableBadge("RM-0001").getAttribute("aria-expanded")).toBe("true");
+    expect(tableBadge("RM-0002").getAttribute("aria-expanded")).toBe("false");
+    await pressEscape();
+    await waitFor(() => expect(document.activeElement).toBe(tableBadge("RM-0001")));
   });
 });

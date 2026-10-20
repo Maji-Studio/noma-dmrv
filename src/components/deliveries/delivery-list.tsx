@@ -449,7 +449,12 @@ export function DeliveryList() {
   const deliveries = deliveriesData?.items ?? [];
   const deliveryLocks = useRecordLocks("delivery", deliveries.map((delivery) => delivery.id));
   const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("delivery", displaySideSheet?.entity?.id);
-  const columns = createColumns(openEdit, setDeleting, facilities, deliveryLocks.locks);
+  const requestDelete = (delivery: DeliverySheetRecord) => {
+    // A message from an earlier attempt belongs to that delivery, not this one.
+    setDeleteError(null);
+    setDeleting(delivery);
+  };
+  const columns = createColumns(openEdit, requestDelete, facilities, deliveryLocks.locks);
   const totalPages = deliveriesData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,

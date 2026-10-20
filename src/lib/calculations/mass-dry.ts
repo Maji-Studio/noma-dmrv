@@ -2,7 +2,6 @@
 export const MASS_COMPARISON_EPSILON_KG = 0.001;
 export const DRY_MASS_EXCEEDS_WET_MESSAGE =
   "Dry mass cannot exceed wet mass. Reduce the dry mass.";
-const MAX_MOISTURE_PERCENT = 100;
 
 export function exceedsMassWithTolerance(
   candidateMassKg: number,
@@ -74,27 +73,16 @@ export function dryOutputExceedsDryInput(input: {
   biocharOutputKg?: number | null;
   biocharMoisturePercent?: number | null;
 }): boolean {
-  if (
-    input.feedstockWetMassKg == null ||
-    input.feedstockMoisturePercent == null ||
-    !Number.isFinite(input.feedstockWetMassKg) ||
-    !Number.isFinite(input.feedstockMoisturePercent) ||
-    input.feedstockWetMassKg < 0 ||
-    input.feedstockMoisturePercent < 0 ||
-    input.feedstockMoisturePercent > MAX_MOISTURE_PERCENT
-  ) {
-    return false;
-  }
-
+  // Missing, non-finite, negative or out-of-range inputs on either side skip
+  // the comparison; the field validators report them.
+  const feedstockDryMassKg = computeClampedDryMass(
+    input.feedstockWetMassKg,
+    input.feedstockMoisturePercent,
+  );
   const biocharDryMassKg = computeClampedDryMass(
     input.biocharOutputKg,
     input.biocharMoisturePercent,
   );
-  if (biocharDryMassKg == null) return false;
-
-  const feedstockDryMassKg = deriveMassDryKg(
-    input.feedstockWetMassKg,
-    input.feedstockMoisturePercent,
-  );
+  if (feedstockDryMassKg == null || biocharDryMassKg == null) return false;
   return exceedsMassWithTolerance(biocharDryMassKg, feedstockDryMassKg);
 }

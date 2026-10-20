@@ -8,6 +8,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RecordLockView } from "@/lib/record-lock-view";
+import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
 
 const DELIVERY_ID = "6f1c4d3a-0f2b-4d6a-9f1e-0a1b2c3d4e5f";
 const FACILITY_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
@@ -187,6 +188,22 @@ describe("DeliveryList delete", () => {
       fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
     });
     expect(screen.getByTestId("dialog-error").textContent).toBe("This delivery cannot be deleted.");
+    expect(screen.queryByTestId("list-error")).toBeNull();
+  });
+
+  it("opens the next confirmation without the previous stale message", async () => {
+    harness.remove.mockRejectedValueOnce(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "delivery", id: DELIVERY_ID, code: STALE_VERSION_CONFLICT_CODE }));
+    render(<DeliveryList />);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.getByTestId("list-error").textContent).toContain("Delivery DL-26-001 was not deleted.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(screen.getByRole("alertdialog", { name: "Delete delivery" })).toBeTruthy();
+    expect(screen.queryByTestId("dialog-error")).toBeNull();
     expect(screen.queryByTestId("list-error")).toBeNull();
   });
 });
