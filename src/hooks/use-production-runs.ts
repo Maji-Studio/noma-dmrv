@@ -1,3 +1,4 @@
+import { useIntentMutation } from "./use-create-intent-key";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 /**
  * Production Runs React Query Hooks
@@ -170,10 +171,10 @@ export function useCreateProductionRun(
 ) {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIntentMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.productionRun),
-    mutationFn: async (data: CreateProductionRunData) => {
-      const result = await createProductionRunFn(data);
+    mutationFn: async (data: CreateProductionRunData, intentKey) => {
+      const result = await createProductionRunFn(data, { intentKey });
       if (!result.success) {
         throwProductionRunActionError(result);
       }

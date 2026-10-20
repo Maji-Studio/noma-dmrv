@@ -40,6 +40,9 @@ import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { focusRowProps } from "./credit-batch-page-parts";
 
+/** A replicate with no production run: a batch-level Sample. One label for the table and `sampleProvenanceLabel`. */
+const BATCH_SAMPLE_LABEL = "Batch Sample";
+
 function Section({
   children,
   action,
@@ -144,7 +147,8 @@ function ReplicateRow({ r }: { r: DurabilitySummaryReplicate }) {
         </span>
       </td>
       <td className="px-10 py-8 body-caption text-[var(--color-text-secondary)]">
-        {r.productionRunCode ?? MISSING_VALUE.notAvailable}
+        {/* No run is a batch-level sample, as in `sampleProvenanceLabel`; a run outside the batch has no code here. */}
+        {r.productionRunCode ?? (r.productionRunId ? "Run not in this batch" : BATCH_SAMPLE_LABEL)}
         {r.samplingDay ? ` · ${r.samplingDay}` : ""}
       </td>
       <td className="px-10 py-8 text-right tabular-nums body-caption text-[var(--color-text-secondary)]">
@@ -249,7 +253,7 @@ export function sampleProvenanceLabel(
     "productionRunCode" | "samplingDay"
   >,
 ): string {
-  const source = replicate.productionRunCode ?? "Batch Sample";
+  const source = replicate.productionRunCode ?? BATCH_SAMPLE_LABEL;
   return replicate.samplingDay
     ? `${source} · ${formatDate(replicate.samplingDay)}`
     : source;

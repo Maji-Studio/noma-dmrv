@@ -1,3 +1,4 @@
+import { releaseSubmissionReservations } from "./submission-reservation-release";
 import { recordActivityChange } from "./activity-events";
 import { emissionEntries } from "@/db/schema/emission-entries";
 import { readRemovalEntrySnapshot } from "@/lib/certification/removal-entry-snapshot";
@@ -168,7 +169,7 @@ export async function retireStaleSubmissionDraft(
 ): Promise<void> {
   requireOrgScope(ctx);
   await withCertificationStatusActivity(ctx, [id], async (tx) => {
-    await tx
+    const [retired] = await tx
       .update(certificationSubmissions)
       .set({
         status: "superseded",
@@ -183,7 +184,8 @@ export async function retireStaleSubmissionDraft(
           eq(certificationSubmissions.status, "draft"),
           eq(certificationSubmissions.organizationId, ctx.organizationId),
         ),
-      );
+      ).returning({ removalId: certificationSubmissions.localEntityId });
+    if (retired) await releaseSubmissionReservations(ctx, tx, id, retired.removalId);
   });
 }
 

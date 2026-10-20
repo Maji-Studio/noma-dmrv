@@ -8,7 +8,7 @@ import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
 import { InfoIcon } from "@phosphor-icons/react/dist/ssr";
 import { cloneElement, useState, type MouseEvent, type ReactElement } from "react";
 import { STOCK_PART_MIN_KG } from "@/config/output-stock";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { NO_MOISTURE_READING } from "@/lib/copy-utils";
 import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { DRY_BIOCHAR_LABEL, ingredientSolidsLabel } from "@/components/biochar-products/product-composition-components";
@@ -27,14 +27,14 @@ const MOVEMENTS_LABEL = "Latest movements";
 const OPEN_DELAY_MS = 160;
 const CLOSE_DELAY_MS = 80;
 
-/** The sub-bin's wet stock, or the missing-value token when nothing dates its moisture. */
+/** The sub-bin's wet stock, or why there is none: nothing dates its moisture. */
 export function subBinWetText(subBin: OutputSubBin): string {
-  return subBin.wetEstimateKg === null ? MISSING_VALUE.notAvailable : `${formatWetEstimate(subBin.wetEstimateKg)} kg wet mass`;
+  return subBin.wetEstimateKg === null ? NO_MOISTURE_READING : `${formatWetEstimate(subBin.wetEstimateKg)} kg wet mass`;
 }
 
-/** The sub-bin's estimated moisture, or the same missing-value token as its wet figure. */
+/** The sub-bin's estimated moisture, or the same reason as its wet figure. */
 export function subBinMoistureText(subBin: OutputSubBin): string {
-  return subBin.moisturePercent === null ? MISSING_VALUE.notAvailable : formatMoisturePercent(subBin.moisturePercent);
+  return subBin.moisturePercent === null ? NO_MOISTURE_READING : formatMoisturePercent(subBin.moisturePercent);
 }
 
 function movementMass(movement: SubBinMovement): string {

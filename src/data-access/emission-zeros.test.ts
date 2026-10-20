@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), batch: vi.fn(), facts: vi.fn(), contenders: vi.fn(), reservations: vi.fn(), available: vi.fn(), automatic: vi.fn(), activity: vi.fn(), context: vi.fn(), entries: vi.fn() }));
-vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), select: vi.fn(), batch: vi.fn(), facts: vi.fn(), contenders: vi.fn(), reservations: vi.fn(), available: vi.fn(), automatic: vi.fn(), activity: vi.fn(), context: vi.fn(), entries: vi.fn() }));
+vi.mock("@/db", () => ({ db: { transaction: mocks.transaction, select: mocks.select } }));
 vi.mock("./emission-entries", () => ({ lockedBatch: mocks.batch, listEmissionEntriesForBatches: mocks.entries }));
 vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: mocks.facts }));
 vi.mock("./emission-entry-contenders", () => ({ listEmissionEntryAvailableApplications: mocks.available, listEmissionEntryDraftContenders: mocks.contenders, loadEmissionEntryReservations: mocks.reservations }));
@@ -28,10 +28,13 @@ const observation = { id: "observation", externalTemplateId: "template", definit
 ] }] }, enrichment: { line: { electricity_use: { unit: "kWh" } } },
 lineSources: { line: { scope: "operating", origin: "reviewed", entryPolicy: "additive" } } };
 let rows: unknown[][];
+// The editable check of the empty-lines read: the Removal row, then its submissions.
+let dbRows: unknown[][];
 const insert = vi.fn();
 const update = vi.fn();
+const rowLock = vi.fn();
 function query(result: unknown[]) {
-  const q = { from: () => q, innerJoin: () => q, where: () => q, for: () => q, orderBy: () => q, returning: () => q,
+  const q = { from: () => q, innerJoin: () => q, where: () => q, for: (mode: string) => { rowLock(mode); return q; }, orderBy: () => q, returning: () => q,
     then: (resolve: (value: unknown[]) => unknown) => Promise.resolve(result).then(resolve) };
   return q;
 }
@@ -41,6 +44,8 @@ beforeEach(() => {
   const tx = { select: () => query(rows.shift()!), insert: () => ({ values: insert }), update: () => ({ set: update }) };
   insert.mockImplementation((values) => query([{ ...values, id: "zero" }]));
   update.mockImplementation((values) => query([{ ...values, id: "zero", creditBatchId, kind: "zero", confirmedForRemovalId: removalId }]));
+  dbRows = [[{ id: removalId, updatedAt: new Date("2026-01-01"), metadata: null }], []];
+  mocks.select.mockImplementation(() => query(dbRows.shift()!));
   mocks.transaction.mockImplementation((fn) => fn(tx));
   mocks.batch.mockResolvedValue({ batch: { id: creditBatchId, startDate: "2026-01-01" }, observation: structuredClone(observation) });
   mocks.facts.mockResolvedValue({ entries: [] });
@@ -171,7 +176,7 @@ it.each(["empty", "future-application", "orphan", "sent-single", "automatic", "o
     }]));
     const template = { id: "template", groups: [{ id: "g", key: "pyrolysis", components: [{ id: "line", display_name: "Electricity",
       blueprint_key: "grid_electricity_use", inputs: [{ input_key: "electricity_use", type: "monitored", quantity_kind: "energy" }] }] }] };
-    const facility = { templatesById: { template: { template, observation: current, enrichmentProblems: [], lineSourceProblems: [],
+    const facility = { facilityTimezone: "UTC", templatesById: { template: { template, observation: current, enrichmentProblems: [], lineSourceProblems: [],
       blueprintsForTemplate: [], unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], requiredTransportCategories: [],
     } } } as unknown as FacilityCertifierFacts;
     const scope = { removalId, memberBatches: members, lineages: [{ application: { applicationDate: new Date("2026-02-01") } }] } as RemovalScope;
@@ -180,6 +185,7 @@ it.each(["empty", "future-application", "orphan", "sent-single", "automatic", "o
     mocks.context.mockResolvedValue({ ...resolved, memberBatches: members });
     mocks.entries.mockResolvedValue(entries);
     const read = await loadRemovalEmptyLines(ctx, removalId);
+    expect(read.editable).toBe(true);
     const emptyIds = read.batches.find((batch) => batch.creditBatchId === creditBatchId)!.lines.map((line) => line.componentId);
     expect(emptyIds).toEqual(["empty", "future-application", "other-batch-single"].includes(scenario) ? ["line"] : []);
 
@@ -197,3 +203,9 @@ it.each(["empty", "future-application", "orphan", "sent-single", "automatic", "o
     expect(mocks.reservations).toHaveBeenLastCalledWith(ctx, [], tx);
   },
 );
+
+it.each(["record", "undo"])("uses a Removal lock compatible with stamping for %s", async (action) => {
+  if (action === "record") await recordEmissionZeros(ctx, input);
+  else { rows.push([]); await undoEmissionZeros(ctx, input); }
+  expect(rowLock).toHaveBeenNthCalledWith(1, "no key update");
+});

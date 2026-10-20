@@ -20,9 +20,9 @@ describe("describeStatusChangeActor", () => {
     expect(describeStatusChangeActor({ ...recorded, source, actorName: "Ada Operator" })).toBe(expected);
   });
 
-  it("uses the shared token when the recorded user can no longer be named", () => {
+  it("names an unknown user when the recorded user can no longer be named", () => {
     expect(describeStatusChangeActor({ origin: "activity", source: "form", actorName: null, actorUnavailable: true }))
-      .toBe("Changed by: Not available");
+      .toBe("Unknown user");
   });
 
   it.each([

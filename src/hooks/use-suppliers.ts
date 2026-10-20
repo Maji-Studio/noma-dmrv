@@ -1,4 +1,4 @@
-import { useCreateIntentKey } from "./use-create-intent-key";
+import { useIntentMutation } from "./use-create-intent-key";
 import { transportLegKeys } from "./use-transport-legs";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
 import { feedstockKeys } from "./use-feedstocks";
@@ -145,9 +145,9 @@ export function useCreateSupplierWithLocations(
 ) {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (data: CreateSupplierWithLocationsData) => {
-      const result = await createSupplierWithLocationsFn(data);
+  return useIntentMutation({
+    mutationFn: async (data: CreateSupplierWithLocationsData, intentKey) => {
+      const result = await createSupplierWithLocationsFn(data, { intentKey });
       if (!result.success) {
         throwActionError(result);
       }
@@ -496,16 +496,14 @@ export function useSupplierLocationsBySupplier(
 
 export function useCreateSupplierLocation(callbacks?: MutationCallbacks<SupplierLocation, CreateSupplierLocationData>) {
   const queryClient = useQueryClient();
-  const intent = useCreateIntentKey();
 
-  const mutation = useMutation({
-    mutationFn: async (data: CreateSupplierLocationData) => {
-      const result = await createSupplierLocationFn(data, { intentKey: intent.current() });
+  return useIntentMutation({
+    mutationFn: async (data: CreateSupplierLocationData, intentKey) => {
+      const result = await createSupplierLocationFn(data, { intentKey });
       if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: async (data, variables) => {
-      intent.rotate();
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(variables.supplierId) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(variables.supplierId) });
@@ -521,8 +519,6 @@ export function useCreateSupplierLocation(callbacks?: MutationCallbacks<Supplier
       callbacks?.onError?.(error instanceof Error ? error : new Error("Location was not created. Check the form."), variables);
     },
   });
-  // Call when a create sheet or dialog opens: each draft gets its own key.
-  return { ...mutation, startDraft: intent.rotate };
 }
 
 export function useUpdateSupplierLocation(supplierId: string, callbacks?: MutationCallbacks<SupplierLocation, UpdateSupplierLocationData>) {

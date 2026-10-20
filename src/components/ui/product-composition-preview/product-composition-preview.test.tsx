@@ -103,7 +103,7 @@ describe("ProductCompositionPreview", () => {
     );
   });
 
-  it("names a missing part as not available and draws no proportions", () => {
+  it("names a missing part without a figure and draws no proportions", () => {
     const html = renderToStaticMarkup(
       <ProductCompositionPreview
         wetMassKg={1_100}
@@ -117,7 +117,8 @@ describe("ProductCompositionPreview", () => {
     );
 
     expect(text(html)).toContain("Dry biochar 600 kg");
-    expect(text(html)).toContain("Compost solids Not available");
+    expect(text(html)).toContain("Compost solids");
+    expect(text(html)).not.toContain("Not available");
     expect(html).not.toContain('role="img"');
     expect(text(html)).not.toContain("sum of its parts");
   });
@@ -172,7 +173,7 @@ describe("ProductCompositionPreview", () => {
           { label: "Dry biochar", massKg: 90, kind: "biochar" },
           { label: "Water", massKg: 10.125, kind: "water" },
         ]}
-        formatMass={(mass) => (mass === null ? "Not available" : `${mass.toFixed(3)} kg`)}
+        formatMass={(mass) => `${mass.toFixed(3)} kg`}
         headline={<span>Saved total</span>}
         basis={<p>Saved with the product.</p>}
       />,

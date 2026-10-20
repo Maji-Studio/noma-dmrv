@@ -1,14 +1,23 @@
+import { requestDocumentUploadInTransaction, confirmDocumentUploadInTransaction, uploadFactsFor } from "@/data-access/document-writes";
+import { cleanupDocumentUploads } from "./helpers/document-upload-cleanup";
+import { documents } from "@/db/schema";
+import { insertDocument, listDocumentsForEntity, listEmissionEntryDocumentsByIds } from "@/data-access/documents";
+import { collectCandidateSourceDocumentsForRemoval } from "@/fn/certification/source-candidates";
+import { planRemovalEvidence } from "@/fn/certification/removal-evidence-plan";
+import { frozenEntriesForAttempt } from "@/fn/certification/removal-entry-context";
+import { discardLocalRemovalDraft } from "@/data-access/certifier-removals";
+import { deleteCreditBatchApplicationSlices } from "@/data-access/credit-batch-delete-slices";
 /** Real PostgreSQL coverage. Deliberately not run by the offline implementation verification. */
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, certificationSubmissions, creditBatchApplications, creditBatches, emissionEntries, emissionEntryValues,
   removalTemplateObservations, users, certifierRemovals, organizations, facilities } from "@/db/schema";
 import { createEmissionEntry, deleteEmissionEntry, getEmissionEntry, updateEmissionEntry } from "@/data-access/emission-entries";
 import { assertEmissionEntryDocumentWritable } from "@/data-access/emission-entry-lock";
-import { recordEmissionZeros } from "@/data-access/emission-zeros";
+import { isRemovalZeroEditable, recordEmissionZeros } from "@/data-access/emission-zeros";
 import { reserveProductionEmissionsClaims, rejectSubmissionAndReleaseProductionClaims } from "@/data-access/production-claim-reservations";
-import { markSubmissionSubmitted } from "@/data-access/submission-ledger-transitions";
+import { markSubmissionSubmitted, retireStaleSubmissionDraft } from "@/data-access/submission-ledger-transitions";
 import { claimRemovalDeletion, finalizeRemovalDeletion } from "@/data-access/certifier-removal-deletion";
 import { loadBatchEmissionEntryFacts } from "@/data-access/emission-entry-facts";
 import { deriveRemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
@@ -22,6 +31,7 @@ const ctx = { ...makeTestOrgContext(userId), orgRole: "owner" as const };
 let fixture: LineageFixture;
 let second: LineageFixture | undefined;
 let observation: typeof removalTemplateObservations.$inferSelect;
+const NEWER_DOCUMENT_COUNT = 201;
 const shape = [{ key: "electricity_use", type: "monitored" as const, quantityKind: "energy" as const }];
 beforeAll(async () => { await ensureTestOrg(); });
 beforeEach(async () => {
@@ -174,4 +184,173 @@ it("records activity when a new value tombstones an unsubmitted draft's zero", a
   expect(zero.deletedAt).not.toBeNull();
   expect(zero.confirmedForRemovalId).toBe(fixture.removalId);
   expect(await db.select().from(activityEvents).where(and(eq(activityEvents.entityId, zero.id), eq(activityEvents.action, "deleted")))).toHaveLength(1);
+});
+it("reports whether recorded zeros can still change, by the check the writer applies", async () => {
+  expect(await isRemovalZeroEditable(ctx, fixture.removalId)).toBe(true);
+  expect(await isRemovalZeroEditable(ctx, crypto.randomUUID())).toBe(false);
+  // Another organization never sees a Removal as editable.
+  expect(await isRemovalZeroEditable({ ...ctx, organizationId: crypto.randomUUID() }, fixture.removalId)).toBe(false);
+
+  // A live attempt (fresh lock) freezes the zeros, and so does the writer.
+  const live = await draft([]);
+  expect(await isRemovalZeroEditable(ctx, fixture.removalId)).toBe(false);
+  await expect(recordEmissionZeros(ctx, { removalId: fixture.removalId, creditBatchId: fixture.batchId, componentIds: ["zero"] }))
+    .rejects.toThrow("unsubmitted, idle Removal");
+
+  // A released attempt that never submitted leaves them editable again.
+  await db.update(certificationSubmissions).set({ status: "rejected" }).where(eq(certificationSubmissions.id, live.id));
+  expect(await isRemovalZeroEditable(ctx, fixture.removalId)).toBe(true);
+
+  // A submitted Removal is frozen for good.
+  await db.update(certificationSubmissions).set({ status: "submitted", submittedAt: new Date() }).where(eq(certificationSubmissions.id, live.id));
+  expect(await isRemovalZeroEditable(ctx, fixture.removalId)).toBe(false);
+});
+
+it("releases a retired attempt so its entry can be edited", async () => {
+  const entry = await value();
+  const row = await draft([{ entryId: entry.id, contentRevision: entry.contentRevision }]);
+  await reserve(row);
+  await retireStaleSubmissionDraft(ctx, row.id, { reason: "fixture drift" });
+  const released = await getEmissionEntry(ctx, entry.id);
+  expect(released.sendReservedBySubmissionId).toBeNull();
+  await updateEmissionEntry(ctx, { id: entry.id, expectedVersion: released.version, note: "editable again" });
+  expect((await getEmissionEntry(ctx, entry.id)).note).toBe("editable again");
+  const [batch] = await db.select().from(creditBatches).where(eq(creditBatches.id, fixture.batchId));
+  expect(batch.productionEmissionsClaimReservedBySubmissionId).toBeNull();
+});
+it.each(["discard", "orphan GC"])("deletes ledger-less zeros through %s with activity history", async (path) => {
+  const zero = await recordEmissionZeros(ctx, { removalId: fixture.removalId, creditBatchId: fixture.batchId, componentIds: ["zero"] });
+  if (path === "discard") await discardLocalRemovalDraft(ctx, fixture.facilityId, fixture.removalId);
+  else await db.transaction(async (tx) => {
+    await tx.select().from(creditBatches).where(eq(creditBatches.id, fixture.batchId)).for("update");
+    await deleteCreditBatchApplicationSlices(ctx, tx, fixture.batchId);
+  });
+  expect(await db.select().from(emissionEntries).where(eq(emissionEntries.id, zero.entryIds[0]))).toEqual([]);
+  expect(await db.select().from(certifierRemovals).where(eq(certifierRemovals.id, fixture.removalId))).toEqual([]);
+  expect(await db.select().from(activityEvents).where(and(eq(activityEvents.entityId, zero.entryIds[0]), eq(activityEvents.action, "deleted")))).toHaveLength(1);
+});
+
+it("retries an empty frozen set after production reservation and a new entry", async () => {
+  const row = await draft([]);
+  await reserve(row);
+  await value();
+  const [batch] = await db.select().from(creditBatches).where(eq(creditBatches.id, fixture.batchId));
+  const entryFacts = await loadBatchEmissionEntryFacts(ctx, fixture.batchId, observation);
+  const frozen = frozenEntriesForAttempt(row, { [fixture.batchId]: { ...entryFacts, automaticFigures: {},
+    productionReservationSubmissionId: batch.productionEmissionsClaimReservedBySubmissionId } });
+  expect(frozen).toEqual([]);
+  await reserve(row);
+  await markSubmissionSubmitted(ctx, row.id, { externalId: "empty-fixture", expectedLockedAt: row.lockedAt!,
+    productionEmissionsClaim: { removalId: fixture.removalId, creditBatchIds: [fixture.batchId] } });
+  const entries = await db.select().from(emissionEntries).where(eq(emissionEntries.creditBatchId, fixture.batchId));
+  expect(entries).toHaveLength(1);
+  expect(entries[0].sentByRemovalId).toBeNull();
+});
+
+it("plans the exact file of an entry on the submitted contribution path", async () => {
+  const entry = await value();
+  const document = await insertDocument(ctx, { entityType: "emission_entry", entityId: entry.id,
+    documentType: "pdf", fileName: "Entry evidence.pdf", fileUrl: "https://example.test/evidence.pdf" });
+  try {
+    const { entries } = await loadBatchEmissionEntryFacts(ctx, fixture.batchId, observation);
+    const contributions = deriveRemovalEntryContributions({ removalId: fixture.removalId,
+      memberBatchIds: [fixture.batchId], window: { start: "2026-06-01", end: "2026-06-16" },
+      contenders: [{ contenderKind: "draft", removalId: fixture.removalId, createdAt: "2026-06-16",
+        creditBatchIds: [fixture.batchId], window: { start: "2026-06-01", end: "2026-06-16" } }],
+      entries, lineSources: observation.lineSources,
+      monitoredInputs: [{ componentId: "line", inputKey: "electricity_use", unit: "kWh" }],
+    });
+    const candidates = await collectCandidateSourceDocumentsForRemoval(ctx, {
+      removalId: fixture.removalId, lineages: [], entryContributions: contributions,
+    });
+    const evidence = await planRemovalEvidence({ orgCtx: ctx, removalId: fixture.removalId,
+      ctx: { lineages: [], memberBatchClaims: [], batchesWithSamples: [],
+        removalEntryContext: { contributions } } as never,
+      template: { groups: [{ key: "pyrolysis", components: [{ id: "line", blueprint_key: "grid_electricity_use",
+        inputs: [{ input_key: "electricity_use", type: "monitored" }] }] }] } as never,
+      compiledBiocharApplicationIntents: [], supplied: { candidateSourceDocuments: candidates,
+        sourceBindingCandidates: candidates.map((candidate) => ({ ...candidate, sourceId: "source-entry-file" })) },
+    });
+    expect(evidence.sourceBindingPlan).toMatchObject([{ documentId: document.id, nomaRole: "emission_entry",
+      lineage: { entityId: entry.id }, intendedTarget: { componentId: "line", inputKey: "electricity_use" } }]);
+    expect(evidence.sourceBindingPlan).toHaveLength(1);
+  } finally {
+    await db.delete(documents).where(and(eq(documents.organizationId, ctx.organizationId), eq(documents.id, document.id)));
+  }
+});
+
+it("finds an uploaded manifest file behind more than the listing cap of pending documents", async () => {
+  const entry = await value();
+  const document = await insertDocument(ctx, { entityType: "emission_entry", entityId: entry.id,
+    documentType: "pdf", fileName: "Manifest evidence.pdf", fileUrl: "https://example.test/evidence.pdf" });
+  // The operator listing caps at 200, regardless of upload status.
+  try {
+    await db.insert(documents).values(Array.from({ length: NEWER_DOCUMENT_COUNT }, (_, index) => ({
+      organizationId: ctx.organizationId, entityType: "emission_entry" as const, entityId: entry.id,
+      documentType: "pdf" as const, fileName: "Pending.pdf", fileUrl: "", uploadStatus: "pending" as const,
+      storageProvider: "local-fs", storageBucket: "test",
+      storageKey: `pending/${entry.id}/${index}`, uploadStorageKey: `uploads/${entry.id}/${index}`,
+      createdAt: new Date("2099-01-01"),
+    })));
+    expect((await listDocumentsForEntity(ctx, "emission_entry", entry.id)).some((row) => row.id === document.id)).toBe(false);
+    const { entries } = await loadBatchEmissionEntryFacts(ctx, fixture.batchId, observation);
+    const contributions = deriveRemovalEntryContributions({ removalId: fixture.removalId,
+      memberBatchIds: [fixture.batchId], window: { start: "2026-06-01", end: "2026-06-16" },
+      contenders: [{ contenderKind: "draft", removalId: fixture.removalId, createdAt: "2026-06-16",
+        creditBatchIds: [fixture.batchId], window: { start: "2026-06-01", end: "2026-06-16" } }],
+      entries, lineSources: observation.lineSources,
+      monitoredInputs: [{ componentId: "line", inputKey: "electricity_use", unit: "kWh" }],
+    });
+    expect(contributions.manifest[0].entries[0].evidenceDocumentIds).toEqual([document.id]);
+    expect(await collectCandidateSourceDocumentsForRemoval(ctx, {
+      removalId: fixture.removalId, lineages: [], entryContributions: contributions,
+    })).toMatchObject([{ documentId: document.id }]);
+    expect(await listEmissionEntryDocumentsByIds({ ...ctx, organizationId: "other-organization" }, [entry.id], [document.id])).toEqual([]);
+    expect(await listEmissionEntryDocumentsByIds(ctx, [crypto.randomUUID()], [document.id])).toEqual([]);
+    await db.update(documents).set({ entityType: "credit_batch", entityId: fixture.batchId })
+      .where(and(eq(documents.organizationId, ctx.organizationId), eq(documents.id, document.id)));
+    expect(await listEmissionEntryDocumentsByIds(ctx, [fixture.batchId], [document.id])).toEqual([]);
+  } finally {
+    await db.delete(documents).where(and(eq(documents.organizationId, ctx.organizationId),
+      or(eq(documents.id, document.id), and(eq(documents.entityType, "emission_entry"), eq(documents.entityId, entry.id)))));
+  }
+});
+
+it.each(["writable", "reserved", "sent"] as const)("upload confirmation preserves the frozen evidence contract for a %s entry", async (state) => {
+  const entry = await value();
+  const fileBytes = Buffer.from("%PDF-1.7");
+  const document = await db.transaction((tx) => requestDocumentUploadInTransaction(ctx, tx, {
+    entityType: "emission_entry", entityId: entry.id, documentType: "pdf", fileName: "Evidence.pdf",
+    contentType: "application/pdf", sizeBytes: fileBytes.length, storageProvider: "local-fs", storageBucket: "test",
+  }));
+  try {
+    const before = await getEmissionEntry(ctx, entry.id);
+    expect(before.contentRevision).toBe(entry.contentRevision);
+    expect((await loadBatchEmissionEntryFacts(ctx, fixture.batchId, observation)).entries[0].evidenceDocumentIds).toEqual([]);
+    if (state !== "writable") {
+      const attempt = await draft([{ entryId: entry.id, contentRevision: before.contentRevision }]);
+      await reserve(attempt);
+      if (state === "sent") await markSubmissionSubmitted(ctx, attempt.id, { externalId: "upload-confirm-fixture", expectedLockedAt: attempt.lockedAt!,
+        productionEmissionsClaim: { removalId: fixture.removalId, creditBatchIds: [fixture.batchId] } });
+    }
+    // Simulate the inspected storage boundary; this test exercises the locked DB transition.
+    const facts = { ...uploadFactsFor(document), finalKey: `objects/${document.id}/confirmed.pdf`,
+      inspectedSizeBytes: fileBytes.length, inspectedSha256: "fixture-checksum", inspectedContentType: "application/pdf" };
+    const result = await db.transaction((tx) => confirmDocumentUploadInTransaction(ctx, tx, facts));
+    const after = await getEmissionEntry(ctx, entry.id);
+    const evidence = (await loadBatchEmissionEntryFacts(ctx, fixture.batchId, observation)).entries[0].evidenceDocumentIds;
+    if (state === "writable") {
+      expect(result).toMatchObject({ kind: "uploaded", transitioned: true });
+      expect(after.contentRevision).toBe(before.contentRevision + 1);
+      expect(evidence).toEqual([document.id]);
+      expect(await db.transaction((tx) => confirmDocumentUploadInTransaction(ctx, tx, facts))).toMatchObject({ kind: "uploaded", transitioned: false });
+      expect((await getEmissionEntry(ctx, entry.id)).contentRevision).toBe(after.contentRevision);
+    } else {
+      expect(result).toMatchObject({ kind: "refused", reason: "certification_locked", document: { uploadStatus: "failed" } });
+      expect(after.contentRevision).toBe(before.contentRevision);
+      expect(evidence).toEqual([]);
+    }
+  } finally {
+    await cleanupDocumentUploads(ctx, [document.id]);
+  }
 });

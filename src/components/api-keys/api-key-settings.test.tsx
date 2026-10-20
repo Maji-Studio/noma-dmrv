@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
   update: vi.fn(),
   revoke: vi.fn(),
   reset: vi.fn(),
+  startDraft: vi.fn(),
   pending: false,
 }));
 
@@ -30,6 +31,7 @@ vi.mock("@/hooks/use-api-keys", () => ({
     },
     isPending: state.pending,
     reset: state.reset,
+    startDraft: state.startDraft,
   }),
   useUpdateApiKey: () => ({ mutateAsync: state.update, isPending: false }),
   useRevokeApiKey: () => ({ mutateAsync: state.revoke, isPending: false }),
@@ -189,6 +191,7 @@ describe("one-time API key", () => {
     expect(tree.root.findAllByProps({ id: "api-key-plaintext" })).toHaveLength(0);
     expect(tree.root.findAllByType("form")).toHaveLength(1);
     expect(state.reset).toHaveBeenCalledOnce();
+    expect(state.startDraft).toHaveBeenCalledOnce();
   });
 
   it("shows a manual-copy instruction if clipboard access fails", async () => {

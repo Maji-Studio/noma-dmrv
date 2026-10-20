@@ -5,6 +5,7 @@ import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-conte
 import { EventTimeInput } from "@/components/forms/event-time-input";
 
 import { useForm, useWatch } from "react-hook-form";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   FormEntitySelect,
@@ -100,6 +101,7 @@ export function StorageLocationForm({
     label: STORAGE_LOCATION_TYPE_SHORT_LABELS[type],
   }));
 
+  const latched = useLatchedSubmit();
   const {
     register,
     handleSubmit,
@@ -149,7 +151,7 @@ export function StorageLocationForm({
     ? "Update storage bin"
     : "Create storage bin";
 
-  const handleFormSubmit = handleSubmit((data) => {
+  const handleFormSubmit = latched(handleSubmit((data) => {
     const normalized = { ...data } as StorageLocationFormData;
     if (!isFeedstockBinType(normalized.type)) {
       normalized.feedstockTypeId = null;
@@ -164,7 +166,7 @@ export function StorageLocationForm({
       return;
     }
     return onSubmit(normalized);
-  });
+  }));
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">

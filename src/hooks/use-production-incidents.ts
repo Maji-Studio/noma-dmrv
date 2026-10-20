@@ -1,3 +1,4 @@
+import { useIntentMutation } from "./use-create-intent-key";
 import { patchArrayListCachesByPrefixWithSavedRow } from "./list-cache-utils";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 /**
@@ -49,9 +50,9 @@ export function useCreateProductionIncident(
 ) {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (data: CreateProductionIncidentData) =>
-      unwrap(await createProductionIncidentFn(data)),
+  return useIntentMutation({
+    mutationFn: async (data: CreateProductionIncidentData, intentKey) =>
+      unwrap(await createProductionIncidentFn(data, { intentKey })),
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({
         queryKey: productionIncidentKeys.list(variables.productionRunId),

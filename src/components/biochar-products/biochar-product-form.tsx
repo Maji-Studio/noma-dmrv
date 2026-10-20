@@ -11,6 +11,7 @@ import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-conte
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 
+import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
 import { EntitySelect, FormActions, FormField, FormInput, FormSection, FormSpine, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
 import { EventTimeInput } from "@/components/forms/event-time-input";
@@ -98,8 +99,8 @@ export function BiocharSourceMassFields({
 
 /**
  * The product composition under the mix fields, at both levels once the
- * biochar or an ingredient has a mass. Before that it is a key of
- * "Not available" rows that only explains what will appear, so only Detailed
+ * biochar or an ingredient has a mass. Before that it is a key of named
+ * parts with no figures that only explains what will appear, so only Detailed
  * shows it. Stock history lives on the storage bin, not here.
  */
 export function ProductCompositionBlock({
@@ -697,6 +698,7 @@ export function BiocharProductForm({
         submitDisabled={hasZeroSourceBiochar || submitDisabled}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        preview={<RecordCreditBatchLine kind="biochar-product" id={product?.id} />}
       />
     </div>
   );
