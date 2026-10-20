@@ -32,7 +32,7 @@ function DayHeader({ day }: { day: HistoryDay }) {
   return (
     <h4 className="flex flex-col gap-2 border-b border-[var(--clr-dark-purple-40)] pb-6 pt-12 body-caption text-[var(--color-text-tertiary)] sm:flex-row sm:justify-between sm:gap-12">
       <span>{day.day}</span>
-      {day.end.wetKg !== null && <span className="tabular-nums">{outputStockFigure(day.end.wetKg)} at day end</span>}
+      {day.end.wetKg !== null && <span className="tabular-nums">{outputStockFigure(day.end.wetKg, null)} at day end</span>}
     </h4>
   );
 }
@@ -42,10 +42,10 @@ function Headline({ wetKg, dryKg }: { wetKg: number | null; dryKg: number }) {
   return (
     <div className="flex flex-col gap-2">
       <p className="flex items-center gap-6 body-large font-medium tabular-nums">
-        {outputStockFigure(wetKg)}
+        {outputStockFigure(wetKg, dryKg)}
         {wetKg !== null && <InfoHint label="About wet mass">{WET_STOCK_DEFINITION}</InfoHint>}
       </p>
-      <SecondaryFigure label={DRY_BIOCHAR_LABEL} value={formatMassKg(dryKg)} />
+      {wetKg !== null && <SecondaryFigure label={DRY_BIOCHAR_LABEL} value={formatMassKg(dryKg)} />}
     </div>
   );
 }

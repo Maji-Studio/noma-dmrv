@@ -4,7 +4,7 @@
  */
 import { formatCompositionMass, type MassSegment } from "@/components/forms/composition-ledger";
 import { batchAccentFill } from "@/components/ui/segment-bar";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { formatMassKg } from "@/lib/format-utils";
 import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/types/output-stock";
 
 /**
@@ -59,8 +59,11 @@ export function formatWetEstimate(kg: number): string {
  * dry biochar. The stock card, the board's tile and the stock history all read
  * a bin this way.
  */
-export function outputStockFigure(wetKg: number | null): string {
-  return wetKg === null ? MISSING_VALUE.notAvailable : `${formatWetEstimate(wetKg)} kg wet mass`;
+export function outputStockFigure(wetKg: number | null, dryKg: number | null): string {
+  // Runs and products always carry moisture now (#1255), so a missing wet figure
+  // is a defect, not a state: show the dry biochar that is known, never a placeholder.
+  if (wetKg !== null) return `${formatWetEstimate(wetKg)} kg wet mass`;
+  return dryKg === null ? "" : `${formatMassKg(dryKg)} dry biochar`;
 }
 
 /**

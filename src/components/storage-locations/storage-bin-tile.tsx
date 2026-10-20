@@ -208,12 +208,12 @@ export function StorageBinTile({
  * holds is its one figure.
  */
 function TileFigure({ feedstock, archived, massKg, wetEstimateKg }: { feedstock: boolean; archived: boolean; massKg: number | null; wetEstimateKg: number | null }) {
-  if (!feedstock && wetEstimateKg != null && wetEstimateKg > 0) return outputStockFigure(wetEstimateKg);
+  if (!feedstock && wetEstimateKg != null && wetEstimateKg > 0) return outputStockFigure(wetEstimateKg, massKg);
   if (massKg == null) return MISSING_VALUE.notAvailable;
   if (massKg === 0) return "Empty";
   if (feedstock) return `${formatMassKg(massKg)} wet mass`;
   if (archived) return `${formatMassKg(massKg)} dry biochar`;
-  return outputStockFigure(wetEstimateKg);
+  return outputStockFigure(wetEstimateKg, massKg);
 }
 
 /**
