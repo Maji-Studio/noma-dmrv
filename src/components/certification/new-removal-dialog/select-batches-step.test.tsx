@@ -50,7 +50,7 @@ describe("SelectBatchesStep", () => {
     // The box names its batch with a link to the batch page, and its dry mass.
     expect(html).toContain('href="/credit-batches/batch-1?facility=facility-1"');
     expect(html).toContain("CB-1");
-    expect(html).toContain("8.40 t");
+    expect(html).toContain("8.40 t dry");
     expect(html).not.toContain("Ready to certify");
     expect(html).toContain("1,000-year biochar sequestration");
     expect(html).not.toContain("biochar_sequestration_1000_year");
@@ -106,6 +106,24 @@ describe("SelectBatchesStep", () => {
     // Only ready batches can be selected; unknown dry mass is not a zero.
     expect(html).not.toContain("Select credit batch for Jul 1 to Jul 31, 2026, CB-2");
     expect(html).toContain("Not available");
+  });
+
+  it("names a single open check without a count tail", () => {
+    const one = {
+      ...READY_BATCH,
+      id: "batch-3",
+      code: "CB-3",
+      health: {
+        state: "incomplete",
+        issueCount: 1,
+        checks: [{ key: "templateSet", status: "unmet", label: "Template set", requirementLabel: "Template set", unmetLabel: "No Removal template chosen" }],
+      },
+    } as unknown as SelectableBatch;
+    const html = renderToStaticMarkup(
+      <SelectBatchesStep batches={[one]} facilitySetupGaps={[]} facilityId="facility-1" selectedIds={new Set()} onToggle={vi.fn()} isLoading={false} isError={false} />,
+    );
+    expect(html).toContain("1 issue: No Removal template chosen<");
+    expect(html).not.toContain("more");
   });
 
   it("keeps Continue disabled while facility setup is incomplete", () => {

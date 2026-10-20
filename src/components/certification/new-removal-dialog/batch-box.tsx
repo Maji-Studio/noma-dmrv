@@ -67,7 +67,7 @@ function BatchCodeLink({ batch, facilityId }: { batch: SelectableBatch; facility
       href={creditBatchDeepLinkHref(batch.id, facilityId)}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-4 body-small font-medium font-mono text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline"
+      className="-my-12 inline-flex min-h-44 items-center gap-4 body-small font-medium font-mono text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline"
     >
       {batch.code}
       <ArrowSquareOutIcon size={LINK_ICON} aria-hidden />
@@ -86,7 +86,7 @@ function BatchHeading({ batch, facilityId }: { batch: SelectableBatch; facilityI
   );
 }
 
-/** Applied dry mass; an unknown mass reads as the placeholder, not a zero. */
+/** Applied dry mass of the slices not yet in a Removal; an unknown mass reads as the placeholder, not a zero. */
 function DryMass({ tons, className }: { tons: number | null; className?: string }) {
   return (
     <span
@@ -97,6 +97,7 @@ function DryMass({ tons, className }: { tons: number | null; className?: string 
       )}
     >
       {formatTonnes(tons)}
+      {tons != null && " dry"}
     </span>
   );
 }
@@ -171,7 +172,7 @@ export function NotReadyBatchBox({
         target="_blank"
         rel="noopener noreferrer"
         aria-label={`${OPEN_CHECKLIST_LABEL} for ${batch.code}`}
-        className="col-start-1 row-start-3 inline-flex min-h-44 items-center gap-4 justify-self-start body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline sm:col-start-2 sm:row-start-2 sm:min-h-0 sm:justify-self-end"
+        className="col-start-1 row-start-3 inline-flex min-h-44 items-center gap-4 justify-self-start body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline sm:col-start-2 sm:row-start-2 sm:-my-12 sm:justify-self-end"
       >
         {OPEN_CHECKLIST_LABEL}
         <ArrowSquareOutIcon size={LINK_ICON} aria-hidden />
