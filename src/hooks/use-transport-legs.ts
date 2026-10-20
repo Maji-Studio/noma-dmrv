@@ -1,4 +1,4 @@
-import { useCreateIntentKey } from "./use-create-intent-key";
+import { useIntentMutation } from "./use-create-intent-key";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { patchArrayListCachesByPrefixWithSavedRow } from "./list-cache-utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -62,12 +62,11 @@ export function useCreateTransportLeg(
   callbacks?: MutationCallbacks<TransportLeg, CreateTransportLegData>,
 ) {
   const queryClient = useQueryClient();
-  const intent = useCreateIntentKey();
-  const mutation = useMutation({
-    mutationFn: async ({ intentKey, ...input }: CreateTransportLegData & { intentKey?: string }): Promise<TransportLeg> =>
-      unwrap(await createTransportLegFn(input, { intentKey: intentKey ?? intent.current() })),
+  return useIntentMutation({
+    // A pending Sample leg brings its own key; the dialog draft uses the hook's.
+    mutationFn: async ({ intentKey, ...input }: CreateTransportLegData & { intentKey?: string }, draftKey): Promise<TransportLeg> =>
+      unwrap(await createTransportLegFn(input, { intentKey: intentKey ?? draftKey })),
     onSuccess: async (data, variables) => {
-      if (variables.intentKey === undefined) intent.rotate();
       await queryClient.invalidateQueries({
         queryKey: transportLegKeys.byEntity(
           variables.entityType,
@@ -85,7 +84,6 @@ export function useCreateTransportLeg(
     onMutate: callbacks?.onMutate,
     onSettled: callbacks?.onSettled,
   });
-  return { ...mutation, startDraft: intent.rotate };
 }
 
 export function useUpdateTransportLeg(

@@ -1,4 +1,4 @@
-import { useCreateIntentKey } from "./use-create-intent-key";
+import { useIntentMutation } from "./use-create-intent-key";
 import { patchArrayListCachesByPrefixWithSavedRow } from "./list-cache-utils";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 /**
@@ -67,13 +67,11 @@ export function useCreateProductionSample(
   >
 ) {
   const queryClient = useQueryClient();
-  const intent = useCreateIntentKey();
 
-  const mutation = useMutation({
-    mutationFn: async (data: CreateProductionSampleData) =>
-      unwrap(await createProductionSampleFn(data, { intentKey: intent.current() })),
+  return useIntentMutation({
+    mutationFn: async (data: CreateProductionSampleData, intentKey) =>
+      unwrap(await createProductionSampleFn(data, { intentKey })),
     onSuccess: (data, variables) => {
-      intent.rotate();
       queryClient.invalidateQueries({
         queryKey: productionSampleKeys.list(variables.productionRunId),
       });
@@ -85,7 +83,6 @@ export function useCreateProductionSample(
     onError: callbacks?.onError,
     onSettled: callbacks?.onSettled,
   });
-  return { ...mutation, startDraft: intent.rotate };
 }
 
 /**
