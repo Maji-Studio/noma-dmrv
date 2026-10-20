@@ -392,14 +392,26 @@ runs passed. Two guards:
   (`...(await importOriginal<typeof import("@/config/env")>())`), then override
   only what the test needs. `vi.mock(path)` without a factory, and a factory
   that only throws (a "must not load" tripwire), are allowed.
-- **Pre-push:** `.githooks/pre-push` runs `pnpm vitest related --run` on the
-  `src/` and `tests/` files changed since the merge-base with `origin/staging`.
-  It skips when only docs or other non-code files changed, and it never runs
-  the full suite (CI does). `new` in `scripts/worktree.sh` enables it with
-  `git config --worktree core.hooksPath .githooks`, which stays local to that
-  worktree (the repo already sets `extensions.worktreeConfig`). In an older
-  checkout run that command once yourself. Skip it for one push with
+- **Pre-push:** `.githooks/pre-push` runs two bounded stages on the `src/` and
+  `tests/` files changed since the merge-base with `origin/staging`:
+  1. Always: changed test files plus test files that `vi.mock(` a changed
+     module by its `@/` alias path (`src/lib/api/problem.ts` matches
+     `@/lib/api/problem`; an index file also matches its directory and
+     `/index`). `pnpm vitest run`; a failure blocks the push.
+  2. Then `pnpm vitest related --run`, cut off after
+     `PRE_PUSH_RELATED_TIMEOUT_SECONDS` (default 300, overridable by env). On a
+     cut-off it prints one line, CI runs the rest, and the push goes through; a
+     real failure inside the bound blocks.
+
+  It skips when only docs or other non-code files changed and on deletion-only
+  pushes, and never runs the full suite (CI does). `new` in `scripts/worktree.sh`
+  enables it with `git config --worktree core.hooksPath .githooks`, which stays
+  local to that worktree (the repo already sets `extensions.worktreeConfig`). In
+  an older checkout run that command once yourself. Skip it for one push with
   `git push --no-verify`.
+- **Known gaps:** the lint selector misses an aliased `vi`, a factory passed by
+  identifier, and the `vi.mock(import("@/config/env"), ...)` form (none used
+  today). The stage 1 match ignores relative-path mocks.
 
 ## E2E data naming is a hard contract
 
