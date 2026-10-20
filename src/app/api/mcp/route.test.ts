@@ -79,11 +79,11 @@ const ENVELOPE = {
   "io.modelcontextprotocol/clientInfo": { name: "unit-test", version: "1" },
 };
 const rateHeaders = { "RateLimit-Limit": "600", "RateLimit-Remaining": "599", "RateLimit-Reset": "1" };
-function rpc(method: string, params: Record<string, unknown> = {}, headers: Record<string, string> = {}) {
+function rpc(method: string, params: Record<string, unknown> = {}, headers: Record<string, string> = {}, id = 1) {
   return new Request(ENDPOINT, { method: "POST", headers: {
     "content-type": "application/json", accept: "application/json, text/event-stream",
     "mcp-protocol-version": "2025-06-18", authorization: "Bearer test-key", ...headers,
-  }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+  }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params }) });
 }
 async function body(response: Response) {
   const text = await response.text();
@@ -285,11 +285,9 @@ describe("authenticated MCP read route", () => {
   });
 });
 
-it("serves read results on MCP revision 2026-07-28", async () => {
-  const request = rpc("tools/call", { name: "whoami", arguments: {}, _meta: {
-    "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-    "io.modelcontextprotocol/clientCapabilities": {},
-  } }, { "mcp-protocol-version": "2026-07-28", "mcp-method": "tools/call", "mcp-name": "whoami" });
+it(`serves read results on MCP revision ${MODERN_REVISION}`, async () => {
+  const request = modernRequest("tools/call", 1, { name: "whoami", arguments: {} });
+  request.headers.set("mcp-name", "whoami");
   const response = await POST(request);
   const payload = await body(response);
   expect(response.status, JSON.stringify(payload)).toBe(200);
@@ -506,10 +504,9 @@ it.each(LOCATION_WRITE_TOOLS)("returns a retryable deadline result for %s before
 });
 
 function modernRequest(method: string, id: number, params: Record<string, unknown> = {}) {
-  return new Request(ENDPOINT, { method: "POST", headers: {
-    "content-type": "application/json", accept: "application/json, text/event-stream", authorization: "Bearer test-key",
+  return rpc(method, { ...params, _meta: ENVELOPE }, {
     "mcp-protocol-version": MODERN_REVISION, "mcp-method": method,
-  }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params: { ...params, _meta: ENVELOPE } }) });
+  }, id);
 }
 
 async function readsToEnd(response: Response) {
@@ -531,5 +528,5 @@ it("does not advertise tool list changes and closes subscriptions/listen at once
   expect(listen.status).toBe(200);
   expect(await readsToEnd(listen)).toBe(true);
   const discover = await (await POST(modernRequest("server/discover", 2))).json();
-  expect(discover.result.capabilities.tools.listChanged).not.toBe(true);
+  expect(discover.result.capabilities.tools.listChanged).toBe(false);
 });
