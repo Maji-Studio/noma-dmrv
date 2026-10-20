@@ -8,8 +8,8 @@
  * the shared focus target scrolls to it. The block says why the operator landed
  * here once: its own Notice when the pin is missing, else a neutral line.
  *
- * While the pinned template has lines to decide, every role sees it here with
- * the count the Lines decided check uses (#1201); Owners and Admins also get
+ * While the pinned template has components to decide, every role sees it here with
+ * the count the Components decided check uses (#1201); Owners and Admins also get
  * the link to decide them.
  */
 "use client";
@@ -25,7 +25,7 @@ import { useFacilityCertifierSummary, useIsometricProjectTemplates } from "@/hoo
 import { useCreditBatch } from "@/hooks/use-credit-batches";
 import { useRemovalTemplateReview } from "@/hooks/use-removal-template-review";
 import { templateReadiness } from "@/components/certification/removal-template-review-model";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { LOAD_FAILED, NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
 import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
 import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL } from "@/lib/certification/links";
 import { linesDecidedByOwnerOrAdmin, linesToDecideLabel } from "@/lib/certification/requirement-labels";
@@ -42,7 +42,7 @@ export interface CreditBatchRemovalTemplateProps {
   /** The deep-link focus target, when this sheet was opened by one. */
   activeFocusTarget?: string | null;
   /**
-   * The batch's Lines decided count (`batchLinesToDecide`), from the health the
+   * The batch's Components decided count (`batchLinesToDecide`), from the health the
    * page or the list already loads; 0 when none or not loaded yet.
    */
   linesToDecide: number;
@@ -51,8 +51,8 @@ export interface CreditBatchRemovalTemplateProps {
 }
 
 /**
- * Why a credit batch with lines to decide can't go into a Removal, and who
- * decides them. Owners and Admins get the Decide lines link instead of the
+ * Why a credit batch with components to decide can't go into a Removal, and who
+ * decides them. Owners and Admins get the Decide components link instead of the
  * second sentence.
  */
 export function linesToDecideNoticeText(count: number, canManage: boolean, inRemoval = false): string {
@@ -89,7 +89,18 @@ export function CreditBatchRemovalTemplate({
   const lookupSettled = !!projectId && templates.isSuccess;
   const pinnedMissing = !!pinnedId && lookupSettled && !pinned;
   const namePending = !!pinnedId && !pinned && !lookupSettled && !templates.isError && (summary.isLoading || templates.isLoading);
-  const value = pinnedId ? pinned?.display_name ?? MISSING_VALUE.notAvailable : null;
+  // A pin whose name cannot be read says why: gone from Isometric, a failed
+  // lookup, or no project to look it up in. Null while the name loads.
+  const reason = !pinnedId || pinned
+    ? null
+    : pinnedMissing
+      ? NOT_FOUND_ON_ISOMETRIC
+      : templates.isError || summary.isError
+        ? LOAD_FAILED
+        : summary.isSuccess && !projectId
+          ? "No Isometric project linked"
+          : null;
+  const value = pinned?.display_name ?? reason;
   const linesToDecide = pinnedId && !pinnedMissing ? undecidedLines : 0;
 
   // The two Notices below already say why an unpinned or vanished pin needs
@@ -108,6 +119,7 @@ export function CreditBatchRemovalTemplate({
           label="Removal template"
           value={value}
           emptySituation="notSet"
+          valuePresent={reason ? false : undefined}
           pending={namePending}
           className="min-w-0 flex-1"
         />

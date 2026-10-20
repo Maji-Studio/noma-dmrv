@@ -16,7 +16,7 @@ import {
   type LineSources,
 } from "@/lib/isometric/template-observations/line-sources";
 import type { ComponentEnrichment, EntryPolicy, QuantityKind } from "@/lib/isometric/template-observations/types";
-import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
+import { humanizeEnum, ISOMETRIC_GIVES_NO_UNIT, MISSING_VALUE, UNIT_NOT_READ } from "@/lib/copy-utils";
 import { isTemplateReady, linesToDecideCount } from "@/lib/certification/removal-template-readiness";
 import { sectionTemplateLines, type TemplateLineSection } from "@/lib/isometric/template-observations/template-sections";
 import { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE } from "@/lib/certification/requirement-labels";
@@ -70,7 +70,7 @@ export const ORIGIN_LABELS: Record<LineContract["origin"], string> = {
 /** Line badges. Unchanged lines carry none. */
 export const CHANGE_LABELS: Partial<Record<ComponentChange, string>> = {
   changed: "Changed",
-  added: "New line",
+  added: "New component",
   cosmetic: "Wording changed",
 };
 
@@ -78,16 +78,18 @@ export const CHANGE_LABELS: Partial<Record<ComponentChange, string>> = {
 const PROBLEM_COPY: Partial<Record<LineSourceProblem["code"], string>> = {
   "single-with-automatic-source":
     "One entry per batch cannot add to automatic datapoints. Remove the automatic datapoints.",
-  "foreign-automatic-source": "These automatic datapoints do not fit this line. Choose others.",
+  "foreign-automatic-source": "These automatic datapoints do not fit this component. Choose others.",
   "retired-automatic-source": "These automatic datapoints are no longer available. Choose others or allow entries for this component.",
-  "disallowed-entry-policy": "This entry rule does not fit the line's inputs. Choose another one.",
-  ambiguous: "Another line uses the same automatic datapoints. Give them to one line only.",
-  "missing-contract": "This line has no contract yet. Assign one.",
+  "disallowed-entry-policy": "This entry rule does not fit the component's inputs. Choose another one.",
+  ambiguous: "Another component uses the same automatic datapoints. Give them to one component only.",
+  "missing-contract": "This component has no contract yet. Assign one.",
 };
 
 /** The badge on a line without a saved decision. */
 export const TO_DECIDE_LABEL = "To decide";
 export const DEPRECATED_FACTORS_LABEL = "Deprecated factors";
+/** The card name of a template Isometric no longer lists. Isometric keeps its capital. */
+export const MISSING_TEMPLATE_NAME = "Template not found on Isometric";
 
 export function sourceLabel(source: AutomaticSourceId | undefined): string {
   return source ? SOURCE_LABELS[source] : MISSING_VALUE.none;
@@ -112,10 +114,15 @@ export function quantityKindLabel(kind: QuantityKind): string {
   return humanizeEnum(kind);
 }
 
-/** The unit Isometric gave this input, or the not-available token when it gave none. */
+/**
+ * The unit Isometric gave this input. Without an enrichment, or with an entry
+ * whose read failed, the unit was not read; only an entry read successfully
+ * with an empty unit is Isometric giving none.
+ */
 export function inputUnitLabel(enrichment: ComponentEnrichment | undefined, inputKey: string): string {
   const input = enrichment?.[inputKey];
-  return input && "unit" in input && input.unit ? input.unit : MISSING_VALUE.notAvailable;
+  if (!input || !("unit" in input)) return UNIT_NOT_READ;
+  return input.unit || ISOMETRIC_GIVES_NO_UNIT;
 }
 
 /**
@@ -163,7 +170,8 @@ export function isNotFullyRead(entry: RemovalTemplateReviewEntry): boolean {
 }
 
 export function templateName(entry: RemovalTemplateReviewEntry): string {
-  return entry.template?.display_name ?? MISSING_VALUE.notAvailable;
+  // Only a template Isometric no longer lists comes without a template.
+  return entry.template?.display_name ?? MISSING_TEMPLATE_NAME;
 }
 
 /** Fixed factors Isometric reports as deprecated, or null when it reports none. */
@@ -184,9 +192,9 @@ export function changeSummary(changes: RemovalTemplateReviewEntry["changes"]): s
   if (values.length === 0) return "No earlier read to compare with.";
   const count = (change: ComponentChange) => values.filter((value) => value === change).length;
   const parts = [
-    count("changed") && plural(count("changed"), "line changed", "lines changed"),
-    count("added") && plural(count("added"), "new line", "new lines"),
-    count("removed") && plural(count("removed"), "line removed", "lines removed"),
+    count("changed") && plural(count("changed"), "component changed", "components changed"),
+    count("added") && plural(count("added"), "new component", "new components"),
+    count("removed") && plural(count("removed"), "component removed", "components removed"),
     count("cosmetic") && plural(count("cosmetic"), "wording change", "wording changes"),
   ].filter(Boolean);
   return parts.length === 0 ? "No changes since the last read." : `Since the last read: ${parts.join(", ")}.`;
@@ -194,8 +202,8 @@ export function changeSummary(changes: RemovalTemplateReviewEntry["changes"]): s
 
 export function reviewCountSummary(lineCount: number, toDecide: number): string {
   return toDecide === 0
-    ? `${plural(lineCount, "line", "lines")}, all decided.`
-    : `${toDecide} of ${plural(lineCount, "line", "lines")} to decide.`;
+    ? `${plural(lineCount, "component", "components")}, all decided.`
+    : `${toDecide} of ${plural(lineCount, "component", "components")} to decide.`;
 }
 
 /** Isometric's section names on its template page. */
@@ -215,9 +223,9 @@ export const NOT_SET_UP_TITLE = "Not set up yet";
 /** Whether a Removal template can be chosen for a credit batch, and why not. */
 export interface TemplateReadiness {
   ready: boolean;
-  /** Why it cannot be chosen yet: "3 lines to decide", "Not set up yet". */
+  /** Why it cannot be chosen yet: "3 components to decide", "Not set up yet". */
   reason?: string;
-  /** Lines without a decision; only then does the link say "Decide lines". */
+  /** Lines without a decision; only then does the link say "Decide components". */
   toDecide?: number;
 }
 

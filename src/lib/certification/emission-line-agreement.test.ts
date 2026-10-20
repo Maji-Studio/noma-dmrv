@@ -57,6 +57,7 @@ it.each(cases)("coverage, readiness and submission agree for %s", (name, code, r
   if (code === "lineNeedsReview") expect(lines[0].blocker?.fixTarget).toBe("templateLineReview");
   expect(coverage[0]?.reason).toBe(reason);
   const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], {
+    facilityTimezone: "UTC",
     templatesById: { [template.id]: { template, observation: { lineSources: sources }, enrichmentProblems: [],
       lineSourceProblems: validateLineSources(normalizeTemplateDefinition(template), sources),
       blueprintsForTemplate: [], unresolvedBlueprintKeys: [], unbindableTemplateInputs: coverage, requiredTransportCategories: [],
@@ -72,7 +73,7 @@ it.each(cases)("coverage, readiness and submission agree for %s", (name, code, r
     emissionLineBlockers: resolved.emissionLines?.flatMap((line) => line.blocker ? [line.blocker] : []),
   };
   expect(deriveRemovalReadiness(facts).state === "ready").toBe(!code);
-  // Line findings are template line problems: the template itself stays set.
+  // Line findings are template component problems: the template itself stays set.
   expect(buildRemovalRequirementsChecklist(facts).find((check) => check.key === "templateSet")?.status).toBe("met");
   expect(buildRemovalRequirementsChecklist(facts).find((check) => check.key === "templateLines")?.status).toBe(code ? "unmet" : "met");
   const agg = { ...aggregateProductionRuns([{ id: "run", code: "RUN", startTime: new Date("2026-10-01"), endTime: new Date("2026-10-02"), electricityKwh: 10 } as ProductionRunForCertification]), weightedOrganicCarbonPercent: null, weightedHToCorgRatio: null, weightedOToCorgRatio: null } satisfies AggregatedProductionData;

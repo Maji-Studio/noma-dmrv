@@ -55,12 +55,12 @@ describe("units and totals", () => {
     expect(lineTotalText(makeLine({ state: "filled", total: { magnitude: "19880", unit: "kWh" } }))).toBe("19,880 kWh");
   });
 
-  it("reads Not available, never Not recorded, when a line holds figures that do not add up", () => {
+  it("leaves the Total out, never Not recorded, when a line holds figures that do not add up", () => {
     const mixedUnits = makeLine({ state: "needsReview", entries: [makeEntry({ values: [{ id: "v1", organizationId: "org", entryId: "entry-1", inputKey: "energy", magnitude: "3.2", unit: "MWh", massDistanceDetail: null }], total: null })] });
-    expect(lineTotalText(mixedUnits)).toBe("Not available");
-    expect(lineTotalText(makeLine({ state: "needsReview", entries: [makeEntry({ counts: false })] }))).toBe("Not available");
+    expect(lineTotalText(mixedUnits)).toBeNull();
+    expect(lineTotalText(makeLine({ state: "needsReview", entries: [makeEntry({ counts: false })] }))).toBeNull();
     const records = { source: "productionRuns" as const, count: 3, figure: { magnitude: "72", unit: "kWh" } };
-    expect(lineTotalText(makeLine({ state: "needsReview", records } as never))).toBe("Not available");
+    expect(lineTotalText(makeLine({ state: "needsReview", records } as never))).toBeNull();
     expect(lineTotalText(makeLine({ records: { ...records, figure: null } } as never))).toBe("Not recorded");
   });
 
@@ -123,7 +123,7 @@ describe("add manual entry", () => {
     const single = makeLine({ entryPolicy: "single" });
     expect(addEntryRefusal(single)).toBeNull();
     expect(addEntryRefusal({ ...single, entries: [makeEntry()] })).toBe("One manual entry per credit batch");
-    expect(addEntryRefusal(makeLine({ entryPolicy: "none" }))).toBe("This line takes no manual entries");
+    expect(addEntryRefusal(makeLine({ entryPolicy: "none" }))).toBe("This component takes no manual entries");
   });
 
   it("splits a mass-distance input into mass and distance and sends the exact product", () => {
@@ -174,7 +174,7 @@ describe("filters and groups", () => {
     expect(lineMatches(makeLine({ state: "empty" }), "notRecorded")).toBe(true);
     expect(lineMatches(makeLine({ state: "filled" }), "open")).toBe(false);
   });
-  it("groups template lines in order under the server's group names", () => {
+  it("groups template components in order under the server's group names", () => {
     const groups = groupLines([
       makeLine({ componentId: "a", groupKey: "co2-stored", groupName: "CO₂ stored" }),
       makeLine({ componentId: "b", groupKey: "co2-stored", groupName: "CO₂ stored" }),

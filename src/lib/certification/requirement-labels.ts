@@ -70,13 +70,13 @@ export const NO_REMOVAL_TEMPLATE_LABEL = "No Removal template chosen";
 /** The unmet Emissions label when an entry needs checking rather than a file. */
 export const EMISSION_ENTRIES_TO_CHECK_LABEL = "Emissions entries to check";
 
-/** Who settles lines to decide, for a viewer who can't: members read this instead of a Decide lines link. */
+/** Who settles components to decide, for a viewer who can't: members read this instead of a Decide components link. */
 export function linesDecidedByOwnerOrAdmin(count: number): string {
   return `An Owner or Admin decides ${count === 1 ? "it" : "them"} in Removal templates.`;
 }
 
-/** The unmet Lines decided label when no line is undecided: the read or the lines are the problem. */
-export const TEMPLATE_LINES_NOT_READY_LABEL = "Template lines not ready";
+/** The unmet Components decided label when no line is undecided: the read or the lines are the problem. */
+export const TEMPLATE_LINES_NOT_READY_LABEL = "Template components not ready";
 
 export const TEMPLATE_NOT_FULLY_READ_TITLE = "Template not fully read";
 
@@ -156,10 +156,10 @@ export const CERT_REQUIREMENT_META: Record<
       "Each credit batch uses one Removal template from the facility's Isometric project. Removals are built from that template, so Isometric must still list it as a Removal template.",
   },
   templateLines: {
-    requirementLabel: "Lines decided",
+    requirementLabel: "Components decided",
     unmetLabel: TEMPLATE_LINES_NOT_READY_LABEL,
     whyDetail:
-      "noma fills each template line from its records or from emissions entries, as decided in Removal templates. A line without a decision, or a template Isometric did not return in full, blocks Removals on that template.",
+      "noma fills each template component from its records or from emissions entries, as decided in Removal templates. A component without a decision, or a template Isometric did not return in full, blocks Removals on that template.",
   },
   evidence: {
     requirementLabel: "Registry value sources linked",
@@ -178,9 +178,9 @@ export const CERT_REQUIREMENT_META: Record<
 /** Suffix that turns a per-field entity readiness label ("Proof of delivery") into its unmet form. */
 export const ENTITY_FIELD_UNMET_SUFFIX = "not complete";
 
-/** "3 lines to decide", the one phrase every template surface counts with. */
+/** "3 components to decide", the one phrase every template surface counts with. */
 export function linesToDecideLabel(count: number): string {
-  return `${count} ${count === 1 ? "line" : "lines"} to decide`;
+  return `${count} ${count === 1 ? "component" : "components"} to decide`;
 }
 
 /** A count names undecided lines; otherwise name the read or filling problem. */

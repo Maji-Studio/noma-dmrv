@@ -368,7 +368,7 @@ export function SupplierList() {
     setLifecycleError(null);
   };
 
-  const openCreate = () => { clearDeepLink(); setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
+  const openCreate = () => { createSupplier.startDraft(); clearDeepLink(); setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
   const openView = (supplier: SupplierWithRelations) => { clearDeepLink(); setSideSheet({ entity: supplier, mode: "view" }); };
   const openEdit = (supplier: SupplierWithRelations) => { clearDeepLink(); setCreateError(null); setUpdateError(null); setSideSheet({ entity: supplier, mode: "edit" }); };
   const closeSideSheet = () => { clearDeepLink(); setSideSheet(null); setCreateError(null); setUpdateError(null); setLifecycleError(null); };
@@ -402,7 +402,6 @@ export function SupplierList() {
       <PageHeader
         area="distribution"
         title="Suppliers"
-        subtitle="Biomass suppliers and their source sites"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -417,7 +416,6 @@ export function SupplierList() {
           title={showArchived ? "Archived suppliers" : "Active suppliers"}
           value={totalSuppliers}
           icon={<UsersIcon size={24} weight="bold" />}
-          description="Biomass feedstock providers"
           isLoading={isLoading}
         />
       </div>

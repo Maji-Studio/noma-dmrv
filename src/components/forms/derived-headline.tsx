@@ -8,12 +8,12 @@
  * picture, a key line or a calculation row.
  *
  * Unit and approximation belong in the figure ("≈ 1,110 kg"), so the label stays
- * a plain name. A figure that cannot be derived yet passes `null` and reads as
- * "Not available", muted, so the block still says which figure is missing.
+ * a plain name. A figure that cannot be derived yet passes `null` and is left
+ * out: the label stays with `sub` saying why ("Needs hydrogen and organic
+ * carbon"), and with no `sub` either the headline renders nothing.
  */
 import type { ReactNode } from "react";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { SecondaryFigure } from "@/components/ui/secondary-figure";
 
 const ARROW_ICON_PX = 18;
@@ -21,17 +21,17 @@ const ARROW_ICON_PX = 18;
 export function DerivedHeadline({ label, value, before, secondary, sub, figureLabel }: {
   /** Names the figure. Caption style, above it. */
   label?: ReactNode;
-  /** The figure, or the value after the change when `before` is set. Null when it cannot be derived. */
+  /** The figure, or the value after the change when `before` is set. Null when it cannot be derived, and then left out. */
   value: ReactNode;
   /** The value before the change, muted and followed by an arrow. */
   before?: ReactNode;
   /**
    * A second figure under the headline, such as the dry stock under a wet
-   * estimate. Data, so it shows at both detail levels. Null value reads
-   * "Not available".
+   * estimate. Data, so it shows at both detail levels. A null value leaves the
+   * line out.
    */
   secondary?: { label: ReactNode; value: ReactNode; };
-  /** One caption line under the figure, such as the entry behind it. */
+  /** One caption line under the figure, such as the entry behind it, or why there is no figure. */
   sub?: ReactNode;
   /**
    * Accessible name for the figure row, read as one phrase instead of the
@@ -39,6 +39,8 @@ export function DerivedHeadline({ label, value, before, secondary, sub, figureLa
    */
   figureLabel?: string;
 }) {
+  const hasFigure = value != null || before != null;
+  if (!hasFigure && sub == null) return null;
   return (
     <div className="flex flex-col gap-2">
       {label != null && (
@@ -46,7 +48,7 @@ export function DerivedHeadline({ label, value, before, secondary, sub, figureLa
           {label}
         </div>
       )}
-      <div
+      {hasFigure && <div
         className="flex flex-wrap items-center gap-x-8 body-large font-medium tabular-nums"
         role={figureLabel ? "group" : undefined}
         aria-label={figureLabel}
@@ -62,16 +64,10 @@ export function DerivedHeadline({ label, value, before, secondary, sub, figureLa
             {!figureLabel && <span className="sr-only">to</span>}
           </>
         )}
-        {value == null
-          ? <span className="font-light text-[var(--color-text-tertiary)]">{MISSING_VALUE.notAvailable}</span>
-          : <span>{value}</span>}
-      </div>
-      {secondary && (
-        <SecondaryFigure
-          label={secondary.label}
-          value={secondary.value ?? MISSING_VALUE.notAvailable}
-          empty={secondary.value == null}
-        />
+        {value != null && <span>{value}</span>}
+      </div>}
+      {secondary && secondary.value != null && (
+        <SecondaryFigure label={secondary.label} value={secondary.value} />
       )}
       {sub != null && (
         <div className="body-caption text-[var(--color-text-secondary)]">{sub}</div>

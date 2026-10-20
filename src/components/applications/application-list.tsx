@@ -100,7 +100,8 @@ function createColumns(
         return (
           <div className="flex flex-col">
             <span className="text-[var(--color-text-primary)]">
-              {customerName ?? MISSING_VALUE.notAvailable}
+              {/* A delivery without an order has no customer: the relation was never chosen. */}
+              {customerName ?? MISSING_VALUE.notSet}
             </span>
             {locationName && (
               <span className="text-[var(--text-s)] text-[var(--color-text-tertiary)]">{locationName}</span>
@@ -527,7 +528,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         <PageHeader
           area="distribution"
           title="Applications"
-          subtitle="Field applications of biochar to soil"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its applications." />
       </div>
@@ -573,7 +573,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       <PageHeader
         area="distribution"
         title="Applications"
-        subtitle="Field applications of biochar to soil"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />
@@ -588,14 +587,12 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           title="Total applications"
           value={totalApplications}
           icon={<MapPinIcon size={24} weight="bold" />}
-          description="Field applications"
           isLoading={isLoading}
         />
         <StatCard
-          title="Biochar applied"
+          title="Biochar applied on this page"
           value={formatApplicationKgFromTons(totalBiochar)}
           icon={<LeafIcon size={24} weight="bold" />}
-          description="Biochar applied on this page"
           isLoading={isLoading}
         />
       </div>

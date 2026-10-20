@@ -1,6 +1,6 @@
 /**
  * CreditBatchEmissionsPanel: the batch sheet's "Emissions" section. It lists
- * the template lines that still need an operator (Not recorded, File missing,
+ * the template components that still need an operator (Not recorded, File missing,
  * Check entry, Not set up) and links to the Emissions page for the batch.
  * Self-fetching and read-only; recording happens on the Emissions page.
  */
@@ -90,7 +90,7 @@ export function CreditBatchEmissionsPanel({
         <div className="flex items-center justify-between gap-12">
           <span className="flex items-center gap-8 body-small text-[var(--color-text-secondary)]">
             <CheckCircleIcon size={16} weight="bold" aria-hidden />
-            All lines recorded
+            All components recorded
           </span>
           <OpenEmissionsLink creditBatchId={creditBatchId} facilityId={facilityId} />
         </div>
@@ -102,7 +102,7 @@ export function CreditBatchEmissionsPanel({
     <PanelSection>
       <div className="flex flex-col gap-8">
         <span className="body-caption text-[var(--color-text-tertiary)]">
-          {open.length} of {lines.length} {lines.length === 1 ? "line" : "lines"} still open
+          {open.length} of {lines.length} {lines.length === 1 ? "component" : "components"} still open
         </span>
         <SheetLinkRows>
           {open.map((line) => (

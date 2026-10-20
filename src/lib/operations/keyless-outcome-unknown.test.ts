@@ -8,7 +8,7 @@ describe("keylessOutcomeUnknown", () => {
   it("replaces the retry-with-key advice for callers without an idempotency key", () => {
     const lost = new DomainError("outcome_unknown", "Retry with the same Idempotency-Key.");
     expect(keylessOutcomeUnknown(lost)).toMatchObject({
-      code: "outcome_unknown", message: "It is not known whether this change was saved. Check the list before trying again.",
+      code: "outcome_unknown", message: "The app could not confirm that it saved this change. Check the list before trying again.",
     });
   });
   it("passes every other error through unchanged", () => {

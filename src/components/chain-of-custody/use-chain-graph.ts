@@ -161,10 +161,9 @@ function massLabel(mass: EdgeMass | null): string | null {
   return mass.unit === "kg" ? formatKg(mass.value) : formatDryTons(mass.value);
 }
 
-function formatShare(fraction: number): string {
-  if (!Number.isFinite(fraction) || fraction <= 0) {
-    return MISSING_VALUE.notAvailable;
-  }
+/** A share is derived, so one that cannot be worked out is left off the edge. */
+function formatShare(fraction: number): string | null {
+  if (!Number.isFinite(fraction) || fraction <= 0) return null;
   if (fraction < SUB_ONE_PERCENT) return "<1%";
   if (fraction >= NEAR_FULL_PERCENT) return "100%";
   return `${Math.round(fraction * 100)}%`;

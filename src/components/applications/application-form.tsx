@@ -25,6 +25,7 @@ import { useController, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { PackageIcon, MapPinIcon, FileIcon, MapTrifoldIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
+import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
 import { EntitySelect, FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
@@ -615,7 +616,6 @@ export function ApplicationForm({
       <FormSection
         title="Evidence method"
         icon={<MapTrifoldIcon size={14} weight="bold" />}
-        hint="Choose one way to identify where the biochar was applied."
         fields={["evidenceMethod", "gisBoundary"]}
       >
         <ApplicationEvidencePanel
@@ -711,6 +711,7 @@ export function ApplicationForm({
         errorMessage={routedServerError.footerError}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        preview={<RecordCreditBatchLine kind="application" id={application?.id} />}
       />
     </form>
   );

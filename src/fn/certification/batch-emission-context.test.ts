@@ -35,7 +35,7 @@ const template = {
 const observation = { id: "current", externalTemplateId: template.id, definition: normalizeTemplateDefinition(template),
   enrichment: { line: { electricity_use: { unit: "kWh" } } },
   lineSources: { line: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } } };
-const facilityFacts = { templatesById: { template: { template, observation,
+const facilityFacts = { facilityTimezone: "UTC", templatesById: { template: { template, observation,
   lineSourceProblems: [], enrichmentProblems: [], blueprintsForTemplate: [], unresolvedBlueprintKeys: [],
   unbindableTemplateInputs: [], requiredTransportCategories: [],
 } } } as unknown as FacilityCertifierFacts;
@@ -209,7 +209,7 @@ it("keeps batch emissions unmet until a compatible changed entry is confirmed", 
   const previousObservations = new Map([["previous", observation], ["current", current]]);
   const stored = storedEntry("one", { observationId: "previous" });
   const entryFacts = () => deriveEmissionEntryFacts([stored] as never, current as never, previousObservations as never);
-  expect(entryFacts()[0]).toMatchObject({ counts: false, canConfirm: true, reason: "Confirm this entry for the changed template line." });
+  expect(entryFacts()[0]).toMatchObject({ counts: false, canConfirm: true, reason: "Confirm this entry for the changed template component." });
   const batches = [{ id: "one", removalTemplateId: "template" }];
   vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([stored]);
   vi.mocked(getTemplateObservationsByIds).mockResolvedValue([{ ...observation, id: "previous" }] as never);
@@ -247,7 +247,7 @@ it.each([false, true])("keeps removed-entry blockers in Removal readiness (group
   };
   expect(deriveRemovalReadiness(readiness).state).toBe("blocked");
   expect(buildRemovalRequirementsChecklist(readiness).find(check => check.key === "emissions"))
-    .toMatchObject({ status: "unmet", detail: "Enter the values again for the current template line." });
+    .toMatchObject({ status: "unmet", detail: "Enter the values again for the current template component." });
   // Retained review lines never become live compilation components.
   expect(resolveTemplateInputs({ template: resolved.removalTemplate!, lineSources: resolved.lineSources,
     emissionLines: resolved.emissionLines, blueprintsByKey: new Map(),

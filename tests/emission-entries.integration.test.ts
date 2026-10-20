@@ -419,10 +419,10 @@ it("refuses unit-change confirmation and reads the re-entry state", async () => 
   const lines = linesResult.lines;
   expect(lines.find(line => line.componentId === "energy")).toMatchObject({
     state: "needsReview", total: null,
-    blocker: { message: "Enter the values again for the current template line." },
+    blocker: { message: "Enter the values again for the current template component." },
     entries: expect.arrayContaining([expect.objectContaining({
       id: entry.id, counts: false, canConfirm: false,
-      reason: "Enter the values again for the current template line.",
+      reason: "Enter the values again for the current template component.",
     })]),
   });
   await db

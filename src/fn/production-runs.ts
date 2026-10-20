@@ -6,6 +6,7 @@
  */
 
 import { z } from "zod";
+import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
 
 import {
   getProductionRunById as getProductionRunByIdData,
@@ -56,13 +57,14 @@ export async function getProductionRunByIdFn(
  * Create a new production run
  */
 export async function createProductionRunFn(
-  data: z.infer<typeof createProductionRunSchema>
+  data: z.infer<typeof createProductionRunSchema>,
+  options?: CreateIntentOptions
 ): Promise<ActionResult<ProductionRunWithRelations>> {
   return withAction(
     (ctx) => {
       const { startDate, endDate, ...input } = createProductionRunSchema.parse(data);
       void startDate; void endDate;
-      return runOperationInProcess(startProductionRun, ctx, input);
+      return runOperationInProcess(startProductionRun, ctx, input, createIntentOptionsSchema.parse(options));
     },
     {
       fallbackMessage: "Failed to create production run",

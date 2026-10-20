@@ -34,6 +34,7 @@ This is the per-surface log of what we tried, what replaced it, and why. Read it
 - **Stock history**: timeline. Bin history (#1004): always wet mass, dry when available, the rest in the table, top to bottom on phones.
 - **Bin sheet** (#992): titled cards, the bin figure is hoverable, one text action top right per card, ⓘ next to the title, one "Adjust stock" (lost mass) action. Rejected: "Record loss" and "Reconcile stock" buttons; stock history buttons outside the bin route.
 - **Transport legs** (#892): derived transport on every record → transport only where goods move; route rail variant B, one line per leg with a menu, "View map" in a dialog. Rejected: two competing summary areas on the right.
+- **Distance refresh action** (#1262; Kenji, 2026-10-20): the outlined uppercase "Refresh from location" button was "huge" → "text only with underline and a refresh icon before, so it fits into the row". The edit row and the read-view notice both use it. Rejected: the boxed button on the hint line.
 - **Production run flow** (#888, #999): Sankey, left to right, with numbers; water taken up shown as an inflow.
 - **Energy → Emissions** (2026-10-01 → #1140): toggled explorer (variant F) was "too complicated" → list and Sankey toggle (G) → replaced by Emissions: overview C, detail C3c (monthly ledger, whole row clickable, ⋮ menu), then accordion layout E (full width, line description above Source, comment as an action). Rejected: a "Nothing to record" button; default reads "Nothing recorded" with a quiet "Add manual entry".
 

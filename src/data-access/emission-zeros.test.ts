@@ -176,7 +176,7 @@ it.each(["empty", "future-application", "orphan", "sent-single", "automatic", "o
     }]));
     const template = { id: "template", groups: [{ id: "g", key: "pyrolysis", components: [{ id: "line", display_name: "Electricity",
       blueprint_key: "grid_electricity_use", inputs: [{ input_key: "electricity_use", type: "monitored", quantity_kind: "energy" }] }] }] };
-    const facility = { templatesById: { template: { template, observation: current, enrichmentProblems: [], lineSourceProblems: [],
+    const facility = { facilityTimezone: "UTC", templatesById: { template: { template, observation: current, enrichmentProblems: [], lineSourceProblems: [],
       blueprintsForTemplate: [], unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], requiredTransportCategories: [],
     } } } as unknown as FacilityCertifierFacts;
     const scope = { removalId, memberBatches: members, lineages: [{ application: { applicationDate: new Date("2026-02-01") } }] } as RemovalScope;

@@ -10,7 +10,6 @@ import { notFound, redirect } from "next/navigation";
 import { SettingsConsole, OrganizationDefaultsForm } from "@/components/settings";
 import { canOwnApiKey } from "@/lib/auth/api-scopes";
 import { getOrgContext } from "@/lib/auth/server";
-import { readActiveOrganization } from "@/lib/read-models";
 
 export default async function OrganizationDefaultsPage() {
   const ctx = await getOrgContext();
@@ -22,18 +21,11 @@ export default async function OrganizationDefaultsPage() {
     ctx.isPlatformAdmin || ctx.orgRole === "owner" || ctx.orgRole === "admin";
   if (!canManage) notFound();
 
-  const org = await readActiveOrganization(ctx);
-
   return (
     <SettingsConsole
       title="Defaults"
       caption="What new records start with. Every one stays editable on the record itself."
       access="Owners and Admins"
-      subtitle={
-        org
-          ? `Set how new records start out for ${org.name}.`
-          : "Set how new records start out for your organization."
-      }
       canManageDefaults={canManage}
       canManageApiKeys={canOwnApiKey(ctx.orgRole)}
       isPlatformAdmin={ctx.isPlatformAdmin}

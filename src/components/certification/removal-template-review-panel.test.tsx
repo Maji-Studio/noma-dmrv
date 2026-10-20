@@ -107,13 +107,13 @@ describe("RemovalTemplateReviewPanel", () => {
     expect(screen.queryByText("No Removal templates yet")).toBeNull();
   });
 
-  it("is read-only for members and still flags the line to decide", () => {
+  it("is read-only for members and still flags the component to decide", () => {
     render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage={false} />);
 
     expect(screen.getByText("Dark Earth Carbon Template")).toBeTruthy();
     expect(screen.getByText("Default")).toBeTruthy();
     expect(screen.getByText("To decide")).toBeTruthy();
-    expect(screen.getByText("Ask an Owner or Admin to decide the lines marked To decide.")).toBeTruthy();
+    expect(screen.getByText("Ask an Owner or Admin to decide the components marked To decide.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Accept proposal/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Change/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
@@ -183,7 +183,7 @@ describe("RemovalTemplateReviewPanel", () => {
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Change Startup diesel usage" })); });
     const scope = document.getElementById("rvt_test-cmp_startup-scope") as HTMLSelectElement;
     await act(async () => { fireEvent.change(scope, { target: { value: "forbidden" } }); });
-    // Only operating lines take entries, so the policy resets with the scope.
+    // Only operating components take entries, so the policy resets with the scope.
     expect((document.getElementById("rvt_test-cmp_startup-entries") as HTMLSelectElement).disabled).toBe(true);
 
     await act(async () => { fireEvent.click(saveButton()); });
@@ -192,7 +192,7 @@ describe("RemovalTemplateReviewPanel", () => {
     }));
   });
 
-  it("offers assignment only on lines to decide", () => {
+  it("offers assignment only on components to decide", () => {
     mocks.data = [entry({
       lineSourceProblems: [{ code: "ambiguous", componentId: "cmp_lab" }],
       lines: [
@@ -220,7 +220,7 @@ describe("RemovalTemplateReviewPanel", () => {
 
     expect([...startup.querySelectorAll("th")].map((cell) => cell.textContent)).toEqual(["Input", "Measures", "Unit"]);
     expect([...startup.querySelectorAll("tbody td")].map((cell) => cell.textContent)).toEqual(["volume_of_fuel", "Volume", "L"]);
-    expect([...lab.querySelectorAll("tbody td")].map((cell) => cell.textContent)).toEqual(["volume_of_fuel", "Volume", "Not available"]);
+    expect([...lab.querySelectorAll("tbody td")].map((cell) => cell.textContent)).toEqual(["volume_of_fuel", "Volume", "Unit not read"]);
   });
 
   it("disables saving and offers a retry while the template is not fully read", async () => {
@@ -338,7 +338,7 @@ describe("RemovalTemplateReviewPanel", () => {
     });
     expect(mocks.setupMutate).toHaveBeenCalledWith({ facilityId: FACILITY_ID, removalTemplateId: "rvt_test" });
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Decide lines" }));
+      fireEvent.click(screen.getByRole("button", { name: "Decide components" }));
     });
     expect(mocks.setupMutate).toHaveBeenCalledTimes(2);
   });
@@ -346,9 +346,9 @@ describe("RemovalTemplateReviewPanel", () => {
   it("keeps a template that is not the default or linked folded until opened", () => {
     mocks.data = [entry({ isDefault: false })];
     render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage />);
-    const toggle = screen.getByRole("button", { name: "Show lines" });
+    const toggle = screen.getByRole("button", { name: "Show components" });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(toggle);
-    expect(screen.getByRole("button", { name: "Hide lines" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: "Hide components" }).getAttribute("aria-expanded")).toBe("true");
   });
 });

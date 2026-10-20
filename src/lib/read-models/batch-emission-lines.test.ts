@@ -85,17 +85,19 @@ it("keeps a missing observation as a retryable failure, not a blocker", async ()
   expect(loadCreditBatchRollups).not.toHaveBeenCalled();
 });
 
-// The current resolver only derives missing or mixed pins from batch inputs.
-it.each(["notRemovalTemplate", "templateNotFound", "mixedTemplatePins"] as const)(
-  "preserves a %s resolver blocker before loading accounting", async (code) => {
-    pinOverride.code = code;
-    await expect(loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch")).resolves.toEqual({
-      status: "blocked", blocker: removalTemplateBlocker(code),
-    });
-    expect(getLatestTemplateObservation).not.toHaveBeenCalled();
-    expect(loadCreditBatchRollups).not.toHaveBeenCalled();
-  },
-);
+// resolveBatchPin only derives unpinned or mixed pins from batch inputs, so
+// notRemovalTemplate and templateNotFound cannot come out of this read (a
+// pinned but unobserved template takes the retryable path above) and are not
+// tested here. The single-batch read cannot yield mixed pins either; the mock
+// keeps the passthrough honest if the resolver ever grows more codes.
+it("preserves a mixedTemplatePins resolver blocker before loading accounting", async () => {
+  pinOverride.code = "mixedTemplatePins";
+  await expect(loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch")).resolves.toEqual({
+    status: "blocked", blocker: removalTemplateBlocker("mixedTemplatePins"),
+  });
+  expect(getLatestTemplateObservation).not.toHaveBeenCalled();
+  expect(loadCreditBatchRollups).not.toHaveBeenCalled();
+});
 
 it("keeps a missing batch as a real failure", async () => {
   vi.mocked(getCreditBatchById).mockResolvedValue(null);
@@ -308,7 +310,7 @@ it("shows re-entry for unit changes and keeps other lines healthy", async () => 
     })) as never,
   );
   const lines = await loadReadyLines();
-  expect(lines[0]).toMatchObject({ state: "needsReview", total: null, blocker: { code: "lineNeedsReview", message: "Enter the values again for the current template line." }, entries: [expect.objectContaining({ counts: false, canConfirm: false })] });
+  expect(lines[0]).toMatchObject({ state: "needsReview", total: null, blocker: { code: "lineNeedsReview", message: "Enter the values again for the current template component." }, entries: [expect.objectContaining({ counts: false, canConfirm: false })] });
   expect(lines[1]).toMatchObject({ state: "filled", total: { magnitude: "1", unit: "kWh" }, removedFromTemplate: false });
   expect(lines.every((line) => line.comment === null)).toBe(true);
   vi.mocked(listEmissionLineComments).mockResolvedValue([

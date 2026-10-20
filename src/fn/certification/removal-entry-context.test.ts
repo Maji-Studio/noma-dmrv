@@ -14,7 +14,7 @@ const scope = { removalId: "r1", memberBatches: [
   { id: "b1", startDate: "2026-01-01", removalTemplateId: "t1", productionEmissionsClaimedByRemovalId: "earlier" },
   { id: "b2", startDate: "2026-01-01", removalTemplateId: "t1", productionEmissionsClaimedByRemovalId: null },
 ], lineages: [{ application: { applicationDate: new Date("2026-02-01T00:00:00Z") } }] } as RemovalScope;
-const facility = { templatesById: { t1: { observation: { id: "observation", semanticFingerprint: "fingerprint",
+const facility = { facilityTimezone: "UTC", templatesById: { t1: { observation: { id: "observation", semanticFingerprint: "fingerprint",
   lineSources: { electricity: { scope: "operating", origin: "reviewed", entryPolicy: "additive", automaticSource: "run-electricity" } },
   definition: { groups: [{ components: [{ id: "electricity", inputs: [{ key: "electricity_use", type: "monitored", quantityKind: "energy" }] }] }] },
   enrichment: { electricity: { electricity_use: { unit: "kWh" } } },

@@ -16,6 +16,7 @@ import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useId, useState } from "react";
 
+import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
 import { FormActions, FormEntitySelect, FormField, FormSection, FormSpine, makeCertFieldStatus, MoistureField, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
@@ -471,6 +472,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         submitDisabled={submitDisabled}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        preview={<RecordCreditBatchLine kind="delivery" id={delivery?.id} />}
       />
     </div>
   );

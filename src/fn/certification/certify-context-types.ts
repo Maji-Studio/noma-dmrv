@@ -37,7 +37,7 @@ export interface RemovalCertifyContext {
   removalTemplate: IsometricGhgEntryTemplate | null;
   lineSources: LineSources;
   templateBlockers: RemovalTemplateBlocker[];
-  /** Current template lines without a saved, unambiguous decision. */
+  /** Current template components without a saved, unambiguous decision. */
   undecidedLineIds?: readonly string[];
   emissionLinesByBatchId?: Record<string, BatchEmissionLine[]>;
   emissionLines?: BatchEmissionLine[] | null;
@@ -107,6 +107,7 @@ export interface RemovalCertifyContext {
 // Extends the UI context with the raw chain data the submit pipeline needs.
 // Kept server-internal so the cached UI payload stays lean.
 export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "emissionsLedger"> {
+  facilityTimezone: string;
   /** Datapoints fixed in the template, for the compiled review's value column. */
   fixedInputValues?: readonly { componentId: string; inputKey: string; magnitude: number; unit: string }[];
   removalEntryContext?: Omit<NonNullable<Awaited<ReturnType<typeof loadRemovalEntryContext>>>, "batchFacts">;

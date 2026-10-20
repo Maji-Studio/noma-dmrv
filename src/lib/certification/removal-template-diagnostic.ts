@@ -130,6 +130,19 @@ export interface BuildRemovalTemplateDiagnosticArgs {
   compilation?: RemovalTemplateDiagnosticCompilation | null;
 }
 
+/**
+ * Why an expected value is missing when noma has no blueprint input to read
+ * it from. These name noma's side: the blueprint's fields are required, so a
+ * gap here means noma did not resolve the component's blueprint, or the
+ * template input is not in it. Never blame Isometric for either.
+ */
+export const BLUEPRINT_NOT_RESOLVED = "Blueprint not resolved";
+export const INPUT_NOT_IN_BLUEPRINT = "Input not in the blueprint";
+
+function blueprintGap(blueprint: IsometricComponentBlueprint | undefined): string {
+  return blueprint ? INPUT_NOT_IN_BLUEPRINT : BLUEPRINT_NOT_RESOLVED;
+}
+
 const GHG_ENTRY_INPUT_PATH =
   "/ghg-entries.ghg_entry_template_components[].inputs[]";
 
@@ -247,10 +260,11 @@ function buildOrdinaryInputs(args: {
       lineContract: args.contract,
       inputKey: input.input_key,
     });
+    const gap = blueprintGap(blueprint);
     const expected = {
-      dataShape: blueprintInput?.data_shape ?? MISSING_VALUE.notAvailable,
+      dataShape: blueprintInput?.data_shape ?? gap,
       quantityKind: blueprintInput?.quantity_kind ?? input.quantity_kind,
-      unit: blueprintInput?.compatible_unit ?? MISSING_VALUE.notAvailable,
+      unit: blueprintInput?.compatible_unit ?? gap,
     };
 
     if (!blueprint) {
@@ -260,7 +274,7 @@ function buildOrdinaryInputs(args: {
         presentInTemplate: true,
         expected,
         nomaSource: "No local blueprint contract",
-        transform: MISSING_VALUE.notAvailable,
+        transform: MISSING_VALUE.notApplicable,
         wirePath: GHG_ENTRY_INPUT_PATH,
         evidenceRoles,
         status: "unsupported-component" as const,
@@ -279,7 +293,7 @@ function buildOrdinaryInputs(args: {
         presentInTemplate: true,
         expected,
         nomaSource: "No matching blueprint input",
-        transform: MISSING_VALUE.notAvailable,
+        transform: MISSING_VALUE.notApplicable,
         wirePath: GHG_ENTRY_INPUT_PATH,
         evidenceRoles,
         status: "template-contract-drift" as const,
@@ -353,7 +367,7 @@ function buildOrdinaryInputs(args: {
         presentInTemplate: true,
         expected,
         nomaSource: "No noma dMRV source",
-        transform: MISSING_VALUE.notAvailable,
+        transform: MISSING_VALUE.notApplicable,
         wirePath: "/datapoints -> " + GHG_ENTRY_INPUT_PATH,
         evidenceRoles,
         status: "missing-noma-mapping" as const,
@@ -452,20 +466,15 @@ function buildSequestrationInputs(args: {
       binding?.source === "measurement-property"
         ? binding.measurementProperty.quantity_kind
         : binding?.quantityKind;
+    const gap = blueprintGap(blueprint);
     const expected = {
-      dataShape:
-        binding?.dataShape ??
-        blueprintInput?.data_shape ??
-        MISSING_VALUE.notAvailable,
+      dataShape: binding?.dataShape ?? blueprintInput?.data_shape ?? gap,
       quantityKind:
         expectedQuantityKind ??
         blueprintInput?.quantity_kind ??
         input?.quantity_kind ??
-        MISSING_VALUE.notAvailable,
-      unit:
-        sourceContract?.wireUnit ??
-        blueprintInput?.compatible_unit ??
-        MISSING_VALUE.notAvailable,
+        gap,
+      unit: sourceContract?.wireUnit ?? blueprintInput?.compatible_unit ?? gap,
     };
     const raw = inputRaw({
       templateId: template.id,
@@ -534,7 +543,8 @@ function buildSequestrationInputs(args: {
           : "No supported noma dMRV source"),
       transform: sourceContract
         ? transformLabel(sourceContract.transformRevision)
-        : MISSING_VALUE.notAvailable,
+        // No noma source, so no transform applies.
+        : MISSING_VALUE.notApplicable,
       wirePath: measurementPath,
       evidenceRoles,
       status,

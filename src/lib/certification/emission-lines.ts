@@ -112,7 +112,7 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     const stale = entries.find((entry) => !entry.counts);
     if (stale) {
       state = "needsReview";
-      blocker = { code: "lineNeedsReview", message: stale.reason ?? "Enter the values again for the current template line.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      blocker = { code: "lineNeedsReview", message: stale.reason ?? "Enter the values again for the current template component.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     }
     const total = unitMismatch || values.some((entry) => entry.total === null) ? null : sumFigures(figures);
     return { componentId: component.id, displayName: component.displayName, groupKey: group.key,

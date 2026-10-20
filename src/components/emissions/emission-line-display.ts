@@ -29,7 +29,7 @@ export const DECIMAL_MESSAGE = "Enter a non-negative decimal value.";
 export const DATE_BEFORE_START_MESSAGE = "Entry date cannot be before the credit batch start date.";
 export const DATE_IN_FUTURE_MESSAGE = "Entry date cannot be in the future at this facility.";
 export const DATE_INVALID_MESSAGE = "Enter a valid entry date.";
-export const NEEDS_SETUP_COPY = "noma cannot fill this line from its records yet. Its decision and the template are in Removal templates.";
+export const NEEDS_SETUP_COPY = "noma cannot fill this component from its records yet. Its decision and the template are in Removal templates.";
 export const SINGLE_LINE_CAPTION = "One manual entry per credit batch. It counts for the whole credit batch.";
 /**
  * The server's note limit (MAX_ENTRY_TEXT_LENGTH in src/schemas/emission-entries.ts).
@@ -49,9 +49,12 @@ const UNIT_ATOM_DISPLAY: Record<string, string> = { tonne: "t", "m^3": "m³" };
 const MASS_ATOMS = new Set(["mg", "g", "kg", "tonne"]);
 const DISTANCE_ATOMS = new Set(["m", "km", "mi"]);
 
+/** What a stored magnitude that will not parse as a number shows in its place. */
+export const UNREADABLE_FIGURE = "Unreadable figure";
+
 export function formatMagnitude(magnitude: string | number): string {
   const value = Number(magnitude);
-  return Number.isFinite(value) ? NUMBER_FORMAT.format(value) : MISSING_VALUE.notAvailable;
+  return Number.isFinite(value) ? NUMBER_FORMAT.format(value) : UNREADABLE_FIGURE;
 }
 
 /** "km * tonne" reads "t·km"; "mg / kg" reads "mg/kg"; "tonne" reads "t". */
@@ -221,17 +224,18 @@ function entryFigureText(entry: EmissionEntry): string {
 /**
  * The row Total: the server total, the single entry's pair, a zero, or a
  * missing token. A line that holds figures the server could not add up (units
- * that differ, an entry that stopped counting) reads Not available, never Not
- * recorded: something was recorded.
+ * that differ, an entry that stopped counting) has no sum, so the Total is
+ * left out (null), never Not recorded: something was recorded, and the
+ * line's state already says it needs review.
  */
-export function lineTotalText(line: EmissionLine): string {
+export function lineTotalText(line: EmissionLine): string | null {
   if (line.state === "needsSetup") return EMISSION_LINE_STATE_LABELS.needsSetup;
   if (line.total) return formatFigure(line.total);
   const values = valueEntries(line);
   if (values.length === 1 && values[0].values.length > 1) return entryFigureText(values[0]);
   if (line.state === "confirmedZero") return `0 ${displayUnit(line.unit)}`.trim();
   const recorded = hasRecordsFigure(line.records) || line.entries.some((entry) => entry.kind === "value");
-  return recorded ? MISSING_VALUE.notAvailable : MISSING_VALUE.notRecorded;
+  return recorded ? null : MISSING_VALUE.notRecorded;
 }
 
 /** The Total is a missing token, not a figure: phones drop it, since the state already says so. */
@@ -243,7 +247,7 @@ export function isTotalMissing(line: EmissionLine): boolean {
 
 /** Why Add manual entry is not offered, or null when it is. */
 export function addEntryRefusal(line: EmissionLine): string | null {
-  if (line.state === "needsSetup" || line.entryPolicy === "none" || line.contract?.scope !== "operating") return "This line takes no manual entries";
+  if (line.state === "needsSetup" || line.entryPolicy === "none" || line.contract?.scope !== "operating") return "This component takes no manual entries";
   if (line.entryPolicy === "single" && line.entries.some((entry) => entry.kind === "value")) return "One manual entry per credit batch";
   if (!line.inputShape.length || line.inputShape.some((input) => !input.unit)) return "The template units are not read yet";
   return null;

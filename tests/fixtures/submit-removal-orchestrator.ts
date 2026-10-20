@@ -1,3 +1,9 @@
+vi.mock("@/data-access/credit-batch-removal-holders", () => ({
+  getCreditBatchUndeletableRemovalCodes: vi.fn<
+    typeof import("@/data-access/credit-batch-removal-holders").getCreditBatchUndeletableRemovalCodes
+  >(async () => new Map()),
+}));
+
 import { reviewedTemplateSources } from "../helpers/template-line-sources";
 import { beforeEach, vi } from "vitest";
 
@@ -46,6 +52,7 @@ const BLOCKING_EXTERNAL_MUTATIONS = new Set<unknown>([
 // are in place when its top-level imports resolve.
 // ---------------------------------------------------------------------------
 
+vi.mock("@/data-access/facilities", () => ({ getFacilityById: vi.fn(async () => ({ timezone: "UTC" })) }));
 vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-removals");
@@ -441,6 +448,7 @@ export function makeContext(
   const batchesWithSamples = makeBatchesWithSamples(runs);
   return {
     facilityId: FACILITY_ID,
+    facilityTimezone: overrides.facilityTimezone ?? "UTC",
     hasOrgCredentials: true,
     removalId: REMOVAL_ID,
     reportingWindowStartedOn: storedRemovalStartedOn,

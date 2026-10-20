@@ -16,7 +16,7 @@ export default function AdminOrganizationsPage() {
       <PageHeader
         eyebrow="Admin"
         title="Organizations"
-        subtitle="Every operator on the platform. Enter an organization to work inside its workspace, or create the first one."
+        subtitle="Enter an organization to work inside its workspace."
       />
 
       <OrganizationsAdmin />

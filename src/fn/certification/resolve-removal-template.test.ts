@@ -17,6 +17,7 @@ const template = templateFixture as GhgEntryTemplate;
 
 function facts(): FacilityCertifierFacts {
   return {
+    facilityTimezone: "UTC",
     // Deliberately a different default. It must never be used for a Removal.
     defaultTemplate: { ...template, id: "other-default" },
     templatesById: {
@@ -129,7 +130,7 @@ it.each(["incompatible-carried", "duplicate-source"] as const)("routes %s contra
   const diagnostics = templateFacts.unbindableTemplateInputs.filter((finding) => [gensetId, startupId].includes(finding.componentId));
   expect(diagnostics).toContainEqual(expect.objectContaining({ componentId: gensetId,
     reason: problem === "duplicate-source" ? "ambiguous" : "unmapped" }));
-  expect(formatUnbindableTemplateInputsText(diagnostics)).toContain("This Removal template has lines to decide.");
+  expect(formatUnbindableTemplateInputsText(diagnostics)).toContain("This Removal template has components to decide.");
   if (problem === "incompatible-carried") expect(formatUnbindableTemplateInputsText(diagnostics)).toContain("ask support");
   else expect(formatUnbindableTemplateInputsText(diagnostics)).not.toContain("ask support");
   const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], input);
@@ -148,7 +149,7 @@ it.each(["incompatible-carried", "duplicate-source"] as const)("routes %s contra
   const batchCheck = health.checks.find((check) => check.key === "templateLines" && check.fixTarget === "templateLineReview")!;
   expect(batchCheck.status).toBe("unmet");
   expect(batchHealthFixLinkFor(batchCheck, "facility-1", "batch-1")).toEqual({
-    label: "Decide lines", href: certificationRemovalTemplatesHref("facility-1"),
+    label: "Decide components", href: certificationRemovalTemplatesHref("facility-1"),
   });
 });
 

@@ -43,7 +43,7 @@ import {
   deriveSourceBiocharDryMassKg,
   fromCompositionJsonb,
 } from "@/lib/biochar-composition";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { FACILITY_NOT_FOUND, MISSING_VALUE } from "@/lib/copy-utils";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
@@ -145,7 +145,7 @@ function createColumns(
       header: "Facility",
       accessorFn: (row) => row.facility?.name ?? "",
       cell: ({ row }) =>
-        row.original.facility?.name || MISSING_VALUE.notAvailable,
+        row.original.facility?.name || FACILITY_NOT_FOUND,
     },
     {
       id: "formulation",
@@ -250,7 +250,6 @@ export function BiocharProductPageMassSummary({
       }
       valueLayout="breakdown"
       icon={<ScalesIcon size={24} weight="bold" />}
-      description="Combined product mass on the current page"
       isLoading={isLoading}
     />
   );
@@ -469,7 +468,6 @@ export function BiocharProductList() {
         <PageHeader
           area="production"
           title="Biochar Products"
-          subtitle="Finished biochar inventory and certifications"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its biochar products." />
       </div>
@@ -489,7 +487,6 @@ export function BiocharProductList() {
       <PageHeader
         area="production"
         title="Biochar Products"
-        subtitle="Finished biochar inventory and certifications"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -504,7 +501,6 @@ export function BiocharProductList() {
           title="Total products"
           value={totalProducts}
           icon={<CubeIcon size={24} weight="bold" />}
-          description="Finished product batches"
           isLoading={isLoading}
         />
         <BiocharProductPageMassSummary

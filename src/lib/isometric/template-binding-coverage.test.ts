@@ -43,7 +43,7 @@ describe("contract-based template coverage", () => {
     const findings = coverage(copy, reviewedTemplateSources(copy, { second: { ...firstContract, origin: "reviewed" } }))
       .filter((finding) => finding.reason === "ambiguous");
     expect(findings.map((finding) => finding.componentId).sort()).toEqual([first.id, "second"].sort());
-    expect(formatUnbindableTemplateInputsText(findings)).toContain("Give each line its own automatic datapoints.");
+    expect(formatUnbindableTemplateInputsText(findings)).toContain("Give each component its own automatic datapoints.");
   });
   it("resolves a renamed diesel component with the same id", () => {
     const copy = structuredClone(template);
@@ -59,7 +59,7 @@ describe("contract-based template coverage", () => {
   });
   it("still fails closed on diesel without a contract", () => {
     const mapping = lookupInputMapping("pyrolysis", "fuel_usage_by_volume", "volume_of_fuel")!;
-    expect(() => resolveDatapointSource(mapping)).toThrow("This Removal template has lines to decide.");
+    expect(() => resolveDatapointSource(mapping)).toThrow("This Removal template has components to decide.");
   });
   it("blocks entry-only operating lines in both environments until entries can be submitted", () => {
     const value = realTemplate as GhgEntryTemplate;

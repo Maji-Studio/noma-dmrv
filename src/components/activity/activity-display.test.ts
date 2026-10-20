@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY_ENTITY_TYPES } from "@/db/schema/common";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { getStatusState } from "@/lib/status-state";
 import { toBadgeProps } from "@/components/chain-of-custody/chain-status-badge";
 import { activityFieldLines } from "./activity-change-lines";
@@ -59,9 +58,9 @@ describe("who made the change", () => {
     expect(activityActorDisplay(item({ actor: null, source: "script" }))).toMatchObject({ name: "Script" });
   });
 
-  it("uses the shared token for a person whose name cannot be read", () => {
+  it("names an unknown user when the person's name cannot be read", () => {
     expect(activityActorDisplay(item({ actor: { id: "gone", name: null } }))).toEqual({
-      name: MISSING_VALUE.notAvailable, missing: true, channel: null,
+      name: "Unknown user", missing: true, channel: null,
     });
   });
 });

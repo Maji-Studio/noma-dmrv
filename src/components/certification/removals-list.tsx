@@ -77,7 +77,7 @@ export function RemovalsList({ initialCreate = false }: { initialCreate?: boolea
       <PageHeader
         area="certification"
         title="Removals"
-        subtitle="A Removal is the registry submission unit. Group one or more complete credit batches that share a reporting period, then submit the Removal to the registry."
+        subtitle="A Removal is the registry submission unit: complete credit batches that share a reporting period."
         actions={
           facilityId ? (
             <Button variant="primary" onClick={() => setDialogOpen(true)}>
