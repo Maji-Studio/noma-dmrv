@@ -375,6 +375,12 @@ The only exception is a hook that reads `field`, `conflict` or `warning`, or
 returns something other than `result.data`; typed errors go through
 `throwActionError`. `pnpm check:action-boundaries` enforces this rule.
 
+A form shows what the hook kept: `useSaveRefusal` files each issue on the field
+it names and returns the footer text for the rest (see
+[forms.md](./forms.md#components), `FormError` / `ServerError`). Edit forms for
+deliveries, applications and feedstock updates use it; the other forms still
+show the one footer line.
+
 ### Authenticated read transport
 
 Client React Query reads use ordinary `fetch` against small resource-specific
