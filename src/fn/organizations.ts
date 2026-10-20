@@ -51,8 +51,6 @@ import {
   orgRoleSchema,
 } from "@/schemas/organizations";
 
-import { isLastAdminDatabaseError, LAST_ADMIN_MESSAGE } from "@/lib/auth/organization-role-policy";
-
 const LOG_MESSAGE = "organization action failed";
 
 /**
@@ -78,7 +76,6 @@ async function toWarnableResult<T>(
   try {
     return toWarnableSuccess(await fn());
   } catch (error) {
-    if (isLastAdminDatabaseError(error)) return { success: false, error: LAST_ADMIN_MESSAGE };
     if (error instanceof z.ZodError) {
       return {
         success: false,

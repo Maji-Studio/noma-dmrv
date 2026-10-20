@@ -9,7 +9,7 @@ import { revokeMemberOAuthGrants } from "./oauth-grant-lifecycle";
 import { disableOwnerApiKeys } from "./api-credential-auth";
 import { oauthRolePolicy } from "@/lib/auth/oauth-role-policy";
 import { canOwnApiKey } from "@/lib/auth/api-scopes";
-import { LAST_ADMIN_MESSAGE } from "@/lib/auth/organization-role-policy";
+import { LAST_ADMIN_MESSAGE, rethrowLastAdmin } from "@/lib/auth/organization-role-policy";
 import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -249,7 +249,7 @@ export async function updateMemberRoleAsPlatformAdmin(
     if (!canOwnApiKey(role)) {
       await disableOwnerApiKeys(ctx.organizationId, member.userId, tx);
     }
-  });
+  }).catch(rethrowLastAdmin);
 }
 
 /** Remove an organization member without plugin membership authorization. */
@@ -305,7 +305,7 @@ export async function removeMemberAsPlatformAdmin(
     }
     await disableOwnerApiKeys(ctx.organizationId, member.userId, tx);
     await revokeMemberOAuthGrants(ctx.organizationId, member.userId, memberId, tx);
-  });
+  }).catch(rethrowLastAdmin);
 }
 
 /** The active org's profile (name, slug, logo). */

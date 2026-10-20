@@ -1,4 +1,5 @@
 import { APIError } from "better-auth/api";
+import { SafeError } from "@/lib/errors";
 import { orgRoleSchema } from "@/schemas/organizations";
 
 export const LAST_ADMIN_MESSAGE =
@@ -51,4 +52,11 @@ export function isLastAdminDatabaseError(error: unknown): boolean {
     error = "cause" in error ? error.cause : undefined;
   }
   return false;
+}
+
+/** For `.catch()` on server-action paths: turn the members trigger refusal into
+ * a user-facing SafeError and rethrow anything else unchanged. */
+export function rethrowLastAdmin(error: unknown): never {
+  if (isLastAdminDatabaseError(error)) throw new SafeError(LAST_ADMIN_MESSAGE);
+  throw error;
 }
