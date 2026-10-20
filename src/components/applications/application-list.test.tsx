@@ -17,7 +17,7 @@ vi.mock("@/hooks/use-applications", () => ({
     error: null,
   }),
   useApplicationDeliveryOptions: () => ({ data: [] }),
-  useCreateApplication: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useCreateApplication: () => ({ startDraft: vi.fn(), isPending: false, mutateAsync: vi.fn() }),
   useUpdateApplication: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useDeleteApplication: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));

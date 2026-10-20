@@ -13,7 +13,7 @@ beforeEach(() => { mocks.run.mockReset(); mocks.run.mockResolvedValue({ id }); }
 describe("supplier location app actions", () => {
   it("uses the runner for add and delete", async () => {
     await createSupplierLocationFn({ supplierId: id, country: "TZ", gpsLatitude: 0, gpsLongitude: 0, isDefault: false });
-    expect(mocks.run).toHaveBeenLastCalledWith({ id: "add_supplier_location" }, mocks.ctx, expect.objectContaining({ supplierId: id, country: "TZ" }));
+    expect(mocks.run).toHaveBeenLastCalledWith({ id: "add_supplier_location" }, mocks.ctx, expect.objectContaining({ supplierId: id, country: "TZ" }), undefined);
     expect(await deleteSupplierLocationFn({ locationId: id, expectedVersion: 1 })).toEqual({ success: true, data: undefined });
     expect(mocks.run).toHaveBeenLastCalledWith({ id: "delete_supplier_location" }, mocks.ctx, { locationId: id, expectedVersion: 1 });
   });

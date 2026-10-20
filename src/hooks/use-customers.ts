@@ -1,3 +1,4 @@
+import { useCreateIntentKey } from "./use-create-intent-key";
 import { deliveryKeys } from "./use-deliveries";
 import { transportLegKeys } from "./use-transport-legs";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
@@ -572,10 +573,11 @@ export function useCreateCustomerLocation(
   callbacks?: MutationCallbacks<CustomerLocation, CreateCustomerLocationData>
 ) {
   const queryClient = useQueryClient();
+  const intent = useCreateIntentKey();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: async (data: CreateCustomerLocationData) => {
-      const result = await createCustomerLocationFn(data);
+      const result = await createCustomerLocationFn(data, { intentKey: intent.current() });
       if (!result.success) {
         throwActionError(result);
       }
@@ -585,6 +587,7 @@ export function useCreateCustomerLocation(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      intent.rotate();
       // Invalidate customer locations list
       queryClient.invalidateQueries({
         queryKey: customerKeys.locations(variables.customerId),
@@ -616,6 +619,8 @@ export function useCreateCustomerLocation(
       await callbacks?.onSettled?.(data, error, variables);
     },
   });
+  // Call when a create sheet or dialog opens: each draft gets its own key.
+  return { ...mutation, startDraft: intent.rotate };
 }
 
 /**

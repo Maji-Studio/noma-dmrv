@@ -6,6 +6,7 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
@@ -165,6 +166,7 @@ export function BiocharProductForm({
   lock,
   initialBin,
 }: BiocharProductFormProps) {
+  const latched = useLatchedSubmit();
   const formId = useId();
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const isEditMode = !!product;
@@ -344,7 +346,7 @@ export function BiocharProductForm({
     biocharStockError ??
     routedServerError.inlineError;
 
-  const handleFormSubmit = handleSubmit(async (data) => {
+  const handleFormSubmit = latched(handleSubmit(async (data) => {
     if (!canSave) return;
     // A failed save needs no refetch here: the host reports the error and the
     // mutation hooks invalidate `outputStockKeys.all`, which refreshes both previews.
@@ -353,7 +355,7 @@ export function BiocharProductForm({
       basisFingerprint: basisFingerprint ?? data.basisFingerprint,
       idempotencyKey,
     });
-  });
+  }));
 
   // A stock change label only advertises a fresh, unblocked projection. The
   // product's projection is one plan across every bin, so a refusal in any bin

@@ -6,6 +6,7 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { INTAKE_MOISTURE_RANGE_HELPER } from "@/lib/mass-moisture";
 import type { ReactNode } from "react";
 import { useEffect, useId, useState } from "react";
@@ -98,6 +99,7 @@ export function FeedstockForm({
   focusTarget,
   onDistanceRefreshed,
 }: FeedstockFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!feedstock;
   // Returning to the saved mass clears RHF dirtiness, but is still an override.
   const [hasEditedAllocationMass, setHasEditedAllocationMass] = useState(false);
@@ -307,7 +309,7 @@ export function FeedstockForm({
     }
   }, [fields.length, getValues, hasEditedAllocationMass, isEditMode, setValue, watchWetMass, dirtyFields.allocations]);
 
-  const handleFormSubmit = handleSubmit((data) => {
+  const handleFormSubmit = latched(handleSubmit((data) => {
     const submitted = {
       overriding,
       distanceKm: data.transportDistanceKm,
@@ -323,13 +325,13 @@ export function FeedstockForm({
     const patch = distanceOverridePatch(savedOverride, submitted, {
       routeChanged: isEditMode && (data.supplierId !== feedstock.supplierId || data.facilityId !== feedstock.facilityId),
     });
-    onSubmit({
+    return onSubmit({
       ...data,
       transportDistanceKm: patch.distanceKm,
       transportDistanceSource: patch.source,
       distanceNote: patch.note,
     } as FeedstockFormData);
-  });
+  }));
 
   return (
     <>

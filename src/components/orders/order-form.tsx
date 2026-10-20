@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { toDateInputValue } from "@/lib/date-utils";
 
 import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine } from "@/components/forms";
@@ -90,6 +91,7 @@ export function OrderForm({
   submitLabel,
   lock,
 }: OrderFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!order;
   // Fail closed: until the lock answers, fields an In use order holds stay disabled.
   const locked = (field: string) => isEditMode && isRecordFieldHeld(lock, recordInUseFreeFields("order"), field);
@@ -173,9 +175,9 @@ export function OrderForm({
 
   const defaultSubmitLabel = isEditMode ? "Update order" : "Create order";
 
-  const handleFormSubmit = handleSubmit((data) => {
-    onSubmit(data as OrderFormData);
-  });
+  const handleFormSubmit = latched(handleSubmit((data) => {
+    return onSubmit(data as OrderFormData);
+  }));
 
   return (
     <>

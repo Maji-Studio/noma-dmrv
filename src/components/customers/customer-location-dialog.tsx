@@ -57,8 +57,10 @@ export function CustomerLocationDialog({
 
   // Modal unmounts its children while closed, so the embedded form resets on
   // every open. Only the dialog-level server error needs clearing.
+  // Closing ends the draft, so the next open never reuses a key from a failed save.
   const handleClose = () => {
     setError(null);
+    createLocation.startDraft();
     onClose();
   };
 

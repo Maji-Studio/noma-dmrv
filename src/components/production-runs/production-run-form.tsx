@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { formatLocalDate, resolveFacilityTimezone } from "@/lib/date-utils";
@@ -126,6 +127,7 @@ export function ProductionRunForm({
   lock,
   initialBiocharStorageLocationId,
 }: ProductionRunFormProps) {
+  const latched = useLatchedSubmit();
   const formId = useId();
   const isEditMode = !!productionRun;
   // `assertProductionRunOutputBasisChange` refuses these once stock is used.
@@ -319,7 +321,7 @@ export function ProductionRunForm({
 
   const defaultSubmitLabel = isEditMode ? "Update production run" : "Create production run";
 
-  const handleFormSubmit = handleSubmit(async (data) => {
+  const handleFormSubmit = latched(handleSubmit(async (data) => {
     // Dates arrive as "YYYY-MM-DD" strings from the inputs. The end date
     // defaults to the start date when only an end time was entered.
     const startDateStr =
@@ -380,7 +382,7 @@ export function ProductionRunForm({
       }
       throw error;
     }
-  });
+  }));
 
   return (
     <div className="space-y-20">

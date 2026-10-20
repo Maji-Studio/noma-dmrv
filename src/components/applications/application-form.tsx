@@ -11,6 +11,7 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
 import { recordInUseFreeFields } from "@/lib/record-lock";
 import { FACILITY_REFERENCE_TEMPERATURE_NOTICE } from "@/lib/application-guidance";
@@ -163,6 +164,7 @@ export function ApplicationForm({
   deferredAttachments,
   lock,
 }: ApplicationFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!application;
   // A Removal slice refuses delivery and applied mass changes (`assertMutableSlices`).
   // Fail closed: until the lock answers, fields an In use application holds stay disabled.
@@ -376,7 +378,7 @@ export function ApplicationForm({
     overdrawError: applicationStockError,
   });
 
-  const handleFormSubmit = handleSubmit(async (data) => {
+  const handleFormSubmit = latched(handleSubmit(async (data) => {
     if (applicationStockError) return;
 
     // Custody ordering (issue #284): the server rejects this too — but a
@@ -418,7 +420,7 @@ export function ApplicationForm({
       ...data,
       gisBoundary: data.evidenceMethod === "boundary" ? data.gisBoundary : null,
     });
-  });
+  }));
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
