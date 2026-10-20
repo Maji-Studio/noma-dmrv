@@ -1,6 +1,7 @@
-/** Mechanical UI rules from docs/design-system.md. Comments are ignored by the TS parser. */
+/** Report-only helper for advisory design review; see .agents/skills/noma-design/SKILL.md. */
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
-import { extname, join, relative, resolve } from "node:path";
+import { extname, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
@@ -19,417 +20,97 @@ const ALLOWED_RADIUS_VALUES = new Set(["none", "full", "4", "8"]);
 const RADIUS_SIDES = "(?:[trblse]|tl|tr|bl|br|ss|se|es|ee)";
 const RULES = ["radius", "shadow", "raw-button", "formatting"] as const;
 type Rule = (typeof RULES)[number];
-interface Exception {
-  file: string;
-  rule: Rule;
-  value: string;
-  count: number;
-  reason: string;
+const DEFAULT_BASE = "origin/staging";
+const CLI_ARGS_START = 2;
+const EXIT_FAILURE = 1;
+const DISPLAY_POSITION_OFFSET = 1;
+const NEXT_ARGUMENT_OFFSET = 1;
+const MESSAGES: Record<Rule, string> = {
+  radius: "Use approved radius tokens from docs/design-system.md.",
+  shadow: "Use the elevation tokens in docs/design-system.md (hairlines; shadow-none only).",
+  "raw-button": "Use Button from src/components/ui (docs/design-system.md).",
+  formatting: "Use shared formatters in src/lib/format-utils.ts / src/lib/date-utils.ts.",
+};
+const USAGE = `Usage: pnpm tsx scripts/check-design-rules.ts [options] [files...]
+
+Report design findings for all source files, or just explicit files when supplied.
+  --rule <name>       Select rules (repeatable or comma-separated).
+                     Valid names: ${RULES.join(", ")}
+  --changed [base]   Scan branch, tracked working-tree and untracked changes.
+                     Default base: ${DEFAULT_BASE}
+  --help             Print usage.
+  --                 End options (also separates files from an optional base).
+
+Findings are advisory and exit 0; usage and runtime errors exit non-zero.`;
+
+export interface CliOptions {
+  help: boolean;
+  rules: readonly Rule[];
+  changedBase?: string;
+  files: string[];
 }
-// Exact utility/API plus occurrence budget: an exempt file cannot accumulate new hits.
-const ALLOWLIST: readonly Exception[] = [
-  {
-    file: "src/app/(auth)/accept-invitation/[id]/page.tsx",
-    rule: "shadow",
-    value: "shadow-sm",
-    count: 1,
-    reason: "renders a shadow today; removal is a visual change pending review",
-  },
-  {
-    file: "src/app/(auth)/forgot-password/page.tsx",
-    rule: "shadow",
-    value: "shadow-sm",
-    count: 1,
-    reason: "renders a shadow today; removal is a visual change pending review",
-  },
-  {
-    file: "src/app/(auth)/login/page.tsx",
-    rule: "shadow",
-    value: "shadow-sm",
-    count: 1,
-    reason: "renders a shadow today; removal is a visual change pending review",
-  },
-  {
-    file: "src/app/(auth)/reset-password/page.tsx",
-    rule: "shadow",
-    value: "shadow-sm",
-    count: 1,
-    reason: "renders a shadow today; removal is a visual change pending review",
-  },
-  {
-    file: "src/app/(auth)/set-password/page.tsx",
-    rule: "shadow",
-    value: "shadow-sm",
-    count: 1,
-    reason: "renders a shadow today; removal is a visual change pending review",
-  },
-  {
-    file: "src/components/chain-of-custody/sankey/batch-sankey.tsx",
-    rule: "shadow",
-    value: "shadow-[0_2px_12px_rgba(20,8,38,0.10)]",
-    count: 1,
-    reason: "renders a shadow today; removal is a visual change pending review",
-  },
-  {
-    file: "src/components/forms/position-picker/address-search.tsx",
-    rule: "shadow",
-    value: "shadow-[0_4px_16px_var(--color-black-10)]",
-    count: 1,
-    reason: "renders a shadow today; removal is a visual change pending review",
-  },
-  {
-    file: "src/components/map/map-controls.tsx",
-    rule: "shadow",
-    value: "shadow-[0_1px_4px_var(--color-black-10)]",
-    count: 1,
-    reason: "renders a shadow today; removal is a visual change pending review",
-  },
-  {
-    file: "src/components/navigation/facility-selector.tsx",
-    rule: "shadow",
-    value: "shadow-[0_8px_24px_rgba(0,0,0,0.35)]",
-    count: 1,
-    reason: "renders a shadow today; removal is a visual change pending review",
-  },
-  {
-    file: "src/components/navigation/mobile-nav.tsx",
-    rule: "shadow",
-    value: "shadow-[-8px_0_32px_rgba(0,0,0,0.4)]",
-    count: 1,
-    reason: "renders a shadow today; removal is a visual change pending review",
-  },
-  {
-    file: "src/components/navigation/org-brand.tsx",
-    rule: "shadow",
-    value: "shadow-[0_8px_24px_rgba(0,0,0,0.35)]",
-    count: 1,
-    reason: "renders a shadow today; removal is a visual change pending review",
-  },
-  {
-    file: "src/components/ui/toast/index.tsx",
-    rule: "shadow",
-    value: "shadow-[0_4px_16px_var(--color-black-10)]",
-    count: 1,
-    reason: "renders a shadow today; removal is a visual change pending review",
-  },
-  {
-    file: "src/components/ui/tooltip/index.tsx",
-    rule: "shadow",
-    value: "shadow-[0_4px_16px_var(--color-black-10)]",
-    count: 1,
-    reason: "renders a shadow today; removal is a visual change pending review",
-  },
-  {
-    file: "src/components/certification/durability-tier-select.tsx",
-    rule: "radius",
-    value: "rounded-[2px]",
-    count: 1,
-    reason: "legacy arbitrary radius listed in docs/design-system.md; swapping to the token breaks tailwind-merge overrides",
-  },
-  {
-    file: "src/components/customers/customer-saved-locations.tsx",
-    rule: "radius",
-    value: "rounded-[4px]",
-    count: 1,
-    reason: "legacy arbitrary radius listed in docs/design-system.md; swapping to the token breaks tailwind-merge overrides",
-  },
-  {
-    file: "src/components/ui/accordion/index.tsx",
-    rule: "radius",
-    value: "rounded-[8px]",
-    count: 1,
-    reason: "legacy arbitrary radius listed in docs/design-system.md; swapping to the token breaks tailwind-merge overrides",
-  },
-  {
-    file: "src/components/ui/card/index.tsx",
-    rule: "radius",
-    value: "rounded-[8px]",
-    count: 2,
-    reason: "legacy arbitrary radius listed in docs/design-system.md; swapping to the token breaks tailwind-merge overrides",
-  },
-  {
-    file: "src/components/ui/notice/index.tsx",
-    rule: "radius",
-    value: "rounded-[8px]",
-    count: 1,
-    reason: "legacy arbitrary radius listed in docs/design-system.md; swapping to the token breaks tailwind-merge overrides",
-  },
-  {
-    file: "src/components/forms/choice-card-group.tsx",
-    rule: "shadow",
-    value: "peer-checked:shadow-[inset_0_0_0_1px_var(--color-interaction)]",
-    count: 1,
-    reason: "Inset shadow reinforces the checked state; replacing it needs selection-state design review.",
-  },
-  {
-    file: "src/components/forms/segmented-control.tsx",
-    rule: "shadow",
-    value: "peer-checked:shadow-[inset_0_0_0_1px_var(--color-interaction)]",
-    count: 1,
-    reason: "Inset shadow reinforces the checked state; replacing it needs selection-state design review.",
-  },
-  {
-    file: "src/components/certification/certification-status-badge.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/certification/durability-readiness.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/certification/durability-tier-select.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/certification/entity-certify-readiness-badge.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 2,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/chain-of-custody/batch-picker.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/chain-of-custody/map/custody-stages-rail.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 3,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/chain-of-custody/map/record-detail-panel.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/chain-of-custody/map/viewer-rails.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/chain-of-custody/run-picker.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 2,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/chain-of-custody/traceability-header.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 2,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/dashboard/flow-hero.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/dashboard/range-toggle.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/energy/energy-record-list.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 3,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/feedstock-types/feedstock-type-form.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/feedstock-types/isometric-feedstock-browser.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/forms/form-file-upload.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/navigation/facility-selector.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 3,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/navigation/org-brand.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 2,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/navigation/sidebar-content.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/orders/matching-output-bins.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/schema/schema-table-view.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 2,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/storage-locations/loss-reason-chips.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/storage-locations/storage-bin-board.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/storage-locations/storage-bin-tile.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 2,
-    reason: "Existing custom control requires a Button migration; preserve its layout and interaction in this mechanical change.",
-  },
-  {
-    file: "src/components/credit-batches/credit-batch-page-overview.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 2,
-    reason: "Added on staging before this check landed; migrate to the Button primitive in its own change.",
-  },
-  {
-    file: "src/components/credit-batches/credit-batch-page.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Added on staging before this check landed; migrate to the Button primitive in its own change.",
-  },
-  {
-    file: "src/components/credit-batches/credit-batch-progress-compact.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Added on staging before this check landed; migrate to the Button primitive in its own change.",
-  },
-  {
-    file: "src/components/credit-batches/credit-batch-timeline.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Added on staging before this check landed; migrate to the Button primitive in its own change.",
-  },
-  {
-    file: "src/components/emissions/batch-emissions-toolbar.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 2,
-    reason: "Added on staging before this check landed; migrate to the Button primitive in its own change.",
-  },
-  {
-    file: "src/components/emissions/emission-line-body-parts.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Added on staging before this check landed; migrate to the Button primitive in its own change.",
-  },
-  {
-    file: "src/components/emissions/emission-line-list.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Added on staging before this check landed; migrate to the Button primitive in its own change.",
-  },
-  {
-    file: "src/components/emissions/emission-source-chips.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Added on staging before this check landed; migrate to the Button primitive in its own change.",
-  },
-  {
-    file: "src/components/emissions/emissions-overview-table.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Added on staging before this check landed; migrate to the Button primitive in its own change.",
-  },
-  {
-    file: "src/components/emissions/emissions-overview.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Added on staging before this check landed; migrate to the Button primitive in its own change.",
-  },
-  {
-    file: "src/components/emissions/manual-entry-form.tsx",
-    rule: "raw-button",
-    value: "<button",
-    count: 1,
-    reason: "Added on staging before this check landed; migrate to the Button primitive in its own change.",
-  },
-  {
-    file: "src/components/oauth/oauth-card.tsx",
-    rule: "shadow",
-    value: "shadow-sm",
-    count: 1,
-    reason: "Added on staging before this check landed; remove the shadow in its own design change.",
-  },
-];
+
+export function parseArgs(args: readonly string[]): CliOptions {
+  const options: CliOptions = { help: false, rules: [], files: [] };
+  const selected = new Set<Rule>();
+  for (let index = 0; index < args.length; index++) {
+    const argument = args[index];
+    if (argument === "--") {
+      options.files.push(...args.slice(index + NEXT_ARGUMENT_OFFSET));
+      break;
+    }
+    if (argument === "--help") {
+      options.help = true;
+    } else if (argument === "--rule") {
+      const value = args[++index];
+      if (!value || value.startsWith("-")) {
+        throw new Error(`--rule requires a name. Valid names: ${RULES.join(", ")}`);
+      }
+      for (const name of value.split(",").map((name) => name.trim())) {
+        if (!RULES.includes(name as Rule)) {
+          throw new Error(`Unknown design rule: ${name}. Valid names: ${RULES.join(", ")}`);
+        }
+        selected.add(name as Rule);
+      }
+    } else if (argument === "--changed") {
+      const base = args[index + NEXT_ARGUMENT_OFFSET];
+      options.changedBase = base && !base.startsWith("-") ? args[++index] : DEFAULT_BASE;
+    } else if (argument.startsWith("-")) {
+      throw new Error(`Unknown option: ${argument}. Use --help for usage.`);
+    } else {
+      options.files.push(argument);
+    }
+  }
+  options.rules = selected.size ? [...selected] : RULES;
+  return options;
+}
+
+export function filterChangedFiles(paths: readonly string[], deletedFiles: readonly string[] = []): string[] {
+  const deleted = new Set(deletedFiles.map((file) => posix.normalize(file)));
+  return [...new Set(paths.map((file) => posix.normalize(file)))].filter((file) =>
+    file.startsWith(`${SOURCE_DIR}/`) && EXTENSIONS.has(extname(file)) &&
+    !TEST_FILE.test(file) && !deleted.has(file)).sort();
+}
+
+function changedFiles(base: string): string[] {
+  const gitFiles = (args: string[]): string[] =>
+    execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).split("\0").filter(Boolean);
+  const paths = [
+    ...gitFiles(["diff", "--name-only", "--diff-filter=d", "-z", `${base}...HEAD`, "--"]),
+    ...gitFiles(["diff", "--name-only", "--diff-filter=d", "-z", "HEAD", "--"]),
+    ...gitFiles(["ls-files", "--others", "--exclude-standard", "-z"]),
+  ];
+  return filterChangedFiles(paths, gitFiles(["ls-files", "--deleted", "-z"]));
+}
 
 export interface Violation {
   rule: Rule;
   file: string;
   line: number;
+  column: number;
   value: string;
 }
 
-/** No shared walker/reporter exists in the sibling checks; follow their recursive walk pattern. */
 function walkFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
@@ -471,7 +152,6 @@ export function matchClass(token: string, radiusValues: ReadonlySet<string>): Ru
     return radiusValues.has(value) ? null : "radius";
   }
   // New code uses hairlines for elevation and only shadow-none is allowed.
-  // Existing rendered shadows require visual review before removal; see ALLOWLIST.
   if (bare === "shadow" || (bare.startsWith("shadow-") && bare !== "shadow-none")) return "shadow";
   return null;
 }
@@ -491,8 +171,8 @@ export function findDesignViolations(source: string, file: string, radiusValues:
   const violations: Violation[] = [];
   const inUI = UI_DIRS.some((directory) => file.startsWith(directory)) && !FORMAT_HELPERS.has(file);
   const report = (node: ts.Node, rule: Rule, value: string, position = node.getStart(sourceFile)): void => {
-    const { line } = sourceFile.getLineAndCharacterOfPosition(position);
-    violations.push({ rule, file, line: line + 1, value });
+    const { line, character } = sourceFile.getLineAndCharacterOfPosition(position);
+    violations.push({ rule, file, line: line + DISPLAY_POSITION_OFFSET, column: character + DISPLAY_POSITION_OFFSET, value });
   };
   const visit = (node: ts.Node): void => {
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) ||
@@ -529,39 +209,35 @@ export function findDesignViolations(source: string, file: string, radiusValues:
   return violations;
 }
 
-export function applyAllowlist(violations: readonly Violation[], allowlist: readonly Exception[]): Violation[] {
-  const remaining = [...violations];
-  for (const exception of allowlist) {
-    let budget = exception.count;
-    for (let index = 0; index < remaining.length && budget > 0;) {
-      const violation = remaining[index];
-      if (violation.file === exception.file && violation.rule === exception.rule && violation.value === exception.value) {
-        remaining.splice(index, 1);
-        budget--;
-      } else index++;
-    }
-    if (budget > 0) {
-      throw new Error(`Stale allowlist entry: ${exception.file} (${exception.rule}: ${exception.value}) has ${exception.count - budget} occurrence(s), below pinned count ${exception.count}. Lower the count or delete this entry.`);
-    }
-  }
-  return remaining;
-}
-
 function main(): void {
-  const requested = process.argv[2];
-  if (requested && !RULES.includes(requested as Rule)) throw new Error(`Unknown design rule: ${requested}`);
-  const selected = requested ? [requested as Rule] : RULES;
-  const radiusValues = loadRadiusValues(readFileSync(join(ROOT, THEME_FILE), "utf8"));
-  const violations = walkFiles(join(ROOT, SOURCE_DIR)).flatMap((path) =>
-    findDesignViolations(readFileSync(path, "utf8"), relative(ROOT, path), radiusValues));
-  const remaining = applyAllowlist(violations, ALLOWLIST);
-  for (const rule of selected) {
-    const hits = remaining.filter((hit) => hit.rule === rule);
-    const exempt = violations.filter((hit) => hit.rule === rule).length - hits.length;
-    console.log(`check:${rule}: ${hits.length} violation(s), ${exempt} allowlisted occurrence(s).`);
-    for (const hit of hits) console.error(`  ${hit.file}:${hit.line}  ${hit.value}`);
-    if (hits.length) process.exitCode = 1;
+  const options = parseArgs(process.argv.slice(CLI_ARGS_START));
+  if (options.help) {
+    console.log(USAGE);
+    return;
   }
+  const files = options.files.length
+    ? filterChangedFiles(options.files.map((file) => relative(ROOT, resolve(ROOT, file))))
+    : options.changedBase !== undefined
+      ? changedFiles(options.changedBase)
+      : filterChangedFiles(walkFiles(join(ROOT, SOURCE_DIR)).map((file) => relative(ROOT, file)));
+  const radiusValues = loadRadiusValues(readFileSync(join(ROOT, THEME_FILE), "utf8"));
+  const violations = files.flatMap((file) =>
+    findDesignViolations(readFileSync(join(ROOT, file), "utf8"), file, radiusValues))
+    .filter((hit) => options.rules.includes(hit.rule))
+    .sort((left, right) => left.file.localeCompare(right.file) || left.line - right.line || left.column - right.column);
+  for (const hit of violations) {
+    console.log(`${hit.file}:${hit.line}:${hit.column}  ${hit.rule}  ${hit.value}  ${MESSAGES[hit.rule]}`);
+  }
+  const counts = options.rules.map((rule) => `${rule}: ${violations.filter((hit) => hit.rule === rule).length}`);
+  const summary = `${counts.join(", ")}; ${files.length} file(s) scanned.`;
+  console.log(violations.length ? summary : `No findings. ${summary}`);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try {
+    main();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = EXIT_FAILURE;
+  }
+}

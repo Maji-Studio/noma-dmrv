@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  applyAllowlist,
+  filterChangedFiles,
   findDesignViolations,
   loadRadiusValues,
   matchClass,
+  parseArgs,
   stripVariants,
 } from "./check-design-rules";
 
@@ -69,6 +70,17 @@ describe("design class matcher", () => {
     expect(hits.map((hit) => hit.line)).toEqual([1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5]);
   });
 
+  it("reports one-based lines and columns for classes, buttons and formatting", () => {
+    const hits = scan([
+      '<div className="rounded-md shadow-sm" />;',
+      '  <button />;',
+      'date.toLocaleTimeString();',
+    ].join("\n"));
+    expect(hits.map(({ line, column }) => [line, column])).toEqual([
+      [1, 17], [1, 28], [2, 3], [3, 1],
+    ]);
+  });
+
   it("skips comments, JSX prose, other JSX attributes and plain copy words", () => {
     expect(scan([
       '// "rounded-md shadow-sm" <button> new Intl.NumberFormat()',
@@ -79,7 +91,7 @@ describe("design class matcher", () => {
   });
 });
 
-describe("UI scopes and exception budgets", () => {
+describe("UI scopes", () => {
   it("exempts UI primitives only for raw buttons", () => {
     expect(scan('<button className="rounded-md" />', "src/components/ui/button/index.tsx")
       .map((hit) => hit.rule)).toEqual(["radius"]);
@@ -116,21 +128,71 @@ describe("UI scopes and exception budgets", () => {
       .toEqual([]);
     expect(scan('new Other.ListFormat(); new Intl.Collator();')).toEqual([]);
   });
+});
 
-  it.each([0, 1])("rejects stale allowlist budgets with %i remaining occurrences", (count) => {
-    const hits = scan('date.toLocaleDateString();'.repeat(count));
-    const exceptions = [{ file: COMPONENT_FILE, rule: "formatting" as const, value: "toLocaleDateString", count: 2, reason: "Existing date formatting." }];
-    expect(() => applyAllowlist(hits, exceptions)).toThrow(
-      `Stale allowlist entry: ${COMPONENT_FILE} (formatting: toLocaleDateString) has ${count} occurrence(s), below pinned count 2. Lower the count or delete this entry.`,
-    );
+describe("design review arguments", () => {
+  it("defaults to every rule and the full source tree", () => {
+    expect(parseArgs([])).toEqual({
+      help: false, rules: ["radius", "shadow", "raw-button", "formatting"], files: [],
+    });
   });
 
-  it("does not let an exempt file accumulate extra occurrences or another API", () => {
-    const hits = scan('date.toLocaleDateString(); other.toLocaleDateString(); date.toLocaleTimeString();');
-    const exceptions = [{ file: COMPONENT_FILE, rule: "formatting" as const, value: "toLocaleDateString", count: 1, reason: "Existing date formatting." }];
-    expect(applyAllowlist(hits, exceptions).map((hit) => hit.value)).toEqual(["toLocaleDateString", "toLocaleTimeString"]);
-    expect(applyAllowlist(scan('date.toLocaleDateString();'), exceptions)).toEqual([]);
-    expect(() => applyAllowlist(scan('date.toLocaleDateString();', "src/components/other.tsx"), exceptions))
-      .toThrow("has 0 occurrence(s), below pinned count 1. Lower the count or delete this entry.");
+  it("combines repeated and comma-separated rules without duplicates", () => {
+    expect(parseArgs(["--rule", "radius,shadow", "--rule", "formatting,radius"]).rules)
+      .toEqual(["radius", "shadow", "formatting"]);
+    expect(parseArgs(["--rule", "raw-button"]).rules).toEqual(["raw-button"]);
+  });
+
+  it("uses the default changed base or an explicit base", () => {
+    expect(parseArgs(["--changed"]).changedBase).toBe("origin/staging");
+    expect(parseArgs(["--changed", "review-base"]).changedBase).toBe("review-base");
+    expect(parseArgs(["--changed", "--rule", "radius"]).changedBase).toBe("origin/staging");
+  });
+
+  it("collects explicit files after options and the option terminator", () => {
+    expect(parseArgs(["--rule", "shadow", COMPONENT_FILE, "src/app/page.tsx"]).files)
+      .toEqual([COMPONENT_FILE, "src/app/page.tsx"]);
+    expect(parseArgs(["--changed", "--", COMPONENT_FILE])).toMatchObject({
+      changedBase: "origin/staging", files: [COMPONENT_FILE],
+    });
+  });
+
+  it("rejects unknown rules with the valid names", () => {
+    expect(() => parseArgs(["--rule", "radius,spacing"]))
+      .toThrow("Unknown design rule: spacing. Valid names: radius, shadow, raw-button, formatting");
+  });
+
+  it("rejects missing rule values and unknown options", () => {
+    for (const args of [["--rule"], ["--rule", "--changed"]]) {
+      expect(() => parseArgs(args)).toThrow("--rule requires a name");
+    }
+    expect(() => parseArgs(["--unknown"])).toThrow("Unknown option: --unknown");
+  });
+
+  it("recognizes help", () => {
+    expect(parseArgs(["--help"]).help).toBe(true);
+  });
+});
+
+describe("changed source file filtering", () => {
+  it("keeps supported source extensions and excludes non-source, tests and other extensions", () => {
+    expect(filterChangedFiles([
+      COMPONENT_FILE, "src/app/page.jsx", "src/features/report.ts", "src/lib/helper.js",
+      "scripts/example.ts", "src-lookalike/example.tsx", "docs/example.md",
+      "src/example.test.ts", "src/example.spec.tsx", "src/example.test.js", "src/example.spec.jsx",
+      "src/app/globals.css", "src/data.json", "../src/outside.ts", "src/../../outside.ts",
+    ])).toEqual([
+      "src/app/page.jsx", COMPONENT_FILE, "src/features/report.ts", "src/lib/helper.js",
+    ]);
+  });
+
+  it("excludes working-tree deletions even when present in the branch diff", () => {
+    expect(filterChangedFiles([COMPONENT_FILE, "src/app/deleted.tsx"], ["src/app/deleted.tsx"]))
+      .toEqual([COMPONENT_FILE]);
+  });
+
+  it("normalizes, deduplicates and sorts the union of changed paths", () => {
+    expect(filterChangedFiles([COMPONENT_FILE, "./src/app/page.tsx", COMPONENT_FILE, "src/lib/../app/page.tsx"]))
+      .toEqual(["src/app/page.tsx", COMPONENT_FILE]);
   });
 });
