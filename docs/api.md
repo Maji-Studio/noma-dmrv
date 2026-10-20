@@ -76,8 +76,9 @@ Admission applies to both credential kinds. A pre-resolution IP bucket allows
 (initially Anthropic `160.79.104.0/21`). After resolution, a per-credential
 `admit` bucket allows 720 per minute and charges before scope, method or body
 refusals. Read/write credential and organization buckets still apply. Values
-live in [rate-limit config](../src/config/api-rate-limits.ts); revisit the
-connector tier after the proof.
+live in [rate-limit config](../src/config/api-rate-limits.ts); the connector
+tier stays until real connector traffic exists (see
+[open questions](./open-questions-architecture.md#oauth-connection-follow-ups)).
 
 #### Connected apps
 
@@ -98,35 +99,20 @@ fix or workaround (decision 122). Claude's exact client identity,
 `OAUTH_CIMD_CLIENT_IDS`; add ChatGPT only after verifying its identity. Dynamic
 registration is off. Results: [plan section 28](./plans/2026-10-06-data-entry-api.md#28-oauth-track-results-2026-10-19).
 
-Tested on staging 2026-10-20:
-
-| Client | First consent | Write with the grant | Step-up from Read only | Disconnect in the client |
-|---|---|---|---|---|
-| claude.ai chat | Three choices; a token narrower than requested is accepted | Saves | Inline Connect card, then claude.ai resends the call; consent preselects only the refused area | Does not revoke at noma |
-| Cowork | Same connector and grant as chat | Saves | Shows "Forbidden", no Connect card (anthropics/claude-ai-mcp#931) | Same connector as chat |
-
-- Cowork workaround: choose Read and write, or the needed areas, on first consent.
-- claude.ai chat gives the model only a tool result's text, so
-  `TOOL_TEXT_SEPARATOR` in `src/lib/mcp/results.ts` puts the JSON after the
-  summary line. Cowork and Claude Code read `structuredContent`.
+- Cowork shows "Forbidden" with no Connect card when a write is refused for
+  scope (`api/cowork-step-up` in open questions). Choose Read and write, or the
+  needed areas, on first consent.
+- claude.ai Disconnect does not revoke at noma; revoke in Connected apps first
+  (decision pending: [open questions](./open-questions-architecture.md#oauth-connection-follow-ups)).
+- claude.ai chat gives the model only a tool result's text, so `toolText` in
+  `src/lib/mcp/results.ts` joins the summary and the JSON with
+  `TOOL_TEXT_SEPARATOR`. Cowork and Claude Code read `structuredContent`.
 - noma does not advertise `tools.listChanged`; otherwise clients hold a
   `subscriptions/listen` request open until the 30 second function timeout.
 - Disconnect in noma Settings, Connected apps revokes at once: the next refresh
   gets 400 `invalid_grant` and the client asks to sign in again.
-- Disconnect inside claude.ai sends no revoke call, so the grant stays in
-  Connected apps. The next connect shows only the board with every allowed scope
-  ticked (`hasConsent` in `src/components/oauth/consent-form.tsx`), so the
-  person cannot narrow. Revoke in noma Connected apps first. Product decision
-  open: see [open questions](./open-questions-architecture.md#oauth-connection-follow-ups).
 - A Platform Admin has no membership and sees "Join an organization first" in the
   picker. Use a real member.
-
-Runbook tips:
-
-- `vercel logs` returns only the newest 50 lines unless filtered. Use
-  `vercel logs -q 'requestPath:/api/mcp'`.
-- Reloading a noma consent page invalidates it ("Start again from the app").
-  Restart from the client.
 - Never retain raw codes, tokens or signed storage URLs in proof artifacts.
 
 ### Lab samples on the runner

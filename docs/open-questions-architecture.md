@@ -37,9 +37,13 @@ these areas; the entry rules and invariants live in
   scopes, or show the three choices when the client starts a fresh connection.
   Decision pending (round 15); until then, revoke in noma Connected apps to narrow.
 - **`api/cowork-step-up`:** Cowork shows "Forbidden" with no Connect card on a 403
-  `insufficient_scope`; claude.ai chat does step up. Reported as
+  `insufficient_scope` (`src/lib/api/problem.ts:oauthInsufficientScopeChallenge`);
+  claude.ai chat does step up. Reported as
   anthropics/claude-ai-mcp#931. Nothing to change in noma; recheck on Cowork
   updates.
+- **`api/connector-rate-tier`:** `src/config/api-rate-limits.ts` gives connector
+  egress ranges a 6,000 per minute pre-resolution tier. The c8 proof did not
+  measure connector load; revisit with real connector traffic.
 - **claude.ai metadata and refresh:**
   `src/lib/auth/oauth-cimd.ts:createOAuthCimdPlugins` uses the client's metadata
   cache policy. claude.ai's document returns `Cache-Control: public, max-age=300`.

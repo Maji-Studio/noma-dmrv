@@ -682,7 +682,12 @@ domain split. Client behaviour and runbook tips live in
   model got no ids (#1227); `tools.listChanged` held `subscriptions/listen`
   streams open until the 30 second timeout (#1228); the picker empty state misled
   a Platform Admin (#1229).
-- Open: Cowork shows "Forbidden" with no step-up card (anthropics/claude-ai-mcp#931);
-  claude.ai Disconnect does not revoke at noma, so a reconnect cannot narrow
-  scopes. Both are in [open questions](../open-questions-architecture.md#oauth-connection-follow-ups).
+- Client behaviour tested on staging 2026-10-20:
+
+  | Client | First consent | Write with the grant | Step-up from Read only | Disconnect in the client |
+  |---|---|---|---|---|
+  | claude.ai chat | Three choices; a token narrower than requested is accepted | Saves | Inline Connect card, then claude.ai resends the call; consent preselects only the refused area | Does not revoke at noma |
+  | Cowork | Same connector and grant as chat | Saves | Shows "Forbidden", no Connect card (anthropics/claude-ai-mcp#931) | Same connector as chat |
+
+- Open: Cowork step-up and claude.ai Disconnect not revoking; both are in [open questions](../open-questions-architecture.md#oauth-connection-follow-ups).
 - Still untested: claude.ai's reaction to `invalid_client` on refresh, ChatGPT.
