@@ -21,6 +21,7 @@ export function CreateApiKeyDialog({ isOpen, onClose, organizationId }: {
     setPlaintext(null);
     setCopyState("idle");
     create.reset();
+    create.startDraft();
     onClose();
   }
 

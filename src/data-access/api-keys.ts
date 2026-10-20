@@ -1,14 +1,23 @@
-import { and, desc, eq } from "drizzle-orm";
-import { db, type DbTransaction } from "@/db";
+import { createHash } from "node:crypto";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { z } from "zod";
+import { APP_FORM_CREDENTIAL_PREFIX } from "@/config/operations";
+import { db, withDedicatedLockConnection, type DbTransaction } from "@/db";
 import { apiKeys, apiKeyOwners, members, users } from "@/db/schema";
 import { auth } from "@/lib/auth/better-auth";
 import type { OrgContext } from "@/lib/auth/server";
 import { canOwnApiKey, scopesFromStoredPermissions, serializeApiPermissions, toApiPermissions } from "@/lib/auth/api-scopes";
-import { DomainError } from "@/lib/domain-errors";
+import { DomainError, idempotencyInProgress } from "@/lib/domain-errors";
 import { revokeApiKeySchema, createApiKeySchema, updateApiKeySchema } from "@/schemas/api-keys";
+import { claimIdempotencyKey, recordIdempotencyOutcome } from "./api-idempotency-records";
 import { findApiCredentialMember } from "./api-credential-auth";
 import { assertRowVersion, nextVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
+
+const CREATE_API_KEY_OPERATION = "create_api_key";
+// A draft retry replaces the key even when its name or scopes were edited.
+const CREATE_API_KEY_FINGERPRINT = createHash("sha256").update(CREATE_API_KEY_OPERATION).digest("hex");
+const createdKeyOutcomeSchema = z.object({ id: z.string().min(1) });
 
 async function requireCredentialManager(ctx: OrgContext) {
   requireOrgScope(ctx);
@@ -53,45 +62,75 @@ export async function listApiKeys(ctx: OrgContext) {
   }));
 }
 
-export async function createApiKey(ctx: OrgContext, input: unknown) {
+export async function createApiKey(ctx: OrgContext, input: unknown, intentKey?: string) {
   requireOrgScope(ctx);
   const member = await requireCredentialManager(ctx);
   const parsed = createApiKeySchema.parse(input);
-  const result = await auth.api.createApiKey({
-    body: {
-      name: parsed.name,
-      expiresIn: parsed.expiresIn,
-      permissions: toApiPermissions(parsed.scopes),
-      userId: ctx.userId,
-      organizationId: ctx.organizationId,
-    },
-  });
-  try {
-    await db.insert(apiKeyOwners)
-      .values({
-        credentialId: result.id,
+  let issuedId: string | undefined;
+
+  const issue = async (executor: Pick<typeof db, "insert">) => {
+    const result = await auth.api.createApiKey({
+      body: {
+        name: parsed.name,
+        expiresIn: parsed.expiresIn,
+        permissions: toApiPermissions(parsed.scopes),
         userId: ctx.userId,
         organizationId: ctx.organizationId,
-        memberId: member.id,
-      });
-    // Close the membership-change/issuance race after the owner becomes visible
-    // to revocation hooks. Unbound plugin rows are never accepted by the resolver.
+      },
+    });
+    issuedId = result.id;
+    await executor.insert(apiKeyOwners).values({
+      credentialId: result.id,
+      userId: ctx.userId,
+      organizationId: ctx.organizationId,
+      memberId: member.id,
+    });
+    // Re-check live membership after issuance; the owner FK also pins membership
+    // until a keyed transaction commits, so removal hooks can revoke the owner.
     const currentMember = await requireCredentialManager(ctx);
     if (currentMember.id !== member.id) {
       throw new DomainError("forbidden", "Credential owner membership changed during issuance.");
     }
+    return { id: result.id, key: result.key, name: result.name, expiresAt: result.expiresAt };
+  };
+
+  try {
+    if (!intentKey) return await issue(db);
+    return await withDedicatedLockConnection(async (tx) => {
+      const credentialId = `${APP_FORM_CREDENTIAL_PREFIX}${ctx.userId}`;
+      const lockKey = JSON.stringify([CREATE_API_KEY_OPERATION, ctx.organizationId, credentialId, intentKey]);
+      // Reject overlap before claiming: waiting could replace a key that the
+      // in-flight request is about to return. The lock lasts through commit.
+      const lock = await tx.execute<{ acquired: boolean }>(
+        sql`select pg_try_advisory_xact_lock(hashtextextended(${lockKey}, 0)) as acquired`,
+      );
+      if (!lock.rows[0]?.acquired) throw idempotencyInProgress();
+      const claim = await claimIdempotencyKey(ctx, tx, {
+        credentialId,
+        key: intentKey,
+        operationId: CREATE_API_KEY_OPERATION,
+        fingerprint: CREATE_API_KEY_FINGERPRINT,
+      });
+      if (claim.kind === "replay") {
+        const previous = createdKeyOutcomeSchema.parse(claim.outcome);
+        await tx.delete(apiKeys).where(and(
+          eq(apiKeys.id, previous.id), eq(apiKeys.referenceId, ctx.organizationId),
+        ));
+      }
+      const result = await issue(tx);
+      await recordIdempotencyOutcome(ctx, tx, claim.recordId, { id: result.id });
+      return result;
+    });
   } catch (error) {
-    await db.update(apiKeys)
-      .set({ enabled: false })
-      .where(and(eq(apiKeys.id, result.id), eq(apiKeys.referenceId, ctx.organizationId)));
+    // Better Auth commits independently. Compensate after T rolls back, including
+    // commit failures, without changing the previous key or its recorded outcome.
+    if (issuedId) {
+      await db.update(apiKeys).set({ enabled: false }).where(and(
+        eq(apiKeys.id, issuedId), eq(apiKeys.referenceId, ctx.organizationId),
+      ));
+    }
     throw error;
   }
-  return {
-    id: result.id,
-    key: result.key,
-    name: result.name,
-    expiresAt: result.expiresAt,
-  };
 }
 
 async function requireOwnedCredential(ctx: OrgContext, tx: DbTransaction, id: string, expectedVersion: number) {

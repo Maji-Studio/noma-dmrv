@@ -150,6 +150,16 @@ records the reason, and no application action can re-enable it. Only creation
 returns plaintext. Lists select safe fields explicitly and never return the
 key hash or plugin metadata.
 
+The create dialog sends a per-draft intent key (docs/forms.md, "Double
+submit"). A retry with the same key, after a response that never reached the
+browser, deletes the key recorded under it (its secret was never shown) and
+issues a fresh one, so the list keeps one key. The idempotency record holds
+only the key id, never the plaintext. The transaction runs on a dedicated
+connection because Better Auth issues the key through the shared pool, and an
+advisory try-lock refuses an overlapping request with the same intent instead
+of letting it wait and replace a key that is about to be returned. The draft
+key rotates once a create response arrives and when the dialog closes.
+
 The Better Auth `hooks.before` rejects all HTTP `/api/auth/api-key/*` calls,
 including create, update, delete, get and list. Only header-free, server-side
 `auth.api` calls are allowed. API-key session emulation and the plugin's own
