@@ -35,7 +35,7 @@ const HIT_AREA_FROM_SM =
 
 /**
  * The one status line of a not-ready batch: the count of open checks and the
- * first one, named as the batch page names it ("3 issues: 17 lines to decide
+ * first one, named as the batch page names it ("3 issues: 17 components to decide
  * and 2 more").
  */
 export function batchIssueLine(health: BatchHealth): string {

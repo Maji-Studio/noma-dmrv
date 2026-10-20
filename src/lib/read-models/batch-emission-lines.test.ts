@@ -310,7 +310,7 @@ it("shows re-entry for unit changes and keeps other lines healthy", async () => 
     })) as never,
   );
   const lines = await loadReadyLines();
-  expect(lines[0]).toMatchObject({ state: "needsReview", total: null, blocker: { code: "lineNeedsReview", message: "Enter the values again for the current template line." }, entries: [expect.objectContaining({ counts: false, canConfirm: false })] });
+  expect(lines[0]).toMatchObject({ state: "needsReview", total: null, blocker: { code: "lineNeedsReview", message: "Enter the values again for the current template component." }, entries: [expect.objectContaining({ counts: false, canConfirm: false })] });
   expect(lines[1]).toMatchObject({ state: "filled", total: { magnitude: "1", unit: "kWh" }, removedFromTemplate: false });
   expect(lines.every((line) => line.comment === null)).toBe(true);
   vi.mocked(listEmissionLineComments).mockResolvedValue([

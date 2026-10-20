@@ -2,10 +2,10 @@
  * One line of a Removal template in the line review: what the line is, its
  * inputs with their quantity kind and unit, where its values come from (scope,
  * automatic datapoints, emissions entries), and for an Owner or Admin the controls
- * to accept a proposal or assign a contract. Only a line to decide
+ * to accept a proposal or assign a contract. Only a component to decide
  * takes an assignment; a settled line is read-only, as the server enforces.
  *
- * A line to decide carries the open-check treatment the credit batch
+ * A component to decide carries the open-check treatment the credit batch
  * checklist uses (a left rule on the sea wash), so the lines that block a
  * Removal read as a short list among the reviewed ones.
  */
@@ -52,7 +52,7 @@ export interface RemovalTemplateLineRowProps {
   problems: string[];
   /** The line has an input Isometric did not return in full. */
   notFullyRead: boolean;
-  /** Units Isometric returned for this line's inputs, keyed by input key. */
+  /** Units Isometric returned for this component's inputs, keyed by input key. */
   enrichment: ComponentEnrichment | undefined;
   /** Show the change badge only when an earlier read exists to compare with. */
   showChange: boolean;
@@ -244,7 +244,7 @@ export function RemovalTemplateLineRow({
         </Notice>
       )}
       {notFullyRead && (
-        <Notice tone="info">Some inputs on this line could not be read from Isometric.</Notice>
+        <Notice tone="info">Some inputs on this component could not be read from Isometric.</Notice>
       )}
 
       {canManage && (needsReview || draft) && (
@@ -287,7 +287,7 @@ export function RemovalTemplateLineRow({
       )}
 
       <RawIdentifiers
-        summary="Line details"
+        summary="Component details"
         entries={[
           ["Component", component.id],
           ["Blueprint", component.blueprintKey],

@@ -69,7 +69,7 @@ export function RemovalTemplateReviewPanel({ facilityId, canManage, templateId }
 
   if (requested && !listed && preview.isPending) {
     return (
-      <div className="flex flex-col gap-16" aria-busy="true" aria-label="Loading template lines">
+      <div className="flex flex-col gap-16" aria-busy="true" aria-label="Loading template components">
         <Skeleton className="h-160 w-full" />
       </div>
     );
@@ -95,7 +95,7 @@ export function RemovalTemplateReviewPanel({ facilityId, canManage, templateId }
     <div className="flex flex-col gap-24">
       {previewFailed && (
         <ServerError
-          message="That template's lines could not be read from Isometric."
+          message="That template's components could not be read from Isometric."
           action={<Button size="small" busy={preview.isFetching} onClick={() => void preview.refetch()}>Try again</Button>}
         />
       )}

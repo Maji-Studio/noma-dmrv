@@ -32,15 +32,15 @@ describe("certCheckLabel", () => {
 
 describe("templateLinesUnmetLabel", () => {
   it("always counts undecided lines, ahead of an incomplete read", () => {
-    expect(templateLinesUnmetLabel(1, ["templateNotFullyRead"])).toBe("1 line to decide");
-    expect(templateLinesUnmetLabel(2, ["templateNotFullyRead", "lineNeedsReview"])).toBe("2 lines to decide");
+    expect(templateLinesUnmetLabel(1, ["templateNotFullyRead"])).toBe("1 component to decide");
+    expect(templateLinesUnmetLabel(2, ["templateNotFullyRead", "lineNeedsReview"])).toBe("2 components to decide");
   });
 
   it("names the incomplete read or filling problem when no count is available", () => {
     expect(templateLinesUnmetLabel(0, ["templateNotFullyRead", "templateLinesNeedReview"])).toBe(TEMPLATE_NOT_FULLY_READ_TITLE);
     for (const codes of [[], ["templateLinesNeedReview"], ["lineNeedsReview"], ["lineNeedsSetup", "lineHasNoSource", "forbiddenLine"]] as const) {
-      expect(templateLinesUnmetLabel(0, codes)).toBe("Template lines not ready");
+      expect(templateLinesUnmetLabel(0, codes)).toBe("Template components not ready");
     }
-    expect(CERT_REQUIREMENT_META.templateLines.unmetLabel).toBe("Template lines not ready");
+    expect(CERT_REQUIREMENT_META.templateLines.unmetLabel).toBe("Template components not ready");
   });
 });
