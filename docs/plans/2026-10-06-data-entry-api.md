@@ -1,7 +1,7 @@
 # Data-entry API (REST + MCP): plan
 
 - **Owner:** Kenji Nguyen
-- **Status:** in progress; Phases 0 to 7 done (sections 15 to 27), OAuth implementation complete; staging connector proof pending (c8)
+- **Status:** in progress; Phases 0 to 7 done (sections 15 to 27), OAuth implementation complete; staging connector proof passed (c8), two client findings open
 - **Last reviewed:** 2026-10-06 (against `e4ba77c2`, plus the Phase 0 branch `feat/data-entry-api-spike`)
 
 Drafted from four Codex research memos (gpt-6.1-sol: REST practice, MCP and auth, codebase audit; gpt-6-astra: independent architecture draft). Reviewed by gpt-6-astra (adversarial), gpt-6.1-sol (fact-check and QA), Fable 5.1 (architecture) and Sonnet 5.5 (API consumer walk-throughs). Section 14 lists what changed and why.
@@ -666,9 +666,23 @@ lock timeout.
 - **c6:** organization picker, consent and Connected apps screens with unit and
   browser coverage.
 
-Keep `OAUTH_PROVIDER_ENABLED=false` everywhere until the staging proof. Enable it
-on staging only for c8 after merge; production stays off until the domain split.
-Run [Connecting Claude and ChatGPT](../api.md#connecting-claude-and-chatgpt),
-then record client versions, outcomes and blockers here.
+`OAUTH_PROVIDER_ENABLED` is on for staging; production stays off until the
+domain split. Client behaviour and runbook tips live in
+[Connecting Claude and ChatGPT](../api.md#connecting-claude-and-chatgpt).
 
-**Connector proof: pending (c8)**
+**Connector proof: passed on staging (c8, 2026-10-19 and 2026-10-20; retest on
+`fd009f39b`).**
+
+- Passed: connect and org picker, reads, write with the granted scope in claude.ai
+  chat and Cowork, step-up from Read only in claude.ai chat, no delete tools (69
+  tools in Claude Code), Disconnect in noma Settings revokes at once (400
+  `invalid_grant` on the next refresh), and a token narrower than requested is
+  accepted.
+- Fixed from the run: chat tool results carried only the summary text, so the
+  model got no ids (#1227); `tools.listChanged` held `subscriptions/listen`
+  streams open until the 30 second timeout (#1228); the picker empty state misled
+  a Platform Admin (#1229).
+- Open: Cowork shows "Forbidden" with no step-up card (anthropics/claude-ai-mcp#931);
+  claude.ai Disconnect does not revoke at noma, so a reconnect cannot narrow
+  scopes. Both are in [open questions](../open-questions-architecture.md#oauth-connection-follow-ups).
+- Still untested: claude.ai's reaction to `invalid_client` on refresh, ChatGPT.
