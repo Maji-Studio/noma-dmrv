@@ -28,10 +28,11 @@ const SOIL_MODELLED_TIER = "200_year";
 export const SOIL_REFERENCE_NOT_USED_TEXT =
   "No soil reference temperature: only the 200-year model uses it.";
 
-function PaneSection({ title, children }: { title: string; children: ReactNode }) {
+/** A hairline-separated block; untitled when its one field already names it. */
+function PaneSection({ title, children }: { title?: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-12 border-t-[1px] border-[var(--clr-dark-purple-10)] pt-16 first:border-t-0 first:pt-0">
-      <h3 className="body-caption text-[var(--color-text-tertiary)]">{title}</h3>
+      {title && <h3 className="body-caption text-[var(--color-text-tertiary)]">{title}</h3>}
       {children}
     </section>
   );
@@ -64,7 +65,7 @@ export function FacilitySettingsPane({ viewer }: { viewer: SettingsViewer }) {
         />
       </PaneSection>
 
-      <PaneSection title="Durability">
+      <PaneSection>
         <DurabilityTierSettings facility={selectedFacility} canManage={canManage} />
         {!soilModelled ? (
           <p className="body-small text-[var(--color-text-tertiary)]">{SOIL_REFERENCE_NOT_USED_TEXT}</p>

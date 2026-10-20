@@ -1,5 +1,5 @@
 /**
- * Settings → Defaults: the organization's operating defaults.
+ * Settings, General: the organization's operating defaults (formerly Defaults).
  *
  * Covers the two claims the surface makes that nothing else proves end to end:
  * a saved default survives a reload, and it reaches the form it says it seeds.
@@ -31,10 +31,10 @@ test.describe("Organization operating defaults", () => {
     seededData,
   }) => {
     await clearOrganizationSettings();
-    await page.goto(`/settings/defaults?facility=${seededData.facility.id}`);
+    await page.goto(`/settings/general?facility=${seededData.facility.id}`);
 
     await expect(
-      page.getByRole("heading", { name: "Defaults", exact: true, level: 1 }),
+      page.getByRole("heading", { name: "General", exact: true, level: 1 }),
     ).toBeVisible({ timeout: 30_000 });
 
     // Wait for hydration before touching a control. The form is server-rendered
@@ -73,21 +73,20 @@ test.describe("Organization operating defaults", () => {
     await expect(page.getByLabel("Currency")).toHaveCount(0);
   });
 
-  test("a member cannot reach the defaults route", async ({
+  test("a member reads the defaults without controls", async ({
     operatorPage: page,
   }) => {
-    // The rail does not offer it, and the route itself refuses — a member
-    // landing on a form they cannot submit is worse than a 404.
-    await page.goto("/settings/organization");
+    // Q15: every member opens General; only Owners and Admins change it.
+    await page.goto("/settings/general");
     await expect(
-      page.getByRole("navigation", { name: "Settings categories" }),
+      page.getByRole("heading", { name: "General", exact: true, level: 1 }),
     ).toBeVisible({ timeout: 30_000 });
-    await expect(
-      page.getByRole("link", { name: "Defaults", exact: true }),
-    ).toHaveCount(0);
+    await expect(page.getByText("New facilities start with")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save defaults" })).toHaveCount(0);
+    await expect(page.getByRole("radio")).toHaveCount(0);
 
-    const response = await page.goto("/settings/defaults");
-    expect(response?.status()).toBe(404);
-    await expect(page.getByLabel("Currency")).toHaveCount(0);
+    // The retired route lands on General too.
+    await page.goto("/settings/defaults");
+    await expect(page).toHaveURL(/\/settings\/general/);
   });
 });

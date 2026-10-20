@@ -95,25 +95,33 @@ test.describe("Isometric credentials self-service", () => {
     operatorPage: page,
     seededData,
   }) => {
-    await page.goto(
-      `/certification/settings?section=certifier&facility=${seededData.facility.id}`,
-    );
+    await page.goto(`/settings/registry?facility=${seededData.facility.id}`);
 
-    // The pane itself is visible to a member — it is where the connection state
-    // is readable — but neither the keys form nor the link controls are.
+    // The pane itself is visible to a member, since it is where the connection
+    // state is readable, but the keys form is not.
     await expect(
-      page.getByRole("heading", { name: "Certifier", exact: true }),
+      page.getByRole("heading", { name: "Registry", exact: true, level: 1 }),
     ).toBeVisible();
+    await expect(page.getByText("Registry: Isometric")).toBeVisible();
     await expect(page.getByLabel("Access token")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Save and test connection" })).toHaveCount(0);
-    await expect(
-      page.getByRole("button", { name: "Link Isometric project" }),
-    ).toHaveCount(0);
-    await expect(
-      page.getByText(
-        "This facility has no Isometric project link. Ask an Admin to link one",
-        { exact: false },
-      ),
-    ).toBeVisible();
+
+    // The project link is on Facilities, read-only. Without saved keys the
+    // route answers with Registry instead.
+    await page.goto(`/settings/facilities?facility=${seededData.facility.id}`);
+    await page.waitForURL(/\/settings\/(facilities|registry)/);
+    if (new URL(page.url()).pathname === "/settings/facilities") {
+      await expect(
+        page.getByRole("button", { name: "Link Isometric project" }),
+      ).toHaveCount(0);
+      await expect(
+        page.getByText(
+          "This facility has no Isometric project link. Ask an Admin to link one",
+          { exact: false },
+        ),
+      ).toBeVisible();
+    } else {
+      await expect(page.getByText("Keys not saved.")).toBeVisible();
+    }
   });
 });

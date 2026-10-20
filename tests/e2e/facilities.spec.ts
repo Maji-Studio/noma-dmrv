@@ -13,7 +13,6 @@ import {
   type TestFacility,
 } from "./fixtures";
 import type { Locator } from "@playwright/test";
-import { dismissCertifierLinkDialog } from "./fixtures/page-helpers";
 import * as crypto from "crypto";
 
 // ============================================
@@ -89,13 +88,14 @@ test.describe("Facility + Reactor UI CRUD", () => {
     // Submit the form
     await page.getByRole("button", { name: /Create Facility/i }).click();
 
-    // Side sheet closes on success. A separate optional certifier dialog may open.
+    // Side sheet closes on success.
     await facilityDialog.waitFor({ state: "hidden", timeout: 10000 });
 
-    // Admins get an optional "Link Isometric project" prompt after create
-    // (facility-list.tsx); it aria-hides the page, so dismiss it before
-    // asserting on the list.
-    await dismissCertifierLinkDialog(page);
+    // A viewer who may link it is pointed to Settings, Facilities, where the
+    // registry link lives (#1277); no dialog opens over the list any more.
+    const linkNotice = page.getByRole("link", { name: "Link registry project" });
+    await expect(linkNotice).toBeVisible({ timeout: 10000 });
+    await expect(linkNotice).toHaveAttribute("href", /\/settings\/facilities\?facility=/);
 
     // Search for the new facility (list may be paginated with many entries)
     const searchBox = page.getByRole("textbox", { name: "Search facilities" });
@@ -293,8 +293,9 @@ test.describe("Facilities Duplicate Code Handling", () => {
 // ============================================
 
 test.describe("Facility durability tier", () => {
-  test("shows the active tier and the locked future pathway", async ({
+  test("is set in Settings, Facilities, not in the facility form", async ({
     adminPage: page,
+    seededData,
   }) => {
     await page.goto("/facilities");
     await expect(page.getByText("Active facilities")).toBeVisible({
@@ -306,11 +307,22 @@ test.describe("Facility durability tier", () => {
       .getByRole("dialog")
       .filter({ has: page.getByRole("button", { name: /Create Facility/i }) });
     await expect(dialog).toBeVisible();
+    // Q9 (#1277): the tier is certification configuration, not site data.
+    await expect(dialog.getByRole("radiogroup")).toHaveCount(0);
+    await expect(dialog.getByText("Durability tier")).toHaveCount(0);
+    await page.keyboard.press("Escape");
 
-    const tierGroup = dialog.getByRole("radiogroup", {
-      name: "Durability tier",
+    await page.goto(`/settings/facilities?facility=${seededData.facility.id}`);
+    await page.waitForURL(/\/settings\/(facilities|registry)/, { timeout: 30000 });
+    test.skip(
+      new URL(page.url()).pathname !== "/settings/facilities",
+      "Settings, Facilities needs the organization's registry keys saved.",
+    );
+
+    const tierGroup = page.getByRole("radiogroup", {
+      name: "Facility durability tier",
     });
-    await expect(tierGroup).toBeVisible();
+    await expect(tierGroup).toBeVisible({ timeout: 15000 });
     await expect(
       tierGroup.getByRole("radio", { name: /1000-year/i }),
     ).toHaveAttribute("aria-checked", "true");
@@ -318,5 +330,8 @@ test.describe("Facility durability tier", () => {
       tierGroup.getByRole("radio", { name: /200-year/i }),
     ).toHaveAttribute("aria-disabled", "true");
     await expect(tierGroup.getByText("Available later")).toBeVisible();
+    await expect(
+      page.getByText("No soil reference temperature: only the 200-year model uses it."),
+    ).toBeVisible();
   });
 });

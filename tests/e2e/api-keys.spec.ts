@@ -30,8 +30,9 @@ test.use({ trace: "off", video: "off", screenshot: "off" });
 test("an organization Admin creates, closes and revokes an API key", async ({ orgAdminPage: page, apiKeyName }) => {
   // adminPage is a Platform Admin without membership. orgAdminPage has the
   // verified, live organization Admin membership required for key management.
-  await page.goto("/settings/api-keys");
-  await expect(page.getByRole("heading", { name: "API keys", level: 1, exact: true })).toBeVisible({ timeout: UI_TIMEOUT_MS });
+  await page.goto("/settings/developers");
+  await expect(page.getByRole("heading", { name: "Developers", level: 1, exact: true })).toBeVisible({ timeout: UI_TIMEOUT_MS });
+  await expect(page.getByText("API access:")).toBeVisible();
   await page.getByRole("button", { name: "New API key", exact: true }).click();
   const createDialog = page.getByRole("dialog", { name: "Create API key", exact: true });
   await createDialog.getByLabel("Name", { exact: false }).fill(apiKeyName);
@@ -67,18 +68,20 @@ test("an organization Admin creates, closes and revokes an API key", async ({ or
   await expect(keyRow.getByRole("button", { name: `Revoke ${apiKeyName}`, exact: true })).toHaveCount(0);
 });
 
-test("Members have no API key rail entry or controls", async ({ operatorPage: page }) => {
-  await page.goto("/settings/organization");
+test("Members have no Developers rail entry or controls", async ({ operatorPage: page }) => {
+  await page.goto("/settings/members");
   const rail = page.getByRole("navigation", { name: "Settings categories" });
   await expect(rail).toBeVisible({ timeout: UI_TIMEOUT_MS });
-  await expect(rail.getByRole("link", { name: "API keys", exact: true })).toHaveCount(0);
+  await expect(rail.getByRole("link", { name: "Developers", exact: true })).toHaveCount(0);
+  // The retired route still lands on the pane.
   await page.goto("/settings/api-keys");
+  await expect(page).toHaveURL(/\/settings\/developers/);
   await expect(page.getByText(/Only organization Owners and Admins with a membership/)).toBeVisible();
   await expect(page.getByRole("button", { name: "New API key" })).toHaveCount(0);
 });
 
 test("a Platform Admin without membership sees the explanation", async ({ adminPage: page }) => {
-  await page.goto("/settings/api-keys");
+  await page.goto("/settings/developers");
   await expect(page.getByText(/Only organization Owners and Admins with a membership/)).toBeVisible({ timeout: UI_TIMEOUT_MS });
   await expect(page.getByRole("button", { name: "New API key" })).toHaveCount(0);
 });

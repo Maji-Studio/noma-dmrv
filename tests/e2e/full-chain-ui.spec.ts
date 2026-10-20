@@ -16,7 +16,6 @@ import { test, expect } from "./fixtures";
 import {
   ACTION_LABEL_PREFIX,
   creditBatchRows,
-  dismissCertifierLinkDialog,
   getCreatedActionCode,
   getListedActionCodes,
   waitForSideSheet,
@@ -407,10 +406,6 @@ test.describe("Full Chain UI Smoke Test", () => {
         .getByRole("button", { name: "Create facility" })
         .click();
       await facilityDialog.waitFor({ state: "hidden", timeout: 10000 });
-
-      // Admins get an optional "Link Isometric project" prompt after create;
-      // it aria-hides the page, so dismiss it before asserting on the list.
-      await dismissCertifierLinkDialog(page);
 
       // Search for the new facility (list may be paginated). Scope to the list
       // card's heading — the sidebar FacilitySelector falls back to the first

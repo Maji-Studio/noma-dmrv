@@ -31,9 +31,8 @@ const GHG_CONTENTS_STEP = 2;
 const GHG_CONFIRM_STEP = 3;
 const DUMMY_TOKEN = "form-capture-token";
 const SETTINGS_PANES = [
-  { key: "certifier", title: "Certifier" },
-  { key: "sources", title: "Sources" },
-  { key: "emission-estimates", title: "Emissions" },
+  { key: "registry", title: "Registry" },
+  { key: "facilities", title: "Facilities" },
   { key: "diagnostics", title: "Diagnostics" },
   { key: "template-mapping", title: "Template mapping" },
 ] as const;
@@ -57,12 +56,12 @@ async function readThenEdit(page: Page, ctx: CaptureContext, route: string, code
 
 /**
  * Opens a certification page. Removals and GHG statements redirect to
- * Certification settings while the facility has no Isometric project link.
+ * Settings, Registry while the facility has no Isometric project link.
  */
 async function certificationPage(page: Page, ctx: CaptureContext, route: string): Promise<string | null> {
   await gotoRoute(page, ctx, route);
-  if (new URL(page.url()).pathname.startsWith("/certification/settings")) {
-    return `${route} redirects to Certification settings: ${UNLINKED}`;
+  if (new URL(page.url()).pathname.startsWith("/settings/registry")) {
+    return `${route} redirects to Settings, Registry: ${UNLINKED}`;
   }
   return null;
 }
@@ -590,29 +589,29 @@ const settingsAuth: Surface[] = [
   ...SETTINGS_PANES.map(({ key, title }): Surface => ({
     id: `cert-settings.${key}`,
     family: "settings-auth-onboarding",
-    title: `Certification settings: ${title}`,
+    title: `Settings: ${title}`,
     kind: "page",
     mode: "form",
     fill: "filled",
     open: async (page, ctx) => {
-      await gotoRoute(page, ctx, `certification/settings?section=${key}`);
-      const rail = page.getByRole("navigation", { name: "Certification settings categories" });
-      if ((await rail.getByRole("button", { name: new RegExp(`^${title}`) }).count()) === 0) return `the ${title} pane is not offered to this viewer`;
+      await gotoRoute(page, ctx, `settings/${key}`);
+      const rail = page.getByRole("navigation", { name: "Settings categories" });
+      if ((await rail.getByRole("link", { name: new RegExp(`^${title}`) }).count()) === 0) return `the ${title} pane is not offered to this viewer`;
       return paneRoot(page);
     },
   })),
   {
     id: "cert-settings.project-link",
     family: "settings-auth-onboarding",
-    title: "Certifier project link dialog",
+    title: "Facilities project link dialog",
     kind: "dialog",
     mode: "form",
     fill: "filled",
     open: async (page, ctx) => {
-      await gotoRoute(page, ctx, "certification/settings?section=certifier");
+      await gotoRoute(page, ctx, "settings/facilities");
       const pane = paneRoot(page);
       const trigger = pane.getByRole("button", { name: /^(Link Isometric project|Edit)$/ }).first();
-      if ((await trigger.count()) === 0) return "no project link button on the Certifier pane";
+      if ((await trigger.count()) === 0) return "no project link button on the Facilities pane";
       await trigger.click();
       const dialog = lastDialog(page);
       await expect(dialog).toBeVisible();
@@ -638,8 +637,8 @@ const settingsAuth: Surface[] = [
   },
   ...(
     [
-      ["members", "settings/organization"],
-      ["defaults", "settings/defaults"],
+      ["members", "settings/members"],
+      ["general", "settings/general"],
       ["organizations", "admin/organizations"],
     ] as const
   ).map(([key, route]): Surface => ({
