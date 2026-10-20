@@ -64,6 +64,7 @@ import {
 import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { BIOCHAR_PRODUCT_DEEP_LINK_PARAM } from "@/lib/biochar-product-links";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useEffect, useState } from "react";
 import { BiocharProductForm } from "./biochar-product-form";
 import { productSheetSections } from "./product-read-details";
@@ -427,6 +428,8 @@ export function BiocharProductList() {
     setFormError(null);
     setSideSheet({ mode: "create", entity: null });
   };
+  // "Adding stock" from a bin's history lands here with ?create=true.
+  useOpenCreateIntent(openCreate);
   const openView = (product: BiocharProductWithRelations) => {
     setFocusedProductId(product.id);
     setDeepLinkMode(null);

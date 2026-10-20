@@ -9,8 +9,9 @@ const ICON_PX = 16;
 
 type Side = OutputMoistureReset["before"];
 
-function wetLine(side: Side): string {
-  return side.wetKg === null ? "Wet stock not available" : `${formatWetEstimate(side.wetKg)} kg wet mass`;
+/** No wet figure: the line is left out rather than shown as a placeholder (#1004). */
+function wetLine(side: Side): string | null {
+  return side.wetKg === null ? null : `${formatWetEstimate(side.wetKg)} kg wet mass`;
 }
 
 /** One side of the change: the moisture as the figure, the wet stock it gives under it. */
@@ -22,7 +23,7 @@ function ResetBlock({ side, label, muted }: { side: Side; label: string; muted?:
         <DropIcon size={ICON_PX} aria-hidden="true" className="shrink-0 text-[var(--color-icon-secondary)]" />
         {formatMoisturePercent(side.moisturePercent)}
       </span>
-      <span className="body-caption tabular-nums text-[var(--color-text-secondary)]">{wetLine(side)}</span>
+      {wetLine(side) !== null && <span className="body-caption tabular-nums text-[var(--color-text-secondary)]">{wetLine(side)}</span>}
     </div>
   );
 }

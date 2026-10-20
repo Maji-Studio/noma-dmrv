@@ -11,6 +11,7 @@ import { updateFormulationInTransaction } from "@/data-access/formulation-writes
 import { getStorageLocationWithFacility } from "@/data-access/storage-locations";
 import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
 import { getOutputSubBins } from "@/data-access/output-sub-bins";
+import { getOutputStockHistory } from "@/data-access/output-stock-history";
 import { cleanupPostedStock, postedStockFixture, postProduct, productInput, STOCK_TIME } from "./helpers/posted-output-stock-fixture";
 
 const VERSION_STEP = 1;
@@ -162,6 +163,11 @@ describe("posted product bin and formulation contract", () => {
     const subBin = subBins.find(s => s.layerId === product.id)!;
     expect(subBin.ingredients).toEqual([{ name: f.ingredientType.name, solidsKg: 18 }]);
     expect(subBin.solidsKg - subBin.dryMassKg).toBeCloseTo(18);
+  });
+  it("gives the bin's history each entry's ingredient solids by material", async () => {
+    const f = await fixture(); const product = await blend(f, { composition: composition(f, 20, null, { moistureContentPercent: 10 }) });
+    const placed = (await getOutputStockHistory(f.ctx, f.bin.id)).find(entry => entry.kind === "intake" && entry.id === product.id)!;
+    expect(placed.ingredientSolidsDeltas).toEqual([{ name: f.ingredientType.name, solidsKg: 18 }]);
   });
   it("retains its ratio snapshot when the live formulation and metadata change", async () => {
     const f = await fixture(); const product = await blend(f); await db.transaction(async tx => updateFormulationInTransaction(f.ctx, tx, { formulationId: f.recipe.id, expectedVersion: f.recipe.version, biocharRatio: 0.7 }));

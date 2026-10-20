@@ -224,7 +224,7 @@ test.describe("Output-bin conserved FIFO", () => {
 
     await openBin(page, f);
     await page.getByRole("button", { name: "History", exact: true }).click();
-    const deliveryEntry = page.getByRole("dialog", { name: "Stock history" }).locator("details").filter({ hasText: "Delivery" });
+    const deliveryEntry = page.getByRole("dialog", { name: "Stock history" }).locator("details").filter({ hasText: "Delivered 2,000 kg wet mass" });
     await deliveryEntry.locator("summary").click();
     await expect(deliveryEntry.getByRole("link", { name: "Open delivery" })).toHaveAttribute("href", `/deliveries?facility=${f.facility.id}&delivery=${delivery.id}`);
     await deliveryEntry.getByRole("link", { name: "Open delivery" }).click();
@@ -251,8 +251,9 @@ test.describe("Output-bin conserved FIFO", () => {
     const history = page.getByRole("dialog", { name: "Stock history", exact: true });
     const loss = history.locator("details").filter({ hasText: "E2E FIFO spill" });
     await loss.locator("summary").click();
-    await expect(loss).toContainText("Lost mass");
-    await expect(loss).toContainText("280 kg");
+    await expect(loss).toContainText("Lost 120 kg wet mass");
+    // What changed per part, with the dry biochar left after.
+    await expect(loss.getByRole("table", { name: /^What changed in the lost mass/ }).getByRole("row", { name: /^Dry biochar/ })).toContainText("280 kg");
     await expect(loss.getByRole("link")).toHaveCount(0);
     await evidence(page, info, "lost-mass-history");
     await loss.getByRole("button", { name: "Edit", exact: true }).click();
@@ -265,10 +266,12 @@ test.describe("Output-bin conserved FIFO", () => {
     await edit.getByRole("button", { name: "Save changes", exact: true }).click();
     await expect(edit).toHaveCount(0);
     expect((await readOutputStockBrowserFixture(f)).balance.beforeDryKg).toBe(315);
-    const corrected = history.locator("details").filter({ hasText: "Correction" }).first();
+    // The correction is its own entry; the lost mass it replaced stays, struck through, as Replaced.
+    const corrected = history.locator("details").filter({ hasText: "Corrected lost mass: 60 kg wet mass" });
     await corrected.locator("summary").click();
-    await expect(corrected).toContainText("Original");
-    await expect(corrected).toContainText("Corrected");
+    await expect(corrected).toContainText("Replaces");
+    await expect(corrected).toContainText("E2E FIFO scale misread");
+    await expect(history.locator("details").filter({ hasText: "Replaced by the correction" })).toContainText("Lost 120 kg wet mass");
     await evidence(page, info, "lost-mass-corrected");
 
     await openBin(page, f);

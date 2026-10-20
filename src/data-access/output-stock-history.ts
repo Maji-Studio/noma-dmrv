@@ -11,6 +11,8 @@ import { getOutputStockAllocationProjection, readOutputBinAllLayers, UnresolvedO
 import { getOutputMovementCertificationLocks, outputMovementLockReason } from './output-stock-edit-lock';
 import { requireOrgScope } from './utils';
 import { deliveryAppliedLockedReason } from '@/lib/output-stock/labels';
+import { entryIngredientSolids } from '@/lib/output-stock/entry-ingredient-solids';
+import { savedIngredientSolids } from './output-stock-ingredients';
 
 /**
  * Intake facts retain their recorded wet mass; movement facts remain immutable.
@@ -66,6 +68,8 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
         : typeof targetProductId === 'string' ? { entity: 'biocharProduct', id: targetProductId } : undefined,
       wetDeltaKg: difference(preview?.afterEstimatedWetKg, preview?.beforeEstimatedWetKg),
       solidsDeltaKg: difference(preview?.afterSolidsKg, preview?.beforeSolidsKg),
+      afterWetKg: typeof preview?.afterEstimatedWetKg === 'number' ? preview.afterEstimatedWetKg : null,
+      afterSolidsKg: typeof preview?.afterSolidsKg === 'number' ? preview.afterSolidsKg : null,
       allocations: allocations.map(a => ({ layerId: (a.biocharProductId ?? a.productionRunId)!,
         code: (a.biocharProductId ? productCode.get(a.biocharProductId) : runCode.get(a.productionRunId!)) ?? String(a.basisSnapshot.code),
         wetMassKg: a.wetMassKg === null ? null : Number(a.wetMassKg), dryMassKg: Number(a.dryMassKg),
@@ -77,14 +81,17 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     if (!reset) return [entry];
     return [entry, moistureUpdateEntry(entry, reset)];
   });
+  // Each product's dry biochar, worked out once: the intake's own figure and the ingredient split's denominator.
+  const productDryKg = new Map(products.map(p => [p.id, sources.filter(s => s.biocharProductId === p.id).reduce((sum, s) => sum + Number(s.allocatedDryMassKg), 0)]));
   const receipts = bin.type === 'product_bin' ? products.map(p => {
     const provenance = sources.filter(s => s.biocharProductId === p.id);
+    const dry = productDryKg.get(p.id) ?? 0;
     const ingredientSolids = ingredients.filter(i => i.biocharProductId === p.id).reduce((sum, i) => sum + Number(i.drySolidsKg), 0);
     const composition = p.composition as { ingredients?: { massKg: number }[] };
     const resolved = (composition.ingredients ?? []).filter(i => i.massKg > 0).length === ingredients.filter(i => i.biocharProductId === p.id).length;
-    return { solids: resolved ? provenance.reduce((sum, s) => sum + Number(s.allocatedDryMassKg), ingredientSolids) : null, id: p.id, code: p.code, occurredAt: p.placedAt.toISOString(), createdAt: p.createdAt,
+    return { solids: resolved ? dry + ingredientSolids : null, id: p.id, code: p.code, occurredAt: p.placedAt.toISOString(), createdAt: p.createdAt,
       wet: Number(p.massKg ?? 0) + Number(p.waterAddedKg ?? 0), moisture: p.moistureContentPercent,
-      dry: provenance.reduce((sum, s) => sum + Number(s.allocatedDryMassKg), 0),
+      dry,
       runs: provenance.map(s => ({ productionRunId: s.productionRunId, code: runCode.get(s.productionRunId) ?? s.productionRunId, dryMassKg: Number(s.allocatedDryMassKg) })) };
   }) : runs.filter(r => r.biocharStorageLocationId === storageLocationId && r.status === 'complete' && r.endTime).map(r => ({
     solids: r.biocharDryMassKg === null ? null : Number(r.biocharDryMassKg), id: r.id, code: r.code, occurredAt: r.endTime!.toISOString(), createdAt: r.createdAt,
@@ -94,13 +101,22 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   for (const r of receipts) history.push({ id: r.id, kind: 'intake', occurredAt: r.occurredAt, recordedAt: r.createdAt.toISOString(), actorName: null,
     reason: `Intake ${r.code}`, wetMassKg: r.wet, moisturePercent: r.moisture, dryMassKg: -r.dry, beforeDryKg: 0, afterDryKg: 0,
     correctsMovementId: null, deliveryId: null, source: { entity: bin.type === 'product_bin' ? 'biocharProduct' : 'productionRun', id: r.id },
-    wetDeltaKg: r.wet, solidsDeltaKg: r.solids, allocations: [{ layerId: r.id, code: r.code, wetMassKg: r.wet, dryMassKg: r.dry, runs: r.runs }] });
+    // A batch added without a moisture reading has no wet basis, so its wet change has no figure.
+    wetDeltaKg: r.moisture === null ? null : r.wet, solidsDeltaKg: r.solids, allocations: [{ layerId: r.id, code: r.code, wetMassKg: r.wet, dryMassKg: r.dry, runs: r.runs }] });
   for (const [productId, movement] of new Map(deletedPlacements.map(row => [row.id, row.movement]))) {
     const intake = history.find(entry => entry.kind === 'intake' && entry.id === productId);
     if (!intake) continue;
     history.push({ ...intake, id: `${movement.id}:placement`, kind: 'reversal', correctsMovementId: intake.id,
       recordedAt: movement.createdAt.toISOString(), reason: movement.reason,
-      dryMassKg: -intake.dryMassKg, wetDeltaKg: -(intake.wetDeltaKg ?? 0), solidsDeltaKg: intake.solidsDeltaKg == null ? null : -intake.solidsDeltaKg });
+      dryMassKg: -intake.dryMassKg, wetDeltaKg: intake.wetDeltaKg == null ? null : -intake.wetDeltaKg, solidsDeltaKg: intake.solidsDeltaKg == null ? null : -intake.solidsDeltaKg });
+  }
+  if (bin.type === 'product_bin') {
+    // Each entry's ingredient solids by material, in the shares its products saved: the history's per-part changes.
+    const saved = await savedIngredientSolids(ctx, products.map(p => p.id), reader);
+    for (const entry of history) {
+      const parts = entryIngredientSolids({ dryChangeKg: -entry.dryMassKg, solidsChangeKg: entry.solidsDeltaKg ?? null, draws: entry.allocations, productDryKg, saved });
+      if (parts.some(part => part.solidsKg !== 0)) entry.ingredientSolidsDeltas = parts;
+    }
   }
   history.sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
   let balance = 0;
