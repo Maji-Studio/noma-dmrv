@@ -3,15 +3,16 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TransportDistanceDrift } from "@/data-access/transport-distance-drift";
-import { TransportDistanceDriftNotice } from "./transport-distance-drift";
+import { DistanceDriftAction, TransportDistanceDriftNotice } from "./transport-distance-drift";
+import { transportDistanceKeys } from "@/hooks/transport-distance-query-keys";
 
-const mocks = vi.hoisted(() => ({ drift: vi.fn(), refresh: vi.fn(), success: vi.fn() }));
+const mocks = vi.hoisted(() => ({ drift: vi.fn(), refresh: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
 vi.mock("@/fn/transport-distance-refresh", () => ({
   getTransportDistanceDriftFn: mocks.drift,
   refreshFeedstockDistanceFn: mocks.refresh,
   refreshDeliveryDistanceFn: mocks.refresh,
 }));
-vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: mocks.success, error: vi.fn() }) }));
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: mocks.success, error: mocks.error, warning: mocks.warning }) }));
 
 const target = { entityType: "feedstock" as const, entityId: "11111111-1111-4111-8111-111111111111" };
 const drift: TransportDistanceDrift = {
@@ -92,5 +93,58 @@ describe("TransportDistanceDriftNotice", () => {
     expect(await screen.findByText(message)).toBeTruthy();
     expect(screen.getByText("Refresh distance from location?")).toBeTruthy();
     expect(mocks.success).not.toHaveBeenCalled();
+  });
+});
+
+describe("DistanceDriftAction", () => {
+  const REFRESHED = { ...drift, expectedVersion: 4, recordedDistanceKm: 55, hasDrift: false };
+
+  function renderAction(onRefreshed: () => Promise<void>) {
+    mocks.drift.mockResolvedValue({ success: true, data: drift });
+    // As on the server: once refreshed, every drift read has no drift left.
+    mocks.refresh.mockImplementation(async () => {
+      mocks.drift.mockResolvedValue({ success: true, data: REFRESHED });
+      return { success: true, data: REFRESHED };
+    });
+    return render(
+      <QueryClientProvider client={client}>
+        <DistanceDriftAction target={target} recordCode="FS-26-001" onRefreshed={onRefreshed} />
+      </QueryClientProvider>,
+    );
+  }
+
+  it("stays pending until the form holds the refreshed record, then confirms", async () => {
+    let landReload!: () => void;
+    const onRefreshed = vi.fn(() => new Promise<void>((resolve) => { landReload = resolve; }));
+    renderAction(onRefreshed);
+    fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Refresh" })); });
+    await waitFor(() => expect(onRefreshed).toHaveBeenCalledWith(REFRESHED));
+    // The drift query has caught up (no drift left) while the reload is delayed.
+    await act(async () => { await client.refetchQueries({ queryKey: transportDistanceKeys.detail(target) }); });
+    expect(client.getQueryData(transportDistanceKeys.detail(target))).toMatchObject({ hasDrift: false });
+
+    // The record fetch is still delayed: the dialog stays, pending, with no way back to Save.
+    expect(screen.queryByTestId("transport-distance-drift-action")).toBeNull();
+    expect(screen.getByText("Refresh distance from location?")).toBeTruthy();
+    expect((screen.getByRole("button", { name: /Refreshing/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(mocks.success).not.toHaveBeenCalled();
+
+    await act(async () => { landReload(); });
+    await waitFor(() => expect(mocks.success).toHaveBeenCalledWith("Distance for FS-26-001 refreshed to 55 km."));
+    expect(screen.queryByText("Refresh distance from location?")).toBeNull();
+    expect(mocks.warning).not.toHaveBeenCalled();
+  });
+
+  it("warns once, distance first, when the refreshed record cannot load", async () => {
+    renderAction(() => Promise.reject(new Error("network")));
+    fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Refresh" })); });
+    await waitFor(() => expect(mocks.warning).toHaveBeenCalledWith(
+      "Distance for FS-26-001 refreshed to 55 km. The record was saved, but its details could not be loaded. Close it and open it again before saving.",
+    ));
+    expect(mocks.success).not.toHaveBeenCalled();
+    expect(mocks.error).not.toHaveBeenCalled();
   });
 });
