@@ -8,6 +8,11 @@
  * header), Platform (Platform Admins only). `/certification/settings` folds in,
  * Vehicles and crew moves to the sidebar as a list page. A Platform Admin
  * inside an organization sees a thin bar with the way back.
+ *
+ * Registry split: Organization, Registry has a head that reads the same for
+ * any registry, then an "Isometric" block. Items that exist only because of
+ * Isometric carry its name as a quiet suffix and hide until a registry is
+ * chosen. The prototype "Registry state" toggle (`?registry=`) drives it.
  */
 import type { Icon } from "@phosphor-icons/react";
 import type { ComponentType } from "react";
@@ -16,22 +21,23 @@ import {
   ArrowUUpLeftIcon,
   BuildingsIcon,
   CertificateIcon,
-  CloudIcon,
   CodeIcon,
+  FileTextIcon,
   GlobeIcon,
-  LinkIcon,
   MapPinAreaIcon,
   PlugsConnectedIcon,
   PulseIcon,
+  SealCheckIcon,
   ShieldStarIcon,
   SlidersHorizontalIcon,
+  TreeStructureIcon,
   UserCircleIcon,
   UsersIcon,
   WarehouseIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { PageHeader } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
-import { fixtures } from "./abd-fixtures";
+import { fixtures, type PrototypeFacility } from "./abd-fixtures";
 import { enterAbdOrg, useAbdActiveOrg } from "./abd-active-org";
 import { PrototypeViewerToggle } from "./abd-viewer-toggle";
 import { setSettingsPrototypeParams } from "./use-settings-prototype-variant";
@@ -39,20 +45,28 @@ import {
   AConnectedAppsPane,
   ADevelopersPane,
   ADiagnosticsPane,
-  AEmissionsPane,
   AGeneralPane,
   AMembersPane,
   AOrganizationsPane,
   AProfilePane,
-  ARegistryLinkPane,
-  ARegistryPane,
   ASitePane,
   type APaneProps,
 } from "./variant-a-panes";
+import {
+  AFacilityIsometricPane,
+  ARegistryPane,
+  ARemovalTemplatesPane,
+  ATemplateMappingPane,
+} from "./variant-a-registry-panes";
+import { ARegistryStateToggle, useARegistryState } from "./variant-a-registry-toggle";
+import { registryChosen, type ARegistryState } from "./variant-a-registry-state";
 
 export const variantAName = "One console by scope";
 
 type AScope = "you" | "organization" | "facility" | "platform";
+type AAttention = "wait" | "bad" | null;
+
+const REGISTRY_NAME = fixtures.registry.name;
 
 interface APane {
   key: string;
@@ -60,7 +74,11 @@ interface APane {
   label: string;
   icon: Icon;
   body: ComponentType<APaneProps>;
-  attention?: boolean;
+  /** Exists only because the organization uses a registry. */
+  registryOwned?: boolean;
+  attention?: (registry: ARegistryState, facility: PrototypeFacility) => AAttention;
+  /** Replaces the scope's who-can-change line. */
+  access?: string;
 }
 
 const PANES: readonly APane[] = [
@@ -68,13 +86,54 @@ const PANES: readonly APane[] = [
   { key: "connected-apps", scope: "you", label: "Connected apps", icon: PlugsConnectedIcon, body: AConnectedAppsPane },
   { key: "general", scope: "organization", label: "General", icon: SlidersHorizontalIcon, body: AGeneralPane },
   { key: "members", scope: "organization", label: "Members", icon: UsersIcon, body: AMembersPane },
-  { key: "registry", scope: "organization", label: "Registry", icon: CertificateIcon, body: ARegistryPane, attention: true },
+  {
+    key: "registry",
+    scope: "organization",
+    label: "Registry",
+    icon: CertificateIcon,
+    body: ARegistryPane,
+    attention: (registry) => (registry === "keys-missing" ? "wait" : registry === "failing" ? "bad" : null),
+  },
+  {
+    key: "removal-templates",
+    scope: "organization",
+    label: "Removal templates",
+    icon: FileTextIcon,
+    body: ARemovalTemplatesPane,
+    registryOwned: true,
+    attention: (registry) =>
+      registry !== "keys-missing" && fixtures.registry.components.some((c) => !c.decided) ? "wait" : null,
+  },
   { key: "developers", scope: "organization", label: "Developers", icon: CodeIcon, body: ADevelopersPane },
   { key: "site", scope: "facility", label: "Site", icon: MapPinAreaIcon, body: ASitePane },
-  { key: "registry-link", scope: "facility", label: "Registry link", icon: LinkIcon, body: ARegistryLinkPane },
-  { key: "emissions", scope: "facility", label: "Emissions", icon: CloudIcon, body: AEmissionsPane },
+  {
+    key: "facility-isometric",
+    scope: "facility",
+    label: REGISTRY_NAME,
+    icon: SealCheckIcon,
+    body: AFacilityIsometricPane,
+    registryOwned: true,
+    attention: (registry, facility) =>
+      registry !== "keys-missing" && !facility.registryFacility ? "wait" : null,
+  },
   { key: "organizations", scope: "platform", label: "Organizations", icon: BuildingsIcon, body: AOrganizationsPane },
-  { key: "diagnostics", scope: "platform", label: "Diagnostics", icon: PulseIcon, body: ADiagnosticsPane },
+  {
+    key: "diagnostics",
+    scope: "platform",
+    label: "Diagnostics",
+    icon: PulseIcon,
+    body: ADiagnosticsPane,
+    registryOwned: true,
+  },
+  {
+    key: "template-mapping",
+    scope: "platform",
+    label: "Template mapping",
+    icon: TreeStructureIcon,
+    body: ATemplateMappingPane,
+    registryOwned: true,
+    access: "Read only.",
+  },
 ];
 
 const SCOPE_ORDER: readonly AScope[] = ["you", "organization", "facility", "platform"];
@@ -84,7 +143,22 @@ const SCOPE_ICON: Record<AScope, Icon> = {
   facility: WarehouseIcon,
   platform: GlobeIcon,
 };
+const SCOPE_LABEL: Record<AScope, string> = {
+  you: "You",
+  organization: "Organization",
+  facility: "Facility",
+  platform: "Platform",
+};
 const DEFAULT_PANE = "general";
+const ATTENTION_DOT: Record<"wait" | "bad", string> = {
+  wait: "bg-[var(--st-wait)]",
+  bad: "bg-[var(--st-bad)]",
+};
+
+/** The quiet registry suffix, unless the label already is the registry name. */
+function registrySuffix(pane: APane): string | null {
+  return pane.registryOwned && pane.label !== REGISTRY_NAME ? REGISTRY_NAME : null;
+}
 
 function scopeTitle(scope: AScope, orgName: string, facilityName: string): string {
   switch (scope) {
@@ -111,16 +185,28 @@ function accessLine(scope: AScope): string {
   }
 }
 
+/** Org and facility items that belong to a registry hide until one is chosen. */
+function paneVisible(pane: APane, isPlatformAdmin: boolean, registry: ARegistryState): boolean {
+  if (pane.scope === "platform") return isPlatformAdmin;
+  if (pane.registryOwned) return registryChosen(registry);
+  return true;
+}
+
 export function VariantA() {
   const params = useSearchParams();
   const toast = useToast();
   const active = useAbdActiveOrg("a-org");
+  const [registry] = useARegistryState();
   const isPlatformAdmin = active.viewer === "platform-admin";
 
   const facility =
     fixtures.facilities.find((f) => f.id === params.get("a-facility")) ?? fixtures.facilities[0];
-  const panes = PANES.filter((p) => p.scope !== "platform" || isPlatformAdmin);
-  const pane = panes.find((p) => p.key === params.get("a-pane")) ?? panes.find((p) => p.key === DEFAULT_PANE)!;
+  const panes = PANES.filter((p) => paneVisible(p, isPlatformAdmin, registry));
+  const requested = params.get("a-pane");
+  const requestedPane = PANES.find((p) => p.key === requested);
+  // A registry item hidden by "No registry yet" falls back to Registry, which explains it.
+  const fallbackKey = requestedPane?.registryOwned && requestedPane.scope !== "platform" ? "registry" : DEFAULT_PANE;
+  const pane = panes.find((p) => p.key === requested) ?? panes.find((p) => p.key === fallbackKey)!;
   const goTo = (key: string) => setSettingsPrototypeParams({ "a-pane": key === DEFAULT_PANE ? null : key });
   const pickFacility = (id: string) =>
     setSettingsPrototypeParams({
@@ -132,6 +218,12 @@ export function VariantA() {
     enterAbdOrg("a-org", orgId, { "a-pane": null });
     toast.info(`Prototype: opened ${org?.name ?? "organization"}`);
   };
+  const attentionOf = (p: APane): AAttention => p.attention?.(registry, facility) ?? null;
+  const optionLabel = (p: APane): string => {
+    const suffix = registrySuffix(p);
+    return `${p.label}${suffix ? ` (${suffix})` : ""}`;
+  };
+  const needsAttention = panes.filter((p) => attentionOf(p) !== null);
 
   const Body = pane.body;
   const ScopeIcon = SCOPE_ICON[pane.scope];
@@ -156,35 +248,72 @@ export function VariantA() {
       )}
 
       <div className="container-max page-shell">
-        <div className="flex max-w-[1160px] flex-col gap-16 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex max-w-[1160px] flex-col gap-16 lg:flex-row lg:items-start lg:justify-between">
           <PageHeader eyebrow="Settings" title={pane.label} />
-          <PrototypeViewerToggle />
+          <div className="flex flex-col gap-8 lg:items-end">
+            <PrototypeViewerToggle />
+            <ARegistryStateToggle />
+          </div>
         </div>
 
-        <div className="grid max-w-[1160px] gap-24 lg:grid-cols-[256px_minmax(0,1fr)] lg:items-start">
-          {/* Phone: one grouped select instead of the rail. */}
-          <label className="flex flex-col gap-4 lg:hidden">
-            <span className="body-small font-medium text-[var(--color-text-secondary)]">Settings page</span>
-            <select
-              value={pane.key}
-              onChange={(event) => goTo(event.target.value)}
-              className="h-44 w-full border border-[var(--color-border-secondary)] bg-[var(--paper)] px-12 text-[length:var(--text-s)]"
-            >
-              {SCOPE_ORDER.map((scope) => {
-                const group = panes.filter((p) => p.scope === scope);
-                if (group.length === 0) return null;
-                return (
-                  <optgroup key={scope} label={scopeTitle(scope, active.name, facility.name)}>
-                    {group.map((p) => (
-                      <option key={p.key} value={p.key}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                );
-              })}
-            </select>
-          </label>
+        <div className="grid max-w-[1160px] gap-24 lg:grid-cols-[288px_minmax(0,1fr)] lg:items-start">
+          {/* Phone: one grouped select instead of the rail, plus the facility picker on facility pages. */}
+          <div className="flex flex-col gap-12 lg:hidden">
+            <label className="flex flex-col gap-4">
+              <span className="body-small font-medium text-[var(--color-text-secondary)]">Settings page</span>
+              <select
+                value={pane.key}
+                onChange={(event) => goTo(event.target.value)}
+                className="h-44 w-full border border-[var(--color-border-secondary)] bg-[var(--paper)] px-12 text-[length:var(--text-s)]"
+              >
+                {SCOPE_ORDER.map((scope) => {
+                  const group = panes.filter((p) => p.scope === scope);
+                  if (group.length === 0) return null;
+                  return (
+                    <optgroup key={scope} label={scopeTitle(scope, active.name, facility.name)}>
+                      {group.map((p) => (
+                        <option key={p.key} value={p.key}>
+                          {optionLabel(p)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
+              </select>
+            </label>
+            {needsAttention.length > 0 && (
+              <p className="body-small flex flex-wrap items-center gap-x-8 gap-y-2 text-[var(--color-text-secondary)]">
+                <span aria-hidden className="size-6 shrink-0 rounded-full bg-[var(--st-wait)]" />
+                Needs attention:
+                {needsAttention.map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    onClick={() => goTo(p.key)}
+                    className="min-h-44 text-[var(--color-text-primary)] underline"
+                  >
+                    {p.scope === "facility" ? `${facility.name}, ${p.label}` : p.label}
+                  </button>
+                ))}
+              </p>
+            )}
+            {pane.scope === "facility" && (
+              <label className="flex flex-col gap-4">
+                <span className="body-small font-medium text-[var(--color-text-secondary)]">Facility</span>
+                <select
+                  value={facility.id}
+                  onChange={(event) => pickFacility(event.target.value)}
+                  className="h-44 w-full border border-[var(--color-border-secondary)] bg-[var(--paper)] px-12 text-[length:var(--text-s)]"
+                >
+                  {fixtures.facilities.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
 
           <nav
             aria-label="Settings"
@@ -200,13 +329,7 @@ export function VariantA() {
                     <span className="flex items-center gap-8">
                       <GroupIcon size={14} weight="bold" className="text-[var(--color-text-tertiary)]" aria-hidden />
                       <span className="body-caption font-medium text-[var(--color-text-secondary)]">
-                        {scope === "you"
-                          ? "You"
-                          : scope === "organization"
-                            ? "Organization"
-                            : scope === "facility"
-                              ? "Facility"
-                              : "Platform"}
+                        {SCOPE_LABEL[scope]}
                       </span>
                     </span>
                     {scope === "organization" && (
@@ -231,6 +354,8 @@ export function VariantA() {
                     {group.map((p) => {
                       const selected = p.key === pane.key;
                       const RowIcon = p.icon;
+                      const suffix = registrySuffix(p);
+                      const attention = attentionOf(p);
                       return (
                         <li key={p.key}>
                           <button
@@ -250,9 +375,17 @@ export function VariantA() {
                               aria-hidden
                             />
                             <span className="body-small min-w-0 flex-1 truncate">{p.label}</span>
-                            {p.attention && (
-                              <span aria-label="Needs attention" className="size-6 shrink-0 rounded-full bg-[var(--st-wait)]" />
+                            {suffix && (
+                              <span className="body-caption shrink-0 text-[var(--color-text-tertiary)]">{suffix}</span>
                             )}
+                            <span className="flex w-6 shrink-0 justify-center">
+                              {attention && (
+                                <span
+                                  aria-label="Needs attention"
+                                  className={`size-6 rounded-full ${ATTENTION_DOT[attention]}`}
+                                />
+                              )}
+                            </span>
                           </button>
                         </li>
                       );
@@ -271,10 +404,19 @@ export function VariantA() {
               </span>
             </div>
             <div className="p-16 sm:p-24">
-              <Body active={active} facility={facility} goTo={goTo} openOrg={openOrg} />
+              <Body
+                key={`${pane.key}-${facility.id}-${registry}`}
+                active={active}
+                facility={facility}
+                registry={registry}
+                goTo={goTo}
+                openOrg={openOrg}
+              />
             </div>
             <div className="border-t border-[var(--clr-dark-purple-10)] px-16 py-12 sm:px-24">
-              <span className="body-caption text-[var(--color-text-tertiary)]">{accessLine(pane.scope)}</span>
+              <span className="body-caption text-[var(--color-text-tertiary)]">
+                {pane.access ?? accessLine(pane.scope)}
+              </span>
             </div>
           </div>
         </div>
