@@ -5,7 +5,6 @@ import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from
 import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
 import { SafeError } from "@/lib/errors";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   aggregateProductionRuns,
   buildRemovalSupplierRef,
@@ -353,7 +352,8 @@ export async function compileRemovalSubmission(
       componentId: input.removalTemplateComponentId,
       componentBlueprintKey:
         templateComponentById.get(input.removalTemplateComponentId)
-          ?.blueprint_key ?? MISSING_VALUE.notAvailable,
+          // A fixed input whose component the template no longer carries keeps a string key, saying so.
+          ?.blueprint_key ?? "Component not in the template",
       componentDisplayName: templateComponentById.get(
         input.removalTemplateComponentId,
       )?.display_name,
@@ -705,6 +705,7 @@ export async function buildRemovalSubmissionBuild(args: {
   const agg = transportAgg;
   const latestApplicationTime = resolveLatestApplicationTime(ctx.lineages);
   assertReportingWindowNotInverted({
+    facilityTimezone: ctx.facilityTimezone,
     lineages: ctx.lineages,
     runStartTimeByRunId: new Map(
       ctx.runs.map((run) => [run.id, run.startTime]),

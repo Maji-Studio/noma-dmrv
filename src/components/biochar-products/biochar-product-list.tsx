@@ -44,7 +44,7 @@ import {
   deriveBlendEffectiveMoisturePercent,
   fromCompositionJsonb,
 } from "@/lib/biochar-composition";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { FACILITY_NOT_FOUND, MISSING_VALUE } from "@/lib/copy-utils";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
@@ -122,7 +122,7 @@ function createColumns(
       header: "Facility",
       accessorFn: (row) => row.facility?.name ?? "",
       cell: ({ row }) =>
-        row.original.facility?.name || MISSING_VALUE.notAvailable,
+        row.original.facility?.name || FACILITY_NOT_FOUND,
     },
     {
       id: "formulation",

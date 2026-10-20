@@ -147,8 +147,7 @@ describe("credit batch CO₂e stored", () => {
       runsError: new Error("request failed"),
     });
 
-    expect(html).toContain("Not available");
-    expect(html).toContain("Reload the production runs");
+    expect(html).toContain("Could not load. Reload the page.");
     expect(html).not.toContain("Feedstock dry mass");
   });
 
@@ -195,7 +194,7 @@ describe("credit batch sheet applied biochar", () => {
 
   it("waits while the page model loads and says when it failed", () => {
     expect(applied(undefined)).toMatchObject({ value: null, pending: true });
-    expect(applied(null)).toMatchObject({ value: null, pending: false, emptySituation: "notAvailable" });
+    expect(applied(null)).toMatchObject({ value: "Could not load", pending: false, valuePresent: false });
   });
 });
 
@@ -246,7 +245,7 @@ function visibleText(node: ReactTestInstance | string): string {
 }
 it("shows saved fields, the durability result and the carbon estimate figure at both levels while calculation rows are Detailed only", async () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
-  const preview = makePreview(12.5, []);
+  const preview = { ...makePreview(12.5, []), formulaVersion: "v1" };
   preview.applicationResults = [{ applicationId: "app", applicationCode: "APP-001", co2eStoredTonnes: 12.5, rawFDurable: 0.97, fDurable: 0.95, durabilityCapped: true, organicCarbonPercent: 79, effectiveSoilTemperatureC: null, missingInputs: [], warnings: [] }];
   const sections = creditBatchSheetSections({ ...baseOptions, creditBatch: makeBatch({ co2eStoredPreview: preview, productionEmissionsClaimedByRemovalId: "removal-1" }) });
   let renderer!: ReactTestRenderer;
@@ -267,7 +266,9 @@ it("shows saved fields, the durability result and the carbon estimate figure at 
   expect(detailed).toContain("12.50");
   // Detailed adds the basis of the durability result as explanation rows.
   expect(detailed).toContain("Raw durability estimate");
-  expect(detailed).toContain("Preview formula");
+  expect(detailed).toContain("Preview formula v1");
+  // A provenance row the preview does not carry is left out, not a placeholder.
+  expect(detailed).not.toContain("Preview component");
   expect(detailed).not.toContain("Preview authority");
   await act(async () => renderer.unmount());
 });

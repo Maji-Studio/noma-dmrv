@@ -222,12 +222,15 @@ describe("formatWetDryStock", () => {
     expect(formatWetDryStock({ wetKg: 2_500, dryKg: 1_500 })).toBe("2,500 kg wet mass, 1,500 kg dry biochar");
   });
 
-  it("marks an estimated wet figure and names a missing side", () => {
-    expect(formatWetDryStock({ wetKg: 277.3, dryKg: null, estimatedWet: true })).toBe(
-      "≈ 277.3 kg wet mass, dry biochar not available",
-    );
-    expect(formatWetDryStock({ wetKg: null, dryKg: 249.6 })).toBe(
-      "wet mass not available, 249.6 kg dry biochar",
+  it("marks an estimated wet figure and leaves a missing side out", () => {
+    expect(formatWetDryStock({ wetKg: 277.3, dryKg: null, estimatedWet: true })).toBe("≈ 277.3 kg wet mass");
+    expect(formatWetDryStock({ wetKg: null, dryKg: 249.6 })).toBe("249.6 kg dry biochar");
+    expect(formatWetDryStock({ wetKg: null, dryKg: null })).toBe("");
+  });
+
+  it("names an operator's gap when the caller passes the token", () => {
+    expect(formatWetDryStock({ wetKg: null, dryKg: 249.6, missing: "Not recorded" })).toBe(
+      "wet mass not recorded, 249.6 kg dry biochar",
     );
   });
 

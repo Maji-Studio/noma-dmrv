@@ -79,7 +79,8 @@ export async function getSupplierByIdFn(
 // ============================================
 
 export async function createSupplierWithLocationsFn(
-  data: z.infer<typeof createSupplierWithLocationsSchema>
+  data: z.infer<typeof createSupplierWithLocationsSchema>,
+  options?: CreateIntentOptions
 ): Promise<ActionResult<Supplier>> {
   return withAction(async (ctx) => {
     const validated = createSupplierWithLocationsSchema.parse(data);
@@ -103,7 +104,7 @@ export async function createSupplierWithLocationsFn(
           facilityDistances: location.facilityDistances,
           isDefault: location.isDefault,
         })),
-      });
+      }, createIntentOptionsSchema.parse(options));
       return result.supplier;
   }, {
     fallbackMessage: "Failed to create supplier",

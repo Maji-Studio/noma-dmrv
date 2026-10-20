@@ -54,7 +54,7 @@ export function lineBodyModel(line: EmissionLine, canWrite: boolean) {
     /** Add manual entry inside the body, only when the Sources cell shows chips instead of the link. */
     canAddInBody: canWrite && hasSomething && !addEntryRefusal(line),
     /** The Total repeats the one part when only one part counts, so it shows from two parts up. */
-    showTotal: recordsCount + values.length > 1,
+    showTotal: recordsCount + values.length > 1 && lineTotalText(line) !== null,
     totalText: lineTotalText(line),
     totalMissing: !line.total && line.state !== "confirmedZero",
     reviewWithoutEntries: line.state === "needsReview" && !stopped.length,

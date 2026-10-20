@@ -8,7 +8,7 @@ vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: () => null,
   Tooltip: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
-import { SampleDerivedRatios } from "./sample-derived-ratios";
+import { RATIO_NOT_CALCULABLE, SampleDerivedRatios } from "./sample-derived-ratios";
 import { FormDetailProvider } from "@/components/forms/form-detail-context";
 
 function visible(node: ReactTestInstance | string): string {
@@ -60,7 +60,22 @@ it("names a ratio it cannot derive and surfaces a refused derived value", async 
   await act(async () => {
     renderer = create(<SampleDerivedRatios hToCOrgRatio={null} oToCOrgRatio={null} hydrogenPercent={null} oxygenPercent={null} organicCarbonPercent={null} oToCFromLab={false} error="Ratio is above the saved precision." {...certify} />);
   });
-  expect(visible(renderer.root)).toContain("Not available");
+  expect(visible(renderer.root)).toContain("Needs hydrogen and organic carbon");
+  expect(visible(renderer.root)).toContain("Needs oxygen and organic carbon, or the O:C org ratio");
+  expect(visible(renderer.root)).not.toContain("Not available");
   expect(renderer.root.findByProps({ role: "alert" }).children.join("")).toContain("above the saved precision");
+  await act(async () => renderer.unmount());
+});
+
+it("keeps the label and CERT tag with a reason when filled entries give no usable ratio", async () => {
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(<SampleDerivedRatios hToCOrgRatio={null} oToCOrgRatio={0.15} hydrogenPercent={-1} oxygenPercent={12} organicCarbonPercent={71.5} oToCFromLab={false} {...certify} />);
+  });
+  const shown = visible(renderer.root);
+  expect(shown).toContain("H:C org");
+  expect(shown).toContain("CERT");
+  expect(shown).toContain("O:C org");
+  expect(shown.split(RATIO_NOT_CALCULABLE).length - 1).toBe(1);
   await act(async () => renderer.unmount());
 });

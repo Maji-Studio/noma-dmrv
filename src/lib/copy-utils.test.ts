@@ -7,6 +7,8 @@ import {
   missingValueSituation,
   pluralize,
   type MissingValueSituation,
+  UNREADABLE_DATE,
+  UNREADABLE_TIME,
 } from "./copy-utils";
 
 describe("MISSING_VALUE vocabulary", () => {
@@ -16,7 +18,6 @@ describe("MISSING_VALUE vocabulary", () => {
   it("pins the rendered copy of every situation", () => {
     expect(MISSING_VALUE).toEqual({
       notRecorded: "Not recorded",
-      notAvailable: "Not available",
       notApplicable: "Not applicable",
       none: "None",
       notSet: "Not set",
@@ -59,8 +60,14 @@ describe("isMissingValueCopy", () => {
     }
   });
 
+  it("reads a formatter's unreadable-value reason as a gap", () => {
+    expect(isMissingValueCopy(UNREADABLE_DATE)).toBe(true);
+    expect(isMissingValueCopy(UNREADABLE_TIME)).toBe(true);
+  });
+
   it("does not recognise real values or off-vocabulary placeholders", () => {
     expect(isMissingValueCopy("25 km")).toBe(false);
+    expect(isMissingValueCopy("Not available")).toBe(false);
     expect(isMissingValueCopy("Unassigned")).toBe(false);
     expect(isMissingValueCopy("No crop type")).toBe(false);
     expect(isMissingValueCopy(undefined)).toBe(false);

@@ -55,7 +55,7 @@ describe("buildSelectableBatchesData", () => {
   });
 
   it("requests one set of accounting-backed contexts for the whole wizard render", async () => {
-    const facilityFacts = { mapping: { id: "mapping-1" } };
+    const facilityFacts = { facilityTimezone: "UTC", mapping: { id: "mapping-1" } };
     const batchRows = [
       { id: "batch-1", code: "CB-1" },
       { id: "batch-2", code: "CB-2" },

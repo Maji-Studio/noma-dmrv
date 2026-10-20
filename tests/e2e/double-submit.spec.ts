@@ -15,13 +15,23 @@ import { createDbConnection } from "./fixtures/db";
 import { test, expect } from "./fixtures";
 import { selectEntity, selectFirstEntity, waitForSideSheet, waitForSideSheetClose } from "./fixtures/page-helpers";
 import { seedCreditBatch } from "./fixtures/seed-chain-data";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 const VIEWPORT = { width: 1440, height: 1000 };
 /** The sidebar footer shows the signed-in email; evidence crops it off. */
 const SIDEBAR_WIDTH_PX = 240;
 const WET_KG = 1500;
 const MOISTURE_PERCENT = 20;
+const DELIVERY_MOISTURE_PERCENT = "10";
 const ORDER_KG = "150.5";
+const APPLICATION_KG = "100";
+const APPLICATION_FIELD_SIZE_HA = "2";
+const PURE_BIOCHAR_PERCENT = "100";
+const APPLICATION_ATTACHMENT = {
+  name: "double-submit-application.pdf",
+  mimeType: "application/pdf",
+  buffer: Buffer.from("%PDF-1.4\n% e2e application double submit probe\n"),
+};
 const LAB_REPORT = {
   name: "double-submit-lab-report.pdf",
   mimeType: "application/pdf",
@@ -141,4 +151,87 @@ test.describe("Double-click on Create", () => {
       await pool.end();
     }
   });
+
+  test("saves one application with its PDF attachment", async ({ adminPage: page, seededData, testUsers }, info) => {
+    const { db, pool } = createDbConnection();
+    const ctx = { organizationId: DEC_ORG_ID, userId: testUsers.admin.id, orgRole: "owner" as const, isPlatformAdmin: true };
+    const fieldIdentifier = `E2E-Double-Submit-${crypto.randomUUID()}`;
+    const scope = and(eq(schema.applications.organizationId, DEC_ORG_ID), eq(schema.applications.fieldIdentifier, fieldIdentifier));
+    try {
+      // Use the seeded product bin, with an order and delivery created by the UI.
+      await openCreateSheet(page, `/orders?facility=${seededData.facility.id}`, seededData.facility.name, "New order");
+      await page.locator('input[name="orderDate"]').fill(new Date().toISOString().slice(0, 10));
+      await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
+      await selectEntity(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
+      await selectEntity(page, "Formulation", seededData.formulation.id, seededData.formulation.name);
+      await page.selectOption('select[name="packaging"]', "loose");
+      await page.locator('input[name="quantityKg"]').fill(ORDER_KG);
+      await page.getByRole("dialog").getByRole("button", { name: "Create order", exact: true }).click();
+      await waitForSideSheetClose(page);
+
+      await openCreateSheet(page, `/deliveries?facility=${seededData.facility.id}`, seededData.facility.name, "New delivery");
+      await selectFirstEntity(page, "Order");
+      await selectEntity(page, "Actual source bin", seededData.productStorageLocation.id, seededData.productStorageLocation.name);
+      await page.locator('input[name="deliveredWetMassKg"]').fill(ORDER_KG);
+      await fillStockMoisture(page, "delivery", DELIVERY_MOISTURE_PERCENT);
+      await page.getByRole("dialog").getByRole("button", { name: "Create delivery", exact: true }).click();
+      await waitForSideSheetClose(page);
+
+      await openCreateSheet(page, `/applications?facility=${seededData.facility.id}`, seededData.facility.name, "New application");
+      const dialog = page.getByRole("dialog", { name: "Create application" });
+      await page.locator('input[name="applicationDate"]').fill(new Date().toISOString().slice(0, 10));
+      await selectFirstEntity(page, "Delivery");
+      await page.locator('input[name="biocharAppliedKg"]').fill(APPLICATION_KG);
+      await page.locator('input[name="fieldSizeHa"]').fill(APPLICATION_FIELD_SIZE_HA);
+      await page.locator('input[name="fieldIdentifier"]').fill(fieldIdentifier);
+      await page.locator('input[name="cropType"]').fill("maize");
+      await dialog.locator("#application-create-supporting-evidence-upload").setInputFiles(APPLICATION_ATTACHMENT);
+      await expect(dialog.getByText(APPLICATION_ATTACHMENT.name)).toBeVisible();
+
+      await dialog.getByRole("button", { name: "Create application", exact: true }).dblclick();
+      await waitForSideSheetClose(page);
+      await page.waitForTimeout(SETTLE_MS);
+      const created = await db.select({ id: schema.applications.id, code: schema.applications.code }).from(schema.applications).where(scope);
+      expect(created).toHaveLength(1);
+      await page.reload();
+      await expect(page.locator("table tbody").getByText(created[0]!.code, { exact: true })).toBeVisible();
+      await shootList(page, info, "application-list");
+      const attached = await db.select({ id: schema.documents.id }).from(schema.documents)
+        .where(and(eq(schema.documents.organizationId, DEC_ORG_ID), eq(schema.documents.entityType, "application"), eq(schema.documents.entityId, created[0]!.id)));
+      expect(attached).toHaveLength(1);
+    } finally {
+      // Retire uploads even if an assertion fails; the global sweep removes rows.
+      const created = await db.select({ id: schema.applications.id }).from(schema.applications).where(scope);
+      if (created.length > 0) {
+        await db.transaction((tx) => retireDocumentsForEntities(ctx, tx, created.map(({ id: entityId }) => ({ entityType: "application", entityId })), "system"));
+        await processPendingStorageObjectDeletions(ctx);
+      }
+      await pool.end();
+    }
+  });
+
+  test("saves one formulation", async ({ adminPage: page, seededData }, info) => {
+    const { db, pool } = createDbConnection();
+    // The global teardown sweeps this name prefix, including automatic codes.
+    const name = `E2E Double Submit Formulation ${crypto.randomUUID()}`;
+    const scope = and(eq(schema.formulations.organizationId, DEC_ORG_ID), eq(schema.formulations.name, name));
+    try {
+      await openCreateSheet(page, `/formulations?facility=${seededData.facility.id}`, seededData.facility.name, "New formulation");
+      const dialog = page.getByRole("dialog", { name: "Create formulation" });
+      await dialog.locator('input[name="name"]').fill(name);
+      await dialog.locator('input[name="biocharPercent"]').fill(PURE_BIOCHAR_PERCENT);
+      await dialog.getByRole("button", { name: "Create formulation", exact: true }).dblclick();
+      await waitForSideSheetClose(page);
+      await page.waitForTimeout(SETTLE_MS);
+      await page.reload();
+      await expect(page.locator("table tbody").getByText(name, { exact: true })).toBeVisible();
+      await shootList(page, info, "formulation-list");
+
+      const created = await db.select({ id: schema.formulations.id }).from(schema.formulations).where(scope);
+      expect(created).toHaveLength(1);
+    } finally {
+      await pool.end();
+    }
+  });
+
 });

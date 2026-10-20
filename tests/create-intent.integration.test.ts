@@ -32,7 +32,7 @@ describe("app create intents with the real order writer", { timeout: SUITE_TIMEO
     expect(await rows(f)).toHaveLength(1);
 
     await expect(runOperationInProcess(recordOrder, f.ctx, orderInput(f, { quantityKg: CHANGED_QUANTITY_KG }), options))
-      .rejects.toMatchObject({ code: "idempotency_key_reused", message: "This entry was already saved with other values. Close the form and check the list." });
+      .rejects.toMatchObject({ code: "idempotency_key_reused", message: "The app already saved this record with other values. Close the form and check the list." });
     expect(await rows(f)).toHaveLength(1);
 
     const separate = await runOperationInProcess(recordOrder, f.ctx, orderInput(f), { intentKey: randomUUID() });
