@@ -17,6 +17,10 @@ export async function loadRemovalEmptyLines(ctx: OrgContext, removalId: string) 
     lines: (emptyLines[batch.id] ?? [])
       .map((line) => ({ componentId: line.componentId, displayName: line.displayName, group: line.groupName, description: line.description })),
     zeros: entries.filter((entry) => entry.creditBatchId === batch.id && entry.kind === "zero" && entry.confirmedForRemovalId === removalId)
-      .map((entry) => ({ id: entry.id, componentId: entry.componentId, note: entry.note, authorId: entry.createdBy, createdAt: entry.createdAt })),
+      .map((entry) => ({
+        id: entry.id, componentId: entry.componentId, note: entry.note, authorId: entry.createdBy, createdAt: entry.createdAt,
+        // The step lists a recorded zero by the component's name; a component retired from the template has none.
+        displayName: context.emissionLinesByBatchId?.[batch.id]?.find((line) => line.componentId === entry.componentId)?.displayName ?? null,
+      })),
   })) };
 }

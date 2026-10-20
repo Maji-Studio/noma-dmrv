@@ -37,6 +37,8 @@ interface StepFlowProps {
   furthest?: number;
   /** Jump to a visited step via the rail. Omit to make the rail display-only. */
   onNavigate?: (index: number) => void;
+  /** Narrows `onNavigate` to the steps that may be revisited. Defaults to every visited step. */
+  canNavigate?: (index: number) => boolean;
   /** The active step's content. */
   children: React.ReactNode;
   /** Action row pinned below the content (Back / Next / Submit). */
@@ -142,6 +144,7 @@ export function StepFlow({
   current,
   furthest,
   onNavigate,
+  canNavigate,
   children,
   footer,
   orientation = "horizontal",
@@ -158,7 +161,8 @@ export function StepFlow({
       )}
     >
       {steps.map((step, index) => {
-        const navigable = !!onNavigate && index <= reach;
+        const navigable =
+          !!onNavigate && index <= reach && (canNavigate?.(index) ?? true);
         return (
           <li
             key={step.key}
