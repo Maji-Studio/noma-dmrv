@@ -1,6 +1,6 @@
 /** Report-only helper for advisory design review; see .agents/skills/noma-design/SKILL.md. */
 import { execFileSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { extname, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
@@ -85,11 +85,13 @@ export function parseArgs(args: readonly string[]): CliOptions {
   return options;
 }
 
-export function filterChangedFiles(paths: readonly string[], deletedFiles: readonly string[] = []): string[] {
-  const deleted = new Set(deletedFiles.map((file) => posix.normalize(file)));
+export function filterChangedFiles(
+  paths: readonly string[],
+  exists: (file: string) => boolean = (file) => existsSync(join(ROOT, file)),
+): string[] {
   return [...new Set(paths.map((file) => posix.normalize(file)))].filter((file) =>
     file.startsWith(`${SOURCE_DIR}/`) && EXTENSIONS.has(extname(file)) &&
-    !TEST_FILE.test(file) && !deleted.has(file)).sort();
+    !TEST_FILE.test(file) && exists(file)).sort();
 }
 
 function changedFiles(base: string): string[] {
@@ -100,7 +102,7 @@ function changedFiles(base: string): string[] {
     ...gitFiles(["diff", "--name-only", "--diff-filter=d", "-z", "HEAD", "--"]),
     ...gitFiles(["ls-files", "--others", "--exclude-standard", "-z"]),
   ];
-  return filterChangedFiles(paths, gitFiles(["ls-files", "--deleted", "-z"]));
+  return filterChangedFiles(paths);
 }
 
 export interface Violation {

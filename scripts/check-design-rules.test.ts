@@ -181,18 +181,18 @@ describe("changed source file filtering", () => {
       "scripts/example.ts", "src-lookalike/example.tsx", "docs/example.md",
       "src/example.test.ts", "src/example.spec.tsx", "src/example.test.js", "src/example.spec.jsx",
       "src/app/globals.css", "src/data.json", "../src/outside.ts", "src/../../outside.ts",
-    ])).toEqual([
+    ], () => true)).toEqual([
       "src/app/page.jsx", COMPONENT_FILE, "src/features/report.ts", "src/lib/helper.js",
     ]);
   });
 
-  it("excludes working-tree deletions even when present in the branch diff", () => {
-    expect(filterChangedFiles([COMPONENT_FILE, "src/app/deleted.tsx"], ["src/app/deleted.tsx"]))
+  it("excludes non-existent paths even when present in the branch diff", () => {
+    expect(filterChangedFiles([COMPONENT_FILE, "src/app/deleted.tsx"], (file) => file === COMPONENT_FILE))
       .toEqual([COMPONENT_FILE]);
   });
 
   it("normalizes, deduplicates and sorts the union of changed paths", () => {
-    expect(filterChangedFiles([COMPONENT_FILE, "./src/app/page.tsx", COMPONENT_FILE, "src/lib/../app/page.tsx"]))
+    expect(filterChangedFiles([COMPONENT_FILE, "./src/app/page.tsx", COMPONENT_FILE, "src/lib/../app/page.tsx"], () => true))
       .toEqual(["src/app/page.tsx", COMPONENT_FILE]);
   });
 });
