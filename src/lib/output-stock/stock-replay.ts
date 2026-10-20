@@ -6,7 +6,9 @@
  * solids turn unknown at an entry with no figure for them, and become known
  * again when the bin is emptied or a movement's own frozen balance after it
  * gives one (a count whose reading sets the estimate, or a draw that used up
- * the batch with no moisture basis).
+ * the batch with no moisture basis). A frozen balance only counts while it is
+ * current: once an earlier-dated entry was recorded after it was saved, the
+ * balance never saw that entry and the figure stays unknown.
  */
 import { STOCK_PART_MIN_KG } from "@/config/output-stock";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
@@ -26,6 +28,17 @@ export interface StockState {
 }
 
 export const EMPTY_STOCK: StockState = { dryKg: 0, solidsKg: 0, wetKg: 0, ingredients: new Map() };
+
+/**
+ * The water in the stock: wet mass less solids. With no wet or solids figure,
+ * or less wet mass than solids, there is no honest figure and the chart and
+ * the history leave water out. Display only: no balance, guard, preview or
+ * posting reads it (the planner's guards check solids against the layers).
+ */
+export function stockWaterKg(state: Pick<StockState, "wetKg" | "solidsKg">): number | null {
+  if (state.wetKg === null || state.solidsKg === null || state.wetKg < state.solidsKg - STOCK_PART_MIN_KG) return null;
+  return Math.max(state.wetKg - state.solidsKg, 0);
+}
 
 /** One entry of the replay, in physical time, with the stock either side of it. */
 export interface StockStep {
@@ -66,13 +79,17 @@ function frozenAfter(entry: OutputStockHistoryEntry, value: number | null | unde
   return entry.kind === "reversal" || value == null ? null : value;
 }
 
-/** The stock after one counting entry. */
-export function applyStockEntry(state: StockState, entry: OutputStockHistoryEntry): StockState {
+/**
+ * The stock after one counting entry. `frozenIsCurrent` is false when an
+ * earlier-dated entry was recorded after this one, so its frozen balance is stale.
+ */
+export function applyStockEntry(state: StockState, entry: OutputStockHistoryEntry, frozenIsCurrent = true): StockState {
   const dryKg = state.dryKg - entry.dryMassKg;
   const ingredients = new Map(state.ingredients);
   for (const part of entry.ingredientSolidsDeltas ?? []) ingredients.set(part.name, (ingredients.get(part.name) ?? 0) + part.solidsKg);
-  let solidsKg = runningKg(state.solidsKg, entry.solidsDeltaKg) ?? frozenAfter(entry, entry.afterSolidsKg);
-  let wetKg = runningKg(state.wetKg, entry.wetDeltaKg) ?? frozenAfter(entry, entry.afterWetKg);
+  const rebase = (value: number | null | undefined) => (frozenIsCurrent ? frozenAfter(entry, value) : null);
+  let solidsKg = runningKg(state.solidsKg, entry.solidsDeltaKg) ?? rebase(entry.afterSolidsKg);
+  let wetKg = runningKg(state.wetKg, entry.wetDeltaKg) ?? rebase(entry.afterWetKg);
   // An emptied bin holds nothing, whatever the batches it held were missing.
   if (Math.abs(dryKg) < STOCK_PART_MIN_KG) {
     solidsKg ??= 0;
@@ -85,11 +102,16 @@ export function applyStockEntry(state: StockState, entry: OutputStockHistoryEntr
 export function replayStock(entries: readonly OutputStockHistoryEntry[]): StockStep[] {
   const live = new Set(liveChartEntries(entries).map(entry => entry.id));
   let state = EMPTY_STOCK;
+  // The latest recording among the counting entries so far; one later than an entry's own means a back-dated entry it never saw.
+  let latestRecordedAt = "";
   return [...entries].sort(stockOrder).map((entry) => {
     const before = state;
     const isLive = live.has(entry.id);
     const moves = isLive && !NO_STOCK_KINDS.has(entry.kind);
-    if (moves) state = applyStockEntry(state, entry);
+    if (moves) {
+      state = applyStockEntry(state, entry, latestRecordedAt <= entry.recordedAt);
+      if (entry.recordedAt > latestRecordedAt) latestRecordedAt = entry.recordedAt;
+    }
     return { entry, live: isLive, moves, before, after: state };
   });
 }

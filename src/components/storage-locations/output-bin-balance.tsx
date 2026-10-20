@@ -13,7 +13,7 @@ import { OutputStockHistory } from "./output-stock-history";
 import { StockLevelChart } from "./stock-level-chart";
 import { buildStockLevelSeries } from "./stock-level-series";
 import { CardTextButton, StockCard, StockChartCard } from "./stock-card";
-import { formatWetEstimate } from "./stock-preview-shared";
+import { outputStockFigure } from "./stock-preview-shared";
 import { MixPileBay, SubBinBays, type PileBand } from "./sub-bin-bays";
 import { contentsRows, ingredientSolidsParts } from "./sub-bin-card";
 import type { OutputSubBin } from "@/types/output-stock";
@@ -60,8 +60,8 @@ export function mixPileBands(layers: OutputSubBin[], dryKg: number | null, wetKg
  * as it does on the board's tile.
  */
 function stockFigure(wetKg: number | null, dryKg: number | null): string {
-  if (wetKg !== null) return `${formatWetEstimate(wetKg)} kg wet mass`;
-  return dryKg === null ? MISSING_VALUE.notAvailable : `${formatMassKg(dryKg)} dry biochar`;
+  if (wetKg === null && dryKg === null) return MISSING_VALUE.notAvailable;
+  return outputStockFigure(wetKg, dryKg ?? 0);
 }
 
 /**

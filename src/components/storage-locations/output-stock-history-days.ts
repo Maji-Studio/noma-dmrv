@@ -10,7 +10,7 @@ import { DRY_BIOCHAR_LABEL, ingredientSolidsLabel } from "@/components/biochar-p
 import { STOCK_PART_MIN_KG } from "@/config/output-stock";
 import { formatFacilityDay, massKgRoundsToZero } from "@/lib/format-utils";
 import { ESTIMATED_WATER_LABEL } from "@/lib/output-stock/labels";
-import { liveChartEntries, replayStock, stockOrder, type StockState } from "@/lib/output-stock/stock-replay";
+import { replayStock, stockWaterKg, type StockState } from "@/lib/output-stock/stock-replay";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 
 /** Wet mass as the parts table's total row. */
@@ -60,20 +60,14 @@ function settled(kg: number): number {
   return Math.abs(kg) < STOCK_PART_MIN_KG ? 0 : kg;
 }
 
-/** Water is wet stock less solids; with no wet or solids figure, or less wet than solids, there is no honest figure. */
-export function waterKg(state: StockState): number | null {
-  if (state.wetKg === null || state.solidsKg === null || state.wetKg < state.solidsKg - STOCK_PART_MIN_KG) return null;
-  return Math.max(state.wetKg - state.solidsKg, 0);
-}
-
 /** What one counting entry changed per part, in the order the bin is made up; a part it left unchanged is left out. */
 export function entryParts(before: StockState, after: StockState, entry: OutputStockHistoryEntry): HistoryPart[] {
   const changed = (part: HistoryPart) => part.changeKg === null || !massKgRoundsToZero(part.changeKg);
   const ingredients = (entry.ingredientSolidsDeltas ?? []).map((part) => ({
     label: ingredientSolidsLabel(part.name), changeKg: part.solidsKg, afterKg: settled(after.ingredients.get(part.name) ?? 0),
   }));
-  const waterAfter = waterKg(after);
-  const waterBefore = waterKg(before);
+  const waterAfter = stockWaterKg(after);
+  const waterBefore = stockWaterKg(before);
   const water = waterAfter === null ? [] : [{ label: ESTIMATED_WATER_LABEL, changeKg: waterBefore === null ? null : waterAfter - waterBefore, afterKg: waterAfter, estimated: true }];
   return [{ label: DRY_BIOCHAR_LABEL, changeKg: -entry.dryMassKg, afterKg: settled(after.dryKg) }, ...ingredients, ...water].filter(changed);
 }
@@ -147,12 +141,8 @@ export function entrySentence(row: Pick<HistoryRow, "entry" | "kind" | "replaces
   return `${VERBS[row.kind] ?? "Changed"} ${amount}`;
 }
 
-/**
- * Why the bin has no wet mass, when it has none. The last batch added is the
- * usual cause, and the line says so only when it is true.
- */
-export function noWetMassReason(entries: readonly OutputStockHistoryEntry[]): { lead: string; action: string } {
-  const lastAdded = liveChartEntries(entries).filter((entry) => entry.kind === "intake").sort(stockOrder).at(-1);
-  const subject = lastAdded && lastAdded.moisturePercent === null ? "The last batch added" : "A batch in the bin";
-  return { lead: `${subject} has no moisture reading, so there is no wet mass. Record one when `, action: "adding stock" };
-}
+/** Why the bin has no wet mass, when it has none: one sentence, its last words linking to where stock is added. */
+export const NO_WET_MASS_REASON = {
+  lead: "A batch in this bin has no moisture reading, so there is no wet mass. Record one when ",
+  action: "adding stock",
+} as const;

@@ -63,4 +63,15 @@ describe("useOpenCreateIntent client effect", () => {
       "/samples?creditBatch=filter-batch",
     );
   });
+
+  it("hands the context to the caller's own opener and consumes it", () => {
+    mocks.searchParams = new URLSearchParams("facility=f1&create=true&bin=bin-1");
+    const onOpen = vi.fn();
+    useOpenCreateIntent({ contextParam: "bin", onOpen });
+    mocks.effect?.();
+
+    expect(onOpen).toHaveBeenCalledWith("bin-1");
+    expect(mocks.setIntent).not.toHaveBeenCalled();
+    expect(mocks.replaceState).toHaveBeenCalledWith(null, "", "/samples?facility=f1");
+  });
 });

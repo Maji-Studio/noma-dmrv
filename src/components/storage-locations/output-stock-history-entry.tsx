@@ -14,16 +14,14 @@ import { reversalCaption } from "@/lib/loss-correction-messages";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
-import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
 import { MoistureResetChange } from "./moisture-reset-change";
 import { entryAmount, entrySentence, WET_MASS_LABEL, type HistoryRow } from "./output-stock-history-days";
-import { LedgerFacts } from "./stock-ledger";
+import { LEDGER_SUMMARY_CLASS, LedgerCaret, LedgerFacts } from "./stock-ledger";
 import { StockChip } from "./stock-figures";
 import { StockSourceLink } from "./stock-source-link";
 import { formatWetEstimate } from "./stock-preview-shared";
 import type { ReactNode } from "react";
 
-const CARET_ICON_PX = 14;
 const TIME_FORMAT = "HH:mm";
 const MUTED = "text-[var(--color-text-tertiary)]";
 const SECONDARY = "text-[var(--color-text-secondary)]";
@@ -151,13 +149,13 @@ export function HistoryEntry({ row, defaultOpen, linked, timeZone, facilityId, o
   const subject = `${outputStockEventLabel(row.kind).toLowerCase()} on ${formatFacilityDateTime(entry.occurredAt, timeZone)}`;
   return (
     <details id={entryElementId(entry.id)} open={defaultOpen} className={`group ${RULE}`}>
-      <summary className="grid min-h-44 cursor-pointer list-none grid-cols-[40px_minmax(0,1fr)_14px] items-start gap-8 py-10 hover:bg-[var(--clr-dark-purple-5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] [&::-webkit-details-marker]:hidden">
+      <summary className={`${LEDGER_SUMMARY_CLASS} grid-cols-[40px_minmax(0,1fr)_14px]`}>
         <span className={`pt-2 body-caption tabular-nums ${MUTED}`}>{formatFacilityTime(new Date(entry.occurredAt), timeZone, TIME_FORMAT)}</span>
         <span className="flex flex-wrap items-center gap-6 body-small font-medium tabular-nums">
           <span className={struck ? `line-through ${MUTED}` : undefined}>{entrySentence(row, formatMassKg)}</span>
           {struck && <StockChip>{status === "replaced" ? "Replaced" : "Reversed"}</StockChip>}
         </span>
-        <CaretDownIcon size={CARET_ICON_PX} aria-hidden="true" className={`mt-4 ${MUTED} transition-transform group-open:rotate-180 motion-reduce:transition-none`} />
+        <LedgerCaret />
       </summary>
       <div className="flex flex-col gap-10 pb-16 sm:pl-48">
         {struck && (

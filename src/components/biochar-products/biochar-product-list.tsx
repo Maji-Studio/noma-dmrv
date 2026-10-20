@@ -65,6 +65,9 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { BIOCHAR_PRODUCT_DEEP_LINK_PARAM } from "@/lib/biochar-product-links";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
+import { useAddStockBin } from "@/hooks/use-add-stock-bin";
+import { AddStockFormSlot } from "@/components/forms/add-stock-form-slot";
+import { ADD_STOCK_BIN_PARAM } from "@/lib/add-stock-intent";
 import { useEffect, useState } from "react";
 import { BiocharProductForm } from "./biochar-product-form";
 import { productSheetSections } from "./product-read-details";
@@ -330,6 +333,7 @@ export function BiocharProductList() {
         } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const addStockBin = useAddStockBin("product", contextFacilityId, displaySideSheet?.mode === "create");
   const productLocks = useRecordLocks("biocharProduct", products.map((product) => product.id));
   // A lock that arrives as Sent keeps an open draft, read-only, with the way
   // back (`submitBlock`).
@@ -426,10 +430,11 @@ export function BiocharProductList() {
     setDeepLinkMode(null);
     setDeepLinkFocus(null);
     setFormError(null);
+    addStockBin.clear();
     setSideSheet({ mode: "create", entity: null });
   };
-  // "Adding stock" from a bin's history lands here with ?create=true.
-  useOpenCreateIntent(openCreate);
+  // "Adding stock" from a bin's history lands here with ?create=true and the bin to fill.
+  useOpenCreateIntent({ contextParam: ADD_STOCK_BIN_PARAM, onOpen: (binId) => { openCreate(); addStockBin.request(binId); } });
   const openView = (product: BiocharProductWithRelations) => {
     setFocusedProductId(product.id);
     setDeepLinkMode(null);
@@ -625,19 +630,22 @@ export function BiocharProductList() {
         editLabel="Edit product"
         sections={viewedEntity ? productSheetSections(viewedEntity, resolveFacilityTimezone(facilities, viewedEntity.facilityId)) : undefined}
       >
-        <BiocharProductForm
-          key={editingEntity?.id ?? "create"}
-          product={editingEntity ?? undefined}
-          lock={sheetLock}
-          onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
-          onCancel={closeSideSheet}
-          isSubmitting={isSubmitting}
-          errorMessage={formError ?? undefined}
-          submitLabel={displaySideSheet?.mode === "edit" ? "Save changes" : "Create product"}
-          focusTarget={
-            displaySideSheet?.mode === "edit" ? activeFocusTarget : null
-          }
-        />
+        <AddStockFormSlot settling={addStockBin.settling}>
+          <BiocharProductForm
+            key={editingEntity?.id ?? "create"}
+            product={editingEntity ?? undefined}
+            initialBin={addStockBin.bin}
+            lock={sheetLock}
+            onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
+            onCancel={closeSideSheet}
+            isSubmitting={isSubmitting}
+            errorMessage={formError ?? undefined}
+            submitLabel={displaySideSheet?.mode === "edit" ? "Save changes" : "Create product"}
+            focusTarget={
+              displaySideSheet?.mode === "edit" ? activeFocusTarget : null
+            }
+          />
+        </AddStockFormSlot>
       </EntitySideSheet>
     </div>
   );

@@ -106,6 +106,12 @@ describe("stock level series", () => {
     expect(result.points).toHaveLength(3);
     expect(result.points.at(-1)).toMatchObject({ dryKg: 75, waterKg: 15, label: "Stock count" });
   });
+  it("leaves water out, never 0 kg, when the records give less wet mass than solids", () => {
+    // 100 kg wet, 80 kg solids; then a delivery takes 50 kg wet but only 10 kg solids: 50 kg wet under 70 kg solids.
+    const result = buildStockLevelSeries([entry({}), entry({ id: "wetter", kind: "delivery", occurredAt: "2026-10-02T10:00:00.000Z",
+      wetMassKg: 50, dryMassKg: 10, wetDeltaKg: -50, solidsDeltaKg: -10 })]);
+    expect(result.points.at(-1)).toMatchObject({ dryKg: 70, waterKg: null, wetKg: 50 });
+  });
   it("leaves water unknown without a saved basis and records mode switches without changing mass", () => {
     const result = buildStockLevelSeries([entry({ wetDeltaKg: null }), entry({ kind: "merge" })]);
     expect(result.points.at(-1)?.waterKg).toBeNull();

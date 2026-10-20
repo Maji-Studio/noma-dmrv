@@ -4,6 +4,7 @@
  */
 import { formatCompositionMass, type MassSegment } from "@/components/forms/composition-ledger";
 import { batchAccentFill } from "@/components/ui/segment-bar";
+import { formatMassKg } from "@/lib/format-utils";
 import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/types/output-stock";
 
 /**
@@ -48,6 +49,15 @@ export function formatDryKeyMass(kg: number | null): string {
 
 export function formatWetEstimate(kg: number): string {
   return kg.toLocaleString(undefined, { maximumFractionDigits: WET_ESTIMATE_DIGITS });
+}
+
+/**
+ * An output bin's headline figure: the wet mass operators find on site, or,
+ * without a wet figure, the dry biochar the bin tracks. The stock card, the
+ * board's tile and the stock history all read a bin this way.
+ */
+export function outputStockFigure(wetKg: number | null, dryKg: number): string {
+  return wetKg === null ? `${formatMassKg(dryKg)} dry biochar` : `${formatWetEstimate(wetKg)} kg wet mass`;
 }
 
 /**

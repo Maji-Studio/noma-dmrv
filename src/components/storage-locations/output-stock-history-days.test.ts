@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { formatMassKg } from "@/lib/format-utils";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
-import { buildHistoryDays, entrySentence, noWetMassReason, waterKg } from "./output-stock-history-days";
+import { stockWaterKg } from "@/lib/output-stock/stock-replay";
+import { buildHistoryDays, entrySentence, NO_WET_MASS_REASON } from "./output-stock-history-days";
 
 const TZ = "UTC";
 const DAY_ONE = "2026-10-14";
@@ -54,7 +55,7 @@ describe("buildHistoryDays", () => {
     // Taking more wet mass than the records hold leaves less wet stock than solids: no water figure.
     expect(day.rows[0].parts.map(part => part.label)).toEqual(["Dry biochar"]);
     expect(day.rows[1].parts.map(part => part.label)).toEqual(["Dry biochar", "Water, estimated"]);
-    expect(waterKg({ dryKg: 0, solidsKg: 80, wetKg: 20, ingredients: new Map() })).toBeNull();
+    expect(stockWaterKg({ solidsKg: 80, wetKg: 20 })).toBeNull();
   });
 
   it("keeps a replaced entry struck as Replaced, folds its reversal, and lets the correction count", () => {
@@ -114,11 +115,8 @@ describe("buildHistoryDays", () => {
   });
 });
 
-describe("noWetMassReason", () => {
-  it("names the last batch added only when it has no moisture reading", () => {
-    const dryOnly = entry({ id: "p2", kind: "intake", occurredAt: `${DAY_TWO}T11:40:00.000Z`, moisturePercent: null, dryMassKg: -120 });
-    const reason = noWetMassReason([placed, dryOnly]);
-    expect(`${reason.lead}${reason.action}.`).toBe("The last batch added has no moisture reading, so there is no wet mass. Record one when adding stock.");
-    expect(noWetMassReason([dryOnly, { ...placed, occurredAt: `${DAY_TWO}T12:00:00.000Z` }]).lead).toMatch(/^A batch in the bin has no moisture reading/);
+describe("NO_WET_MASS_REASON", () => {
+  it("is the one sentence, whichever batch has no moisture reading", () => {
+    expect(`${NO_WET_MASS_REASON.lead}${NO_WET_MASS_REASON.action}.`).toBe("A batch in this bin has no moisture reading, so there is no wet mass. Record one when adding stock.");
   });
 });

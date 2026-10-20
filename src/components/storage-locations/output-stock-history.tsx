@@ -10,37 +10,31 @@ import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { InfoHint } from "@/components/ui/tooltip";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { useOutputStockBalance, useOutputStockHistory } from "@/hooks/use-output-stock";
-import { createIntentHref } from "@/lib/create-intent";
+import { addStockHref } from "@/lib/add-stock-intent";
 import { formatMassKg } from "@/lib/format-utils";
 import { LOST_MASS_LABEL, WET_STOCK_DEFINITION } from "@/lib/output-stock/labels";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { buildHistoryDays, noWetMassReason, type HistoryDay } from "./output-stock-history-days";
+import { buildHistoryDays, NO_WET_MASS_REASON, type HistoryDay } from "./output-stock-history-days";
 import { HistoryBreak, HistoryEntry, isModeChange } from "./output-stock-history-entry";
 import { OutputLossDeleteDialog } from "./loss-delete-dialog";
 import { OutputStockForm } from "./output-stock-form";
-import { formatWetEstimate } from "./stock-preview-shared";
+import { outputStockFigure } from "./stock-preview-shared";
 
 const ICON_PX = 16;
-/** Where each kind of output bin gets its stock: products go into product bins, runs into biochar bins. */
-const ADD_STOCK_PATHS = { product: "/biochar-products", biochar: "/production-runs" } as const;
 
 /** The one fact the entries cannot show as a figure. */
 const HISTORY_HINT =
   "Each entry is one measurement. Wet stock is wet mass added less wet mass taken out. A later entry never changes an earlier one.";
-
-function wetFigure(wetKg: number): string {
-  return `${formatWetEstimate(wetKg)} kg wet mass`;
-}
 
 /** A day's heading: the date, and the stock when it ended (wet mass, or the dry biochar without one). */
 function DayHeader({ day }: { day: HistoryDay }) {
   return (
     <h4 className="flex flex-col gap-2 border-b border-[var(--clr-dark-purple-40)] pb-6 pt-12 body-caption text-[var(--color-text-tertiary)] sm:flex-row sm:justify-between sm:gap-12">
       <span>{day.day}</span>
-      <span className="tabular-nums">{day.end.wetKg === null ? `${formatMassKg(day.end.dryKg)} dry biochar` : wetFigure(day.end.wetKg)} at day end</span>
+      <span className="tabular-nums">{outputStockFigure(day.end.wetKg, day.end.dryKg)} at day end</span>
     </h4>
   );
 }
@@ -49,16 +43,16 @@ function DayHeader({ day }: { day: HistoryDay }) {
  * The bin now: wet mass, with the dry biochar under it. Without a wet figure
  * the dry biochar leads, with the one reason there is none and where to fix it.
  */
-function Headline({ wetKg, dryKg, entries, addStockHref }: { wetKg: number | null; dryKg: number; entries: readonly OutputStockHistoryEntry[]; addStockHref: string }) {
-  const reason = wetKg === null ? noWetMassReason(entries) : null;
+function Headline({ wetKg, dryKg, addStockLink }: { wetKg: number | null; dryKg: number; addStockLink: string }) {
+  const reason = wetKg === null ? NO_WET_MASS_REASON : null;
   return (
     <div className="flex flex-col gap-2">
       <p className="flex items-center gap-6 body-large font-medium tabular-nums">
-        {wetKg === null ? `${formatMassKg(dryKg)} dry biochar` : wetFigure(wetKg)}
+        {outputStockFigure(wetKg, dryKg)}
         {wetKg !== null && <InfoHint label="About wet mass">{WET_STOCK_DEFINITION}</InfoHint>}
       </p>
       {reason
-        ? <p className="body-caption text-[var(--color-text-secondary)]">{reason.lead}<Link href={addStockHref} className="underline underline-offset-4">{reason.action}</Link>.</p>
+        ? <p className="body-caption text-[var(--color-text-secondary)]">{reason.lead}<Link href={addStockLink} className="underline underline-offset-4">{reason.action}</Link>.</p>
         : <SecondaryFigure label={DRY_BIOCHAR_LABEL} value={formatMassKg(dryKg)} />}
     </div>
   );
@@ -99,8 +93,8 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
           </h3>
         </div>
         {now && history.data && history.data.length > 0 && (
-          <Headline wetKg={now.beforeEstimatedWetKg} dryKg={now.beforeDryKg} entries={entries}
-            addStockHref={createIntentHref(ADD_STOCK_PATHS[now.lane === "biochar" ? "biochar" : "product"], facilityId)} />
+          <Headline wetKg={now.beforeEstimatedWetKg} dryKg={now.beforeDryKg}
+            addStockLink={addStockHref(now.lane === "biochar" ? "biochar" : "product", facilityId, storageLocationId)} />
         )}
         {history.isLoading && <p role="status" className="body-caption text-[var(--color-text-secondary)]">Loading the stock history</p>}
         {history.error && <Notice tone="error">{history.error.message}</Notice>}
