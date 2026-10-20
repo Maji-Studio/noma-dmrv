@@ -1,5 +1,5 @@
 import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
-import { TOOL_TEXT_SEPARATOR } from "@/lib/mcp/results";
+import { TOOL_TEXT_SEPARATOR } from "@/lib/mcp/tool-text";
 
 export interface ToolCall {
   id: string;

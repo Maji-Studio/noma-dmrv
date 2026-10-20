@@ -1,4 +1,4 @@
-import { toolText } from "@/lib/mcp/results";
+import { toolText } from "@/lib/mcp/tool-text";
 import { expect, it } from "vitest";
 import { parseTranscript, redactKeys } from "./transcript";
 
