@@ -116,6 +116,20 @@ describe("loadRemovalTemplateReviewEntry", () => {
     expect(reviewLineContracts).not.toHaveBeenCalled();
   });
 
+  it("keeps a sample shipping proposal's scope and entry policy once its source is retired", async () => {
+    vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
+    const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
+    const lineSources = resolveLineSources({ definition });
+    const componentId = "rtc_1M4ZRPH1RSBXADG2";
+    lineSources[componentId] = { scope: "operating", automaticSource: "sample-transport", entryPolicy: "additive", origin: "proposed" };
+    vi.mocked(getLatestTemplateObservation).mockResolvedValueOnce({ definition, lineSources } as never);
+    const result = await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: fixture.id });
+    vi.unstubAllEnvs();
+    if (!result.success) throw new Error("expected a read");
+    expect(result.data.lines.find((line) => line.component.id === componentId)?.contract)
+      .toEqual({ scope: "operating", automaticSource: undefined, entryPolicy: "additive", origin: "proposed" });
+  });
+
   it("shows a template no batch uses yet, proposals included, without observing it", async () => {
     const result = await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: fixture.id });
     if (!result.success) throw new Error("expected a read");

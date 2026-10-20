@@ -13,7 +13,7 @@ import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import { listComponentBlueprints, listGhgEntryTemplates } from "@/lib/isometric";
-import { effectiveContract, allowedEntryPolicies, lineNeedsReview, catalogCandidates, compareTemplateObservations, enrichmentProblems, normalizeTemplateDefinition, resolveLineSources, validateLineSources, withoutUnacceptableProposals, type ComponentChange, type LineSources, type TemplateDefinition } from "@/lib/isometric/template-observations";
+import { allowedEntryPolicies, lineNeedsReview, catalogCandidates, compareTemplateObservations, enrichmentProblems, normalizeTemplateDefinition, resolveLineSources, validateLineSources, withoutUnacceptableProposals, type ComponentChange, type LineSources, type TemplateDefinition } from "@/lib/isometric/template-observations";
 import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/load-enrichment";
 import { canonicalJson } from "@/lib/canonical-json";
 import {
@@ -29,7 +29,8 @@ function reviewLines(definition: TemplateDefinition, lineSources: LineSources, c
   return definition.groups.flatMap((group) => group.components.map((component) => ({
     component, groupKey: group.key, groupName: group.displayName,
     contract: lineSources[component.id]?.automaticSource === "sample-transport" && emissionsEntriesEnabled()
-      ? effectiveContract(lineSources[component.id])
+      // Drop only the retired source: a proposal keeps its scope and entry policy.
+      ? { ...lineSources[component.id], automaticSource: undefined }
       : lineSources[component.id] ?? { scope: "unassigned" as const, entryPolicy: "none" as const, origin: "proposed" as const },
     catalogCandidates: catalogCandidates(component, group.key), allowedEntryPolicies: allowedEntryPolicies(component),
     change: changes[component.id] ?? ("added" as ComponentChange),
