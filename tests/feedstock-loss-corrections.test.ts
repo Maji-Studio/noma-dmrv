@@ -18,6 +18,7 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import type { ActionResult } from "@/types/actions";
 import { formatFacilityDateTime } from "@/lib/format-utils";
+import { ALREADY_CORRECTED_MESSAGE, ALREADY_DELETED_MESSAGE } from "@/lib/loss-correction-messages";
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { TEST_SITE_POSITION } from "./helpers/test-org";
 
@@ -126,7 +127,7 @@ async function ledger(f: Fixture) {
 async function rows(f: Fixture) {
   return db.select().from(binMovements).where(and(
     eq(binMovements.organizationId, f.ctx.organizationId), eq(binMovements.storageLocationId, f.bin.id),
-  ));
+  )).orderBy(binMovements.postingSequence);
 }
 
 async function seedSiblingBin(f: Fixture) {
@@ -266,8 +267,11 @@ describe("feedstock Lost mass corrections", { timeout: SUITE_TIMEOUT_MS }, () =>
     if (command === "edit") saved(await recordLossFn(editInput(f, original.id)));
     else saved<BinMovement>(await removeLossFn(removeInput(f, original.id)));
     await expectBothCorrectionsRefused(f, original.id);
-    const again = await removeLossFn(removeInput(f, original.id));
-    expect(again).toMatchObject({ success: false, error: expect.stringMatching(/already.*corrected/i) });
+    const before = await rows(f);
+    const expectedMessage = command === "edit" ? ALREADY_CORRECTED_MESSAGE : ALREADY_DELETED_MESSAGE;
+    expect(await removeLossFn(removeInput(f, original.id))).toMatchObject({ success: false, error: expectedMessage });
+    expect(await recordLossFn(editInput(f, original.id))).toMatchObject({ success: false, error: expectedMessage });
+    expect(await rows(f)).toEqual(before);
   });
 
   it("allows the replacement to be corrected without restoring the original twice", async () => {

@@ -340,6 +340,19 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
   context-specific label (for example, `cancelLabel="Not now"`) and omit the
   parent footer for that step.
 - Submission-level server/action/root errors go through `errorMessage`; `FormActions` renders the shared `ServerError` immediately above the buttons inside the same sticky footer. Do not render the same error in a parent sheet or earlier in the form.
+- **Error summary.** With `control`, a Save that validation refuses shows
+  `FormErrorSummary` under `ServerError`: "Not saved. Fix N fields." and one
+  link per field error, in form order, labelled from the field's `<label>`
+  (or legend). Focus moves to the first of them, scrolled to the middle of
+  the sheet; each link focuses its field. The list follows the live errors and
+  goes once none are left. Save stays pressable. It finds a field by its RHF
+  path as the control's `data-field-name`, `name` or `id`: a `Controller`
+  widget keeps its `id` equal to the field name, or sets `data-field-name`
+  (`EntitySelect` takes `fieldName`, `PositionPicker` takes `fieldNames`). An
+  error with no matching control lists unlinked. The list is not a live
+  region: one sr-only alert announces each refused save, so fixing a field
+  does not re-read the whole list.
+  Do not hand-roll a summary or a focus-first-error helper in a form.
 - Nested inline forms (child-entity editors, transport legs) pass `sticky={false}`.
 - Sheet forms pass `control` (the RHF `control` object). It feeds the side
   sheet's unsaved-changes guard with `formState.isDirty`, which is the only

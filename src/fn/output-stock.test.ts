@@ -15,14 +15,14 @@ vi.mock("@/lib/auth/server", () => ({ requireOrgContext: mocks.requireOrgContext
 vi.mock("@/lib/operations/runner", () => ({ runOperationInProcess: mocks.runOperationInProcess }));
 vi.mock("@/lib/operations/output-stock", () => ({ recordOutputStockMovement: { id: "record_output_stock_movement" } }));
 vi.mock("@/data-access/output-stock-operations", () => ({ getMatchingOutputBins: vi.fn(), getOutputStockHistory: vi.fn(), previewOutputStock: vi.fn() }));
-vi.mock("@/lib/operations/output-stock-form-edits", () => ({ correctOutputStockEntry: mocks.correct }));
+vi.mock("@/lib/operations/output-stock-form-edits", () => ({ correctOutputStockEntry: mocks.correct, deleteOutputStockLoss: { id: "delete_output_stock_loss" } }));
 vi.mock("@/data-access/output-sub-bins", () => ({ getOutputSubBins: vi.fn() }));
 vi.mock("@/lib/log", () => ({
   logger: { error: mocks.loggerError, child: () => ({ error: mocks.loggerError }) },
   sanitizeErrorMessage: (error: unknown) => error instanceof Error ? error.message : String(error),
 }));
 
-import { postOutputStockFn } from "./output-stock";
+import { postOutputStockFn, removeOutputLossFn } from "./output-stock";
 
 const BIN_ID = "00000000-0000-4000-8000-000000000001";
 const FACILITY_ID = "00000000-0000-4000-8000-000000000002";
@@ -74,4 +74,28 @@ it("returns a conflict for a locked loss form correction", async () => {
     success: false, code: "conflict", error: "Locked because newer stock entries were recorded on this bin after it.", conflict,
   });
   expect(mocks.runOperationInProcess).not.toHaveBeenCalled();
+});
+
+describe("removeOutputLossFn", () => {
+  const input = { storageLocationId: BIN_ID, correctsMovementId: FACILITY_ID, idempotencyKey: "delete-key", reason: "Recorded in error" };
+
+  it("validates and runs the app-only deletion operation", async () => {
+    const saved = { movementId: "reversal", savedProducts: [], savedDeliveries: [] };
+    mocks.runOperationInProcess.mockResolvedValue(saved);
+    expect(await removeOutputLossFn(input)).toEqual({ success: true, data: saved });
+    expect(mocks.runOperationInProcess).toHaveBeenCalledWith({ id: "delete_output_stock_loss" }, ctx, input);
+  });
+
+  it("refuses an empty reason before running the operation", async () => {
+    expect(await removeOutputLossFn({ ...input, reason: " " })).toMatchObject({ success: false, code: "validation_failed" });
+    expect(mocks.runOperationInProcess).not.toHaveBeenCalled();
+  });
+
+  it.each(["conflict", "certification_locked"] as const)("preserves %s and its bin reference", async code => {
+    const conflict = { entity: "storageLocation", id: BIN_ID, code: conflictCode("BC-001") };
+    const message = code === "conflict" ? "This request key was already used with different values." : "This stock entry is locked by a certification submission.";
+    mocks.runOperationInProcess.mockRejectedValue(code === "conflict" ? new ActionConflictError(message, conflict) : new DomainError(code, message, { conflict }));
+    expect(await removeOutputLossFn(input)).toEqual({ success: false, error: message, code, conflict });
+    expect(mocks.loggerError).not.toHaveBeenCalled();
+  });
 });

@@ -152,6 +152,13 @@ and an optional `action` (a link or button); no eyebrow, no uppercase.
 | `success` | An action completed and the page stays | green icon, no tint | `status` |
 | `error` | The task is blocked or a save failed | red icon, **tinted** | `alert` |
 
+The role column is the default. `live={false}` drops the role; its one
+sanctioned use is `FormErrorSummary` (`@/components/forms`), the error Notice
+above Save that holds the links to refused fields. Its list changes as the
+user fixes fields, so it is not a live region and announces each refused save
+through its own sr-only `role="alert"` line instead. Every other Notice keeps
+its role.
+
 Only `error` is tinted red, so one blocker stands out on a page of advisories.
 `boxed` is an opt-in quiet neutral card (`--color-surface-light`, 8px/12px
 padding, 8px radius) for a lock or state that explains why a record cannot
@@ -515,6 +522,9 @@ restore for free.
 - **Dialog actions sit bottom left, primary first, then secondary** (Delete,
   then Cancel). Where it is easy, records a dialog names link to the record
   through its deep-link helper; reuse `SheetLinkRow` (`@/components/ui/sheet-link-row`).
+- A dialog that lists records uses `md` width. Its text has hierarchy (a short
+  heading, then grouped lines), never one paragraph. Archived children sit
+  behind a collapsed toggle as compact rows, not full cards.
 - **`dismissOnClickOutside={false}`** for multi-step workflows where a stray
   backdrop click would discard in-progress work. Close button and ESC stay live.
 - **`dismissible={false}`** only while an irreversible request is active. It
@@ -572,6 +582,20 @@ input is not the touch target: the whole label is, and `SegmentedControl`
 segments are at least 44px tall. The sheet header Simple/Detailed toggle
 (`FormDetailToggle`) is sheet chrome, not a form field, and stays a separate
 component.
+
+### Before and after
+
+A value change (bin moisture reset, stock preview, correction) is two blocks
+with an arrow between them: before on the left, arrow, after on the right.
+Never write it as a sentence. A short heading may introduce the pair.
+Unchanged values ("30% → 30%") are not shown.
+
+### Consistency across sibling surfaces
+
+A style change reaches every sibling surface of the same kind (all table
+headers, a whole page's chrome) in the same PR, so no screen is left in two
+type systems. Put risky surfaces, such as the dashboard, in a last commit that
+can be dropped on its own.
 
 ### Illustrations — `src/components/ui/illustrations`
 

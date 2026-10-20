@@ -15,7 +15,7 @@ import { useController, useForm, useWatch } from "react-hook-form";
 import { FormActions } from "@/components/forms/form-actions";
 import { FormField } from "@/components/forms/form-field";
 import { FormInput } from "@/components/forms/form-input";
-import { PositionPicker } from "@/components/forms/position-picker";
+import { GPS_FIELD_NAMES, PositionPicker } from "@/components/forms/position-picker";
 import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { useCreateSupplierWithLocations } from "@/hooks/use-suppliers";
@@ -190,6 +190,7 @@ export function SupplierQuickAddDialog({
 
         <PositionPicker
           idPrefix="supplier-quick-add-position"
+          fieldNames={GPS_FIELD_NAMES}
           label="Source location position"
           accent="orange"
           required

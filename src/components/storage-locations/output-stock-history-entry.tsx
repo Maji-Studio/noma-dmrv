@@ -1,8 +1,8 @@
 /**
  * One output-bin history entry: time first, then the line it reads as. It
  * opens into what changed per part with the stock after, then the batches,
- * moisture, source and who recorded it. An entry a correction replaced stays,
- * struck through, and opens into why it no longer counts.
+ * moisture, source and who recorded it. An entry a correction replaced, or one
+ * deleted, stays struck through and opens into why it no longer counts.
  */
 "use client";
 
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui";
 import { Notice } from "@/components/ui/notice";
 import { formatFacilityTime } from "@/lib/date-utils";
 import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
+import { reversalCaption } from "@/lib/loss-correction-messages";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
@@ -121,7 +122,7 @@ function PartsTable({ row, subject }: { row: HistoryRow; subject: string }) {
 }
 
 function facts(row: HistoryRow, timeZone: string, linked: boolean) {
-  const { entry, replaces } = row;
+  const { entry, replaces, replacedBy, reversedBy } = row;
   const recordedLater = entry.recordedAt.slice(0, 16) !== entry.occurredAt.slice(0, 16);
   const batches = entry.allocations.map((allocation) => allocation.code);
   return [
@@ -129,11 +130,13 @@ function facts(row: HistoryRow, timeZone: string, linked: boolean) {
     ...(entry.moisturePercent !== null ? [{ label: "Moisture", value: formatMoisturePercent(entry.moisturePercent) }] : []),
     ...(replaces ? [{ label: "Replaces", value: <EntryLink entryId={replaces.id} linked={linked}>{`${entryAmount(replaces, row.kind, formatMassKg)}, ${formatFacilityDateTime(replaces.occurredAt, timeZone)}`}</EntryLink> }] : []),
     ...(entry.reason && entry.kind !== "intake" ? [{ label: replaces ? "Why corrected" : "Reason", value: entry.reason }] : []),
+    // A deleted Lost mass keeps the operator's reason on the crossed-out entry, as on feedstock bins.
+    ...(row.kind === "loss" && reversedBy && !replacedBy && reversedBy.reason ? [{ label: "Why deleted", value: reversedBy.reason }] : []),
     { label: "Recorded", value: `${recordedLater ? formatFacilityDateTime(entry.recordedAt, timeZone) : "At the time"}${entry.actorName ? ` by ${entry.actorName}` : ""}` },
   ];
 }
 
-export function HistoryEntry({ row, defaultOpen, linked, timeZone, facilityId, onEdit }: {
+export function HistoryEntry({ row, defaultOpen, linked, timeZone, facilityId, onEdit, onDelete }: {
   row: HistoryRow;
   defaultOpen: boolean;
   /** True when every entry is in the list, so references between entries can link. */
@@ -141,6 +144,7 @@ export function HistoryEntry({ row, defaultOpen, linked, timeZone, facilityId, o
   timeZone: string;
   facilityId: string;
   onEdit: (entry: OutputStockHistoryEntry) => void;
+  onDelete: (entry: OutputStockHistoryEntry) => void;
 }) {
   const { entry, status } = row;
   const struck = status !== "counts";
@@ -159,15 +163,18 @@ export function HistoryEntry({ row, defaultOpen, linked, timeZone, facilityId, o
         {struck && (
           <p className={`body-caption ${SECONDARY}`}>
             {row.replacedBy
-              ? <>Replaced by <EntryLink entryId={row.replacedBy.id} linked={linked}>the correction recorded {formatFacilityDateTime(row.replacedBy.recordedAt, timeZone)}</EntryLink>.</>
-              : "Reversed."} It no longer counts toward the stock.
+              ? <>Replaced by <EntryLink entryId={row.replacedBy.id} linked={linked}>the correction recorded {formatFacilityDateTime(row.replacedBy.recordedAt, timeZone)}</EntryLink>. It no longer counts toward the stock.</>
+              : reversalCaption(row.reversedBy ? { recordedAt: row.reversedBy.recordedAt, actorName: row.reversedBy.actorName, replaced: false } : null, timeZone)}
           </p>
         )}
         <PartsTable row={row} subject={subject} />
         {row.moistureEntry?.moistureReset && <MoistureResetChange reset={row.moistureEntry.moistureReset} />}
         <LedgerFacts facts={facts(row, timeZone, linked)} />
         {row.kind === "loss" && !struck && (entry.editLockedReason === null
-          ? <Button type="button" variant="noOutline" className="self-start" onClick={() => onEdit(entry)}>Edit</Button>
+          ? <div className="flex flex-wrap gap-8">
+              <Button type="button" variant="noOutline" onClick={() => onEdit(entry)}>Edit</Button>
+              <Button type="button" variant="noOutline" onClick={() => onDelete(entry)}>Delete</Button>
+            </div>
           : entry.editLockedReason ? <Notice tone="info">{entry.editLockedReason}</Notice> : null)}
         <StockSourceLink source={entry.source} facilityId={facilityId} />
       </div>

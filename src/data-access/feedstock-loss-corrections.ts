@@ -11,6 +11,7 @@ import {
   formatFeedstockLossCrossingMessage, formatFeedstockLossLockReason,
 } from '@/lib/feedstock-loss-lock';
 import { formatFacilityDateTime } from '@/lib/format-utils';
+import { ALREADY_CORRECTED_MESSAGE, ALREADY_DELETED_MESSAGE } from '@/lib/loss-correction-messages';
 import { STOCK_CONFLICT_ENTITY } from '@/lib/stock-conflict-entities';
 import { findMovementRequest, lockMovementRequest, requestFingerprint } from './bin-movement-requests';
 import { isOverdraw, lockBinStock } from './bin-stock-guards';
@@ -25,7 +26,6 @@ const RECORDED_TIME_STEP_MS = 1;
 const REQUEST_KEY_CONSTRAINT = 'bin_movements_org_idempotency_unique';
 const REPLAY_CONFLICT_MESSAGE =
   'Lost mass was not changed because this request was already saved with different values. Close the form and start again.';
-const ALREADY_CORRECTED_MESSAGE = 'This entry has already been corrected. Open its correction instead.';
 const NEGATIVE_BALANCE_MESSAGE =
   'Not enough wet feedstock at this time or after a later movement. Check the date and time or reduce the loss.';
 
@@ -82,12 +82,13 @@ export async function correctFeedstockLoss(ctx: OrgContext, input: CorrectFeedst
     if (!original || original.lane !== 'feedstock' || original.movementType !== 'loss') {
       throw new SafeError('Choose a Lost mass entry in this feedstock bin to correct.');
     }
-    const [reversed] = await tx.select({ id: binMovements.id }).from(binMovements).where(and(
+    const corrections = await tx.select({ movementType: binMovements.movementType }).from(binMovements).where(and(
       eq(binMovements.organizationId, ctx.organizationId),
       eq(binMovements.correctsMovementId, original.id),
-      eq(binMovements.movementType, 'adjustment'),
     ));
-    if (reversed) throw new SafeError(ALREADY_CORRECTED_MESSAGE);
+    if (corrections.some(row => row.movementType === 'adjustment')) {
+      throw new SafeError(corrections.some(row => row.movementType === 'loss') ? ALREADY_CORRECTED_MESSAGE : ALREADY_DELETED_MESSAGE);
+    }
 
     const stock = await getFeedstockBinStock(ctx, input.storageLocationId, tx);
     const blocker = findFeedstockLossBlocker(stock.entries, original.id);

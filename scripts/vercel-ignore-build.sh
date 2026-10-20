@@ -1,6 +1,7 @@
 #!/bin/sh
 # Vercel Ignored Build Step for both projects that build from this repo (root vercel.json applies to
 # both, overriding any dashboard setting). Exit 0 skips the build, exit 1 builds; when in doubt, build.
+# Redeploys of the same commit build so build-time environment changes take effect.
 #   noma-site: builds when site/, the fonts it loads from src/styles/fonts, or this root vercel.json
 #              (which configures both projects) changed.
 #   noma-dmrv: builds when anything outside site/ changed.
@@ -18,6 +19,12 @@ echo "ignore-build: project=${project:-unknown} previous=${prev:-none}"
 [ -n "$prev" ] || exit 1
 if ! git cat-file -e "${prev}^{commit}" 2>/dev/null; then
   echo "ignore-build: previous commit not in the clone, building"
+  exit 1
+fi
+
+# A deliberate redeploy reuses the previous deployment's commit.
+if [ "$prev" = "$(git rev-parse HEAD)" ]; then
+  echo "ignore-build: redeploy of the same commit, building"
   exit 1
 fi
 

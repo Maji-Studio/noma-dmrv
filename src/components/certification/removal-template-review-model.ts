@@ -9,9 +9,11 @@ import type { ReviewRemovalTemplateLinesInput } from "@/schemas/removal-template
 import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
 import type { ComponentChange } from "@/lib/isometric/template-observations/compare";
 import {
+  isAcceptableProposal,
   lineNeedsReview as contractNeedsReview,
   type LineContract,
   type LineSourceProblem,
+  type LineSources,
 } from "@/lib/isometric/template-observations/line-sources";
 import type { ComponentEnrichment, EntryPolicy, QuantityKind } from "@/lib/isometric/template-observations/types";
 import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
@@ -107,9 +109,22 @@ export function inputUnitLabel(enrichment: ComponentEnrichment | undefined, inpu
   return input && "unit" in input && input.unit ? input.unit : MISSING_VALUE.notAvailable;
 }
 
-/** A proposal can be accepted unchanged only when it names a scope. */
-export function canAcceptProposal(line: RemovalTemplateReviewLine): boolean {
-  return line.contract.origin === "proposed" && line.contract.scope !== "unassigned";
+/**
+ * Accept proposal is offered only when the proposal, saved unchanged next to
+ * the other unsaved lines, would pass the server's validation (#1198). The
+ * rule itself is `isAcceptableProposal`; this only adds the drafts.
+ */
+export function canAcceptProposal(
+  entry: RemovalTemplateReviewEntry,
+  line: RemovalTemplateReviewLine,
+  drafts: Readonly<Record<string, LineAssignment>>,
+): boolean {
+  if (!entry.observation) return false;
+  const drafted: LineSources = Object.fromEntries(Object.entries(drafts).map(([id, draft]) => [
+    id, { ...draft, origin: "reviewed" as const },
+  ]));
+  const { definition, lineSources } = entry.observation;
+  return isAcceptableProposal(definition, { ...lineSources, ...drafted }, line.component.id);
 }
 
 export function assignmentFromContract(contract: LineContract): LineAssignment {

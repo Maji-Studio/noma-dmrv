@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
 import { getCreditBatchById } from "@/data-access/credit-batches";
-import { reviewLineContracts } from "@/data-access/removal-template-observations";
+import { getLatestTemplateObservation, reviewLineContracts } from "@/data-access/removal-template-observations";
 import { getCertifierProjectByFacility } from "@/data-access/certification";
 import { requireOrgFacility } from "@/data-access/utils";
 import { listGhgEntryTemplates, type IsometricGhgEntryTemplate } from "@/lib/isometric";
@@ -96,6 +96,26 @@ it("refuses a preview target absent from the facility project", async () => {
 });
 
 describe("loadRemovalTemplateReviewEntry", () => {
+  it("drops stored colliding proposals for an unchanged template without writing", async () => {
+    const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
+    const lineSources = resolveLineSources({ definition });
+    const ids = ["rtc_1KWHFRM4GSBX5Y7A", "rtc_1KWP4Y13JSBXV8FB"];
+    for (const componentId of ids) {
+      lineSources[componentId] = { scope: "operating", automaticSource: "run-genset-diesel", entryPolicy: "additive", origin: "proposed" };
+    }
+    const before = structuredClone(lineSources);
+    vi.mocked(getLatestTemplateObservation).mockResolvedValueOnce({ definition, lineSources } as never);
+    const result = await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: fixture.id });
+    if (!result.success) throw new Error("expected a read");
+    for (const componentId of ids) {
+      expect(result.data.lines.find((line) => line.component.id === componentId)?.contract)
+        .toEqual({ scope: "unassigned", entryPolicy: "none", origin: "proposed" });
+    }
+    expect(lineSources).toEqual(before);
+    expect(observeRemovalTemplate).not.toHaveBeenCalled();
+    expect(reviewLineContracts).not.toHaveBeenCalled();
+  });
+
   it("shows a template no batch uses yet, proposals included, without observing it", async () => {
     const result = await loadRemovalTemplateReviewEntry({ facilityId: id, removalTemplateId: fixture.id });
     if (!result.success) throw new Error("expected a read");

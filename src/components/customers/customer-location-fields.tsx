@@ -9,6 +9,7 @@ import {
   FormInput,
   FormSection,
   FormTextarea,
+  GPS_FIELD_NAMES,
   PositionPicker,
 } from "@/components/forms";
 import type { Facility } from "@/db/schema";
@@ -176,6 +177,7 @@ export function CustomerLocationFields({
       <FormSection title="GPS coordinates">
         <PositionPicker
           idPrefix={positionIdPrefix}
+          fieldNames={GPS_FIELD_NAMES}
           label="Application site position"
           accent="pink"
           required

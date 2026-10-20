@@ -177,7 +177,8 @@ test("adds, reads and replaces a GIS boundary, and keeps it when removal would l
     .locator('[role="dialog"]')
     .getByRole("button", { name: "Update application" })
     .click();
-  await expect(page.getByText("Add a boundary file, or choose Customer location.")).toBeVisible();
+  // The field's own message; the error summary above Save repeats it.
+  await expect(page.locator("#gisBoundary-error")).toHaveText("Add a boundary file, or choose Customer location.");
   await expect(page.locator('[role="dialog"]')).toBeVisible();
 
   // The sheet reopens from the URL in view mode, showing the stored boundary.

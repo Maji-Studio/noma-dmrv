@@ -34,6 +34,8 @@ export interface HistoryRow {
   status: HistoryRowStatus;
   /** The correction that replaced this entry. */
   replacedBy?: OutputStockHistoryEntry;
+  /** The reversal that cancelled this entry: with no correction after it, the entry was deleted. */
+  reversedBy?: OutputStockHistoryEntry;
   /** The entry this correction replaces. */
   replaces?: OutputStockHistoryEntry;
   /** The "Moisture updated" row this movement's reading added. */
@@ -87,7 +89,7 @@ export function entryParts(before: StockState, after: StockState, entry: OutputS
 export function buildHistoryDays(entries: readonly OutputStockHistoryEntry[], timeZone: string, movementId?: string): HistoryDay[] {
   const ids = new Set(entries.map((entry) => entry.id));
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
-  const reversedIds = new Set(entries.filter((entry) => entry.kind === "reversal" && entry.correctsMovementId !== null && ids.has(entry.correctsMovementId)).map((entry) => entry.correctsMovementId));
+  const reversalFor = new Map(entries.filter((entry) => entry.kind === "reversal" && entry.correctsMovementId !== null && ids.has(entry.correctsMovementId)).map((entry) => [entry.correctsMovementId as string, entry]));
   const replacementFor = new Map(entries.filter((entry) => entry.kind !== "reversal" && entry.correctsMovementId).map((entry) => [entry.correctsMovementId as string, entry]));
   const originalKind = (entry: OutputStockHistoryEntry, seen = new Set<string>()): string => {
     if (entry.eventKind) return entry.eventKind;
@@ -112,8 +114,9 @@ export function buildHistoryDays(entries: readonly OutputStockHistoryEntry[], ti
     group.rows.push({
       entry,
       kind: entry.kind === "replacement" || (entry.correctsMovementId && entry.kind !== "reversal") ? originalKind(entry) : entry.kind,
-      status: reversedIds.has(entry.id) ? (replacementFor.has(entry.id) ? "replaced" : "reversed") : "counts",
+      status: reversalFor.has(entry.id) ? (replacementFor.has(entry.id) ? "replaced" : "reversed") : "counts",
       replacedBy: replacementFor.get(entry.id),
+      reversedBy: reversalFor.get(entry.id),
       replaces: entry.correctsMovementId && entry.kind !== "reversal" ? byId.get(entry.correctsMovementId) : undefined,
       moistureEntry: entries.find((other) => other.kind === "moisture_update" && other.measuredByMovementId === entry.id),
       parts: counts ? entryParts(before, state, entry) : [],

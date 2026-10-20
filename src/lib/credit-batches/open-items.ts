@@ -15,7 +15,7 @@ import type {
   DurabilityBatchSummary,
   DurabilitySummaryReplicate,
 } from "@/lib/certification/durability-batch-summary";
-import type { BatchEmissionLine } from "@/lib/certification/emission-lines";
+import { EMISSION_LINE_STATE_LABELS, type BatchEmissionLine } from "@/lib/certification/emission-lines";
 import type { SampleDocumentWarningKey } from "@/lib/certification/sample-document-warnings";
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { formatTonnes } from "@/lib/format-utils";
@@ -150,7 +150,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
         : { tab: "emissions", rowId: line.componentId };
       check.push({
         id: `emission:${line.componentId}`,
-        title: `${line.displayName} needs review`,
+        title: `${line.displayName}: ${EMISSION_LINE_STATE_LABELS.needsReview}`,
         detail: line.blocker?.message,
         target,
       });

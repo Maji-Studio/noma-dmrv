@@ -19,6 +19,7 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { buildHistoryDays, noWetMassReason, type HistoryDay } from "./output-stock-history-days";
 import { HistoryBreak, HistoryEntry, isModeChange } from "./output-stock-history-entry";
+import { OutputLossDeleteDialog } from "./loss-delete-dialog";
 import { OutputStockForm } from "./output-stock-form";
 import { formatWetEstimate } from "./stock-preview-shared";
 
@@ -75,6 +76,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
   const clock = useFacilityClock(facilityId);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<OutputStockHistoryEntry | null>(null);
+  const [deleting, setDeleting] = useState<OutputStockHistoryEntry | null>(null);
   const history = useOutputStockHistory(storageLocationId, open);
   // The bin now, as its stock card reads it; one movement opened on its own needs no headline.
   const balance = useOutputStockBalance(open && !movementId ? { storageLocationId, facilityId } : null);
@@ -109,7 +111,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
               <DayHeader day={day} />
               {day.rows.map((row) => isModeChange(row.entry) || row.entry.kind === "moisture_update"
                 ? <HistoryBreak key={row.entry.id} entry={row.entry} timeZone={clock.timeZone} facilityId={facilityId} />
-                : <HistoryEntry key={row.entry.id} row={row} defaultOpen={!!movementId} linked={!movementId} timeZone={clock.timeZone} facilityId={facilityId} onEdit={setEditing} />)}
+                : <HistoryEntry key={row.entry.id} row={row} defaultOpen={!!movementId} linked={!movementId} timeZone={clock.timeZone} facilityId={facilityId} onEdit={setEditing} onDelete={setDeleting} />)}
             </section>
           ))}
         </div>}
@@ -120,5 +122,6 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
       {editing && <OutputStockForm key={editing.id} storageLocationId={storageLocationId} facilityId={facilityId} correction={editing}
         onCancel={() => setEditing(null)} onRecorded={() => setEditing(null)} />}
     </FormDialog>
+    {deleting && <OutputLossDeleteDialog key={deleting.id} entry={deleting} storageLocationId={storageLocationId} timeZone={clock.timeZone} onClose={() => setDeleting(null)} />}
   </>;
 }

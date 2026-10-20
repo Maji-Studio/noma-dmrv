@@ -16,6 +16,7 @@ import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
 import { getLatestTemplateObservations, getTemplateObservationsByIds } from "@/data-access/removal-template-observations";
 import { loadBatchesEmissionAutomaticFacts } from "@/data-access/batch-emission-automatic-figures";
 import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
+import { loadBatchesEmissionLines } from "./batches-emission-lines";
 import { loadFacilityEmissionsOverview } from "./facility-emissions-overview";
 
 const ctx = makeTestOrgContext();
@@ -95,4 +96,16 @@ it("authorizes the facility even when there are no batches and avoids other read
   expect(getLatestTemplateObservations).not.toHaveBeenCalled();
   vi.mocked(loadFacilityEmissionsOverviewScope).mockRejectedValue(new Error("Facility not found"));
   await expect(loadFacilityEmissionsOverview(ctx, "foreign")).rejects.toThrow("Facility not found");
+});
+
+it("isolates unread and unpinned templates while deriving review lines for a sibling", async () => {
+  const result = await loadBatchesEmissionLines(ctx, [
+    batch, { ...batch, id: "unread", removalTemplateId: "unread-template" },
+    { ...batch, id: "unpinned", removalTemplateId: null },
+  ]);
+  expect(result.get("new")?.lines?.filter(line => line.state === "needsReview")).toHaveLength(1);
+  expect(result.get("unread")?.lines).toBeUndefined();
+  expect(result.get("unpinned")?.lines).toBeUndefined();
+  expect(getLatestTemplateObservations).toHaveBeenCalledExactlyOnceWith(ctx, "isometric", ["template", "unread-template"]);
+  expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledExactlyOnceWith(ctx, ["new", "unread", "unpinned"]);
 });

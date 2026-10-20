@@ -7,7 +7,7 @@
 import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { RemovalTemplateReviewEntry } from "./removal-template-review-model";
+import { entry } from "./removal-template-review-test-support";
 import { CertificationSettings } from "./certification-settings";
 
 vi.mock("@/components/ui/tooltip", () => ({
@@ -57,42 +57,6 @@ vi.mock("./env-banner", () => ({ EnvBanner: () => null }));
 vi.mock("./registry-source-visibility-settings", () => ({
   RegistrySourceVisibilitySettings: () => <div>Source visibility policy</div>,
 }));
-
-const OBSERVATION_ID = "22222222-2222-4222-8222-222222222222";
-
-function component(id: string, displayName: string) {
-  return {
-    id, displayName, description: null, blueprintKey: "fuel_usage_by_volume",
-    inputs: [{ key: "volume", type: "monitored", quantityKind: "volume" }],
-  };
-}
-
-function entry(overrides: Record<string, unknown> = {}): RemovalTemplateReviewEntry {
-  return {
-    templateId: "rvt_test",
-    template: { id: "rvt_test", display_name: "Dark Earth Carbon Template", credit_type: "REMOVAL" },
-    observation: { id: OBSERVATION_ID, version: 3, enrichment: { cmp_startup: { volume: { unit: "L" } } } },
-    isDefault: true,
-    availability: "listed",
-    changes: {},
-    lines: [
-      {
-        component: component("cmp_startup", "Startup diesel usage"), groupKey: "operations", groupName: "Operations",
-        contract: { scope: "operating", automaticSource: "run-startup-diesel", entryPolicy: "additive", origin: "proposed" },
-        catalogCandidates: ["run-startup-diesel"], allowedEntryPolicies: ["none", "additive"], change: "added",
-      },
-      {
-        component: component("cmp_lab", "Lab electricity"), groupKey: "operations", groupName: "Operations",
-        contract: { scope: "operating", entryPolicy: "additive", origin: "reviewed" },
-        catalogCandidates: [], allowedEntryPolicies: ["none", "additive"], change: "unchanged",
-      },
-    ],
-    enrichmentProblems: [],
-    lineSourceProblems: [{ code: "unassigned", componentId: "cmp_startup" }],
-    ...overrides,
-  } as unknown as RemovalTemplateReviewEntry;
-}
-
 
 afterEach(cleanup);
 

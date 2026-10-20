@@ -15,6 +15,7 @@ import {
   FormInput,
   FormSection,
   FormTextarea,
+  GPS_FIELD_NAMES,
   PositionPicker,
 } from "@/components/forms";
 import {
@@ -242,6 +243,7 @@ export function SupplierLocationForm({
       <FormSection title="GPS coordinates">
         <PositionPicker
           idPrefix={positionIdPrefix}
+          fieldNames={GPS_FIELD_NAMES}
           label="Source location position"
           accent="orange"
           required

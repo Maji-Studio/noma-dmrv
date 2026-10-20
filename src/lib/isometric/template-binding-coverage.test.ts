@@ -38,7 +38,10 @@ describe("contract-based template coverage", () => {
     const group = copy.groups.find((group) => group.key === "biochar-transport")!;
     const first = group.components[0];
     group.components.push({ ...structuredClone(first), id: "second", display_name: "Second shipment" });
-    const findings = coverage(copy).filter((finding) => finding.reason === "ambiguous");
+    // noma never proposes a figure another line owns (#1198), so the clash is an operator's assignment.
+    const firstContract = reviewedTemplateSources(copy)[first.id];
+    const findings = coverage(copy, reviewedTemplateSources(copy, { second: { ...firstContract, origin: "reviewed" } }))
+      .filter((finding) => finding.reason === "ambiguous");
     expect(findings.map((finding) => finding.componentId).sort()).toEqual([first.id, "second"].sort());
     expect(formatUnbindableTemplateInputsText(findings)).toContain("Choose a different automatic source for each line.");
   });

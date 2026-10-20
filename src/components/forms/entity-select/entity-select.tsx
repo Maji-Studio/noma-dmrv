@@ -8,6 +8,7 @@ import {
   useState,
   useRef,
   useEffect,
+  useLayoutEffect,
   useId,
   type KeyboardEvent,
   type FocusEvent,
@@ -130,6 +131,17 @@ interface EntityQueryData {
 export function EntitySelect(props: EntitySelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  // A record can lock while its menu is open (#1177). Close the menu as the
+  // lock arrives, so nothing picked from the old list reaches the locked form.
+  const lock = { disabled: Boolean(props.disabled), selectionLocked: Boolean(props.selectionLocked) };
+  const [previousLock, setPreviousLock] = useState(lock);
+  if (lock.disabled !== previousLock.disabled || lock.selectionLocked !== previousLock.selectionLocked) {
+    setPreviousLock(lock);
+    if ((lock.disabled && !previousLock.disabled) || (lock.selectionLocked && !previousLock.selectionLocked)) {
+      setIsOpen(false);
+      setSearchQuery("");
+    }
+  }
   const pickerState = { isOpen, setIsOpen, searchQuery, setSearchQuery };
 
   // Separate components keep query hooks unconditional in server mode and
@@ -231,6 +243,7 @@ function EntitySelectView({
   noneOption,
   onEditSelected,
   editLabel,
+  fieldName,
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
   isOpen,
@@ -344,6 +357,11 @@ function EntitySelectView({
     !isLocal && value && !selectedOption && isSelectedEntityPending,
   );
 
+  // Read at pick time, not from this render's props: async quick-add saves and
+  // Base UI item handlers can call back with an older render's closure (#1177).
+  const latestLock = useRef({ disabled, selectionLocked });
+  const wasOpen = useRef(isOpen);
+
   const isInsidePicker = (target: EventTarget | null) => target instanceof Node && (
     containerRef.current?.contains(target) || popupRef.current?.contains(target)
   );
@@ -370,7 +388,9 @@ function EntitySelectView({
     closeMenu();
   };
   const handleCreatedEntity = (entity: EntityOption) => {
-    onChange(entity.id);
+    // A quick-add save resolves with the handler from when it was submitted;
+    // a lock that arrived meanwhile keeps the new record out of the field.
+    if (!latestLock.current.disabled && !latestLock.current.selectionLocked) onChange(entity.id);
     closeMenu();
   };
   const createActions = {
@@ -401,6 +421,16 @@ function EntitySelectView({
 
   const canEdit = Boolean(value && selectedOption && onEditSelected);
   const triggerDisabled = disabled || (selectionLocked && !canEdit);
+  useLayoutEffect(() => {
+    const lockArrived = (disabled && !latestLock.current.disabled) || (selectionLocked && !latestLock.current.selectionLocked);
+    latestLock.current = { disabled, selectionLocked };
+    const lockClosedMenu = lockArrived && wasOpen.current && !isOpen;
+    wasOpen.current = isOpen;
+    // The lock closes the menu without closeMenu; drop the stale descendant.
+    if (!isOpen) triggerRef.current?.removeAttribute("aria-activedescendant");
+    // Unmounting the menu drops focus to the page; keep it on the field while it can take it.
+    if (lockClosedMenu && !triggerDisabled && document.activeElement === document.body) triggerRef.current?.focus();
+  }, [disabled, selectionLocked, isOpen, triggerDisabled]);
   const rows: SelectRow[] = [];
   if (!disabled && !selectionLocked) {
     if (noneOption && !searchQuery) {
@@ -462,6 +492,9 @@ function EntitySelectView({
 
   const activateRow = (row: SelectRow, byPointer = false) => {
     if (row.kind === "option" && row.option.disabled) return;
+    // Edit stays available only on a selectionLocked field; disabled refuses every row.
+    const lock = latestLock.current;
+    if (lock.disabled || (lock.selectionLocked && row.kind !== "edit")) return;
     // Base UI items cancel pointerdown, so a pointer pick never moves focus and
     // the trigger would keep or inherit a keyboard focus ring. Drop focus as a
     // press on a non-focusable row did, and return it without the ring.
@@ -640,6 +673,7 @@ function EntitySelectView({
             aria-describedby={triggerDescribedBy}
             aria-invalid={ariaInvalid}
             data-testid="entity-select-trigger"
+            data-field-name={fieldName}
             data-has-value={Boolean(value)}
             className={cn(
               "flex h-40 w-full items-center justify-between gap-2 border bg-[var(--color-background-white)] px-12 text-[var(--text-s)] transition-all",

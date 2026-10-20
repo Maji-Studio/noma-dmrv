@@ -20,8 +20,8 @@ test.describe("credit-batch row scanability", () => {
     const row = creditBatchRow(page, batch.code);
     await expect(row).toHaveCount(1);
     await expect(row.getByText(seededData.feedstockType.name)).toBeVisible();
-    // The timeline's state names: an unsubmitted batch is Open or Ready.
-    await expect(row.getByText(/^(Open|Ready)$/)).toBeVisible();
+    // An unsubmitted batch reads "Open to-dos" (plus its count bubble) or "Ready".
+    await expect(row.getByText(/^(Open to-dos\s*\d*|Ready)$/)).toBeVisible();
     await expect(row.getByText(seededData.facility.name)).toHaveCount(0);
     await expect(row.getByText("Isometric", { exact: true })).toHaveCount(0);
   });

@@ -39,7 +39,7 @@ components (UI)
   `delete_order`). Application writes use the registered `record_application`,
   `update_application` and `delete_application` operations. Product and delivery deletes use the app-only `delete_posted_biochar_product`
   and `delete_posted_delivery` operations, with activity capture and document cleanup. Lost mass form edits run `record_output_stock_movement`
-  with the unpublished `checkFormEditLock` option. Delivery updates run
+  with the unpublished `checkFormEditLock` option; Lost mass form deletes run the app-only `delete_output_stock_loss`. Delivery updates run
   the UI-only `update_posted_delivery` operation: the delivery row, stock
   correction and transport legs share its transaction. Both use the shared
   stock writer with the same dependency check as native corrections (ADR 0035).
