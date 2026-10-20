@@ -124,3 +124,4 @@ export {
 } from "./sources";
 
 export { loadRemovalTemplateReview, loadRemovalTemplateReviewEntry, reviewRemovalTemplateLines, switchCreditBatchRemovalTemplate } from "./removal-template-review";
+export { setFacilityDefaultRemovalTemplate, startRemovalTemplateSetup } from "./removal-template-setup";

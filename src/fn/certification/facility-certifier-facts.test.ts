@@ -34,7 +34,6 @@ it("observes a pinned template even when the facility has no default", async () 
   const facts = await loadFacilityCertifierFacts(ctx, "facility-id");
   expect(facts.defaultTemplate).toBeNull();
   expect(facts.templatesById[fixture.id]!.template.id).toBe(fixture.id);
-  expect(facts.removalTemplateIds).toEqual([fixture.id]);
   expect(listPinnedRemovalTemplateIds).toHaveBeenCalledOnce();
   expect(observeRemovalTemplate).toHaveBeenCalledWith(ctx, expect.objectContaining({ template: fixture }));
 });

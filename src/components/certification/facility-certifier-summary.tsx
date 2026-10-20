@@ -16,6 +16,7 @@
 
 import Link from "next/link";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { EnvBanner } from "./env-banner";
 import { Field, Section } from "./panel-layout";
 
@@ -111,7 +112,7 @@ function SummaryBody({
           </span>
         ) : (
           <span className="body-small text-[var(--color-text-tertiary)]">
-            None selected
+            {MISSING_VALUE.notSet}
           </span>
         )}
       </Field>

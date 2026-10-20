@@ -116,7 +116,7 @@ const AVAILABILITY_COPY: Record<
   "template-not-selected": {
     title: "No active Removal template",
     description:
-      "Select a default Isometric Removal template in Certifier settings.",
+      "Choose a default Removal template in Removal templates.",
   },
   "template-not-found": {
     title: "Active Removal template is missing",

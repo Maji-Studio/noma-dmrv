@@ -230,7 +230,7 @@ export function CertificationSettings() {
     label: "Removal templates",
     icon: ListChecksIcon,
     caption:
-      "Where each template line gets its values. Lines to decide block Removals.",
+      "Choose the facility default and decide each template line. Lines to decide block Removals.",
     access: "Owners and Admins",
     content: facilityId ? (
       <RemovalTemplateReviewPanel

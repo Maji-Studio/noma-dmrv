@@ -166,7 +166,8 @@ describe("FacilityCertifierSection", () => {
       />,
     );
 
-    expect(markup).toContain("Default Removal template");
+    // The default Removal template is chosen in Removal templates, not here.
+    expect(markup).not.toContain("Default Removal template");
     expect(markup).toContain("Isometric facility ID");
     expect(markup).toContain("Save changes");
     expect(markup).toContain('data-variant="default"');
@@ -254,10 +255,10 @@ describe("FacilityCertifierSection", () => {
       expect.objectContaining({
         facilityId,
         externalProjectId: "prj_saved",
-        defaultRemovalTemplateId: "tpl_saved",
         externalFacilityId: "fcl_saved",
       }),
     );
+    expect(saveMapping.mock.calls[0][0]).not.toHaveProperty("defaultRemovalTemplateId");
 
     await act(async () => {
       renderer?.unmount();

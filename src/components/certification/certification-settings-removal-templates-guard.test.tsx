@@ -48,6 +48,8 @@ vi.mock("@/hooks/use-removal-template-review", () => ({
     data: [entry()], isLoading: false, isError: false, isFetching: false, refetch: vi.fn(),
   }),
   useReviewRemovalTemplateLines: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSetFacilityDefaultRemovalTemplate: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useStartRemovalTemplateSetup: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useRemovalTemplateReviewEntry: () => ({
     data: undefined, isLoading: false, isError: false, isFetching: false, refetch: vi.fn(),
   }),

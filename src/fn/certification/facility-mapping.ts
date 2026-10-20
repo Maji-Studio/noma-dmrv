@@ -17,12 +17,10 @@ import { SafeError } from "@/lib/errors";
 import {
   IsometricApiError,
   listProjects,
-  listComponentBlueprints,
   listGhgEntryTemplates,
   type IsometricProject,
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
-import { assertSequestrationTemplateSelectable } from "@/lib/isometric/transformers/sequestration-binding";
 import {
   facilityEmissionConfigSchema,
   saveMappingSchema,
@@ -32,7 +30,6 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
-import { loadRemovalTemplateFacts } from "./removal-template-facts";
 
 export interface FacilityCertifierMapping {
   mapping: CertifierProjectRow | null;
@@ -139,36 +136,12 @@ export async function saveFacilityCertifierMapping(
     if (!projects.some((p) => p.id === parsed.externalProjectId)) {
       throw new SafeError("Selected project does not exist on Isometric.");
     }
-    if (parsed.defaultRemovalTemplateId) {
-      const templates = await listGhgEntryTemplates(client, parsed.externalProjectId);
-      const selectedTemplate = templates.find(
-        (t) => t.id === parsed.defaultRemovalTemplateId,
-      );
-      if (!selectedTemplate) {
-        throw new SafeError(
-          "Selected template does not belong to the chosen project.",
-        );
-      }
-      // We only submit biochar REMOVAL credits; a REDUCTION template bound
-      // here would mislabel every future GHG entry created from it.
-      if (selectedTemplate.credit_type !== "REMOVAL") {
-        throw new SafeError(
-          "Selected template is not a REMOVAL template. Only REMOVAL templates can be used for biochar submissions.",
-        );
-      }
-      assertSequestrationTemplateSelectable(selectedTemplate);
-      await loadRemovalTemplateFacts(orgCtx, {
-        client, externalProjectId: parsed.externalProjectId, template: selectedTemplate,
-        blueprints: await listComponentBlueprints(client),
-      });
-    }
 
     return upsertCertifierProject(orgCtx, {
       facilityId: parsed.facilityId,
       provider: ISOMETRIC_PROVIDER,
       externalProjectId: parsed.externalProjectId,
       protocolSlug: parsed.protocolSlug,
-      defaultRemovalTemplateId: parsed.defaultRemovalTemplateId ?? null,
       externalFacilityId: parsed.externalFacilityId,
     });
   });
