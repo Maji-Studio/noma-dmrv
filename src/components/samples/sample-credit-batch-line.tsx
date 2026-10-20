@@ -15,23 +15,23 @@ import {
 interface SampleCreditBatchLineProps {
   /** The form's currently-selected credit batch. */
   creditBatchId: string | undefined;
-  facilityId?: string | null;
 }
 
-export function SampleCreditBatchLine({ creditBatchId, facilityId }: SampleCreditBatchLineProps) {
+export function SampleCreditBatchLine({ creditBatchId }: SampleCreditBatchLineProps) {
   const summary = useBatchDurabilitySummary(creditBatchId || "", !!creditBatchId);
+  // Error first: a failed background refetch keeps the old data, and the form
+  // treats that error as blocking, so the line must not keep claiming a batch.
   const view: SampleCreditBatchLineView = !creditBatchId
     ? { state: "empty" }
-    : summary.data
-      ? { state: "selected", batch: { id: creditBatchId, code: summary.data.creditBatchCode } }
-      : summary.isError
-        ? { state: "error" }
+    : summary.isError
+      ? { state: "error" }
+      : summary.data
+        ? { state: "selected", batch: { id: creditBatchId, code: summary.data.creditBatchCode } }
         : { state: "pending" };
 
   return (
     <CreditBatchLine
       copy={describeSampleCreditBatchLine(view)}
-      facilityId={facilityId}
       retrying={summary.isFetching}
       onRetry={() => void summary.refetch()}
     />

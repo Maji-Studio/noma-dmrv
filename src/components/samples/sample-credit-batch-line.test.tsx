@@ -17,9 +17,9 @@ afterEach(() => {
 describe("SampleCreditBatchLine", () => {
   it("links the selected batch's code in a new tab", () => {
     summary.mockReturnValue({ data: { creditBatchCode: "CB-26-009" }, isError: false, isFetching: false, refetch: vi.fn() });
-    render(<SampleCreditBatchLine creditBatchId="batch-1" facilityId="fac-1" />);
+    render(<SampleCreditBatchLine creditBatchId="batch-1" />);
     const link = screen.getByRole("link", { name: /CB-26-009/ });
-    expect(link.getAttribute("href")).toBe("/credit-batches/batch-1?facility=fac-1");
+    expect(link.getAttribute("href")).toBe("/credit-batches/batch-1");
     expect(link.getAttribute("target")).toBe("_blank");
     expect(screen.getByRole("status").textContent).toContain("Credit batch: CB-26-009");
   });
@@ -36,5 +36,12 @@ describe("SampleCreditBatchLine", () => {
     summary.mockReturnValue({ data: undefined, isError: true, isFetching: false, refetch: vi.fn() });
     render(<SampleCreditBatchLine creditBatchId="batch-1" />);
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+  });
+
+  it("shows the error and Retry when a refetch failed but data is retained", () => {
+    summary.mockReturnValue({ data: { creditBatchCode: "CB-26-009" }, isError: true, isFetching: false, refetch: vi.fn() });
+    render(<SampleCreditBatchLine creditBatchId="batch-1" />);
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.queryByRole("link")).toBeNull();
   });
 });

@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { describeSampleCreditBatchLine } from "./sample-credit-batch-line-copy";
 
 describe("describeSampleCreditBatchLine", () => {
-  it("names the selected batch and explains the sample characterizes it", () => {
+  it("names the selected batch and explains the Sample characterises it", () => {
     const copy = describeSampleCreditBatchLine({ state: "selected", batch: { id: "b1", code: "CB-26-009" } });
     expect(copy.lead).toBe("Credit batch: ");
     expect(copy.batches).toEqual([{ id: "b1", code: "CB-26-009" }]);
-    expect(copy.info).toContain("characterizes the credit batch chosen above");
+    expect(copy.info).toContain("characterises the credit batch chosen above");
     expect(copy.infoLabel).toBeTruthy();
   });
 

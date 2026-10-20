@@ -986,7 +986,7 @@ export function SampleForm({
         errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
-        preview={<SampleCreditBatchLine creditBatchId={watchedCreditBatchId} facilityId={contextFacilityId} />}
+        preview={<SampleCreditBatchLine creditBatchId={watchedCreditBatchId} />}
       />
     </div>
   );

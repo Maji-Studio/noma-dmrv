@@ -3,7 +3,7 @@
  * pending, error, "None yet" and "Not yet determined" states, and the shape of
  * the copy a line renders. Pure, so each state is tested without a server.
  * Form-specific matching copy (which batch a run joins, which one a sample
- * characterizes) stays with its form and returns the same shape.
+ * characterises) stays with its form and returns the same shape.
  */
 
 /** A credit batch named in the line, rendered as a link. */
