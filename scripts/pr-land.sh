@@ -84,7 +84,7 @@ read_pr() {
 
 read_checks() {
   local status=0
-  CHECKS_JSON="$(gh pr checks "$PR" --repo "$REPO" --json name,bucket,state 2>&1)" || status=$?
+  CHECKS_JSON="$(gh pr checks "$PR" --repo "$REPO" --required --json name,bucket,state 2>&1)" || status=$?
   case "$status" in
     0|"$GH_CHECKS_FAILURE_STATUS"|"$GH_CHECKS_PENDING_STATUS") ;;
     *) die "$EXIT_FAILURE" "could not read checks for #$PR: $CHECKS_JSON" ;;

@@ -385,13 +385,13 @@ See [the Vitest migration preflight](#vitest-only-runs-against-a-throwaway-datab
 
 `scripts/pr-land.sh <pr> [--teardown <name>] [--dry-run]` merges `origin/staging` into the
 PR branch when behind (in the worktree that has it checked out) and pushes, waits for
-GitHub to show that head and for every check to pass, enqueues the PR in the merge queue
+GitHub to show that head and for every required check to pass, enqueues the PR in the merge queue
 through GraphQL, and watches until MERGED. A drop from the queue prints the
 `RemovedFromMergeQueueEvent` reason and exits non-zero. `--teardown` runs
 `teardown` from `scripts/worktree.sh` only after MERGED; `--dry-run` reads state and mutates
 nothing. `scripts/ci-failures.sh <pr>` lists failing checks and prints the Vitest and
 Playwright failing test names with their error lines from the failed Actions logs.
-Neither script runs tests or deletes branches.
+Neither script runs tests or deletes branches itself; `--teardown` delegates to `teardown`, which deletes the branch once merged.
 
 ## E2E data naming is a hard contract
 
