@@ -375,9 +375,10 @@ describe("buildRemovalSubmissionBuild", () => {
   });
 
   it.each([
-    { scenario: "builds the Safety margin from dry mass with the Inventory Source attached", inverted: false },
-    { scenario: "refuses an application on the UTC day before the run's facility day", inverted: true },
-  ])("$scenario", async ({ inverted }) => {
+    { scenario: "builds the Safety margin from dry mass with the Inventory Source attached", inverted: false, beforeEnd: false },
+    { scenario: "refuses an application on the UTC day before the run's facility day", inverted: true, beforeEnd: false },
+    { scenario: "refuses an application before the production end's facility day", inverted: false, beforeEnd: true },
+  ])("$scenario", async ({ inverted, beforeEnd }) => {
     const inventoryBinding = classifyRemovalSourceCandidate({
       documentType: "pdf",
       metadata: { logbookEvidenceType: "inventory" },
@@ -476,7 +477,7 @@ describe("buildRemovalSubmissionBuild", () => {
       id: "run-1",
       code: "RUN-001",
       startTime: new Date(inverted ? "2026-01-01T22:30:00Z" : "2026-01-01T00:00:00Z"),
-      endTime: new Date("2026-01-02T00:00:00Z"),
+      endTime: new Date(beforeEnd ? "2026-01-02T22:30:00Z" : "2026-01-02T00:00:00Z"),
       biocharDryMassKg: 1_200,
       feedstockMassDryKg: 4_000,
       dieselOperationLiters: 0,
@@ -494,7 +495,7 @@ describe("buildRemovalSubmissionBuild", () => {
           application: {
             id: "application-1",
             code: "APP-001",
-            applicationDate: new Date(inverted ? "2026-01-01T00:00:00Z" : "2026-01-03T00:00:00Z"),
+            applicationDate: new Date(inverted ? "2026-01-01T00:00:00Z" : beforeEnd ? "2026-01-02T00:00:00Z" : "2026-01-03T00:00:00Z"),
           },
           delivery: { id: "delivery-1", proofOfDeliveryCount: 1, status: "delivered", customerLocationId: "location-1" },
           productionRun: { id: "run-1", code: "RUN-001" },
@@ -552,6 +553,12 @@ describe("buildRemovalSubmissionBuild", () => {
     if (inverted) {
       await expect(buildPromise).rejects.toThrow(
         "Application APP-001 is dated 2026-01-01, before its production run RUN-001 started 2026-01-02. Correct the application date before submitting.",
+      );
+      return;
+    }
+    if (beforeEnd) {
+      await expect(buildPromise).rejects.toThrow(
+        "Latest application date 2026-01-02 precedes latest production end date 2026-01-03. Correct the application date before submitting.",
       );
       return;
     }
