@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StaleVersionError } from "@/lib/stale-version";
 import { RemovalTemplateSetupFlow } from "./setup-flow";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { dieselSource, electricityClash, setupData, startupDefault, template } from "./test-support";
 
 const push = vi.fn();
@@ -76,6 +77,7 @@ describe("RemovalTemplateSetupFlow", () => {
       facilityId: FACILITY,
       removalTemplateId: "tpl-protocol",
       fingerprints: { semanticFingerprint: "tpl-protocol-semantic", fullFingerprint: "tpl-protocol-full" },
+      planFingerprint: "tpl-protocol-plan",
       answers: { "clash:run-electricity": "pyrolyzer", fuel: "run-genset-diesel" },
       overrides: {},
       makeDefault: true,
@@ -103,5 +105,36 @@ describe("RemovalTemplateSetupFlow", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reload template" }));
     expect(onReload).toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("shows why a blocked template cannot be picked and never offers it", () => {
+    const blocked = template("tpl-blocked", "Fixed values missing", { defaults: [startupDefault] }, REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint);
+    renderFlow(setupData({ fitting: [withDecisions, blocked] }));
+    const radio = screen.getByRole("radio", { name: /Fixed values missing/ }) as HTMLInputElement;
+    expect(radio.disabled).toBe(true);
+    expect(screen.getByText(/Isometric has fixed values without a datapoint in this template/)).toBeTruthy();
+    expect(screen.queryByText(/before submitting/)).toBeNull();
+  });
+
+  it("keeps Continue disabled and says so when every template is blocked", () => {
+    const blocked = template("tpl-blocked", "Fixed values missing", { defaults: [startupDefault] }, REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint);
+    renderFlow(setupData({ fitting: [blocked] }));
+    expect(screen.getByRole("heading", { name: "Pick the template" })).toBeTruthy();
+    expect(screen.getByText(/This template cannot be set up yet\./)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Continue" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("opens the noma decided list through a disclosure button", () => {
+    renderFlow(setupData({ fitting: [withDecisions] }), { step: "decisions" });
+    const toggle = screen.getByRole("button", { name: /noma decided 1 component/ });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByLabelText("What fills Startup fuel usage")).toBeTruthy();
+  });
+
+  it("explains a clash in plain words", () => {
+    renderFlow(setupData({ fitting: [withDecisions] }), { step: "decisions" });
+    expect(screen.getByText("noma keeps one electricity figure per production run. Two components in this template ask for it, and one figure cannot fill both.")).toBeTruthy();
   });
 });

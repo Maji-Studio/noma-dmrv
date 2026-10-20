@@ -10,16 +10,24 @@ import type { LineContract } from "@/lib/isometric/template-observations/line-so
 import { formatCount } from "@/lib/copy-utils";
 import type { RemovalTemplateSetupPlan, SetupAssignment, SetupDecision, SetupOption } from "./removal-template-setup-plan";
 import { sourcesTakenElsewhere } from "./removal-template-setup-plan";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "./removal-template-blockers";
 import { SOURCE_LABELS } from "./removal-template-source-labels";
 
 export type SetupStepKey = "template" | "decisions" | "apply";
 export const SETUP_STEP_KEYS: readonly SetupStepKey[] = ["template", "decisions", "apply"];
 
-/** What noma records for each source, in the words of the explanation lines. */
-const SOURCE_RECORDS: Partial<Record<AutomaticSourceId, string>> = {
-  "run-genset-diesel": "one generator diesel figure per production run",
-  "run-startup-diesel": "one startup diesel figure per production run",
-  "run-electricity": "one electricity figure per production run",
+/** What noma keeps for each source, and whether the datapoints come as one figure or a set. */
+const SOURCE_KEEPS: Record<AutomaticSourceId, { keeps: string; unit: "figure" | "set" }> = {
+  "run-genset-diesel": { keeps: "one generator diesel figure per production run", unit: "figure" },
+  "run-startup-diesel": { keeps: "one startup diesel figure per production run", unit: "figure" },
+  "run-electricity": { keeps: "one electricity figure per production run", unit: "figure" },
+  "feedstock-transport": { keeps: "one set of feedstock transport legs per credit batch", unit: "set" },
+  "delivery-transport": { keeps: "one set of delivery transport legs per credit batch", unit: "set" },
+  "sample-transport": { keeps: "one set of sample transport legs per credit batch", unit: "set" },
+  "feedstock-dry-mass": { keeps: "one feedstock dry mass per credit batch", unit: "figure" },
+  "biochar-dry-mass": { keeps: "one biochar dry mass per credit batch", unit: "figure" },
+  sequestration: { keeps: "one set of application and lab results per credit batch", unit: "set" },
+  "safety-margin": { keeps: "one safety margin per credit batch", unit: "figure" },
 };
 
 const SOURCE_NOUNS: Record<AutomaticSourceId, string> = {
@@ -35,6 +43,16 @@ const SOURCE_NOUNS: Record<AutomaticSourceId, string> = {
   "safety-margin": "the safety margin on biochar dry mass",
 };
 
+const BLOCKED_COPY: Record<string, string> = {
+  [REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint]: "Isometric has fixed values without a datapoint in this template. Set them in the Isometric template editor, then come back.",
+  [REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead]: "noma could not read this template in full. Try again in a moment.",
+};
+
+/** The reason a template cannot be set up yet, in setup words. */
+export function blockedCopy(reason: string): string {
+  return BLOCKED_COPY[reason] ?? reason;
+}
+
 const ENTRY_EACH_BATCH = "an emissions entry on each credit batch";
 export const ENTRY_LABEL = "Emissions entry";
 export const PROJECT_LABEL = "Project level (not sent)";
@@ -47,9 +65,8 @@ function sourceNoun(source: string): string {
   return SOURCE_NOUNS[source as AutomaticSourceId] ?? source;
 }
 
-function sourceRecords(source: string): string {
-  return SOURCE_RECORDS[source as AutomaticSourceId] ?? `one record of ${sourceNoun(source)}`;
-}
+const COUNT_WORDS = ["Zero", "One", "Two", "Three", "Four", "Five"];
+const countWord = (count: number) => COUNT_WORDS[count] ?? String(count);
 
 /** The source an option fills, if it fills one. */
 export function optionSource(option: SetupOption): AutomaticSourceId | undefined {
@@ -77,10 +94,13 @@ export function decisionSituation(decision: SetupDecision): string {
   const first = decision.components[0].component.displayName;
   if (decision.kind === "clash") {
     const source = decision.id.replace("clash:", "");
-    return `noma records ${sourceRecords(source)}. ${formatCount(decision.components.length, "component")} in this template measure ${sourceNoun(source)}, and one figure cannot fill ${decision.components.length === 2 ? "both" : "all of them"}.`;
+    const { keeps, unit } = SOURCE_KEEPS[source as AutomaticSourceId] ?? { keeps: `one record of ${sourceNoun(source)}`, unit: "figure" as const };
+    const count = decision.components.length;
+    return `noma keeps ${keeps}. ${countWord(count)} components in this template ask for ${unit === "set" ? "them" : "it"}, and one ${unit} cannot fill ${count === 2 ? "both" : "all of them"}.`;
   }
   if (decision.kind === "added") return `${first} is not decided yet for this template. noma lists its proposal first, and nothing is preselected.`;
-  return `noma has more than one record that could fill ${first}. The component name does not say which one it means.`;
+  const sources = decision.options.filter((option) => optionSource(option)).map((option) => sourceNoun(optionSource(option) as string));
+  return `noma keeps ${sources.join(" and ")} separately. The name of ${first} does not say which one it means.`;
 }
 
 export function optionDescription(decision: SetupDecision, option: SetupOption): string {
@@ -143,17 +163,18 @@ export function parseStep(raw: string | null | undefined): SetupStepKey | null {
 }
 
 interface StartInput {
-  fitting: readonly { id: string; plan: RemovalTemplateSetupPlan }[];
+  fitting: readonly { id: string; plan: RemovalTemplateSetupPlan; blockedReason?: string | null }[];
   templateId: string | null;
   step: SetupStepKey | null;
 }
 
 /** Where the page opens: the requested step, else Apply for the one fit with nothing to decide. */
-export function startState({ fitting, templateId, step }: StartInput): { templateId: string | null; stepIndex: number } {
-  const requested = fitting.find((template) => template.id === templateId) ?? (fitting.length === 1 ? fitting[0] : null);
+export function startState({ fitting: all, templateId, step }: StartInput): { templateId: string | null; stepIndex: number } {
+  const fitting = all.filter((template) => !template.blockedReason);
+  const requested = fitting.find((template) => template.id === templateId) ?? (all.length === 1 ? fitting[0] ?? null : null);
   if (!requested) return { templateId: null, stepIndex: 0 };
   const requestedIndex = step ? SETUP_STEP_KEYS.indexOf(step) : -1;
   if (requestedIndex >= 0) return { templateId: requested.id, stepIndex: requestedIndex };
-  const zeroPath = fitting.length === 1 && requested.plan.decisions.length === 0;
+  const zeroPath = all.length === 1 && requested.plan.decisions.length === 0;
   return { templateId: requested.id, stepIndex: zeroPath ? 2 : 0 };
 }

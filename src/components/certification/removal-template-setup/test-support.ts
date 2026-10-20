@@ -44,12 +44,12 @@ export const startupDefault: SetupDefault = {
   ],
 };
 
-export function template(id: string, name: string, plan: Partial<RemovalTemplateSetupPlan> = {}): SetupTemplate {
+export function template(id: string, name: string, plan: Partial<RemovalTemplateSetupPlan> = {}, blockedReason: string | null = null): SetupTemplate {
   const full: RemovalTemplateSetupPlan = { decided: [], defaults: [], decisions: [], ...plan };
   return {
     id, name, componentCount: full.decided.length + full.defaults.length + full.decisions.reduce((sum, decision) => sum + decision.components.length, 0),
     plan: full, ready: full.decisions.length === 0, toDecideCount: full.decisions.length,
-    semanticFingerprint: `${id}-semantic`, fullFingerprint: `${id}-full`,
+    semanticFingerprint: `${id}-semantic`, fullFingerprint: `${id}-full`, planFingerprint: `${id}-plan`, blockedReason,
   };
 }
 

@@ -4,7 +4,10 @@
  */
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
+import { cn } from "@/lib/utils";
 import { ChoiceCardGroup } from "@/components/forms";
 import { Notice } from "@/components/ui/notice";
 import { LedgerBeforeAfter } from "@/components/storage-locations/stock-ledger";
@@ -15,6 +18,7 @@ import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
 import {
   type Answers,
   assignmentFill,
+  blockedCopy,
   decisionQuestion,
   decisionSituation,
   entryCount,
@@ -46,8 +50,9 @@ export function TemplateStep({ data, templateId, onChange, invalid }: {
   invalid: boolean;
 }) {
   const only = data.fitting.length === 1 ? data.fitting[0] : null;
-  const describe = (template: SetupTemplate) =>
-    `${formatCount(template.componentCount, "component")}. ${toDecideLabel(template.plan.decisions.length)}.`;
+  const describe = (template: SetupTemplate) => template.blockedReason
+    ? blockedCopy(template.blockedReason)
+    : `${formatCount(template.componentCount, "component")}. ${toDecideLabel(template.plan.decisions.length)}.`;
   return (
     <div className="flex flex-col gap-16">
       {only ? (
@@ -61,7 +66,7 @@ export function TemplateStep({ data, templateId, onChange, invalid }: {
           value={templateId}
           onValueChange={onChange}
           error={invalid && !templateId}
-          options={data.fitting.map((template) => ({ value: template.id, title: template.name, description: describe(template) }))}
+          options={data.fitting.map((template) => ({ value: template.id, title: template.name, description: describe(template), disabled: !!template.blockedReason }))}
         />
       )}
       <p className="body-caption text-[var(--color-text-tertiary)]">
@@ -75,6 +80,26 @@ export function TemplateStep({ data, templateId, onChange, invalid }: {
 }
 
 /* Decisions ---------------------------------------------------------------- */
+
+/** A quiet disclosure, closed by default: nothing in it needs a click. */
+function Disclosure({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col gap-12 border-t border-[var(--color-border-tertiary)] pt-12">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((value) => !value)}
+        className="flex min-h-44 w-full cursor-pointer items-center justify-between gap-12 text-left"
+      >
+        <span className="body-small font-medium text-[var(--color-text-primary)]">{title}</span>
+        <CaretDownIcon size={16} aria-hidden className={cn("shrink-0 text-[var(--color-text-tertiary)] transition-transform", open && "rotate-180")} />
+      </button>
+      {open && <div id={id}>{children}</div>}
+    </div>
+  );
+}
 
 function DecisionBlock({ decision, number, value, taken, invalid, onChange }: {
   decision: SetupDecision;
@@ -100,6 +125,7 @@ function DecisionBlock({ decision, number, value, taken, invalid, onChange }: {
         value={value ?? null}
         onValueChange={onChange}
         error={invalid && !value}
+        stackNarrow
         options={decision.options.map((option) => ({
           value: option.id,
           title: optionLabel(option),
@@ -192,10 +218,10 @@ export function DecisionsStep({ template, answers, overrides, showMissing, onAns
         />
       ))}
       {total > 0 && (
-        <details className="group flex flex-col gap-12 border-t border-[var(--color-border-tertiary)] pt-12">
-          <summary className="flex min-h-44 cursor-pointer items-center body-small font-medium text-[var(--color-text-primary)]">
-            {plan.defaults.length > 0 ? `noma decided ${formatCount(plan.defaults.length, "component")}` : `${formatCount(plan.decided.length, "component")} decided before`}
-          </summary>
+        <Disclosure
+          id="setup-decided-components"
+          title={plan.defaults.length > 0 ? `noma decided ${formatCount(plan.defaults.length, "component")}` : `${formatCount(plan.decided.length, "component")} decided before`}
+        >
           <div className="flex flex-col gap-16">
             <p className="body-small text-[var(--color-text-secondary)]">
               Every component counts as Operating, on each credit batch. Decisions apply to every facility that uses this template.
@@ -213,7 +239,7 @@ export function DecisionsStep({ template, answers, overrides, showMissing, onAns
               </GroupList>
             )}
           </div>
-        </details>
+        </Disclosure>
       )}
     </div>
   );

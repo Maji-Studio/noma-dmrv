@@ -62,6 +62,7 @@ export function RemovalTemplateSetupFlow({ data, facilityId, templateId: request
   const decisionCount = template?.plan.decisions.length ?? 0;
   const defaultName = data.fitting.find((candidate) => candidate.id === data.defaultRemovalTemplateId)?.name
     ?? data.notFitting.find((candidate) => candidate.id === data.defaultRemovalTemplateId)?.name ?? null;
+  const allBlocked = data.fitting.length > 0 && data.fitting.every((candidate) => candidate.blockedReason);
   const batchCount = setBatches ? data.batchesWithoutTemplate.length : 0;
 
   const steps: StepFlowStep[] = [
@@ -97,6 +98,7 @@ export function RemovalTemplateSetupFlow({ data, facilityId, templateId: request
         facilityId,
         removalTemplateId: template.id,
         fingerprints: { semanticFingerprint: template.semanticFingerprint, fullFingerprint: template.fullFingerprint },
+        planFingerprint: template.planFingerprint,
         answers,
         overrides,
         makeDefault,
@@ -133,6 +135,11 @@ export function RemovalTemplateSetupFlow({ data, facilityId, templateId: request
           orientation="vertical"
           footer={
             <div className="flex flex-col gap-16">
+              {allBlocked && step === 0 && (
+                <Notice tone="warning">
+                  {data.fitting.length === 1 ? "This template cannot be set up yet." : "None of these templates can be set up yet."} Fix what each card says in Isometric, then come back.
+                </Notice>
+              )}
               {showMissing && step === 0 && <Notice tone="error">Pick a template to continue.</Notice>}
               {showMissing && step === 1 && open.length > 0 && (
                 <Notice tone="error">{`${toDecideLabel(open.length)}: ${open.map((decision) => decisionQuestion(decision)).join(" ")}`}</Notice>
@@ -146,7 +153,7 @@ export function RemovalTemplateSetupFlow({ data, facilityId, templateId: request
                 </Notice>
               )}
               <div className="flex flex-wrap items-center gap-12 border-t border-[var(--color-border-secondary)] pt-16">
-                <Button variant="primary" onClick={next} busy={apply.isPending} className={step === 2 ? APPLY_BUTTON_CLASS : undefined}>
+                <Button variant="primary" onClick={next} busy={apply.isPending} disabled={allBlocked && step === 0} className={step === 2 ? APPLY_BUTTON_CLASS : undefined}>
                   {step === 2 ? applyLabel(makeDefault, batchCount) : "Continue"}
                 </Button>
               </div>

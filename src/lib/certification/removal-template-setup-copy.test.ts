@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { dieselSource, electricityClash, startupDefault, template } from "@/components/certification/removal-template-setup/test-support";
-import { decisionQuestion, entryCount, openDecisions, optionLabel, startState } from "./removal-template-setup-copy";
+import { decisionQuestion, decisionSituation, entryCount, openDecisions, optionLabel, startState } from "./removal-template-setup-copy";
 
 describe("removal template setup copy", () => {
   it("maps raw source ids to labels and writes the question in operator words", () => {
@@ -8,6 +8,15 @@ describe("removal template setup copy", () => {
     expect(optionLabel(dieselSource.options[2])).toBe("Neither, entry");
     expect(decisionQuestion(electricityClash)).toBe("Which component gets electricity from production runs?");
     expect(decisionQuestion(dieselSource)).toBe("Which source fills Biomass processing fuel usage?");
+  });
+
+  it("writes each explanation for its source", () => {
+    expect(decisionSituation(dieselSource)).toBe("noma keeps generator diesel from production runs and startup diesel from production runs separately. The name of Biomass processing fuel usage does not say which one it means.");
+  });
+
+  it("does not start on a blocked template", () => {
+    const blocked = { ...template("a", "A", { defaults: [startupDefault] }), blockedReason: "x" };
+    expect(startState({ fitting: [blocked], templateId: "a", step: null })).toEqual({ templateId: null, stepIndex: 0 });
   });
 
   it("tracks open decisions and the entries each answer creates", () => {
