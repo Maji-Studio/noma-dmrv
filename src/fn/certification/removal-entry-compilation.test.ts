@@ -82,7 +82,7 @@ function context(kind: "zero" | "value", withEntryContext = true) {
 }
 
 async function compile(ctx: RemovalSubmissionContext) {
-  const preparation = prepareRemovalSubmission(ctx, { isometricEnvironment: "sandbox" });
+  const preparation = prepareRemovalSubmission(ctx);
   expect(preparation.prepared).not.toBeNull();
   return { preparation, compiled: await compileRemovalSubmission({
     orgCtx: ORG_CTX, removalId: REMOVAL_ID, ctx, prepared: preparation.prepared!,

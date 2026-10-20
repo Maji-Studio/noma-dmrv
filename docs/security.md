@@ -184,6 +184,10 @@ The application hook owns reuse and revocation; the patch is its backstop.
 
 Read directly from `process.env`, **not** validated by `env.ts`:
 
+- `NEXT_PUBLIC_SHOT_MODE` — `next.config.ts` and
+  `src/components/navigation/sidebar-content.tsx`. Only the literal `true` counts and it is ignored when
+  `NODE_ENV=production`. Hides the sidebar account text and the dev indicator for PR screenshots
+  (the PR screenshots section of `docs/testing.md`). Never put it in a 1Password item or a deployment.
 - `LOG_LEVEL` — validated in `src/lib/log/index.ts`: `trace`, `debug`, `info`,
   `warn`, `error`, `fatal`, or `silent`. Unset/blank defaults to `info` in
   production and `debug` otherwise; invalid values are rejected.

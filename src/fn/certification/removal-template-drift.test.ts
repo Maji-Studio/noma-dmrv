@@ -69,7 +69,7 @@ function prepare(template: GhgEntryTemplate, lineSources = sources(template), fa
   const facts = facilityFacts(template, lineSources);
   const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], facts);
   const context = { ...resolved, facilityId, mapping: facts.mapping, hasOrgCredentials: true };
-  return { resolved, ...prepareRemovalSubmission(context, { isometricEnvironment: "sandbox" }) };
+  return { resolved, ...prepareRemovalSubmission(context) };
 }
 
 function compile(template: GhgEntryTemplate, lineSources = sources(template), facilityId?: string) {
@@ -79,7 +79,7 @@ function compile(template: GhgEntryTemplate, lineSources = sources(template), fa
   return { ...result, inputs: resolveTemplateInputs({
     template: result.prepared!.removalTemplate, lineSources: result.prepared!.lineSources,
     blueprintsByKey: result.prepared!.blueprintsByKey, externalProjectId: result.prepared!.externalProjectId,
-    agg, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: true, omitProductionComponents: false,
+    agg, sourceIds: [], sourceBindingPlan: [], omitProductionComponents: false,
   }) };
 }
 

@@ -99,6 +99,7 @@ vi.mock("@/data-access/emission-entry-contenders", () => ({ loadEmissionEntryRes
 vi.mock("@/data-access/certification", () => ({ listRecentSyncEvents: vi.fn(async () => []) }));
 vi.mock("@/data-access/certifier-removals", () => ({ listRemovalsForFacility: vi.fn(), listUngroupedCreditBatches: vi.fn(async () => []), getCertifierRemovalById: vi.fn() }));
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntriesForBatches: vi.fn(async () => []) }));
+vi.mock("@/data-access/emission-zeros", () => ({ isRemovalZeroEditable: vi.fn(async () => true) }));
 vi.mock("./biochar-application-source-readback", () => ({ refreshRemovalEvidenceLinks: vi.fn(async () => []) }));
 vi.mock("../with-action", () => ({ withAction: async (fn: (org: typeof ctx) => unknown) => ({ success: true, data: await fn(ctx) }) }));
 import { getLatestSubmission } from "@/data-access/certification-submissions";
@@ -124,7 +125,7 @@ it.each([new Date(0), new Date()])("loads context, Empty lines and overview afte
     kind: "value", contentRevision: 2, counts: false, values: [], evidenceDocumentIds: [], occurredOn: "2026-01-02" }],
     previousObservations: new Map(), automaticFigures: {} } } as never);
   await expect(loadRemovalSubmissionContext(ctx, "removal-1")).resolves.toMatchObject({ latestSubmission: { id: "crashed" } });
-  await expect(loadRemovalEmptyLines(ctx, "removal-1")).resolves.toHaveProperty("batches");
+  await expect(loadRemovalEmptyLines(ctx, "removal-1")).resolves.toMatchObject({ editable: true, batches: expect.any(Array) });
   await expect(loadCertificationOverview(scope.facilityId)).resolves.toMatchObject({ success: true, data: { removals: [{ removalId: scope.removalId }] } });
 });
 

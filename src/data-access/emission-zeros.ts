@@ -20,6 +20,25 @@ import { assertRowVersion, nextVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 
+/** A submitted, accepted or in-flight attempt freezes the recorded zeros. */
+function submissionsLockZeros(submissions: (typeof certificationSubmissions.$inferSelect)[]) {
+  return submissions.some((row) => row.submittedAt || row.status === "submitted" || row.status === "accepted" || isLiveEntryReservation(row, Date.now()));
+}
+
+/** Whether recorded zeros may change now: the check `lockZeroDraft` applies, without the lock. */
+export async function isRemovalZeroEditable(ctx: OrgContext, removalId: string): Promise<boolean> {
+  requireOrgScope(ctx);
+  const [removal] = await db.select().from(certifierRemovals).where(and(
+    eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, removalId),
+  ));
+  if (!removal || hasFreshRemovalDeletionLease(removal.metadata)) return false;
+  const submissions = await db.select().from(certificationSubmissions).where(and(
+    eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityId, removalId),
+    eq(certificationSubmissions.localEntityType, "removal"), eq(certificationSubmissions.submissionType, "removal"),
+  ));
+  return !submissionsLockZeros(submissions);
+}
+
 async function lockZeroDraft(ctx: OrgContext, tx: DbTransaction, data: z.infer<typeof undoEmissionZerosSchema>, expectedVersion?: number) {
   requireOrgScope(ctx);
   // Stamping holds batch locks before its sentByRemovalId FK takes KEY SHARE here.
@@ -38,7 +57,7 @@ async function lockZeroDraft(ctx: OrgContext, tx: DbTransaction, data: z.infer<t
     eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityId, data.removalId),
     eq(certificationSubmissions.localEntityType, "removal"), eq(certificationSubmissions.submissionType, "removal"),
   ));
-  if (submissions.some((row) => row.submittedAt || row.status === "submitted" || row.status === "accepted" || isLiveEntryReservation(row, Date.now()))) {
+  if (submissionsLockZeros(submissions)) {
     throw new SafeError("Recorded zeros can only be changed on an unsubmitted, idle Removal.");
   }
   // Removals have no integer row version; use the persisted updatedAt millisecond token returned by the empty-lines read.
