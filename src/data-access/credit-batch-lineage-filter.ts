@@ -1,7 +1,6 @@
 import { db } from "@/db";
 import {
   biocharProductSourceAllocations,
-  biocharProducts,
   creditBatchProductionRuns,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -32,7 +31,7 @@ export function inCreditBatchLineage(
     db
       .select({ value: sql`1` })
       .from(creditBatchProductionRuns)
-      .leftJoin(
+      .innerJoin(
         biocharProductSourceAllocations,
         and(
           eq(
@@ -43,17 +42,11 @@ export function inCreditBatchLineage(
             biocharProductSourceAllocations.organizationId,
             ctx.organizationId,
           ),
-        ),
-      )
-      .innerJoin(
-        biocharProducts,
-        and(
+          // Correlate through allocations so an outer product column is not shadowed.
           eq(
-            biocharProducts.id,
             biocharProductSourceAllocations.biocharProductId,
+            biocharProductId,
           ),
-          eq(biocharProducts.organizationId, ctx.organizationId),
-          eq(biocharProducts.id, biocharProductId),
         ),
       )
       .where(
