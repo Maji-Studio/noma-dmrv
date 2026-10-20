@@ -16,6 +16,7 @@ import type { TransportDistanceDrift } from "@/data-access/transport-distance-dr
 import { useRefreshTransportDistance, useTransportDistanceDrift } from "@/hooks/use-transport-distance-refresh";
 import { formatDistanceKm } from "@/lib/format-utils";
 import { toSaveErrorMessage } from "@/lib/stale-version";
+import { SAVED_DETAILS_UNAVAILABLE } from "@/lib/copy-utils";
 import type { TransportDistanceTarget } from "@/schemas/transport-distance-refresh";
 
 export const REFRESH_FROM_LOCATION_LABEL = "Refresh from location";
@@ -24,6 +25,7 @@ const CONFIRM_TITLE = "Refresh distance from location?";
 // Short, so it fits beside Cancel in the 400px confirm dialog; the title names the location.
 const CONFIRM_LABEL = "Refresh";
 const REFRESH_FAILED_MESSAGE = "The distance was not refreshed. Try again.";
+const REOPEN_BEFORE_SAVING = "Close it and open it again before saving.";
 
 const RECORD_NOUNS: Record<TransportDistanceTarget["entityType"], string> = {
   feedstock: "feedstock",
@@ -58,11 +60,15 @@ function DistanceRefreshDialog({
   recordCode: string;
   /** A refused version or a new lock changes what the next attempt sees. */
   onRefused: () => void;
-  onRefreshed?: (refreshed: TransportDistanceDrift) => void;
+  /** Resolves once the caller holds the refreshed record; the dialog waits for it. */
+  onRefreshed?: (refreshed: TransportDistanceDrift) => Promise<void> | void;
 }) {
   const refresh = useRefreshTransportDistance(target.entityType);
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
+  // The refresh committed a new version; Save stays out of reach until the
+  // form holds it, or it would send the old one.
+  const [reloading, setReloading] = useState(false);
   const noun = RECORD_NOUNS[target.entityType];
   const close = () => {
     setError(null);
@@ -70,15 +76,27 @@ function DistanceRefreshDialog({
   };
   const confirm = async () => {
     setError(null);
+    let refreshed: TransportDistanceDrift;
     try {
-      const refreshed = await refresh.mutateAsync({ entityId: target.entityId, expectedVersion: drift.expectedVersion });
-      close();
-      toast.success(`Distance for ${recordCode} refreshed to ${formatDistanceKm(refreshed.recordedDistanceKm)}.`);
-      onRefreshed?.(refreshed);
+      refreshed = await refresh.mutateAsync({ entityId: target.entityId, expectedVersion: drift.expectedVersion });
     } catch (refusal) {
       setError(toSaveErrorMessage(refusal, REFRESH_FAILED_MESSAGE));
       onRefused();
+      return;
     }
+    setReloading(true);
+    let reloaded = true;
+    try {
+      await onRefreshed?.(refreshed);
+    } catch {
+      reloaded = false;
+    } finally {
+      setReloading(false);
+    }
+    close();
+    const done = `Distance for ${recordCode} refreshed to ${formatDistanceKm(refreshed.recordedDistanceKm)}.`;
+    if (reloaded) toast.success(done);
+    else toast.warning(`${done} ${SAVED_DETAILS_UNAVAILABLE} ${REOPEN_BEFORE_SAVING}`);
   };
 
   return (
@@ -103,7 +121,7 @@ function DistanceRefreshDialog({
       }
       confirmLabel={CONFIRM_LABEL}
       busyLabel="Refreshing…"
-      isPending={refresh.isPending}
+      isPending={refresh.isPending || reloading}
       confirmDisabled={drift.hasSubmittedRemoval}
       errorMessage={error ?? undefined}
     />
@@ -154,8 +172,11 @@ export const SAVE_BEFORE_REFRESH_REASON = "Save or discard your changes first.";
 interface DistanceDriftActionProps extends TransportDistanceDriftNoticeProps {
   /** Why the action is unavailable, shown beside it (unsaved form edits). */
   disabledReason?: string | null;
-  /** The refresh committed a new version: the form must reload the record. */
-  onRefreshed: (refreshed: TransportDistanceDrift) => void;
+  /**
+   * The refresh committed a new version: the form must reload the record.
+   * The dialog stays pending until the returned promise settles.
+   */
+  onRefreshed: (refreshed: TransportDistanceDrift) => Promise<void> | void;
 }
 
 /**
@@ -164,34 +185,43 @@ interface DistanceDriftActionProps extends TransportDistanceDriftNoticeProps {
  */
 export function DistanceDriftAction({ target, recordCode, disabledReason, onRefreshed }: DistanceDriftActionProps) {
   const drift = useTransportDistanceDrift(target);
-  const [confirming, setConfirming] = useState(false);
-  const data = drift.data;
-  if (!visibleDrift(data)) return null;
+  // The drift the dialog opened on. A successful refresh clears the live
+  // drift before the form has reloaded; the dialog stays on this snapshot,
+  // pending, until the reload lands.
+  const [confirmingDrift, setConfirmingDrift] = useState<VisibleDrift | null>(null);
+  const visible = visibleDrift(drift.data) ? drift.data : null;
+  // A refused attempt refetches: the live drift carries the version to retry with.
+  const dialogDrift = visible ?? confirmingDrift;
+  if (!dialogDrift) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-8" data-testid="transport-distance-drift-action">
-      <p className="body-caption text-[var(--color-text-secondary)]">
-        {`Location now ${formatDistanceKm(data.currentDistanceKm)}.`}
-        {disabledReason ? ` ${disabledReason}` : ""}
-      </p>
-      <Button
-        type="button"
-        size="small"
-        variant="noOutline"
-        disabled={!!disabledReason}
-        onClick={() => setConfirming(true)}
-      >
-        {REFRESH_FROM_LOCATION_LABEL}
-      </Button>
+    <>
+      {visible && (
+        <div className="flex flex-wrap items-center gap-x-8" data-testid="transport-distance-drift-action">
+          <p className="body-caption text-[var(--color-text-secondary)]">
+            {`Location now ${formatDistanceKm(visible.currentDistanceKm)}.`}
+            {disabledReason ? ` ${disabledReason}` : ""}
+          </p>
+          <Button
+            type="button"
+            size="small"
+            variant="noOutline"
+            disabled={!!disabledReason}
+            onClick={() => setConfirmingDrift(visible)}
+          >
+            {REFRESH_FROM_LOCATION_LABEL}
+          </Button>
+        </div>
+      )}
       <DistanceRefreshDialog
-        open={confirming}
-        onClose={() => setConfirming(false)}
+        open={!!confirmingDrift}
+        onClose={() => setConfirmingDrift(null)}
         target={target}
-        drift={data}
+        drift={dialogDrift}
         recordCode={recordCode}
         onRefused={() => void drift.refetch()}
         onRefreshed={onRefreshed}
       />
-    </div>
+    </>
   );
 }

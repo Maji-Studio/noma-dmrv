@@ -17,9 +17,9 @@
 "use client";
 
 import { certificationRemovalsHref } from "@/lib/certification/links";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { CellContext, ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
 import {
   PlusIcon,
   SealCheckIcon,
@@ -250,6 +250,27 @@ export function StatusCell({ summary, lock }: { summary: RemovalListRow; lock?: 
   );
 }
 
+/**
+ * The page's record locks, read by the status cell. Cells are module-level
+ * components: a cell function created per render is a new component type, so
+ * every refetch would remount the cell and drop an open status history and
+ * the focus on its badge.
+ */
+const RemovalLocksContext = createContext<RecordLockViews>({});
+
+function RemovalColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
+  return <RemovalCell summary={row.original} />;
+}
+
+function BatchesColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
+  return <MemberBatchesCell summary={row.original} />;
+}
+
+function StatusColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
+  const locks = useContext(RemovalLocksContext);
+  return <StatusCell summary={row.original} lock={locks[row.original.removalId]} />;
+}
+
 const createColumns = (
   locks: RecordLockViews,
   registryHref: (externalId: string) => string | null,
@@ -267,13 +288,13 @@ const createColumns = (
     },
     header: "Removal",
     accessorFn: removalSearchText,
-    cell: ({ row }) => <RemovalCell summary={row.original} />,
+    cell: RemovalColumnCell,
   },
   {
     id: "batches",
     header: "Credit batches",
     accessorFn: (summary) => summary.memberBatchCodes.join(" "),
-    cell: ({ row }) => <MemberBatchesCell summary={row.original} />,
+    cell: BatchesColumnCell,
   },
   {
     id: "status",
@@ -288,7 +309,7 @@ const createColumns = (
       });
       return `${status.label} ${status.reasons.join(" ")}${locks[summary.removalId]?.returnedBy.length ? ` ${CORRECTION_NEEDED_LABEL}` : ""}`;
     },
-    cell: ({ row }) => <StatusCell summary={row.original} lock={locks[row.original.removalId]} />,
+    cell: StatusColumnCell,
   },
 ];
 
@@ -352,50 +373,55 @@ function ListBody({
             ({rows.length})
           </span>
         </h2>
-        <DataTable
-          columns={columns}
-          data={rows}
-          enableFiltering
-          enablePagination
-          globalFilter={searchQuery}
-          onGlobalFilterChange={setSearchQuery}
-          isLoading={identities.isLoading}
-          hoverable
-          onRowClick={(row) => setRemovalId(row.removalId)}
-          getRowHref={(row) => certificationRemovalsHref({ facility: facilityId, removal: row.removalId })}
-          aria-label="Removals"
-          emptyMessage={
-            <EmptyState
-              padding="md"
-              icon={<SealCheckIcon size={40} />}
-              title={searchQuery ? "No matching Removals" : "No Removals yet"}
-              description={
-                searchQuery
-                  ? "Try clearing your search."
-                  : "Group complete credit batches into a Removal to submit them."
-              }
-              action={
-                searchQuery ? undefined : (
-                  <Button variant="default" onClick={onNewRemoval}>
-                    <PlusIcon size={16} weight="bold" />
-                    Create your first Removal
-                  </Button>
-                )
-              }
-            />
-          }
-        >
-          <DataTable.Toolbar>
-            <DataTable.Search
-              placeholder="Search Removals..."
-              aria-label="Search Removals"
-            />
-            <DataTable.Controls>
-              <DataTable.ColumnVisibility />
-            </DataTable.Controls>
-          </DataTable.Toolbar>
-          <DataTable.Pagination />
-        </DataTable>
+        <RemovalLocksContext.Provider value={removalLocks.locks}>
+          <DataTable
+            columns={columns}
+            data={rows}
+            // Rows carry `removalId`, not `id`: key by it so an open status
+            // history stays with its Removal when rows shift.
+            getRowId={(row) => row.removalId}
+            enableFiltering
+            enablePagination
+            globalFilter={searchQuery}
+            onGlobalFilterChange={setSearchQuery}
+            isLoading={identities.isLoading}
+            hoverable
+            onRowClick={(row) => setRemovalId(row.removalId)}
+            getRowHref={(row) => certificationRemovalsHref({ facility: facilityId, removal: row.removalId })}
+            aria-label="Removals"
+            emptyMessage={
+              <EmptyState
+                padding="md"
+                icon={<SealCheckIcon size={40} />}
+                title={searchQuery ? "No matching Removals" : "No Removals yet"}
+                description={
+                  searchQuery
+                    ? "Try clearing your search."
+                    : "Group complete credit batches into a Removal to submit them."
+                }
+                action={
+                  searchQuery ? undefined : (
+                    <Button variant="default" onClick={onNewRemoval}>
+                      <PlusIcon size={16} weight="bold" />
+                      Create your first Removal
+                    </Button>
+                  )
+                }
+              />
+            }
+          >
+            <DataTable.Toolbar>
+              <DataTable.Search
+                placeholder="Search Removals..."
+                aria-label="Search Removals"
+              />
+              <DataTable.Controls>
+                <DataTable.ColumnVisibility />
+              </DataTable.Controls>
+            </DataTable.Toolbar>
+            <DataTable.Pagination />
+          </DataTable>
+        </RemovalLocksContext.Provider>
       </section>
 
       {selected && identities.data && (

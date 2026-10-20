@@ -51,6 +51,16 @@ it('deletes an Open delivery with exact stock restoration, retained history and 
   expect(await db.select().from(orders).where(eq(orders.id, f.order.id))).toHaveLength(0);
 });
 
+it('restores delivery stock once: a repeated delete of the same version is refused', async () => {
+  const f = await fixture();
+  const delivery = await postDelivery(f, 100);
+  await deleteDelivery(f.ctx, delivery.id, delivery.version);
+  await expect(deleteDelivery(f.ctx, delivery.id, delivery.version)).rejects.toMatchObject({ code: 'stale_version' });
+  expect(await getOutputBinStockView(f.ctx, f.bin.id)).toMatchObject({ dryMassKg: 1000, estimatedWetMassKg: 1000 });
+  const reversals = (await getOutputStockHistory(f.ctx, f.bin.id)).filter(row => row.kind === 'reversal');
+  expect(reversals).toHaveLength(1);
+});
+
 it('deletes an Open product and restores its source stock while retaining the reversed draw', async () => {
   const f = await fixture();
   const original = (await getOutputStockHistory(f.ctx, f.source.id)).find(row => row.kind === 'production_draw')!;

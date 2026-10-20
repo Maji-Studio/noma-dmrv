@@ -14,7 +14,9 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
+import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { MassPair } from "@/components/ui/mass-pair";
@@ -32,6 +34,7 @@ import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   useCreateDelivery,
+  useDeleteDelivery,
   useDeliveries,
   useDeliveryStats,
   useDeliveryWithRelations,
@@ -95,6 +98,7 @@ function deliveryDetailToRelations(
 
 function createColumns(
   onEdit: (delivery: DeliverySheetRecord) => void,
+  onDelete: (delivery: DeliverySheetRecord) => void,
   facilities: readonly { id: string; timezone: string }[],
   locks: RecordLockViews,
 ): ColumnDef<DeliveryWithRelations>[] {
@@ -185,18 +189,23 @@ function createColumns(
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end">
-          {isRecordEditable(locks[row.original.id]) && (
-            <RowActionsMenu
-              label={`Actions for ${row.original.code}`}
-              actions={[
-                { label: "Edit", onSelect: () => onEdit(row.original) },
-              ]}
-            />
-          )}
-        </div>
-      ),
+      // Edit until Sent; Delete only while Open (the server restores the bin stock).
+      cell: ({ row }) => {
+        const lock = locks[row.original.id];
+        const actions = [
+          ...(isRecordEditable(lock) ? [{ label: "Edit", onSelect: () => onEdit(row.original) }] : []),
+          ...(isRecordDeletable(lock)
+            ? [{ label: "Delete", destructive: true, onSelect: () => onDelete(row.original) }]
+            : []),
+        ];
+        return (
+          <div className="flex items-center justify-end">
+            {actions.length > 0 && (
+              <RowActionsMenu label={`Actions for ${row.original.code}`} actions={actions} />
+            )}
+          </div>
+        );
+      },
       enableSorting: false,
     },
   ];
@@ -233,6 +242,8 @@ export function DeliveryList() {
 
   // Error state
   const [formError, setFormError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<DeliverySheetRecord | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Global facility context
   const { facilityId: contextFacilityId, facilities } = useFacilityContext();
@@ -279,6 +290,7 @@ export function DeliveryList() {
   // Mutations
   const createDelivery = useCreateDelivery();
   const updateDelivery = useUpdateDelivery();
+  const deleteDelivery = useDeleteDelivery();
   const fetchDelivery = useFetchDeliveryWithRelations();
   const toast = useToast();
   const createWithEvidence = useCreateWithEvidence({
@@ -421,10 +433,28 @@ export function DeliveryList() {
     }
   };
 
+  const handleDeleteConfirm = async () => {
+    if (!deleting) return;
+    setDeleteError(null);
+    try {
+      await deleteDelivery.mutateAsync({ deliveryId: deleting.id, expectedVersion: deleting.version });
+      setDeleting(null);
+      toast.success("Delivery deleted.");
+    } catch (error) {
+      if (error instanceof StaleVersionError) setDeleting(null);
+      setDeleteError(toDeleteErrorMessage(error, `Delivery ${deleting.code}`, "Delivery was not deleted. Try again."));
+    }
+  };
+
   const deliveries = deliveriesData?.items ?? [];
   const deliveryLocks = useRecordLocks("delivery", deliveries.map((delivery) => delivery.id));
   const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("delivery", displaySideSheet?.entity?.id);
-  const columns = createColumns(openEdit, facilities, deliveryLocks.locks);
+  const requestDelete = (delivery: DeliverySheetRecord) => {
+    // A message from an earlier attempt belongs to that delivery, not this one.
+    setDeleteError(null);
+    setDeleting(delivery);
+  };
+  const columns = createColumns(openEdit, requestDelete, facilities, deliveryLocks.locks);
   const totalPages = deliveriesData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -595,6 +625,23 @@ export function DeliveryList() {
         </DataTable.Toolbar>
         <DataTable.Pagination />
       </DataTable>
+
+      {/* A stale version closes the confirmation, so its message lands here. */}
+      {deleteError && !deleting && <ServerError message={deleteError} />}
+
+      <DeleteConfirmDialog
+        isOpen={!!deleting}
+        title="Delete delivery"
+        message="Are you sure you want to delete this delivery? Its stock goes back to the product bin. This action cannot be undone."
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => {
+          setDeleting(null);
+          setDeleteError(null);
+        }}
+        isPending={deleteDelivery.isPending}
+        // A refusal keeps the confirmation open with its reason.
+        errorMessage={deleting ? deleteError ?? undefined : undefined}
+      />
 
       {/* Unified Side Sheet */}
       <EntitySideSheet

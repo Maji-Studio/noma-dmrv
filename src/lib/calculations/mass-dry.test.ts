@@ -83,6 +83,34 @@ describe("mass-dry calculations", () => {
   });
 
   describe("mass comparison", () => {
+    const validDryExcess = {
+      feedstockWetMassKg: 100,
+      feedstockMoisturePercent: 20,
+      biocharOutputKg: 101,
+      biocharMoisturePercent: 20,
+    };
+
+    it("reports a real dry output excess", () => {
+      expect(dryOutputExceedsDryInput(validDryExcess)).toBe(true);
+    });
+
+    it.each([
+      "feedstockWetMassKg",
+      "feedstockMoisturePercent",
+      "biocharOutputKg",
+      "biocharMoisturePercent",
+    ] as const)("skips the comparison for invalid %s", (field) => {
+      const invalidValues = [-1, Number.NaN, Infinity, -Infinity];
+      if (field.endsWith("MoisturePercent")) invalidValues.push(101);
+
+      for (const value of invalidValues) {
+        expect(dryOutputExceedsDryInput({
+          ...validDryExcess,
+          [field]: value,
+        })).toBe(false);
+      }
+    });
+
     it("allows the epsilon boundary and rejects mass beyond it", () => {
       const referenceMassKg = 100;
 
