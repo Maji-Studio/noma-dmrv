@@ -123,6 +123,7 @@ export function SubmitStep({
       : false,
     hasFinalizedSubmission: ctx.hasFinalizedSubmission,
     registryBoundaryOpened: ctx.registryBoundaryOpened,
+    deletionInProgress: ctx.deletionInProgress,
   };
   const hasRegistryHistory = removalDeletionTouchesRegistry(
     deleteFacts,

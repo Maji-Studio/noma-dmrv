@@ -208,6 +208,10 @@ Prefer the `PositionPicker` component (map preview + address search + manual lat
 
 ## Dates
 
+Union date fields use `dateOrStringSchema` from `@/schemas/helpers`.
+The resolver shows the first branch's first issue, so the helper puts strings
+first and shares that message with server validation.
+
 Use `calendarDateSchema` from `@/schemas/helpers` for business dates persisted
 as **UTC-midnight date-only values**, such as the feedstock delivery date. It
 accepts strict `YYYY-MM-DD` strings and real calendar days only, decodes them to
@@ -215,7 +219,7 @@ a UTC-midnight `Date`, and publishes as `format: date`. Server re-validation
 accepts a `Date` only at UTC midnight. Use `toDateInputValue` for defaults of
 these persisted UTC date-only values.
 
-Use `requiredDateOnly` / `optionalDateOnly` where a date is combined with a
+Use `requiredDateOnlySchema(<required message>)` / `optionalDateOnly` where a date is combined with a
 facility time, as in production runs. They parse `"YYYY-MM-DD"` at **local**
 midnight, because `new Date("YYYY-MM-DD")` parses as **UTC** midnight, which can
 render as the adjacent day and walk a stored date on an edit/save round-trip.
@@ -368,6 +372,14 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 - When the actions render **inside an owning parent form**, pass `submitType="button"` + `onSubmitClick` — nesting `<form>` elements is invalid HTML.
 - `formId` is the escape hatch when extension content must render between the fields and the CTA: the CTA lives outside the `<form>` and points back at it by id.
 - `submitDisabled` gates on an unmet precondition (e.g. an unchecked acknowledgement).
+- **Association preview.** `preview` takes one `FormFooterPreview` line,
+  rendered under the error summary and the Save blocker, directly above the
+  buttons: what saving associates the record with. The Production Run form
+  shows the credit batch the run joins, is expected to join, or belongs to
+  (#1164). The server answers
+  from the unsaved values with the save path's own rule, so the browser holds
+  no copy of it. The line never blocks Save, and it shows "Checking" whenever
+  its last answer is not for the current inputs.
 - The submit skips the browser's constraint bubbles except for unparsed number text (see [Native number constraints](#native-number-constraints)); a nested `submitType="button"` is untouched.
 
 ### FormSpine
@@ -611,12 +623,13 @@ presentation, so switching levels does not reset an active correction.
 ### Stock blocks lead with wet mass
 
 Stock is kept in dry biochar, but operators weigh and load wet mass, so the
-stock family presents wet first. Only presentation changes.
+stock family presents wet first. Only presentation changes. A wet figure reads
+"N kg wet mass", number first, in every caption; never the short "kg wet".
 
 - **Movement blocks** (`OutputStockPreview variant="movement"`: correction,
   loss, count, delivery load). Headline "Wet stock in bin, estimate" as
-  "≈ 1,420 → 1,110 kg", with the entry as its caption ("310 kg wet removed at
-  22.7% moisture", "Counted 2,650 kg wet at 27.4% moisture", "1,190 kg wet
+  "≈ 1,420 → 1,110 kg", with the entry as its caption ("310 kg wet mass removed at
+  22.7% moisture", "Counted 2,650 kg wet mass at 27.4% moisture", "1,190 kg wet mass
   loaded at 16% moisture"). Before is each batch's wet stock, wet mass added
   less wet mass taken out from its last count; after takes this entry's wet
   mass out, or for a count, sets each batch to the count. The picture is the entered wet mass split into
@@ -673,8 +686,8 @@ check, never a value:
 
 A bin selector whose choice moves stock shows the change in its selected value:
 `EntitySelect`'s `formatSelectedLabel` returns a `ReactNode`, and
-`StockChangeLabel` renders "Biochar bin (−100 kg wet)" in amber for a draw and
-"Product bin (+400 kg wet)" in green for an addition. It shows only for a fresh,
+`StockChangeLabel` renders "Biochar bin (−100 kg wet mass)" in amber for a draw and
+"Product bin (+400 kg wet mass)" in green for an addition. It shows only for a fresh,
 unblocked projection with a finite, non-zero mass; pass `available={false}`
 while the preview refetches or has failed. The biochar product form's biochar,
 ingredient and product bin selectors are the reference; they replace separate

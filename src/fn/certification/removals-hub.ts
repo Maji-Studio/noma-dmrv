@@ -12,6 +12,7 @@ import {
   type CertifierRemovalRow,
   type UngroupedCreditBatchRow,
 } from "@/data-access/certifier-removals";
+import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 import { removalMayHaveExternalMutation } from "@/lib/certification/removal-external-mutation";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
@@ -31,6 +32,8 @@ export interface RemovalHubEntry {
   latestSubmission: CertificationSubmissionRow | null;
   hasFinalizedSubmission: boolean;
   registryBoundaryOpened: boolean;
+  /** A fresh Removal deletion lease hides Delete for every viewer. */
+  deletionInProgress: boolean;
 }
 
 export interface RemovalsHubData {
@@ -73,6 +76,7 @@ export async function loadRemovalsForFacility(
             memberBatches: batches.map((b) => ({ id: b.id, code: b.code })),
             latestSubmission,
             hasFinalizedSubmission: finalized,
+            deletionInProgress: hasFreshRemovalDeletionLease(removal.metadata),
             registryBoundaryOpened: removalMayHaveExternalMutation(
               removal.metadata,
             ),

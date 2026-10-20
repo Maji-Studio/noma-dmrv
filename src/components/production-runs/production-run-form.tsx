@@ -41,6 +41,7 @@ import {
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
 import { ProcessFlowPreview } from "./production-run-process-flow-preview";
+import { ProductionRunCreditBatchPreview } from "./production-run-credit-batch-preview";
 
 import {
   productionRunMassBalanceFeedback,
@@ -509,7 +510,6 @@ export function ProductionRunForm({
           <FormField
             id="endDate"
             label="End date"
-            required={terminal}
             error={errors.endDate?.message}
             helperText="Leave the end blank until the run finishes. For an overnight run, set the next day."
           >
@@ -881,6 +881,19 @@ export function ProductionRunForm({
         errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        preview={
+          <ProductionRunCreditBatchPreview
+            control={control}
+            facilityId={watchedFacilityId}
+            productionRunId={productionRun?.id}
+            timeZone={formTimezone}
+            clearEndTime={shouldClearProductionRunEndTime({
+              from: transitionFrom,
+              to: watchedStatus,
+              existingEndTime: productionRun?.endTime,
+            })}
+          />
+        }
       />
     </div>
   );

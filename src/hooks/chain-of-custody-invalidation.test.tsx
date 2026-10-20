@@ -4,11 +4,18 @@ import { beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
 import { useCreateApplication, useDeleteApplication, useUpdateApplication } from "./use-applications";
 import { useArchiveCustomerLocation, useDeleteCustomerLocation, useUpdateCustomerLocation } from "./use-customers";
-import { useUpdateFacility } from "./use-facilities";
+import { facilityKeys, useUpdateFacility } from "./use-facilities";
+import { productionRunKeys } from "./use-production-runs";
+import { entityKeys } from "./entity-query-keys";
+import { creditBatchKeys } from "./credit-batch-query-keys";
+import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { useCreateSupplierLocation, useDeleteSupplierLocation, useUpdateSupplierLocation } from "./use-suppliers";
 import { useCreateTransportLeg, useDeleteTransportLeg, useUpdateTransportLeg } from "./use-transport-legs";
 
 const ID = "11111111-1111-4111-8111-111111111111";
+const VERSION = 1;
+const ORIGINAL_TIMEZONE = "UTC";
+const CHANGED_TIMEZONE = "Africa/Dar_es_Salaam";
 const mocks = vi.hoisted(() => ({ write: vi.fn() }));
 vi.mock("@/fn/applications", () => ({
   createApplicationFn: mocks.write,
@@ -37,6 +44,45 @@ beforeAll(() => {
 });
 beforeEach(() => {
   mocks.write.mockResolvedValue({ success: true, data: { id: ID, customerId: ID } });
+});
+
+it("refreshes facility-local run dates only when the saved time zone changed or was unknown", async () => {
+  for (const source of ["detail", "list", "unknown"] as const) {
+    for (const optimistic of [true, false]) {
+      for (const timezone of [ORIGINAL_TIMEZONE, CHANGED_TIMEZONE]) {
+        const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+        const original = { id: ID, timezone: ORIGINAL_TIMEZONE, version: VERSION };
+        if (source === "detail") client.setQueryData(facilityKeys.detail(ID), original);
+        if (source === "list") client.setQueryData(facilityKeys.list(), { items: [original] });
+        const keys = [
+          productionRunKeys.list({ facilityId: ID }), productionRunKeys.detail(ID),
+          entityKeys.list("productionRun", "2026-10", { facilityId: ID }),
+          entityKeys.detail("productionRun", ID),
+          dashboardOverviewKeys.overview(ID, "week"),
+          creditBatchKeys.productionRunOptions(ID),
+        ];
+        for (const key of keys) client.setQueryData(key, {});
+        mocks.write.mockResolvedValue({ success: true, data: { ...original, timezone } });
+        function Harness() {
+          const mutation = useUpdateFacility(undefined, { optimistic });
+          return <button onClick={() => mutation.mutateAsync({ facilityId: ID, expectedVersion: VERSION, timezone })}>Save</button>;
+        }
+        let renderer!: ReactTestRenderer;
+        await act(async () => {
+          renderer = create(<QueryClientProvider client={client}><Harness /></QueryClientProvider>);
+        });
+        try {
+          await act(async () => { await renderer.root.findByType("button").props.onClick(); });
+          for (const key of keys) {
+            expect(client.getQueryState(key)?.isInvalidated).toBe(source === "unknown" || timezone !== ORIGINAL_TIMEZONE);
+          }
+        } finally {
+          act(() => renderer.unmount());
+          client.clear();
+        }
+      }
+    }
+  }
 });
 
 const writes = {

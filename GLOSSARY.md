@@ -23,7 +23,7 @@ diesel against. Production runs are the membership primitive for a
 1:1 with a Removal.
 A completed run joins the credit batch whose window contains the day the
 run ended on the facility's calendar, in its time zone. Lists and dashboards
-still date runs by their start.
+date runs by the day they started on the facility's calendar.
 
 **Production run status**:
 New runs default to *Running*. Operators may create an already-finished run
@@ -394,7 +394,7 @@ means production period, not application period. Batch members are
 **production runs**. Each completed run joins the credit batch whose inclusive
 window contains the day the run ended on the facility's calendar, in its time
 zone, matching its organization, facility and feedstock. Lists and dashboards
-still date runs by their start. Matching runs
+date runs by the day they started on the facility's calendar. Matching runs
 attach automatically while membership is unlocked, so the batch may be declared
 before any runs exist. Application-by-credit-batch wet
 and dry mass slices are derived from product provenance. A slice belongs to a

@@ -4,31 +4,31 @@ import { formatRemainingMass } from "./remaining-mass";
 describe("formatRemainingMass", () => {
   it("formats wet-only feedstock stock with grouped whole kg", () => {
     expect(formatRemainingMass({ wetKg: 3_500.4 })).toBe(
-      "Remaining now: 3,500 kg wet",
+      "Remaining now: 3,500 kg wet mass",
     );
   });
 
   it("formats wet and dry biochar product stock in one sentence", () => {
     expect(formatRemainingMass({ wetKg: 3_000, dryKg: 2_900 })).toBe(
-      "Remaining now: 3,000 kg wet, 2,900 kg dry biochar",
+      "Remaining now: 3,000 kg wet mass, 2,900 kg dry biochar",
     );
   });
 
   it("names the dry figure of a feedstock bin as dry feedstock", () => {
     expect(formatRemainingMass({ wetKg: 3_000, dryKg: 2_400, dryLabel: "dry feedstock" })).toBe(
-      "Remaining now: 3,000 kg wet, 2,400 kg dry feedstock",
+      "Remaining now: 3,000 kg wet mass, 2,400 kg dry feedstock",
     );
   });
 
   it("can show only wet mass when dry mass is not useful for the task", () => {
     expect(formatRemainingMass({ wetKg: 3_000, dryKg: 2_900 }, false)).toBe(
-      "Remaining now: 3,000 kg wet",
+      "Remaining now: 3,000 kg wet mass",
     );
   });
 
   it("uses explicit unknown copy for unresolved masses", () => {
     expect(formatRemainingMass({ wetKg: null, dryKg: null })).toBe(
-      "Remaining now: wet not recorded, dry biochar not recorded",
+      "Remaining now: wet mass not recorded, dry biochar not recorded",
     );
   });
 
@@ -39,6 +39,6 @@ describe("formatRemainingMass", () => {
         dryKg: 2_900,
         labelVariant: "excluding-this-order",
       }),
-    ).toBe("Remaining, excluding this order: 3,000 kg wet, 2,900 kg dry biochar");
+    ).toBe("Remaining, excluding this order: 3,000 kg wet mass, 2,900 kg dry biochar");
   });
 });

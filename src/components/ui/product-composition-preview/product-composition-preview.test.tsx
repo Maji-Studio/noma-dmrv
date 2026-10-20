@@ -210,8 +210,8 @@ describe("ProductCompositionPreview", () => {
 
       expect(html).toContain("data-mass-flow");
       expect(html).not.toContain('data-segment="dry-biochar"');
-      expect(text(html)).toContain("Biochar300 kg wet");
-      expect(text(html)).toContain("Chicken manure300 kg wet");
+      expect(text(html)).toContain("Biochar300 kg wet mass");
+      expect(text(html)).toContain("Chicken manure300 kg wet mass");
       expect(text(html)).toContain("Wet biochar product600 kg");
       // No water was added, so it is not an input.
       expect(text(html)).not.toContain("Water added0 kg");

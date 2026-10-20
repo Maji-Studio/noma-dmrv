@@ -204,6 +204,7 @@ export function useCreateProductionRun(
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.runPreviewPrefix() });
       invalidateStockEntityQueries(queryClient, "productionRun");
       invalidateCertificationReadiness(queryClient);
       invalidateOnboardingProgress(queryClient, data.facilityId);
@@ -441,6 +442,7 @@ export function useDeleteProductionRun(
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.runPreviewPrefix() });
       invalidateStockEntityQueries(queryClient, "productionRun");
       invalidateCertificationReadiness(queryClient);
       // Invalidate facility data

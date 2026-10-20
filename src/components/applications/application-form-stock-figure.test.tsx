@@ -101,7 +101,7 @@ describe("ApplicationForm stock figure", () => {
 
     expect(html).toContain(deliveryStockOverdrawMessage());
     expect(html).not.toContain("available to this application");
-    expect(html).toContain("Remaining now: 600 kg wet, 270 kg dry biochar");
+    expect(html).toContain("Remaining now: 600 kg wet mass, 270 kg dry biochar");
   });
 
   it("keeps one figure when the over-draw error states what is available", () => {
