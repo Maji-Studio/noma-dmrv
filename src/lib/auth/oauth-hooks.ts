@@ -7,13 +7,12 @@ import { findOAuthClientResources, findOAuthClientScopes, findOAuthOfflineGenera
 import { findOAuthAuthorizationCode, findOAuthRefreshToken, findOAuthRevocationToken } from "@/data-access/oauth-token-lookups";
 import { revokeGeneration } from "@/data-access/oauth-grant-lifecycle";
 import { assertGenerationEligible } from "./oauth-eligibility";
-import { OAUTH_READ_SCOPES } from "./oauth-scopes";
+import { OAUTH_REQUESTABLE_SCOPES } from "./oauth-scopes";
 
 import { guardOAuthAuthorize, guardOAuthRefreshScopes, guardOAuthTokenInput, OAUTH_HTTP_PATHS, refuseOAuth, refreshDecision } from "./oauth-request-policy";
 
-const OAUTH_DEFAULT_AUTHORIZE_SCOPES: readonly string[] = [...OAUTH_READ_SCOPES, "offline_access"];
-
 type OAuthHookContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];
+const REQUESTABLE_SCOPES: ReadonlySet<string> = new Set(OAUTH_REQUESTABLE_SCOPES);
 
 export async function oauthBefore(ctx: OAuthHookContext) {
   if (!ctx.path?.startsWith("/oauth2/")) return;
@@ -26,12 +25,23 @@ export async function oauthBefore(ctx: OAuthHookContext) {
     if (ctx.request && new URL(ctx.request.url).searchParams.getAll("resource").length > 1) refuseOAuth("invalid_target");
     // Normalize before the provider signs the authorization.
     const normalized: Record<string, unknown> = { ...query };
-    // Without a scope the plugin would request every client scope, writes
-    // included; read first (decision 123), keeping the connection alive.
-    if ((typeof query.scope !== "string" || query.scope.trim() === "") && typeof query.client_id === "string") {
+    // Offer registered reads and writes plus offline access. Round 14 Q100
+    // supersedes decision 123: reads start ticked, writes start unticked.
+    if (typeof query.client_id === "string") {
       const clientScopes = await findOAuthClientScopes(query.client_id);
-      const registered = new Set(clientScopes ?? (env.OAUTH_CIMD_CLIENT_IDS.includes(query.client_id) ? OAUTH_DEFAULT_AUTHORIZE_SCOPES : []));
-      normalized.scope = OAUTH_DEFAULT_AUTHORIZE_SCOPES.filter(scope => registered.has(scope)).join(" ");
+      const registration = clientScopes ?? (env.OAUTH_CIMD_CLIENT_IDS.includes(query.client_id) ? OAUTH_REQUESTABLE_SCOPES : undefined);
+      const registered = new Set(registration ?? []);
+      if (typeof query.scope !== "string" || query.scope.trim() === "") {
+        normalized.scope = OAUTH_REQUESTABLE_SCOPES.filter(scope => registered.has(scope)).join(" ");
+      } else if (registration !== undefined) {
+        // Discovery advertises every requestable scope. Trim only known scopes
+        // outside this registration; invalid scopes still fail the guard above.
+        const requested = query.scope.trim().split(/\s+/);
+        const allowed = requested.filter((scope: string) => !REQUESTABLE_SCOPES.has(scope) || registered.has(scope));
+        // An empty scope would trigger provider defaults. Preserve the original
+        // request instead so the provider rejects the unregistered scopes.
+        if (allowed.length && allowed.length < requested.length) normalized.scope = allowed.join(" ");
+      }
     }
     if (query.resource === undefined && typeof query.client_id === "string") {
       const resources = await findOAuthClientResources(query.client_id);

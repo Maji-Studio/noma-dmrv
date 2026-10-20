@@ -3,12 +3,12 @@ import { OAUTH_ACCESS_TOKEN_PREFIX, OAUTH_REFRESH_TOKEN_PREFIX, OAUTH_ACCESS_TOK
 import { OAUTH_HTTP_PATHS } from "./oauth-request-policy";
 import { assertOAuthIssuer, getOAuthConfig } from "./oauth-config";
 import { oauthConsentReferenceId, shouldRedirectOAuth } from "./oauth-attempt";
-import { OAUTH_GRANTABLE_SCOPES } from "./oauth-scopes";
+import { OAUTH_REQUESTABLE_SCOPES } from "./oauth-scopes";
 import { isPlatformAdminUser } from "@/data-access/oauth-provider";
 
 export function createOAuthProvider() {
   const { rest, mcp } = getOAuthConfig();
-  const scopes = [...OAUTH_GRANTABLE_SCOPES, "offline_access"];
+  const scopes = OAUTH_REQUESTABLE_SCOPES;
   const options: OAuthOptions<Scope[]> = {
     loginPage: "/login", consentPage: "/oauth/consent",
     postLogin: { page: "/oauth/organization", shouldRedirect: shouldRedirectOAuth, consentReferenceId: oauthConsentReferenceId },
