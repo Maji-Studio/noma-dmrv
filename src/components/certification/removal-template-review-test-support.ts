@@ -33,16 +33,19 @@ function baseEntry(overrides: Record<string, unknown>): RemovalTemplateReviewEnt
     enrichment: { cmp_startup: { [DIESEL_INPUT]: { unit: "L" } } },
     preview: false,
     isDefault: true,
+    isPinned: false,
     availability: "listed",
     changes: {},
     lines: [
       {
         component: component("cmp_startup", "Startup diesel usage"), groupKey: "pyrolysis", groupName: "Operations",
+        section: "emitted", groupPosition: 0, blueprintType: "ACTIVITY",
         contract: { scope: "operating", automaticSource: "run-startup-diesel", entryPolicy: "additive", origin: "proposed" },
         catalogCandidates: ["run-startup-diesel"], allowedEntryPolicies: ["none", "additive"], change: "added",
       },
       {
         component: component("cmp_lab", "Lab electricity"), groupKey: "pyrolysis", groupName: "Operations",
+        section: "emitted", groupPosition: 0, blueprintType: "ACTIVITY",
         contract: { scope: "operating", entryPolicy: "additive", origin: "reviewed" },
         catalogCandidates: [], allowedEntryPolicies: ["none", "additive"], change: "unchanged",
       },
