@@ -2,7 +2,7 @@
 <title>Merge page</title>
 <!--
 Merge page template (pr skill). Publish with capabilities {db:{}, user:{}}.
-Edit only the PRS array below, then republish to the SAME url. One card per PR.
+Edit only the PRS array below (escape "<" as \u003c in every string so a title cannot close the script), then republish to the SAME url. One card per PR.
 before/after: short text, or an <img> data URI (artifact CSP blocks GitHub images).
 Saved choices live in db collection "answers", doc "merge-<pr>" (read with ArtifactData).
 -->
@@ -42,6 +42,7 @@ const PRS = [
   {
     num: 0, title: "type: imperative title", url: "https://github.com/Maji-Studio/noma-dmrv/pull/0",
     before: "what it was (text or <img src='data:...'>)", after: "what it is now",
+    sha: "abc1234",   // head the OK applies to
     review: "suite run 1 on head abc1234, 0 P1 open", reviewState: "ok",   // ok | wait | bad
     ci: "green", ciState: "ok",                                          // ok | wait | bad
     action: "Merge into staging, delete the branch, tear down the worktree",
@@ -49,16 +50,17 @@ const PRS = [
   }
 ];
 // ---------------------------------------------------------------------------
+const STATE = {ok:"ok", wait:"wait", bad:"bad"};
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const SAFE_IMG = /^<img src='data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+\/=]+'( alt='[^'<>]*')?>$/;
 const block = (label, v) => `<div class="blk"><small>${label}</small>${SAFE_IMG.test(v) ? v : esc(v)}</div>`;
 document.getElementById("sub").textContent = `Updated ${UPDATED}. Merge is preselected; Save records your OK.`;
 document.getElementById("list").innerHTML = PRS.map(p => `
 <section class="card" data-pr="${p.num}">
-  <h2><a href="${esc(p.url)}">#${p.num}</a> ${esc(p.title)}</h2>
+  <h2><a href="${/^https:\/\/github\.com\//.test(p.url) ? esc(p.url) : "#"}">#${p.num}</a> ${esc(p.title)}</h2>
   <div class="facts">
-    <span class="chip ${p.reviewState}">Review: ${esc(p.review)}</span>
-    <span class="chip ${p.ciState}">CI: ${esc(p.ci)}</span>
+    <span class="chip ${STATE[p.reviewState]||"wait"}">Review: ${esc(p.review)}</span>
+    <span class="chip ${STATE[p.ciState]||"wait"}">CI: ${esc(p.ci)}</span>
   </div>
   <div class="ba">${block("Before", p.before)}<span class="arrow" aria-hidden="true">&rarr;</span>${block("After", p.after)}</div>
   <fieldset>
@@ -66,22 +68,23 @@ document.getElementById("list").innerHTML = PRS.map(p => `
     <label><input type="radio" name="c${p.num}" value="hold"> Hold, do not merge yet</label>
   </fieldset>
   <textarea rows="2" placeholder="Optional note"></textarea>
-  <p><button type="button">Save</button><span class="saved" hidden>Saved</span></p>
+  <p><button type="button" disabled>Save</button><span class="saved" hidden>Saved</span></p>
 </section>`).join("");
 (async () => {
   const db = await claude.use("db");
   if (!db) return;
   document.querySelectorAll(".card").forEach(card => {
     const ref = db.doc("answers/merge-" + card.dataset.pr);
+    const btn = card.querySelector("button");
     ref.get().then(d => {
       const v = d && (d.data ? d.data() : d);
       if (!v) return;
       const r = card.querySelector(`input[value="${v.choice}"]`); if (r) r.checked = true;
       card.querySelector("textarea").value = v.note || "";
-    }).catch(() => {});
-    card.querySelector("button").onclick = async () => {
+    }).catch(() => {}).finally(() => { btn.disabled = false; });
+    btn.onclick = async () => {
       const choice = card.querySelector("input:checked").value;
-      await ref.set({choice, note: card.querySelector("textarea").value, savedAt: Date.now()});
+      await ref.set({choice, sha: PRS.find(p => String(p.num) === card.dataset.pr).sha, note: card.querySelector("textarea").value, savedAt: Date.now()});
       card.querySelector(".saved").hidden = false;
     };
   });

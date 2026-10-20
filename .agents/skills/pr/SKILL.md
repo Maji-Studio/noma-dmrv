@@ -175,7 +175,7 @@ A PR is done when the review suite has run on its head, valid findings are fixed
 
 1. Start from `merge-page-template.html` (this folder) for the first PR of a batch: copy it, fill the `PRS` array, publish with `capabilities: {db: {}, user: {}}`. For later PRs, read the existing page and republish to the same url with one more entry.
 2. One card per PR: title and link, a Before block, an arrow, an After block (never a sentence; embed screenshots as data URIs because the artifact CSP blocks GitHub images), review status, CI status, and a Merge/Hold control with Merge preselected. The Merge label names the whole action: merge, delete the branch, tear down the worktree.
-3. The control saves to the page's db as `answers/merge-<pr>`. Read the choice back with `ArtifactData` before merging; merge only a PR whose doc says `merge`.
+3. The control saves to the page's db as `answers/merge-<pr>`. Read the choice back with `ArtifactData` before merging; merge only a PR whose doc says `merge` and whose saved `sha` equals the current head; after a push, republish the card and wait for a fresh OK. An OK covers this session only.
 4. Send the link in your report. On a permission denial at merge, give Kenji the exact `! <command>`.
 
 When a merge batch ends and no subagent is running, propose `/handoff`.

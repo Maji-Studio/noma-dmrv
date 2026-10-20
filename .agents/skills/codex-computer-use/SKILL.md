@@ -16,11 +16,11 @@ or acting on real accounts/data).
 
 ## Safety preamble
 
-Paste this text verbatim as the first lines of every Codex prompt this skill writes, before the task:
+Paste this text verbatim as the first lines of every Codex prompt this skill writes (the review target or task follows it):
 
 > Safety rules. Do not read, list or cat any file outside this repository (no ~/.npmrc, ~/.ssh, ~/.config, other home dotfiles). Do not run pnpm db:reset, db:push, db:migrate, drizzle-kit push, psql or any SQL against a database. Do not run pkill, killall or kill on processes you did not start. Do not edit package.json dependencies or the lockfile unless the task says so. Never loosen, skip or delete a test, lint rule or guard to make something pass; stop and report instead.
 
-Launch a backgrounded `codex exec` with the prompt file as stdin (`- < prompt.md`); without it the process waits on "Reading additional input from stdin" and hangs.
+When a command below runs in the background (`codex exec` or a stdin-fed `codex review`), pass the prompt file as stdin (`- < prompt.md`); without it the process waits on "Reading additional input from stdin" and hangs.
 
 ## Shared invocation rules
 
