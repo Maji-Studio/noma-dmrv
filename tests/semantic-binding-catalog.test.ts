@@ -290,8 +290,8 @@ it.each([false, true])("keeps the mapping revision stable while retiring sample 
   vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
   const { buildMappingRevisionInput } = await import("@/lib/isometric/transformers/datapoint");
   const { payloadHash } = await import("@/lib/isometric/utils/payload-hash");
-  expect(payloadHash(buildMappingRevisionInput())).toBe(PRE_CATALOG_MAPPING_REVISION);
-  expect(MAPPING_REVISION).toBe(PRE_CATALOG_MAPPING_REVISION);
+  expect(payloadHash(buildMappingRevisionInput())).toBe(ENTRY_CONTRIBUTION_MAPPING_REVISION);
+  expect(MAPPING_REVISION).toBe(ENTRY_CONTRIBUTION_MAPPING_REVISION);
   expect(INPUT_MAPPING["sampling-required-for-mrv"].mass_distance_based_ci_emissions.mass_distance.source).toBe("sampleTransportMassDistanceTonneKm");
   expect(lookupInputMapping("sampling-required-for-mrv", "mass_distance_based_ci_emissions", "mass_distance") === undefined).toBe(enabled);
   expect(lookupSourceFact("sampleTransportMassDistanceTonneKm") === undefined).toBe(enabled);
@@ -301,7 +301,7 @@ it("keeps fresh module-load projections identical across activation states", asy
   vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
   vi.resetModules();
   const activated = await import("@/lib/isometric/transformers/datapoint");
-  expect(activated.MAPPING_REVISION).toBe(PRE_CATALOG_MAPPING_REVISION);
+  expect(activated.MAPPING_REVISION).toBe(ENTRY_CONTRIBUTION_MAPPING_REVISION);
   expect(JSON.parse(JSON.stringify(activated.INPUT_MAPPING))).toEqual(PRE_CATALOG_INPUT_MAPPING);
   vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false");
   vi.resetModules();
