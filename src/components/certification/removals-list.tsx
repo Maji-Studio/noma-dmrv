@@ -40,6 +40,7 @@ import { formatDateRange } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import { NewRemovalDialog } from "./new-removal-dialog";
+import { PrototypeSwitcher } from "./new-removal-dialog/prototype-switcher";
 import { CORRECTION_NEEDED_LABEL, RemovalCorrectionCell } from "./removal-correction-needed";
 import { useRecordLocks } from "@/hooks/use-record-locks";
 import type { RecordLockView, RecordLockViews } from "@/lib/record-lock-view";
@@ -65,11 +66,14 @@ export function RemovalsList({ initialCreate = false }: { initialCreate?: boolea
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 
-  const wizardOpen = dialogOpen || !!resume || createIntent.isOpen;
+  // PROTOTYPE ONLY (#1058 PR 4): ?proto= opens the wizard on the fixture variants.
+  const [proto, setProto] = useQueryState("proto", parseAsString);
+  const wizardOpen = dialogOpen || !!resume || createIntent.isOpen || !!proto;
   const closeWizard = () => {
     setDialogOpen(false);
     createIntent.clear();
     void setResume(null);
+    void setProto(null);
   };
 
   return (
@@ -94,6 +98,7 @@ export function RemovalsList({ initialCreate = false }: { initialCreate?: boolea
         <ListBody facilityId={facilityId} onNewRemoval={() => setDialogOpen(true)} />
       )}
 
+      {proto && <PrototypeSwitcher />}
       {facilityId && (
         <NewRemovalDialog
           facilityId={facilityId}
