@@ -51,9 +51,11 @@ describe("getBiocharProductStats whole-facility totals", () => {
         massKg: INGREDIENT_KG,
       }] },
     });
+    // org-scope-ok: fixture insert; the values helper sets organizationId
     const active = await db.insert(biocharProducts).values(Array.from({ length: PRODUCT_COUNT }, (_, index) =>
       productValues(fixture, `E2E-PRODUCT-STATS-${fixture.tag}-${index}`),
     )).returning();
+    // org-scope-ok: fixture insert; the values helper sets organizationId
     await db.insert(biocharProducts).values([
       { ...productValues(fixture, `E2E-PRODUCT-ARCHIVED-${fixture.tag}`), archivedAt: FIXTURE_DATE },
       productValues(other, `E2E-PRODUCT-OTHER-${fixture.tag}`),

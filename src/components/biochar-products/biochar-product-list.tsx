@@ -22,10 +22,12 @@ import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import {
   PURE_BIOCHAR_LABEL,
 } from "@/config/product-labels";
+import type { BiocharProductStats } from "@/data-access/biochar-product-stats";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import {
   useBiocharProduct,
   useBiocharProducts,
+  useBiocharProductStats,
   useCreateBiocharProduct,
   useDeleteBiocharProduct,
   useUpdateBiocharProduct,
@@ -53,7 +55,6 @@ import {
   formatMoisturePercent,
 } from "@/lib/mass-moisture";
 import { finalWetProductMassKg, sourceBiocharDryMassKg } from "@/lib/biochar-product-mass";
-import { sumNullable, sumNullableBy } from "@/lib/nullable-sum";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
 import {
   CubeIcon,
@@ -198,28 +199,23 @@ type SideSheetState =
   | { mode: "view"; entity: BiocharProductWithRelations }
   | { mode: "edit"; entity: BiocharProductWithRelations };
 
-interface BiocharProductPageMassSummaryProps {
-  products: BiocharProductWithRelations[];
+interface BiocharProductMassSummaryProps {
+  stats: Pick<BiocharProductStats, "totalWetMassKg" | "totalDryBiocharMassKg"> | undefined;
   isLoading?: boolean;
 }
 
-export function BiocharProductPageMassSummary({
-  products,
+export function BiocharProductMassSummary({
+  stats,
   isLoading = false,
-}: BiocharProductPageMassSummaryProps) {
-  const wetKg = sumNullableBy(products, finalWetProductMassKg);
-  const dryMassesKg = products.map(sourceBiocharDryMassKg);
-  const dryKg = dryMassesKg.some((massKg) => massKg === null)
-    ? null
-    : sumNullable(dryMassesKg);
-
+}: BiocharProductMassSummaryProps) {
   return (
     <StatCard
-      title="Mass on this page"
+      title="Total mass"
+      description="Across all products in this facility"
       value={
         <MassPair
-          wetKg={wetKg}
-          dryKg={dryKg}
+          wetKg={stats?.totalWetMassKg ?? null}
+          dryKg={stats?.totalDryBiocharMassKg ?? null}
           wetLabel={WET_PRODUCT_LABEL}
           dryLabel={DRY_BIOCHAR_LABEL}
         />
@@ -333,8 +329,10 @@ export function BiocharProductList() {
     toast,
   ]);
 
-  // Computed stats
-  const totalProducts = productsData?.total ?? 0;
+  const { data: statsData, isLoading: statsLoading } = useBiocharProductStats(
+    contextFacilityId || undefined,
+    { enabled: !!contextFacilityId },
+  );
   const totalPages = productsData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -475,14 +473,12 @@ export function BiocharProductList() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
           title="Total products"
-          value={totalProducts}
+          value={statsData?.totalProducts ?? 0}
+          description="All products in this facility"
           icon={<CubeIcon size={24} weight="bold" />}
-          isLoading={isLoading}
+          isLoading={statsLoading}
         />
-        <BiocharProductPageMassSummary
-          products={products}
-          isLoading={isLoading}
-        />
+        <BiocharProductMassSummary stats={statsData} isLoading={statsLoading} />
       </div>
 
       <RecordLockListNotice read={productLocks} />

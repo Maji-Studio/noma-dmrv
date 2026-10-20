@@ -56,11 +56,12 @@ export const biocharProductKeys = {
 // Biochar Product Query Hooks
 // ============================================
 
-export function useBiocharProductStats(facilityId?: string) {
+export function useBiocharProductStats(facilityId?: string, options?: { enabled?: boolean }) {
   const filters = { facilityId };
   return useQuery({
     queryKey: biocharProductKeys.stats(filters),
     queryFn: async () => unwrap(await getBiocharProductStatsFn(filters)),
+    enabled: options?.enabled,
   });
 }
 

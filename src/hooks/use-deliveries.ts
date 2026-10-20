@@ -156,12 +156,12 @@ export function useCreateDelivery(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       for (const row of data.savedProducts) {
         patchListCachesWithSavedRow(queryClient, biocharProductKeys.lists(), row);
         queryClient.setQueryData(biocharProductKeys.detail(row.id), (old: object | undefined) => old ? { ...old, ...row } : old);
       }
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.details() });
       // Invalidate all delivery lists
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
@@ -266,7 +266,6 @@ export function useUpdateDelivery(
       return { previousDelivery, previousLists };
     },
     onSuccess: async ({ savedProducts, ...data }, variables) => {
-      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       // A mass or moisture edit re-posted stock: merge the products' new versions, then refresh what reads stock.
       for (const row of savedProducts) {
         patchListCachesWithSavedRow(queryClient, biocharProductKeys.lists(), row);
@@ -383,7 +382,6 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
       return { previousDelivery, previousLists };
     },
     onSuccess: async (_, variables) => {
-      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       const { deliveryId } = variables;
       // Remove specific delivery from cache
       queryClient.removeQueries({ queryKey: deliveryKeys.detail(deliveryId) });
@@ -396,6 +394,7 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       void invalidateRecordedTransport(queryClient);
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.details() });
       void queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       // Deleting a delivery shrinks the derived biochar leg's evidence set.

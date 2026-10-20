@@ -25,7 +25,7 @@ import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
-import { useCreateOrder, useDeleteOrder, useOrderWithRelations, useOrders, useUpdateOrder } from "@/hooks/use-orders";
+import { useCreateOrder, useDeleteOrder, useOrderWithRelations, useOrders, useOrderStats, useUpdateOrder } from "@/hooks/use-orders";
 import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
 import { formatCalendarDate } from "@/lib/format-utils";
 import {
@@ -216,7 +216,6 @@ export function OrderList() {
   const orders = ordersData?.items ?? [];
   const orderLocks = useRecordLocks("order", orders.map((order) => order.id));
   const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("order", displaySideSheet?.entity?.id);
-  const totalOrders = ordersData?.total ?? 0;
   const totalPages = ordersData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -224,8 +223,7 @@ export function OrderList() {
     isLoading,
     setCurrentPage,
   });
-  const totalDeliveries = orders.reduce((sum, o) => sum + o.deliveryCount, 0);
-  const totalQuantityKg = orders.reduce((sum, o) => sum + o.quantityKg, 0);
+  const { data: statsData, isLoading: statsLoading } = useOrderStats(facilityId || undefined, { enabled: !!facilityId });
 
   // Side sheet helpers
   const openCreate = () => {
@@ -378,9 +376,9 @@ export function OrderList() {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
-        <StatCard title="Total orders" value={totalOrders} icon={<PackageIcon size={24} weight="bold" />} isLoading={isLoading} />
-        <StatCard title="Deliveries on this page" value={totalDeliveries} icon={<TruckIcon size={24} weight="bold" />} isLoading={isLoading} />
-        <StatCard title="Quantity on this page" value={`${totalQuantityKg.toLocaleString()} kg`} icon={<PackageIcon size={24} weight="bold" />} isLoading={isLoading} />
+        <StatCard title="Total orders" value={statsData?.totalOrders ?? 0} description="All orders in this facility" icon={<PackageIcon size={24} weight="bold" />} isLoading={statsLoading} />
+        <StatCard title="Total deliveries" value={statsData?.totalDeliveries ?? 0} description="On all orders in this facility" icon={<TruckIcon size={24} weight="bold" />} isLoading={statsLoading} />
+        <StatCard title="Total quantity" value={`${(statsData?.totalQuantityKg ?? 0).toLocaleString()} kg`} description="Ordered across all orders in this facility" icon={<PackageIcon size={24} weight="bold" />} isLoading={statsLoading} />
       </div>
 
       <RecordLockListNotice read={orderLocks} />

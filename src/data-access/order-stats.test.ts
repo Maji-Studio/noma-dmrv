@@ -40,16 +40,20 @@ describe("getOrderStats whole-facility totals", () => {
       quantityKg: QUANTITY_KG,
       packaging: "loose" as const,
     });
+    // org-scope-ok: fixture insert; the values helper sets organizationId
     const active = await db.insert(orders).values(Array.from({ length: ORDER_COUNT }, (_, index) =>
       orderValues(fixture, `E2E-ORDER-STATS-${fixture.tag}-${index}`),
     )).returning();
+    // org-scope-ok: fixture insert; the values helper sets organizationId
     const [archived] = await db.insert(orders).values({
       ...orderValues(fixture, `E2E-ORDER-ARCHIVED-${fixture.tag}`),
       archivedAt: FIXTURE_DATE,
     }).returning();
+    // org-scope-ok: fixture insert; the values helper sets organizationId
     const [otherOrder] = await db.insert(orders).values(
       orderValues(other, `E2E-ORDER-OTHER-${fixture.tag}`),
     ).returning();
+    // org-scope-ok: fixture insert; the values helper sets organizationId
     const [foreignOrder] = await db.insert(orders).values(
       orderValues(foreign, `E2E-ORDER-FOREIGN-${foreign.tag}`),
     ).returning();
@@ -63,6 +67,7 @@ describe("getOrderStats whole-facility totals", () => {
       storageLocationId: owner.bin.id,
       deliveredWetMassKg: DELIVERY_WET_KG,
     });
+    // org-scope-ok: fixture insert; the values helper sets organizationId
     await db.insert(deliveries).values([
       ...active.map((order) => deliveryValues(order)),
       deliveryValues(active[0]),

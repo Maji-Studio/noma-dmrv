@@ -61,8 +61,8 @@ describe.each([
   });
 
   it("does not read stats for a facility rejected by the org guard", async () => {
-    mocks.facility.mockRejectedValue(new SafeError("Facility not found"));
-    expect(await action({ facilityId: FACILITY_ID })).toMatchObject({ success: false, error: "Facility not found" });
+    mocks.facility.mockRejectedValue(new SafeError("Facility was not found."));
+    expect(await action({ facilityId: FACILITY_ID })).toMatchObject({ success: false, error: "Facility was not found." });
     expect(read).not.toHaveBeenCalled();
   });
 });

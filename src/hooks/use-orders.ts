@@ -57,11 +57,12 @@ export const orderKeys = {
 // Query Hooks
 // ============================================
 
-export function useOrderStats(facilityId?: string) {
+export function useOrderStats(facilityId?: string, options?: { enabled?: boolean }) {
   const filters = { facilityId };
   return useQuery({
     queryKey: orderKeys.stats(filters),
     queryFn: async () => unwrap(await getOrderStatsFn(filters)),
+    enabled: options?.enabled,
   });
 }
 
