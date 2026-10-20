@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { members, organizations, users } from "@/db/schema";
+import { feedstockTypes, formulations, members, organizations, users } from "@/db/schema";
 
 vi.mock("@/lib/auth/server", () => ({
   requirePlatformAdmin: vi.fn().mockResolvedValue({}),
@@ -23,6 +23,10 @@ afterEach(async () => {
     await db.execute(sql.raw(`DROP FUNCTION IF EXISTS "${functionName}"()`));
   }
   if (organizationSlug) {
+    // Organization creation seeds starter rows (seedOrgDefaults): clear them first.
+    const orgIds = db.select({ id: organizations.id }).from(organizations).where(eq(organizations.slug, organizationSlug));
+    await db.delete(feedstockTypes).where(inArray(feedstockTypes.organizationId, orgIds));
+    await db.delete(formulations).where(inArray(formulations.organizationId, orgIds));
     await db.delete(organizations).where(eq(organizations.slug, organizationSlug));
   }
   if (adminUserId) {
