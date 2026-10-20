@@ -25,8 +25,8 @@ export interface SaveRefusalOutcome {
 
 export type SaveRefusalHandler = (error: unknown) => SaveRefusalOutcome | null;
 
-interface UseSaveRefusalOptions<TFieldValues extends FieldValues> {
-  control: Control<TFieldValues>;
+interface UseSaveRefusalOptions<TFieldValues extends FieldValues, TContext, TTransformed> {
+  control: Control<TFieldValues, TContext, TTransformed>;
   setError: UseFormSetError<TFieldValues>;
   /** The `<form>` element's id; its controls say which fields are on screen. */
   formId: string;
@@ -47,13 +47,13 @@ function isRendered(form: HTMLElement | null, field: string): boolean {
   return !(control instanceof HTMLInputElement && control.readOnly);
 }
 
-export function useSaveRefusal<TFieldValues extends FieldValues>({
+export function useSaveRefusal<TFieldValues extends FieldValues, TContext, TTransformed>({
   control,
   setError,
   formId,
   aliases,
   isEnabled,
-}: UseSaveRefusalOptions<TFieldValues>): SaveRefusalHandler {
+}: UseSaveRefusalOptions<TFieldValues, TContext, TTransformed>): SaveRefusalHandler {
   const { dirtyFields } = useFormState({ control });
   return (error) => {
     const form = document.getElementById(formId);

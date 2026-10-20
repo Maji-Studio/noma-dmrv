@@ -33,7 +33,9 @@ import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { StaleVersionError, staleDeleteMessage, toSaveErrorMessage } from "@/lib/stale-version";
 import { getConflict, type ConflictRef } from "@/lib/conflict-ref";
 import { STOCK_CONFLICT_ENTITY } from "@/lib/stock-conflict-entities";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { FeedstockForm } from "./feedstock-form";
+import { feedstockUpdatePayload } from "./feedstock-update-payload";
 import {
   useFeedstocks,
   useFeedstock,
@@ -309,7 +311,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   // Handlers
   const handleCreate = createWithEvidence.handleCreate;
 
-  const handleUpdate = async (data: FeedstockFormData) => {
+  const handleUpdate = async (data: FeedstockFormData, onRefusal?: SaveRefusalHandler) => {
     const editing =
       displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
     if (!editing) return;
@@ -317,25 +319,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     setUpdateBlockers([]);
     if (createWithEvidence.guardUpdate()) return;
     try {
-      await updateFeedstock.mutateAsync({
-        feedstockId: editing.id,
-        // The version the side sheet opened on, never a refetched one, so a
-        // concurrent edit is refused instead of silently overwritten (#768).
-        expectedVersion: editing.version,
-        facilityId: data.facilityId,
-        deliveryDate: data.deliveryDate,
-        supplierId: data.supplierId,
-        vehicleId: data.vehicleId || null,
-        transportDistanceKm: data.transportDistanceKm,
-        transportDistanceSource: data.transportDistanceSource,
-        distanceNote: data.distanceNote,
-        feedstockTypeId: data.feedstockTypeId,
-        massWetKg: data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
-        moistureContentPercent: data.moisturePercent,
-        storageLocationId: data.allocations[0].storageLocationId,
-        overrideJustification: data.overrideJustification || null,
-        notes: data.notes || null,
-      });
+      await updateFeedstock.mutateAsync(feedstockUpdatePayload(data, editing));
       createWithEvidence.reset();
       setSideSheet(null);
       setFocusedFeedstockId(null);
@@ -345,7 +329,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     } catch (error) {
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      setUpdateError(toSaveErrorMessage(error, "Feedstock was not saved. Try again."));
+      const shown = onRefusal?.(error);
+      setUpdateError(shown ? shown.footer : toSaveErrorMessage(error, "Feedstock was not saved. Try again."));
       const refused = getConflict(error);
       if (refused?.conflict.entity === STOCK_CONFLICT_ENTITY.storageLocation) {
         setUpdateBlockers(refused.blockers ?? []);
