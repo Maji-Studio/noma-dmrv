@@ -73,11 +73,12 @@ describe("EmissionLineList", () => {
     expect(screen.getByRole("button", { name: "1 manual entry, file missing. Show manual entries" })).toBeTruthy();
   });
 
-  it("reads a Total that does not add up as Not available, never Not recorded, and drops it on phones", () => {
+  it("leaves out a Total that does not add up, never Not recorded", () => {
     const entry = makeEntry({ values: [{ id: "v1", organizationId: "org", entryId: "entry-1", inputKey: "energy", magnitude: "3.2", unit: "MWh", massDistanceDetail: null }], total: null });
     renderList([makeLine({ state: "needsReview", entries: [entry] })]);
     expect(screen.queryByText("Not recorded")).toBeNull();
-    expect(screen.getByText("Not available").className).toContain("max-md:hidden");
+    expect(screen.queryByText("Not available")).toBeNull();
+    expect(screen.queryByText(/MWh/)).toBeNull();
   });
 
   it("keeps a figure Total on phones until the row opens, where the sources table states it", () => {

@@ -18,7 +18,6 @@ import { Skeleton } from "@/components/ui/loading-skeleton";
 import { LIST_PAGE_SIZE_OPTIONS } from "@/config/list-controls";
 import type { StorageLocationLaneSummary } from "@/data-access/storage-location-lane-summary";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordDeletable, isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
 import { formatMass } from "@/lib/format-utils";
@@ -125,14 +124,21 @@ function filterBinCount(
 function filterFigure(
   summary: LaneSummary | undefined,
   filter: StorageBinTypeFilter,
-): string {
-  if (!summary) return MISSING_VALUE.notAvailable;
+): string | null {
+  // Before the summary lands, or for a type with no on-hand total, the figure
+  // is a sum the board does not have, so it is left out.
+  if (!summary) return null;
   if (filter === "all") {
     const bins = filterBinCount(summary, "all") ?? 0;
     return `${bins} ${bins === 1 ? "bin" : "bins"}`;
   }
   const onHandKg = summary[filter].onHandKg;
-  return onHandKg == null ? MISSING_VALUE.notAvailable : formatMass(onHandKg);
+  return onHandKg == null ? null : formatMass(onHandKg);
+}
+
+/** A select option names the type, and its figure in parentheses when there is one. */
+function optionLabel(filter: StorageBinTypeFilter, figure: string | null): string {
+  return figure ? `${binTypeFilterLabel(filter)} (${figure})` : binTypeFilterLabel(filter);
 }
 
 /**
@@ -229,7 +235,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
         >
           {BIN_TYPE_FILTER_ORDER.map((filter) => (
             <option key={filter} value={filter}>
-              {binTypeFilterLabel(filter)} ({filterFigure(laneSummary, filter)})
+              {optionLabel(filter, filterFigure(laneSummary, filter))}
             </option>
           ))}
         </select>
@@ -405,7 +411,7 @@ function RailFilter({
   filter: StorageBinTypeFilter;
   isActive: boolean;
   count: number | null;
-  figure: string;
+  figure: string | null;
   onSelect: () => void;
 }) {
   const meta = filter === "all" ? null : BIN_TYPE_META[filter];
@@ -436,7 +442,7 @@ function RailFilter({
         </span>
       </span>
       <span className="flex flex-col items-end">
-        <span className="body-caption font-semibold tabular-nums">{figure}</span>
+        {figure && <span className="body-caption font-semibold tabular-nums">{figure}</span>}
         {filter !== "all" && count != null && (
           <span className="body-caption text-[var(--color-text-tertiary)]">
             {count} {count === 1 ? "bin" : "bins"}
