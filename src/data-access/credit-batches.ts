@@ -1,3 +1,4 @@
+import type { ActivityEventInput } from "./activity-events";
 import { readRecordDependents } from './record-lock-dependents';
 import { assertRecordLockFields } from '@/lib/record-lock-fields';
 import { recordLocks } from '@/lib/record-lock';
@@ -356,127 +357,131 @@ export async function getCreditBatchByCode(
 /**
  * Create a new credit batch with production-run membership.
  */
-export async function createCreditBatch(
+export async function createCreditBatch(ctx: OrgContext, data: Parameters<typeof createCreditBatchInTransaction>[2]): Promise<SavedCreditBatch> {
+  requireOrgScope(ctx);
+  const committed = await retryTransaction(() => db.transaction((tx) => createCreditBatchInTransaction(ctx, tx, data, "form")));
+  return describeSavedCreditBatch(ctx, committed);
+}
+
+export async function createCreditBatchInTransaction(
   ctx: OrgContext,
+  tx: DbTransaction,
   data: Omit<CreateCreditBatchData, "sampling"> & {
     code: string;
     sampling?: CreditBatchSampling;
-  }
-): Promise<SavedCreditBatch> {
+  },
+  source: ActivityEventInput["source"],
+): Promise<CommittedCreditBatch> {
   requireOrgScope(ctx);
   const { productionRunIds, ...batchData } = data;
   const sampling = data.sampling ?? "sampled";
-  const created = await retryTransaction(() => db.transaction(async (tx) => {
-    // Mapping adoption takes UPDATE on the facility before checking its batches.
-    // Hold SHARE before resolving the provider so a concurrent link cannot be missed.
-    await tx.select({ id: facilities.id }).from(facilities)
-      .where(and(eq(facilities.id, batchData.facilityId), eq(facilities.organizationId, ctx.organizationId)))
-      .for("share");
-    const { provider: certifier, removalTemplateId } = await resolveCreditBatchCertifier(ctx, tx, batchData.facilityId);
-    assertCreditBatchProductionWindow(batchData.startDate, batchData.endDate, certifier);
+  // Mapping adoption takes UPDATE on the facility before checking its batches.
+  // Hold SHARE before resolving the provider so a concurrent link cannot be missed.
+  await tx.select({ id: facilities.id }).from(facilities)
+    .where(and(eq(facilities.id, batchData.facilityId), eq(facilities.organizationId, ctx.organizationId)))
+    .for("share");
+  const { provider: certifier, removalTemplateId } = await resolveCreditBatchCertifier(ctx, tx, batchData.facilityId);
+  assertCreditBatchProductionWindow(batchData.startDate, batchData.endDate, certifier);
 
-    // ADR 0016 (amended 2026-07-04): the credit batch is the protocol production
-    // batch (one feedstock), and the feedstock type is now DECLARED on the form,
-    // not derived from the runs. Validate the member runs FIRST (existence,
-    // facility, window, prior assignment), then GUARD that they all match the
-    // declared feedstock type, then find-or-create the (facility, feedstock)
-    // production process this batch belongs to.
-    const { runIds, lockedRuns } = await lockCreditBatchDeclarationRuns(
-      ctx,
-      tx,
-      {
-        facilityId: batchData.facilityId,
-        feedstockTypeId: batchData.feedstockTypeId,
-        certifier,
-        startDate: batchData.startDate,
-        endDate: batchData.endDate,
-        requestedProductionRunIds: productionRunIds ?? [],
-      },
-    );
-    await assertNoOverlappingCreditBatchCohort(ctx, tx, {
+  // ADR 0016 (amended 2026-07-04): the credit batch is the protocol production
+  // batch (one feedstock), and the feedstock type is now DECLARED on the form,
+  // not derived from the runs. Validate the member runs FIRST (existence,
+  // facility, window, prior assignment), then GUARD that they all match the
+  // declared feedstock type, then find-or-create the (facility, feedstock)
+  // production process this batch belongs to.
+  const { runIds, lockedRuns } = await lockCreditBatchDeclarationRuns(
+    ctx,
+    tx,
+    {
       facilityId: batchData.facilityId,
       feedstockTypeId: batchData.feedstockTypeId,
       certifier,
       startDate: batchData.startDate,
       endDate: batchData.endDate,
-    });
-    const feedstockTypeId = batchData.feedstockTypeId;
-    const process = await findOrCreateProductionProcess(
-      ctx,
-      {
-        facilityId: batchData.facilityId,
-        feedstockTypeId,
-        startDate: new Date(formatUtcDate(batchData.startDate)),
-      },
-      tx,
-    );
-    await validateProductionRunIds(
-      ctx,
-      tx,
-      runIds,
-      batchData.facilityId,
+      requestedProductionRunIds: productionRunIds ?? [],
+    },
+  );
+  await assertNoOverlappingCreditBatchCohort(ctx, tx, {
+    facilityId: batchData.facilityId,
+    feedstockTypeId: batchData.feedstockTypeId,
+    certifier,
+    startDate: batchData.startDate,
+    endDate: batchData.endDate,
+  });
+  const feedstockTypeId = batchData.feedstockTypeId;
+  const process = await findOrCreateProductionProcess(
+    ctx,
+    {
+      facilityId: batchData.facilityId,
+      feedstockTypeId,
+      startDate: new Date(formatUtcDate(batchData.startDate)),
+    },
+    tx,
+  );
+  await validateProductionRunIds(
+    ctx,
+    tx,
+    runIds,
+    batchData.facilityId,
+    certifier,
+    batchData.startDate,
+    batchData.endDate,
+    undefined,
+    lockedRuns,
+  );
+  await assertDeclaredFeedstockType(ctx, tx, runIds, feedstockTypeId);
+  const eligibility = isBatchEligible(sampling === "unsampled" ? {
+    sampling,
+    certifier,
+    hasIsometricCredentials: await hasCertifierCredentials(ctx, "isometric", tx),
+    methodBEligibility: await getMethodBEligibilityForProcess(ctx, process, tx),
+  } : { sampling });
+  if (!eligibility.eligible) throw new SafeError(eligibility.message);
+
+  // Insert the credit batch
+  const [batch] = await tx
+    .insert(creditBatches)
+    .values({
+      organizationId: ctx.organizationId,
+      code: batchData.code,
+      facilityId: batchData.facilityId,
+      feedstockTypeId,
+      productionProcessId: process.id,
+      startDate: formatUtcDate(batchData.startDate),
+      endDate: formatUtcDate(batchData.endDate),
       certifier,
-      batchData.startDate,
-      batchData.endDate,
-      undefined,
-      lockedRuns,
-    );
-    await assertDeclaredFeedstockType(ctx, tx, runIds, feedstockTypeId);
-    const eligibility = isBatchEligible(sampling === "unsampled" ? {
+      removalTemplateId,
       sampling,
-      certifier,
-      hasIsometricCredentials: await hasCertifierCredentials(ctx, "isometric", tx),
-      methodBEligibility: await getMethodBEligibilityForProcess(ctx, process, tx),
-    } : { sampling });
-    if (!eligibility.eligible) throw new SafeError(eligibility.message);
+      siteManagementNotes: batchData.siteManagementNotes || null,
+    })
+    .returning();
 
-    // Insert the credit batch
-    const [batch] = await tx
-      .insert(creditBatches)
-      .values({
+  if (runIds.length > 0) {
+    await tx.insert(creditBatchProductionRuns).values(
+      runIds.map((productionRunId) => ({
         organizationId: ctx.organizationId,
-        code: batchData.code,
-        facilityId: batchData.facilityId,
-        feedstockTypeId,
-        productionProcessId: process.id,
-        startDate: formatUtcDate(batchData.startDate),
-        endDate: formatUtcDate(batchData.endDate),
-        certifier,
-        removalTemplateId,
-        sampling,
-        siteManagementNotes: batchData.siteManagementNotes || null,
-      })
-      .returning();
+        creditBatchId: batch.id,
+        productionRunId,
+      }))
+    );
+  }
 
-    if (runIds.length > 0) {
-      await tx.insert(creditBatchProductionRuns).values(
-        runIds.map((productionRunId) => ({
-          organizationId: ctx.organizationId,
-          creditBatchId: batch.id,
-          productionRunId,
-        }))
-      );
-    }
+  await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
+    creditBatchIds: [batch.id],
+  });
 
-    await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
-      creditBatchIds: [batch.id],
-    });
+  const savedRunIds = await readMemberProductionRunIds(ctx, tx, batch.id);
+  await recordActivityChange(ctx, tx, {
+    entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
+    action: "created", source,
+  }, null, { ...batch, production_runs: savedRunIds });
+  await recordMembershipActivity(ctx, tx, batch.id, [], savedRunIds, { recordBatchEvent: false, source });
 
-    const savedRunIds = await readMemberProductionRunIds(ctx, tx, batch.id);
-    await recordActivityChange(ctx, tx, {
-      entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
-      action: "created", source: "form",
-    }, null, { ...batch, production_runs: savedRunIds });
-    await recordMembershipActivity(ctx, tx, batch.id, [], savedRunIds, { recordBatchEvent: false });
-
-    return { ...(await readCommittedCreditBatch(ctx, tx, batch)), memberProductionRunIds: runIds };
-  }));
-
-  return describeSavedCreditBatch(ctx, created);
+  return { ...(await readCommittedCreditBatch(ctx, tx, batch)), memberProductionRunIds: runIds };
 }
 
 /** What a create or update knows about its batch from the write itself. */
-interface CommittedCreditBatch {
+export interface CommittedCreditBatch {
   batch: CreditBatch;
   facility: { name: string; durabilityOption: DurabilityOption } | undefined;
   feedstockType: { name: string } | undefined;
@@ -511,10 +516,11 @@ async function readCommittedCreditBatch(
  * instead of failing a save that landed. The caller turns that into a warning
  * (issues #769, #797).
  */
-async function describeSavedCreditBatch(
+export async function describeSavedCreditBatch(
   ctx: OrgContext,
   committed: CommittedCreditBatch,
 ): Promise<SavedCreditBatch> {
+  requireOrgScope(ctx);
   const { batch, facility, feedstockType } = committed;
   const durabilityOption = facility?.durabilityOption ?? DURABILITY_TIER_FALLBACK;
   const accounting = await loadCreditBatchAccountingSafely(ctx, batch.id);

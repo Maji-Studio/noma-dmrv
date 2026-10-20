@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   requireOrgContext: vi.fn(),
   createCreditBatch: vi.fn(),
+  describeSavedCreditBatch: vi.fn(),
   updateCreditBatch: vi.fn(),
   getCreditBatchById: vi.fn(),
   getCreditBatchCertifierForFacility: vi.fn(),
@@ -25,19 +26,11 @@ vi.mock("@/lib/auth/server", () => ({
 
 vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn() }));
 
-vi.mock("@/data-access/code-generator", () => ({
-  withAutoCode: (
-    _ctx: unknown,
-    _prefix: string,
-    _table: unknown,
-    _column: unknown,
-    _scope: unknown,
-    run: (code: string) => unknown,
-  ) => run("CB-001"),
-}));
+vi.mock("@/lib/operations/runner", () => ({ runOperationInProcess: mocks.createCreditBatch }));
+vi.mock("@/lib/operations/credit-batches", () => ({ createCreditBatch: { id: "create_credit_batch" } }));
 
 vi.mock("@/data-access/credit-batches", () => ({
-  createCreditBatch: mocks.createCreditBatch,
+  describeSavedCreditBatch: mocks.describeSavedCreditBatch,
   getCreditBatchById: mocks.getCreditBatchById,
   getCo2eStoredPreviews: vi.fn(),
   getCreditBatchProductionRunOptions: vi.fn(),
@@ -88,6 +81,7 @@ function createdRow(rollupLoaded: boolean) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.describeSavedCreditBatch.mockImplementation(async (_ctx, committed) => committed);
   mocks.requireOrgContext.mockResolvedValue({ organizationId: ORGANIZATION_ID });
   mocks.getCreditBatchCertifierForFacility.mockResolvedValue("isometric");
 });

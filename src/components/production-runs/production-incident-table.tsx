@@ -62,6 +62,7 @@ export function ProductionIncidentTable({
   const [formError, setFormError] = useState<string | null>(null);
 
   const openCreate = () => {
+    createIncident.startDraft();
     setFormError(null);
     setFormDialog({ open: true });
   };

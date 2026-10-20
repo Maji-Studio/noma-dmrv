@@ -26,6 +26,12 @@ vi.mock("@/data-access/production-incidents", () => ({
   getProductionIncidents: mocks.listIncidents,
   createProductionIncident: mocks.createIncident,
 }));
+vi.mock("@/lib/operations/production-samples", () => ({ recordProductionSample: { id: "record_production_sample" } }));
+vi.mock("@/lib/operations/production-incidents", () => ({ recordProductionIncident: { id: "record_production_incident" } }));
+vi.mock("@/lib/operations/runner", () => ({
+  runOperationInProcess: (operation: { id: string }, ctx: unknown, input: unknown) =>
+    operation.id === "record_production_incident" ? mocks.createIncident(ctx, input) : mocks.create(ctx, input),
+}));
 vi.mock("@/db", () => ({
   db: { select: () => ({ from: () => ({ where: async () => [{ maxSuffix: 0 }] }) }) },
 }));

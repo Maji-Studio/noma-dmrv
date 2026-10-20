@@ -104,6 +104,7 @@ export function TransportLegsEditor({
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const openCreate = () => {
+    createMutation.startDraft();
     setFormError(null);
     setDialog({ open: true });
   };

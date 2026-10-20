@@ -4,14 +4,16 @@
  */
 "use server";
 
+import { createDriver } from "@/lib/operations/drivers";
+import { createOperator } from "@/lib/operations/operators";
+import { runOperationInProcess } from "@/lib/operations/runner";
+import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
 import {
-  createDriver,
-  createOperator,
   createVehicle,
   createFeedstockType,
   createStorageLocation,
 } from "@/data-access/quick-add";
-import { drivers, vehicles, feedstockTypes, storageLocations } from "@/db/schema";
+import { vehicles, feedstockTypes, storageLocations } from "@/db/schema";
 import {
   CODE_CONFLICT_MESSAGES,
   withAutoCode,
@@ -40,16 +42,13 @@ import { withAction } from "./with-action";
  * Create a new driver from quick-add dialog
  */
 export async function createDriverFn(
-  data: DriverQuickAddData
+  data: DriverQuickAddData,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<EntityOption>> {
   return withAction(async (ctx) => {
     const parsed = driverQuickAddSchema.parse(data);
-    return withAutoCode(
-      ctx,
-      "DRV", drivers, drivers.code, undefined,
-      (code) => createDriver(ctx, { ...parsed, code }),
-      CODE_CONFLICT_MESSAGES.driver,
-    );
+    const parsedOptions = createIntentOptionsSchema.parse(options);
+    return runOperationInProcess(createDriver, ctx, parsed, parsedOptions);
   }, { fallbackMessage: "Failed to create driver" });
 }
 
@@ -58,11 +57,13 @@ export async function createDriverFn(
 // ============================================
 
 export async function createOperatorFn(
-  data: OperatorQuickAddData
+  data: OperatorQuickAddData,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<EntityOption>> {
   return withAction(async (ctx) => {
     const parsed = operatorQuickAddSchema.parse(data);
-    return createOperator(ctx, parsed);
+    const parsedOptions = createIntentOptionsSchema.parse(options);
+    return runOperationInProcess(createOperator, ctx, parsed, parsedOptions);
   }, { fallbackMessage: "Failed to create operator" });
 }
 

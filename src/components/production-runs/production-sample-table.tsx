@@ -88,6 +88,7 @@ export function ProductionSampleTable({
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
   const openCreate = () => {
+    createSample.startDraft();
     setFormError(null);
     createWithEvidence.reset();
     setFormDialog({ open: true });
