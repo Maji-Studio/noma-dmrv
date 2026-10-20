@@ -121,18 +121,15 @@ export function assertRemovalDatesNotFuture(args: {
   }
 }
 
-// Guards the window inversion BEFORE any registry POST — the local stamp's
-// `startedOn <= completedOn` DB check happens later during finalization, so a
-// back-dated application must fail before posting an inverted window to
-// Isometric. Compares each lineage
-// against ITS OWN production run's start, not the removal-wide earliest:
-// biochar cannot be applied before the run that produced it started, and in a
-// mixed removal an earlier sibling run would otherwise mask a lineage whose
-// application predates its own run (PR #336 second-pass review). Fails closed
-// on a lineage whose run start cannot be resolved. Compares at DATE
-// granularity (what gets POSTed and stamped): form-entered application dates
-// are UTC midnight, so a millisecond comparison would wrongly block a
-// same-facility-day application against a mid-day run start (issue #320 caveat 4).
+// Reject each application dated before its own production run before any
+// registry POST; an earlier sibling run must not mask invalid lineage.
+// The application date is a stored facility business date, represented as UTC
+// midnight of that day. Convert the run start instant to its facility day for
+// this comparison so a same-day application can follow a mid-day run start.
+// This business-date check differs from resolveRemovalReportingWindow, which
+// works on stored instants and compares UTC days to derive the reporting window.
+// The checks can therefore differ near UTC midnight. Fail closed when the
+// lineage's production run start cannot be resolved.
 export function assertReportingWindowNotInverted(args: {
   lineages: {
     application: { applicationDate: Date; code: string };

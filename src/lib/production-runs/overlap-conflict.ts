@@ -11,6 +11,8 @@
 import { formatFacilityDate, formatFacilityTime } from "@/lib/date-utils";
 import type { ConflictRef } from "@/lib/conflict-ref";
 
+const OVERLAP_CLOCK_FORMAT = "HH:mm";
+
 export type RunConflict = ConflictRef;
 
 export class ProductionRunConflictError extends Error {
@@ -40,8 +42,8 @@ export function formatProductionRunOverlapMessage(conflict: {
   const { startTime, endTime, facilityTimezone } = conflict;
   const startDay = formatFacilityDate(startTime, facilityTimezone);
   const endDay = formatFacilityDate(endTime, facilityTimezone);
-  const startClock = formatFacilityTime(startTime, facilityTimezone, "HH:mm");
-  const endClock = formatFacilityTime(endTime, facilityTimezone, "HH:mm");
+  const startClock = formatFacilityTime(startTime, facilityTimezone, OVERLAP_CLOCK_FORMAT);
+  const endClock = formatFacilityTime(endTime, facilityTimezone, OVERLAP_CLOCK_FORMAT);
   const window = startDay === endDay
     ? `${startDay} ${startClock} to ${endClock}`
     : `${startDay} ${startClock} to ${endDay} ${endClock}`;

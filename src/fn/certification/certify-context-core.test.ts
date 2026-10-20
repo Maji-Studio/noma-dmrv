@@ -135,7 +135,19 @@ it.each([new Date(0), new Date()])("loads context, Empty lines and overview afte
 
 it.each(["Africa/Dar_es_Salaam", "America/Los_Angeles"])("passes the scoped facility zone to future measurement readiness (%s)", async (timezone) => {
   vi.mocked(getFacilityById).mockResolvedValueOnce({ timezone } as never);
-  await buildRemovalContext(ctx, scope, facts(fixture as GhgEntryTemplate));
+  const result = await buildRemovalContext(ctx, scope, facts(fixture as GhgEntryTemplate));
+  expect(result.facilityTimezone).toBe(timezone);
+  expect(getFacilityById).toHaveBeenCalledTimes(1);
   expect(getFacilityById).toHaveBeenLastCalledWith(ctx, scope.facilityId);
   expect(collectFutureDatedMeasurements).toHaveBeenLastCalledWith(expect.objectContaining({ facilityTimezone: timezone }));
+});
+
+it("carries the facility zone when there are no applications", async () => {
+  const timezone = "Africa/Dar_es_Salaam";
+  vi.mocked(getFacilityById).mockResolvedValueOnce({ timezone } as never);
+  const emptyScope = { ...scope, memberBatches: scope.memberBatches.map((batch) => ({ ...batch, applicationIds: [] })) };
+  const result = await buildRemovalContext(ctx, emptyScope, facts(fixture as GhgEntryTemplate));
+  expect(result.facilityTimezone).toBe(timezone);
+  expect(getFacilityById).toHaveBeenCalledTimes(1);
+  expect(collectFutureDatedMeasurements).not.toHaveBeenCalled();
 });

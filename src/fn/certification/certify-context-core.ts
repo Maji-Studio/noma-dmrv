@@ -241,12 +241,15 @@ export async function buildRemovalContext(
     soilTemperatureGate.blockers,
   );
 
+  const facility = await getFacilityById(orgCtx, scope.facilityId);
+
   // Nothing to submit when the removal carries no applications. Facility
   // template setup does NOT gate the lineage walk; otherwise setup gaps collapse
   // into a misleading "no production data" blocker.
   if (applicationIds.length === 0) {
     return {
       facilityId: scope.facilityId,
+      facilityTimezone: facility.timezone,
       removalId: scope.removalId,
       reportingWindowStartedOn: scope.removal?.startedOn ?? null,
       reportingWindowCompletedOn: scope.removal?.completedOn ?? null,
@@ -306,7 +309,6 @@ export async function buildRemovalContext(
   const runIds = Array.from(
     new Set([...appliedRunIds, ...productionClaimRunIds]),
   );
-  const facility = await getFacilityById(orgCtx, scope.facilityId);
   const runs =
     runIds.length > 0
       ? await getProductionRunsForCertification(orgCtx, runIds)
@@ -381,6 +383,7 @@ export async function buildRemovalContext(
 
   return {
     facilityId: scope.facilityId,
+    facilityTimezone: facility.timezone,
     removalId: scope.removalId,
     reportingWindowStartedOn: scope.removal?.startedOn ?? null,
     reportingWindowCompletedOn: scope.removal?.completedOn ?? null,

@@ -448,6 +448,7 @@ export function makeContext(
   const batchesWithSamples = makeBatchesWithSamples(runs);
   return {
     facilityId: FACILITY_ID,
+    facilityTimezone: overrides.facilityTimezone ?? "UTC",
     hasOrgCredentials: true,
     removalId: REMOVAL_ID,
     reportingWindowStartedOn: storedRemovalStartedOn,

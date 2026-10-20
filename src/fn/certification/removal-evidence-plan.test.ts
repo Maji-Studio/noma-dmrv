@@ -66,6 +66,7 @@ const template = {
 } as unknown as IsometricGhgEntryTemplate;
 
 const ctx = {
+  facilityTimezone: "UTC",
   lineages: [
     {
       application: { id: "application-1", code: "APP-001" },
