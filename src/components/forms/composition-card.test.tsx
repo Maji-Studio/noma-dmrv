@@ -47,7 +47,7 @@ function Block() {
   return (
     <CompositionCard
       title="Bin stock"
-      headline={<DerivedHeadline label="Wet stock in bin, estimate" before="≈ 1,420" value="1,110 kg" sub="310 kg wet removed at 22.7% moisture" />}
+      headline={<DerivedHeadline label="Wet stock in bin, estimate" before="≈ 1,420" value="1,110 kg" sub="310 kg wet mass removed at 22.7% moisture" />}
       detail={<p>Dry biochar pair</p>}
       calculation={<p>Batch ledger</p>}
       actions={<button type="button">Stock history</button>}
@@ -62,7 +62,7 @@ describe("detail levels", () => {
     let renderer!: ReactTestRenderer;
     await act(async () => { renderer = create(<FormDetailProvider scope="block"><FormDetailControl /><Block /></FormDetailProvider>); });
     const simple = visible(renderer.root);
-    for (const text of ["Bin stock", "≈ 1,420", "1,110 kg", "310 kg wet removed", "Split bar", "Stock history"]) expect(simple).toContain(text);
+    for (const text of ["Bin stock", "≈ 1,420", "1,110 kg", "310 kg wet mass removed", "Split bar", "Stock history"]) expect(simple).toContain(text);
     for (const text of ["Dry biochar pair", "Show calculation"]) expect(simple).not.toContain(text);
     await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
     const detailed = visible(renderer.root);

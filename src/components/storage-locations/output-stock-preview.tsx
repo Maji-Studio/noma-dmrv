@@ -25,7 +25,7 @@ export interface StockEntry {
   wetMassKg: number | null | undefined;
 }
 
-/** "310 kg wet removed", "48 kg wet lost", "1,190 kg wet loaded". A count reads "Counted …". */
+/** "310 kg wet mass removed", "48 kg wet mass lost", "1,190 kg wet mass loaded". A count reads "Counted …". */
 const ENTRY_VERB: Record<Exclude<StockEntryKind, "count">, string> = {
   correction: "removed",
   loss: "lost",
@@ -43,7 +43,7 @@ const ENTRY_VERB: Record<Exclude<StockEntryKind, "count">, string> = {
  * figures and batch draw behind Show calculation.
  *
  * `entry` is what the operator typed on a movement surface: its kind names the
- * movement in the headline's caption ("310 kg wet removed at 22.7% moisture"),
+ * movement in the headline's caption ("310 kg wet mass removed at 22.7% moisture"),
  * and its wet mass is the one figure a count cannot recover from the preview.
  *
  * `hideBlockingMessage` is for forms that already render `preview.blockingMessage`
@@ -145,18 +145,18 @@ function enteredWetMassKg(preview: Preview, entry?: StockEntry): number | null {
 }
 
 /**
- * The entry as one caption: "310 kg wet removed at 22.7% moisture", "Counted
- * 2,650 kg wet at 27.4% moisture". A refused entry drops the verb: "310 kg wet
+ * The entry as one caption: "310 kg wet mass removed at 22.7% moisture", "Counted
+ * 2,650 kg wet mass at 27.4% moisture". A refused entry drops the verb: "310 kg wet mass
  * at 22.7% moisture".
  */
 function enteredLine(preview: Preview, kind: StockEntryKind, entry: StockEntry | undefined, refused: boolean): string | null {
   const wetKg = enteredWetMassKg(preview, entry);
   if (wetKg === null) return null;
   const moisture = preview.movementMoisturePercent === null ? "" : ` at ${formatMoisturePercent(preview.movementMoisturePercent)} moisture`;
-  if (refused) return `${formatMassKg(wetKg)} wet${moisture}`;
+  if (refused) return `${formatMassKg(wetKg)} wet mass${moisture}`;
   return kind === "count"
-    ? `Counted ${formatMassKg(wetKg)} wet${moisture}`
-    : `${formatMassKg(wetKg)} wet ${ENTRY_VERB[kind]}${moisture}`;
+    ? `Counted ${formatMassKg(wetKg)} wet mass${moisture}`
+    : `${formatMassKg(wetKg)} wet mass ${ENTRY_VERB[kind]}${moisture}`;
 }
 
 /**

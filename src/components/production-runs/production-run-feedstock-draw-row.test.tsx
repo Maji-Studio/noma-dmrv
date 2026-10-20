@@ -76,7 +76,7 @@ describe("ProductionRunFeedstockDrawRow stock figure", () => {
     availability.availableKg = null;
     const html = render();
 
-    expect(html).toContain("Remaining now: 1,000 kg wet, 800 kg dry feedstock");
+    expect(html).toContain("Remaining now: 1,000 kg wet mass, 800 kg dry feedstock");
     expect(html).not.toContain("available in this bin");
   });
 
@@ -96,7 +96,7 @@ describe("ProductionRunFeedstockDrawRow stock figure", () => {
 
     expect(html).toContain("Enter wet mass.");
     expect(html).not.toContain("available in this bin");
-    expect(html).toContain("Remaining now: 1,000 kg wet, 800 kg dry feedstock");
+    expect(html).toContain("Remaining now: 1,000 kg wet mass, 800 kg dry feedstock");
   });
 
   it("keeps one figure when the over-draw error states what is available", () => {

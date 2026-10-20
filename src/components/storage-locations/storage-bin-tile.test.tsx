@@ -72,7 +72,7 @@ describe('archived storage board tile', () => {
     let renderer!: ReactTestRenderer;
     await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null, type: 'feedstock_bin', feedstockTypeName: 'Pine chips', feedstockInventory: { currentWetMassKg: 400, feedstockTypes: [] } } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
     const text = JSON.stringify(renderer.toJSON());
-    expect(text).toContain('400 kg wet');
+    expect(text).toContain('400 kg wet mass');
     expect(renderer.root.findAllByType(SecondaryFigure)).toHaveLength(0);
     await act(async () => renderer.unmount());
   });

@@ -156,7 +156,7 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
     // The production date is the oldest lot drawn, whatever order the operator emptied them in.
     const drawnLayers = prepared.plan.allocations.map(a => prepared.layers.find(l => l.id === a.layerId)!);
     const firstLayer = drawnLayers.reduce((oldest, layer) => layer.placedAt < oldest.placedAt ? layer : oldest);
-    const [sourceRun] = await writeTx.select({ date: productionRunDateExpr() }).from(productionRuns).where(and(
+    const [sourceRun] = await writeTx.select({ date: productionRunDateExpr(ctx.organizationId) }).from(productionRuns).where(and(
       eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.facilityId, data.facilityId), eq(productionRuns.id, firstLayer.id)));
     if (!sourceRun) throw new SafeError('Source production run not found.');
     const moistureContentPercent = postedMoisturePercent(prepared);
