@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planRenumber } from "./migration-renumber";
+import { followUpLines, planRenumber } from "./migration-renumber";
 
 const STAGING = [
   { idx: 0, tag: "0000_first", when: 100 },
@@ -29,5 +29,25 @@ describe("planRenumber", () => {
     const plan = planRenumber(STAGING, branch);
     expect(plan.branchOnly).toEqual(["0001_a", "0002_b"]);
     expect(plan.nextTag).toBe("0002_b");
+  });
+});
+
+describe("followUpLines", () => {
+  const DEV = "postgresql://u:secret@localhost:5432/noma_dmrv_wt_mig_renumber_dev";
+  const TEST = "postgresql://u:secret@localhost:5432/noma_dmrv_wt_mig_renumber_test";
+
+  it("suggests resets for both worktree DBs without printing credentials", () => {
+    const text = followUpLines("/wt/x", DEV, TEST).join("\n");
+    expect(text).toContain('cd "/wt/x" && pnpm db:reset');
+    expect(text).toContain(". ./.env.test");
+    expect(text).not.toContain("secret");
+  });
+
+  it.each([
+    ["a shared dev DB", "postgresql://u:p@localhost:5432/noma_dmrv_dev"],
+    ["a remote host", "postgresql://u:p@db.example.com:5432/noma_dmrv_wt_x_dev"],
+    ["garbage", "not a url"],
+  ])("suggests nothing for %s", (_label, url) => {
+    expect(followUpLines("/wt/x", url, undefined).join("\n")).not.toContain("db:reset");
   });
 });

@@ -1,4 +1,5 @@
 /** Regenerate branch migrations offline from origin/staging's metadata. */
+import { parse } from "dotenv";
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, writeFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -8,7 +9,7 @@ import {
   readStagingJournal,
   type MigrationEntry,
 } from "./check-migrations";
-import { planRenumber } from "./migration-renumber";
+import { followUpLines, planRenumber } from "./migration-renumber";
 
 const EXIT_FAILURE = 1;
 const CLI_ARGUMENTS_START = 2;
@@ -18,13 +19,24 @@ const SAFE_MIGRATION_TAG = /^[\w-]+$/;
 const STATEMENT_BREAKPOINT = "--> statement-breakpoint";
 const BACKUP_ROOT = "node_modules/.cache/db-renumber";
 
+function readEnvFile(name: string): Record<string, string> {
+  try {
+    return parse(readFileSync(join(process.cwd(), name), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
 function printFollowUp(): void {
   console.log("Review the generated SQL and re-apply any hand-written SQL from the backups.");
-  console.log("For worktrees: scripts/worktree.sh migrate <name> (being added in PR #1289).");
-  console.log("Guarded fallback available today: reset and migrate both worktree DBs only (see docs/testing.md):");
-  console.log("  DATABASE_URL=<dev url> pnpm db:reset");
-  console.log("  DATABASE_URL=<test url> pnpm db:reset");
-  console.log("A plain migrate skips staging's migration when its journal when is older than the newest applied one.");
+  const test = readEnvFile(".env.test");
+  const lines = followUpLines(
+    process.cwd(),
+    readEnvFile(".env.local").DATABASE_URL,
+    test.TEST_DATABASE_URL ?? test.DATABASE_URL,
+  );
+  for (const line of lines) console.log(line);
+  console.log("A plain migrate would skip staging's migration when its journal when is older than the newest applied one.");
 }
 
 function main(): void {
