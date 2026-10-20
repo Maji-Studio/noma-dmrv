@@ -235,12 +235,17 @@ export interface WetDryMassFormatInput {
   unitSpacing?: "spaced" | "compact";
 }
 
+/** Whether a stored mass is a real measurement (not missing, non-finite or negative). */
+export function isRecordedMass(kg: number | null | undefined): kg is number {
+  return kg != null && Number.isFinite(kg) && kg >= 0;
+}
+
 /** Format one member of a wet/dry pair, preserving an explicit missing state. */
 export function formatRecordedMass(
   kg: number | null | undefined,
   unitSpacing: "spaced" | "compact" = "spaced",
 ): string {
-  if (kg == null || !Number.isFinite(kg) || kg < 0) {
+  if (!isRecordedMass(kg)) {
     return MISSING_VALUE.notRecorded;
   }
 

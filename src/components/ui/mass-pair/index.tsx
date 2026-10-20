@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   formatRecordedMass,
+  isRecordedMass,
   MASS_MOISTURE_LABELS,
 } from "@/lib/mass-moisture";
 
@@ -15,10 +15,6 @@ export interface MassPairProps {
   className?: string;
 }
 
-function isRecorded(kg: number | null | undefined): boolean {
-  return formatRecordedMass(kg) !== MISSING_VALUE.notRecorded;
-}
-
 /** A structured wet/dry comparison for KPI cards and dense table cells. */
 export function MassPair({
   wetKg,
@@ -30,8 +26,8 @@ export function MassPair({
   className,
 }: MassPairProps) {
   const figures = [
-    { label: wetLabel, value: formatRecordedMass(wetKg), recorded: isRecorded(wetKg) },
-    { label: dryLabel, value: formatRecordedMass(dryKg), recorded: isRecorded(dryKg) },
+    { label: wetLabel, value: formatRecordedMass(wetKg), recorded: isRecordedMass(wetKg) },
+    { label: dryLabel, value: formatRecordedMass(dryKg), recorded: isRecordedMass(dryKg) },
   ];
   const isCompact = variant === "compact";
 
