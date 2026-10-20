@@ -733,6 +733,7 @@ export async function buildRemovalSubmissionBuild(args: {
     latestApplicationTime,
   });
   const reportingWindow = resolveRemovalReportingWindow({
+    facilityTimezone: ctx.facilityTimezone,
     earliestProductionStartTime: agg.earliestStartTime,
     latestProductionEndTime: agg.latestEndTime,
     latestApplicationTime,
