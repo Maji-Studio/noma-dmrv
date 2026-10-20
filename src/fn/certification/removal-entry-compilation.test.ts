@@ -16,7 +16,7 @@ vi.mock("./removal-evidence-plan", () => ({
   })),
 }));
 
-const ORG_CTX = { userId: "user", organizationId: "org", orgRole: "owner", isPlatformAdmin: false } as const;
+const ORG_CTX = { userId: "user", organizationId: "org", orgRole: "admin", isPlatformAdmin: false } as const;
 const REMOVAL_ID = "removal";
 const BATCH_ID = "batch";
 const ENTRY_COMPONENT_IDS = ["lab-electricity", "staff-electricity"];
