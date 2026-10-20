@@ -51,8 +51,8 @@ describe("deriveBatchHealth", () => {
       .map((check) => batchHealthFixLinkFor(check, "facility-1", "batch-1"));
     expect(links).toEqual([
       { label: "Switch template", href: "/credit-batches/batch-1?facility=facility-1&focus=removal-template" },
-      { label: "Open Removal templates", href: "/certification/settings?section=removal-templates&facility=facility-1" },
-      { label: "Decide components", href: "/certification/settings?section=removal-templates&facility=facility-1" },
+      { label: "Open Removal templates", href: "/settings/removal-templates?facility=facility-1" },
+      { label: "Decide components", href: "/settings/removal-templates?facility=facility-1" },
     ]);
     expect(result.checks.filter((check) => check.key === "templateSet" || check.key === "templateLines")
       .map(certCheckLabel)).toEqual(["No Removal template chosen", "Template not fully read", "Template components not ready"]);

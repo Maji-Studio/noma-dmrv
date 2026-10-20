@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useRemovalTemplateReview, useRemovalTemplateReviewEntry } from "@/hooks/use-removal-template-review";
-import { certificationSettingsHref } from "@/lib/certification/links";
+import { facilityCertificationSettingsHref } from "@/lib/certification/links";
 import { RemovalTemplateReviewCard } from "./removal-template-review-card";
 
 const EMPTY_ICON_SIZE = 32;
@@ -80,11 +80,11 @@ export function RemovalTemplateReviewPanel({ facilityId, canManage, templateId }
       <EmptyState
         icon={<ListChecksIcon size={EMPTY_ICON_SIZE} weight="bold" />}
         title="No Removal templates yet"
-        description="Link this facility to an Isometric project in Certifier. Its Removal templates show here."
+        description="Link this facility to an Isometric project in Settings, Facilities. Its Removal templates show here."
         padding="sm"
         action={
-          <Link href={certificationSettingsHref(facilityId)} className="body-small underline underline-offset-2">
-            Open Certifier
+          <Link href={facilityCertificationSettingsHref(facilityId)} className="body-small underline underline-offset-2">
+            Open Facilities
           </Link>
         }
       />

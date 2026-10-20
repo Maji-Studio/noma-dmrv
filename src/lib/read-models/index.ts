@@ -17,6 +17,11 @@ export {
 } from "./facility-certifier-summary";
 export { readFacility } from "./facility";
 export { readActiveOrganization } from "./active-organization";
+export {
+  readOrganizationApiAccess,
+  readOrganizationRegistryStatus,
+  type OrganizationRegistryStatus,
+} from "./organization-registry-status";
 export { readOnboardingStatus, type OnboardingStatusInput } from "./onboarding-status";
 export {
   DASHBOARD_SCHEMA_MISMATCH_MESSAGE,

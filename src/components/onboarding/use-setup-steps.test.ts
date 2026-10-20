@@ -84,7 +84,7 @@ describe("buildStepHref", () => {
 
   it("routes registry to certification settings and facility to its hub", () => {
     expect(buildStepHref("registry", FACILITY_ID)).toBe(
-      `/certification/settings?facility=${FACILITY_ID}`,
+      `/settings/registry?facility=${FACILITY_ID}`,
     );
     expect(buildStepHref("facility", null)).toBe("/facilities?create=true");
   });

@@ -201,19 +201,6 @@ these areas; the entry rules and invariants live in
 - **To resolve:** UX decision with DEC; adjacent to #253 (cross-facility
   context reconciliation), which any switch-while-open flow must satisfy.
 
-### Registry picker needs approved Puro Earth / CSI logo assets (`onboarding/registry-picker-logos`, opened 2026-07-22)
-
-- The archived onboarding plan
-  ([`2026-07-21-onboarding.md`](./archive/plans/2026-07-21-onboarding.md)) asks the registry picker to show Puro Earth and CSI greyed **with their logos**.
-  `src/components/certification/registry-picker.tsx` deliberately renders styled
-  text wordmarks instead: we hold no approved logo files, and bundling
-  unofficial reproductions of third-party registry branding is worse than no
-  logo. (The component moved out of `onboarding/` on 2026-07-28 when the
-  certifier settings pane became its second consumer.)
-- **To resolve:** DEC obtains approved logo assets (and usage permission) for
-  both registries, or amends the plan to accept text wordmarks. Swap the
-  wordmark spans in `registry-picker.tsx` for the assets when they arrive.
-
 ### An Organization cannot be renamed (`tenancy/organization-rename`, opened 2026-07-28)
 
 - `organizations.name` and `slug` (`src/db/schema/auth.ts`) are settable only at
@@ -222,7 +209,7 @@ these areas; the entry rules and invariants live in
   typo at onboarding is permanent and shows in the sidebar brand, the settings
   subtitle, and every invitation email.
 - **To resolve:** add `updateOrganization` plus a name/slug field on
-  `/settings/organization` for Owners. A slug change needs a decision on
+  Settings, General (`/settings/general`, wave 2 of #1277) for Owners. A slug change needs a decision on
   existing invitation-accept URLs, which embed the invitation id rather than the
   slug — so probably none, but confirm before assuming.
 
@@ -487,7 +474,7 @@ follow-up, not permission to weaken the current guard.
   soon as it is not.
 - **To resolve:** a Platform-Admin choice at org creation, or an onboarding step
   that picks a catalog. Not an operating default: it creates records rather than
-  seeding a form, so it does not belong on `/settings/defaults`.
+  seeding a form, so it does not belong on Settings, General (`/settings/general`).
 
 ### ADR 0026's org-level plausibility overrides are unbuilt (`data-quality/plausibility-overrides`, opened 2026-07-28)
 
@@ -496,7 +483,7 @@ follow-up, not permission to weaken the current guard.
   Organization override". No plausibility module exists under `src/`, so neither
   half is implemented.
 - **To resolve:** build the rule engine first. When it exists, the override
-  surface is `/settings/defaults`
+  surface is Settings, General (`/settings/general`)
   (`src/components/settings/organization-defaults-form.tsx`) — the table
   `organization_settings` and its Owner/Admin gate are already in place. Keep
   the distinction that page is built on: advisory thresholds may be

@@ -1,24 +1,11 @@
-import { redirect } from "next/navigation";
-import { ApiKeySettings } from "@/components/api-keys";
-import { SettingsConsole } from "@/components/settings";
-import { canOwnApiKey } from "@/lib/auth/api-scopes";
-import { getOrgContext } from "@/lib/auth/server";
+/** `/settings/api-keys` was retired by the settings console (#1277); it moved to Developers. */
+import { permanentRedirect } from "next/navigation";
+import { SETTINGS_DEVELOPERS_HREF, redirectPreservingQuery, type SettingsSearchParams } from "@/lib/settings/links";
 
-export default async function ApiKeysPage() {
-  const ctx = await getOrgContext();
-  if (!ctx) redirect("/dashboard");
-  const canManage = canOwnApiKey(ctx.orgRole);
-
-  return (
-    <SettingsConsole
-      title="API keys"
-      caption="A key acts as its owner, limited to the permissions you select."
-      access="Organization Owners and Admins"
-      canManageDefaults={ctx.isPlatformAdmin || canManage}
-      canManageApiKeys={canManage}
-      isPlatformAdmin={ctx.isPlatformAdmin}
-    >
-      <ApiKeySettings canManage={canManage} organizationId={ctx.organizationId} />
-    </SettingsConsole>
-  );
+export default async function RetiredSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<SettingsSearchParams>;
+}) {
+  permanentRedirect(redirectPreservingQuery(SETTINGS_DEVELOPERS_HREF, await searchParams));
 }

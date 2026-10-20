@@ -9,7 +9,7 @@ import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib
 import { deriveBatchHealth } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
-import { certificationRemovalTemplatesHref } from "@/lib/certification/links";
+import { removalTemplatesSettingsHref } from "@/lib/certification/links";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
 
@@ -148,7 +148,7 @@ it.each(["incompatible-carried", "duplicate-source"] as const)("routes %s contra
   const batchCheck = health.checks.find((check) => check.key === "templateLines" && check.fixTarget === "templateLineReview")!;
   expect(batchCheck.status).toBe("unmet");
   expect(batchHealthFixLinkFor(batchCheck, "facility-1", "batch-1")).toEqual({
-    label: "Decide components", href: certificationRemovalTemplatesHref("facility-1"),
+    label: "Decide components", href: removalTemplatesSettingsHref("facility-1"),
   });
 });
 

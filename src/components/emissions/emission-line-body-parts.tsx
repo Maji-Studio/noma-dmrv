@@ -12,7 +12,7 @@ import { ArrowUpRightIcon, FileIcon, PlusIcon, WarningIcon } from "@phosphor-ico
 import { ServerError } from "@/components/forms/server-error";
 import { Button, Notice } from "@/components/ui";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
-import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
+import { removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
 import { cn } from "@/lib/utils";
 import { EntryFileUpload, useEntryFiles } from "./emission-entry-files";
 import {
@@ -234,7 +234,7 @@ export function NothingYet({ line, className }: { line: EmissionLine; className?
 /** "Decide components" only for a line without a decision; any other template problem opens Removal templates. */
 function TemplateReviewLink({ scope, undecided }: { scope: EmissionBatchScope; undecided: boolean }) {
   return (
-    <Link href={certificationRemovalTemplatesHref(scope.facilityId)} className="body-small font-medium underline underline-offset-4">
+    <Link href={removalTemplatesSettingsHref(scope.facilityId)} className="body-small font-medium underline underline-offset-4">
       {undecided ? DECIDE_LINES_LINK_LABEL : OPEN_REMOVAL_TEMPLATES_LINK_LABEL}
     </Link>
   );

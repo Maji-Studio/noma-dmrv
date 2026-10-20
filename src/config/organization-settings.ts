@@ -1,5 +1,5 @@
 /**
- * The fallback an organization gets before anyone opens `/settings/defaults`.
+ * The fallback an organization gets before anyone opens Settings, General.
  *
  * These values mirror the column defaults on `organization_settings`
  * (`@/db/schema/settings`), which in turn mirror the literals they replaced.

@@ -1,34 +1,21 @@
 /**
- * Settings → Connected apps. Every member sees their own connections;
+ * Settings, Connected apps. Every member sees their own connections;
  * Owners and Admins also see every member's and can disconnect any.
  */
-import { redirect } from "next/navigation";
 import { ConnectedApps } from "@/components/oauth";
 import { SettingsConsole } from "@/components/settings";
-import { canOwnApiKey } from "@/lib/auth/api-scopes";
 import { oauthRolePolicy } from "@/lib/auth/oauth-role-policy";
-import { getOrgContext } from "@/lib/auth/server";
-import { readActiveOrganization } from "@/lib/read-models";
+import { loadSettingsViewer } from "@/lib/settings/settings-viewer";
 
 export default async function ConnectedAppsPage() {
-  const ctx = await getOrgContext();
-  if (!ctx) redirect("/dashboard");
-  const org = await readActiveOrganization(ctx);
+  const { ctx, viewer } = await loadSettingsViewer();
   const policy = oauthRolePolicy(ctx.orgRole ?? "");
-  const canManage = canOwnApiKey(ctx.orgRole);
 
   return (
-    <SettingsConsole
-      title="Connected apps"
-      caption="Apps you have allowed to act for you in this organization."
-      access="You and organization Owners and Admins"
-      canManageDefaults={ctx.isPlatformAdmin || canManage}
-      canManageApiKeys={canManage}
-      isPlatformAdmin={ctx.isPlatformAdmin}
-    >
+    <SettingsConsole pane="connected-apps" viewer={viewer}>
       <ConnectedApps
-        organizationId={ctx.organizationId}
-        organizationName={org?.name ?? "this organization"}
+        organizationId={viewer.organizationId}
+        organizationName={viewer.organizationName}
         userId={ctx.userId}
         canManageAll={policy.manageAll}
         isMember={policy.manageOwn}

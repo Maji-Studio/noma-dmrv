@@ -27,7 +27,7 @@ import { useRemovalTemplateReview } from "@/hooks/use-removal-template-review";
 import { templateReadiness } from "@/components/certification/removal-template-review-model";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
-import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL } from "@/lib/certification/links";
+import { removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL } from "@/lib/certification/links";
 import { linesDecidedByOwnerOrAdmin, linesToDecideLabel } from "@/lib/certification/requirement-labels";
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { RawIdentifiers } from "@/components/certification/removal-template-mapping-view";
@@ -137,7 +137,7 @@ export function CreditBatchRemovalTemplate({
           tone="warning"
           action={canManage ? (
             <Link
-              href={certificationRemovalTemplatesHref(batch.facilityId, pinnedId)}
+              href={removalTemplatesSettingsHref(batch.facilityId, pinnedId)}
               className="inline-flex min-h-44 items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
             >
               {DECIDE_LINES_LINK_LABEL}

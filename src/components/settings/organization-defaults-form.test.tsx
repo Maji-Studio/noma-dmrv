@@ -42,14 +42,16 @@ describe("OrganizationDefaultsForm", () => {
     expect(html).not.toContain("Couldn&#x27;t load the operating defaults");
   });
 
-  it("offers Region without a currency field", () => {
+  it("splits what new facilities start with from what new records start with, without a currency field", () => {
     const html = renderToStaticMarkup(
       <ToastProvider>
         <OrganizationDefaultsForm />
       </ToastProvider>,
     );
 
-    expect(html).toContain("Region");
+    expect(html).toContain("New facilities start with");
+    expect(html).toContain("New records");
+    expect(html.indexOf("New facilities start with")).toBeLessThan(html.indexOf("Application evidence"));
     expect(html).toContain("Country");
     expect(html).toContain("Timezone");
     expect(html).not.toContain("Currency");
@@ -68,5 +70,26 @@ describe("OrganizationDefaultsForm", () => {
     expect(html).not.toContain("Visual evidence");
     expect(html).not.toContain("GIS boundary");
     expect(html).not.toMatch(/>Visual</);
+  });
+
+  it("shows a member the values without the controls", () => {
+    queryState.data.viewerCanManage = false;
+    try {
+      const html = renderToStaticMarkup(
+        <ToastProvider>
+          <OrganizationDefaultsForm />
+        </ToastProvider>,
+      );
+
+      expect(html).not.toContain("<form");
+      expect(html).not.toContain("Save defaults");
+      expect(html).toContain("New facilities start with");
+      expect(html).toContain("Kenya");
+      expect(html).toContain("Africa/Nairobi");
+      expect(html).toContain("Customer location");
+      expect(html).toContain("Bagged");
+    } finally {
+      queryState.data.viewerCanManage = true;
+    }
   });
 });

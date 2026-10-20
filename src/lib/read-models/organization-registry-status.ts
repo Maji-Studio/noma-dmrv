@@ -1,0 +1,34 @@
+import { env } from "@/config/env";
+import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
+import { getOrganizationApiAccess } from "@/data-access/organization-api-access";
+import { requireOrgScope } from "@/data-access/utils";
+import type { OrgContext } from "@/lib/auth/server";
+import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
+
+/**
+ * What the settings console needs to know about the organization's registry
+ * before any pane mounts: whether keys are saved (the panes that need keys hide
+ * until then) and which Isometric environment writes land in.
+ */
+export interface OrganizationRegistryStatus {
+  keysSaved: boolean;
+  isProduction: boolean;
+}
+
+export async function readOrganizationRegistryStatus(
+  ctx: OrgContext,
+): Promise<OrganizationRegistryStatus> {
+  return {
+    keysSaved: await hasCertifierCredentials(ctx, ISOMETRIC_PROVIDER),
+    isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
+  };
+}
+
+/**
+ * Whether API keys and connected apps may act for the active organization.
+ * A Platform Admin switch; the organization only reads it.
+ */
+export async function readOrganizationApiAccess(ctx: OrgContext): Promise<boolean> {
+  requireOrgScope(ctx);
+  return getOrganizationApiAccess(ctx.organizationId);
+}

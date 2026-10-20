@@ -59,7 +59,7 @@ describe("batchHealthFixLinkFor", () => {
     for (const key of ["templateSet", "templateLines"] as const) {
       expect(batchHealthFixLinkFor(check(key, target), facilityId)).toEqual({
         label: "Review Removal templates",
-        href: `/certification/settings?section=removal-templates&facility=${facilityId}`,
+        href: `/settings/removal-templates?facility=${facilityId}`,
       });
     }
   });
@@ -81,9 +81,9 @@ describe("batchHealthFixLinkFor", () => {
       check("facilityEmissions", "certificationEmissions"),
       facilityId,
     );
-    expect(link.label).toBe("Open emission estimates");
+    expect(link.label).toBe("Open facility settings");
     expect(link.href).toBe(
-      `/certification/settings?section=emission-estimates&facility=${facilityId}`,
+      `/settings/facilities?facility=${facilityId}`,
     );
   });
 

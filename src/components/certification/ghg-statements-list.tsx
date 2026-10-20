@@ -39,7 +39,7 @@ import {
 import { useToast } from "@/components/ui/toast";
 import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
-import { certificationSettingsHref } from "@/lib/certification/links";
+import { facilityCertificationSettingsHref } from "@/lib/certification/links";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
@@ -111,7 +111,7 @@ export function deriveGhgCreateGate(summary: {
 function SettingsLink({ facilityId }: { facilityId: string }) {
   return (
     <Link
-      href={certificationSettingsHref(facilityId)}
+      href={facilityCertificationSettingsHref(facilityId)}
       className="text-[var(--color-interaction)] underline underline-offset-2 hover:text-[var(--color-interaction-hover)]"
     >
       Settings

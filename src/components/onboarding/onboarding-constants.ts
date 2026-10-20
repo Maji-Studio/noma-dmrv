@@ -10,6 +10,8 @@
  * Credit batch.
  */
 
+import { registrySettingsHref } from "@/lib/certification/links";
+
 export type SetupStepId =
   | "facility"
   | "reactor"
@@ -95,8 +97,8 @@ export const SETUP_STEP_COUNT = SETUP_STEPS.length;
 
 /**
  * Where a step's CTA sends the operator. All entity hubs honour `?create=true`
- * (via `useOpenCreateIntent`); the registry step routes to the certification
- * settings surface, which owns the project link. `?facility=` carries the
+ * (via `useOpenCreateIntent`); the registry step routes to Settings,
+ * Registry, where the keys are saved first. `?facility=` carries the
  * active facility so the target page lands on the right one (mirrors the
  * sidebar links).
  */
@@ -113,9 +115,7 @@ export function buildStepHref(
       // No facility exists yet — nothing to scope.
       return "/facilities?create=true";
     case "registry":
-      return facilityParam
-        ? `/certification/settings?${facilityParam}`
-        : "/certification/settings";
+      return registrySettingsHref(facilityId);
     case "reactor":
     case "supplier":
     case "feedstock":

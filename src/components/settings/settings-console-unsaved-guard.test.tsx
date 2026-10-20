@@ -1,36 +1,31 @@
 // @vitest-environment jsdom
 /**
- * Switching rail sections unmounts the pane, so a pane with a draft has to ask
- * first. These render the real Emissions form (real RHF dirty state) inside the
- * real console; only data hooks and the other panes are stubbed.
+ * Leaving a pane through the rail drops its draft, so a pane with a draft has
+ * to ask first, as the in-place certification panes did. These render the real
+ * soil reference form (real RHF dirty state) inside the real console on the
+ * Facilities pane; only data hooks and the other parts of the pane are stubbed.
  */
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CertificationSettings } from "./certification-settings";
+import type { SettingsViewer } from "@/lib/settings/panes";
+import { FacilitySettingsPane } from "./facility-settings-pane";
+import { SettingsConsole } from "./settings-console";
+
+const FACILITY_ID = "11111111-1111-4111-8111-111111111111";
+const REGISTRY_HREF = `/settings/registry?facility=${FACILITY_ID}`;
 
 const saveMock = vi.hoisted(() => ({ mutateAsync: vi.fn() }));
+const router = vi.hoisted(() => ({ push: vi.fn() }));
 
-// A real, stateful `?section=` so a confirmed leave actually swaps the pane.
-vi.mock("nuqs", async () => {
-  const react = await import("react");
-  return {
-    parseAsString: { withOptions: () => ({}) },
-    useQueryState: () => react.useState<string | null>("emission-estimates"),
-  };
-});
-
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("@/components/navigation", () => ({
   SelectFacilityEmptyState: () => <div>Select a facility</div>,
 }));
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({
-    facilityId: "11111111-1111-4111-8111-111111111111",
-    selectedFacility: { code: "FAC-1", durabilityOption: "200_year" },
+    facilityId: FACILITY_ID,
+    selectedFacility: { id: FACILITY_ID, code: "FAC-1", name: "Facility One", durabilityOption: "200_year", version: 1 },
   }),
-}));
-vi.mock("@/hooks/use-is-admin", () => ({ useIsAdmin: () => false }));
-vi.mock("@/hooks/use-organizations", () => ({
-  useActiveOrganizationProfile: () => ({ data: { id: "organization-1" } }),
 }));
 vi.mock("@/hooks/use-certification", () => ({
   certificationKeys: { all: ["certification"] },
@@ -51,16 +46,24 @@ vi.mock("@/hooks/use-certifier-credentials", () => ({
   useOrgCertifierCredentialsStatus: () => ({ data: { configured: true } }),
 }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn() }) }));
-vi.mock("./certifier-settings-panel", () => ({
-  CertifierSettingsPanel: () => <div>Certifier pane</div>,
+vi.mock("@/components/certification/env-banner", () => ({ EnvBanner: () => null }));
+vi.mock("@/components/certification/facility-certifier-section", () => ({
+  FacilityCertifierSection: () => <div>Project link</div>,
 }));
-vi.mock("./env-banner", () => ({ EnvBanner: () => null }));
-vi.mock("./registry-source-visibility-settings", () => ({
-  RegistrySourceVisibilitySettings: () => <div>Source visibility policy</div>,
+vi.mock("./durability-tier-settings", () => ({
+  DurabilityTierSettings: () => <div>Durability tier</div>,
 }));
-vi.mock("./removal-template-review-panel", () => ({
-  RemovalTemplateReviewPanel: () => <div>Removal templates pane</div>,
-}));
+
+const viewer: SettingsViewer = {
+  organizationId: "organization-1",
+  organizationName: "Organization One",
+  organizationSlug: "organization-one",
+  isPlatformAdmin: false,
+  canManage: true,
+  canManageApiKeys: true,
+  registryKeysSaved: true,
+  isProduction: false,
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -68,13 +71,17 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-const rail = () =>
-  screen.getByRole("navigation", { name: "Certification settings categories" });
-const goTo = (label: string) =>
+const renderPane = () =>
+  render(
+    <SettingsConsole pane="facilities" viewer={viewer}>
+      <FacilitySettingsPane viewer={viewer} />
+    </SettingsConsole>,
+  );
+const goToRegistry = () =>
   fireEvent.click(
-    Array.from(rail().querySelectorAll("button")).find(
-      (button) => button.textContent?.includes(label),
-    )!,
+    Array.from(
+      screen.getByRole("navigation", { name: "Settings categories" }).querySelectorAll("a"),
+    ).find((link) => link.textContent?.includes("Registry"))!,
   );
 const temperature = () =>
   document.querySelector<HTMLInputElement>("#defaultSoilTemperatureC")!;
@@ -86,68 +93,65 @@ const tabCloseWarned = () => {
 };
 const confirmation = () => screen.queryByText("Discard unsaved changes?");
 
-describe("CertificationSettings unsaved changes", () => {
+describe("SettingsConsole unsaved changes", () => {
   it("asks before leaving a pane with a draft", async () => {
-    render(<CertificationSettings />);
+    renderPane();
     edit();
 
-    goTo("Sources");
+    goToRegistry();
 
     expect(await screen.findByText("Discard unsaved changes?")).toBeTruthy();
-    expect(screen.queryByText("Source visibility policy")).toBeNull();
+    expect(router.push).not.toHaveBeenCalled();
   });
 
   it("keeps the pane and the draft when the operator keeps editing", async () => {
-    render(<CertificationSettings />);
+    renderPane();
     edit();
-    goTo("Sources");
+    goToRegistry();
 
     fireEvent.click(await screen.findByRole("button", { name: "Keep editing" }));
 
     await waitFor(() => expect(confirmation()).toBeNull());
     expect(temperature().value).toBe("12.5");
-    expect(screen.queryByText("Source visibility policy")).toBeNull();
+    expect(router.push).not.toHaveBeenCalled();
   });
 
-  it("switches and drops the draft when the operator discards", async () => {
-    render(<CertificationSettings />);
+  it("leaves when the operator discards", async () => {
+    renderPane();
     edit();
-    goTo("Sources");
+    goToRegistry();
 
     fireEvent.click(await screen.findByRole("button", { name: "Discard changes" }));
 
-    expect(await screen.findByText("Source visibility policy")).toBeTruthy();
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith(REGISTRY_HREF));
     expect(confirmation()).toBeNull();
-    expect(document.querySelector("#defaultSoilTemperatureC")).toBeNull();
   });
 
-  it("switches without asking when the pane is clean", () => {
-    render(<CertificationSettings />);
+  it("leaves without asking when the pane is clean", () => {
+    renderPane();
 
-    goTo("Sources");
+    goToRegistry();
 
     expect(confirmation()).toBeNull();
-    expect(screen.getByText("Source visibility policy")).toBeTruthy();
+    expect(router.push).toHaveBeenCalledWith(REGISTRY_HREF);
   });
 
   it("does not ask again once the draft is saved", async () => {
-    render(<CertificationSettings />);
+    renderPane();
     edit();
     fireEvent.click(screen.getByRole("button", { name: "Save estimates" }));
     // The save resets the form's baseline once it resolves.
     await waitFor(() => expect(tabCloseWarned()).toBe(false));
     expect(saveMock.mutateAsync).toHaveBeenCalled();
 
-    goTo("Sources");
+    goToRegistry();
 
-    await waitFor(() =>
-      expect(screen.getByText("Source visibility policy")).toBeTruthy(),
-    );
     expect(confirmation()).toBeNull();
+    expect(router.push).toHaveBeenCalledWith(REGISTRY_HREF);
   });
 
   it("warns on tab close only while a draft exists", async () => {
-    render(<CertificationSettings />);
+    renderPane();
     expect(tabCloseWarned()).toBe(false);
 
     edit();
@@ -156,7 +160,7 @@ describe("CertificationSettings unsaved changes", () => {
   });
 
   it("treats a saved value typed again as clean", async () => {
-    render(<CertificationSettings />);
+    renderPane();
     edit();
     fireEvent.click(screen.getByRole("button", { name: "Save estimates" }));
     await waitFor(() => expect(tabCloseWarned()).toBe(false));
@@ -171,16 +175,29 @@ describe("CertificationSettings unsaved changes", () => {
   it("locks the inputs and ignores rail clicks while a save runs", async () => {
     let finish!: () => void;
     saveMock.mutateAsync.mockReturnValue(new Promise<void>((resolve) => { finish = resolve; }));
-    render(<CertificationSettings />);
+    renderPane();
     edit();
     fireEvent.click(screen.getByRole("button", { name: "Save estimates" }));
     await waitFor(() => expect(temperature().readOnly).toBe(true));
 
-    goTo("Sources");
+    goToRegistry();
 
     expect(confirmation()).toBeNull();
-    expect(screen.queryByText("Source visibility policy")).toBeNull();
+    expect(router.push).not.toHaveBeenCalled();
     finish();
     await waitFor(() => expect(temperature().readOnly).toBe(false));
+  });
+
+  it("lets a modified click open the pane in a new tab without asking", () => {
+    renderPane();
+    edit();
+    const link = Array.from(
+      screen.getByRole("navigation", { name: "Settings categories" }).querySelectorAll("a"),
+    ).find((candidate) => candidate.textContent?.includes("Registry"))!;
+
+    fireEvent.click(link, { metaKey: true });
+
+    expect(confirmation()).toBeNull();
+    expect(router.push).not.toHaveBeenCalled();
   });
 });

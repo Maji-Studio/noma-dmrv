@@ -7,7 +7,7 @@
  *    cross-facility link hints from the Isometric API).
  *  - read-only: a DB-only summary (no management payload on the wire) with no
  *    controls — for viewers who can read the current link but not change it.
- * Mounts in /certification/settings, which passes the server-computed
+ * Mounts in Settings, Facilities, which passes the server-computed
  * `viewerCanManage`. The facility side-sheet shows the lighter
  * `FacilityCertifierSummary` instead.
  */
@@ -23,7 +23,7 @@ import {
   useFacilityCertifierSummary,
 } from "@/hooks/use-certification";
 import { isometricRegistry } from "@/lib/isometric/links";
-import { certificationRemovalTemplatesHref } from "@/lib/certification/links";
+import { removalTemplatesSettingsHref } from "@/lib/certification/links";
 import { formatDate } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import type { CertifierProjectRow } from "@/data-access/certification";
@@ -207,7 +207,7 @@ function CertifierMappingFields({
         )}
         {/* Chosen with its lines in Removal templates; shown here read-only. */}
         <Link
-          href={certificationRemovalTemplatesHref(facilityId)}
+          href={removalTemplatesSettingsHref(facilityId)}
           className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
         >
           Open Removal templates

@@ -17,7 +17,7 @@ import { CaretDownIcon, CaretRightIcon, ChatTextIcon, DotsThreeVerticalIcon, Fun
 import { Button, DropdownMenu, EmptyState } from "@/components/ui";
 import { InfoHint } from "@/components/ui/tooltip";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
-import { certificationRemovalTemplatesHref, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
+import { removalTemplatesSettingsHref, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
 import { cn } from "@/lib/utils";
 import { EmissionLineAccordionBody } from "./emission-line-accordion-body";
 import { MENU_PULL, PHONE_COLUMNS, ROW_COLUMNS } from "./emission-line-grid";
@@ -215,7 +215,7 @@ function LineRow({ line, showGroup, scope, actions, canWrite, expanded, editingC
           <div className={cn(META_CELL, "max-md:flex-1 md:col-start-3 md:row-start-1 md:min-w-0")}>
             {line.state === "needsSetup" ? (
               <Link
-                href={certificationRemovalTemplatesHref(scope.facilityId)}
+                href={removalTemplatesSettingsHref(scope.facilityId)}
                 onClick={(event) => event.stopPropagation()}
                 className="body-caption text-[var(--color-text-secondary)] underline underline-offset-4 hover:text-[var(--color-text-primary)]"
               >
@@ -273,7 +273,7 @@ function RowMenu({ line, scope, actions, canWrite }: { line: EmissionLine; scope
     </DropdownMenu.Item>
   ) : null;
   const setup = line.state === "needsSetup" ? (
-    <DropdownMenu.Item key="setup" render={<Link href={certificationRemovalTemplatesHref(scope.facilityId)} />}>
+    <DropdownMenu.Item key="setup" render={<Link href={removalTemplatesSettingsHref(scope.facilityId)} />}>
       {OPEN_REMOVAL_TEMPLATES_LINK_LABEL}
     </DropdownMenu.Item>
   ) : null;
