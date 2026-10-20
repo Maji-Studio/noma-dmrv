@@ -33,7 +33,7 @@ import { useSwitchCreditBatchRemovalTemplate } from "@/hooks/use-removal-templat
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { Notice } from "@/components/ui/notice";
 import type { TemplateReadiness } from "@/components/certification/removal-template-review-model";
-import { DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL, removalTemplateSetupHref } from "@/lib/certification/links";
+import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL, removalTemplateSetupHref } from "@/lib/certification/links";
 import { getStaleVersionConflict, toSaveErrorMessage } from "@/lib/stale-version";
 import {
   switchRemovalTemplateFormSchema,
@@ -237,7 +237,9 @@ function SwitchTemplateForm({
                 {reason && <span className="body-caption text-[var(--color-text-tertiary)]">{reason}</span>}
                 {/* A new tab, so this dialog and its unsaved choice stay open. */}
                 <Link
-                  href={removalTemplateSetupHref(creditBatch.facilityId, { templateId: template.id, step: "decisions", makeDefault: false })}
+                  href={toDecide > 0
+                    ? removalTemplateSetupHref(creditBatch.facilityId, { templateId: template.id, step: "decisions", makeDefault: false })
+                    : certificationRemovalTemplatesHref(creditBatch.facilityId, template.id)}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-4 body-small underline underline-offset-2"

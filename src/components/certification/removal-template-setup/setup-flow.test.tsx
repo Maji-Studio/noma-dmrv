@@ -4,10 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StaleVersionError } from "@/lib/stale-version";
 import { RemovalTemplateSetupFlow } from "./setup-flow";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
-import { dieselSource, electricityClash, setupData, startupDefault, template } from "./test-support";
+import { addedComponent, dieselSource, electricityClash, setupData, startupDefault, template } from "./test-support";
 
 const push = vi.fn();
 const mutateAsync = vi.fn();
+const never = () => new Promise(() => undefined);
 const success = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success }) }));
@@ -45,8 +46,8 @@ describe("RemovalTemplateSetupFlow", () => {
   it("opens on Apply for the one template that fits with nothing to decide", () => {
     renderFlow(setupData({ fitting: [nothingToDecide] }));
     expect(screen.getByRole("heading", { name: "Apply the setup" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Make default and set on 2 batches" })).toBeTruthy();
-    expect(screen.getByText(/is the only template that fits/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Make default and set on 2 credit batches" })).toBeTruthy();
+    expect(screen.getByText(/Only one fits/)).toBeTruthy();
   });
 
   it("holds Continue on Decisions until every decision is answered, naming what is open", () => {
@@ -71,7 +72,7 @@ describe("RemovalTemplateSetupFlow", () => {
     fireEvent.click(screen.getByRole("radio", { name: /^Pyrolyzer electricity usage/ }));
     fireEvent.click(screen.getByRole("radio", { name: /Generator diesel from production runs/ }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: "Make default and set on 2 batches" }));
+    fireEvent.click(screen.getByRole("button", { name: "Make default and set on 2 credit batches" }));
     await waitFor(() => expect(push).toHaveBeenCalled());
     expect(mutateAsync).toHaveBeenCalledWith({
       facilityId: FACILITY,
@@ -136,5 +137,61 @@ describe("RemovalTemplateSetupFlow", () => {
   it("explains a clash in plain words", () => {
     renderFlow(setupData({ fitting: [withDecisions] }), { step: "decisions" });
     expect(screen.getByText("noma keeps one electricity figure per production run. Two components in this template ask for it, and one figure cannot fill both.")).toBeTruthy();
+  });
+
+  it("sends one apply for a double click", async () => {
+    mutateAsync.mockImplementation(never);
+    renderFlow(setupData({ fitting: [nothingToDecide] }));
+    const apply = screen.getByRole("button", { name: /Make default/ });
+    fireEvent.click(apply);
+    fireEvent.click(apply);
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the batch versions and fingerprints the draft started with when the data refreshes", async () => {
+    const view = renderFlow(setupData({ fitting: [nothingToDecide] }));
+    const refreshed = setupData({
+      fitting: [{ ...nothingToDecide, planFingerprint: "newer-plan" }],
+      batchesWithoutTemplate: [{ id: "22222222-2222-4222-8222-222222222222", code: "CB-26-001", version: 9 }],
+    });
+    view.rerender(<RemovalTemplateSetupFlow data={refreshed} facilityId={FACILITY} templateId={null} step={null} makeDefault onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Make default/ }));
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+    const sent = mutateAsync.mock.calls[0][0];
+    expect(sent.planFingerprint).toBe("tpl-ready-plan");
+    expect(sent.batches).toEqual([
+      { id: "22222222-2222-4222-8222-222222222222", expectedVersion: 3 },
+      { id: "33333333-3333-4333-8333-333333333333", expectedVersion: 1 },
+    ]);
+  });
+
+  it("never opens another template when the requested one is not offered, and says why", () => {
+    const unfit = { id: "tpl-unfit", name: "Wrong tier", reason: "The storage component does not match this facility's durability tier." };
+    renderFlow(setupData({ fitting: [nothingToDecide], notFitting: [unfit] }), { templateId: "tpl-unfit", step: "decisions" });
+    expect(screen.getByRole("heading", { name: "Pick the template" })).toBeTruthy();
+    expect(screen.getByText(/Wrong tier is not offered for this facility\./)).toBeTruthy();
+  });
+
+  it("hides Now to After and Make default for the template that is already the default", () => {
+    renderFlow(setupData({ fitting: [nothingToDecide], defaultRemovalTemplateId: "tpl-ready" }));
+    expect(screen.queryByText("Now")).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /Make it the default/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Set on 2 credit batches" })).toBeTruthy();
+  });
+
+  it("offers a way out when no template fits", () => {
+    renderFlow(setupData({ fitting: [] }));
+    expect(screen.getByText(/No Removal template in Tanzania biochar fits this facility/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open Certifier" }).getAttribute("href")).toContain("section=certifier");
+    expect((screen.getByRole("button", { name: "Continue" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("asks an added component explicitly, with nothing preselected", () => {
+    const added = template("tpl-added", "Changed template", { decisions: [addedComponent] });
+    renderFlow(setupData({ fitting: [added] }), { step: "decisions" });
+    expect(screen.getByRole("heading", { name: /How should noma fill Staff transport\?/ })).toBeTruthy();
+    expect(screen.getAllByRole("radio").every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByText(/1 to decide/)).toBeTruthy();
   });
 });

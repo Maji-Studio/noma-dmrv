@@ -19,6 +19,11 @@ describe("removal template setup copy", () => {
     expect(startState({ fitting: [blocked], templateId: "a", step: null })).toEqual({ templateId: null, stepIndex: 0 });
   });
 
+  it("never falls back to another template when an explicit one is not offered", () => {
+    const only = template("a", "A", { defaults: [startupDefault] });
+    expect(startState({ fitting: [only], templateId: "missing", step: "decisions" })).toEqual({ templateId: null, stepIndex: 0 });
+  });
+
   it("tracks open decisions and the entries each answer creates", () => {
     const { plan } = template("t", "T", { decisions: [electricityClash, dieselSource], defaults: [startupDefault] });
     expect(openDecisions(plan, {})).toHaveLength(2);

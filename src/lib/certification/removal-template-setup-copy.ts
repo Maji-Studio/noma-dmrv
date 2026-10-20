@@ -43,14 +43,26 @@ const SOURCE_NOUNS: Record<AutomaticSourceId, string> = {
   "safety-margin": "the safety margin on biochar dry mass",
 };
 
-const BLOCKED_COPY: Record<string, string> = {
-  [REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint]: "Isometric has fixed values without a datapoint in this template. Set them in the Isometric template editor, then come back.",
-  [REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead]: "noma could not read this template in full. Try again in a moment.",
+const BLOCKED_COPY: Record<string, { reason: string; fix: string }> = {
+  [REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint]: {
+    reason: "Isometric has fixed values without a datapoint in this template.",
+    fix: "Set them in the Isometric template editor, then come back.",
+  },
+  [REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead]: {
+    reason: "noma could not read this template in full.",
+    fix: "Try again in a moment.",
+  },
 };
 
-/** The reason a template cannot be set up yet, in setup words. */
+/** Why a template cannot be set up yet, with what to do about it. */
 export function blockedCopy(reason: string): string {
-  return BLOCKED_COPY[reason] ?? reason;
+  const copy = BLOCKED_COPY[reason];
+  return copy ? `${copy.reason} ${copy.fix}` : reason;
+}
+
+/** Only the reason, for a reader who cannot act on it. */
+export function blockedReasonLine(reason: string): string {
+  return BLOCKED_COPY[reason]?.reason ?? reason;
 }
 
 const ENTRY_EACH_BATCH = "an emissions entry on each credit batch";
@@ -171,10 +183,26 @@ interface StartInput {
 /** Where the page opens: the requested step, else Apply for the one fit with nothing to decide. */
 export function startState({ fitting: all, templateId, step }: StartInput): { templateId: string | null; stepIndex: number } {
   const fitting = all.filter((template) => !template.blockedReason);
-  const requested = fitting.find((template) => template.id === templateId) ?? (all.length === 1 ? fitting[0] ?? null : null);
+  // A template that was asked for but is not offered never falls back to another one.
+  const requested = templateId
+    ? fitting.find((template) => template.id === templateId) ?? null
+    : (all.length === 1 ? fitting[0] ?? null : null);
   if (!requested) return { templateId: null, stepIndex: 0 };
   const requestedIndex = step ? SETUP_STEP_KEYS.indexOf(step) : -1;
   if (requestedIndex >= 0) return { templateId: requested.id, stepIndex: requestedIndex };
   const zeroPath = all.length === 1 && requested.plan.decisions.length === 0;
   return { templateId: requested.id, stepIndex: zeroPath ? 2 : 0 };
+}
+
+/** Why the template a link named is not offered, or null when it is. */
+export function notOfferedReason(
+  data: { fitting: readonly { id: string; name: string; blockedReason?: string | null }[]; notFitting: readonly { id: string; name: string; reason: string }[] },
+  templateId: string | null,
+): string | null {
+  if (!templateId) return null;
+  const fit = data.fitting.find((template) => template.id === templateId);
+  if (fit) return fit.blockedReason ? `${fit.name} cannot be set up yet. ${blockedCopy(fit.blockedReason)}` : null;
+  const unfit = data.notFitting.find((template) => template.id === templateId);
+  if (unfit) return `${unfit.name} is not offered for this facility. ${unfit.reason}`;
+  return "The template you opened is not in this Isometric project, so it is not offered. Pick another one.";
 }

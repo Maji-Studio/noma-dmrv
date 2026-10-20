@@ -35,6 +35,15 @@ export const dieselSource: SetupDecision = {
 };
 
 /** noma already gave startup diesel to this component, so the fuel decision cannot also take it. */
+/** A component added after setup: noma's proposal first, nothing preselected. */
+export const addedComponent: SetupDecision = {
+  id: "added", kind: "added", components: [component("added", "Staff transport")],
+  options: [
+    option("entry", "Entry", { added: operating(undefined, "additive") }),
+    option("run-electricity", "run-electricity", { added: operating("run-electricity") }),
+  ],
+};
+
 export const startupDefault: SetupDefault = {
   ...component("startup", "Startup fuel usage"),
   proposal: option("run-startup-diesel", "run-startup-diesel", { startup: operating("run-startup-diesel") }),

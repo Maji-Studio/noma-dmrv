@@ -8,7 +8,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
-import { ChoiceCardGroup } from "@/components/forms";
+import { ChoiceCardGroup, FormSelect } from "@/components/forms";
+import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { LedgerBeforeAfter } from "@/components/storage-locations/stock-ledger";
 import type { useRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
@@ -33,8 +34,8 @@ export type SetupData = NonNullable<ReturnType<typeof useRemovalTemplateSetup>["
 export type SetupTemplate = SetupData["fitting"][number];
 
 const TAKEN_NOTE = "Already used by another component.";
-const SELECT_CLASS =
-  "h-40 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 body-small sm:w-[280px]";
+/** One width for what fills each component, so the rows line up. */
+const FILL_COLUMN_CLASS = "sm:w-[280px]";
 
 /* Template ----------------------------------------------------------------- */
 
@@ -43,24 +44,37 @@ function notOfferedLine(notFitting: SetupData["notFitting"]): string {
   return `Not offered: ${items.join("; ")}.`;
 }
 
-export function TemplateStep({ data, templateId, onChange, invalid }: {
+export function TemplateStep({ data, templateId, onChange, invalid, notOffered, certifierHref }: {
   data: SetupData;
   templateId: string | null;
   onChange: (id: string) => void;
   invalid: boolean;
+  /** Why the template a link named is not offered. */
+  notOffered: string | null;
+  certifierHref: string;
 }) {
   const only = data.fitting.length === 1 ? data.fitting[0] : null;
   const describe = (template: SetupTemplate) => template.blockedReason
     ? blockedCopy(template.blockedReason)
     : `${formatCount(template.componentCount, "component")}. ${toDecideLabel(template.plan.decisions.length)}.`;
+  const project = data.projectName ?? "this project";
   return (
     <div className="flex flex-col gap-16">
+      {notOffered && <Notice tone="warning">{notOffered}</Notice>}
+      {data.fitting.length === 0 && (
+        <Notice
+          tone="warning"
+          action={<Link href={certifierHref} className="body-small underline underline-offset-2">Open Certifier</Link>}
+        >
+          {`No Removal template in ${project} fits this facility. Check the facility's durability tier or add a template in Isometric.`}
+        </Notice>
+      )}
       {only ? (
         <div className="flex flex-col gap-4 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 py-10">
           <span className="body-small font-medium text-[var(--color-text-primary)]">{only.name}</span>
           <span className="body-caption text-[var(--color-text-tertiary)]">{describe(only)}</span>
         </div>
-      ) : (
+      ) : data.fitting.length > 1 && (
         <ChoiceCardGroup
           legend="Removal template"
           value={templateId}
@@ -69,12 +83,12 @@ export function TemplateStep({ data, templateId, onChange, invalid }: {
           options={data.fitting.map((template) => ({ value: template.id, title: template.name, description: describe(template), disabled: !!template.blockedReason }))}
         />
       )}
-      <p className="body-caption text-[var(--color-text-tertiary)]">
-        {only
-          ? `The only template in ${data.projectName ?? "this project"} that fits this facility.`
-          : `${data.fitting.length} templates in ${data.projectName ?? "this project"} fit this facility.`}
-        {data.notFitting.length > 0 && ` ${notOfferedLine(data.notFitting)}`}
-      </p>
+      {(data.fitting.length > 1 || data.notFitting.length > 0) && (
+        <p className="body-caption text-[var(--color-text-tertiary)]">
+          {data.fitting.length > 1 && `${data.fitting.length} templates in ${project} fit this facility.`}
+          {data.notFitting.length > 0 && ` ${notOfferedLine(data.notFitting)}`}
+        </p>
+      )}
     </div>
   );
 }
@@ -86,16 +100,16 @@ function Disclosure({ id, title, children }: { id: string; title: string; childr
   const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col gap-12 border-t border-[var(--color-border-tertiary)] pt-12">
-      <button
-        type="button"
+      <Button
+        variant="noOutline"
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen((value) => !value)}
-        className="flex min-h-44 w-full cursor-pointer items-center justify-between gap-12 text-left"
+        className="min-h-44 w-full justify-between gap-12 whitespace-normal text-left"
       >
-        <span className="body-small font-medium text-[var(--color-text-primary)]">{title}</span>
+        <span>{title}</span>
         <CaretDownIcon size={16} aria-hidden className={cn("shrink-0 text-[var(--color-text-tertiary)] transition-transform", open && "rotate-180")} />
-      </button>
+      </Button>
       {open && <div id={id}>{children}</div>}
     </div>
   );
@@ -149,20 +163,18 @@ function DefaultRow({ line, value, taken, onChange }: {
     <li className="flex flex-col gap-6 border-b border-[var(--color-border-tertiary)] py-10 last:border-b-0 sm:flex-row sm:items-center sm:gap-16">
       <span className="body-small min-w-0 flex-1 text-[var(--color-text-primary)]">{name}</span>
       {line.options.length > 1 ? (
-        <select
+        <FormSelect
           aria-label={`What fills ${name}`}
           value={current.id}
           onChange={(event) => onChange(event.target.value)}
-          className={SELECT_CLASS}
-        >
-          {line.options.map((option) => (
-            <option key={option.id} value={option.id} disabled={taken.has(option.id) && option.id !== current.id}>
-              {taken.has(option.id) && option.id !== current.id ? `${optionLabel(option)} (${TAKEN_NOTE.toLowerCase().replace(/\.$/, "")})` : optionLabel(option)}
-            </option>
-          ))}
-        </select>
+          className={FILL_COLUMN_CLASS}
+          options={line.options.map((option) => {
+            const blocked = taken.has(option.id) && option.id !== current.id;
+            return { value: option.id, label: blocked ? `${optionLabel(option)} (${TAKEN_NOTE.toLowerCase().replace(/\.$/, "")})` : optionLabel(option), disabled: blocked };
+          })}
+        />
       ) : (
-        <span className="body-small text-[var(--color-text-secondary)] sm:w-[280px]">{optionLabel(current)}</span>
+        <span className={cn("body-small text-[var(--color-text-secondary)]", FILL_COLUMN_CLASS)}>{optionLabel(current)}</span>
       )}
     </li>
   );
@@ -205,7 +217,7 @@ export function DecisionsStep({ template, answers, overrides, showMissing, onAns
   const total = plan.defaults.length + plan.decided.length;
   return (
     <div className="flex flex-col gap-24">
-      {plan.decisions.length === 0 && <Notice tone="success">{`noma decided all ${formatCount(template.componentCount, "component")}.`}</Notice>}
+      {plan.decisions.length === 0 && <Notice tone="info">{`noma decided all ${formatCount(template.componentCount, "component")}.`}</Notice>}
       {plan.decisions.map((decision, index) => (
         <DecisionBlock
           key={decision.id}
@@ -224,16 +236,16 @@ export function DecisionsStep({ template, answers, overrides, showMissing, onAns
         >
           <div className="flex flex-col gap-16">
             <p className="body-small text-[var(--color-text-secondary)]">
-              Every component counts as Operating, on each credit batch. Decisions apply to every facility that uses this template.
+              These count as Operating, on each credit batch. Change one only if it is wrong for you.
             </p>
             {records > 0 && <GroupList title={`Filled from noma records (${records})`}>{rows(true)}</GroupList>}
             {entries > 0 && <GroupList title={`Emissions entry on each credit batch (${entries})`}>{rows(false)}</GroupList>}
             {plan.decided.length > 0 && (
-              <GroupList title={`Decided before (${plan.decided.length}). Read only.`}>
+              <GroupList title={`Decided before (${plan.decided.length}). Decided for every facility using this template.`}>
                 {plan.decided.map((line) => (
                   <li key={line.component.id} className="flex flex-col gap-2 border-b border-[var(--color-border-tertiary)] py-10 last:border-b-0 sm:flex-row sm:items-center sm:gap-16">
                     <span className="body-small min-w-0 flex-1 text-[var(--color-text-primary)]">{line.component.displayName}</span>
-                    <span className="body-small text-[var(--color-text-secondary)] sm:w-[280px]">{assignmentFill(line.contract)}</span>
+                    <span className={cn("body-small text-[var(--color-text-secondary)]", FILL_COLUMN_CLASS)}>{assignmentFill(line.contract)}</span>
                   </li>
                 ))}
               </GroupList>
@@ -294,24 +306,27 @@ export function ApplyStep({ data, template, answers, overrides, makeDefault, set
   const without = data.batchesWithoutTemplate;
   const entries = entryCount(template.plan, answers, overrides);
   const others = data.batchesOnOtherTemplates;
+  const isCurrentDefault = template.id === data.defaultRemovalTemplateId;
   return (
     <div className="flex flex-col gap-20">
-      <LedgerBeforeAfter
-        title={`Default Removal template for ${data.facility.name}`}
-        labels={["Now", "After"]}
-        before={defaultName ?? MISSING_VALUE.notSet}
-        after={makeDefault ? template.name : (defaultName ?? MISSING_VALUE.notSet)}
-      />
-      <div className="flex flex-col gap-16">
-        <CheckRow checked={makeDefault} onChange={onMakeDefault} title="Make it the default for this facility">
-          New credit batches start on this template.
-        </CheckRow>
-        {without.length > 0 && (
-          <CheckRow checked={setBatches} onChange={onSetBatches} title={`Also set it on ${formatCount(without.length, "credit batch", "credit batches")} without a template`}>
-            <CodeLinks batches={without} facilityId={facilityId} />
+      {!isCurrentDefault && (
+        <>
+          <LedgerBeforeAfter
+            title={`Default Removal template for ${data.facility.name}`}
+            labels={["Now", "After"]}
+            before={defaultName ?? MISSING_VALUE.notSet}
+            after={makeDefault ? template.name : (defaultName ?? MISSING_VALUE.notSet)}
+          />
+          <CheckRow checked={makeDefault} onChange={onMakeDefault} title="Make it the default for this facility">
+            New credit batches start on this template.
           </CheckRow>
-        )}
-      </div>
+        </>
+      )}
+      {without.length > 0 && (
+        <CheckRow checked={setBatches} onChange={onSetBatches} title={`Also set it on ${formatCount(without.length, "credit batch", "credit batches")} without a template`}>
+          <CodeLinks batches={without} facilityId={facilityId} />
+        </CheckRow>
+      )}
       {others.length > 0 && (
         <Notice tone="info">
           <CodeLinks batches={others} facilityId={facilityId} />
@@ -321,8 +336,6 @@ export function ApplyStep({ data, template, answers, overrides, makeDefault, set
       <div className="flex flex-col gap-6">
         <h3 className="body-small font-medium text-[var(--color-text-primary)]">What changes</h3>
         <ul className="flex list-disc flex-col gap-4 pl-20 body-small text-[var(--color-text-secondary)]">
-          {makeDefault && <li>{`New credit batches start on ${template.name}.`}</li>}
-          {setBatches && without.length > 0 && <li>{`${formatCount(without.length, "credit batch", "credit batches")} ${without.length === 1 ? "passes" : "pass"} the Template set check of New Removal.`}</li>}
           <li>{`${formatCount(entries, "component")} ${entries === 1 ? "takes" : "take"} an emissions entry on each credit batch. Emissions lists them as Not recorded until someone records a value or a zero.`}</li>
           <li>{`The component decisions apply to every facility that uses ${template.name}.`}</li>
         </ul>
@@ -332,7 +345,7 @@ export function ApplyStep({ data, template, answers, overrides, makeDefault, set
 }
 
 export function applyLabel(makeDefault: boolean, batchCount: number): string {
-  const batches = formatCount(batchCount, "batch", "batches");
+  const batches = formatCount(batchCount, "credit batch", "credit batches");
   if (makeDefault && batchCount > 0) return `Make default and set on ${batches}`;
   if (makeDefault) return "Make default";
   return batchCount > 0 ? `Set on ${batches}` : "Save decisions";
