@@ -7,7 +7,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SettingsViewer } from "@/lib/settings/panes";
-import { FacilitySettingsPane, SOIL_REFERENCE_NOT_USED_TEXT } from "./facility-settings-pane";
+import {
+  FacilitySettingsPane,
+  SOIL_REFERENCE_NEEDS_LINK_TEXT,
+  SOIL_REFERENCE_NOT_USED_TEXT,
+} from "./facility-settings-pane";
 import { REGISTRY_UNLOCKS_TEXT, RegistrySettingsPane } from "./registry-settings-pane";
 
 const state = vi.hoisted(() => ({
@@ -134,6 +138,14 @@ describe("FacilitySettingsPane", () => {
     const html = renderToStaticMarkup(<FacilitySettingsPane viewer={viewer} />);
     expect(html).toContain("Soil reference form");
     expect(html).not.toContain(SOIL_REFERENCE_NOT_USED_TEXT);
+  });
+
+  it("asks for the project link before the soil reference on an unlinked 200-year facility", () => {
+    state.durabilityOption = "200_year";
+    state.summaryMapping = null;
+    const html = renderToStaticMarkup(<FacilitySettingsPane viewer={viewer} />);
+    expect(html).toContain(SOIL_REFERENCE_NEEDS_LINK_TEXT);
+    expect(html).not.toContain("Soil reference form");
   });
 
   it("shows a member the saved soil reference read-only", () => {

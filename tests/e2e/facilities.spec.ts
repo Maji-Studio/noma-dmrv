@@ -323,15 +323,17 @@ test.describe("Facility durability tier", () => {
       name: "Facility durability tier",
     });
     await expect(tierGroup).toBeVisible({ timeout: 15000 });
-    await expect(
-      tierGroup.getByRole("radio", { name: /1000-year/i }),
-    ).toHaveAttribute("aria-checked", "true");
-    await expect(
-      tierGroup.getByRole("radio", { name: /200-year/i }),
-    ).toHaveAttribute("aria-disabled", "true");
+    // The seeded facility is on the 200-year tier, which stays shown but locked;
+    // 1000-year is the selectable pathway, and choosing it offers Save.
+    const locked = tierGroup.getByRole("radio", { name: /200-year/i });
+    await expect(locked).toHaveAttribute("aria-checked", "true");
+    await expect(locked).toHaveAttribute("aria-disabled", "true");
     await expect(tierGroup.getByText("Available later")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save durability tier" })).toHaveCount(0);
+    await tierGroup.getByRole("radio", { name: /1000-year/i }).click();
+    await expect(page.getByRole("button", { name: "Save durability tier" })).toBeVisible();
     await expect(
       page.getByText("No soil reference temperature: only the 200-year model uses it."),
-    ).toBeVisible();
+    ).toHaveCount(0);
   });
 });

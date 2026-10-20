@@ -27,6 +27,9 @@ const SOIL_MODELLED_TIER = "200_year";
 
 export const SOIL_REFERENCE_NOT_USED_TEXT =
   "No soil reference temperature: only the 200-year model uses it.";
+/** The soil reference is stored on the registry project link. */
+export const SOIL_REFERENCE_NEEDS_LINK_TEXT =
+  "Link the registry project above to set the reference soil temperature.";
 
 /** A hairline-separated block; untitled when its one field already names it. */
 function PaneSection({ title, children }: { title?: string; children: ReactNode }) {
@@ -73,6 +76,8 @@ export function FacilitySettingsPane({ viewer }: { viewer: SettingsViewer }) {
           <Skeleton className="h-160 w-full" />
         ) : error || !summary ? (
           <ServerError message="Couldn't load the soil reference temperature. Refresh the page to retry." />
+        ) : !summary.mapping ? (
+          <p className="body-small text-[var(--color-text-tertiary)]">{SOIL_REFERENCE_NEEDS_LINK_TEXT}</p>
         ) : canManage ? (
           // The form seeds its defaultValues from `mapping` at mount, so it
           // must not mount before the summary lands or saved values render blank.
