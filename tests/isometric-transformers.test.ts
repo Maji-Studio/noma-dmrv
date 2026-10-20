@@ -1,5 +1,8 @@
+const retirementGate = vi.hoisted(() => ({ enabled: false }));
+vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
+afterEach(() => { retirementGate.enabled = false; });
 import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import type { components } from "@/lib/isometric/generated/certify";
 import {
   buildCreateDatapointRequest,
@@ -613,7 +616,8 @@ describe("buildCreateDatapointRequest", () => {
     ).toThrowError(/has no calculated value/);
   });
 
-  it("INPUT_MAPPING covers the MVP demo-template (group, blueprint, input) tuples", () => {
+  it.each([false, true])("INPUT_MAPPING covers active demo-template tuples (gate: %s)", (enabled) => {
+    retirementGate.enabled = enabled;
     // Sanity: any deletion here is a real schema change, not a refactor.
     // Anchors the contract with the noma-mvp tailored template authored in
     // `docs/isometric/sandbox-template-authoring.md`. The seven previously-
@@ -622,7 +626,7 @@ describe("buildCreateDatapointRequest", () => {
     const expected: Array<[string, string, string]> = [
       ["co2-stored", "carbon_rich_substance_sequestration", "carbon_content"],
       ["co2-stored", "carbon_rich_substance_sequestration", "product_mass"],
-      // All three transport categories bind the `mass_distance_based_ci_emissions`
+      // Legacy transport categories bind the `mass_distance_based_ci_emissions`
       // blueprint: a single mass-weighted `mass_distance` (tonne·km) per category
       // (there is no LIST-shaped transport blueprint in the Certify catalog).
       [
@@ -647,8 +651,8 @@ describe("buildCreateDatapointRequest", () => {
     ];
     for (const [groupKey, blueprintKey, inputKey] of expected) {
       expect(
-        lookupInputMapping(groupKey, blueprintKey, inputKey),
-      ).toBeDefined();
+        lookupInputMapping(groupKey, blueprintKey, inputKey) !== undefined,
+      ).toBe(groupKey !== "sampling-required-for-mrv" || !enabled);
     }
   });
 });

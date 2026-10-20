@@ -1,6 +1,6 @@
 import { ownValue } from "../semantic-binding-catalog";
 import { BOOTSTRAP_LINE_SOURCES } from "./bootstrap";
-import { catalogCandidates, hasCatalogDisambiguation, type AutomaticSourceId } from "./catalog-sources";
+import { automaticSourceAvailable, catalogCandidates, hasCatalogDisambiguation, type AutomaticSourceId } from "./catalog-sources";
 import { allowedEntryPolicies } from "./entry-policies";
 import type { EntryPolicy, TemplateDefinition } from "./types";
 
@@ -28,7 +28,7 @@ export function lineNeedsReview(componentId: string, contract: LineContract | un
 export function effectiveContract(contract: LineContract): LineContract {
   return contract.origin === "proposed" || contract.scope === "unassigned"
     ? { scope: "unassigned", entryPolicy: "none", origin: contract.origin }
-    : { ...contract };
+    : { ...contract, ...(contract.automaticSource && !automaticSourceAvailable(contract.automaticSource) ? { automaticSource: undefined } : {}) };
 }
 
 export function validateLineSources(definition: TemplateDefinition, lineSources: LineSources): LineSourceProblem[] {
@@ -45,7 +45,7 @@ export function validateLineSources(definition: TemplateDefinition, lineSources:
       if (effectiveContract(contract).scope === "unassigned") problems.push({ code: "unassigned", componentId });
       if (contract.entryPolicy === "single" && contract.automaticSource) problems.push({ code: "single-with-automatic-source", componentId });
       if (!allowedEntryPolicies(component).includes(contract.entryPolicy)) problems.push({ code: "disallowed-entry-policy", componentId });
-      if (contract.automaticSource) {
+      if (contract.automaticSource && automaticSourceAvailable(contract.automaticSource)) {
         if (!catalogCandidates(component, group.key).includes(contract.automaticSource)) problems.push({ code: "foreign-automatic-source", componentId });
         const owners = sourceOwners.get(contract.automaticSource) ?? [];
         sourceOwners.set(contract.automaticSource, [...owners, componentId]);

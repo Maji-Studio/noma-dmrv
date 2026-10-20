@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+const retirementGate = vi.hoisted(() => ({ enabled: false }));
+vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
+afterEach(() => { retirementGate.enabled = false; });
+import { describe, expect, it, vi, afterEach } from "vitest";
 import sandbox from "../../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import cula from "../../../../tests/fixtures/isometric/cula-template-2026-10-15.json";
 import production from "../../../../tests/fixtures/isometric/production-template-2026-07-03.json";
@@ -298,4 +301,18 @@ describe("lineNeedsReview", () => {
     expect(lineNeedsReview(GENSET, undefined, [])).toBe(true);
     expect(lineNeedsReview(GENSET, { scope: "operating", entryPolicy: "none", origin: "proposed" }, [])).toBe(true);
   });
+});
+
+it.each([false, true])("makes legacy sample contracts entry-only without changing stored sources (gate: %s)", (enabled) => {
+  retirementGate.enabled = enabled;
+  const legacy = definitions[2];
+  const sources = resolveLineSources({ definition: legacy });
+  const stored = sources.rtc_1KWKNGJZY1S0HNRT;
+  expect(stored.automaticSource).toBe("sample-transport");
+  expect(effectiveContract(stored).automaticSource).toBe(enabled ? undefined : "sample-transport");
+  expect(effectiveContract(stored).entryPolicy).toBe("additive");
+  const group = legacy.groups.find((group) => group.components.some((component) => component.id === "rtc_1KWKNGJZY1S0HNRT"))!;
+  const line = group.components.find((component) => component.id === "rtc_1KWKNGJZY1S0HNRT")!;
+  expect(catalogCandidates(line, group.key).includes("sample-transport")).toBe(!enabled);
+  expect(validateLineSources(legacy, sources)).toEqual([]);
 });

@@ -1,5 +1,7 @@
 "use server";
 
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
+
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 
 import { getCreditBatchById } from "@/data-access/credit-batches";
@@ -11,7 +13,7 @@ import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import { listComponentBlueprints, listGhgEntryTemplates } from "@/lib/isometric";
-import { allowedEntryPolicies, lineNeedsReview, catalogCandidates, compareTemplateObservations, enrichmentProblems, normalizeTemplateDefinition, resolveLineSources, validateLineSources, withoutUnacceptableProposals, type ComponentChange, type LineSources, type TemplateDefinition } from "@/lib/isometric/template-observations";
+import { effectiveContract, allowedEntryPolicies, lineNeedsReview, catalogCandidates, compareTemplateObservations, enrichmentProblems, normalizeTemplateDefinition, resolveLineSources, validateLineSources, withoutUnacceptableProposals, type ComponentChange, type LineSources, type TemplateDefinition } from "@/lib/isometric/template-observations";
 import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/load-enrichment";
 import { canonicalJson } from "@/lib/canonical-json";
 import {
@@ -26,7 +28,9 @@ import { ISOMETRIC_PROVIDER } from "./shared";
 function reviewLines(definition: TemplateDefinition, lineSources: LineSources, changes: Record<string, ComponentChange>) {
   return definition.groups.flatMap((group) => group.components.map((component) => ({
     component, groupKey: group.key, groupName: group.displayName,
-    contract: lineSources[component.id] ?? { scope: "unassigned" as const, entryPolicy: "none" as const, origin: "proposed" as const },
+    contract: lineSources[component.id]?.automaticSource === "sample-transport" && emissionsEntriesEnabled()
+      ? effectiveContract(lineSources[component.id])
+      : lineSources[component.id] ?? { scope: "unassigned" as const, entryPolicy: "none" as const, origin: "proposed" as const },
     catalogCandidates: catalogCandidates(component, group.key), allowedEntryPolicies: allowedEntryPolicies(component),
     change: changes[component.id] ?? ("added" as ComponentChange),
   })));

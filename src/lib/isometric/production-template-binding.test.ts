@@ -1,5 +1,8 @@
+const retirementGate = vi.hoisted(() => ({ enabled: false }));
+vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
+afterEach(() => { retirementGate.enabled = false; });
 import { reviewedTemplateSources } from "../../../tests/helpers/template-line-sources";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
 import type { components } from "./generated/certify";
 import { findUnbindableTemplateInputs as findCoverage, formatUnbindableTemplateInputsText } from "./template-binding-coverage";
@@ -117,3 +120,9 @@ describe("production template binding coverage", () => {
 function findUnbindableTemplateInputs(template: Parameters<typeof findCoverage>[0], options: Parameters<typeof findCoverage>[1] = {}) {
   return findCoverage(template, { lineSources: reviewedTemplateSources(template), ...options });
 }
+
+it.each([false, true])("reports legacy sample shipping as entry-only after activation (gate: %s)", (enabled) => {
+  retirementGate.enabled = enabled;
+  const findings = findUnbindableTemplateInputs(template);
+  expect(findings.some((finding) => finding.componentId === "rtc_1KWKNGJZY1S0HNRT")).toBe(enabled);
+});

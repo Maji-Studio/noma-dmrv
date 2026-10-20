@@ -1,3 +1,4 @@
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import type { RemovalAdvisory } from "@/lib/certification/removal-blockers";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { effectiveContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
@@ -95,6 +96,7 @@ export function buildSubmissionAdvisories(args: {
   const droppedFacts = [
     ...RECORDED_AUTOMATIC_SOURCES.filter((source) => runs.some(source.recorded) && !carried.has(source.id)),
     ...RECORDED_TRANSPORT_SOURCES.filter((source) => {
+      if (source.category === "sample" && emissionsEntriesEnabled()) return false;
       const legs = args.transportLegs?.[source.category] ?? [];
       // Delivery legs are derived even for an unrecorded route; their mere
       // existence does not mean a transport fact was captured.

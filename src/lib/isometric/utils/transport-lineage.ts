@@ -1,3 +1,4 @@
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import type { CreditBatchDurabilityInput } from "./durability-aggregation";
 
 type TransportLineageInput = {
@@ -40,6 +41,6 @@ export function collectTransportEntityIds(
   return {
     feedstockIds: Array.from(feedstockIds),
     biocharProductIds: Array.from(biocharProductIds),
-    sampleIds: Array.from(sampleIds),
+    sampleIds: emissionsEntriesEnabled() ? [] : Array.from(sampleIds),
   };
 }

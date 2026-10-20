@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+const retirementGate = vi.hoisted(() => ({ enabled: false }));
+vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
+afterEach(() => { retirementGate.enabled = false; });
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import {
   aggregateProductionRuns,
   enrichWithTransportLegs,
@@ -54,7 +57,8 @@ describe("buildRemovalLedgerPreview", () => {
     vi.mocked(enrichWithTransportLegs).mockReturnValue(AGGREGATE as never);
   });
 
-  it("projects mixed production claims, transport inputs, and batch-aware links", () => {
+  it.each([false, true])("projects mixed production claims, transport inputs, and batch-aware links (gate: %s)", (enabled) => {
+    retirementGate.enabled = enabled;
     const preview = buildRemovalLedgerPreview({
       removalId: "removal-current",
       memberBatchClaims: [
@@ -107,7 +111,7 @@ describe("buildRemovalLedgerPreview", () => {
       "grid-electricity",
       "feedstock-transport",
       "biochar-transport",
-      "sample-transport",
+      ...(!enabled ? ["sample-transport"] : []),
     ]);
     expect(preview.applications).toEqual([
       expect.objectContaining({

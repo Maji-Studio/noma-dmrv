@@ -1,3 +1,4 @@
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import {
   ownValue, SAFETY_MARGIN_CARVE_OUT, SEMANTIC_BINDING_CATALOG,
   type BindingRole, type SourceFactKey,
@@ -19,6 +20,11 @@ export const SOURCE_IDS = {
 } as const satisfies Partial<Record<SourceFactKey, string>>;
 
 export type AutomaticSourceId = typeof SOURCE_IDS[keyof typeof SOURCE_IDS] | "safety-margin";
+
+/** Runtime availability is separate from the stable catalog/hash projections. */
+export function automaticSourceAvailable(source: AutomaticSourceId): boolean {
+  return source !== "sample-transport" || !emissionsEntriesEnabled();
+}
 
 function roleSources(role: BindingRole, groupKey: string): AutomaticSourceId[] {
   if (role.strategy === "project-scope-forbidden") return [];
@@ -61,10 +67,10 @@ export function catalogCandidates(component: TemplateComponent, groupKey: string
         const role = ownValue(binding.roles, groupKey);
         return binding.datapoint?.expectedQuantityKind === "mass_distance" && role ? roleSources(role, groupKey) : [];
       }),
-    ))].sort(compareIds);
+    ))].filter(automaticSourceAvailable).sort(compareIds);
   }
   const candidates = monitored.map((input) => inputCandidates(component.blueprintKey, input, groupKey));
-  return [...new Set(candidates[0].filter((id) => candidates.every((options) => options.includes(id))))].sort(compareIds);
+  return [...new Set(candidates[0].filter((id) => automaticSourceAvailable(id) && candidates.every((options) => options.includes(id))))].sort(compareIds);
 }
 
 export function hasCatalogDisambiguation(blueprintKey: string): boolean {

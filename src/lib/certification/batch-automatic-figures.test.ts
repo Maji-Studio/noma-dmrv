@@ -1,4 +1,7 @@
-import { expect, it } from "vitest";
+const retirementGate = vi.hoisted(() => ({ enabled: false }));
+vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
+afterEach(() => { retirementGate.enabled = false; });
+import { expect, it, vi, afterEach } from "vitest";
 import type { ProductionRunForCertification, TransportLegsByCategory } from "@/lib/isometric/utils/aggregation";
 import { batchAutomaticFigures } from "./batch-automatic-figures";
 const emptyLegs: TransportLegsByCategory = { feedstock: [], biochar: [], sample: [] };
@@ -63,4 +66,10 @@ it.each(["empty", "missing-mass", "mixed-mode", "biochar-zero-distance"])("match
   const figures = batchAutomaticFigures([], { feedstock: legs, biochar: legs, sample: legs });
   expect(figures["feedstock-transport"] === null).toBe(aggregateTransportMassDistance(legs, "Feedstock").massDistanceTonneKm === null);
   expect(figures["delivery-transport"] === null).toBe(aggregateBiocharTransportMassDistance(legs).massDistanceTonneKm === null);
+});
+
+it.each([false, true])("retires the sample automatic figure on activation (gate: %s)", (enabled) => {
+  retirementGate.enabled = enabled;
+  const leg = { id: "sample-leg", distanceKm: 10, loadMassKg: 1000, transportMethodType: "road", calculationMethodType: "distance_based" } as TransportLegsByCategory["sample"][number];
+  expect(batchAutomaticFigures([], { ...emptyLegs, sample: [leg] })["sample-transport"]).toEqual(enabled ? null : { magnitude: "20", unit: "km * tonne" });
 });

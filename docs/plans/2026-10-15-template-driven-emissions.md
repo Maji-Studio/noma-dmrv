@@ -365,6 +365,9 @@ Kenji's round 2 note asks to reopen general edits when Isometric pushes a submis
 
 **Activation gate:** one server-side flag, `EMISSIONS_ENTRIES_ENABLED`, read through `envSchema` and off by default. It covers entry UI, API and MCP availability, and the sample-leg retirement, including PR 4's removal of sample legs from aggregation and the catalog. PR 3 merges with it off, and it is switched on only once PR 4 is deployed. With it off, sample legs keep working as today.
 
+With the application environment supplied, run `pnpm exec tsx src/lib/cli/retire-sample-transport.ts --organization-id <org-id>` per organization for a dry-run; after switching the gate on, repeat with `--delete` to delete old sample legs and owned evidence (idempotent, counts/ids only).
+The CLI uses the existing Platform Admin bootstrap seam (`ALLOW_DEV_BOOTSTRAP=1` in production); lineage/evidence locks still refuse protected history. Rerun after resolving those references; storage cleanup uses the durable deletion queue.
+
 **Working rules**
 - Claude verifies each PR, commits, and runs E2E in the PR's worktree (`scripts/worktree.sh`).
 - Every Codex prompt bans database commands.

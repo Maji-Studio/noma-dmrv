@@ -1,3 +1,4 @@
+import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 /**
  * Semantic binding catalog: the one code-owned place that says which noma
  * fact feeds which Certify removal-template input, and how (#291, #636).
@@ -123,6 +124,7 @@ export function normalizeComponentDisplayName(
 
 /** The source fact behind an aggregated source key, if the catalog knows it. */
 export function lookupSourceFact(source: string): SourceFact | undefined {
+  if (source === "sampleTransportMassDistanceTonneKm" && emissionsEntriesEnabled()) return undefined;
   return ownValue<SourceFact>(SOURCE_FACTS, source);
 }
 

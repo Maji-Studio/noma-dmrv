@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+const retirementGate = vi.hoisted(() => ({ enabled: false }));
+vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
+afterEach(() => { retirementGate.enabled = false; });
+import { describe, expect, it, vi, afterEach } from "vitest";
 import sandboxFixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import culaFixture from "../../../tests/fixtures/isometric/cula-template-2026-10-15.json";
 import enrichment from "../../../tests/fixtures/isometric/sandbox-enrichment-2026-10-15.json";
@@ -171,4 +174,13 @@ describe("pinned-template compilation drift matrix", () => {
     expect(result.resolved.templateBlockers.map((blocker) => blocker.code)).toContain("templateLinesNeedReview");
     expect(findUnbindableTemplateInputs(changed, { lineSources })).toContainEqual(expect.objectContaining({ componentId: GENSET }));
   });
+});
+
+it.each([false, true])("stops warning about retired sample transport facts on activation (gate: %s)", (enabled) => {
+  retirementGate.enabled = enabled;
+  const template = supportedAutomaticTemplate(sandbox);
+  const warnings = buildSubmissionWarnings({ removalTemplate: template, lineSources: sources(template), runs: [], lineages: [],
+    transportLegs: { feedstock: [], biochar: [], sample: [{ id: "legacy-sample-leg", distanceKm: 20 } as TransportLegsByCategory["sample"][number]] },
+  });
+  expect(warnings).toEqual(enabled ? [] : [expect.stringContaining("Sample transport is recorded")]);
 });

@@ -1,8 +1,11 @@
+const retirementGate = vi.hoisted(() => ({ enabled: false }));
+vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
+afterEach(() => { retirementGate.enabled = false; });
 import { buildTransportCoverage } from "@/fn/certification/certify-transport-coverage";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib/certification/readiness";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import { TEST_ORG_ID } from "./helpers/test-org";
 import type { TransportLeg } from "@/db/schema";
 import { ROUND_TRIP_DISTANCE_FACTOR } from "@/lib/calculations/round-trip";
@@ -450,4 +453,22 @@ describe("enrichWithTransportLegs", () => {
     );
     expect(enriched.biocharTransportMassDistanceTonneKm).toBeNull();
   });
+});
+
+it.each([false, true])("sample legs contribute and warn only before activation (gate: %s)", (enabled) => {
+  retirementGate.enabled = enabled;
+  const aggregate = {
+    sampleTransportMassDistanceTonneKm: 99, warnings: [],
+  } as unknown as AggregatedProductionData;
+  const valid = enrichWithTransportLegs(aggregate, { feedstock: [], biochar: [], sample: [leg(10, 1000)] });
+  expect(valid.sampleTransportMassDistanceTonneKm).toBe(enabled ? null : 20);
+  const invalid = enrichWithTransportLegs(aggregate, { feedstock: [], biochar: [], sample: [leg(10, null)] });
+  expect(invalid.warnings.length).toBe(enabled ? 0 : 1);
+  const coverage = buildTransportCoverage({ feedstock: [], biochar: [], sample: [leg(10, null)] }, {
+    feedstockIds: [], biocharProductIds: [], sampleIds: ["sample"],
+  });
+  expect(coverage.sample.count).toBe(enabled ? 0 : 1);
+  expect(coverage.sample.entityIds).toEqual(enabled ? [] : ["sample"]);
+  expect(coverage.sample.aggregationWarning === null).toBe(enabled);
+  expect(coverage.sample.vehicleAdvisories.length > 0).toBe(!enabled);
 });

@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+const retirementGate = vi.hoisted(() => ({ enabled: false }));
+vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
+afterEach(() => { retirementGate.enabled = false; });
+import { describe, expect, it, vi, afterEach } from "vitest";
 import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import type { TransportLeg } from "@/db/schema";
@@ -238,4 +241,12 @@ it("keeps missing histogram evidence advisory for sampled 1,000-year batches", (
   const result = buildEntityReadinessResult([], [batch], { feedstock: [], biochar: [], sample: [] }, []);
   expect(result.gaps).toEqual([]);
   expect(result.warnings).toEqual(["Credit batch CB-001 has no reflectance histogram document. Upload a reflectance histogram to one of its Samples. You can still submit the Removal."]);
+});
+
+it.each([false, true])("ignores incomplete sample legs only on activation (gate: %s)", (enabled) => {
+  retirementGate.enabled = enabled;
+  const sampleLeg = { id: "sample-leg", entityId: "sample", distanceKm: 10, loadMassKg: null } as TransportLeg;
+  const result = buildEntityReadinessResult([], [], { feedstock: [], biochar: [], sample: [sampleLeg] }, ["sample"]);
+  expect(result.gaps.length > 0).toBe(!enabled);
+  expect(result.issues.some((issue) => issue.key === "sample-transport-evidence")).toBe(!enabled);
 });

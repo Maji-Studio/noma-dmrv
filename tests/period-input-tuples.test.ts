@@ -1,3 +1,6 @@
+const retirementGate = vi.hoisted(() => ({ enabled: false }));
+vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => retirementGate.enabled }));
+afterEach(() => { retirementGate.enabled = false; });
 import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
 // Tests for the ADR 0005 period-input scope guard + INPUT_MAPPING cleanup.
 //
@@ -14,7 +17,7 @@ import type { LineContract } from "@/lib/isometric/template-observations/line-so
 //      keeps an additional runtime tripwire so a future re-introduction
 //      from a merge or refactor surfaces immediately.
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import { allowsPeriodInputStub } from "@/lib/isometric/datapoint-mapping";
 import { SafeError } from "@/lib/errors";
 import type { components } from "@/lib/isometric/generated/certify";
@@ -332,4 +335,10 @@ it.each([
   [undefined, false],
 ] as const)("allows period-input stubs only in sandbox (%s)", (environment, expected) => {
   expect(allowsPeriodInputStub(environment)).toBe(expected);
+});
+
+it.each([false, true])("retires only sample automatic mass-distance, preserving project-owned sample inputs (gate: %s)", (enabled) => {
+  retirementGate.enabled = enabled;
+  expect(lookupInputMapping("sampling-required-for-mrv", "mass_distance_based_ci_emissions", "mass_distance") === undefined).toBe(enabled);
+  expect(lookupPeriodInputTuple("sampling-required-for-mrv", "grid_electricity_use", "electricity_use")).toEqual({ category: "lab_electricity" });
 });
