@@ -18,7 +18,7 @@ export const toolErrorSchema = problemSchema.pick({ code: true, detail: true, re
   });
 
 export function toolSuccess(structuredContent: Record<string, unknown>, text: string) {
-  return { content: [{ type: "text" as const, text }], structuredContent };
+  return { content: [{ type: "text" as const, text: `${text}\n\n${JSON.stringify(structuredContent)}` }], structuredContent };
 }
 
 export function writesDisabledResult() {

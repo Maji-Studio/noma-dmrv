@@ -198,8 +198,9 @@ describe("authenticated MCP read route", () => {
     request.headers.set("content-length", String(API_BODY_MAX_BYTES));
     const response = await POST(new Request(ENDPOINT, { method: "POST", headers: request.headers, body: padded }));
     expect(response.status).toBe(200);
-    expect(await body(response)).toMatchObject({ result: {
-      content: [{ type: "text", text: "Organization Test, 0 facilities, role admin." }],
+    const payload = await body(response);
+    expect(payload).toMatchObject({ result: {
+      content: [{ type: "text", text: `Organization Test, 0 facilities, role admin.\n\n${JSON.stringify(payload.result.structuredContent)}` }],
       structuredContent: { data: { organization: { id: "org-1" } } },
     } });
     expect(mocks.me).toHaveBeenCalledOnce();
@@ -346,8 +347,9 @@ it("answers the write switch inside MCP and keeps reads working", async () => {
   mocks.env.API_WRITES_DISABLED = true;
   const response = await call("log_feedstock_delivery");
   expect(response.status).toBe(200);
-  expect(await body(response)).toMatchObject({ result: { isError: true,
-    content: [{ type: "text", text: "API writes are temporarily disabled." }],
+  const payload = await body(response);
+  expect(payload).toMatchObject({ result: { isError: true,
+    content: [{ type: "text", text: `API writes are temporarily disabled.\n\n${JSON.stringify(payload.result.structuredContent)}` }],
     structuredContent: { code: "api_writes_disabled", retryable: true, detail: "API writes are temporarily disabled." },
   } });
   expect((await body(await call("whoami"))).result.isError).toBeUndefined();

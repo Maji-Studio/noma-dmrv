@@ -82,7 +82,7 @@ describe("MCP reads with real API keys", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, (
     const rest = await response.json();
     const { result } = await call("whoami");
     expect(result.structuredContent).toEqual(rest);
-    expect(result.content).toEqual([{ type: "text", text: `Organization ${rest.data.organization.name}, ${rest.data.facilities.length} ${rest.data.facilities.length === 1 ? "facility" : "facilities"}, role ${rest.data.role}.` }]);
+    expect(result.content).toEqual([{ type: "text", text: `Organization ${rest.data.organization.name}, ${rest.data.facilities.length} ${rest.data.facilities.length === 1 ? "facility" : "facilities"}, role ${rest.data.role}.\n\n${JSON.stringify(rest)}` }]);
   });
   it.each(collections)("matches $name filtered pages and shares cursors in both directions", async ({ resource, name, get, summary }) => {
     const args = { q: PREFIX, limit: PAGE_SIZE };
@@ -92,7 +92,7 @@ describe("MCP reads with real API keys", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, (
     expect(first.data).toHaveLength(PAGE_SIZE);
     expect(first.nextCursor).toBeTruthy();
     const { result } = await call(name, args);
-    expect(result.content).toEqual([{ type: "text", text: summary }]);
+    expect(result.content).toEqual([{ type: "text", text: `${summary}\n\n${JSON.stringify(first)}` }]);
     const mcpFirst = result.structuredContent;
     expect(mcpFirst).toEqual(first);
     const nextArgs = { ...args, cursor: first.nextCursor };
@@ -125,7 +125,7 @@ describe("MCP reads with real API keys", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, (
       const rest = await response.json();
       const { result } = await call("get_feedstock", { idOrCode });
       expect(result.structuredContent).toEqual(rest);
-      expect(result.content).toEqual([{ type: "text", text: `Feedstock ${rest.data.code}, version ${rest.data.version}.` }]);
+      expect(result.content).toEqual([{ type: "text", text: `Feedstock ${rest.data.code}, version ${rest.data.version}.\n\n${JSON.stringify(rest)}` }]);
     }
   });
   it("filters scopes and refuses hidden tools exactly like unknown tools", async () => {

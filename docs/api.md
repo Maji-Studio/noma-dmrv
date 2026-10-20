@@ -794,8 +794,9 @@ HTTP-only ETag builders live in `lib/api/representation-etags.ts`.
 
 The SDK publishes schemas through `toToolSchema`. A low-level tools/call
 handler owns argument parsing so validation failures remain structured.
-Success structuredContent uses the matching REST response envelope. Expected
-failures use the REST problem code and JSON Pointer errors, named `issues` in
+Success structuredContent uses the matching REST response envelope. The text block
+carries the summary plus serialized JSON for clients that read only text (claude.ai chat).
+Expected failures use the REST problem code and JSON Pointer errors, named `issues` in
 MCP, without HTTP metadata. Tool errors carry `retryable: true` for retryable
 domain errors. Both transports include query validation issues
 with JSON Pointers: REST uses `errors` and MCP uses `issues`. Each issue carries

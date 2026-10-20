@@ -211,7 +211,7 @@ async function refusal(kind: Kind, command: Command, target: Target, code: strin
     expect(action.error).toBe(expectedMessage);
     expect(problem.detail).toBe(expectedMessage);
     expect(result.structuredContent.detail).toBe(expectedMessage);
-    expect(result.content[0].text).toBe(expectedMessage);
+    expect(result.content[0].text).toBe(`${expectedMessage}\n\n${JSON.stringify(result.structuredContent)}`);
     expect(problem.errors[0].detail).toBe(expectedMessage);
     expect(action.issues?.[0].message).toBe(expectedMessage);
     expect(result.structuredContent.issues).toEqual(problem.errors);

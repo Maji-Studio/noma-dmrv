@@ -3,7 +3,7 @@ import { z } from "zod";
 import { DomainError } from "@/lib/domain-errors";
 import type { ApiRouteContext } from "@/lib/api/route";
 import { apiResponseHeaders } from "@/lib/api/problem";
-import { toolErrorSchema, toolFailure, toolSuccess } from "./results";
+import { toolErrorSchema, toolFailure, toolSuccess, writesDisabledResult } from "./results";
 import { parseQueryInput } from "@/lib/api/query";
 import { lookupListSchema } from "@/lib/api/query-schemas";
 
@@ -11,6 +11,26 @@ const mocks = vi.hoisted(() => ({ log: vi.fn() }));
 vi.mock("@/lib/log", () => ({ logger: { error: mocks.log } }));
 beforeEach(() => vi.clearAllMocks());
 const context = { requestId: "request-1", instance: "/api/mcp", headers: apiResponseHeaders("request-1"), deadlineAt: 0 } as ApiRouteContext;
+
+it("returns one text block with the summary and compact JSON, preserving structured content", () => {
+  const body = { data: [{ id: "batch-1", note: 'Quoted "value"\nNext line' }], nextCursor: null };
+  const result = toolSuccess(body, "1 credit batch.");
+  expect(result.content).toEqual([{ type: "text", text: `1 credit batch.\n\n${JSON.stringify(body)}` }]);
+  expect(result.structuredContent).toBe(body);
+});
+
+it("includes the same problem JSON after the summary for tool failures", async () => {
+  const result = await toolFailure(new DomainError("validation_failed", "Check the field."), context, "test_tool");
+  expect(result.isError).toBe(true);
+  expect(result.content).toEqual([{ type: "text", text: `Check the field.\n\n${JSON.stringify(result.structuredContent)}` }]);
+});
+
+it("includes the same problem JSON after the summary when writes are disabled", () => {
+  const result = writesDisabledResult();
+  expect(result.isError).toBe(true);
+  expect(result.content).toEqual([{ type: "text", text: `API writes are temporarily disabled.\n\n${JSON.stringify(result.structuredContent)}` }]);
+});
+
 it.each([
   ["find_facilities", { q: "bad\u0000value" }, lookupListSchema, "/q"],
   ["find_feedstocks", { cursor: "bad\tvalue" }, lookupListSchema, "/cursor"],
