@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-block-context";
 import { RECORD_LOCK_RETRY_LABEL, recordLockSaveBlock, type RecordLockStatus, type RecordLockView } from "@/lib/record-lock-view";
 import { RecordLockChip } from "./record-lock-chip";
+import { isInterruptedLockDisplay } from "./record-lock-labels";
 import { RecordLockNotice } from "./record-lock-notice";
 import { RecordUsedBy } from "./record-used-by";
 
@@ -35,7 +36,7 @@ export function recordLockSheetProps(options: RecordLockSheetOptions) {
   // In use that locks nothing has no line below, so the chip would claim a lock that isn't there.
   const showChip = !!lock && !(lock.level === "inUse" && inUseLocksNothing);
   return {
-    titleBadge: showChip ? <RecordLockChip level={lock.level} /> : undefined,
+    titleBadge: showChip ? <RecordLockChip level={lock.level} interrupted={isInterruptedLockDisplay(lock)} /> : undefined,
     viewModeNotice: (
       <RecordLockNotice lock={lock} status={status} onRetry={retry} retrying={retrying} subject={subject} inUseLocksNothing={inUseLocksNothing} />
     ),
