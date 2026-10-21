@@ -26,6 +26,8 @@ import {
   type SetupStepKey,
 } from "@/lib/certification/removal-template-setup-copy";
 import { ApplyStep, applyLabel, DecisionsStep, TemplateStep, type SetupData } from "./setup-steps";
+import { cn } from "@/lib/utils";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 
 const APPLY_BUTTON_CLASS = "h-auto min-h-[40px] whitespace-normal py-8 text-left";
 const STEP_TITLES = ["Pick the template", "Decide what noma cannot", "Apply the setup"];
@@ -140,7 +142,7 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
   return (
     <>
       <div className={`${GUTTER_CLASS} pb-16`}>
-        <StepFlow steps={STEPS} current={step} furthest={furthest} onNavigate={go} footer={null} compactOnPhone className="gap-20">
+        <StepFlow steps={STEPS} current={step} furthest={furthest} onNavigate={go} footer={null} className="gap-20">
           <div className="flex flex-col gap-20">
             <h3 className="sr-only">{STEP_TITLES[step]}</h3>
             {step === 0 && <TemplateStep data={data} templateId={templateId} onChange={pickTemplate} invalid={showMissing} notOffered={notOfferedReason(data, requestedTemplate)} facilitySettingsHref={facilityCertificationSettingsHref(facilityId)} />}
@@ -193,14 +195,14 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
               variant="primary"
               busy={apply.isPending}
               disabled={allBlocked && step === 0}
-              className={step === LAST_STEP ? APPLY_BUTTON_CLASS : undefined}
+              className={cn(step === LAST_STEP ? APPLY_BUTTON_CLASS : undefined, PHONE_TOUCH_TARGET)}
               // Only Apply writes, so only Apply is latched; the latch holds until the save settles.
               onClick={() => (step === LAST_STEP ? void applyLatched({ preventDefault: () => undefined }) : void next())}
             >
               {apply.isPending ? "Applying…" : step === LAST_STEP ? applyLabel(effectiveMakeDefault, batchCount) : "Next"}
             </Button>
-            {step > 0 && <Button variant="default" disabled={apply.isPending} onClick={back}>Back</Button>}
-            <Button variant="default" disabled={apply.isPending} onClick={onClose}>Cancel</Button>
+            {step > 0 && <Button className={PHONE_TOUCH_TARGET} variant="default" disabled={apply.isPending} onClick={back}>Back</Button>}
+            <Button className={PHONE_TOUCH_TARGET} variant="default" disabled={apply.isPending} onClick={onClose}>Cancel</Button>
           </div>
           {step === 1 && decisionCount > 0 && (
             <span className="body-caption text-[var(--color-text-tertiary)]">{`${decided} of ${decisionCount} decided`}</span>
