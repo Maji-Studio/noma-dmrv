@@ -331,7 +331,6 @@ export function CreditBatchPage({
         onModeChange={(mode) => mode === "view" && closeEdit()}
         title={batch.code}
         subtitle={formatDateRange(batch.startDate, batch.endDate)}
-        detailScope={batch.id}
         canEdit={editable}
         {...recordLockSheetProps({ lock, status: lockStatus, retry: retryLock, retrying: lockRetrying, inUseLocksNothing: !membershipLocked })}
         size="wide"

@@ -1,21 +1,16 @@
 /**
- * Detail level parity for sheet forms: every sheet form renders in create mode,
- * and one form per family also in edit mode, at Simple then at Detailed. Both
- * must show the same inputs, field labels, section titles, actions and text
- * outside explanation blocks (docs/forms.md, "Simple and Detailed presentation").
- * Stock preview hooks return a preview, so the delivery and stock forms render
- * it inside the form at both levels. Every `*-form.tsx` is either covered here or
- * listed in `NOT_SHEET_FORMS` with its reason; a new form fails the inventory.
- *
- * The same render seam hosts the required marker guards at the end of the file
- * (see `form-required-markers-harness.tsx`).
+ * Sheet form inventory (every `*-form.tsx` is covered or named as not a sheet
+ * form; section and field order of the reworked forms; stock previews render)
+ * and the required marker guards: every sheet form renders in create mode and is
+ * submitted empty, and every field it refuses carries the star
+ * (`form-required-markers-harness.tsx`). Conditional requirements start from a
+ * valid fixture and empty one field.
  *
  * Data hooks are neutralised at the React Query seam, so every query reads as
- * settled and empty and no server action runs. That is enough for parity: a
- * form can only differ between the levels through a level reader, and those
- * are the primitives exercised with data in `form-detail-parity.test.tsx`.
+ * settled and empty and no server action runs.
  */
 import { NuqsTestingAdapter } from "nuqs/adapters/testing";
+import { act } from "react-test-renderer";
 import type { ComponentProps, ReactElement, ReactNode } from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -68,7 +63,6 @@ vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }),
 }));
 
-import { renderBothLevels, sourceFiles } from "./form-detail-parity-harness";
 import { DistanceOverrideField } from "@/components/transport-legs/distance-override-field";
 import { FieldPositionField } from "@/components/applications/field-position-field";
 import { ApplicationEvidencePanel } from "@/components/applications/application-evidence-panel";
@@ -77,7 +71,9 @@ import { FormEntitySelect } from "./entity-select/form-entity-select";
 import { FormField } from "./form-field";
 import { ChoiceCardGroup } from "./choice-card-group";
 import { EventTimeInput } from "./event-time-input";
-import { change, conditionalRequired, requiredMarkers } from "./form-required-markers-harness";
+import { change, conditionalRequired, renderForm, requiredMarkers } from "./form-required-markers-harness";
+import { inventory } from "../../../tests/helpers/render-inventory";
+import { sourceFiles } from "../../../tests/helpers/source-files";
 import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
 import { FeedstockForm } from "@/components/feedstocks/feedstock-form";
 import { OutputStockForm } from "@/components/storage-locations/output-stock-form";
@@ -110,19 +106,19 @@ const noop = () => undefined;
 const as = <T,>(value: object) => value as unknown as T;
 const DAY = new Date("2026-09-01T10:00:00Z");
 
-/** `*-form.tsx` files that are not sheet forms, so the detail toggle never reaches them. */
+/** `*-form.tsx` files that are not sheet forms, so the sheet inventory skips them. */
 const NOT_SHEET_FORMS: Record<string, string> = {
-  "components/auth/forgot-password-form.tsx": "auth page, no detail toggle",
-  "components/auth/login-form.tsx": "auth page, no detail toggle",
-  "components/auth/reset-password-form.tsx": "auth page, no detail toggle",
-  "components/auth/set-password-form.tsx": "auth page, no detail toggle",
-  "components/organizations/invitation-bootstrap-form.tsx": "onboarding page, no detail toggle",
-  "components/settings/organization-defaults-form.tsx": "settings page, no detail toggle",
-  "components/admin/emission-estimates-form.tsx": "admin page, no detail toggle",
-  "components/api-keys/api-key-form.tsx": "settings dialog, no detail toggle",
-  "components/oauth/consent-form.tsx": "auth page card, no detail toggle",
-  "components/emissions/manual-entry-form.tsx": "emissions line drawer, no detail toggle",
-  "components/storage-locations/feedstock-loss-form.tsx": "feedstock Lost mass sheet and edit dialog, no detail toggle",
+  "components/auth/forgot-password-form.tsx": "auth page",
+  "components/auth/login-form.tsx": "auth page",
+  "components/auth/reset-password-form.tsx": "auth page",
+  "components/auth/set-password-form.tsx": "auth page",
+  "components/organizations/invitation-bootstrap-form.tsx": "onboarding page",
+  "components/settings/organization-defaults-form.tsx": "settings page",
+  "components/admin/emission-estimates-form.tsx": "admin page",
+  "components/api-keys/api-key-form.tsx": "settings dialog",
+  "components/oauth/consent-form.tsx": "auth page card",
+  "components/emissions/manual-entry-form.tsx": "emissions line drawer",
+  "components/storage-locations/feedstock-loss-form.tsx": "feedstock Lost mass sheet and edit dialog",
 };
 
 function ProductionSampleFormHarness() {
@@ -140,8 +136,7 @@ const CREATE_CASES: FormCase[] = [
   { file: "components/production-runs/production-run-form.tsx", name: "production run", element: <ProductionRunForm onSubmit={noop} /> },
   { file: "components/production-runs/production-incident-form.tsx", name: "production incident", element: <ProductionIncidentForm facilityId="facility" productionRunId="run" onSubmit={noop} /> },
   { file: "components/production-runs/production-sample-form.tsx", name: "production sample", element: <ProductionSampleFormHarness /> },
-  // Its stock previews render only once bins are picked, which props cannot preset;
-  // the stock blocks themselves are covered in form-detail-parity.test.tsx.
+  // Its stock previews render only once bins are picked, which props cannot preset.
   { file: "components/biochar-products/biochar-product-form.tsx", name: "biochar product", element: <BiocharProductForm onSubmit={noop} /> },
   { file: "components/formulations/formulation-form.tsx", name: "formulation", element: <FormulationForm onSubmit={noop} /> },
   { file: "components/orders/order-form.tsx", name: "order", element: <OrderForm onSubmit={noop} /> },
@@ -207,28 +202,21 @@ beforeAll(() => {
 });
 afterAll(() => { vi.unstubAllGlobals(); });
 
-describe("sheet form detail level parity", () => {
-  it.each([
-    ["biochar_bin", "split", true], ["product_bin", "split", true],
-    ["biochar_bin", "mix", false], ["product_bin", "mix", false], ["feedstock_bin", "split", false],
-  ] as const)("shows default draw order only for split output bins (%s, %s)", async (type, stockMode, shown) => {
-    const { simple, detailed } = await renderBothLevels(<StorageLocationForm onSubmit={noop}
-      storageLocation={as({ id: "bin", facilityId: "facility", type, stockMode, drawOrder: "newest_first", name: "Bin" })} />);
-    for (const view of [simple, detailed]) {
-      expect(view.items.includes("field:Default draw order")).toBe(shown);
-      if (shown) {
-        expect(view.text).toContain("Oldest first");
-        expect(view.text).toContain("Newest first");
-      }
-    }
-  });
-
+describe("sheet form inventory", () => {
   it("covers every sheet form, or names why a form is not one", () => {
     const forms = sourceFiles().map(file => file.path).filter(path => path.endsWith("-form.tsx"));
     const covered = new Set([...CREATE_CASES, ...EDIT_CASES].map(entry => entry.file));
     expect(forms.filter(path => !covered.has(path) && !(path in NOT_SHEET_FORMS)).sort()).toEqual([]);
     // Every sheet form also has a create case.
     expect(new Set(CREATE_CASES.map(entry => entry.file)).size).toBe(covered.size);
+  });
+
+  it.each([...CREATE_CASES, ...EDIT_CASES])("$name form renders its inputs, and its stock preview where it has one", async ({ element, shows }) => {
+    const renderer = await renderForm(<NuqsTestingAdapter>{element}</NuqsTestingAdapter>);
+    const view = inventory(renderer.root);
+    expect(view.items.some(item => item.startsWith("input:"))).toBe(true);
+    if (shows) expect(view.text).toContain(shows);
+    await act(async () => renderer.unmount());
   });
 
   it.each([
@@ -253,23 +241,28 @@ describe("sheet form detail level parity", () => {
   ])("keeps $name create/edit sections and fields in order without generic headings or the auto-fill cue", async ({ file, sections, createFields, editFields }) => {
     for (const { cases, fields } of [{ cases: CREATE_CASES, fields: createFields }, { cases: EDIT_CASES, fields: editFields }]) {
       const formCase = cases.find(entry => entry.file === file)!;
-      const { simple, detailed } = await renderBothLevels(formCase.element);
-      for (const level of [simple, detailed]) {
-        expect(level.items.filter(item => item.startsWith("section:"))).toEqual(sections);
-        expect(level.items.filter(item => item.startsWith("field:"))).toEqual(fields);
-        for (const removed of ["Required information", "Additional information", "Auto-fills the remaining share"]) {
-          expect(level.text).not.toContain(removed);
-        }
+      const renderer = await renderForm(<NuqsTestingAdapter>{formCase.element}</NuqsTestingAdapter>);
+      const view = inventory(renderer.root);
+      expect(view.items.filter(item => item.startsWith("section:"))).toEqual(sections);
+      expect(view.items.filter(item => item.startsWith("field:"))).toEqual(fields);
+      for (const removed of ["Required information", "Additional information", "Auto-fills the remaining share"]) {
+        expect(view.text).not.toContain(removed);
       }
+      await act(async () => renderer.unmount());
     }
   });
+});
 
-  it.each([...CREATE_CASES, ...EDIT_CASES])("$name form shows the same inputs, sections and actions at both levels", async ({ element, shows }) => {
-    const { simple, detailed } = await renderBothLevels(<NuqsTestingAdapter>{element}</NuqsTestingAdapter>);
-    expect(simple.items.some(item => item.startsWith("input:"))).toBe(true);
-    if (shows) expect(simple.text).toContain(shows);
-    expect(detailed.items).toEqual(simple.items);
-    expect(detailed.text).toEqual(simple.text);
+describe("storage bin form", () => {
+  it.each([
+    ["biochar_bin", "split", true], ["product_bin", "split", true],
+    ["biochar_bin", "mix", false], ["product_bin", "mix", false], ["feedstock_bin", "split", false],
+  ] as const)("shows default draw order only for split output bins (%s, %s)", async (type, stockMode, shown) => {
+    const renderer = await renderForm(<StorageLocationForm onSubmit={noop}
+      storageLocation={as({ id: "bin", facilityId: "facility", type, stockMode, drawOrder: "newest_first", name: "Bin" })} />);
+    const labels = renderer.root.findAllByType(FormField).map(field => field.props.label);
+    expect(labels.includes("Default draw order")).toBe(shown);
+    await act(async () => renderer.unmount());
   });
 });
 

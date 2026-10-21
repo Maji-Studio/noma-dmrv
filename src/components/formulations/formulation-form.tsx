@@ -423,8 +423,8 @@ export function FormulationForm({
           ))}
         </div>
 
-        {/* What the entered shares make, directly under the share fields,
-            at both levels. A total other than 100% is something to fix, so
+        {/* What the entered shares make, directly under the share fields.
+            A total other than 100% is something to fix, so
             the Balance action joins it. */}
         {(biocharNum > 0 || fields.length > 0) && (
           <CompositionCard

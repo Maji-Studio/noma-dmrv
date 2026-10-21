@@ -8,9 +8,9 @@
  * entered and takes the lab value only without oxygen; this line shows the
  * figure that will be saved, so an operator can see which one applies.
  *
- * The two figures are the block's headline, shown at both levels. Detailed
- * adds the atomic formulas with this sample's own numbers behind
- * `Show calculation`, the same way the moisture split discloses its arithmetic.
+ * The two figures are the block's headline. The atomic formulas with this
+ * sample's own numbers open from the caption's (i), the same way the moisture
+ * split explains its arithmetic.
  */
 "use client";
 
@@ -121,7 +121,7 @@ export function SampleDerivedRatios({
         </div>
         {error && <p role="alert" className="body-caption text-[var(--st-bad)]">{error}</p>}
       </>}
-      calculation={(
+      explanation={(
         <dl className="space-y-8 body-caption text-[var(--color-text-secondary)]">
           <div>
             <dt>H:C org is the atomic ratio of hydrogen to organic carbon.</dt>

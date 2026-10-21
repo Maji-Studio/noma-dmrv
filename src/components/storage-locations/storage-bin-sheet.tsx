@@ -105,8 +105,6 @@ export function StorageBinSheet({
       }}
       mode={state?.mode ?? "create"}
       onModeChange={handleModeChange}
-      // No detail toggle: a bin sheet has no explanation to switch on, since
-      // a mix bin's batch shares are data and show at every level.
       // Bins lead with their name, not their code — the one entity where the
       // house convention (code as the sheet title) puts an opaque lookup key
       // where the operator's own word for the thing belongs. The code stays,

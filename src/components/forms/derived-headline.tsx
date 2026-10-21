@@ -27,8 +27,7 @@ export function DerivedHeadline({ label, value, before, secondary, sub, figureLa
   before?: ReactNode;
   /**
    * A second figure under the headline, such as the dry stock under a wet
-   * estimate. Data, so it shows at both detail levels. A null value leaves the
-   * line out.
+   * estimate. Data, so it is always shown. A null value leaves the line out.
    */
   secondary?: { label: ReactNode; value: ReactNode; };
   /** One caption line under the figure, such as the entry behind it, or why there is no figure. */

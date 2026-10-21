@@ -2,7 +2,7 @@
  * SecondaryFigure — a second figure read under a primary one: the dry biochar
  * under a wet mass, the dry stock under a wet stock estimate.
  *
- * It is data, so both detail levels show it. One caption line, value first,
+ * It is data, so it is always shown. One caption line, value first,
  * read as one phrase in one style ("1,500 kg dry biochar"): a single text run
  * in secondary ink, number tabular, lower-cased description after a normal
  * space. A missing-value token has no number to lead with, so it keeps the

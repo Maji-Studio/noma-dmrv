@@ -29,8 +29,8 @@ export function summarizeMatchingStock(bins: readonly MatchingOutputBin[]): { we
 }
 
 /**
- * Matching stock informs the order, so both levels show it: one total, and
- * the single bins behind it in a modal (the same in Simple and Detailed).
+ * Matching stock informs the order, so it is always shown: one total, and
+ * the single bins behind it in a modal.
  *
  * Each bin leads with its wet stock. An order has no departure moisture yet
  * (the delivery measures it), so the estimate uses each batch's latest

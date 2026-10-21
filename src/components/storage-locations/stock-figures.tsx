@@ -1,26 +1,20 @@
 /**
  * Shared figure shapes for the stock surfaces (preview, history, correction).
  *
- * Every number an operator has to compare lives in one of three shapes, so the
+ * Every number an operator has to compare lives in one of two shapes, so the
  * same quantity reads the same way in a preview card, a history entry and a
  * correction form:
  *
  *  - `StockBalanceChange` — the consequence: one balance before and after.
  *  - `StockRows` — the inputs: label left, tabular figure right.
- *  - `CalculationDisclosure` — arithmetic the rows do not already show.
  *
  * Prose is deliberately absent. A sentence that only restates a row belongs in
  * an `InfoHint` on the surface's title, not in this file.
  */
 "use client";
 
-import {
-  ArrowRightIcon,
-  CaretDownIcon,
-  CaretUpIcon,
-} from "@phosphor-icons/react/dist/ssr";
-import { useId, useState, type ReactNode } from "react";
-import { Button } from "@/components/ui/button";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
+import type { ReactNode } from "react";
 import { DerivedHeadline } from "@/components/forms/derived-headline";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
@@ -172,49 +166,5 @@ export function StockChip({
     >
       {children}
     </span>
-  );
-}
-
-/**
- * "Show calculation" for surfaces that are not a `CompositionCard` — a history
- * entry or a bare form section. Same label, caret and quiet weight as the card,
- * so the control means one thing everywhere.
- */
-export function CalculationDisclosure({
-  subject,
-  children,
-}: {
-  /** Names what is being calculated, for the control's accessible label. */
-  subject: string;
-  children: ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  const id = useId();
-  const CaretIcon = open ? CaretUpIcon : CaretDownIcon;
-  return (
-    <div className="space-y-8">
-      <Button
-        data-presentation-control
-        type="button"
-        variant="noOutline"
-        className="-ml-8 min-h-44 gap-6 px-8 normal-case"
-        aria-expanded={open}
-        aria-controls={id}
-        aria-label={`${open ? "Hide" : "Show"} calculation for ${subject}`}
-        onClick={() => setOpen(!open)}
-      >
-        <span className="body-caption normal-case">
-          {open ? "Hide calculation" : "Show calculation"}
-        </span>
-        <CaretIcon size={14} className="shrink-0" aria-hidden="true" />
-      </Button>
-      <div
-        id={id}
-        hidden={!open}
-        className="space-y-8 border-t border-[var(--color-border-secondary)] pt-8"
-      >
-        {children}
-      </div>
-    </div>
   );
 }

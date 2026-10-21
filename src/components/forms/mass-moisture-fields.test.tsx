@@ -21,7 +21,6 @@ vi.mock("@/components/ui/moisture-split", () => ({
   },
 }));
 
-import { FormDetailProvider } from "./form-detail-context";
 import { MassMoistureFields } from "./mass-moisture-fields";
 
 const registration = (name: string) => ({
@@ -61,23 +60,21 @@ describe("MassMoistureFields", () => {
     expect(html).toContain("Added water: 50");
   });
 
-  it("gives the split no frame of its own and keeps it visible in Simple", () => {
+  it("gives the split no frame of its own", () => {
     const html = renderToStaticMarkup(
-      <FormDetailProvider scope="feedstock">
-        <MassMoistureFields
-          wetMassKg={4000}
-          moisturePercent={20}
-          wet={{ id: "massKg", registration: registration("massKg") }}
-          moisture={{
-            id: "moistureContentPercent",
-            registration: registration("moistureContentPercent"),
-          }}
-        />
-      </FormDetailProvider>,
+      <MassMoistureFields
+        wetMassKg={4000}
+        moisturePercent={20}
+        wet={{ id: "massKg", registration: registration("massKg") }}
+        moisture={{
+          id: "moistureContentPercent",
+          registration: registration("moistureContentPercent"),
+        }}
+      />,
     );
 
     // Variant E: the bar sits directly under the inputs, with no card, frame or
-    // tinted panel, and Simple never hides it.
+    // tinted panel.
     expect(html).toContain(
       '<div data-testid="mass-moisture-split" class="md:col-span-2 [&amp;:not(:has(*:not(:empty)))]:hidden">',
     );
@@ -87,7 +84,7 @@ describe("MassMoistureFields", () => {
     expect(html).toContain('data-testid="captured-split"');
   });
 
-  it("keeps the split mounted when the first input arrives", async () => {
+  it("draws no split before the first value, then keeps one mounted as values change", async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     const fields = (wetMassKg: unknown) => (
       <MassMoistureFields
@@ -99,11 +96,12 @@ describe("MassMoistureFields", () => {
     );
     splitMounts.count = 0;
     let renderer!: ReactTestRenderer;
-    // Outside a provider the level is Detailed, so the untouched split renders
-    // as explanation; the first value turns it into data in the same place.
     await act(async () => { renderer = create(fields(null)); });
+    // The untouched split would only explain what will appear, so it is absent.
+    expect(splitMounts.count).toBe(0);
+    expect(renderer.root.findAllByProps({ "data-testid": "captured-split" })).toHaveLength(0);
     await act(async () => renderer.update(fields(100)));
-    await act(async () => renderer.update(fields(null)));
+    await act(async () => renderer.update(fields(200)));
     expect(splitMounts.count).toBe(1);
     await act(async () => renderer.unmount());
   });

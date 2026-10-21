@@ -9,10 +9,9 @@
  * and moisture.
  *
  * The composition is the form's `ProductCompositionPreview` fed the saved
- * parts, so one split rule serves both. Both detail levels show every saved
- * field, the dry figures as a secondary line under each wet mass and the
- * composition picture. Detailed adds only the ledger and arithmetic behind
- * Show calculation. Masses read at save precision. No transport here: goods
+ * parts, so one split rule serves both. The view shows every saved field, the
+ * dry figures as a secondary line under each wet mass and the composition
+ * picture. The ledger and arithmetic open from the composition's (i). Masses read at save precision. No transport here: goods
  * move on deliveries, so the route reads on each delivery.
  */
 "use client";

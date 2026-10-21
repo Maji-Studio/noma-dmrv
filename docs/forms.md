@@ -282,7 +282,7 @@ New or touched leaf and shared components should import from `@/components/forms
   - `hint` and `helperText` both render behind the ⓘ beside the label (hint first), whatever their length. They also reach screen readers as the control's description. Definitions, examples, "why we ask", plain scope notes ("Seeds new orders.") and typical ranges ("0 to 100% of wet mass", "Only an empty bin can switch to split.") go here.
   - `cue` is one visible `body-caption` line under the control: "Minimum 8 characters", "-90 to 90", "Facility time: Africa/Dar es Salaam", "1,200 kg available from this delivery", "Seeds new facilities. Existing facilities keep their own." (organization defaults timezone), "Applies to new Sources across the organization." (registry default visibility), "Annual average for this application site" (soil temperature). It is tagged by hand at the call site; never move an explanation into it to make it visible. Exception: exactly the last three examples above (the timezone and default-visibility scope notes and the soil temperature definition) stay visible as cues by product decision; no other explanation may be a cue. An error or warning replaces it while shown.
   - `cueAction` ({ label, onClick, disabled?, ariaLabel? }) puts one tertiary text action at the right of the cue row, for a shortcut that fills the control from the cue's figure ("Add all" beside "1,000 kg available from this delivery"). It stays mounted whenever `cue` has text, even while an error or warning replaces the cue's message, so a click that follows the input's blur still lands. Compute the value with `wholeStockDrawKg` (`@/lib/stock-overdraw`), set it with `shouldDirty`, `shouldTouch` and `shouldValidate`, and omit the action (do not dim it) when the field is locked.
-  - `unit` renders a suffix inside the end of the control ("kg", "%", "km"), so the label drops its "(kg)". The label keeps the unit for screen readers. Use it only for a single input; the read-view value already carries the unit, so the read label drops it too.
+  - `unit` renders a suffix inside the control ("kg", "%", "km"), so the label drops its "(kg)". The label keeps the unit for screen readers. Use it only for a single input; the read-view value already carries the unit, so the read label drops it too.
   - The label row is `min-h-24` (the ⓘ hit area), so a one-line label reads at the same height with or without a CERT chip or ⓘ. The ⓘ is a sibling of the `<label>`, never inside it.
 - **`FormError` / `ServerError`** — field-level vs server-level; both carry `role="alert"`. A refused save is split, not all-or-nothing: an issue whose field is on screen shows at that field, the rest show once in the error box. A form calls `useSaveRefusal` (`src/components/forms/use-save-refusal.ts`) and calls the returned function from its submit `catch`, **inside the `handleSubmit` callback** (RHF works out `isSubmitSuccessful` when the callback ends, and `FormErrorSummary` shows only after an unsuccessful submit, so a later `setError` is never listed or focused). It returns `{ footer }` for the parent to show, or `null` for a stale-version or conflict refusal, a refusal without issues, or a non-`ActionError`; the parent then keeps its own message and blockers. The rule itself is `planSaveRefusal` (`src/lib/save-refusal.ts`). Server paths the form names differently go in an alias map next to the payload builder (`feedstockUpdatePayload`, `applicationOperationInput`, delivery's `DELIVERY_REFUSAL_ALIASES`). A lock refusal (`certification_locked`) shows **"Locked"** at a field the operator changed and that is on screen; the lock's reason shows once in the footer, and a lock on any other field (lineage, a whole-record lock) goes to the footer only. The summary words it apart: "Not saved. 2 fields are locked." (mixed: "Not saved. Fix 1 field. 2 fields are locked."). Forms that do not use the hook yet keep the footer line. Never copy a server rule into the form just to show it at the field; the server's issue now lands there. Parents hand the form's handler the caught error: `onSubmit(data, onRefusal)`, then `const shown = onRefusal(error); setError(shown ? shown.footer : fallback)`; a null footer means every reason sits at a field, so `?? fallback` would wrongly bring the generic line back (see `delivery-list.tsx`, `feedstock-list.tsx`, `application-list.tsx`).
 - **`FormSelect`**, **`FormInput`**, **`FormTextarea`** — styled primitives; spread `{...register(name)}`.
@@ -438,11 +438,11 @@ A red star on a label means the save refuses the field empty. The rules:
 - A field needed for certification but not for saving gets the CERT chip below, never a star.
 - `FormField` takes `required`. Anything drawn outside a FormField (a picker label, a legend, a readout) uses `RequiredMarker` from `@/components/forms/required-marker`, imported by file path, never through the barrel. For a fieldset control (`SegmentedControl`, `ChoiceCardGroup`) also pass `required`, which adds "Required" to the sr-only legend that names the group. Do not add `aria-required`: the control would announce it twice.
 - The star adds "Required" to the label, so locate a starred field in specs with a regex or by role and a prefix match, not by exact name.
-- The guard lives at the end of `src/components/forms/form-detail-parity-forms.test.tsx`: every sheet form is submitted empty and any field that shows an error must carry a star. Its limit: Zod 4 aborts an object `superRefine` after an `invalid_type` issue and handler checks run after validation, so an empty submit never reaches a conditional requirement. Those go in its second table, which starts from a valid fixture, empties one field and asserts the star and the error together. A new conditional requirement gets a row there.
+- The guard lives in `src/components/forms/form-required-markers.test.tsx`: every sheet form is submitted empty and any field that shows an error must carry a star. Its limit: Zod 4 aborts an object `superRefine` after an `invalid_type` issue and handler checks run after validation, so an empty submit never reaches a conditional requirement. Those go in its second table, which starts from a valid fixture, empties one field and asserts the star and the error together. A new conditional requirement gets a row there.
 
 ### CERT chip status
 
-A field with `certifyRequired` carries the CERT chip on its label row (`CertificationFieldTag`), in Simple and Detailed alike. It explains itself on hover and to screen readers ("Required for certification"); there is no sheet legend. `FormField` accepts `certifyStatus`; the section's `certifyRequired` controls whether the chip shows. The chip reflects the record's **saved** state, frozen — it does not flip while the user types:
+A field with `certifyRequired` carries the CERT chip on its label row (`CertificationFieldTag`). It explains itself on hover and to screen readers ("Required for certification"); there is no sheet legend. `FormField` accepts `certifyStatus`; the section's `certifyRequired` controls whether the chip shows. The chip reflects the record's **saved** state, frozen — it does not flip while the user types:
 
 - create mode → `neutral` (neutral chip, no claim)
 - edit mode, saved value present → `satisfied` (green chip with a check)
@@ -556,75 +556,75 @@ storageLocationId: emptyToNull.or(z.uuid()).optional().nullable(),
 
 The underlying `useClearOnDependencyChange` (`@/hooks/use-clear-on-dependency-change`) is standalone — use it directly in custom form components that are not `FormEntitySelect`.
 
-## Simple and Detailed presentation
+## Explanations behind an (i)
 
-Use `FormDetailToggle` for the shared compact radio control. Opt entity sheets
-in with `EntitySideSheet`'s `detailToggle` and pass the record ID as
-`detailScope`: `true` shows the control in every mode, `"view"` in saved read
-mode only, `"form"` in create and edit only. A sheet that does not opt in has no
-provider, and everything under it renders at Detailed. The switch lives in
-`SlideOverPanel.Header`'s `actions` slot beside the title, not in an extra row
-above the form. Other sheet owners can use `FormDetailProvider` and
-`FormDetailControl` with a scope containing open state, mode and record ID.
+There is one view of every form and read sheet. Explanation does not switch on
+and off; it opens from an (i) beside the figure or caption it explains.
 
-The provider resets to Simple when that scope changes without remounting input
-fields. Presentation state is separate from RHF and payloads. The shared sheet
-excludes `data-presentation-control` events from its unsaved-change heuristic.
-A real input change must still trigger the discard guard.
+**The contract:** an input, section, action or anything that informs a decision
+is always visible: available stock, before → after, matching bins, blockers,
+warnings, dry figures as `secondary` lines (`DetailField`, `DerivedHeadline`,
+both through `SecondaryFigure`, CERT chip included). Explanation is what only
+checks a number: composition ledgers, calculation arithmetic, the figures
+behind a movement, FIFO batches, source runs, yield arithmetic, H:C / O:C
+formulas, carbon estimate inputs, durability raw value, cap, component and
+formula version, held allocations. It sits behind an (i).
 
-**The contract: Simple and Detailed show the same information and differ
-only in explanation.** Neither level hides something you fill in or something
-you read.
-
-- **Forms:** every input, section and action (history links, uploads, add
-  buttons) renders at both levels, and so does everything that informs a
-  decision: available stock, stock after the movement, matching bins, before →
-  after previews, blockers and warnings.
-- **Read views:** both levels show the same fields and sections.
-  `DetailPanelField` and `DetailPanelSection` have no level flag.
-- **Detailed adds only explanation:** calculation rows, basis captions,
-  formula or component provenance, raw versus capped values. A read section
-  puts it in its `explanation` slot; a derived block in `detail` or
-  `calculation`; anything else in `DetailedOnly`. All three carry
-  `data-detail-explanation`.
+- **`ExplanationInfo`** (`@/components/ui/explanation-info`) is the one (i):
+  `<ExplanationInfo title hint?>{tables}</ExplanationInfo>`. It is a `Popover`
+  with `openOnHover`, so it opens on mouse hover (desktop) and on a tap, click,
+  Enter or Space (touch, keyboard); Escape, an outside press, the close button or
+  a second press closes it, so a panel never traps the field being edited. The
+  trigger is a `span` with `role="button"` named "About {title}" (a native button inside a read-only form's `<fieldset disabled>` would be disabled, and a locked record must still open its explanations), looks like
+  `InfoHint`, keeps its 24px hit area and carries `data-presentation-control`, so
+  a press on it never marks a sheet dirty. The panel is up to 420px wide and
+  never wider than the viewport minus 32px; it scrolls past the Popover's max
+  height. The body mounts only while open. Do not build this on the Base UI
+  Tooltip, which closes on the tap that opens it.
+- **One (i) per block.** A block with a definition and an explanation passes
+  both: the `hint` leads the panel, then the tables. A block with only a
+  definition keeps `InfoHint`.
+- **Two short lines stay inline,** because the operator checks them on every
+  entry: the dry mass formula sentence under a moisture split
+  that derives dry mass from moisture (`formatSplitArithmetic` in
+  `ui/moisture-split`; a stored dry mass explains itself inside the (i)) and the dry biochar before →
+  after line on a stock movement ("Dry biochar in bin 540 → 135 kg"). Add no
+  third without a decision in `docs/design-decisions.md`. Other explanation
+  goes behind the (i).
+- **Read sections:** `DetailPanelSection.explanation` (titled sections only)
+  opens from the (i) beside the section title, after the section's `hint`;
+  `DetailPanelField.explanation` does the same beside one figure's label, when a
+  section holds several (`explanationTitle` names it). Read sheets build their
+  sections in a named builder (`*-read-sections.tsx`, returning
+  `DetailPanelSection[]`), never inline in the list;
+  `src/components/read-sheets.test.tsx` fails for a builder without a
+  case.
 - **No "Add X" reveals** for fillable fields. A field may still appear when an
   earlier answer makes it relevant (a cancellation reason, an over-allocation
   justification). Keep long sheets calm by grouping, pairing and unit
   suffixes, never by hiding.
-- **Dry figures are data.** A read view shows dry biochar or dry solids as a
-  `secondary` line under the wet figure (`DetailField`, `DerivedHeadline`,
-  both through `SecondaryFigure`), CERT chip included. A stock balance such as
-  available dry stock does the same. In a movement preview the dry before and
-  after pair stays part of the calculation.
-
-The `src/components/forms/form-detail-parity*.test.tsx` suites guard this.
-Only `form-detail-context`, `CompositionCard` and `MoistureSplit` may read the
-level, and `DetailedOnly` has a short list of callers. Every level-aware block,
-every read sheet and one create form per family render at both levels and must
-show identical labels, titles, inputs, actions and text outside explanation
-blocks. Read sheets build their sections in a named builder
-(`*-read-sections.tsx`, returning `DetailPanelSection[]`), never inline in the
-list; a new builder fails the coverage check until it has a case.
+- **No presentation state.** There is no provider, no sheet prop and no level to
+  test. A test of a block asserts the inline content, then opens the (i) and
+  asserts the explanation.
 
 ### Derived blocks
 
 A derived block is a `CompositionCard` (`@/components/forms`) that sits flat
 under the inputs that drive it, with no tint and no frame: a sentence case
-caption with its one-sentence definition behind an ⓘ `hint`, an optional
-`headline`, the picture as `children`, and one action row holding the block's
-own `actions` (a fix such as "Balance to 100%"). Stock history lives on the
-storage bin and its own loss, count and correction form, never on the block of a
-form that only draws from a bin. All of that
-shows at both levels. Detailed adds the `detail` rows (explanation such as a
-ledger, never decision info) and Show calculation, which opens `calculation`:
-arithmetic the block does not already show. Omit it and no control renders. Do
-not draw proportions from an incomplete or zero basis.
+caption, an optional `headline`, the picture as `children`, one `explanation`
+slot and one action row holding the block's own `actions` (a fix such as
+"Balance to 100%"). The caption's one (i) opens `explanation`, led by the
+`hint` definition; with no `explanation` the `hint` stays an `InfoHint`. Put a
+short line that must stay visible (the stock movement's dry pair) in `children`.
+Stock history lives on the storage bin and its own loss, count and correction
+form, never on the block of a form that only draws from a bin. Omit
+`explanation` when it would only restate visible numbers. Do not draw
+proportions from an incomplete or zero basis.
 
-Before any input, a form's moisture split and product composition are
-explanation of what will appear, so only Detailed draws their unresolved
-state (`<DetailedOnly unless={started}>`, which keeps one wrapper so the block
-never remounts when the first value arrives). Explanation parts stay mounted behind
-`hidden`, so an open disclosure survives a level switch.
+Before any input, a form's moisture split and product composition would only
+explain what will appear, so they render nothing until the first value makes
+them data (`MassMoistureFields` and `ProductCompositionBlock` gate on
+`started`).
 
 `DerivedHeadline` is the block's one figure, at most one per block: a caption
 label, the figure with its unit and approximation in the value ("≈ 1,110 kg",
@@ -634,9 +634,7 @@ figure is left out: the label stays with `sub` saying why, and with no `sub`
 the headline renders nothing. Pass `figureLabel` so a before and after pair is
 announced as one phrase.
 
-Disclosure state is separate from form state and must never submit or dirty the
-form. Keep stateful history/correction controls mounted while hiding their
-presentation, so switching levels does not reset an active correction.
+Presentation controls (the (i), a history link) never submit or dirty the form.
 
 ### Stock blocks lead with wet mass
 
@@ -651,16 +649,16 @@ stock family presents wet first. Only presentation changes. A wet figure reads
   loaded at 16% moisture"). Before is each batch's wet stock, wet mass added
   less wet mass taken out from its last count; after takes this entry's wet
   mass out, or for a count, sets each batch to the count. The picture is the entered wet mass split into
-  solids and water, then any notice, then the moisture reset block. The dry biochar before and after pair is a
-  Detailed `detail` row (the calculation); the entered figures and the FIFO
-  batch draw sit behind Show calculation. Without a moisture there is no estimate, and the dry pair takes
+  solids and water, then any notice, then the moisture reset block. The dry biochar before and after pair is an
+  inline line under the picture (one of the two lines that stay visible); the
+  entered figures and the FIFO batch draw sit behind the caption's (i). Without a moisture there is no estimate, and the dry pair takes
   the headline. Ingredient bins track wet stock directly, so their headline is
   not labelled an estimate.
 - **Order availability** (`OutputStockAvailability` in `MatchingOutputBins`,
   right after the requested wet mass field). Headline "Available wet stock,
   estimate", each batch's wet mass added less wet mass taken out from its last
-  count, since an order has no departure moisture yet, with available dry stock as a secondary line under it at
-  both levels; the batch bar and key as the picture. On the order form and
+  count, since an order has no departure moisture yet, with available dry stock as a secondary line under it;
+  the batch bar and key as the picture. On the order form and
   read sheet the bins collapse into one tappable row labelled "Available" with
   the wet figure only ("2,500 kg wet mass"), plus "in N of M bins" when some
   bins lack an estimate so a partial sum never reads as the full stock. Dry

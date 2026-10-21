@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
-import { FormDetailProvider } from "../form-detail-context";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 it("guards the Base UI version used by the EntitySelect navigation adapter", () => {
@@ -159,19 +158,17 @@ describe("EntitySelect selected-value display", () => {
     expect(html).toContain('aria-invalid="true"');
   });
 
-  it("keeps the selected input, helper and remaining stock caption in Simple", () => {
+  it("keeps the selected input, helper and remaining stock caption", () => {
     entityState.selected = {
       id: "bin-1", code: "BIN-01", name: "North product bin",
       remainingMass: { wetKg: 3000, dryKg: 2900 },
     };
     entityState.selectedPending = false;
     const html = renderToStaticMarkup(
-      <FormDetailProvider scope="simple-selector">
-        <EntitySelect entityType="storageLocation" value="bin-1" onChange={() => undefined} aria-describedby="field-helper" />
-      </FormDetailProvider>,
+      <EntitySelect entityType="storageLocation" value="bin-1" onChange={() => undefined} aria-describedby="field-helper" />,
     );
     expect(html).toContain("North product bin");
-    // Remaining stock informs the pick, so Simple shows it too and the
+    // Remaining stock informs the pick, so it is always shown and the
     // control is described by the helper, the stock caption and the label.
     const describedBy = html.match(/aria-describedby="([^"]*)"/)?.[1].split(" ") ?? [];
     expect(describedBy[0]).toBe("field-helper");

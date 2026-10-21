@@ -4,7 +4,7 @@
  *
  * The product form no longer draws a stock preview per bin: the movement rides
  * inside the selector as a stock change label. Refusals, blockers and
- * discrepancies are not optional, so they stay visible at both detail levels,
+ * discrepancies are not optional, so they stay visible,
  * next to the bin they concern.
  */
 "use client";

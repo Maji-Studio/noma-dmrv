@@ -70,9 +70,9 @@ function formatInput(value: number | null, unit: string): string {
  *
  * It closes the Production runs section because the runs listed above it are
  * what it is computed from. The figure is the only thing an operator reads off
- * the block, and both levels show it. The physical inputs the
- * registry turns into deductions are the arithmetic behind it, not a competing
- * list, so they sit under Show calculation as label and figure rows.
+ * the block. The physical inputs the registry turns into deductions are the
+ * arithmetic behind it, not a competing list, so they sit behind the caption's
+ * (i) as label and figure rows.
  *
  * The caption names the figure, so the headline carries no label of its own.
  * There is no gross-to-net chain to draw here: noma submits input quantities
@@ -117,7 +117,7 @@ function CreditBatchCarbonEstimate({
         value={estimate == null ? null : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`}
         sub={gap ?? undefined}
       />}
-      calculation={
+      explanation={
         <div className="flex flex-col gap-8">
           {runsPending ? (
             <StockRows
@@ -360,23 +360,27 @@ export function creditBatchSheetSections({
           ...(appliedDryKg === null ? { valuePresent: false } : {}),
         },
         ...(durabilityResult?.fDurable != null
-          ? [{ label: "Durability estimate (capped)", value: formatDurabilityPercent(durabilityResult.fDurable) }]
+          ? [{
+              label: "Durability estimate (capped)",
+              value: formatDurabilityPercent(durabilityResult.fDurable),
+              // How the estimate was reached: the raw figure, the cap and the
+              // preview's provenance. Explanation, so it opens from an (i).
+              explanationTitle: "Durability estimate",
+              explanation: durabilityResult.rawFDurable != null ? (
+                <StockRows
+                  label="Durability estimate basis"
+                  rows={[
+                    { label: "Raw durability estimate", value: formatDurabilityPercent(durabilityResult.rawFDurable) },
+                    { label: "Durability cap applied", value: durabilityResult.durabilityCapped ? "Yes" : "No" },
+                    // Provenance rows: one the preview does not carry is left out.
+                    ...(preview?.componentKey ? [{ label: "Preview component", value: preview.componentKey }] : []),
+                    ...(preview?.formulaVersion ? [{ label: "Preview formula", value: preview.formulaVersion }] : []),
+                  ]}
+                />
+              ) : undefined,
+            }]
           : []),
       ],
-      // How the durability estimate was reached: the raw figure, the cap and
-      // the preview's provenance. Explanation, so Detailed only.
-      explanation: durabilityResult?.rawFDurable != null && durabilityResult.fDurable != null ? (
-        <StockRows
-          label="Durability estimate basis"
-          rows={[
-            { label: "Raw durability estimate", value: formatDurabilityPercent(durabilityResult.rawFDurable) },
-            { label: "Durability cap applied", value: durabilityResult.durabilityCapped ? "Yes" : "No" },
-            // Provenance rows: one the preview does not carry is left out.
-            ...(preview?.componentKey ? [{ label: "Preview component", value: preview.componentKey }] : []),
-            ...(preview?.formulaVersion ? [{ label: "Preview formula", value: preview.formulaVersion }] : []),
-          ]}
-        />
-      ) : undefined,
     },
     {
       title: "Production runs",

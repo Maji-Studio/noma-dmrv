@@ -49,7 +49,7 @@ export function OutputStockAllocations({ allocations }: { allocations: OutputSto
  *
  * Same shape as the movement blocks: caption, one headline figure, the batches
  * the bin holds as one bar and its key, then one action row. Under a wet
- * headline the tracked dry stock is a secondary line at both levels. There is no before and after because nothing
+ * headline the tracked dry stock is a secondary line. There is no before and after because nothing
  * is moving yet.
  *
  * Operators plan loads in wet mass, so the headline is the wet estimate when a
@@ -75,12 +75,12 @@ export function OutputStockAvailability({ binName, dryKg, wetEstimate = null, al
       title={binName}
       hint={AVAILABILITY_HINT}
       actions={actions}
-      calculation={held.length > 0 ? <OutputStockAllocations allocations={held} /> : undefined}
+      explanation={held.length > 0 ? <OutputStockAllocations allocations={held} /> : undefined}
       headline={wetEstimate
         ? <DerivedHeadline
             label="Available wet stock, estimate"
             value={`${formatWetEstimate(wetEstimate.kg)} kg wet mass`}
-            // Dry stock is a balance, not a calculation: a secondary line at both levels.
+            // Dry stock is a balance, not a calculation: a secondary line.
             secondary={{ label: DRY_BIOCHAR_LABEL, value: dryKg == null ? null : formatMassKg(dryKg) }}
             sub={wetEstimate.basis}
           />

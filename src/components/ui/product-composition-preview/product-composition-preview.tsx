@@ -7,9 +7,9 @@
  * rules. The bar sits flat under the inputs that produce it, inside the same
  * form section, with one key line of swatches beneath it. No card, no tint, no
  * frame: the hierarchy comes from the bar and its key, never from a background.
- * Both levels show the bar and its key, because those are what the fields
- * mean; Detailed adds the explanation: the composition ledger and the
- * arithmetic behind `Show calculation`.
+ * The bar and its key are always visible, because those are what the fields
+ * mean; the explanation, the composition ledger and the arithmetic, opens from
+ * the caption's (i).
  *
  * Three levels of knowledge, one component, most specific first:
  * - `components`: the surface already split every part into solids and water
@@ -111,7 +111,7 @@ interface ProductCompositionPreviewProps {
   headline?: ReactNode;
   /** Mass formatter for the bar, its key and the arithmetic. Defaults to kilograms at display precision. */
   formatMass?: SegmentFormat;
-  /** Where the figures come from, shown under the arithmetic behind Show calculation. */
+  /** Where the figures come from, shown under the arithmetic in the (i) panel. */
   basis?: ReactNode;
   /** Other controls for the block's action row, such as a stock history. */
   actions?: ReactNode;
@@ -393,7 +393,7 @@ export function ProductCompositionPreview({
         hint={note ?? COMPOSITION_HINT}
         headline={headline}
         actions={actions}
-        calculation={ledgerSegments ? (
+        explanation={ledgerSegments ? (
           <div className="flex flex-col gap-8">
             <CompositionLedger
               label={BLOCK_TITLE}

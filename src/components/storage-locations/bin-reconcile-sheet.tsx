@@ -1,6 +1,5 @@
 "use client";
 
-import { FormDetailProvider, FormDetailControl } from "@/components/forms/form-detail-context";
 import { LOST_MASS_LABEL } from "@/lib/output-stock/labels";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
@@ -29,10 +28,9 @@ export function BinReconcileSheet({
   };
 
   return (
-    <FormDetailProvider scope={`${open}:${storageLocation?.id}`} enabled={!!storageLocation && storageLocation.type !== "feedstock_bin"}>
     <SlideOverPanel.Root open={open} onOpenChange={onOpenChange}>
       <SlideOverPanel.Content size="default">
-        <SlideOverPanel.Header showClose actions={<FormDetailControl />}>
+        <SlideOverPanel.Header showClose>
           <div className="flex flex-col gap-4 min-w-0">
             <SlideOverPanel.Title>
               {LOST_MASS_LABEL}
@@ -69,6 +67,5 @@ export function BinReconcileSheet({
         </SlideOverPanel.Body>
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
-    </FormDetailProvider>
   );
 }

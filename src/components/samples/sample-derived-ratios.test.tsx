@@ -1,81 +1,46 @@
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
-import { beforeAll, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, expect, it } from "vitest";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
-
-// The certification chip and the caption hint both mount Base UI tooltips,
-// which read `window` on mount; this suite runs in the node environment.
-vi.mock("@/components/ui/tooltip", () => ({
-  InfoHint: () => null,
-  Tooltip: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-}));
 import { RATIO_NOT_CALCULABLE, SampleDerivedRatios } from "./sample-derived-ratios";
-import { FormDetailProvider } from "@/components/forms/form-detail-context";
 
-function visible(node: ReactTestInstance | string): string {
-  return typeof node === "string" ? node : node.props.hidden ? "" : node.children.map(visible).join(" ");
-}
+afterEach(cleanup);
 
 const certify = { certifyRequired: () => true, certifyStatus: (): CertFieldStatus => "satisfied" };
+const OPEN_INFO = { name: "About Derived ratios" };
 
-beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
-
-it("shows both figures and keeps the atomic formulas behind the calculation", async () => {
-  let renderer!: ReactTestRenderer;
-  await act(async () => {
-    renderer = create(<SampleDerivedRatios hToCOrgRatio={0.42} oToCOrgRatio={0.15} hydrogenPercent={2.5} oxygenPercent={12} organicCarbonPercent={71.5} oToCFromLab={false} {...certify} />);
-  });
-  const shown = visible(renderer.root);
-  expect(shown).toContain("0.4200");
-  expect(shown).toContain("0.1500");
-  expect(shown).not.toContain("atomic ratio");
-  const disclosure = renderer.root.findAllByType("button").find(node => node.props["aria-controls"])!;
-  await act(async () => disclosure.props.onClick());
-  const disclosed = visible(renderer.root);
-  expect(disclosed).toContain("(2.5 / 1.008) / (71.5 / 12.011)");
-  expect(disclosed).toContain("(12 / 15.999) / (71.5 / 12.011)");
-  await act(async () => renderer.unmount());
+it("shows both figures and keeps the atomic formulas behind the (i)", async () => {
+  render(<SampleDerivedRatios hToCOrgRatio={0.42} oToCOrgRatio={0.15} hydrogenPercent={2.5} oxygenPercent={12} organicCarbonPercent={71.5} oToCFromLab={false} {...certify} />);
+  expect(screen.getByText("0.4200")).toBeTruthy();
+  expect(screen.getByText("0.1500")).toBeTruthy();
+  expect(screen.queryByText(/atomic ratio/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", OPEN_INFO));
+  expect(await screen.findByText(/\(2\.5 \/ 1\.008\) \/ \(71\.5 \/ 12\.011\)/)).toBeTruthy();
+  expect(screen.getByText(/\(12 \/ 15\.999\) \/ \(71\.5 \/ 12\.011\)/)).toBeTruthy();
 });
 
-it("offers no calculation in Simple and credits a lab O:C org to the lab", async () => {
-  let renderer!: ReactTestRenderer;
-  await act(async () => {
-    renderer = create(<FormDetailProvider scope="sample"><SampleDerivedRatios hToCOrgRatio={0.42} oToCOrgRatio={0.2} hydrogenPercent={2.5} oxygenPercent={12} organicCarbonPercent={71.5} oToCFromLab {...certify} /></FormDetailProvider>);
-  });
-  // Simple keeps the headline: both figures, and no calculation to open.
-  expect(visible(renderer.root)).toContain("0.4200");
-  expect(visible(renderer.root)).toContain("0.2000");
-  expect(visible(renderer.root)).not.toContain("Show calculation");
-  await act(async () => renderer.unmount());
-
-  await act(async () => {
-    renderer = create(<SampleDerivedRatios hToCOrgRatio={0.42} oToCOrgRatio={0.2} hydrogenPercent={2.5} oxygenPercent={12} organicCarbonPercent={71.5} oToCFromLab {...certify} />);
-  });
-  await act(async () => renderer.root.findAllByType("button").find(node => node.props["aria-controls"])!.props.onClick());
-  expect(visible(renderer.root)).toContain("comes from the lab ratio entered above");
-  await act(async () => renderer.unmount());
+it("credits a lab O:C org to the lab", async () => {
+  render(<SampleDerivedRatios hToCOrgRatio={0.42} oToCOrgRatio={0.2} hydrogenPercent={2.5} oxygenPercent={12} organicCarbonPercent={71.5} oToCFromLab {...certify} />);
+  expect(screen.getByText("0.4200")).toBeTruthy();
+  expect(screen.getByText("0.2000")).toBeTruthy();
+  expect(screen.queryByText(/comes from the lab ratio/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", OPEN_INFO));
+  expect(await screen.findByText(/comes from the lab ratio entered above/)).toBeTruthy();
 });
 
-it("names a ratio it cannot derive and surfaces a refused derived value", async () => {
-  let renderer!: ReactTestRenderer;
-  await act(async () => {
-    renderer = create(<SampleDerivedRatios hToCOrgRatio={null} oToCOrgRatio={null} hydrogenPercent={null} oxygenPercent={null} organicCarbonPercent={null} oToCFromLab={false} error="Ratio is above the saved precision." {...certify} />);
-  });
-  expect(visible(renderer.root)).toContain("Needs hydrogen and organic carbon");
-  expect(visible(renderer.root)).toContain("Needs oxygen and organic carbon, or the O:C org ratio");
-  expect(visible(renderer.root)).not.toContain("Not available");
-  expect(renderer.root.findByProps({ role: "alert" }).children.join("")).toContain("above the saved precision");
-  await act(async () => renderer.unmount());
+it("names a ratio it cannot derive and surfaces a refused derived value", () => {
+  render(<SampleDerivedRatios hToCOrgRatio={null} oToCOrgRatio={null} hydrogenPercent={null} oxygenPercent={null} organicCarbonPercent={null} oToCFromLab={false} error="Ratio is above the saved precision." {...certify} />);
+  expect(screen.getByText("Needs hydrogen and organic carbon")).toBeTruthy();
+  expect(screen.getByText("Needs oxygen and organic carbon, or the O:C org ratio")).toBeTruthy();
+  expect(screen.queryByText(/Not available/)).toBeNull();
+  expect(screen.getByRole("alert").textContent).toContain("above the saved precision");
 });
 
-it("keeps the label and CERT tag with a reason when filled entries give no usable ratio", async () => {
-  let renderer!: ReactTestRenderer;
-  await act(async () => {
-    renderer = create(<SampleDerivedRatios hToCOrgRatio={null} oToCOrgRatio={0.15} hydrogenPercent={-1} oxygenPercent={12} organicCarbonPercent={71.5} oToCFromLab={false} {...certify} />);
-  });
-  const shown = visible(renderer.root);
+it("keeps the label and CERT tag with a reason when filled entries give no usable ratio", () => {
+  const { container } = render(<SampleDerivedRatios hToCOrgRatio={null} oToCOrgRatio={0.15} hydrogenPercent={-1} oxygenPercent={12} organicCarbonPercent={71.5} oToCFromLab={false} {...certify} />);
+  const shown = container.textContent ?? "";
   expect(shown).toContain("H:C org");
   expect(shown).toContain("CERT");
   expect(shown).toContain("O:C org");
   expect(shown.split(RATIO_NOT_CALCULABLE).length - 1).toBe(1);
-  await act(async () => renderer.unmount());
 });
