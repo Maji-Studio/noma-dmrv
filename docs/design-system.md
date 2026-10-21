@@ -685,7 +685,11 @@ The one outcome screen for auth pages (check your email, email verified, verific
   fires an unscoped query.
 - **`StepFlow`** — step rail + content slot + pinned footer. Deliberately dumb:
   **StepFlow never validates**; the parent owns the active index and gates
-  forward progress by disabling its own Next button.
+  forward progress by disabling its own Next button. Below `sm` it shows the
+  current step only (its number, its label and "Step 2 of 3" under it), in both
+  orientations; the full rail returns from `sm` up. The rail's jump back to an
+  earlier step is therefore a desktop affordance, so a flow whose only way back
+  is the rail needs its own Back control.
 - **`StatCard`** — the one KPI card. **Always carries a 24px Phosphor icon.**
   `value` accepts a `ReactNode`: use the default `valueLayout="headline"` for a
   single scalar or short text value, and `valueLayout="breakdown"` for a
