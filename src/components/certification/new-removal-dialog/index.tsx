@@ -53,6 +53,7 @@ import {
   EmptyComponentsStep,
   type FocusRequest,
 } from "./empty-components-step";
+import { PHONE_TOUCH_TARGET } from "./touch-target";
 import { Notice } from "@/components/ui/notice";
 import {
   continueRefusal,
@@ -429,10 +430,10 @@ function EmptyStepFooter({
     <div className="flex flex-col gap-12 border-t border-[var(--color-border-secondary)] pt-16">
       <div className="flex items-center gap-12">
         {/* BTN-09: Continue stays pressable; pressing it while blocked names what is missing. */}
-        <Button variant="primary" onClick={onContinue} busy={busy}>
+        <Button variant="primary" className={PHONE_TOUCH_TARGET} onClick={onContinue} busy={busy}>
           Continue
         </Button>
-        <Button variant="default" onClick={onCancel}>
+        <Button variant="default" className={PHONE_TOUCH_TARGET} onClick={onCancel}>
           Cancel
         </Button>
       </div>
@@ -464,13 +465,14 @@ export function Footer({
       <div className="flex items-center gap-12">
         <Button
           variant="primary"
+          className={PHONE_TOUCH_TARGET}
           onClick={onConfirm}
           disabled={!canConfirm}
           busy={confirmBusy}
         >
           Continue
         </Button>
-        <Button variant="default" onClick={onCancel}>
+        <Button variant="default" className={PHONE_TOUCH_TARGET} onClick={onCancel}>
           Cancel
         </Button>
       </div>

@@ -54,6 +54,7 @@ import { DebugDrawer } from "./debug-drawer";
 import { isRemovalCompilationReady } from "./submission-facts";
 import { SubmissionSummary } from "./submission-summary";
 import { allowsRemovalSubmission } from "./resume-state";
+import { PHONE_TOUCH_TARGET } from "./touch-target";
 import { RemovalEmissionsLedger } from "./removal-emissions-ledger";
 import { ComponentsSent } from "./components-sent";
 import { Notice } from "@/components/ui/notice";
@@ -268,7 +269,7 @@ export function SubmitStep({
           isResubmission={attemptIsResubmission}
         />
         <div className="flex flex-wrap items-center justify-start gap-12">
-          <Button variant="primary" onClick={onDone}>
+          <Button variant="primary" className={PHONE_TOUCH_TARGET} onClick={onDone}>
             Done
           </Button>
           {viewUrl && (
@@ -316,12 +317,13 @@ export function SubmitStep({
           {!submitMutation.isPending && (
             <div className="flex items-center gap-12">
               {submissionStalled ? (
-                <Button variant="primary" onClick={onDone}>
+                <Button variant="primary" className={PHONE_TOUCH_TARGET} onClick={onDone}>
                   Close
                 </Button>
               ) : (
                 <>
                   <Button
+                    className={PHONE_TOUCH_TARGET}
                     onClick={() => {
                       setProgressUpdates([]);
                       submitMutation.reset();
@@ -331,6 +333,7 @@ export function SubmitStep({
                   </Button>
                   <Button
                     variant="primary"
+                    className={PHONE_TOUCH_TARGET}
                     onClick={() => fireSubmit(lastConfirmProduction)}
                   >
                     Try again
@@ -355,6 +358,7 @@ export function SubmitStep({
   const submitButton = (
     <Button
       variant="primary"
+      className={PHONE_TOUCH_TARGET}
       onClick={handleSubmit}
       busy={submitMutation.isPending}
       disabled={rejectedWithExternal || !requirementsMet}
@@ -419,6 +423,7 @@ export function SubmitStep({
         {canDeleteRemoval ? (
           <Button
             variant="default"
+            className={PHONE_TOUCH_TARGET}
             onClick={() => setDeleteConfirmOpen(true)}
             disabled={submitMutation.isPending}
           >
