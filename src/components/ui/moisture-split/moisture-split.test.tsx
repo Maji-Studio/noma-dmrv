@@ -1,7 +1,10 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
-import { FormDetailProvider } from "@/components/forms/form-detail-context";
+import { afterEach, describe, expect, it } from "vitest";
 import { MoistureSplit } from "./moisture-split";
+
+afterEach(cleanup);
 
 type MoistureSegment = "dry" | "water" | "added-water";
 
@@ -15,7 +18,7 @@ function renderedSegmentWidth(html: string, segment: MoistureSegment): number {
   return Number(match[1]);
 }
 
-/** The calculation table is the one thing the detail level gates. */
+/** The ledger lives in the (i) panel and mounts only while it is open. */
 const TABLE_HEADER = "% of total";
 
 describe("MoistureSplit", () => {
@@ -46,15 +49,23 @@ describe("MoistureSplit", () => {
     expect(html).toContain("20% moisture");
   });
 
-  it("explains a stored dry mass as a subtraction rather than a moisture formula", () => {
-    const html = renderToStaticMarkup(
-      <MoistureSplit wetMassKg={850} dryMassKg={820} moisturePercent={null} />,
-    );
-
-    expect(html).toContain(
-      "Dry mass comes from the saved record. Water is the wet mass minus the dry mass: 850 kg - 820 kg = 30 kg.",
-    );
+  it("keeps the stored dry mass sentence in the (i) panel and nothing inline", async () => {
+    const element = <MoistureSplit wetMassKg={850} dryMassKg={820} moisturePercent={null} />;
+    const html = renderToStaticMarkup(element);
+    expect(html).not.toContain("Dry mass comes from the saved record");
     expect(html).not.toContain("Dry = wet");
+
+    render(element);
+    fireEvent.click(screen.getByRole("button", { name: "About Material composition" }));
+    expect(await screen.findByText(
+      "Dry mass comes from the saved record. Water is the wet mass minus the dry mass: 850 kg - 820 kg = 30 kg.",
+    )).toBeTruthy();
+  });
+
+  it("puts the (i) inside the key row, after the last swatch item, so it wraps with the key", () => {
+    const { container } = render(<MoistureSplit wetMassKg={450} moisturePercent={10} addedWaterKg={50} />);
+    const key = container.querySelector('[aria-live="polite"]')!;
+    expect(key.lastElementChild?.hasAttribute("data-explanation-info")).toBe(true);
   });
 
   it("puts the key line under the bar and names each segment with its mass", () => {
@@ -90,7 +101,7 @@ describe("MoistureSplit", () => {
     expect(html).toContain("Water 17 kg");
   });
 
-  it("combines the ledger and the wet-basis arithmetic in the calculation table", () => {
+  it("keeps the wet-basis formula inline and puts the ledger behind the (i)", async () => {
     const html = renderToStaticMarkup(
       <MoistureSplit
         wetMassKg={4000}
@@ -99,15 +110,20 @@ describe("MoistureSplit", () => {
       />,
     );
 
-    expect(html).toContain("Feedstock composition.");
-    expect(html).toContain("Wet total");
-    expect(html).toContain(TABLE_HEADER);
     expect(html).toContain(
       "Dry = wet × (1 - moisture). 4,000 kg × (1 - 20%) = 3,200 kg.",
     );
+    expect(html).not.toContain(TABLE_HEADER);
+    expect(html).not.toContain("Wet total");
+
+    render(<MoistureSplit wetMassKg={4000} moisturePercent={20} materialLabel="Feedstock" />);
+    expect(screen.queryByText(TABLE_HEADER)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "About Feedstock composition" }));
+    expect(await screen.findByText(TABLE_HEADER)).toBeTruthy();
+    expect(screen.getByText("Wet total")).toBeTruthy();
   });
 
-  it("includes added water in the final wet mass and draws it separately", () => {
+  it("includes added water in the final wet mass and draws it separately", async () => {
     const html = renderToStaticMarkup(
       <MoistureSplit
         wetMassKg={450}
@@ -127,13 +143,18 @@ describe("MoistureSplit", () => {
     expect(html).toContain("Water before addition 45 kg");
     expect(html).toContain("Water added 50 kg");
     expect(html).toContain("Final moisture 19%");
-    expect(html).toContain(
+    // Only the dry mass sentence stays inline; the added water step waits in the (i).
+    expect(html).toContain("Dry = wet × (1 - moisture).");
+    expect(html).not.toContain("Added water raises the wet mass");
+    render(<MoistureSplit wetMassKg={450} moisturePercent={10} addedWaterKg={50} materialLabel="Biochar" />);
+    fireEvent.click(screen.getByRole("button", { name: "About Biochar composition" }));
+    expect(await screen.findByText(
       "Added water raises the wet mass and leaves dry mass unchanged: 450 kg + 50 kg = 500 kg.",
-    );
+    )).toBeTruthy();
   });
 
-  it("preserves a supplied note when added water is present", () => {
-    const html = renderToStaticMarkup(
+  it("keeps a supplied note in the (i) panel when added water is present", async () => {
+    render(
       <MoistureSplit
         wetMassKg={450}
         moisturePercent={10}
@@ -142,10 +163,10 @@ describe("MoistureSplit", () => {
       />,
     );
 
-    expect(html).toContain(
-      '<p class="body-caption">Moisture from delivery record</p>',
-    );
-    expect(html).toContain("Water added 50 kg");
+    expect(screen.queryByText("Moisture from delivery record")).toBeNull();
+    expect(screen.getByText(/Water added 50 kg/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "About Material composition" }));
+    expect(await screen.findByText("Moisture from delivery record")).toBeTruthy();
   });
 
   it("keeps tiny visible segments while normalizing the bar to 100%", () => {
@@ -199,36 +220,14 @@ describe("MoistureSplit", () => {
     expect(html).not.toContain(TABLE_HEADER);
   });
 
-  it("keeps the bar and key in Simple and adds the calculation table in Detailed", () => {
-    const simple = renderToStaticMarkup(
-      <FormDetailProvider scope="feedstock">
-        <MoistureSplit
-          wetMassKg={4000}
-          moisturePercent={20}
-          materialLabel="Feedstock"
-        />
-      </FormDetailProvider>,
+  it("draws no (i), formula or ledger when the host surface explains the arithmetic", () => {
+    const html = renderToStaticMarkup(
+      <MoistureSplit wetMassKg={4000} moisturePercent={20} materialLabel="Feedstock" calculation={false} />,
     );
 
-    expect(simple).toContain('role="img"');
-    expect(simple).toContain("Dry feedstock 3,200 kg");
-    expect(simple).toContain("Water 800 kg");
-    expect(simple).not.toContain(TABLE_HEADER);
-    expect(simple).not.toContain("Dry = wet");
-
-    // No provider means no managed detail level, so read surfaces stay expanded.
-    const detailed = renderToStaticMarkup(
-      <MoistureSplit
-        wetMassKg={4000}
-        moisturePercent={20}
-        materialLabel="Feedstock"
-      />,
-    );
-
-    expect(detailed).toContain("Dry feedstock 3,200 kg");
-    expect(detailed).toContain(TABLE_HEADER);
-    expect(detailed).toContain(
-      "Dry = wet × (1 - moisture). 4,000 kg × (1 - 20%) = 3,200 kg.",
-    );
+    expect(html).toContain('role="img"');
+    expect(html).toContain("Dry feedstock 3,200 kg");
+    expect(html).not.toContain("data-explanation-info");
+    expect(html).not.toContain("Dry = wet");
   });
 });

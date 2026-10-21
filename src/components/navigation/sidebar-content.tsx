@@ -165,7 +165,7 @@ const navSections: NavSection[] = [
 ];
 
 /**
- * Admin section — appended to the nav only for users with the admin role.
+ * Platform section — appended to the nav only for Platform Admins.
  *
  * One item, because the organization directory is the only surface that lives
  * under `/admin`. It used to point at an `/admin` hub whose other two tiles
@@ -174,7 +174,7 @@ const navSections: NavSection[] = [
  * `?facility=` param is skipped.
  */
 const adminSection: NavSection = {
-  title: "Admin",
+  title: "Platform",
   accent: SECTION_ACCENTS.admin,
   items: [
     {
@@ -308,7 +308,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     window.location.replace("/login");
   }
 
-  // Append the Admin section only for admin users. `useIsAdmin()` is
+  // Append the Platform section only for Platform Admins. `useIsAdmin()` is
   // hydration-safe (server snapshot is `false`, so the admin subtree only
   // mounts after hydration). Server-side `requireAdmin()` in
   // src/app/admin/layout.tsx remains the actual access boundary.

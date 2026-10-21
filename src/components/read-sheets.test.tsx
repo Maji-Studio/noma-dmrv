@@ -1,28 +1,20 @@
+// @vitest-environment jsdom
 vi.mock("@/hooks/use-emission-entries", () => ({ useBatchEmissionLines: () => ({ data: [], isLoading: false, error: null }) }));
-import { TEST_SITE_POSITION } from "../../../tests/helpers/test-org";
+import { TEST_SITE_POSITION } from "../../tests/helpers/test-org";
 /**
- * Detail level parity for every read sheet: each read-section builder renders
- * through the shared side-sheet spine at Simple, then at Detailed, and must
- * show the same field labels, section titles, actions and text outside
- * explanation blocks (docs/forms.md, "Simple and Detailed presentation").
- *
- * Section content that only fetches and lists (documents, evidence panels,
- * transport legs, sampling) is stubbed: the source scan in
- * `form-detail-parity.test.tsx` already proves those modules never read the
- * level. Content built on level-aware blocks (moisture splits, stock blocks,
- * applied batches, the mix pile) renders for real.
+ * Every read sheet: each read-section builder renders through the shared
+ * side-sheet spine, and the section order and key fields of the families that
+ * were reworked stay put. Section content that only fetches and lists
+ * (documents, evidence panels, transport legs, sampling) is stubbed.
  *
  * A builder is a file ending `-read-sections.tsx` or a function returning
  * `DetailPanelSection[]`; adding one without a case here fails the coverage check.
  */
-import type { ReactElement, ReactNode } from "react";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
+import { cleanup, render } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { stub } = vi.hoisted(() => ({ stub: (name: string) => () => name }));
-vi.mock("@/components/ui/tooltip", () => ({
-  InfoHint: ({ label }: { children: ReactNode; label: string }) => <span aria-label={label} />,
-  Tooltip: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
 vi.mock("next/link", () => ({ default: ({ children, href }: { children: ReactNode; href: string }) => <a href={href}>{children}</a> }));
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({ facilities: [{ id: "facility", timezone: "UTC" }] }),
@@ -54,7 +46,7 @@ vi.mock("@/components/orders/order-location-read", () => ({ OrderLocationRead: s
 vi.mock("@/components/credit-batches/credit-batch-removal-template", () => ({ CreditBatchRemovalTemplate: stub("Removal template") }));
 vi.mock("@/components/certification/facility-certifier-summary", () => ({ FacilityCertifierSummary: stub("Registry connection") }));
 
-import { renderBothLevels, sourceFiles } from "./form-detail-parity-harness";
+import { sourceFiles } from "../../tests/helpers/source-files";
 import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import { orderSheetSections } from "@/components/orders/order-read-sections";
@@ -157,25 +149,23 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
   ) },
 ];
 
-beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
+afterEach(cleanup);
 
-describe("read sheet detail level parity", () => {
+describe("read sheets", () => {
   it.each([
     { name: "formulation", keys: ["name", "Blend composition by volume", "description"], first: "Formulation name", last: "Description" },
     { name: "reactor", keys: ["identifier", "Reactor configuration"], first: "Identifier", last: "Nominal throughput (tph)" },
     { name: "credit batch", keys: ["Certification progress", "Removal template", "Batch definition", "Production runs", "emissions", "notes"], first: "Feedstock type", last: "Notes" },
-  ])("keeps $name read groups and field order without generic headings", async ({ name, keys, first, last }) => {
+  ])("keeps $name read groups and field order without generic headings", ({ name, keys, first, last }) => {
     const { sections } = READ_SECTION_CASES.find(entry => entry.name === name)!;
     expect(sections.map(section => section.id ?? section.title)).toEqual(keys);
     const labels = sections.flatMap(section => section.fields.map(field => field.label));
     expect(labels[0]).toBe(first);
     expect(labels.at(-1)).toBe(last);
-    const { simple, detailed } = await renderBothLevels(<EntitySideSheetSections sections={sections} />);
-    for (const level of [simple, detailed]) {
-      expect(level.items).toContain("section:(untitled)");
-      expect(level.text).not.toContain("Required information");
-      expect(level.text).not.toContain("Additional information");
-    }
+    expect(sections.some(section => section.title === undefined)).toBe(true);
+    const { container } = render(<EntitySideSheetSections sections={sections} />);
+    expect(container.textContent).not.toContain("Required information");
+    expect(container.textContent).not.toContain("Additional information");
   });
 
   it("shows the saved default only on split output bin read views", () => {
@@ -194,11 +184,12 @@ describe("read sheet detail level parity", () => {
     expect(builders.sort()).toEqual([...new Set(READ_SECTION_CASES.map(entry => entry.file))].sort());
   });
 
-  it.each(READ_SECTION_CASES)("$name shows the same fields, sections and actions at both levels", async ({ sections }) => {
-    const element: ReactElement = <EntitySideSheetSections numbered sections={sections} />;
-    const { simple, detailed } = await renderBothLevels(element);
-    expect(simple.items.some(item => item.startsWith("section:"))).toBe(true);
-    expect(detailed.items).toEqual(simple.items);
-    expect(detailed.text).toEqual(simple.text);
+  it.each(READ_SECTION_CASES)("$name renders its sections and fields", ({ sections }) => {
+    const { container } = render(<EntitySideSheetSections numbered sections={sections} />);
+    expect(container.textContent).not.toBe("");
+    for (const section of sections) {
+      if (section.title) expect(container.textContent).toContain(section.title);
+      for (const field of section.fields) expect(container.textContent).toContain(field.label);
+    }
   });
 });

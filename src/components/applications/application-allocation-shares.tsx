@@ -3,10 +3,9 @@
  * from, and which production runs are behind each batch.
  *
  * The bar is the answer: one proportional block per batch, with a key line
- * naming each batch and its dry mass, at both levels, because the bar and the
- * key are what the saved shares mean. Detailed adds the ledger with each
- * batch's percentage of the total, and the action row's `Show calculation`
- * holds the run-level split the ledger cannot show.
+ * naming each batch and its dry mass, because the bar and the key are what the
+ * saved shares mean. The caption's (i) opens the ledger with each batch's
+ * percentage of the total and the run-level split the ledger cannot show.
  */
 "use client";
 
@@ -42,8 +41,10 @@ export function ApplicationAllocationShares({ shares }: { shares: ApplicationAll
   return <CompositionCard
     title="Applied batches"
     hint={APPLIED_BATCHES_HINT}
-    detail={<CompositionLedger label="Applied batches" totalLabel={TOTAL_LABEL} total={total} segments={segments} />}
-    calculation={<SourceRunGroups label="Source production runs per applied batch" groups={groups} />}
+    explanation={<>
+      <CompositionLedger label="Applied batches" totalLabel={TOTAL_LABEL} total={total} segments={segments} />
+      <SourceRunGroups label="Source production runs per applied batch" groups={groups} />
+    </>}
   >
     <div className="space-y-8">
       <SegmentBar label={TOTAL_LABEL} segments={segments} />

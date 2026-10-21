@@ -134,7 +134,7 @@ export function SettingsRail({
         // Sticky against `main`, which is the app shell's scrollport on desktop
         // (src/app/(app)/layout.tsx). Capped and scrollable so a long menu can
         // never push its own last row out of reach.
-        className="hidden border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)] lg:sticky lg:top-24 lg:block lg:max-h-[calc(100vh-48px)] lg:overflow-y-auto"
+        className="hidden border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)] lg:sticky lg:top-24 lg:block lg:max-h-[calc(100vh-48px-var(--platform-admin-bar-height))] lg:overflow-y-auto"
       >
         {groups.map((group) => {
           const headingId = `${idPrefix}-group-${group.key}`;

@@ -112,8 +112,8 @@ describe("organization reads", () => {
   });
 
   it.each(ORG_READS)("stops the $name read when authentication fails", async ({ action, read }) => {
-    vi.mocked(requireOrgContext).mockRejectedValue(new SafeError("Select an Organization to continue."));
-    expect(await action()).toEqual({ success: false, error: "Select an Organization to continue." });
+    vi.mocked(requireOrgContext).mockRejectedValue(new SafeError("Select an organization to continue."));
+    expect(await action()).toEqual({ success: false, error: "Select an organization to continue." });
     expect(read).not.toHaveBeenCalled();
     expect(requireOrgRole).not.toHaveBeenCalled();
     expect(logger.error).not.toHaveBeenCalled();

@@ -16,6 +16,8 @@ interface OrganizationAdminRowProps {
   org: { id: string; name: string; slug: string; memberCount: number };
   apiAccessEnabled: boolean | undefined;
   entering: boolean;
+  /** True for the organization the viewer is working in now. */
+  current?: boolean;
   onEnter: () => void;
 }
 
@@ -23,7 +25,7 @@ interface OrganizationAdminRowProps {
  * Organization status and actions, with confirmation before disabling API
  * access and a write-only certifier keys form in its own modal.
  */
-export function OrganizationAdminRow({ org, apiAccessEnabled, entering, onEnter }: OrganizationAdminRowProps) {
+export function OrganizationAdminRow({ org, apiAccessEnabled, entering, current = false, onEnter }: OrganizationAdminRowProps) {
   const [keysOpen, setKeysOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmOff, setConfirmOff] = useState(false);
@@ -82,15 +84,19 @@ export function OrganizationAdminRow({ org, apiAccessEnabled, entering, onEnter 
             >
               Isometric keys
             </Button>
-            <Button
-              type="button"
-              variant="weak"
-              size="small"
-              onClick={onEnter}
-              busy={entering}
-            >
-              Enter
-            </Button>
+            {current ? (
+              <span className="body-small font-medium text-[var(--color-text-secondary)]">Current</span>
+            ) : (
+              <Button
+                type="button"
+                variant="weak"
+                size="small"
+                onClick={onEnter}
+                busy={entering}
+              >
+                Open
+              </Button>
+            )}
           </>
         }
       />

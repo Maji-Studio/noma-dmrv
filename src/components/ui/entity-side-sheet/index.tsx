@@ -13,7 +13,6 @@
 "use client";
 
 import * as React from "react";
-import { FormDetailProvider, FormDetailControl } from "@/components/forms/form-detail-context";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import { DiscardChangesDialog } from "@/components/ui/discard-changes-dialog";
@@ -54,12 +53,6 @@ function ArrowLeftIcon() {
 type SideSheetMode = "view" | "edit" | "create";
 
 interface EntitySideSheetProps {
-  /**
-   * Explicit opt-in: `true` in every mode, `"view"` in saved read mode only,
-   * `"form"` in create and edit only (a read view with nothing optional).
-   */
-  detailToggle?: boolean | "view" | "form";
-  detailScope?: string;
   /** Controlled open state */
   open: boolean;
   /** Callback when the panel should close */
@@ -124,8 +117,6 @@ interface EntitySideSheetProps {
  * -----------------------------------------------------------------------------------------------*/
 
 function EntitySideSheet({
-  detailToggle = false,
-  detailScope = "",
   open,
   onOpenChange,
   onCloseAttempt,
@@ -183,7 +174,7 @@ function EntitySideSheet({
       body.scrollTop = 0;
     });
     return () => cancelAnimationFrame(frame);
-  }, [open, mode, detailScope]);
+  }, [open, mode]);
 
   function confirmDiscard(action: "close" | "view") {
     if (action === "close") onOpenChange(false);
@@ -231,15 +222,11 @@ function EntitySideSheet({
     dirtyRef.current = true;
   };
 
-  const showDetailToggle = detailToggle === true
-    || (detailToggle === "view" && isViewMode)
-    || (detailToggle === "form" && !isViewMode);
   return (
-    <FormDetailProvider scope={`${open}:${mode}:${detailScope}`} enabled={showDetailToggle}>
     <SlideOverPanel.Root open={open} onOpenChange={handleOpenChange}>
       <SlideOverPanel.Content size={size}>
         {/* Header */}
-        <SlideOverPanel.Header showClose actions={showDetailToggle ? <FormDetailControl /> : undefined}>
+        <SlideOverPanel.Header showClose>
           <div className="flex min-w-0 items-center gap-12">
             {/* Back arrow: only in edit mode when coming from view (not create) */}
             {mode === "edit" && (
@@ -259,7 +246,7 @@ function EntitySideSheet({
                 {mode !== "create" && titleBadge}
               </div>
               {subtitle && (
-                <SlideOverPanel.Description className={showDetailToggle ? "truncate" : undefined}>
+                <SlideOverPanel.Description>
                   {subtitle}
                 </SlideOverPanel.Description>
               )}
@@ -335,7 +322,6 @@ function EntitySideSheet({
         />
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
-    </FormDetailProvider>
   );
 }
 EntitySideSheet.displayName = "EntitySideSheet";
