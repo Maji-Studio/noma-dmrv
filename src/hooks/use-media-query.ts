@@ -15,8 +15,12 @@ import { useSyncExternalStore } from "react";
 /** Default mobile breakpoint — matches Tailwind's `md` (everything below is "mobile"). */
 export const MOBILE_BREAKPOINT_PX = 768;
 
+/** jsdom and older browsers may have no matchMedia: they read as no match. */
+const hasMatchMedia = () => typeof window.matchMedia === "function";
+
 function subscribe(query: string) {
   return (onChange: () => void) => {
+    if (!hasMatchMedia()) return () => {};
     const mql = window.matchMedia(query);
     mql.addEventListener("change", onChange);
     return () => mql.removeEventListener("change", onChange);
@@ -30,7 +34,7 @@ function subscribe(query: string) {
 export function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(
     subscribe(query),
-    () => window.matchMedia(query).matches,
+    () => hasMatchMedia() && window.matchMedia(query).matches,
     () => false,
   );
 }

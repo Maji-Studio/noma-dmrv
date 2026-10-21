@@ -165,6 +165,16 @@ describe("ComponentsSent", () => {
     expect(within(row).getByRole("button", { name: "Why Staff travel is not sent" }).getAttribute("data-reason")).toBe("Sent with an earlier Removal.");
   });
 
+  it("says why a figure is blank: not applicable when the component is not sent, not recorded when nothing gave a figure", () => {
+    const lines = [LINES[1], line({ componentId: "bare", displayName: "Bare component", state: "empty" })];
+    const bareCtx = { ...ctx, emissionLinesByBatchId: { [BATCH_ID]: lines } } as unknown as typeof ctx;
+    render(<ComponentsSent ctx={bareCtx} facilityId="facility-1" review={review([], ["manual"])} isLoading={false} />);
+    const notSent = screen.getByText("Staff travel").closest("li")!;
+    expect(within(notSent).getByText("Not applicable").getAttribute("data-empty")).toBe("true");
+    const bare = screen.getByText("Bare component").closest("li")!;
+    expect(within(bare).getByText("Not recorded").getAttribute("data-empty")).toBe("true");
+  });
+
   it("offers the file names behind a toggletip, reachable on a tap", () => {
     render(<ComponentsSent ctx={ctx} facilityId="facility-1" review={REVIEW} isLoading={false} />);
     expect(screen.getAllByRole("button", { name: "File names for Staff travel" }).length).toBeGreaterThan(0);

@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import type { RecordLockView } from "@/lib/record-lock-view";
 import type { RemovalListRow } from "./removal-list-state";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { RemovalCellDetails, removalSearchText, StatusCell } from "./removals-list";
@@ -21,6 +22,38 @@ describe("Removal list reason", () => {
       expect(html).not.toContain("Review settings.");
     },
   );
+});
+
+describe("Removal list status for a returned Removal", () => {
+  const lock = {
+    level: "open", heldBy: [], usedBy: [], freeFields: [], howToFree: null,
+    returnedBy: [{
+      removal: { kind: "removal", id: "rem-1", label: null, facilityId: "facility-1", period: { startedOn: "2026-07-01", completedOn: "2026-09-30" } },
+      statement: { kind: "ghgStatement", id: "statement-1", label: null, facilityId: "facility-1", period: { startedOn: "2026-07-01", completedOn: "2026-09-30" } },
+      statementStatus: "FAILED_VERIFICATION",
+    }],
+  } as unknown as RecordLockView;
+  const correction = (resubmitNeeded: boolean) => ({
+    removalId: "rem-1", removalCode: "RM-1", windowOpen: true, resubmitNeeded,
+    statement: { id: "statement-1", status: "FAILED_VERIFICATION", reportingPeriodStartOn: "2026-07-01", reportingPeriodEndOn: "2026-09-30" },
+    batches: [], changed: [],
+  }) as RemovalListRow["correction"];
+
+  it.each([[false, "Correction needed"], [true, "Resubmit needed"]])("names the state on one line, with nothing under it, when resubmitNeeded is %s", (resubmitNeeded, label) => {
+    const html = renderToStaticMarkup(<StatusCell summary={{ removalId: "rem-1", correction: correction(resubmitNeeded) } as RemovalListRow} lock={lock} />);
+    expect(html).toContain(`>${label}<`);
+    expect(html).toContain('data-status="pending"');
+    // One Removal never shows both #1134's lock-based state and this one: one badge, none of #1134's action or sentence.
+    expect(html.split(`>${label}<`)).toHaveLength(2);
+    expect(html).not.toContain("Open GHG Statement");
+    expect(html).not.toContain("Correct this Removal");
+  });
+
+  it("keeps the lock-based Correction needed where the Removal has no correction", () => {
+    const html = renderToStaticMarkup(<StatusCell summary={{ removalId: "rem-1" } as RemovalListRow} lock={lock} />);
+    expect(html).toContain("Correction needed");
+    expect(html).toContain("Open GHG Statement");
+  });
 });
 
 describe("Removal cell registry record", () => {

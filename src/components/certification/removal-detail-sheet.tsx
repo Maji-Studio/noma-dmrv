@@ -50,6 +50,8 @@ import { removalDeletionCopy } from "./removal-deletion-copy";
 import { Notice } from "@/components/ui/notice";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { RemovalCorrectionNotice } from "./removal-correction-needed";
+import { RemovalResubmitNotice, ResubmitRemovalAction } from "./removal-resubmit-notice";
+import { correctionStatus } from "@/lib/removal-correction-copy";
 import { RemovalEvidenceLinksNotice } from "./removal-evidence-links-notice";
 
 interface RemovalDetailSheetProps {
@@ -58,7 +60,7 @@ interface RemovalDetailSheetProps {
   facilityId: string;
   open: boolean;
   onClose: () => void;
-  /** Which Isometric returned, if any: shows "Correction needed". */
+  /** Which Isometric returned, if any: shows "Correction needed" where the Removal has no `correction`. */
   lock?: RecordLockView;
 }
 
@@ -178,6 +180,10 @@ export function RemovalDetailSheet({
     enrichmentStatus: summary.enrichmentStatus,
     readiness: summary.readiness,
   });
+  // A returned Removal with its correction window open shows the Returned or
+  // Resubmit needed status and one notice in place of #1134's lock-based one.
+  const { correction } = summary;
+  const shownStatus = correction ? { ...workflowStatus, ...correctionStatus(correction) } : workflowStatus;
   const submissionWarningNotes = buildSubmissionWarningNotes(
     [...summary.submissionWarnings, ...(summary.readiness?.transportVehicleAdvisories ?? [])],
   );
@@ -233,8 +239,12 @@ export function RemovalDetailSheet({
           <SlideOverPanel.Body className="flex flex-col gap-24">
             <EnvBanner isProduction={isProduction} variant="inline" />
 
-            <SubmissionStatusSection summary={summary} status={workflowStatus} />
-            <RemovalCorrectionNotice lock={lock} />
+            <SubmissionStatusSection summary={summary} status={shownStatus} />
+            {correction ? (
+              <RemovalResubmitNotice correction={correction} facilityId={facilityId} />
+            ) : (
+              <RemovalCorrectionNotice lock={lock} />
+            )}
             <RemovalEvidenceLinksNotice links={summary.evidenceLinks} />
 
             {summary.externalId && (
@@ -334,8 +344,9 @@ export function RemovalDetailSheet({
             )}
           </SlideOverPanel.Body>
 
-          {(isActionable || canDelete) && (
+          {(isActionable || canDelete || correction?.resubmitNeeded) && (
             <SlideOverPanel.Footer>
+              <ResubmitRemovalAction correction={correction} facilityId={facilityId} />
               <RemovalReviewAction
                 isActionable={isActionable}
                 reviewHref={reviewHref}

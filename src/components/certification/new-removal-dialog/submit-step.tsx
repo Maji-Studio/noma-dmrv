@@ -54,6 +54,8 @@ import { DebugDrawer } from "./debug-drawer";
 import { isRemovalCompilationReady } from "./submission-facts";
 import { SubmissionSummary } from "./submission-summary";
 import { allowsRemovalSubmission } from "./resume-state";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
+import { cn } from "@/lib/utils";
 import { RemovalEmissionsLedger } from "./removal-emissions-ledger";
 import { ComponentsSent } from "./components-sent";
 import { Notice } from "@/components/ui/notice";
@@ -71,6 +73,8 @@ interface SubmitStepProps {
   facilityName: string;
   onDone: () => void;
   submitMutation: ReturnType<typeof useSubmitRemoval>;
+  /** Back to the Empty components step, to undo a recorded zero. Shown on phones only, where the rail shows one step. */
+  onBackToEmpty?: () => void;
 }
 
 export function SubmitStep({
@@ -80,6 +84,7 @@ export function SubmitStep({
   facilityName,
   onDone,
   submitMutation,
+  onBackToEmpty,
 }: SubmitStepProps) {
   const router = useRouter();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
@@ -268,7 +273,7 @@ export function SubmitStep({
           isResubmission={attemptIsResubmission}
         />
         <div className="flex flex-wrap items-center justify-start gap-12">
-          <Button variant="primary" onClick={onDone}>
+          <Button variant="primary" className={PHONE_TOUCH_TARGET} onClick={onDone}>
             Done
           </Button>
           {viewUrl && (
@@ -316,12 +321,13 @@ export function SubmitStep({
           {!submitMutation.isPending && (
             <div className="flex items-center gap-12">
               {submissionStalled ? (
-                <Button variant="primary" onClick={onDone}>
+                <Button variant="primary" className={PHONE_TOUCH_TARGET} onClick={onDone}>
                   Close
                 </Button>
               ) : (
                 <>
                   <Button
+                    className={PHONE_TOUCH_TARGET}
                     onClick={() => {
                       setProgressUpdates([]);
                       submitMutation.reset();
@@ -331,6 +337,7 @@ export function SubmitStep({
                   </Button>
                   <Button
                     variant="primary"
+                    className={PHONE_TOUCH_TARGET}
                     onClick={() => fireSubmit(lastConfirmProduction)}
                   >
                     Try again
@@ -355,6 +362,7 @@ export function SubmitStep({
   const submitButton = (
     <Button
       variant="primary"
+      className={PHONE_TOUCH_TARGET}
       onClick={handleSubmit}
       busy={submitMutation.isPending}
       disabled={rejectedWithExternal || !requirementsMet}
@@ -416,9 +424,15 @@ export function SubmitStep({
             </span>
           </Tooltip>
         )}
+        {onBackToEmpty && (
+          <Button variant="default" className={cn(PHONE_TOUCH_TARGET, "sm:hidden")} onClick={onBackToEmpty} data-phone-back>
+            Back
+          </Button>
+        )}
         {canDeleteRemoval ? (
           <Button
             variant="default"
+            className={PHONE_TOUCH_TARGET}
             onClick={() => setDeleteConfirmOpen(true)}
             disabled={submitMutation.isPending}
           >

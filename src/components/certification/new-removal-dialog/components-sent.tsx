@@ -73,7 +73,13 @@ function FilesCell({ row }: { row: SentComponentRow }) {
   );
 }
 
+/** A blank figure says why: a component not sent does not apply, one with no figure was not recorded. */
+function missingFigureText(row: SentComponentRow): string {
+  return row.notSentReason ? MISSING_VALUE.notApplicable : MISSING_VALUE.notRecorded;
+}
+
 function SentRow({ row, withFiles }: { row: SentComponentRow; withFiles: boolean }) {
+  const missing = row.value === null;
   return (
     <li
       className={cn(
@@ -106,12 +112,13 @@ function SentRow({ row, withFiles }: { row: SentComponentRow; withFiles: boolean
       <span
         className={cn(
           "col-start-2 row-start-2 text-right body-small font-mono tabular-nums md:col-auto md:row-auto",
-          row.valuePointer
+          row.valuePointer || missing
             ? "text-[var(--color-text-tertiary)]"
             : "text-[var(--color-text-primary)]",
         )}
+        data-empty={missing || undefined}
       >
-        {row.value}
+        {row.value ?? missingFigureText(row)}
       </span>
     </li>
   );

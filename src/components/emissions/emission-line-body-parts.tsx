@@ -8,7 +8,7 @@
 
 import { useState, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowUpRightIcon, FileIcon, PlusIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArrowUpRightIcon, ClockIcon, FileIcon, PlusIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms/server-error";
 import { Button, Notice } from "@/components/ui";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
@@ -36,6 +36,14 @@ import { TOUCH_TARGET } from "./emission-line-grid";
 import { SOURCE_ICON } from "./emission-source-chips";
 
 export const ICON = 14;
+
+/** An entry re-entered after its Removal was sent: it counts once the Removal is resubmitted. */
+export const WAITING_FOR_RESUBMIT_LABEL = "Waiting for resubmit";
+
+/** The sent original is retired and its replacement is not sent yet. */
+export function isWaitingForResubmit(entry: Pick<EmissionEntry, "heldForRemovalId" | "sentByRemovalId">): boolean {
+  return !!entry.heldForRemovalId && !entry.sentByRemovalId;
+}
 
 /** What the body reads off a line before laying it out. */
 export function lineBodyModel(line: EmissionLine) {
@@ -186,6 +194,12 @@ export function EntryEvidence({ entry, scope, actions, className }: {
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <div className="flex flex-wrap items-center gap-x-16 gap-y-2 body-caption text-[var(--color-text-secondary)]">
+        {isWaitingForResubmit(entry) && (
+          <span className="inline-flex min-h-24 items-center gap-4 text-[var(--st-wait)]" data-entry-waiting-for-resubmit>
+            <ClockIcon size={ICON} weight="bold" aria-hidden="true" />
+            {WAITING_FOR_RESUBMIT_LABEL}
+          </span>
+        )}
         {missing ? (
           <span className="inline-flex min-h-24 items-center gap-4 text-[var(--st-wait)]">
             <WarningIcon size={ICON} weight="bold" aria-hidden="true" />

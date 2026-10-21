@@ -45,7 +45,12 @@ vi.mock("./empty-components-step", () => ({
 vi.mock("@/components/ui/notice", () => ({
   Notice: ({ children, action }: { children: ReactNode; action?: ReactNode }) => <div role="alert">{children}{action}</div>,
 }));
-vi.mock("./submit-step", () => ({ SubmitStep: () => <div>submit step</div> }));
+// The real footer Back is a Button that only phones show; here the wiring is what matters.
+vi.mock("./submit-step", () => ({
+  SubmitStep: ({ onBackToEmpty }: { onBackToEmpty?: () => void }) => (
+    <div>submit step{onBackToEmpty && <button type="button" onClick={onBackToEmpty}>Back</button>}</div>
+  ),
+}));
 
 import { NewRemovalDialog } from "./index";
 import { EmptyComponentsCheckError } from "@/hooks/use-removal-empty-components";
@@ -94,6 +99,22 @@ describe("New Removal wizard with empty components", () => {
     renderDialog("removal-1");
     expect(screen.getByText("submit step")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Empty components/ })).toBeTruthy();
+  });
+
+  it("keeps the way back to Empty components from the submit step, for phones where the rail shows one step", () => {
+    mocks.landing.data = LAND_SUBMIT;
+    mocks.query.data = CONFIRMED;
+    renderDialog("removal-1");
+    const back = screen.getByRole("button", { name: "Back" });
+    fireEvent.click(back);
+    expect(screen.getByText("empty components step")).toBeTruthy();
+  });
+
+  it("offers no footer Back when the Empty components step is not part of the flow", () => {
+    mocks.landing.data = LAND_SUBMIT;
+    mocks.query.data = { removalVersion: 1, editable: true, batches: [{ creditBatchId: BATCH, code: "CB-26-001", lines: [], zeros: [] }] };
+    renderDialog("removal-1");
+    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
   });
 
   it("skips the step entirely when no selected batch has empty components", () => {

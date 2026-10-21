@@ -43,6 +43,7 @@ import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
 import { ProductionConfirmation } from "./production-confirmation";
 import { SubmissionProgress } from "./submission-progress";
 import { Notice } from "@/components/ui/notice";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 
 const STEPS: StepFlowStep[] = [
   { key: "report", label: "Report", description: "Choose the attachment" },
@@ -429,7 +430,7 @@ function GhgStatementSubmitDialogContent({
               {!isPending && (
                 <div className="flex items-center gap-12">
                   {mutation.isSuccess && resultNeedsReview ? (
-                    <Button
+                    <Button className={PHONE_TOUCH_TARGET}
                       type="button"
                       variant="primary"
                       onClick={() => {
@@ -440,21 +441,21 @@ function GhgStatementSubmitDialogContent({
                       Review submission
                     </Button>
                   ) : mutation.isSuccess || submissionStalled ? (
-                    <Button type="button" variant="primary" onClick={onClose}>
+                    <Button className={PHONE_TOUCH_TARGET} type="button" variant="primary" onClick={onClose}>
                       {submissionStalled || verificationFailed
                         ? "Close"
                         : "Done"}
                     </Button>
                   ) : (
                     <>
-                      <Button
+                      <Button className={PHONE_TOUCH_TARGET}
                         type="button"
                         variant="primary"
                         onClick={() => void retrySubmission()}
                       >
                         Try again
                       </Button>
-                      <Button
+                      <Button className={PHONE_TOUCH_TARGET}
                         type="button"
                         onClick={() => {
                           mutation.reset();
@@ -506,7 +507,7 @@ function GhgStatementSubmitDialogContent({
               footer={
                 <div className="flex flex-wrap justify-start gap-12">
                   {stepIndex === REPORT_STEP_INDEX ? (
-                    <Button
+                    <Button className={PHONE_TOUCH_TARGET}
                       type="button"
                       variant="primary"
                       onClick={advance}
@@ -519,7 +520,7 @@ function GhgStatementSubmitDialogContent({
                       Next
                     </Button>
                   ) : (
-                    <Button
+                    <Button className={PHONE_TOUCH_TARGET}
                       type="submit"
                       variant="primary"
                       busy={submissionPending}
@@ -540,7 +541,7 @@ function GhgStatementSubmitDialogContent({
                     </Button>
                   )}
                   {stepIndex === REVIEW_STEP_INDEX && (
-                    <Button
+                    <Button className={PHONE_TOUCH_TARGET}
                       type="button"
                       variant="default"
                       onClick={returnToReportStep}
@@ -549,7 +550,7 @@ function GhgStatementSubmitDialogContent({
                       Back
                     </Button>
                   )}
-                  <Button
+                  <Button className={PHONE_TOUCH_TARGET}
                     type="button"
                     variant="default"
                     onClick={onClose}

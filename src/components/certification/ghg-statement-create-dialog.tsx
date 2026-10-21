@@ -67,6 +67,7 @@ import {
   CERTIFICATION_ACCORDION_TRIGGER,
 } from "./certification-accordion-styles";
 import { Notice } from "@/components/ui/notice";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 
 interface GhgStatementCreateDialogProps {
   facilityId: string;
@@ -326,13 +327,13 @@ function DialogBody({
 
       <div className="sticky bottom-0 z-10 flex flex-wrap justify-start gap-12 border-t border-[var(--color-border-tertiary)] bg-[var(--color-background-white)] pt-16">
         {result ? (
-          <Button variant="primary" onClick={onClose}>
+          <Button className={PHONE_TOUCH_TARGET} variant="primary" onClick={onClose}>
             Done
           </Button>
         ) : (
           <>
             {isLastStep ? (
-              <Button
+              <Button className={PHONE_TOUCH_TARGET}
                 variant="primary"
                 onClick={onCreate}
                 busy={mutation.isPending}
@@ -341,7 +342,7 @@ function DialogBody({
                 Create GHG Statement
               </Button>
             ) : (
-              <Button
+              <Button className={PHONE_TOUCH_TARGET}
                 variant="primary"
                 onClick={advance}
                 // On the Period step, wait for the existing statements the
@@ -360,7 +361,7 @@ function DialogBody({
               </Button>
             )}
             {stepIndex > 0 && (
-              <Button
+              <Button className={PHONE_TOUCH_TARGET}
                 variant="default"
                 onClick={() => setStepIndex((s) => s - 1)}
                 disabled={mutation.isPending}
@@ -368,7 +369,7 @@ function DialogBody({
                 Back
               </Button>
             )}
-            <Button
+            <Button className={PHONE_TOUCH_TARGET}
               variant="default"
               onClick={onClose}
               disabled={mutation.isPending}
