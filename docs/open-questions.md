@@ -58,12 +58,6 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
   says nothing either way about two Removals or GHG Statements with overlapping
   dates, so reopening this starts with asking Isometric.
 
-## Credit batch line on other forms (#1164, #1059) - **deferred**
-
-- `src/components/forms/form-actions.tsx:FormActions` `preview`: Emissions entry
-  still needs its credit batch line (#1059 section 2), from its own
-  provenance, not its date. It waits for #1242.
-
 ## Record-lock follow-ups
 
 - `src/data-access/record-lock-lineage.ts:readRecordLockLineage`: Isometric exposes
