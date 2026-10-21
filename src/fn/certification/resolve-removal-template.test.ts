@@ -9,7 +9,6 @@ import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib
 import { deriveBatchHealth } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
-import { removalTemplatesSettingsHref } from "@/lib/certification/links";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { removalTemplateSetupHref } from "@/lib/certification/links";
 
