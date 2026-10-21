@@ -239,7 +239,7 @@ export function FormErrorSummary<
     <>
       {announcement}
       <Notice tone="error" live={false} title={countLabel(items)} data-form-error-summary="">
-        {message && <p>{message}</p>}
+        {message && <p className="body-small">{message}</p>}
         <ul className="mt-4 flex flex-col">
           {items.map((item) => (
             <li key={item.path}>
@@ -258,7 +258,7 @@ export function FormErrorSummary<
                   </span>
                 </a>
               ) : (
-                <p className="flex min-h-44 items-center py-4">{item.message}</p>
+                <p className="body-small flex min-h-44 items-center py-4">{item.message}</p>
               )}
             </li>
           ))}

@@ -20,7 +20,8 @@ export function ServerError({ message, action }: ServerErrorProps) {
   const { title, detail } = splitErrorMessage(message);
   return (
     <Notice tone="error" title={title}>
-      {detail && <p>{detail}</p>}
+      {/* The type class beats the global `p` size, as on the Notice title. */}
+      {detail && <p className="body-small">{detail}</p>}
       {action && <div className="mt-8">{action}</div>}
     </Notice>
   );
