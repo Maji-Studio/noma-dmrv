@@ -3,10 +3,13 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
+import { readableText } from "../../../tests/helpers/readable-text";
 
 vi.mock("@/components/ui/entity-detail-value", () => ({ EntityDetailValue: () => <span>Manure store</span> }));
 
 afterEach(cleanup);
+
+const text = readableText;
 
 import { productSheetSections, savedProductComposition } from "./product-read-details";
 
@@ -40,13 +43,6 @@ describe("Saved product composition", () => {
   });
 });
 
-/** Text as the operator reads it: elements are separated by a space. */
-function text(node: Node): string {
-  const walk = (current: Node): string => current.nodeType === Node.TEXT_NODE
-    ? current.textContent ?? ""
-    : [...current.childNodes].map(walk).join(" ");
-  return walk(node).replace(/\s+/g, " ");
-}
 
 describe("Product read view", () => {
   it("shows saved fields, dry lines, the composition picture and transport inline, and the ledger behind the (i)", async () => {

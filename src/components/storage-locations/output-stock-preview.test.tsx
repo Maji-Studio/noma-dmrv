@@ -4,16 +4,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
 import type { OutputStockPreview as Preview } from "@/types/output-stock";
 import { OutputStockAvailability, OutputStockPreview, type StockEntry } from "./output-stock-preview";
+import { readableText } from "../../../tests/helpers/readable-text";
 
 afterEach(cleanup);
 
-/** Text as the operator reads it: elements are separated by a space. */
-function readable(node: Node): string {
-  const walk = (current: Node): string => current.nodeType === Node.TEXT_NODE
-    ? current.textContent ?? ""
-    : [...current.childNodes].map(walk).join(" ");
-  return walk(node).replace(/\s+/g, " ");
-}
+const readable = readableText;
+
 
 /** Opens the block's (i) and returns the panel's text. */
 async function openInfo(): Promise<string> {
