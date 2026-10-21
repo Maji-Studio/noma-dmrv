@@ -112,6 +112,27 @@ test("the same scopes skip consent, and a step-up lists the refused write first 
   expect((await readE2EOAuthConsentScopes(client.clientId, person.userId)).sort()).toEqual(STEP_UP_SCOPES.split(" ").sort());
 });
 
+test("a reconnect with a stored consent shows the three choices, and Read only narrows the stored consent", async ({ page, client, person }) => {
+  await page.goto(authorizeUrl(client, ALL_SCOPES, "e2e-state-8"));
+  await signIn(page, person);
+  await page.getByRole("radio", { name: /E2E OAuth Organization A/ }).check({ force: true });
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("radio", { name: /^Read and write/ }).check({ force: true });
+  await page.getByRole("button", { name: "Allow", exact: true }).click();
+  await expectCallback(page, { state: "e2e-state-8" });
+  expect((await readE2EOAuthConsentScopes(client.clientId, person.userId)).sort()).toEqual(ALL_SCOPES.split(" ").sort());
+
+  // claude.ai Disconnect sends no revoke, so the next connect finds the stored consent and still offers the choices.
+  await page.goto(authorizeUrl(client, ALL_SCOPES, "e2e-state-9", { prompt: "consent" }));
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Allow E2E OAuth client to use noma?", level: 1 })).toBeVisible({ timeout: UI_TIMEOUT_MS });
+  await expect(page.getByRole("radio", { name: /^Read only/ })).toBeChecked();
+  await expect(page.getByRole("table")).toHaveCount(0);
+  await page.getByRole("button", { name: "Allow", exact: true }).click();
+  await expectCallback(page, { state: "e2e-state-9" });
+  expect((await readE2EOAuthConsentScopes(client.clientId, person.userId)).sort()).toEqual(READ_SCOPES.split(" ").sort());
+});
+
 test("Deny returns access_denied", async ({ page, client, person }) => {
   await page.goto(authorizeUrl(client, READ_SCOPES, "e2e-state-5"));
   await signIn(page, person);

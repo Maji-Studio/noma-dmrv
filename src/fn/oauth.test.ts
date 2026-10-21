@@ -72,7 +72,7 @@ it("reads consent organization and allowed scopes from the bound generation", as
   vi.mocked(assertGenerationEligible).mockResolvedValue({ ok: true, role: "member" });
   expect(await getOAuthConsentViewFn({ oauthQuery: oauthQuery.replace("feedstocks%3Aread", "feedstocks%3Aread+feedstocks%3Awrite"), organizationId: "forged-org", scopes: ["orders:write"] })).toMatchObject({ success: true, data: {
     organization: { id: "bound-org", name: "Bound organization" }, newlyRequestedScopes: ["feedstocks:write"],
-    alreadyAllowedScopes: ["feedstocks:read"], offlineAccessRequested: true, isStepUp: true,
+    alreadyAllowedScopes: ["feedstocks:read"], offlineAccessRequested: true, isStepUp: false,
   } });
 });
 

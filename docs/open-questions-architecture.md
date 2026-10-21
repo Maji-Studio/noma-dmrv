@@ -30,12 +30,6 @@ these areas; the entry rules and invariants live in
   (decision 126), using `src/lib/auth/oauth-provider.ts:createOAuthProvider` and
   `src/lib/auth/oauth-config.ts:deriveOAuthConfig`. Settle its native redirect
   and link it to REST only.
-- **`api/claude-ai-disconnect-revoke`:** disconnecting inside claude.ai sends no
-  revoke call to noma, so the grant stays in Connected apps and the next consent
-  shows the board alone (`src/components/oauth/consent-form.tsx:hasConsent`),
-  with every allowed scope resubmitted. Options: let the board untick allowed
-  scopes, or show the three choices when the client starts a fresh connection.
-  Decision pending (round 15); until then, revoke in noma Connected apps to narrow.
 - **`api/cowork-step-up`:** Cowork shows "Forbidden" with no Connect card on a 403
   `insufficient_scope` (`src/lib/api/problem.ts:oauthInsufficientScopeChallenge`);
   claude.ai chat does step up. Reported as

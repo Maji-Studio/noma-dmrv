@@ -102,8 +102,10 @@ registration is off. Results: [plan section 28](./plans/2026-10-06-data-entry-ap
 - Cowork shows "Forbidden" with no Connect card when a write is refused for
   scope (`api/cowork-step-up` in open questions). Choose Read and write, or the
   needed areas, on first consent.
-- claude.ai Disconnect does not revoke at noma; revoke in Connected apps first
-  (decision pending: [open questions](./open-questions-architecture.md#oauth-connection-follow-ups)).
+- claude.ai Disconnect does not revoke at noma. Reconnecting shows the three
+  choices again (Read only, Read and write, Choose per area) and the new choice
+  replaces the stored consent. Only a step-up, after a write was refused, keeps
+  the board with the allowed areas locked.
 - claude.ai chat gives the model only a tool result's text, so `toolText` in
   `src/lib/mcp/results.ts` joins the summary and the JSON with
   `TOOL_TEXT_SEPARATOR`. Cowork and Claude Code read `structuredContent`.

@@ -29,34 +29,36 @@ export function ConsentForm() {
 function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery: string }) {
   const { clientHost, redirectHost, organization, offlineAccessRequested } = view;
   const clientName = oauthAppName(view.clientName);
-  const newScopes = view.newlyRequestedScopes as ApiScope[];
-  const allowed = view.alreadyAllowedScopes as ApiScope[];
+  const requested = [...view.newlyRequestedScopes, ...view.alreadyAllowedScopes] as ApiScope[];
+  // A step-up (a live refusal hint) keeps the stored consent and adds to it. Any other connect is a fresh choice:
+  // claude.ai sends no revoke on Disconnect, so a stored consent must not lock the person in.
+  const stepUp = view.isStepUp;
+  const allowed = (stepUp ? view.alreadyAllowedScopes : []) as ApiScope[];
+  const undecided = stepUp ? view.newlyRequestedScopes as ApiScope[] : requested;
   const stepUpScopes = view.stepUpScopes as ApiScope[];
-  const areas = buildConsentAreas([...newScopes, ...allowed]);
-  const newReads = newScopes.filter(isReadScope);
-  const writeAreas = areas.filter((area) => area.write && newScopes.includes(area.write)).length;
-  // A stored consent means the board alone: the person is adding to what the app already has.
-  const hasConsent = view.isStepUp || allowed.length > 0;
+  const areas = buildConsentAreas(requested);
+  const undecidedReads = undecided.filter(isReadScope);
+  const writeAreas = areas.filter((area) => area.write && undecided.includes(area.write)).length;
   // Step-up ticks only what a recent refusal asked for (plus the read it needs), since discovery may request every scope.
-  const [ticked, setTicked] = useState<ApiScope[]>(() => hasConsent
-    ? preselectStepUp(areas, newScopes, stepUpScopes)
-    : newReads);
+  const [ticked, setTicked] = useState<ApiScope[]>(() => stepUp
+    ? preselectStepUp(areas, undecided, stepUpScopes)
+    : undecidedReads);
   const [preset, setPreset] = useState<ConsentPreset>("read");
   const [failed, setFailed] = useState(false);
   const decision = useOAuthConsentDecision(oauthQuery);
 
   const submittedScopes = [...new Set<string>([...allowed, ...ticked])].filter((scope) => scope !== OFFLINE_ACCESS);
-  const newAreas = new Set(hasConsent ? areas.filter((area) => [area.read, area.write].some((scope) => scope && stepUpScopes.includes(scope))).map((area) => area.entity) : []);
+  const newAreas = new Set(stepUp ? areas.filter((area) => [area.read, area.write].some((scope) => scope && stepUpScopes.includes(scope))).map((area) => area.entity) : []);
 
   function choose(next: ConsentPreset) {
     setPreset(next);
-    if (next === "read") setTicked(newReads);
-    else if (next === "write") setTicked(newScopes.filter((scope) => areas.some((area) => area.read === scope || area.write === scope)));
+    if (next === "read") setTicked(undecidedReads);
+    else if (next === "write") setTicked(undecided.filter((scope) => areas.some((area) => area.read === scope || area.write === scope)));
   }
 
   async function decide(accept: boolean) {
     setFailed(false);
-    // Accepting replaces the stored consent, so the already allowed scopes stay in it.
+    // Accepting replaces the stored consent: a step-up keeps the allowed scopes, a fresh choice submits only what is ticked.
     const scope = accept ? [...submittedScopes, ...(offlineAccessRequested ? [OFFLINE_ACCESS] : [])].join(" ") : undefined;
     try {
       const url = await decision.mutateAsync({ accept, scope });
@@ -68,12 +70,12 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
     // The card names the app and its host, so the intro only adds where it will act.
     <OAuthCard title={`Allow ${clientName} to use noma?`} intro={`It wants to act for you in ${organization.name}.`}>
       <OAuthAppIdentity name={view.clientName} host={clientHost} redirectHost={redirectHost} />
-      {!hasConsent && (
-        <ConsentChoices clientName={clientName} readAreas={areas.filter((area) => area.read && newReads.includes(area.read)).length}
+      {!stepUp && (
+        <ConsentChoices clientName={clientName} readAreas={areas.filter((area) => area.read && undecidedReads.includes(area.read)).length}
           writeAreas={writeAreas} value={preset} onChange={choose} disabled={decision.isPending} />
       )}
-      {(hasConsent || preset === "custom") && (
-        <ConsentPegBoard areas={areas} allowed={allowed} undecided={newScopes} newAreas={newAreas} ticked={ticked}
+      {(stepUp || preset === "custom") && (
+        <ConsentPegBoard areas={areas} allowed={allowed} undecided={undecided} newAreas={newAreas} ticked={ticked}
           onChange={setTicked} clientName={clientName} disabled={decision.isPending} />
       )}
       {offlineAccessRequested && (

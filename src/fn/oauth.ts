@@ -47,10 +47,12 @@ export async function getOAuthConsentViewFn(input: unknown) {
     const allowed = new Set(view.consentScopes ?? []);
     const newlyRequestedScopes = apiScopes.filter(scope => !allowed.has(scope));
     const pending = new Set(await findOAuthStepUp({ userId: attempt.userId, clientId: attempt.clientId, organizationId: view.organizationId }));
+    const stepUpScopes = newlyRequestedScopes.filter(scope => pending.has(scope));
+    // A step-up is a live refusal hint. A plain reconnect also requests new scopes but is a fresh choice.
     return { ...display, organization: { id: view.organizationId, name: view.name },
-      newlyRequestedScopes, stepUpScopes: newlyRequestedScopes.filter(scope => pending.has(scope)),
+      newlyRequestedScopes, stepUpScopes,
       alreadyAllowedScopes: apiScopes.filter(scope => allowed.has(scope)),
-      offlineAccessRequested: requested.includes("offline_access"), isStepUp: view.consentScopes !== null && newlyRequestedScopes.length > 0 };
+      offlineAccessRequested: requested.includes("offline_access"), isStepUp: stepUpScopes.length > 0 };
   });
 }
 

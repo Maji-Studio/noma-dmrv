@@ -94,11 +94,11 @@ describe("OAuth screen actions", () => {
     } });
   });
 
-  it("uses the consent of the attempt generation for a step-up", async () => {
+  it("uses the consent of the attempt generation for a reconnect that asks for more", async () => {
     await f.connect({ organizationIndex: 1 });
     const flow = await f.authorize({ organizationIndex: 1, scope: "feedstocks:read feedstocks:write offline_access" });
     expect(await getOAuthConsentViewFn({ oauthQuery: flow.location.search.slice(1) })).toMatchObject({ success: true, data: {
-      organization: { id: f.orgIds[1] }, newlyRequestedScopes: ["feedstocks:write"], alreadyAllowedScopes: ["feedstocks:read"], isStepUp: true,
+      organization: { id: f.orgIds[1] }, newlyRequestedScopes: ["feedstocks:write"], alreadyAllowedScopes: ["feedstocks:read"], isStepUp: false,
     } });
   });
 

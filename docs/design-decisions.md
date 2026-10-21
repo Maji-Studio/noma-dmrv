@@ -25,6 +25,10 @@ This is the per-surface log of what we tried, what replaced it, and why. Read it
 - **Production run status** (#991): Draft and Running on create → create as Running or Complete; Cancelled is an action.
 - **Choice controls** (form cleanup, 2026-09-29): selector text → choice cards when the choice has a consequence, segmented controls for short equal options, selects for the rest.
 
+## OAuth consent
+
+- **Reconnect after a claude.ai Disconnect** (Q104, round 15; 2026-10-21): a stored consent showed the board alone with every allowed area locked and resubmitted, so the person could never narrow → any connect that is not a step-up shows the three first-connect choices (default Read only), nothing locked, and Allow replaces the stored consent with what is ticked. A step-up (a live refusal hint) keeps the board with the allowed areas locked and the refused write marked New. Why: claude.ai sends no revoke on Disconnect. Rejected: unticking allowed areas on the locked board.
+
 ## Onboarding
 
 - **Setup wizard** (#500 → #940 → #965; 2026-07-22 to 10-13): wizard with Back and Skip → Continue only, back through the step header → wizard removed; setup runs from the dashboard guide through the normal create sheets.

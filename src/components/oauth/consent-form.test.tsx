@@ -157,13 +157,45 @@ it("preticks only the refused write on a step-up, listed first with New", () => 
   expect(screen.getAllByText("New")).toHaveLength(1);
 });
 
-it("shows the board with nothing new ticked and no New row when a step-up has no refusal", () => {
-  mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:write", "orders:read"],
-    alreadyAllowedScopes: ["feedstocks:read"], isStepUp: true, stepUpScopes: [] }));
+const RECONNECT = { newlyRequestedScopes: ["feedstocks:write", "orders:read"], alreadyAllowedScopes: ["feedstocks:read"], isStepUp: false, stepUpScopes: [] };
+
+it("shows the three choices, not the locked board, for a reconnect with a stored consent", () => {
+  mocks.view.mockReturnValue(view(RECONNECT));
   render(<ConsentForm />);
-  expect(box("Feedstocks, write").checked).toBe(false);
-  expect(box("Orders, read").checked).toBe(false);
+  expect((screen.getByRole("radio", { name: /^Read only/ }) as HTMLInputElement).checked).toBe(true);
+  expect(screen.getByRole("radio", { name: /^Read and write/ })).toBeTruthy();
+  expect(screen.getByRole("radio", { name: /^Choose per area/ })).toBeTruthy();
+  expect(screen.queryByRole("table")).toBeNull();
   expect(screen.queryByText("New")).toBeNull();
+});
+
+it("narrows a stored read and write consent to reads when Read only is chosen", async () => {
+  mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["orders:read"], alreadyAllowedScopes: ["feedstocks:read", "feedstocks:write"] }));
+  mocks.mutateAsync.mockResolvedValue("https://client.test/cb?code=c");
+  render(<ConsentForm />);
+  fireEvent.click(screen.getByRole("button", { name: "Allow" }));
+  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "orders:read feedstocks:read offline_access" }));
+});
+
+it("locks nothing in Choose per area when a consent is stored", () => {
+  mocks.view.mockReturnValue(view(RECONNECT));
+  render(<ConsentForm />);
+  choose("Choose per area");
+  expect(box("Feedstocks, read").disabled).toBe(false);
+  expect(box("Feedstocks, read").checked).toBe(true);
+  expect(box("Feedstocks, write").checked).toBe(false);
+  expect(screen.queryByText(/already allowed/)).toBeNull();
+  fireEvent.click(box("Feedstocks, read"));
+  expect(box("Feedstocks, read").checked).toBe(false);
+});
+
+it("keeps the board with New for a step-up that has a refusal hint", () => {
+  mocks.view.mockReturnValue(view({ ...RECONNECT, isStepUp: true, stepUpScopes: ["feedstocks:write"] }));
+  render(<ConsentForm />);
+  expect(screen.queryByRole("radio")).toBeNull();
+  expect(box("Feedstocks, write").checked).toBe(true);
+  expect(screen.getAllByText("New")).toHaveLength(1);
+  expect(screen.getByText("Feedstocks, read, already allowed")).toBeTruthy();
 });
 
 it("keeps Allow enabled when existing permissions remain after unticking new scopes", () => {
@@ -248,11 +280,13 @@ it("tells the person to start again when the request cannot be read", () => {
 });
 
 
-it("accepts forced re-consent when every requested scope is already allowed", async () => {
+it("offers a fresh choice on forced re-consent when every requested scope is already allowed", async () => {
   mocks.view.mockReturnValue(view({ newlyRequestedScopes: [], alreadyAllowedScopes: ["feedstocks:read"] }));
   vi.stubGlobal("location", { assign: mocks.assign, origin: "https://noma.test", search: `?${QUERY}&prompt=consent` });
   mocks.mutateAsync.mockResolvedValue("https://client.test/cb?code=c");
   render(<ConsentForm />);
+  // A forced re-consent is a fresh choice: Read only ticks the allowed reads.
+  expect((screen.getByRole("radio", { name: /^Read only/ }) as HTMLInputElement).checked).toBe(true);
   expect((screen.getByRole("button", { name: "Allow" }) as HTMLButtonElement).disabled).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "Allow" }));
   await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "feedstocks:read offline_access" }));

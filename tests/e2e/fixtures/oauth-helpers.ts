@@ -110,10 +110,10 @@ export function pkcePair(): { verifier: string; challenge: string } {
 }
 
 /** The provider's authorize URL for the client, with PKCE and a state to echo. */
-export function authorizeUrl(client: E2EOAuthClient, scope: string, state: string): string {
+export function authorizeUrl(client: E2EOAuthClient, scope: string, state: string, extra: Record<string, string> = {}): string {
   const query = new URLSearchParams({
     client_id: client.clientId, redirect_uri: client.redirectUri, response_type: "code", scope, state,
-    resource: client.resource, code_challenge: pkcePair().challenge, code_challenge_method: "S256",
+    resource: client.resource, code_challenge: pkcePair().challenge, code_challenge_method: "S256", ...extra,
   });
   return `/api/auth/oauth2/authorize?${query}`;
 }
