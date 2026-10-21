@@ -1,5 +1,6 @@
-import { inWindow } from "@/lib/certification/removal-emission-contributions";
-import { emissionCorrectionWindow } from "./emission-entry-corrections";
+import { loadEmissionEntryHolds } from "./emission-entry-holds";
+import { entryHoldingRemovalId, inWindow } from "@/lib/certification/removal-emission-contributions";
+import { assertSentEntryInCorrectionWindow, emissionCorrectionWindow } from "./emission-entry-corrections";
 import { entryLine, resolveEmissionEntryDate } from "@/lib/certification/emission-entry-rules";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -66,14 +67,15 @@ export async function getEmissionEntry(ctx: OrgContext, id: string, executor: Ex
         eq(documents.uploadStatus, "uploaded"),
       ),
     );
-  return { ...entry, values, documentCount: count };
+  const holds = await loadEmissionEntryHolds(ctx, [entry], executor);
+  return { ...entry, heldForRemovalId: holds.get(entry.id) ?? null, values, documentCount: count };
 }
 export async function listEmissionEntries(ctx: OrgContext, creditBatchId: string, executor: Executor = db) {
   requireOrgScope(ctx);
   return listEmissionEntriesForBatches(ctx, [creditBatchId], executor);
 }
 
-/** Three set-based reads, independent of batch and entry counts. */
+/** Set-based reads, including one hold lookup only when replacements exist. */
 export async function listEmissionEntriesForBatches(
   ctx: OrgContext, creditBatchIds: string[], executor: Executor = db,
 ) {
@@ -120,9 +122,11 @@ export async function listEmissionEntriesForBatches(
     group.push(value);
     valuesByEntry.set(value.entryId, group);
   }
+  const holds = await loadEmissionEntryHolds(ctx, entries, executor);
   const countsByEntry = new Map(counts.map((row) => [row.entryId, row]));
   return entries.map((entry) => ({
     ...entry,
+    heldForRemovalId: holds.get(entry.id) ?? null,
     values: valuesByEntry.get(entry.id) ?? [],
     documentCount: countsByEntry.get(entry.id)?.count ?? 0,
     evidenceDocumentIds: countsByEntry.get(entry.id)?.evidenceDocumentIds ?? [],
@@ -234,6 +238,7 @@ async function createEmissionEntryInTransaction(
   tx: DbTransaction,
   data: CreateEmissionEntryInput,
   { batch, facility, observation }: Awaited<ReturnType<typeof lockedBatch>>,
+  replacementHold?: { replacesEntryId: string; removalId: string },
 ) {
   requireOrgScope(ctx);
   const active = await tx
@@ -264,6 +269,7 @@ async function createEmissionEntryInTransaction(
     timezone: facility.timezone,
     activeValueCount: active.length,
   });
+  if (replacementHold) assertSentEntryInCorrectionWindow(ctx, tx, batch.id, replacementHold.removalId, occurredOn);
   const [entry] = await tx
     .insert(emissionEntries)
     .values({
@@ -277,6 +283,7 @@ async function createEmissionEntryInTransaction(
       occurredOn,
       note: data.note,
       createdBy: ctx.userId,
+      replacesEntryId: replacementHold?.replacesEntryId ?? null,
     })
     .returning();
   const values = await writeValues(ctx, tx, entry.id, data.values);
@@ -304,16 +311,10 @@ export async function replaceEmissionEntry(ctx: OrgContext, input: ReplaceEmissi
     const replacement = await createEmissionEntryInTransaction(ctx, tx, {
       creditBatchId: entry.creditBatchId, componentId: entry.componentId,
       occurredOn: data.occurredOn, note: data.note, values: data.values,
-    }, context);
-    if (entry.sentByRemovalId) {
-      const window = emissionCorrectionWindow(ctx, tx, entry.creditBatchId, entry.sentByRemovalId);
-      if (!window || !inWindow(replacement, window))
-        throw new SafeError("Keep the entry date within this Removal's period.");
-      const [stored] = await tx.update(emissionEntries).set({ sentByRemovalId: entry.sentByRemovalId,
-        version: nextVersion(emissionEntries.version), updatedAt: new Date() })
-        .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, replacement.id))).returning();
-      await recordEmissionEntryActivity(ctx, tx, "updated", replacement, { ...stored, values: replacement.values });
-    }
+    }, context, entry.sentByRemovalId || entry.heldForRemovalId ? {
+      replacesEntryId: entry.sentByRemovalId ? entry.id : entry.replacesEntryId!,
+      removalId: entryHoldingRemovalId(entry)!,
+    } : undefined);
     // Documents have polymorphic owners, not an entry-document join table.
     // Keep retained evidence and live uploads; failed uploads remain on the old row.
     // Owner locks precede these document row locks, matching the upload writers.
@@ -355,10 +356,9 @@ export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmission
         dateDefaulted: data.occurredOn === undefined,
       });
     }
-    if (entry.sentByRemovalId && data.occurredOn) {
-      const window = emissionCorrectionWindow(ctx, tx, entry.creditBatchId, entry.sentByRemovalId);
-      if (!window || !inWindow({ occurredOn: data.occurredOn }, window))
-        throw new SafeError("Keep the entry date within this Removal's period.");
+    const holdingRemovalId = entryHoldingRemovalId(entry);
+    if (holdingRemovalId && data.occurredOn) {
+      assertSentEntryInCorrectionWindow(ctx, tx, entry.creditBatchId, holdingRemovalId, data.occurredOn);
     }
     const contentChanged =
       (data.occurredOn !== undefined && data.occurredOn !== entry.occurredOn) ||

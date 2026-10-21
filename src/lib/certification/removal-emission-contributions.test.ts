@@ -1,5 +1,6 @@
+import { deriveRemovalBatchEmissionLines } from "./removal-emission-lines";
 import { describe, expect, it } from "vitest";
-import { deriveRemovalEntryContributions, deriveRemovalEntryWindow, isLiveEntryReservation, removalEntryOwner, type EntryContender, type RemovalEntryFact } from "./removal-emission-contributions";
+import { deriveRemovalEntryContributions, deriveRemovalEntryWindow, entriesWithoutRemoval, isLiveEntryReservation, removalEntryOwner, type EntryContender, type RemovalEntryFact } from "./removal-emission-contributions";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import { reviewPayloadHash } from "./removal-review-hash";
 
@@ -137,4 +138,34 @@ it.each(["additive", "single"] as const)("never sums separate transport inputs w
   expect(result.inputs).toEqual([]);
   expect(result.selectedEntryIds).toEqual([]);
   expect(result.blockers.map((row) => row.code)).toContain(entryPolicy === "additive" ? "lineNeedsReview" : "singleLineMultipleEntries");
+});
+
+it("holds an unsent replacement before drafts, including after the window closes", () => {
+  const held = entry({ heldForRemovalId: "r2" });
+  expect(removalEntryOwner(held, [first])).toBe("r2");
+  expect(removalEntryOwner(held, [])).toBe("r2");
+  expect(derive([held]).selectedEntryIds).toEqual([]);
+  expect(derive([held], { removalId: "r2", contenders: [] }).entrySet).toEqual([{ entryId: held.id, contentRevision: 1 }]);
+  expect(entriesWithoutRemoval([held], [], new Set(), [])).toEqual([]);
+  expect(removalEntryOwner({ ...held, deletedAt: new Date() }, [])).toBeNull();
+  expect(removalEntryOwner({ ...held, sentByRemovalId: "sent" }, [])).toBe("sent");
+  expect(removalEntryOwner({ ...held, reservedByRemovalId: "reserved" }, [])).toBe("reserved");
+  expect(removalEntryOwner({ ...held, sendReservedBySubmissionId: "unknown" }, [])).toBeNull();
+});
+
+it("omits another Removal's held single and keeps its follow-up batch line filled", () => {
+  const held = entry({ lineRule: "single", heldForRemovalId: "r2" });
+  const lineSources = { c1: { scope: "operating" as const, entryPolicy: "single" as const, origin: "reviewed" as const } };
+  const contributions = derive([held], { lineSources });
+  expect(contributions.sentSingleComponentIds).toEqual(["c1"]);
+  expect(contributions.entrySet).toEqual([]);
+  const lines = deriveRemovalBatchEmissionLines({
+    definition: { groups: [{ id: "g", key: "pyrolysis", displayName: "Group", description: "", components: [{
+      id: "c1", displayName: "Electricity", description: null, blueprintKey: "metered_energy_based_ci_emissions",
+      inputs: [{ key: "initial_readout", type: "monitored", quantityKind: "energy" }, { key: "final_readout", type: "monitored", quantityKind: "energy" }],
+    }] }] },
+    lineSources, problems: [], enrichmentComplete: true, automaticFigures: {}, entries: [], entriesCanSubmit: true,
+  }, "b1", { entries: [held] }, contributions);
+  expect(lines[0]).toMatchObject({ state: "filled", blocker: undefined });
+  expect(held.sentByRemovalId).toBeNull();
 });

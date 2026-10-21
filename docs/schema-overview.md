@@ -15,7 +15,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 | API credentials (`api_keys`) and management records (`api_key_owners`) | `src/db/schema/api-keys.ts` |
 | OAuth clients, resources, consents, tokens, grants and authorization attempts | `src/db/schema/oauth.ts` |
 | API bookkeeping (`api_idempotency_records`, `api_rate_limit_buckets`, `organization_api_access`) | `src/db/schema/api.ts` |
-| Emissions entries and input values | `src/db/schema/emission-entries.ts`. Organization-consistent references, versioned tombstones, entry claims, and exact decimal values. |
+| Emissions entries and input values | `src/db/schema/emission-entries.ts`. Organization-consistent references, versioned tombstones, entry claims, nullable `replaces_entry_id` holds through an organization-consistent self-reference, and exact decimal values. |
 | Component comments (`emission_line_comments`) | `src/db/schema/emission-line-comments.ts`. One versioned, noma-only comment per organization, credit batch and template component ID. Hard deleted; earlier wording stays in activity. |
 | Activity history (`activity_events`) | `src/db/schema/activity.ts` |
 | Facilities, reactors, storage locations | `src/db/schema/facilities.ts` |

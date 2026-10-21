@@ -5,7 +5,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { getMetadataValue } from "@/lib/certification/submission-metadata";
 import { getTransactionDeadline } from "@/lib/db/transaction-deadline";
 import { getGhgStatement, type GhgStatement } from "@/lib/isometric/ghg-statements";
-import { decideSubmissionClaim } from "@/lib/isometric/utils/submission-claim";
+import { decideSubmissionClaim, REMOVAL_SUBMISSION_CLAIM_POLICY } from "@/lib/isometric/utils/submission-claim";
 import { LOCK_TTL_MS, isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { REMOVAL_SCOPED_SUBMISSION_TYPES } from "@/lib/isometric/utils/constants";
 import { isSentRemoval, isTerminalAttemptStatus, submissionHasRemoteEffect, type RecordLockRemoval, type RecordLockStatement } from "@/lib/record-lock";
@@ -39,7 +39,7 @@ export async function readRecordLockLineage(ctx: OrgContext, tx: Pick<DbTransact
     row.localEntityId === current.localEntityId && row.version + 1 === current.version);
   if (predecessor) {
     const recovery = decideSubmissionClaim({ latest: predecessor, payloadHash: predecessor.payloadHash ?? "",
-      now: Date.now(), lockTtlMs: LOCK_TTL_MS, policy: { onSubmittedHashChanged: "supersede", allowEvidenceRefresh: true } });
+      now: Date.now(), lockTtlMs: LOCK_TTL_MS, policy: REMOVAL_SUBMISSION_CLAIM_POLICY });
     // A validated evidence-refresh predecessor remains a draft until finalization.
     // Only its exact successor's own read may omit it, never ordinary write checks.
     if (recovery.kind === "create-new-version" && recovery.reason === "evidence-refresh") excludedIds.add(predecessor.id);

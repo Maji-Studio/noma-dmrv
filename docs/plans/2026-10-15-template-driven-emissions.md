@@ -46,7 +46,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | Testing | Kenji copies Cula into the sandbox (not 1:1). Tests use a fixture of Cula as read on 2026-10-15. A read-only production key is needed before the first real submission. |
 | Naming | "Emissions entry", with an "Add entry" button. "Activity" stays the history log of #1037-#1047. |
 | Durability | Build for both tiers. The Cula facility is 1000-year: one credit batch per Removal (`THOUSAND_YEAR_REMOVAL_BATCH_LIMIT`, `src/data-access/certifier-removals.ts`). |
-| Corrections | A submitted Removal is never corrected on noma's initiative. Edits reopen only when Isometric changes the state: a statement fails verification, or a statement noma submitted is back in DRAFT. The Removal is then marked "correction needed", and resubmitting supersedes it (Kenji, 2026-10-15). |
+| Corrections | A submitted Removal is never corrected on noma's initiative. Edits reopen only when Isometric changes the state: a statement fails verification, or a statement noma submitted is back in DRAFT. Resubmitting supersedes it (Kenji, 2026-10-15). A re-entered sent entry is held via a link and stamped on resubmit (Kenji, 2026-10-21, "link"). The derived state reads "Returned by Isometric" while the window is open with no changes and "Resubmit needed" once a sent fact changed (Kenji, 2026-10-21, screen variant A). #1134 keeps "Correction needed" for its lock-based notice. |
 | Reference template | The sandbox "Dark Earth Carbon Template (15 Oct)" (`rvt_1KS4S43VPSBXA26X`, edited in place) is more correct than Cula. It is the shape #1020 brings production to: 15 components, trucks as mass × distance, single-kWh electricity, the 1000-year storage line, two lab and two sample lines, pyrolyzer CO and CH₄, and staff travel. |
 
 ## 3. What the code tells us
@@ -168,6 +168,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 **Entry policy per input shape** (code, next to the catalog)
 - `additive`: entries sum, and add to the line's automatic source if it has one. Applies to fuel volume, electricity, mass, distance and mass × distance.
 - `single`: at most one active entry per batch, and never an automatic source. Applies to gas concentration with mass flow, and meter readings.
+- Paired mass and distance inputs on one component (the current production and Cula truck lines): one entry or none. With an automatic figure the component takes no manual entries; without one it takes a single entry (Kenji, 2026-10-21). A t·km input stays `additive`: it takes many entries, each with its own leg's sources, summed into one component. noma keeps that shape and does not follow Cula's paired inputs; #1020 brings production to it.
 - An unsupported shape shows "Needs setup".
 - The entry's `lineRule` column records the policy it was written under.
 
@@ -289,7 +290,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
   - otherwise the eligible Removal with the earliest window end, then the earliest draft creation, then the lowest id.
   - This rule is only for entry contenders. It does not reuse the production contender ordering (`listProductionClaimDraftContenders`, by reporting quarter).
 - An entry outside every draft window blocks only when no available, unsubmitted application is dated on or after it; otherwise it waits for a later Removal. The blocker gives the next action: change the entry date to fit the Removal period, or wait for a later Removal. If the batch is fully applied, #1059 sends it on the facility's next Removal (§7).
-- A 200-year Removal grouping two batches that both have an entry on the same `single` line is refused in v1. Paired inputs are never summed one input at a time. Whether Isometric accepts list-shaped inputs (`InputDataShape: LIST`) for these lines is a follow-up.
+- A 200-year Removal grouping two batches that both have an entry on the same `single` line is refused in v1. Paired inputs are never summed one input at a time; a paired mass and distance component takes one entry or none (§4.1). Whether Isometric accepts list-shaped inputs (`InputDataShape: LIST`) for these lines is a follow-up.
 
 **Reservation and claims**
 - Atomic with the production claim. One transaction locks the batch rows, then the entries in id order.
@@ -338,7 +339,8 @@ Round 7, version B (Kenji, 2026-10-20). Screens say "component", never "line".
 - `isometric/sample-transport-template-drift` is resolved when the gate is switched on, not when PR 4 merges.
 
 **Corrections**
-- "Correction needed" is derived, not stored, and only inside an open correction window: the snapshot's contribution manifest differs from the current entries.
+- The state is derived, not stored, and only inside an open correction window. It reads "Returned by Isometric" with no changes and "Resubmit needed" once a sent fact changed: the snapshot's contribution manifest differs from the current entries (Kenji, 2026-10-21, screen variant A). #1134 keeps "Correction needed" for its lock-based notice.
+- A re-entered sent entry stays unsent and is held for its original Removal via a link. Re-entering a held replacement keeps the same sent-original link. Stamping happens in `markSubmissionSubmitted` on the corrected resubmit (Kenji, 2026-10-21, "link").
 - Once a Removal is submitted, the entries it sent stay locked, as today. noma never corrects a submitted Removal on its own initiative.
 - Edits reopen only after Isometric changes the state, and only when all of these hold:
   - a statement covering the lineage, freshly refreshed, is FAILED_VERIFICATION, or is back in DRAFT after it was sent to the verifier. `ghgStatementSubmissionId` is not enough: creating a statement already marks its ledger row submitted with remote status DRAFT (`finalizeGhgStatement`). "Sent to the verifier" follows #1101: a marker PR 4 records in `submitGhgStatementToVerifierCore`, or Certify's own record of a submission (REST `GhgStatement.submitted_at`, GraphQL `GhgStatement.submissions`), because a statement can be submitted from the Certify web UI and noma only learns of it on Refresh or Sync. A noma-only marker would leave such a statement locked after it returns to DRAFT;

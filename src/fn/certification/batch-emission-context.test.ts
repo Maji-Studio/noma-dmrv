@@ -1,3 +1,5 @@
+import { loadRemovalEntryCorrection } from "@/data-access/removal-entry-correction";
+import { buildRemovalCorrection, deriveEntryCorrection, correctionForRemoval } from "@/lib/certification/removal-entry-correction";
 import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
@@ -18,6 +20,7 @@ import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib
 import { resolveTemplateInputs } from "./removal-template-inputs";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 
+vi.mock("@/data-access/removal-entry-correction", () => ({ loadRemovalEntryCorrection: vi.fn() }));
 vi.mock("@/data-access/emission-entry-contenders", () => ({ listEmissionEntryDraftContenders: vi.fn(), listEmissionEntryAvailableApplications: vi.fn(), loadEmissionEntryReservations: vi.fn() }));
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntries: vi.fn(), listEmissionEntriesForBatches: vi.fn() }));
 vi.mock("@/data-access/removal-template-observations", () => ({ getTemplateObservationById: vi.fn(), getTemplateObservationsByIds: vi.fn() }));
@@ -269,4 +272,41 @@ it("retains production reservation ownership when the batch has no entries", asy
   const result = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts);
   expect(result.one.productionReservationSubmissionId).toBe("attempt");
   expect(result.one.entries).toEqual([]);
+});
+
+it.each([false, true])("reuses one correction read for all member batches and the hub (changed=%s)", async (changed) => {
+  const ctx = makeTestOrgContext();
+  const batches = ["one", "two", "unrelated"].map((id) => ({ id, removalTemplateId: "template" }));
+  const contender = { contenderKind: "correction" as const, removalId: "returned", createdAt: "2026-01-01",
+    creditBatchIds: ["one", "two"], window: { start: "2026-01-01", end: "2026-02-01" } };
+  vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([contender]);
+  const previous = [{ componentId: "line", inputKey: "electricity_use", entries: [
+    { entryId: "entry", creditBatchId: "one", contentRevision: 1, kind: "value" as const,
+      value: { magnitude: "1", unit: "kWh" }, evidenceDocumentIds: ["file"] },
+  ] }];
+  const state = deriveEntryCorrection(true, previous, changed ? [] : previous);
+  const correction = buildRemovalCorrection({ removalId: "returned", removalCode: "RM-001", state,
+    statement: { id: "statement", status: "DRAFT", reportingPeriodStartOn: null, reportingPeriodEndOn: "2026-03-31" },
+    batches: [{ id: "one", code: "CB-001" }, { id: "two", code: "CB-002" }],
+    components: [{ id: "line", displayName: "Electricity" }],
+  });
+  vi.mocked(loadRemovalEntryCorrection).mockResolvedValue({ ...state, removalId: "returned", removalCode: "RM-001", correction });
+  const loaded = await loadBatchEmissionContext(ctx, "facility", batches, facilityFacts);
+  expect(loadRemovalEntryCorrection).toHaveBeenCalledExactlyOnceWith(ctx, "returned", [contender]);
+  expect(loaded.one.corrections?.[0].correction).toEqual(correction);
+  expect(loaded.two.corrections?.[0].correction).toEqual({ ...correction, changed: [] });
+  expect(loaded.unrelated.corrections).toBeUndefined();
+  const context = { memberBatches: batches, requiredTransportCategories: [],
+    entryCorrectionsByBatchId: Object.fromEntries(Object.entries(loaded).map(([id, batch]) => [id, batch.corrections ?? []])),
+  } as unknown as RemovalCertifyContext;
+  for (const id of ["one", "two"]) {
+    const health = deriveBatchHealth(toBatchHealthFacts(context, id));
+    expect(health.removalCorrections).toEqual([loaded[id].corrections![0].correction]);
+    expect(health.advisories).toEqual([{ removalId: "returned", removalCode: "RM-001", fixTarget: "removal",
+      message: changed ? "Resubmit needed: 1 component changed since this Removal was sent." : "Returned by Isometric" }]);
+  }
+  const states = Object.values(context.entryCorrectionsByBatchId!).flat();
+  expect(correctionForRemoval("returned", states)).toEqual(correction);
+  expect(correctionForRemoval("unrelated", states)).toBeUndefined();
+  expect(correctionForRemoval("returned", [{ ...state, correction: { ...correction, windowOpen: false } }])).toBeUndefined();
 });

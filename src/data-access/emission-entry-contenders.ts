@@ -1,6 +1,6 @@
 import { decideSubmissionClaim } from "@/lib/isometric/utils/submission-claim";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
-import { isSubmittedAttempt, isRemovalCorrectionWindowOpen } from "@/lib/record-lock";
+import { isSubmittedAttempt, isRemovalCorrectionWindowOpen, isReturnedStatement } from "@/lib/record-lock";
 import { getCertifiedLineageForBatches } from "./certification-lineage-guards";
 import { emissionCorrectionBatchIds } from "./emission-entry-corrections";
 import type { StatementReads } from "./record-lock-lineage";
@@ -64,10 +64,15 @@ export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBa
       return !!shared && isRemovalCorrectionWindowOpen(fact, shared);
     });
     const correction = eligibleBatchIds.length > 0;
+    // The correction window's own rule; inside an open window every statement passes it.
+    const returnedStatements = correction ? fact.statements.filter(isReturnedStatement) : [];
+    const statement = returnedStatements.find((item) => item.id === group[0]?.ghgStatementId) ?? returnedStatements[0];
+    const returnedStatement: EntryContender["returnedStatement"] = statement
+      ? { id: statement.id, status: statement.status === "DRAFT" ? "DRAFT" : "FAILED_VERIFICATION" } : undefined;
     const submitted = fact.submissions.some(isSubmittedAttempt);
     if (submitted && !correction) return [];
     const window = deriveRemovalEntryWindow(group, group.map((row) => row.applicationDate));
-    return window ? [{ contenderKind: correction ? "correction" as const : "draft" as const, removalId, createdAt: group[0].createdAt.toISOString(),
+    return window ? [{ contenderKind: correction ? "correction" as const : "draft" as const, removalId, returnedStatement, createdAt: group[0].createdAt.toISOString(),
       creditBatchIds: [...new Set(correction ? eligibleBatchIds : group.map((row) => row.creditBatchId))], window }] : [];
   });
 }

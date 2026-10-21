@@ -595,6 +595,16 @@ edits and sent-zero replacement; dates must stay within the Removal's entry wind
 Correction state compares the last submitted contribution manifest with the
 current contribution and is never stored. A new attempt reserves the current set
 and supersedes the prior attempt without transferring its entry claims.
+A replacement of a sent entry starts unsent. Its nullable `replaces_entry_id`
+references the sent original through the composite `(replaces_entry_id,
+organization_id)` foreign key, with a partial index on non-null replacement links.
+Replacing an unsent replacement carries the same original link. The original's
+`sent_by_removal_id` holds the replacement for that Removal even after its
+correction window closes. Entry reads expose this as `heldForRemovalId`; holds
+exclude other drafts and the entries-without-Removal list. Edits, deletion and
+evidence changes use the holding Removal's correction window. Only
+`markSubmissionSubmitted` stamps the replacement when its frozen reservation set
+is submitted successfully.
 Ordinary entry deletion tombstones the entry and keeps its values and evidence.
 Removal draft deletion first records an activity tombstone, then hard-deletes
 its never-sent recorded zeros, including already tombstoned zeros. The zero-owner

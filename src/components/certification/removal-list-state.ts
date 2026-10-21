@@ -16,6 +16,7 @@ export interface RemovalEnrichmentState {
 }
 
 export interface RemovalListRow {
+  correction?: RemovalPreflightSummary["correction"];
   removalId: string;
   code: string;
   startedOn: string | null;
@@ -58,6 +59,7 @@ export function buildRemovalListRows(
       lifecycleData?.local ?? identity.latestSubmission?.status ?? null;
     return {
       removalId,
+      correction: lifecycleData?.correction,
       code: data?.code ?? identity.removal.code,
       startedOn,
       completedOn,

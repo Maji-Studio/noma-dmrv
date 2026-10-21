@@ -1,9 +1,10 @@
+import { EMISSION_ENTRY_OUTSIDE_CORRECTION_WINDOW } from "@/lib/certification/emission-entry-messages";
 import { SafeError } from "@/lib/errors";
 import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { applications, certificationSubmissions, creditBatchApplications, creditBatches } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { deriveRemovalEntryWindow, type RemovalEntryWindow } from "@/lib/certification/removal-emission-contributions";
+import { deriveRemovalEntryWindow, inWindow, type RemovalEntryWindow } from "@/lib/certification/removal-emission-contributions";
 import { isRemovalCorrectionWindowOpen } from "@/lib/record-lock";
 import { CertificationLineageChangedError, getCertifiedLineage, getLockedCertifiedLineageForBatches } from "./certification-lineage-guards";
 import { requireOrgScope, type Executor } from "./utils";
@@ -57,6 +58,15 @@ export async function revalidateEmissionCorrectionScope(ctx: OrgContext, tx: DbT
 export function emissionCorrectionWindow(ctx: OrgContext, tx: DbTransaction, batchId: string, removalId: string) {
   requireOrgScope(ctx);
   return scopes.get(tx)?.get(scopeKey(ctx, batchId))?.windows.get(removalId);
+}
+
+export function assertSentEntryInCorrectionWindow(
+  ctx: OrgContext, tx: DbTransaction, batchId: string, removalId: string, occurredOn: string,
+) {
+  requireOrgScope(ctx);
+  const window = emissionCorrectionWindow(ctx, tx, batchId, removalId);
+  if (!window || !inWindow({ occurredOn }, window))
+    throw new SafeError(EMISSION_ENTRY_OUTSIDE_CORRECTION_WINDOW);
 }
 
 /** New attempts are allowed only after the registry returned the prior submission.
