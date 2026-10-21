@@ -36,6 +36,13 @@ export const STICKY_END_CELL_CLASSES =
   "sticky right-0 z-10 bg-[var(--panel-bg)] [border-left:var(--hair-3)] group-hover/row:bg-[var(--row-hover-bg-solid)]";
 export const STICKY_END_HEADER_CLASSES =
   "sticky right-0 z-10 bg-[var(--panel-head-bg-solid)] [border-left:var(--hair-3)]";
+
+/**
+ * Starting visibility for lists the facility switcher already scopes: the
+ * Facility column (id `facility`) is redundant there, so it starts hidden and
+ * stays available in the Columns menu.
+ */
+export const FACILITY_COLUMN_HIDDEN_BY_DEFAULT = { facility: false } as const;
 const INTERACTIVE_ROW_CONTROL_SELECTOR =
   'button, a, label, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])';
 
@@ -83,10 +90,3 @@ export function handleRowActivationClick(
   if (interactive && interactive !== event.currentTarget) return;
   activate();
 }
-
-/**
- * Starting visibility for lists the facility switcher already scopes: the
- * Facility column (id `facility`) is redundant there, so it starts hidden and
- * stays available in the Columns menu.
- */
-export const FACILITY_COLUMN_HIDDEN_BY_DEFAULT = { facility: false } as const;
