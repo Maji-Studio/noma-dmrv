@@ -35,7 +35,8 @@ export function withCreate<T, E extends MappedFailure = never>(
         if (called) throw new Error("A create action may run only one operation.");
         called = true;
         const parsedOptions = parseIntent();
-        // The API key adapter reads only key and does not load the runner.
+        // Loaded on first use: api-keys.test.ts (unchanged by design) mocks no runner,
+        // and a static import would pull the database client into it.
         const { runOperationInProcess } = await import("@/lib/operations/runner");
         return runOperationInProcess(operation, ctx, input, parsedOptions);
       },

@@ -6,7 +6,7 @@ import { expect, it } from "vitest";
 const ROOT = resolve(import.meta.dirname, "../..");
 const FN_ROOT = join(ROOT, "src/fn");
 const TEST_FILE = /\.(test|spec)\.tsx?$/;
-const NON_CREATE_VERBS = /^(get|list|search|fetch|load|preview|can|is|has|update|delete|archive|restore|unarchive|revoke|remove|set|change)/;
+const NON_CREATE_VERBS = /^(get|list|search|fetch|load|preview|can|is|has|update|delete|archive|restore|unarchive|revoke|remove|set|change)(?=[A-Z]|$)/;
 const API_KEY_ACTION = "api-keys#createApiKeyFn";
 const WRAPPER_FILE = join(FN_ROOT, "with-create.ts");
 
@@ -130,7 +130,7 @@ function exportedActions(source: ts.SourceFile): Map<string, Action> {
   const exported = new Map<string, Action>();
   for (const statement of source.statements) {
     const entries: [string, Action][] = [];
-    if (ts.isFunctionDeclaration(statement) && statement.name) entries.push([statement.name.text, statement]);
+    if (ts.isFunctionDeclaration(statement)) entries.push([statement.name?.text ?? "default", statement]);
     if (ts.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
         if (ts.isIdentifier(declaration.name) && declaration.initializer &&
@@ -139,7 +139,11 @@ function exportedActions(source: ts.SourceFile): Map<string, Action> {
         }
       }
     }
-    if (ts.isExportAssignment(statement)) throw new Error(`Classify default export in ${source.fileName}`);
+    if (ts.isExportAssignment(statement)) {
+      const value = statement.expression;
+      if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) exported.set("default", value);
+      else if (!ts.isIdentifier(value)) throw new Error(`Classify default export in ${source.fileName}`);
+    }
     if (ts.isVariableStatement(statement) && statement.modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword) &&
       entries.length !== statement.declarationList.declarations.length) {
       throw new Error(`Cannot resolve exported action declaration in ${source.fileName}`);
@@ -152,6 +156,11 @@ function exportedActions(source: ts.SourceFile): Map<string, Action> {
     }
   }
   for (const statement of source.statements) {
+    if (ts.isExportAssignment(statement) && ts.isIdentifier(statement.expression)) {
+      const fn = local.get(statement.expression.text);
+      if (!fn) throw new Error(`Cannot resolve default export in ${source.fileName}`);
+      exported.set("default", fn);
+    }
     if (!ts.isExportDeclaration(statement) || statement.isTypeOnly) continue;
     // Fail closed on re-exports rather than silently omit a new public action.
     if (statement.moduleSpecifier || !statement.exportClause || !ts.isNamedExports(statement.exportClause)) {
@@ -189,11 +198,16 @@ function wiringErrors(identity: string, fn: Action): string[] {
   const callback = call.arguments[0];
   if (!callback || !(ts.isArrowFunction(callback) || ts.isFunctionExpression(callback))) return [...errors, "Callback must be argument 0"];
   const create = callback.parameters[1];
+  if (create && ts.isObjectBindingPattern(create.name) && identity !== API_KEY_ACTION) {
+    return [...errors, "Only API keys may destructure create"];
+  }
   if (!create || !ts.isIdentifier(create.name)) return [...errors, "Callback must declare create as parameter 1"];
   const createName = create.name.text;
   const nodes = descendants(callback.body);
   const runnerCalls = nodes.filter(node => namedCall(node, createName));
   const keyReads = nodes.filter(node =>
+    ((ts.isVariableDeclaration(node) || ts.isParameter(node)) && ts.isObjectBindingPattern(node.name) &&
+      node.initializer && ts.isIdentifier(node.initializer) && node.initializer.text === createName) ||
     (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === createName && node.name.text === "key") ||
     (ts.isElementAccessExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === createName &&
       ts.isStringLiteral(node.argumentExpression) && node.argumentExpression.text === "key"));
@@ -234,14 +248,24 @@ function clientErrors(source: ts.SourceFile): string[] {
   }
   const errors: string[] = [];
   for (const node of descendants(source)) {
-    if (!ts.isCallExpression(node)) continue;
-    const callee = node.expression;
-    const identity = ts.isIdentifier(callee) ? bindings.get(callee.text)
-      : ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && namespaces.has(callee.expression.text)
-        ? `${namespaces.get(callee.expression.text)}#${callee.name.text}` : undefined;
-    if (identity && KEYED.includes(identity) && !hasIntentProperty(node.arguments[1])) {
+    // Import declarations introduce bindings; type queries do not pass runtime values.
+    let ancestor: ts.Node | undefined = node;
+    while (ancestor && !ts.isImportDeclaration(ancestor) && !ts.isTypeQueryNode(ancestor)) ancestor = ancestor.parent;
+    if (ancestor) continue;
+    const identity = ts.isIdentifier(node) && bindings.has(node.text)
+      ? bindings.get(node.text)
+      : (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
+        ts.isIdentifier(node.expression) && namespaces.has(node.expression.text)
+        ? `${namespaces.get(node.expression.text)}#${ts.isPropertyAccessExpression(node)
+          ? node.name.text : ts.isStringLiteral(node.argumentExpression) ? node.argumentExpression.text : ""}`
+        : undefined;
+    if (!identity || !KEYED.includes(identity)) continue;
+    // A property name is not a reference to a same-named imported binding.
+    if (ts.isIdentifier(node) && ts.isPropertyAccessExpression(node.parent) && node.parent.name === node) continue;
+    const call = node.parent;
+    if (!ts.isCallExpression(call) || call.expression !== node || !hasIntentProperty(call.arguments[1])) {
       const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
-      errors.push(`${relative(ROOT, source.fileName)}:${line + 1} ${identity} needs { intentKey } as argument 1`);
+      errors.push(`${relative(ROOT, source.fileName)}:${line + 1} ${identity} needs a direct call with { intentKey } as argument 1`);
     }
   }
   return errors;
@@ -346,4 +370,68 @@ it("checks each imported action call, including aliases and namespace imports", 
     save(data, options);
   `, ts.ScriptTarget.Latest, true);
   expect(clientErrors(source)).toHaveLength(3);
+});
+
+
+it.each([
+  "export default async function () {}",
+  "export default async function named() {}",
+  "export default async () => {}",
+  "const fn = async () => {}; export default fn",
+])("inventories default actions: %s", body => {
+  const source = ts.createSourceFile(join(FN_ROOT, "fixture.ts"), `"use server"; ${body}`, ts.ScriptTarget.Latest, true);
+  const identities = [...exportedActions(source).keys()].map(name => `${moduleName(source.fileName)}#${name}`);
+  expect(identities).toEqual(["fixture#default"]);
+  expect(identities.filter(identity => !NON_CREATE_VERBS.test(identity.split("#")[1]) && !KEYED.includes(identity)))
+    .toEqual(["fixture#default"]);
+});
+
+it.each([
+  "useMutation({ mutationFn: createOrderFn })",
+  "const keep = createOrderFn; keep(data)",
+  'orders["createOrderFn"](data)',
+  "orders.createOrderFn",
+  'orders["createOrderFn"]',
+  "createOrderFn(data)",
+  "createOrderFn(data, options)",
+  "save(data)",
+])("rejects unkeyed client references: %s", body => {
+  expect(clientErrors(clientFixture(body))).toHaveLength(1);
+});
+
+it.each([
+  "createOrderFn(data, { intentKey })",
+  "save(data, { intentKey: key })",
+  "orders.createOrderFn(data, { intentKey })",
+  'orders["createOrderFn"](data, { intentKey })',
+  "type Result = Awaited<ReturnType<typeof createOrderFn>>",
+  "type Result = typeof orders.createOrderFn",
+  "",
+])("accepts keyed calls and type-only references: %s", body => {
+  expect(clientErrors(clientFixture(body))).toEqual([]);
+});
+
+function clientFixture(body: string): ts.SourceFile {
+  return ts.createSourceFile(join(ROOT, "src/hooks/fixture.ts"), `
+    import { createOrderFn, createOrderFn as save } from "@/fn/orders";
+    import * as orders from "@/fn/orders";
+    ${body};
+  `, ts.ScriptTarget.Latest, true);
+}
+
+it.each([
+  "(_ctx, create) => { const { key } = create; return create(op, data); }",
+  "(_ctx, create) => { const { key: retryKey } = create; return create(op, data); }",
+  "(_ctx, { key }) => save(key)",
+  "(_ctx, create) => { function read({ key } = create) { return key; } return create(op, data); }",
+])("rejects create parameter destructuring: %s", callback => {
+  const source = ts.createSourceFile("fixture.ts", `export async function createFn(data: unknown, options?: CreateIntentOptions) {
+    return withCreate(${callback}, options);
+  }`, ts.ScriptTarget.Latest, true);
+  expect(wiringErrors("fixture#createFn", exportedActions(source).get("createFn")!))
+    .toContainEqual(expect.stringMatching(/Only API keys/));
+});
+
+it.each(["issueUrl", "cancelInvitation", "setupFacility"])("keeps %s in the candidate inventory", name => {
+  expect(NON_CREATE_VERBS.test(name)).toBe(false);
 });

@@ -7,9 +7,9 @@
  * fixture that reproduces each leak shape it must catch and one that follows
  * the allowed pattern.
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import ts from "typescript";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -44,12 +44,21 @@ export interface OrgContext {
 export function requireOrgRole(ctx: OrgContext, role: "admin"): void {
   void ctx; void role;
 }
+export { withAction } from "./src/fn/with-action";
+export { withCreate } from "./src/fn/with-create";
+`,
+  "src/fn/with-action.ts": `
+import type { OrgContext } from "../../auth";
+export async function withAction<T>(fn: (ctx: OrgContext) => Promise<T>): Promise<T> {
+  return fn({ userId: "u", organizationId: "o", orgRole: "admin", isPlatformAdmin: false });
+}
+`,
+  "src/fn/with-create.ts": `
+import type { OrgContext } from "../../auth";
+import { withAction } from "./with-action";
 export async function withCreate<T>(fn: (ctx: OrgContext) => Promise<T>, options?: unknown): Promise<T> {
   void options;
   return withAction(fn);
-}
-export async function withAction<T>(fn: (ctx: OrgContext) => Promise<T>): Promise<T> {
-  return fn({ userId: "u", organizationId: "o", orgRole: "admin", isPlatformAdmin: false });
 }
 `,
   // A directive-free core may take a trusted context; it is never an action.
@@ -140,6 +149,14 @@ export async function mappedContexts(contexts: unknown[]) {
 }
 
 export { issueUrl } from "./report-core";
+`;
+
+const UNRELATED_CREATE = `"use server";
+import { requireOrgRole, type OrgContext } from "./auth";
+function withCreate(fn: (ctx: any) => void, input: unknown) { return fn(input); }
+export async function action(input: unknown) {
+  return withCreate(ctx => requireOrgRole(ctx, "admin"), input);
+}
 `;
 
 const CONTEXT_CREATE_EXPORT = `"use server";
@@ -570,6 +587,7 @@ const DELIBERATE_REJECTIONS = [
 
 function writeFixture(dir: string, actions: string): string[] {
   for (const [name, source] of Object.entries(SHARED_FILES)) {
+    mkdirSync(dirname(join(dir, name)), { recursive: true });
     writeFileSync(join(dir, name), source);
   }
   const actionsFile = join(dir, "actions.ts");
@@ -601,7 +619,7 @@ describe("check-server-action-exports", () => {
   beforeAll(() => {
     fixtureDir = mkdtempSync(join(tmpdir(), "server-action-exports-"));
     const sources = [
-      FAILING_ACTIONS, PASSING_ACTIONS, BYPASS_ACTIONS, INLINE_ACTIONS, CONTEXT_CREATE_EXPORT,
+      FAILING_ACTIONS, PASSING_ACTIONS, BYPASS_ACTIONS, INLINE_ACTIONS, CONTEXT_CREATE_EXPORT, UNRELATED_CREATE,
       ...[...REVIEW_BYPASSES, ...DELIBERATE_REJECTIONS, ...SAFE_REVIEW_CASES]
         .map(([, body]) => reviewSource(body)),
       ...EXOTIC_BYPASSES.map(([, body]) => exoticSource(body)),
@@ -639,6 +657,12 @@ describe("check-server-action-exports", () => {
     if (!violations) throw new Error("Fixture was not included in the shared program");
     return violations;
   }
+
+  it("rejects an unrelated withCreate forwarding browser input", () => {
+    expect(checkFixture(UNRELATED_CREATE)).toContainEqual(expect.objectContaining({
+      name: "requireOrgRole", reason: expect.stringMatching(/context comes from the caller/),
+    }));
+  });
 
   it("rejects a context-taking export passed as withCreate's callback", () => {
     expect(checkFixture(CONTEXT_CREATE_EXPORT)).toContainEqual(

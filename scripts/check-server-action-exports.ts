@@ -87,7 +87,10 @@ const TEST_FILE = /\.test\.tsx?$/;
 const USE_SERVER = "use server";
 const GUARD_NAMES = new Set(["requireOrgRole", "requireOrgScope"]);
 /** Wrappers that call their callback with a session-resolved OrgContext. */
-const SESSION_CONTEXT_WRAPPERS = new Set(["withAction", "withCreate"]);
+const SESSION_CONTEXT_WRAPPERS = new Map([
+  ["withAction", "/src/fn/with-action.ts"],
+  ["withCreate", "/src/fn/with-create.ts"],
+]);
 const FORWARDING_UTILITY_TYPES = new Set([
   "Parameters",
   "ConstructorParameters",
@@ -225,11 +228,11 @@ function rootExpression(expression: ts.Expression): ts.Expression {
   return current;
 }
 
-/** The resolved name of a call's callee, following import aliases. */
-function resolvedCalleeName(
+/** The canonical callee symbol, following import and local aliases. */
+function resolvedCalleeSymbol(
   checker: ts.TypeChecker,
   callee: ts.LeftHandSideExpression,
-): string | null {
+): ts.Symbol | null {
   const nameNode = ts.isIdentifier(callee)
     ? callee
     : ts.isPropertyAccessExpression(callee)
@@ -237,7 +240,7 @@ function resolvedCalleeName(
       : null;
   if (!nameNode) return null;
   let symbol = checker.getSymbolAtLocation(nameNode);
-  if (!symbol) return nameNode.text;
+  if (!symbol) return null;
   // Follow import aliases and `const check = requireOrgRole` style locals.
   for (let hop = 0; hop < MAX_ALIAS_HOPS; hop += 1) {
     if (symbol.flags & ts.SymbolFlags.Alias) {
@@ -261,7 +264,12 @@ function resolvedCalleeName(
     if (!next) break;
     symbol = next;
   }
-  return symbol.name;
+  return symbol;
+}
+
+function resolvedCalleeName(checker: ts.TypeChecker, callee: ts.LeftHandSideExpression): string | null {
+  return resolvedCalleeSymbol(checker, callee)?.name ??
+    (ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : null);
 }
 
 /**
@@ -281,8 +289,9 @@ function isSessionContextParameter(
   if (!call || !ts.isCallExpression(call) || call.arguments[0] !== argument) {
     return false;
   }
-  const wrapper = resolvedCalleeName(checker, call.expression);
-  return !!wrapper && SESSION_CONTEXT_WRAPPERS.has(wrapper);
+  const wrapper = resolvedCalleeSymbol(checker, call.expression);
+  const modulePath = wrapper && SESSION_CONTEXT_WRAPPERS.get(wrapper.name);
+  return !!modulePath && !!wrapper?.valueDeclaration?.getSourceFile().fileName.replaceAll("\\", "/").endsWith(modulePath);
 }
 
 /**
