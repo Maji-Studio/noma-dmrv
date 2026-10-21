@@ -558,7 +558,7 @@ it("reserves and stamps a held replacement only when its corrected Removal is su
   await markSubmissionSubmitted(ctx, next.id, { externalId: "held-correction-next", supersedePreviousId: original.id,
     expectedLockedAt: next.lockedAt!, productionEmissionsClaim: { removalId: fixture.removalId, creditBatchIds: [fixture.batchId] } });
   expect(await getEmissionEntry(ctx, replacement.id)).toMatchObject({ sentByRemovalId: fixture.removalId,
-    replacesEntryId: entry.id, sendReservedBySubmissionId: null });
+    replacesEntryId: entry.id, heldForRemovalId: null, sendReservedBySubmissionId: null });
   const [prior] = await db.select().from(certificationSubmissions).where(and(
     eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.id, original.id)));
   expect(prior.status).toBe("superseded");

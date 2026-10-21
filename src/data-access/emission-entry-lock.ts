@@ -1,3 +1,4 @@
+import { entryHoldingRemovalId } from "@/lib/certification/removal-emission-contributions";
 import { loadEmissionEntryHolds } from "./emission-entry-holds";
 import { lockEmissionCorrectionScope, revalidateEmissionCorrectionScope, emissionCorrectionWindow } from "./emission-entry-corrections";
 import { and, eq, isNull } from "drizzle-orm";
@@ -29,7 +30,7 @@ export async function lockWritableEmissionEntry(ctx: OrgContext, tx: DbTransacti
   const entry = await lockEmissionEntry(ctx, tx, id, options);
   const holds = await loadEmissionEntryHolds(ctx, [entry], tx);
   const heldForRemovalId = holds.get(entry.id) ?? null;
-  const removalId = entry.sentByRemovalId ?? heldForRemovalId;
+  const removalId = entryHoldingRemovalId({ ...entry, heldForRemovalId });
   if ((removalId && !emissionCorrectionWindow(ctx, tx, entry.creditBatchId, removalId)) || entry.sendReservedBySubmissionId)
     throw new DomainError(
       "certification_locked",

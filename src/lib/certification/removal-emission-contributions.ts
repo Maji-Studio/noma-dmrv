@@ -78,6 +78,9 @@ export function isLiveEntryReservation(row: {
 export function inWindow(entry: { occurredOn: string }, window: RemovalEntryWindow) {
   return entry.occurredOn >= window.start && entry.occurredOn <= window.end;
 }
+export function entryHoldingRemovalId(entry: Pick<RemovalEntryFact, "sentByRemovalId" | "heldForRemovalId">): string | null {
+  return entry.sentByRemovalId ?? entry.heldForRemovalId ?? null;
+}
 export function removalEntryOwner(entry: RemovalEntryFact, contenders: readonly EntryContender[]): string | null {
   if (entry.deletedAt) return null;
   if (entry.sentByRemovalId) return entry.sentByRemovalId;
@@ -124,7 +127,7 @@ export function deriveRemovalEntryContributions(args: {
       code: "entryHasNoRemoval", message: ENTRY_HAS_NO_REMOVAL, fixTarget: "emissions", creditBatchId: entry.creditBatchId,
       lineRef: { componentId: entry.componentId, displayName: entry.componentId },
     });
-    const holdingRemovalId = entry.sentByRemovalId ?? entry.heldForRemovalId;
+    const holdingRemovalId = entryHoldingRemovalId(entry);
     if (entry.kind === "value" && entry.lineRule === "single" && holdingRemovalId && holdingRemovalId !== args.removalId) {
       result.sentSingleComponentIds.push(entry.componentId);
       continue;

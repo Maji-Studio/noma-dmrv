@@ -1,3 +1,4 @@
+export const RETURNED_BY_ISOMETRIC_LABEL = "Returned by Isometric";
 export const EMISSION_ENTRY_OUTSIDE_CORRECTION_WINDOW = "Keep the entry date within this Removal's period.";
 export const ENTRY_HAS_NO_REMOVAL = "No Removal can carry this entry yet. Change its date to fit the Removal period, or wait for a later Removal.";
 export const EMPTY_REMOVAL_LINE = "Record a value or confirm that this component has no emissions for this Removal.";

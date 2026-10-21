@@ -11,8 +11,8 @@ vi.mock("./emission-entry-corrections", () => ({ emissionCorrectionBatchIds: vi.
 vi.mock("./certification-lineage-guards", () => ({ getCertifiedLineageForBatches: vi.fn() }));
 const returned: RecordLockRemoval = { id: "returned", submissions: [{ id: "attempt", status: "submitted", externalId: "remote", submittedAt: "2026-01-01" }],
   statements: [{ id: "statement", status: "FAILED_VERIFICATION", submittedToVerifier: true, fresh: true, returnedAt: "2026-02-01", removalExternalIds: ["remote"] }] };
-function reader(latest?: { id: string; status: string; version: number }) {
-  const rows = [[{ removalId: "returned" }], [{ removalId: "returned", creditBatchId: "a", metadata: {},
+function reader(latest?: { id: string; status: string; version: number }, ghgStatementId: string | null = null) {
+  const rows = [[{ removalId: "returned" }], [{ removalId: "returned", creditBatchId: "a", metadata: {}, ghgStatementId,
     createdAt: new Date("2026-01-01"), startDate: "2026-01-01", applicationDate: new Date("2026-01-31") }], ...(latest ? [[latest]] : [])];
   return { select: () => {
     const query = { from: () => query, innerJoin: () => query, where: () => query, orderBy: () => query, limit: () => query, then: (resolve: (value: unknown) => unknown) => Promise.resolve(rows.shift()).then(resolve) };
@@ -55,4 +55,13 @@ it("does not exclude the correction draft for ordinary contender readers", async
   vi.mocked(getCertifiedLineageForBatches).mockResolvedValue([lineage({ ...returned,
     submissions: [...returned.submissions, { id: "claimed", status: "draft", inFlight: true }] })]);
   expect(await listEmissionEntryDraftContenders(makeTestOrgContext(), ["a"], reader())).toEqual([]);
+});
+
+it.each(["current", "missing", null])("prefers the current returned statement with a fallback (%s)", async (ghgStatementId) => {
+  vi.mocked(getCertifiedLineageForBatches).mockResolvedValue([lineage({ ...returned,
+    statements: [...returned.statements, { ...returned.statements[0], id: "current", status: "DRAFT" }],
+  })]);
+  const result = await listEmissionEntryDraftContenders(makeTestOrgContext(), ["a"], reader(undefined, ghgStatementId));
+  expect(result[0].returnedStatement).toEqual(ghgStatementId === "current"
+    ? { id: "current", status: "DRAFT" } : { id: "statement", status: "FAILED_VERIFICATION" });
 });

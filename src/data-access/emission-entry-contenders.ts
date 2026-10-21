@@ -64,7 +64,8 @@ export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBa
       return !!shared && isRemovalCorrectionWindowOpen(fact, shared);
     });
     const correction = eligibleBatchIds.length > 0;
-    const statement = correction ? fact.statements.find((item) => item.status === "FAILED_VERIFICATION" || item.status === "DRAFT") : undefined;
+    const returnedStatements = correction ? fact.statements.filter((item) => item.status === "FAILED_VERIFICATION" || item.status === "DRAFT") : [];
+    const statement = returnedStatements.find((item) => item.id === group[0]?.ghgStatementId) ?? returnedStatements[0];
     const returnedStatement: EntryContender["returnedStatement"] = statement && (statement.status === "FAILED_VERIFICATION" || statement.status === "DRAFT")
       ? { id: statement.id, status: statement.status } : undefined;
     const submitted = fact.submissions.some(isSubmittedAttempt);

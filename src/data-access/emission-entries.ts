@@ -1,5 +1,5 @@
 import { loadEmissionEntryHolds } from "./emission-entry-holds";
-import { inWindow } from "@/lib/certification/removal-emission-contributions";
+import { entryHoldingRemovalId, inWindow } from "@/lib/certification/removal-emission-contributions";
 import { assertSentEntryInCorrectionWindow, emissionCorrectionWindow } from "./emission-entry-corrections";
 import { entryLine, resolveEmissionEntryDate } from "@/lib/certification/emission-entry-rules";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
@@ -313,7 +313,7 @@ export async function replaceEmissionEntry(ctx: OrgContext, input: ReplaceEmissi
       occurredOn: data.occurredOn, note: data.note, values: data.values,
     }, context, entry.sentByRemovalId || entry.heldForRemovalId ? {
       replacesEntryId: entry.sentByRemovalId ? entry.id : entry.replacesEntryId!,
-      removalId: (entry.sentByRemovalId ?? entry.heldForRemovalId)!,
+      removalId: entryHoldingRemovalId(entry)!,
     } : undefined);
     // Documents have polymorphic owners, not an entry-document join table.
     // Keep retained evidence and live uploads; failed uploads remain on the old row.
@@ -356,7 +356,7 @@ export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmission
         dateDefaulted: data.occurredOn === undefined,
       });
     }
-    const holdingRemovalId = entry.sentByRemovalId ?? entry.heldForRemovalId;
+    const holdingRemovalId = entryHoldingRemovalId(entry);
     if (holdingRemovalId && data.occurredOn) {
       assertSentEntryInCorrectionWindow(ctx, tx, entry.creditBatchId, holdingRemovalId, data.occurredOn);
     }

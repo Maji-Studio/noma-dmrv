@@ -46,7 +46,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | Testing | Kenji copies Cula into the sandbox (not 1:1). Tests use a fixture of Cula as read on 2026-10-15. A read-only production key is needed before the first real submission. |
 | Naming | "Emissions entry", with an "Add entry" button. "Activity" stays the history log of #1037-#1047. |
 | Durability | Build for both tiers. The Cula facility is 1000-year: one credit batch per Removal (`THOUSAND_YEAR_REMOVAL_BATCH_LIMIT`, `src/data-access/certifier-removals.ts`). |
-| Corrections | A submitted Removal is never corrected on noma's initiative. Edits reopen only when Isometric changes the state: a statement fails verification, or a statement noma submitted is back in DRAFT. The Removal is then marked "correction needed", and resubmitting supersedes it (Kenji, 2026-10-15). |
+| Corrections | A submitted Removal is never corrected on noma's initiative. Edits reopen only when Isometric changes the state: a statement fails verification, or a statement noma submitted is back in DRAFT. Resubmitting supersedes it (Kenji, 2026-10-15). A re-entered sent entry is held via a link and stamped on resubmit (Kenji, 2026-10-21, "link"). The derived state reads "Returned by Isometric" while the window is open with no changes and "Resubmit needed" once a sent fact changed (Kenji, 2026-10-21, screen variant A). #1134 keeps "Correction needed" for its lock-based notice. |
 | Reference template | The sandbox "Dark Earth Carbon Template (15 Oct)" (`rvt_1KS4S43VPSBXA26X`, edited in place) is more correct than Cula. It is the shape #1020 brings production to: 15 components, trucks as mass × distance, single-kWh electricity, the 1000-year storage line, two lab and two sample lines, pyrolyzer CO and CH₄, and staff travel. |
 
 ## 3. What the code tells us
@@ -339,7 +339,8 @@ Round 7, version B (Kenji, 2026-10-20). Screens say "component", never "line".
 - `isometric/sample-transport-template-drift` is resolved when the gate is switched on, not when PR 4 merges.
 
 **Corrections**
-- "Correction needed" is derived, not stored, and only inside an open correction window: the snapshot's contribution manifest differs from the current entries.
+- The state is derived, not stored, and only inside an open correction window. It reads "Returned by Isometric" with no changes and "Resubmit needed" once a sent fact changed: the snapshot's contribution manifest differs from the current entries (Kenji, 2026-10-21, screen variant A). #1134 keeps "Correction needed" for its lock-based notice.
+- A re-entered sent entry stays unsent and is held for its original Removal via a link. Re-entering a held replacement keeps the same sent-original link. Stamping happens in `markSubmissionSubmitted` on the corrected resubmit (Kenji, 2026-10-21, "link").
 - Once a Removal is submitted, the entries it sent stay locked, as today. noma never corrects a submitted Removal on its own initiative.
 - Edits reopen only after Isometric changes the state, and only when all of these hold:
   - a statement covering the lineage, freshly refreshed, is FAILED_VERIFICATION, or is back in DRAFT after it was sent to the verifier. `ghgStatementSubmissionId` is not enough: creating a statement already marks its ledger row submitted with remote status DRAFT (`finalizeGhgStatement`). "Sent to the verifier" follows #1101: a marker PR 4 records in `submitGhgStatementToVerifierCore`, or Certify's own record of a submission (REST `GhgStatement.submitted_at`, GraphQL `GhgStatement.submissions`), because a statement can be submitted from the Certify web UI and noma only learns of it on Refresh or Sync. A noma-only marker would leave such a statement locked after it returns to DRAFT;

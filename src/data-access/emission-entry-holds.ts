@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { emissionEntries } from "@/db/schema";
@@ -18,6 +18,6 @@ export async function loadEmissionEntryHolds(
   const rows = await executor.select({ id: emissionEntries.id, removalId: original.sentByRemovalId })
     .from(emissionEntries)
     .innerJoin(original, and(eq(original.id, emissionEntries.replacesEntryId), eq(original.organizationId, ctx.organizationId)))
-    .where(and(eq(emissionEntries.organizationId, ctx.organizationId), inArray(emissionEntries.id, ids)));
+    .where(and(eq(emissionEntries.organizationId, ctx.organizationId), inArray(emissionEntries.id, ids), isNull(emissionEntries.sentByRemovalId)));
   return new Map(rows.map((row) => [row.id, row.removalId]));
 }

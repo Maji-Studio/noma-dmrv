@@ -1,5 +1,14 @@
 # Isometric Docs Change Log
 
+## 2026-10-21: Held emission replacements and Removal correction read data (#1335)
+
+Re-entered sent entries stay unsent and held for their original Removal through
+`replaces_entry_id` (migration 0170). Stamping happens only in
+`markSubmissionSubmitted` on the corrected resubmit. `RemovalCorrection` read data
+supplies the screens with returned-statement details, member batches and changed
+components for Returned by Isometric and Resubmit needed states.
+No binding or `MAPPING_REVISION` change. No backfill.
+
 ## 2026-10-20: Emissions entries always on
 
 The activation flag is removed. Entries and sample-leg retirement apply in every environment.
