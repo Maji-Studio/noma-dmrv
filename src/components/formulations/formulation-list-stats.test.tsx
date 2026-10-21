@@ -7,6 +7,7 @@ import { FormulationList } from "./formulation-list";
 
 const state = vi.hoisted(() => ({
   stats: { data: undefined as unknown, isLoading: false, isError: false },
+  statsArchivedArgs: [] as boolean[],
   filters: [] as Array<{ archived?: boolean }>,
   items: [] as unknown[],
 }));
@@ -14,7 +15,10 @@ const state = vi.hoisted(() => ({
 vi.mock("@/hooks/use-formulations", () => {
   const mutation = () => ({ mutateAsync: vi.fn(), isPending: false });
   return {
-    useFormulationStats: () => state.stats,
+    useFormulationStats: (archived: boolean) => {
+      state.statsArchivedArgs.push(archived);
+      return state.stats;
+    },
     useFormulations: (filters: { archived?: boolean }) => {
       state.filters.push(filters);
       const items = state.items.filter((item) => Boolean((item as FormulationWithIngredients).archivedAt) === Boolean(filters.archived));
@@ -73,6 +77,7 @@ vi.mock("@/components/ui/data-table", () => {
 });
 
 beforeEach(() => {
+  state.statsArchivedArgs = [];
   state.filters = [];
   state.items = [];
 });
@@ -91,7 +96,9 @@ describe("FormulationList summary card", () => {
   it("keeps the archived toggle as the card scope", () => {
     state.stats = { data: { totalFormulations: 3 }, isLoading: false, isError: false };
     render(<FormulationList />);
+    expect(state.statsArchivedArgs.at(-1)).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Archived" }));
+    expect(state.statsArchivedArgs.at(-1)).toBe(true);
 
     const card = screen.getByLabelText("Archived formulations");
     expect(card.textContent).toContain("3");

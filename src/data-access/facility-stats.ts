@@ -2,10 +2,9 @@ import { db } from "@/db";
 import { facilities, reactors, storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { and, count, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { storageLocationTypes } from "@/schemas/storage-locations";
 import { requireOrgScope } from "./utils";
 import { getFacilityFeedstockWetStock } from "./facility-feedstock-stock";
-
-const STORAGE_BIN_TYPES = ["feedstock_bin", "biochar_bin", "product_bin"] as const;
 
 export interface FacilityStats {
   totalFacilities: number;
@@ -49,7 +48,7 @@ export async function getFacilityStats(
       ))
       .where(and(
         eq(storageLocations.organizationId, ctx.organizationId),
-        inArray(storageLocations.type, STORAGE_BIN_TYPES),
+        inArray(storageLocations.type, storageLocationTypes),
         // getFacilities counts bins in every archive state for the selected facilities.
         facilityArchiveFilter,
       )),

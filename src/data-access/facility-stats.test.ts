@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { facilities, feedstocks, feedstockTypes, reactors, storageLocations } from "@/db/schema";
+import { storageLocationTypes } from "@/schemas/storage-locations";
 import { cleanupCatalogueStatsOrg, seedCatalogueStatsOrg } from "../../tests/helpers/catalogue-stats-fixture";
 import { feedstockFixtureValues } from "../../tests/helpers/feedstock-fixture";
 import { TEST_SITE_POSITION } from "../../tests/helpers/test-org";
@@ -21,7 +22,6 @@ const TOTAL_ACTIVE_FEEDSTOCK_WET_KG = Array.from(
   { length: FACILITY_COUNT },
   (_, index) => (index + 1) * FEEDSTOCK_WET_KG_STEP * BINS_PER_TYPE,
 ).reduce((sum, mass) => sum + mass, 0);
-const STORAGE_BIN_TYPES = ["feedstock_bin", "biochar_bin", "product_bin"] as const;
 const FIXTURE_DATE = new Date("2026-09-12T12:00:00Z");
 type Fixture = Awaited<ReturnType<typeof seedCatalogueStatsOrg>>;
 
@@ -53,7 +53,7 @@ describe("getFacilityStats whole-list totals", () => {
     ]));
     // Multiple child rows catch accidental join multiplication. Bin archive
     // state is intentionally unfiltered, matching getFacilities.
-    const bins = await db.insert(storageLocations).values(sites.flatMap((site) => STORAGE_BIN_TYPES.flatMap((type) => {
+    const bins = await db.insert(storageLocations).values(sites.flatMap((site) => storageLocationTypes.flatMap((type) => {
       const values = {
         organizationId: site.organizationId, facilityId: site.id, type,
         feedstockTypeId: type === "feedstock_bin" ? typeIdByOrg.get(site.organizationId) : null,
@@ -89,7 +89,7 @@ describe("getFacilityStats whole-list totals", () => {
     const expected = {
       totalFacilities: FACILITY_COUNT,
       totalReactors: FACILITY_COUNT * REACTORS_PER_FACILITY,
-      totalStorageBins: FACILITY_COUNT * STORAGE_BIN_TYPES.length * BINS_PER_TYPE,
+      totalStorageBins: FACILITY_COUNT * storageLocationTypes.length * BINS_PER_TYPE,
       totalFeedstockWetKg: TOTAL_ACTIVE_FEEDSTOCK_WET_KG,
     };
     expect(await getFacilityStats(fixture.ctx)).toEqual(expected);
@@ -100,7 +100,7 @@ describe("getFacilityStats whole-list totals", () => {
       const list = await getFacilities(fixture.ctx, { page, pageSize: PAGE_SIZE });
       expect(list.items).toHaveLength(Math.min(PAGE_SIZE, FACILITY_COUNT - (page - 1) * PAGE_SIZE));
       expect(list.total).toBe(FACILITY_COUNT);
-      expect(list.items.every((item) => item.storageLocationCount === STORAGE_BIN_TYPES.length * BINS_PER_TYPE)).toBe(true);
+      expect(list.items.every((item) => item.storageLocationCount === storageLocationTypes.length * BINS_PER_TYPE)).toBe(true);
       rowReactors += list.items.reduce((sum, item) => sum + item.reactorCount, 0);
       totalFeedstockWetKg += list.items.reduce((sum, item) => sum + item.inventorySummary.feedstockWetKg, 0);
       expect(await getFacilityStats(fixture.ctx)).toEqual(expected);
@@ -117,7 +117,7 @@ describe("getFacilityStats whole-list totals", () => {
 
   it("selects only archived facilities with the same child rules and excludes foreign rows", async () => {
     expect(await getFacilityStats(fixture.ctx, { archived: true })).toEqual({
-      totalFacilities: 1, totalReactors: REACTORS_PER_FACILITY, totalStorageBins: STORAGE_BIN_TYPES.length * BINS_PER_TYPE,
+      totalFacilities: 1, totalReactors: REACTORS_PER_FACILITY, totalStorageBins: storageLocationTypes.length * BINS_PER_TYPE,
       totalFeedstockWetKg: ARCHIVED_FEEDSTOCK_WET_KG_PER_BIN * BINS_PER_TYPE,
     });
     const archived = await getFacilities(fixture.ctx, { archived: true });
@@ -129,7 +129,7 @@ describe("getFacilityStats whole-list totals", () => {
       archived.items.reduce((sum, item) => sum + item.inventorySummary.feedstockWetKg, 0),
     );
     expect(await getFacilityStats(foreign.ctx)).toEqual({
-      totalFacilities: 1, totalReactors: REACTORS_PER_FACILITY, totalStorageBins: STORAGE_BIN_TYPES.length * BINS_PER_TYPE,
+      totalFacilities: 1, totalReactors: REACTORS_PER_FACILITY, totalStorageBins: storageLocationTypes.length * BINS_PER_TYPE,
       totalFeedstockWetKg: FOREIGN_FEEDSTOCK_WET_KG_PER_BIN * BINS_PER_TYPE,
     });
     expect((await getFacilityStats(foreign.ctx, { archived: true })).totalFeedstockWetKg).toBe(

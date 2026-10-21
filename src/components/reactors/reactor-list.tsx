@@ -40,7 +40,7 @@ import {
 import type { ReactorWithRelations } from "@/data-access/reactors";
 import type { Reactor } from "@/db/schema";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
-import { formatTotalThroughputTph } from "./reactor-throughput";
+import { formatThroughputTph } from "./reactor-throughput";
 import { FACILITY_NOT_FOUND } from "@/lib/copy-utils";
 import { reactorSheetSections } from "./reactor-read-sections";
 import { ILLUSTRATION_SIZE, ReactorArt } from "@/components/ui/illustrations";
@@ -218,9 +218,9 @@ export function ReactorList() {
     isLoading,
     setCurrentPage,
   });
-  const totalThroughputValue = formatTotalThroughputTph([
-    { nominalThroughputTph: statsData?.totalNominalThroughputTph ?? null },
-  ]);
+  const totalThroughputValue = formatThroughputTph(
+    statsData?.totalNominalThroughputTph ?? null,
+  );
   const hasActiveSearch = searchInput.trim().length > 0;
 
   if (!contextFacilityId) {

@@ -7,6 +7,7 @@ import { SupplierList } from "./supplier-list";
 
 const state = vi.hoisted(() => ({
   stats: { data: undefined as unknown, isLoading: false, isError: false },
+  statsArchivedArgs: [] as boolean[],
   filters: [] as Array<{ archived?: boolean }>,
   items: [] as unknown[],
   archive: vi.fn(),
@@ -26,7 +27,10 @@ vi.mock("nuqs", () => ({
 vi.mock("@/hooks/use-suppliers", () => {
   const mutation = () => ({ mutateAsync: vi.fn(), isPending: false });
   return {
-    useSupplierStats: () => state.stats,
+    useSupplierStats: (archived: boolean) => {
+      state.statsArchivedArgs.push(archived);
+      return state.stats;
+    },
     useSuppliers: (filters: { archived?: boolean }) => {
       state.filters.push(filters);
       const items = state.items.filter((item) => Boolean((item as SupplierWithRelations).archivedAt) === Boolean(filters.archived));
@@ -99,6 +103,7 @@ vi.mock("@/components/ui/data-table", () => {
 });
 
 beforeEach(() => {
+  state.statsArchivedArgs = [];
   state.filters = [];
   state.items = [];
 });
@@ -117,7 +122,9 @@ describe("SupplierList summary card", () => {
   it("keeps the archived toggle as the card scope", () => {
     state.stats = { data: { totalSuppliers: 3 }, isLoading: false, isError: false };
     render(<SupplierList />);
+    expect(state.statsArchivedArgs.at(-1)).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Archived" }));
+    expect(state.statsArchivedArgs.at(-1)).toBe(true);
 
     const card = screen.getByLabelText("Archived suppliers");
     expect(card.textContent).toContain("3");
