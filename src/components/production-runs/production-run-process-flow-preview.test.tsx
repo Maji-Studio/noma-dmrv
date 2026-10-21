@@ -124,7 +124,9 @@ describe("ProcessFlowPreview", () => {
 
   it("offers no (i) for the arithmetic until a yield resolves", () => {
     const html = renderToStaticMarkup(<ProcessFlowPreview {...run} biocharKg={null} biocharMoisturePercent={null} biocharDryKg={null} />);
-    expect(html).not.toContain("About Process flow");
+    // The arithmetic trigger is absent; the block's definition hint still renders.
+    expect(html).not.toContain("data-explanation-info");
+    expect(html).toContain("About Process flow");
   });
 
   it("falls back to a wet flow, with water and conversion loss as one exit, when the output dry mass is unresolved", () => {

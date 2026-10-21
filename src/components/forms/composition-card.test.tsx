@@ -26,7 +26,7 @@ describe("CompositionCard", () => {
   it("shows caption, headline, picture, short lines and actions; the explanation waits behind the (i)", () => {
     render(<Block />);
     for (const text of ["Bin stock", "≈ 1,420", "1,110 kg", "310 kg wet mass removed", "Split bar", "Dry biochar in bin 540 → 135 kg", "Stock history"]) {
-      expect(screen.getByText(new RegExp(text.replace(/[≈→.()]/g, "\\$&")))).toBeTruthy();
+      expect(screen.getByText(text, { exact: false })).toBeTruthy();
     }
     expect(screen.queryByText("Batch ledger")).toBeNull();
     expect(screen.queryByText(/Show calculation/)).toBeNull();
