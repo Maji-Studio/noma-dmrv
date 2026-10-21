@@ -385,7 +385,14 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
   `FormActions` puts its own. The line never blocks Save, and it shows "Checking" whenever
   its last answer is not for the current inputs.
   Feedstock, Delivery, Application and Biochar Product render `RecordCreditBatchLine` from saved
-  provenance via `getRecordCreditBatches` and show "Not yet computed" while creating.
+  provenance via `getRecordCreditBatches`. While creating, a new Feedstock says
+  "Set when a production run uses this feedstock"; the other three pass the chosen
+  source bin or delivery as `preview` (#1350). `previewRecordCreditBatches` plans the
+  draw with the stock preview's own request (`prepareOutputStock`) or the
+  application's shares (`planApplicationShares`), the planners the save posts, and
+  resolves the runs through `getCreditBatchesForSourceRuns`. Before the mass is
+  entered it reads the runs the source holds: "Joins" when they share one batch,
+  "Could join" when they span several.
   When several batches apply, "+N" opens a list of all their batches.
 - The submit skips the browser's constraint bubbles except for unparsed number text (see [Native number constraints](#native-number-constraints)); a nested `submitType="button"` is untouched.
 

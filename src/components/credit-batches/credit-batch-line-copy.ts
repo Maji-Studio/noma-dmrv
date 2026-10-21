@@ -37,6 +37,9 @@ export interface CreditBatchLineCopy {
   busy: boolean;
 }
 
+/** How long a form's inputs rest before a credit batch preview asks the server again. */
+export const CREDIT_BATCH_PREVIEW_DEBOUNCE_MS = 350;
+
 /** The line's label for the ⓘ, so a screen reader names what it explains. */
 export const CREDIT_BATCH_INFO_LABEL = "How the credit batch is chosen";
 

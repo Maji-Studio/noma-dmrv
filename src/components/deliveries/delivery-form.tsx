@@ -17,6 +17,7 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useId, useState } from "react";
 
 import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
+import { outputDrawCreditBatchPreview } from "@/components/credit-batches/record-credit-batch-preview-input";
 import { FormActions, FormEntitySelect, FormField, FormSection, FormSpine, makeCertFieldStatus, MoistureField, FieldErrorRow, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
@@ -217,7 +218,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const massChanged = isEditMode && (draw.changed || wetMass !== delivery.deliveredWetMassKg || (!draw.active && moisture !== delivery.moistureContentPercent) ||
     ((draw.sources ?? watchSources) != null && JSON.stringify(draw.sources ?? watchSources) !== JSON.stringify(openedMovement?.sources)));
   const stockChanged = !isEditMode || (!stockLocked && (massChanged || dateChanged));
-  const { preview: stockPreview, estimate: moistureEstimate, gate, beginSubmit } = useOutputDrawDraft({
+  const { preview: stockPreview, input: drawInput, estimate: moistureEstimate, gate, beginSubmit } = useOutputDrawDraft({
     draw, bypass: !stockChanged,
     singleMoistureReady: Number.isFinite(moisture) && moisture >= 0 && moisture < 100,
     moisturePercent: moisture,
@@ -233,6 +234,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     },
   });
   const { canSave, submitDisabled: draftSubmitDisabled, basisFingerprint } = gate();
+  // A saved delivery keeps its source bin, so only a new one previews its batches.
+  const creditBatchPreview = isEditMode ? undefined
+    : outputDrawCreditBatchPreview("delivery", { storageLocationId: watchBinId, facilityId: formFacilityId, occurredAt: watchDate }, drawInput);
   const submitDisabled = draftSubmitDisabled || (stockLocked && (massChanged || dateChanged));
   useClearOnDependencyChange(watchOrderId, () => setValue("storageLocationId", ""));
   // A refusal caused by the new time alone belongs under the date, not the mass.
@@ -474,7 +478,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         submitDisabled={submitDisabled}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
-        preview={<RecordCreditBatchLine kind="delivery" id={delivery?.id} />}
+        preview={<RecordCreditBatchLine kind="delivery" id={delivery?.id} preview={creditBatchPreview} facilityId={formFacilityId} />}
       />
     </div>
   );

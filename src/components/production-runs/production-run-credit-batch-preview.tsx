@@ -11,6 +11,7 @@
 
 import { useWatch, type Control } from "react-hook-form";
 import { CreditBatchLine } from "@/components/credit-batches/credit-batch-line";
+import { CREDIT_BATCH_PREVIEW_DEBOUNCE_MS } from "@/components/credit-batches/credit-batch-line-copy";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useProductionRunCreditBatchPreview } from "@/hooks/use-production-run-credit-batch-preview";
 import { resolveRunWindow } from "@/lib/production-runs/run-window";
@@ -20,9 +21,6 @@ import {
   describeCreditBatchPreview,
   type ProductionRunCreditBatchPreviewView,
 } from "./production-run-credit-batch-preview-copy";
-
-/** How long the inputs rest before the server is asked again. */
-export const CREDIT_BATCH_PREVIEW_DEBOUNCE_MS = 350;
 
 /** The form values the line reads; the form's own values type is wider. */
 export interface CreditBatchPreviewFormValues {
