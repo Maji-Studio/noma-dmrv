@@ -1,5 +1,5 @@
 /**
- * Removal template setup dialog (#1276): a stepper over the Settings Removal
+ * Removal template setup dialog (#1276): a two-step dialog (Template, Check) over the Settings Removal
  * templates pane, opened from the summary card. Reads the facility's templates
  * live from Isometric (nothing is stored), then hands them to the flow. A
  * reload after a stale refusal remounts the flow so every choice starts from
@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { Modal } from "@/components/ui/modal";
 import { useApplyRemovalTemplateSetup, useRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
-import { parseStep, setupDialogTitle } from "@/lib/certification/removal-template-setup-copy";
+import { parseStep, SETUP_DIALOG_TITLE } from "@/lib/certification/removal-template-setup-copy";
 import { SETUP_GUTTER_CLASS } from "./layout";
 import { RemovalTemplateSetupFlow } from "./setup-flow";
 
@@ -22,19 +22,15 @@ const TITLE_ID = "removal-template-setup-title";
 export interface RemovalTemplateSetupDialogProps {
   isOpen: boolean;
   facilityId: string;
-  /** Whether the facility already has a default template, known by the caller so the title is right before the read lands. */
-  hasCurrentTemplate: boolean;
   /** The template a link or button starts with. */
   templateId?: string | null;
   /** The step a link or button starts on; any other value starts on Template. */
   step?: string | null;
-  /** Make default starts on unless the caller says false, as the credit batch dialog does. */
-  makeDefault?: boolean;
   onClose: () => void;
 }
 
 export function RemovalTemplateSetupDialog(props: RemovalTemplateSetupDialogProps) {
-  // Owned here, above the Modal, so Escape and the close button can be held while Apply is saving.
+  // Owned here, above the Modal, so Escape and the close button can be held while Set template is saving.
   const apply = useApplyRemovalTemplateSetup();
   const pending = apply.isPending;
   return (
@@ -44,7 +40,7 @@ export function RemovalTemplateSetupDialog(props: RemovalTemplateSetupDialogProp
       onOpen={() => { if (!pending) apply.reset(); }}
       dismissible={!pending}
       ariaLabelledBy={TITLE_ID}
-      // Dense form: the Decisions step puts a 280px fill column beside each component name.
+      // Dense form: the Check step shows question cards and a Now to After pair.
       width="lg"
       contentClassName=""
       // A stray backdrop click must not discard answers; the close button and Escape still work.
@@ -55,7 +51,7 @@ export function RemovalTemplateSetupDialog(props: RemovalTemplateSetupDialogProp
   );
 }
 
-function DialogBody({ facilityId, hasCurrentTemplate, templateId = null, step = null, makeDefault = true, onClose, apply }: RemovalTemplateSetupDialogProps & { apply: ReturnType<typeof useApplyRemovalTemplateSetup> }) {
+function DialogBody({ facilityId, templateId = null, step = null, onClose, apply }: RemovalTemplateSetupDialogProps & { apply: ReturnType<typeof useApplyRemovalTemplateSetup> }) {
   const query = useRemovalTemplateSetup(facilityId, !!facilityId);
   const [reloads, setReloads] = useState(0);
   const reload = async () => {
@@ -63,14 +59,10 @@ function DialogBody({ facilityId, hasCurrentTemplate, templateId = null, step = 
     setReloads((count) => count + 1);
   };
 
-  // The title names the entry point, read from the link and the caller's knowledge of the default, so it is right while the read loads or fails.
-  const title = setupDialogTitle({ step: parseStep(step), hasCurrentTemplate });
-
   return (
     <div className="flex flex-col">
-      <div className={`${SETUP_GUTTER_CLASS} flex flex-col gap-4 pb-16 pr-56 pt-20`}>
-        <h2 id={TITLE_ID} className="title-heading-3">{title}</h2>
-        {query.data && <p className="body-small text-[var(--color-text-secondary)]">{query.data.facility.name}</p>}
+      <div className={`${SETUP_GUTTER_CLASS} pb-16 pr-56 pt-20`}>
+        <h2 id={TITLE_ID} className="title-heading-3">{SETUP_DIALOG_TITLE}</h2>
       </div>
       {query.isError ? (
         <div className={`${SETUP_GUTTER_CLASS} flex flex-col gap-16 pb-20`}>
@@ -92,7 +84,6 @@ function DialogBody({ facilityId, hasCurrentTemplate, templateId = null, step = 
           facilityId={facilityId}
           templateId={templateId}
           step={parseStep(step)}
-          makeDefault={makeDefault}
           onReload={() => void reload()}
           apply={apply}
           onClose={onClose}

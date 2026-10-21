@@ -39,12 +39,12 @@ describe("CreditBatchEmissionsPanel", () => {
     expect(screen.getByRole("link", { name: /Open emissions/ }).getAttribute("href")).toBe("/emissions/cb-1?facility=f-1");
   });
 
-  it("explains an unpinned template and links to the batch template, without Retry", () => {
+  it("explains an unpinned template and links to the Set template setup in Settings, without Retry", () => {
     query.error = new EmissionLinesBlockedError(removalTemplateBlocker("unpinnedTemplate"));
     render_();
     expect(screen.getByText("Choose a Removal template for this credit batch.")).toBeTruthy();
     const link = screen.getByRole("link", { name: "Set template" });
-    expect(link.getAttribute("href")).toContain("/credit-batches/cb-1");
+    expect(link.getAttribute("href")).toBe("/settings/removal-templates?facility=f-1&setup=template");
     expect(link.getAttribute("href")).toContain("facility=f-1");
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });

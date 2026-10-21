@@ -62,7 +62,7 @@ export function removalTemplatesSettingsHref(
  */
 export function removalTemplateSetupHref(
   facilityId: string,
-  { templateId, step = "template" }: { templateId?: string; step?: "template" | "decisions" | "apply" } = {},
+  { templateId, step = "template" }: { templateId?: string; step?: "template" | "check" } = {},
 ): string {
   let href = `${withFacilityParam(SETTINGS_REMOVAL_TEMPLATES_HREF, facilityId)}&${REMOVAL_TEMPLATES_SETUP_PARAM}=${step}`;
   if (templateId) href += `&${REMOVAL_TEMPLATES_TEMPLATE_PARAM}=${encodeURIComponent(templateId)}`;

@@ -12,18 +12,23 @@ import { sourcesTakenElsewhere } from "./removal-template-setup-plan";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "./removal-template-blockers";
 import { SOURCE_LABELS } from "./removal-template-source-labels";
 
-export type SetupStepKey = "template" | "decisions" | "apply";
-export const SETUP_STEP_KEYS: readonly SetupStepKey[] = ["template", "decisions", "apply"];
+export type SetupStepKey = "template" | "check";
+export const SETUP_STEP_KEYS: readonly SetupStepKey[] = ["template", "check"];
 
-/**
- * The dialog title for its entry point. Review decisions opens on Decisions;
- * Change template opens on Template while a default exists; everything else
- * (Set up template, a blocker link) is a first setup.
- */
-export function setupDialogTitle({ step, hasCurrentTemplate }: { step: SetupStepKey | null; hasCurrentTemplate: boolean }): string {
-  if (step === "decisions") return "Review decisions";
-  if (step === "template" && hasCurrentTemplate) return "Change Removal template";
-  return "Set up Removal template";
+/** One title for every entry point: the dialog sets the facility's Removal template. */
+export const SETUP_DIALOG_TITLE = "Set Removal template";
+
+/** The Check step line about credit batches that switch: "Credit batches CB-3 and CB-4 switch to it." */
+export const NO_SWITCH_COPY = "No credit batches switch.";
+export const switchLead = (count: number): string => (count === 1 ? "Credit batch " : "Credit batches ");
+export const switchTail = (count: number): string => (count === 1 ? " switches to it." : " switch to it.");
+
+/** Why a credit batch keeps its template, after its code: "CB-1 and CB-2 keep their template: their Removals are sent." */
+export function keptCopy(reason: "removalSent" | "certified", count: number): string {
+  const one = count === 1;
+  const lead = one ? " keeps its template: " : " keep their template: ";
+  if (reason === "removalSent") return `${lead}${one ? "its Removal is sent." : "their Removals are sent."}`;
+  return `${lead}${one ? "it is certified." : "they are certified."}`;
 }
 
 /** What noma keeps for each source, and whether the datapoints come as one figure or a set. */

@@ -12,8 +12,8 @@ vi.mock("@/hooks/use-removal-template-setup", () => ({
   useRemovalTemplateSetup: () => ({ data: state.error ? undefined : state.data, error: state.error, isError: !!state.error, isFetching: false, refetch: vi.fn() }),
 }));
 vi.mock("./removal-template-setup/removal-template-setup-dialog", () => ({
-  RemovalTemplateSetupDialog: ({ isOpen, step, templateId, makeDefault, onClose }: { isOpen: boolean; step?: string | null; templateId?: string | null; makeDefault?: boolean; onClose: () => void }) => (
-    isOpen ? <div role="dialog">{`setup ${step} ${templateId ?? "no template"} ${makeDefault ? "default" : "no default"}`}<button onClick={onClose}>Close setup</button></div> : null
+  RemovalTemplateSetupDialog: ({ isOpen, step, templateId, onClose }: { isOpen: boolean; step?: string | null; templateId?: string | null; onClose: () => void }) => (
+    isOpen ? <div role="dialog">{`setup ${step} ${templateId ?? "no template"}`}<button onClick={onClose}>Close setup</button></div> : null
   ),
 }));
 vi.mock("@/hooks/use-credit-batches", () => ({ useCreditBatches: () => ({ data: state.batches }) }));
@@ -37,31 +37,31 @@ function show(overrides: Parameters<typeof setupData>[0], batches: unknown[] = [
 }
 
 describe("RemovalTemplateSummaryCard", () => {
-  it("shows Ready with both buttons for an Admin", () => {
+  it("shows Ready with Change template for an Admin", () => {
     show({ fitting: [ready], removalTemplateId: "tpl-ready" }, [{ id: "b1", code: "CB-26-001", removalTemplateId: "tpl-ready" }]);
     expect(screen.getByText("Ready")).toBeTruthy();
     expect(screen.getByRole("link", { name: "CB-26-001" }).getAttribute("href")).toContain("/credit-batches/b1");
     expect(screen.queryByRole("dialog")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Review decisions" }));
-    expect(screen.getByRole("dialog").textContent).toContain("setup decisions tpl-ready default");
+    expect(screen.queryByRole("button", { name: "Review decisions" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Change template" }));
+    expect(screen.getByRole("dialog").textContent).toContain("setup template no template");
   });
 
   it("Change template opens the dialog on the template list with nothing picked", () => {
     show({ fitting: [ready], removalTemplateId: "tpl-ready" });
     fireEvent.click(screen.getByRole("button", { name: "Change template" }));
-    expect(screen.getByRole("dialog").textContent).toContain("setup template no template default");
+    expect(screen.getByRole("dialog").textContent).toContain("setup template no template");
   });
 
   it("opens the dialog from a setup link for an Admin and clears the params on close", async () => {
-    show({ fitting: [ready], removalTemplateId: "tpl-ready" }, [], "?facility=facility-1&setup=decisions&template=tpl-ready&makeDefault=false");
-    expect(screen.getByRole("dialog").textContent).toContain("setup decisions tpl-ready no default");
+    show({ fitting: [ready], removalTemplateId: "tpl-ready" }, [], "?facility=facility-1&setup=check&template=tpl-ready");
+    expect(screen.getByRole("dialog").textContent).toContain("setup check tpl-ready");
     fireEvent.click(screen.getByRole("button", { name: "Close setup" }));
     await waitFor(() => expect(onUrlUpdate).toHaveBeenCalled());
     const { searchParams, options } = onUrlUpdate.mock.lastCall![0];
     expect(options.history).toBe("replace");
     expect(searchParams.get("setup")).toBeNull();
     expect(searchParams.get("template")).toBeNull();
-    expect(searchParams.get("makeDefault")).toBeNull();
     expect(searchParams.get("facility")).toBe("facility-1");
     expect(screen.queryByRole("dialog")).toBeNull();
   });
@@ -86,17 +86,17 @@ describe("RemovalTemplateSummaryCard", () => {
     expect(screen.queryByText("Ready")).toBeNull();
   });
 
-  it("offers Set up template when there is no default, to Admins only", () => {
+  it("offers Set template when no template is set, to Admins only", () => {
     show({ fitting: [ready] });
     expect(screen.getByText("No Removal template set")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Set up template" }));
-    expect(screen.getByRole("dialog").textContent).toContain("setup template no template default");
+    fireEvent.click(screen.getByRole("button", { name: "Set template" }));
+    expect(screen.getByRole("dialog").textContent).toContain("setup template no template");
     cleanup();
     show({ fitting: [ready], viewerCanManage: false });
-    expect(screen.queryByRole("button", { name: "Set up template" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Set template" })).toBeNull();
   });
 
-  it("reads a default that is blocked or unfit as a problem with its reason, never as Ready", () => {
+  it("reads a template that is blocked or unfit as a problem with its reason, never as Ready", () => {
     const blocked = template("tpl-blocked", "Fixed values missing", { defaults: [startupDefault] }, "Set each value in the Isometric template editor before submitting.");
     show({ fitting: [blocked], removalTemplateId: "tpl-blocked" });
     expect(screen.getByText("Not ready")).toBeTruthy();
@@ -116,7 +116,7 @@ describe("RemovalTemplateSummaryCard", () => {
     expect(screen.getByText("Isometric has fixed values without a datapoint in this template.")).toBeTruthy();
   });
 
-  it("says a default missing from Isometric is missing, not unset", () => {
+  it("says a template missing from Isometric is missing, not unset", () => {
     show({ fitting: [ready], removalTemplateId: "tpl-gone" });
     expect(screen.queryByText("No Removal template set")).toBeNull();
     expect(screen.getByText("Not found")).toBeTruthy();

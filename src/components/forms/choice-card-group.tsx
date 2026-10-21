@@ -56,6 +56,8 @@ export interface ChoiceCardGroupProps {
   stackArt?: boolean;
   /** Keep two-up options in one column until the group is about 24rem wide (phones), for long titles. */
   stackNarrow?: boolean;
+  /** One card per line at every width, for a list of long choices read top to bottom. */
+  singleColumn?: boolean;
 }
 
 /** Width of the group at which each column count starts. Cards keep about 176px. */
@@ -99,6 +101,7 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
       className,
       stackArt = false,
       stackNarrow = false,
+      singleColumn = false,
       ...aria
     },
     ref,
@@ -106,7 +109,7 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
     const generatedName = useId();
     const groupName = name ?? generatedName;
     const controlled = value !== undefined;
-    const columns = wideColumns(options.length);
+    const columns = singleColumn ? 1 : wideColumns(options.length);
 
     return (
       <fieldset

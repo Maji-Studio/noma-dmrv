@@ -117,7 +117,7 @@ describe("BatchEmissionsPage template blocker", () => {
     mocks.linesError = new EmissionLinesBlockedError(removalTemplateBlocker("unpinnedTemplate"));
     render(<BatchEmissionsPage creditBatchId="cb" />);
     expect(screen.getByText("Choose a Removal template for this credit batch.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Set template" }).getAttribute("href")).toContain("/credit-batches/cb");
+    expect(screen.getByRole("link", { name: "Set template" }).getAttribute("href")).toBe("/settings/removal-templates?facility=fac&setup=template");
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
   it("keeps Try again for a real load failure", () => {

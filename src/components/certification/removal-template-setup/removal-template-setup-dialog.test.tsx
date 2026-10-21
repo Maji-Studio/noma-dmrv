@@ -15,8 +15,8 @@ vi.mock("@/hooks/use-removal-template-setup", () => ({
   },
 }));
 vi.mock("./setup-flow", () => ({
-  RemovalTemplateSetupFlow: ({ facilityId, templateId, step, makeDefault }: { facilityId: string; templateId: string | null; step: string | null; makeDefault: boolean }) => (
-    <div>{`flow for ${facilityId} ${templateId ?? "no template"} ${step ?? "no step"} ${makeDefault ? "default" : "no default"}`}</div>
+  RemovalTemplateSetupFlow: ({ facilityId, templateId, step }: { facilityId: string; templateId: string | null; step: string | null }) => (
+    <div>{`flow for ${facilityId} ${templateId ?? "no template"} ${step ?? "no step"}`}</div>
   ),
 }));
 
@@ -25,57 +25,42 @@ afterEach(() => { cleanup(); state.read.length = 0; state.error = false; state.l
 describe("RemovalTemplateSetupDialog", () => {
   it("reads and writes the facility it is given and hands the link's start to the flow", () => {
     state.refetch = vi.fn();
-    render(<RemovalTemplateSetupDialog hasCurrentTemplate={false} isOpen facilityId={ACTIVE} templateId="tpl" step="decisions" makeDefault={false} onClose={vi.fn()} />);
+    render(<RemovalTemplateSetupDialog isOpen facilityId={ACTIVE} templateId="tpl" step="check" onClose={vi.fn()} />);
     expect(new Set(state.read.map((read) => read.facilityId))).toEqual(new Set([ACTIVE]));
-    expect(screen.getByRole("dialog", { name: "Review decisions" })).toBeTruthy();
-    expect(screen.getByText(`flow for ${ACTIVE} tpl decisions no default`)).toBeTruthy();
-    expect(screen.getByText("Mafinga Facility")).toBeTruthy();
+    expect(screen.getByText(`flow for ${ACTIVE} tpl check`)).toBeTruthy();
   });
 
-  it("titles the dialog after its entry point", () => {
-    state.refetch = vi.fn();
-    const titleFor = (step: string | undefined, defaultId: string | null) => {
-      state.defaultId = defaultId;
-      render(<RemovalTemplateSetupDialog hasCurrentTemplate={defaultId !== null} isOpen facilityId={ACTIVE} step={step} onClose={vi.fn()} />);
-      const title = screen.getByRole("dialog").getAttribute("aria-labelledby");
-      const text = document.getElementById(title ?? "")?.textContent;
-      cleanup();
-      return text;
-    };
-    expect(titleFor("decisions", "tpl")).toBe("Review decisions");
-    expect(titleFor("template", "tpl")).toBe("Change Removal template");
-    expect(titleFor("template", null)).toBe("Set up Removal template");
-    expect(titleFor("apply", "tpl")).toBe("Set up Removal template");
-  });
-
-  it("keeps the Change template title while the read loads or fails", () => {
+  it("is always titled Set Removal template, with no facility subtitle, while loading, failing or loaded", () => {
     state.refetch = vi.fn();
     const titleNow = () => {
-      render(<RemovalTemplateSetupDialog hasCurrentTemplate isOpen facilityId={ACTIVE} step="template" onClose={vi.fn()} />);
-      const text = screen.getByRole("dialog", { name: "Change Removal template" }).textContent;
+      render(<RemovalTemplateSetupDialog isOpen facilityId={ACTIVE} step="template" onClose={vi.fn()} />);
+      const text = screen.getByRole("dialog", { name: "Set Removal template" }).textContent;
       cleanup();
       return text;
     };
+    expect(titleNow()).not.toContain("Mafinga Facility");
+    state.defaultId = "tpl";
+    expect(titleNow()).toContain("Set Removal template");
     state.loading = true;
-    expect(titleNow()).toContain("Change Removal template");
+    expect(titleNow()).toContain("Set Removal template");
     state.loading = false;
     state.error = true;
-    expect(titleNow()).toContain("Change Removal template");
+    expect(titleNow()).toContain("Set Removal template");
   });
 
   it("ignores a step it does not know and reads nothing while closed", () => {
     state.refetch = vi.fn();
-    render(<RemovalTemplateSetupDialog hasCurrentTemplate={false} isOpen={false} facilityId={ACTIVE} step="bogus" onClose={vi.fn()} />);
+    render(<RemovalTemplateSetupDialog isOpen={false} facilityId={ACTIVE} step="bogus" onClose={vi.fn()} />);
     expect(state.read).toEqual([]);
     cleanup();
-    render(<RemovalTemplateSetupDialog hasCurrentTemplate={false} isOpen facilityId={ACTIVE} step="bogus" onClose={vi.fn()} />);
-    expect(screen.getByText(`flow for ${ACTIVE} no template no step default`)).toBeTruthy();
+    render(<RemovalTemplateSetupDialog isOpen facilityId={ACTIVE} step="bogus" onClose={vi.fn()} />);
+    expect(screen.getByText(`flow for ${ACTIVE} no template no step`)).toBeTruthy();
   });
 
   it("shows a skeleton while loading", () => {
     state.refetch = vi.fn();
     state.loading = true;
-    render(<RemovalTemplateSetupDialog hasCurrentTemplate={false} isOpen facilityId={ACTIVE} onClose={vi.fn()} />);
+    render(<RemovalTemplateSetupDialog isOpen facilityId={ACTIVE} onClose={vi.fn()} />);
     expect(screen.getByLabelText("Loading Removal templates")).toBeTruthy();
   });
 
@@ -83,7 +68,7 @@ describe("RemovalTemplateSetupDialog", () => {
     state.refetch = vi.fn();
     state.error = true;
     const onClose = vi.fn();
-    render(<RemovalTemplateSetupDialog hasCurrentTemplate={false} isOpen facilityId={ACTIVE} onClose={onClose} />);
+    render(<RemovalTemplateSetupDialog isOpen facilityId={ACTIVE} onClose={onClose} />);
     expect(screen.getByText("The Removal templates could not be read from Isometric.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(state.refetch).toHaveBeenCalled();
@@ -91,11 +76,11 @@ describe("RemovalTemplateSetupDialog", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("cannot be dismissed while Apply is pending, so a refusal and its Reload are never lost", () => {
+  it("cannot be dismissed while Set template is pending, so a refusal and its Reload are never lost", () => {
     state.refetch = vi.fn();
     state.pending = true;
     const onClose = vi.fn();
-    render(<RemovalTemplateSetupDialog hasCurrentTemplate={false} isOpen facilityId={ACTIVE} onClose={onClose} />);
+    render(<RemovalTemplateSetupDialog isOpen facilityId={ACTIVE} onClose={onClose} />);
     expect((screen.getByRole("button", { name: "Close" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(onClose).not.toHaveBeenCalled();

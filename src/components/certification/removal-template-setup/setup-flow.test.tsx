@@ -17,10 +17,15 @@ const applyMutation = { mutateAsync, isPending: false } as unknown as React.Comp
 const FACILITY = "11111111-1111-4111-8111-111111111111";
 const withDecisions = template("tpl-protocol", "Protocol default", { decisions: [electricityClash, dieselSource], defaults: [startupDefault] });
 const nothingToDecide = template("tpl-ready", "Sandbox template", { defaults: [startupDefault] });
+const BATCH_VERSIONS = [
+  { id: "22222222-2222-4222-8222-222222222222", expectedVersion: 3, removalTemplateId: null },
+  { id: "33333333-3333-4333-8333-333333333333", expectedVersion: 1, removalTemplateId: null },
+];
+const withImpact = (base: typeof nothingToDecide, impact: Partial<typeof nothingToDecide>) => ({ ...base, ...impact });
 
 function renderFlow(data = setupData({ fitting: [withDecisions, nothingToDecide] }), props: Partial<React.ComponentProps<typeof RemovalTemplateSetupFlow>> = {}) {
   return render(
-    <RemovalTemplateSetupFlow data={data} facilityId={FACILITY} templateId={null} step={null} makeDefault onReload={vi.fn()} onClose={onClose} apply={applyMutation} {...props} />,
+    <RemovalTemplateSetupFlow data={data} facilityId={FACILITY} templateId={null} step={null} onReload={vi.fn()} onClose={onClose} apply={applyMutation} {...props} />,
   );
 }
 
@@ -28,35 +33,33 @@ beforeEach(() => { vi.clearAllMocks(); mutateAsync.mockResolvedValue({}); });
 afterEach(cleanup);
 
 describe("RemovalTemplateSetupFlow", () => {
-  it("preselects nothing when several templates fit and Continue waits for a pick", () => {
+  it("lists templates one per line, preselects nothing when several fit, and Next waits for a pick", () => {
     renderFlow();
     expect((screen.getByRole("radio", { name: /Protocol default/ }) as HTMLInputElement).checked).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByText("Pick a template to continue.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Pick the template" })).toBeTruthy();
-    // Decisions and Apply are not reachable from the rail before the pick.
-    expect(screen.queryByRole("button", { name: /^Decisions/ })).toBeNull();
+    expect(screen.getByText("4 components. 2 to decide.")).toBeTruthy();
+    expect(screen.getByText("1 component. Nothing to decide.")).toBeTruthy();
     fireEvent.click(screen.getByRole("radio", { name: /Protocol default/ }));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByRole("heading", { name: "Decide what noma cannot" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Check what changes" })).toBeTruthy();
   });
 
-  it("lists the one template that fits, preselected, and goes straight to Apply when nothing is left to decide", () => {
+  it("has two steps, Template and Check, and no Apply or Decisions step", () => {
     renderFlow(setupData({ fitting: [nothingToDecide] }));
-    expect(screen.getByRole("heading", { name: "Pick the template" })).toBeTruthy();
-    expect((screen.getByRole("radio", { name: /Sandbox template/ }) as HTMLInputElement).checked).toBe(true);
+    expect(screen.queryByRole("button", { name: /^Decisions/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Apply/ })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByRole("heading", { name: "Apply the setup" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Make default and set on 2 credit batches" })).toBeTruthy();
-    // Back skips the Decisions step that had nothing to decide.
+    expect(screen.getByRole("button", { name: "Set template" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(screen.getByRole("heading", { name: "Pick the template" })).toBeTruthy();
   });
 
-  it("disables Apply, Back and Cancel and says Applying… while the save is pending", () => {
+  it("shows Setting template… busy and disables Back and Cancel while the save is pending", () => {
     const pending = { mutateAsync, isPending: true } as unknown as React.ComponentProps<typeof RemovalTemplateSetupFlow>["apply"];
-    renderFlow(setupData({ fitting: [nothingToDecide] }), { step: "apply", templateId: "tpl-ready", apply: pending });
-    expect((screen.getByRole("button", { name: "Applying…" }) as HTMLButtonElement).disabled).toBe(true);
+    renderFlow(setupData({ fitting: [nothingToDecide] }), { step: "check", templateId: "tpl-ready", apply: pending });
+    expect((screen.getByRole("button", { name: "Setting template…" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Back" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -68,34 +71,30 @@ describe("RemovalTemplateSetupFlow", () => {
     expect(radio.disabled).toBe(true);
     expect(screen.getByText("Does not fit")).toBeTruthy();
     expect(screen.getByText(unfit.reason)).toBeTruthy();
-    expect(screen.queryByText(/Not offered/)).toBeNull();
-    // The one that fits stays selected, so the operator is never stuck.
     expect((screen.getByRole("radio", { name: /Sandbox template/ }) as HTMLInputElement).checked).toBe(true);
   });
 
-  it("holds Continue on Decisions until every decision is answered, naming what is open", () => {
-    renderFlow(setupData({ fitting: [withDecisions] }), { step: "decisions" });
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByRole("heading", { name: "Decide what noma cannot" })).toBeTruthy();
+  it("asks the questions first on Check and holds Set template until they are answered", () => {
+    renderFlow(setupData({ fitting: [withDecisions] }), { step: "check", templateId: "tpl-protocol" });
+    expect(screen.getByText("noma keeps one electricity figure per production run. Two components in this template ask for it, and one figure cannot fill both.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Set template" }));
     expect(screen.getByText(/2 to decide: Which component gets electricity from production runs\? Which source fills Biomass processing fuel usage\?/)).toBeTruthy();
+    expect(mutateAsync).not.toHaveBeenCalled();
   });
 
   it("disables an option another component already holds and says why", () => {
-    renderFlow(setupData({ fitting: [withDecisions] }), { step: "decisions" });
+    renderFlow(setupData({ fitting: [withDecisions] }), { step: "check", templateId: "tpl-protocol" });
     const startup = screen.getByRole("radio", { name: /Startup diesel from production runs/ }) as HTMLInputElement;
     expect(startup.disabled).toBe(true);
     expect(screen.getByText(/Already used by another component\./)).toBeTruthy();
-    expect((screen.getByRole("radio", { name: /Generator diesel from production runs/ }) as HTMLInputElement).disabled).toBe(false);
-    // The server may send a raw source id; the page shows the human label.
     expect(screen.queryByText("run-genset-diesel")).toBeNull();
   });
 
-  it("sends fingerprints, answers and batches with versions, then closes the dialog", async () => {
-    renderFlow(setupData({ fitting: [withDecisions] }), { step: "decisions" });
+  it("sends fingerprints, answers and the batch snapshot, no overrides, then closes the dialog", async () => {
+    renderFlow(setupData({ fitting: [withDecisions] }), { step: "check", templateId: "tpl-protocol" });
     fireEvent.click(screen.getByRole("radio", { name: /^Pyrolyzer electricity usage/ }));
     fireEvent.click(screen.getByRole("radio", { name: /Generator diesel from production runs/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    fireEvent.click(screen.getByRole("button", { name: "Make default and set on 2 credit batches" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set template" }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(mutateAsync).toHaveBeenCalledWith({
       facilityId: FACILITY,
@@ -104,116 +103,115 @@ describe("RemovalTemplateSetupFlow", () => {
       planFingerprint: "tpl-protocol-plan",
       answers: { "clash:run-electricity": "pyrolyzer", fuel: "run-genset-diesel" },
       overrides: {},
-      makeDefault: true,
-      batches: [
-        { id: "22222222-2222-4222-8222-222222222222", expectedVersion: 3 },
-        { id: "33333333-3333-4333-8333-333333333333", expectedVersion: 1 },
-      ],
+      batchVersions: BATCH_VERSIONS,
     });
     expect(success).toHaveBeenCalled();
   });
 
-  it("leaves Make default off when the batch dialog sent the operator here", () => {
-    renderFlow(setupData({ fitting: [nothingToDecide] }), { makeDefault: false, step: "apply" });
-    expect((screen.getByRole("checkbox", { name: /Make it the default/ }) as HTMLInputElement).checked).toBe(false);
-    expect(screen.getByRole("button", { name: "Save decisions" })).toBeTruthy();
+  it("shows Now to After with Not set when nothing is set, and no default or batch checkboxes", () => {
+    renderFlow(setupData({ fitting: [nothingToDecide] }), { step: "check", templateId: "tpl-ready" });
+    expect(screen.getByText("Removal template now")).toBeTruthy();
+    expect(screen.getByText("Not set")).toBeTruthy();
+    expect(screen.getByText("After")).toBeTruthy();
+    expect(screen.getAllByText("Sandbox template").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByText(/default/i)).toBeNull();
+    expect(screen.queryByText(/noma decided/)).toBeNull();
+    expect(screen.getByText(/emissions entry on each credit batch\./)).toBeTruthy();
+  });
+
+  it("names the credit batches that switch and those that keep their template, leaving archived ones out", () => {
+    const impact = withImpact(nothingToDecide, {
+      batchesThatSwitch: [{ id: "a", code: "CB-3" }, { id: "b", code: "CB-4" }, { id: "c", code: "CB-5" }],
+      batchesKept: [
+        { id: "d", code: "CB-1", templateName: "Old", reason: "removalSent" },
+        { id: "e", code: "CB-2", templateName: "Old", reason: "removalSent" },
+        { id: "f", code: "CB-6", templateName: "Old", reason: "certified" },
+        { id: "g", code: "CB-0", templateName: "Old", reason: "archived" },
+      ],
+    });
+    renderFlow(setupData({ fitting: [impact], currentTemplateName: "Old" }), { step: "check", templateId: "tpl-ready" });
+    const line = screen.getByText(/switch to it\./).closest("p");
+    expect(line?.textContent).toBe("Credit batches CB-3, CB-4 and CB-5 switch to it. CB-1 and CB-2 keep their template: their Removals are sent. CB-6 keeps its template: it is certified.");
+    expect(screen.getByRole("link", { name: "CB-3" }).getAttribute("href")).toContain("/credit-batches/a");
+    expect(screen.queryByText(/CB-0/)).toBeNull();
+    expect(screen.getByText("Old")).toBeTruthy();
+  });
+
+  it("says plainly when no credit batch switches", () => {
+    const none = withImpact(nothingToDecide, { batchesKept: [{ id: "d", code: "CB-1", templateName: "Old", reason: "removalSent" }] });
+    renderFlow(setupData({ fitting: [none] }), { step: "check", templateId: "tpl-ready" });
+    expect(screen.getByText(/No credit batches switch\./).textContent).toBe("No credit batches switch. CB-1 keeps its template: its Removal is sent.");
   });
 
   it("shows the server's stale message and offers a reload", async () => {
     const onReload = vi.fn();
     mutateAsync.mockRejectedValue(new StaleVersionError("The template changed in Isometric. Review it again.", { entity: "removal_template_observation", id: "tpl-ready", code: "stale_version" } as never));
-    renderFlow(setupData({ fitting: [nothingToDecide] }), { onReload, step: "apply" });
-    fireEvent.click(screen.getByRole("button", { name: /Make default/ }));
+    renderFlow(setupData({ fitting: [nothingToDecide] }), { onReload, step: "check", templateId: "tpl-ready" });
+    fireEvent.click(screen.getByRole("button", { name: "Set template" }));
     expect(await screen.findByText(errorBox("The template changed in Isometric. Review it again."))).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Reload template" }));
     expect(onReload).toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("shows why a blocked template cannot be picked and never offers it", () => {
+  it("shows why a blocked template is Not ready and never offers it", () => {
     const blocked = template("tpl-blocked", "Fixed values missing", { defaults: [startupDefault] }, REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint);
     renderFlow(setupData({ fitting: [withDecisions, blocked] }));
     const radio = screen.getByRole("radio", { name: /Fixed values missing/ }) as HTMLInputElement;
     expect(radio.disabled).toBe(true);
+    expect(screen.getByText("Not ready")).toBeTruthy();
     expect(screen.getByText(/Isometric has fixed values without a datapoint in this template/)).toBeTruthy();
-    expect(screen.queryByText(/before submitting/)).toBeNull();
   });
 
-  it("keeps Continue disabled and says so when every template is blocked", () => {
+  it("keeps Next disabled and says so when every template is blocked", () => {
     const blocked = template("tpl-blocked", "Fixed values missing", { defaults: [startupDefault] }, REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint);
     renderFlow(setupData({ fitting: [blocked] }));
-    expect(screen.getByRole("heading", { name: "Pick the template" })).toBeTruthy();
     expect(screen.getByText(/This template cannot be set up yet\./)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("opens the noma decided list through a disclosure button", () => {
-    renderFlow(setupData({ fitting: [withDecisions] }), { step: "decisions" });
-    const toggle = screen.getByRole("button", { name: /noma decided 1 component/ });
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByLabelText("What fills Startup fuel usage")).toBeTruthy();
-  });
-
-  it("explains a clash in plain words", () => {
-    renderFlow(setupData({ fitting: [withDecisions] }), { step: "decisions" });
-    expect(screen.getByText("noma keeps one electricity figure per production run. Two components in this template ask for it, and one figure cannot fill both.")).toBeTruthy();
-  });
-
-  it("Cancel closes the dialog without applying", () => {
+  it("Cancel closes the dialog without saving", () => {
     renderFlow();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onClose).toHaveBeenCalled();
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
-  it("sends one apply for a double click", async () => {
+  it("sends one save for a double click", () => {
     mutateAsync.mockImplementation(never);
-    renderFlow(setupData({ fitting: [nothingToDecide] }), { step: "apply" });
-    const apply = screen.getByRole("button", { name: /Make default/ });
-    fireEvent.click(apply);
-    fireEvent.click(apply);
+    renderFlow(setupData({ fitting: [nothingToDecide] }), { step: "check", templateId: "tpl-ready" });
+    const save = screen.getByRole("button", { name: "Set template" });
+    fireEvent.click(save);
+    fireEvent.click(save);
     expect(mutateAsync).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the batch versions and fingerprints the draft started with when the data refreshes", async () => {
-    const view = renderFlow(setupData({ fitting: [nothingToDecide] }), { step: "apply" });
+    const view = renderFlow(setupData({ fitting: [nothingToDecide] }), { step: "check", templateId: "tpl-ready" });
     const refreshed = setupData({
       fitting: [{ ...nothingToDecide, planFingerprint: "newer-plan" }],
-      batchesWithoutTemplate: [{ id: "22222222-2222-4222-8222-222222222222", code: "CB-26-001", version: 9 }],
+      batchVersions: [{ id: "22222222-2222-4222-8222-222222222222", expectedVersion: 9, removalTemplateId: null }],
     });
-    view.rerender(<RemovalTemplateSetupFlow data={refreshed} facilityId={FACILITY} templateId={null} step={null} makeDefault onReload={vi.fn()} onClose={onClose} apply={applyMutation} />);
-    fireEvent.click(screen.getByRole("button", { name: /Make default/ }));
+    view.rerender(<RemovalTemplateSetupFlow data={refreshed} facilityId={FACILITY} templateId="tpl-ready" step="check" onReload={vi.fn()} onClose={onClose} apply={applyMutation} />);
+    fireEvent.click(screen.getByRole("button", { name: "Set template" }));
     await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
     const sent = mutateAsync.mock.calls[0][0];
     expect(sent.planFingerprint).toBe("tpl-ready-plan");
-    expect(sent.batches).toEqual([
-      { id: "22222222-2222-4222-8222-222222222222", expectedVersion: 3 },
-      { id: "33333333-3333-4333-8333-333333333333", expectedVersion: 1 },
-    ]);
+    expect(sent.batchVersions).toEqual(BATCH_VERSIONS);
   });
 
   it("never opens another template when the requested one is not offered, and says why", () => {
     const unfit = { id: "tpl-unfit", name: "Wrong tier", reason: "The storage component does not match this facility's durability tier." };
-    renderFlow(setupData({ fitting: [nothingToDecide, withDecisions], notFitting: [unfit] }), { templateId: "tpl-unfit", step: "decisions" });
+    renderFlow(setupData({ fitting: [nothingToDecide, withDecisions], notFitting: [unfit] }), { templateId: "tpl-unfit", step: "check" });
     expect(screen.getByRole("heading", { name: "Pick the template" })).toBeTruthy();
-    expect((screen.getByRole("radio", { name: /Wrong tier/ }) as HTMLInputElement).checked).toBe(false);
     expect(screen.getAllByRole("radio").every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
     cleanup();
-    renderFlow(setupData({ fitting: [nothingToDecide] }), { templateId: "tpl-gone", step: "decisions" });
+    renderFlow(setupData({ fitting: [nothingToDecide] }), { templateId: "tpl-gone", step: "check" });
     expect(screen.getByText(/not in this Isometric project/)).toBeTruthy();
-    // The one template that fits stays selectable, so the operator is never stuck.
     fireEvent.click(screen.getByRole("radio", { name: /Sandbox template/ }));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByRole("heading", { name: "Apply the setup" })).toBeTruthy();
-  });
-
-  it("hides Now to After and Make default for the template that is already the default", () => {
-    renderFlow(setupData({ fitting: [nothingToDecide], removalTemplateId: "tpl-ready" }), { step: "apply" });
-    expect(screen.queryByText("Now")).toBeNull();
-    expect(screen.queryByRole("checkbox", { name: /Make it the default/ })).toBeNull();
-    expect(screen.getByRole("button", { name: "Set on 2 credit batches" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Check what changes" })).toBeTruthy();
   });
 
   it("offers a way out when no template fits", () => {
@@ -225,10 +223,10 @@ describe("RemovalTemplateSetupFlow", () => {
 
   it("asks an added component explicitly, with nothing preselected", () => {
     const added = template("tpl-added", "Changed template", { decisions: [addedComponent] });
-    renderFlow(setupData({ fitting: [added] }), { step: "decisions" });
+    renderFlow(setupData({ fitting: [added] }), { step: "check", templateId: "tpl-added" });
     expect(screen.getByRole("heading", { name: /How should noma fill Staff transport\?/ })).toBeTruthy();
     expect(screen.getAllByRole("radio").every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set template" }));
     expect(screen.getByText(/1 to decide/)).toBeTruthy();
   });
 });

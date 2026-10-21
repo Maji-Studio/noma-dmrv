@@ -42,7 +42,7 @@ function withUnmet(
 }
 
 describe("SubmissionChecks", () => {
-  it("links template pin blockers to each batch's Switch template and line blockers to the review", () => {
+  it("links template blockers to the Set template setup in Settings and line blockers to the review", () => {
     const html = renderToStaticMarkup(<SubmissionChecks
       checks={CHECKS.map((check): RemovalRequirementCheck => check.key === "templateSet"
         ? { ...check, status: "unmet", templateBlockerCodes: ["mixedTemplatePins"] }
@@ -52,8 +52,9 @@ describe("SubmissionChecks", () => {
       facilityId="facility-1"
       creditBatches={[{ id: "batch-1", code: "CB-1" }, { id: "batch-2", code: "CB-2" }]}
     />);
-    expect(html).toContain('href="/credit-batches/batch-1?facility=facility-1&amp;focus=removal-template"');
-    expect(html).toContain(">Switch template on CB-2</a>");
+    expect(html).toContain('href="/settings/removal-templates?facility=facility-1&amp;setup=template"');
+    expect(html).toContain(">Set template</a>");
+    expect(html).not.toContain("Switch template");
     expect(html).toContain('href="/settings/removal-templates?facility=facility-1"');
     expect(html).toContain(">Decide components</a>");
     expect(html).toContain("Template cannot be used");
@@ -287,7 +288,7 @@ it.each(["templateNotFullyRead", "forbiddenLine", "lineNeedsSetup", "lineHasNoSo
   expect(html).not.toContain(">Decide components</a>");
 });
 
-it.each([LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE])("links replacement guidance to each batch or Removal templates: %s", (message) => {
+it.each([LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE])("links replacement guidance to the Set template setup in Settings: %s", (message) => {
   const facts: RemovalReadinessFacts = {
     local: null, lockInFlight: false, hasMapping: true, hasOrgCredentials: true, hasRemovalTemplate: true,
     hasSubmittableRuns: true, unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], requiredTransport: [], feedstockTypeMappingGaps: [],
@@ -297,9 +298,8 @@ it.each([LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE])("links re
   for (const count of [0, 1, 2]) {
     const creditBatches = [{ id: "batch-1", code: "CB-1" }, { id: "batch-2", code: "CB-2" }].slice(0, count);
     const html = renderToStaticMarkup(<SubmissionChecks checks={checks} facilityId="facility-1" creditBatches={creditBatches} />);
-    expect(html).toContain(`>${count === 0 ? "Open Removal templates" : count === 1 ? "Switch template" : "Switch template on CB-1"}</a>`);
-    if (count > 0) expect(html).toContain('href="/credit-batches/batch-1?facility=facility-1&amp;focus=removal-template"');
-    if (count === 2) expect(html).toContain(">Switch template on CB-2</a>");
+    expect(html).toContain(">Set template</a>");
+    expect(html).toContain('href="/settings/removal-templates?facility=facility-1&amp;setup=template"');
     expect(html).not.toContain(">Decide components</a>");
   }
 });
