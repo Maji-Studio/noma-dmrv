@@ -345,4 +345,59 @@ describe("FormActions error box", () => {
     expect(within(box).getByText("Locked by a Removal.")).toBeTruthy();
     expect(screen.getAllByRole("alert").filter((node) => node.textContent?.includes("Locked by a Removal."))).toHaveLength(0);
   });
+
+  it("does not steal focus when a lock's field is put back and only the message is left", async () => {
+    function Locked() {
+      const { control, register, handleSubmit, setError, clearErrors } = useForm<{ labName: string }>({ defaultValues: { labName: "x" } });
+      return (
+        <form aria-label="Locked" onSubmit={handleSubmit(() => setError("labName", { type: "locked", message: "Locked" }))}>
+          <FormField id="labName" label="Lab name">
+            <FormInput id="labName" {...register("labName")} />
+          </FormField>
+          <button type="button" onClick={() => clearErrors("labName")}>Revalidate</button>
+          <FormActions control={control} submitLabel="Save locked" errorMessage="Locked by a Removal." />
+        </form>
+      );
+    }
+    render(<Locked />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save locked" }));
+    });
+    await waitFor(() => expect(document.activeElement?.id).toBe("labName"));
+    const scrolls = vi.mocked(Element.prototype.scrollIntoView).mock.calls.filter(([arg]) => (arg as ScrollIntoViewOptions)?.block === "nearest").length;
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Revalidate" }));
+    });
+
+    expect(document.activeElement?.id).toBe("labName");
+    expect(vi.mocked(Element.prototype.scrollIntoView).mock.calls.filter(([arg]) => (arg as ScrollIntoViewOptions)?.block === "nearest").length).toBe(scrolls);
+  });
+});
+
+describe("FormActions error box without control", () => {
+  function Plain({ message }: { message?: string }) {
+    return (
+      <form aria-label="Plain">
+        <FormActions submitLabel="Save plain" errorMessage={message} />
+      </form>
+    );
+  }
+
+  it("scrolls a new message into view without moving focus", () => {
+    const { rerender } = render(<Plain />);
+    const scroll = vi.mocked(Element.prototype.scrollIntoView);
+    scroll.mockClear();
+    const before = document.activeElement;
+
+    rerender(<Plain message="Template was not saved. Try again." />);
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
+    expect(document.activeElement).toBe(before);
+
+    rerender(<Plain message="Template was not saved. Try again." />);
+    expect(scroll).toHaveBeenCalledTimes(1);
+    rerender(<Plain message="Something else failed." />);
+    expect(scroll).toHaveBeenCalledTimes(2);
+  });
 });

@@ -1,5 +1,5 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
-import { errorBox, squashed } from "../../../tests/helpers/error-box-text";
+import { squashed } from "../../../tests/helpers/error-box-text";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";

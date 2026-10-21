@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { errorBox, squashed } from "../../../tests/helpers/error-box-text";
+import { squashed } from "../../../tests/helpers/error-box-text";
 import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

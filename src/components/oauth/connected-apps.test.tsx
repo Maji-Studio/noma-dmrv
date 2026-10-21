@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { errorBox, squashed } from "../../../tests/helpers/error-box-text";
+import { errorBox } from "../../../tests/helpers/error-box-text";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ModalProps } from "@/components/ui/modal";

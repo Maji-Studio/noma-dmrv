@@ -183,6 +183,9 @@ export function FormErrorSummary<
   // form gets focus, not the first one registered.
   useEffect(() => {
     if (firstPath === null || focusedAttempt.current === submitCount) return;
+    // One consumed attempt across both paths: a lock keeps its message, and
+    // once the field is put back the message-only box must not take focus.
+    focusedBox.current = submitCount;
     const timer = setTimeout(() => {
       focusedAttempt.current = submitCount;
       focusField(getForm(), firstPath);

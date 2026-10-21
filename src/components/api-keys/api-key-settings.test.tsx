@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { errorBox, squashed } from "../../../tests/helpers/error-box-text";
+import { squashed } from "../../../tests/helpers/error-box-text";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModalProps } from "@/components/ui/modal";

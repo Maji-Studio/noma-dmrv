@@ -6,7 +6,7 @@
  * customers silently drops everyone past the page and leaves no way to reach
  * them (#774).
  */
-import { errorBox, squashed } from "../../../tests/helpers/error-box-text";
+import { errorBox } from "../../../tests/helpers/error-box-text";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

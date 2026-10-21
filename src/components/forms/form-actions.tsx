@@ -175,7 +175,7 @@ export function FormActions<
           action={errorAction}
         />
       ) : (
-        <ServerError message={errorMessage} action={errorAction} />
+        <ScrolledServerError message={errorMessage} action={errorAction} />
       )
     )}
     {!block?.readOnly && (showSubmit || handleCancel || errorMessage) && <div
@@ -230,6 +230,25 @@ export function FormActions<
       </div>
     </div>}
     </>
+  );
+}
+
+/**
+ * The error box of a form without the summary (no `control`, or no Save). It
+ * sits at the end of the form, so a new message scrolls into view; focus stays
+ * put because the alert role announces it.
+ */
+function ScrolledServerError({ message, action }: { message?: string; action?: React.ReactNode }) {
+  const boxRef = React.useRef<HTMLDivElement>(null);
+  // Sanctioned useEffect: scrolling is imperative DOM work.
+  React.useEffect(() => {
+    if (message) boxRef.current?.scrollIntoView({ block: "nearest" });
+  }, [message]);
+  if (!message) return null;
+  return (
+    <div ref={boxRef}>
+      <ServerError message={message} action={action} />
+    </div>
   );
 }
 
