@@ -116,14 +116,11 @@ function RegistrySourceVisibilityForm({
 
       <PolicyTimingCopy />
 
-      {errors.root?.serverError?.message && (
-        <ServerError message={errors.root.serverError.message} />
-      )}
-
       {/* control reports the draft to the settings console's unsaved guard. */}
       <FormActions
         control={control}
         isSubmitting={saveMutation.isPending}
+        errorMessage={errors.root?.serverError?.message}
         submitLabel="Save policy"
         submittingLabel="Saving…"
         sticky={false}

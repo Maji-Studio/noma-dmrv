@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { formatMassKg } from "@/lib/format-utils";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { stockWaterKg } from "@/lib/output-stock/stock-replay";
-import { buildHistoryDays, entrySentence, estimateKg, formatPartFigures, signedKg } from "./output-stock-history-days";
+import { buildHistoryDays, entryParts, entrySentence, estimateKg, formatPartFigures, signedKg } from "./output-stock-history-days";
 
 const TZ = "UTC";
 const DAY_ONE = "2026-10-14";
@@ -94,6 +94,11 @@ describe("buildHistoryDays", () => {
 });
 
 describe("formatPartFigures", () => {
+  it("keeps a change under 0.05 kg visible, with the same precision in After", () => {
+    expect(formatPartFigures({ label: "Water, estimated", changeKg: -0.04, afterKg: 29.96, estimated: true }))
+      .toEqual({ change: "−0.04 kg", after: "29.96 kg" });
+  });
+
   it("keeps a sub-kilogram water change and its after figure, so the row adds up", () => {
     expect(formatPartFigures({ label: "Water, estimated", changeKg: -0.2, afterKg: 29.8, estimated: true }))
       .toEqual({ change: "−0.2 kg", after: "29.8 kg" });
@@ -102,7 +107,7 @@ describe("formatPartFigures", () => {
   it("never prints a minus zero", () => {
     expect(signedKg(-0.04, formatMassKg)).toBe("0 kg");
     expect(signedKg(-0.2, estimateKg)).toBe("0 kg");
-    expect(formatPartFigures({ label: "Water, estimated", changeKg: -0.04, afterKg: 30, estimated: true }).change).toBe("0 kg");
+    expect(formatPartFigures({ label: "Water, estimated", changeKg: -0.04, afterKg: 29.96, estimated: true }).change).not.toBe("0 kg");
   });
 
   it("still reads estimates in whole kg once the change is a whole kg or more", () => {
@@ -110,5 +115,16 @@ describe("formatPartFigures", () => {
       .toEqual({ change: "−22 kg", after: "88 kg" });
     expect(formatPartFigures({ label: "Dry biochar", changeKg: -1.8, afterKg: 268.2 }))
       .toEqual({ change: "−1.8 kg", after: "268.2 kg" });
+  });
+});
+
+describe("entryParts", () => {
+  it("keeps a water change of 0.04 kg as a row, and leaves out one below what a mass is stored at", () => {
+    const before = { dryKg: 100, solidsKg: 100, wetKg: 130, ingredients: new Map<string, number>() };
+    const small = { ...before, wetKg: 129.96 };
+    const tiny = { ...before, wetKg: 129.9999 };
+    const drop = entry({ id: "d1", kind: "loss", wetDeltaKg: -0.04, dryMassKg: 0 });
+    expect(entryParts(before, small, drop).map((part) => part.label)).toEqual(["Water, estimated"]);
+    expect(entryParts(before, tiny, drop)).toEqual([]);
   });
 });

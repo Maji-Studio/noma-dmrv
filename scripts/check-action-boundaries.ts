@@ -107,12 +107,6 @@ export const ACTION_BOUNDARY_ALLOWLIST: readonly ActionBoundaryException[] = [
     reason: "Stock-take failures preserve a typed counted-field error before the generic fallback.",
   },
   {
-    file: "src/hooks/use-credit-batches.ts",
-    function: "useCreateCreditBatch",
-    sites: { "hook-unwrap": 1 },
-    reason: "Returns the committed credit batch together with its post-commit warning.",
-  },
-  {
     file: "src/hooks/use-production-run-readings.ts",
     function: "useDeleteAllProductionRunReadings",
     sites: { "hook-unwrap": 1 },

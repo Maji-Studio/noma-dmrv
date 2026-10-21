@@ -29,7 +29,7 @@ import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-conte
 import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 
 import { useEffect, useId } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, useController, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FlaskIcon, FireIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, MoistureField, makeCertFieldStatus } from "@/components/forms";
@@ -212,10 +212,7 @@ export function SampleForm({
     cue: facilityTimeCue,
   });
   // resetField only acts on a registered field; this one has no input of its own.
-  useEffect(() => {
-    register("durabilityOption");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useController({ name: "durabilityOption", control });
   useEffect(() => {
     // Derived from the batch, not typed: it becomes the form's baseline, so an
     // untouched form stays clean (no discard prompt on Cancel).

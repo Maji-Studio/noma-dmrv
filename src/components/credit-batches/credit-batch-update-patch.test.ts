@@ -5,6 +5,7 @@ import {
   CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE,
   creditBatchUpdatePatch,
   isCreditBatchMembershipLocked,
+  logUnexpectedSaveError,
   saveCreditBatchEdit,
 } from "./credit-batch-update-patch";
 
@@ -93,6 +94,19 @@ describe("saveCreditBatchEdit logging", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
     await save(() => Promise.reject(new TypeError("fetch failed")));
+    expect(error).toHaveBeenCalledOnce();
+    error.mockRestore();
+  });
+});
+
+describe("logUnexpectedSaveError", () => {
+  it("skips a refused create and keeps logging a real failure", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    logUnexpectedSaveError("Credit batch create error:", new ActionError({ error: "Dates fall outside the entries." }));
+    expect(error).not.toHaveBeenCalled();
+
+    logUnexpectedSaveError("Credit batch create error:", new TypeError("fetch failed"));
     expect(error).toHaveBeenCalledOnce();
     error.mockRestore();
   });

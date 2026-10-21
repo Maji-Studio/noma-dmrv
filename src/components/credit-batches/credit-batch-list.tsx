@@ -43,7 +43,7 @@ import {
   CreditBatchTimeline,
   type NewBatchRequest,
 } from "./credit-batch-timeline";
-import { isCreditBatchMembershipLocked, saveCreditBatchEdit } from "./credit-batch-update-patch";
+import { isCreditBatchMembershipLocked, logUnexpectedSaveError, saveCreditBatchEdit } from "./credit-batch-update-patch";
 import { RecordUsedBy, recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordEditable } from "@/lib/record-lock-view";
@@ -89,7 +89,6 @@ import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-conte
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useListPagination } from "@/hooks/use-list-pagination";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { isActionError } from "@/lib/action-error";
 import { sumNullableBy } from "@/lib/nullable-sum";
 import { Notice } from "@/components/ui/notice";
 import { ILLUSTRATION_SIZE, CreditBatchArt } from "@/components/ui/illustrations";
@@ -318,7 +317,7 @@ export function CreditBatchList({
         err instanceof Error
           ? err.message
           : "Credit batch was not created. Check the form.";
-      if (!isActionError(err)) console.error("Credit batch create error:", err);
+      logUnexpectedSaveError("Credit batch create error:", err);
       setCreateError(message);
     }
   };
