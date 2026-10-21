@@ -2,8 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { FormField, FormSelect, ServerError } from "@/components/forms";
-import { Button } from "@/components/ui";
+import { FormActions, FormField, FormSelect, ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import {
   useRegistrySourceVisibility,
@@ -70,6 +69,8 @@ function RegistrySourceVisibilityForm({
   const {
     register,
     handleSubmit,
+    control,
+    reset,
     setError,
     formState: { errors },
   } = useForm<RegistrySourceVisibilityInput>({
@@ -80,6 +81,7 @@ function RegistrySourceVisibilityForm({
   const onSubmit = async (input: RegistrySourceVisibilityInput) => {
     try {
       await saveMutation.mutateAsync(input);
+      reset(input);
       toast.success("Registry Source visibility policy saved.");
     } catch (error) {
       setError("root.serverError", {
@@ -118,11 +120,14 @@ function RegistrySourceVisibilityForm({
         <ServerError message={errors.root.serverError.message} />
       )}
 
-      <div>
-        <Button type="submit" variant="primary" busy={saveMutation.isPending}>
-          Save policy
-        </Button>
-      </div>
+      {/* control reports the draft to the settings console's unsaved guard. */}
+      <FormActions
+        control={control}
+        isSubmitting={saveMutation.isPending}
+        submitLabel="Save policy"
+        submittingLabel="Saving…"
+        sticky={false}
+      />
     </form>
   );
 }

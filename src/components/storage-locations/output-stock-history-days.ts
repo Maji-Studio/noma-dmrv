@@ -8,10 +8,11 @@
  */
 import { DRY_BIOCHAR_LABEL, ingredientSolidsLabel } from "@/components/biochar-products/product-composition-components";
 import { STOCK_PART_MIN_KG } from "@/config/output-stock";
-import { formatFacilityDay, massKgRoundsToZero } from "@/lib/format-utils";
+import { formatFacilityDay, formatMassKg, massKgRoundsToZero } from "@/lib/format-utils";
 import { ESTIMATED_WATER_LABEL } from "@/lib/output-stock/labels";
 import { replayStock, stockWaterKg, type StockState } from "@/lib/output-stock/stock-replay";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
+import { formatWetEstimate } from "./stock-preview-shared";
 
 /** Wet mass as the parts table's total row. */
 export const WET_MASS_LABEL = "Wet mass";
@@ -23,6 +24,30 @@ export interface HistoryPart {
   afterKg: number;
   /** Water by the records: an estimate, read like the wet mass it is part of. */
   estimated?: boolean;
+}
+
+/** A change with a real minus sign, and a plus for stock in. Never "-0": a change that shows as zero reads as zero. */
+export function signedKg(kg: number, format: (kg: number) => string = formatMassKg): string {
+  const magnitude = format(Math.abs(kg));
+  if (magnitude === format(0)) return magnitude;
+  return `${kg > 0 ? "+" : "−"}${magnitude}`;
+}
+
+/** Wet mass and the water in it are estimates, read in whole kg as the bin's headline reads them. */
+export function estimateKg(kg: number): string {
+  return `${formatWetEstimate(kg)} kg`;
+}
+
+/**
+ * The Change and After figures of one part. Estimates read in whole kg, but a
+ * change that whole kg would round to nothing (2 kg of wet mass at 10% moisture
+ * takes 0.2 kg of water) is shown with the one decimal `formatMassKg` keeps, in
+ * both columns, so the row still adds up.
+ */
+export function formatPartFigures(part: HistoryPart): { change: string | null; after: string } {
+  const hidden = part.changeKg !== null && part.changeKg !== 0 && estimateKg(Math.abs(part.changeKg)) === estimateKg(0);
+  const format = part.estimated && !hidden ? estimateKg : formatMassKg;
+  return { change: part.changeKg === null ? null : signedKg(part.changeKg, format), after: format(part.afterKg) };
 }
 
 export type HistoryRowStatus = "counts" | "replaced" | "reversed";

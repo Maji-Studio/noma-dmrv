@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { formatMassKg } from "@/lib/format-utils";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { stockWaterKg } from "@/lib/output-stock/stock-replay";
-import { buildHistoryDays, entrySentence } from "./output-stock-history-days";
+import { buildHistoryDays, entrySentence, estimateKg, formatPartFigures, signedKg } from "./output-stock-history-days";
 
 const TZ = "UTC";
 const DAY_ONE = "2026-10-14";
@@ -90,5 +90,25 @@ describe("buildHistoryDays", () => {
     expect(days[0].rows[0].moistureEntry?.id).toBe("d1:moisture");
     // The folded row moves no stock: the delivery is counted once.
     expect(days[0].end.wetKg).toBe(400);
+  });
+});
+
+describe("formatPartFigures", () => {
+  it("keeps a sub-kilogram water change and its after figure, so the row adds up", () => {
+    expect(formatPartFigures({ label: "Water, estimated", changeKg: -0.2, afterKg: 29.8, estimated: true }))
+      .toEqual({ change: "−0.2 kg", after: "29.8 kg" });
+  });
+
+  it("never prints a minus zero", () => {
+    expect(signedKg(-0.04, formatMassKg)).toBe("0 kg");
+    expect(signedKg(-0.2, estimateKg)).toBe("0 kg");
+    expect(formatPartFigures({ label: "Water, estimated", changeKg: -0.04, afterKg: 30, estimated: true }).change).toBe("0 kg");
+  });
+
+  it("still reads estimates in whole kg once the change is a whole kg or more", () => {
+    expect(formatPartFigures({ label: "Water, estimated", changeKg: -22, afterKg: 88, estimated: true }))
+      .toEqual({ change: "−22 kg", after: "88 kg" });
+    expect(formatPartFigures({ label: "Dry biochar", changeKg: -1.8, afterKg: 268.2 }))
+      .toEqual({ change: "−1.8 kg", after: "268.2 kg" });
   });
 });

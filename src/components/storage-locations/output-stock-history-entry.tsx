@@ -15,11 +15,10 @@ import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { MoistureResetChange } from "./moisture-reset-change";
-import { entryAmount, entrySentence, WET_MASS_LABEL, type HistoryRow } from "./output-stock-history-days";
+import { entryAmount, entrySentence, estimateKg, formatPartFigures, signedKg, WET_MASS_LABEL, type HistoryRow } from "./output-stock-history-days";
 import { LEDGER_SUMMARY_CLASS, LedgerCaret, LedgerFacts } from "./stock-ledger";
 import { StockChip } from "./stock-figures";
 import { StockSourceLink } from "./stock-source-link";
-import { formatWetEstimate } from "./stock-preview-shared";
 import type { ReactNode } from "react";
 
 const TIME_FORMAT = "HH:mm";
@@ -33,17 +32,6 @@ const MODE_CHANGE_CAPTIONS: Record<string, string> = {
   merge: "From here on the bin is one blended pile: each draw takes from every batch in proportion to what it holds.",
   split: "From here on each batch added is kept apart as its own sub-bin.",
 };
-
-/** Wet mass and the water in it are estimates, read in whole kg as the bin's headline reads them. */
-function estimateKg(kg: number): string {
-  return `${formatWetEstimate(kg)} kg`;
-}
-
-/** A change with a real minus sign, and a plus for stock in. */
-function signedKg(kg: number, format: (kg: number) => string = formatMassKg): string {
-  if (format(kg) === format(0)) return format(0);
-  return `${kg > 0 ? "+" : "−"}${format(Math.abs(kg))}`;
-}
 
 /** The element id an entry renders with: the target of links between entries. */
 function entryElementId(entryId: string): string {
@@ -98,12 +86,12 @@ function PartsTable({ row, subject }: { row: HistoryRow; subject: string }) {
       </thead>
       <tbody>
         {row.parts.map((part) => {
-          const format = part.estimated ? estimateKg : formatMassKg;
+          const figures = formatPartFigures(part);
           return (
             <tr key={part.label} className={RULE}>
               <th scope="row" className="py-6 pr-12 text-left font-normal">{part.label}</th>
-              <td className={`py-6 pr-12 text-right ${SECONDARY}`}>{part.changeKg === null ? "" : signedKg(part.changeKg, format)}</td>
-              <td className="py-6 text-right">{format(part.afterKg)}</td>
+              <td className={`py-6 pr-12 text-right ${SECONDARY}`}>{figures.change ?? ""}</td>
+              <td className="py-6 text-right">{figures.after}</td>
             </tr>
           );
         })}

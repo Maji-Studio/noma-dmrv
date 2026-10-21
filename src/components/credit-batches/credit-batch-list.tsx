@@ -89,6 +89,7 @@ import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-conte
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useListPagination } from "@/hooks/use-list-pagination";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { isActionError } from "@/lib/action-error";
 import { sumNullableBy } from "@/lib/nullable-sum";
 import { Notice } from "@/components/ui/notice";
 import { ILLUSTRATION_SIZE, CreditBatchArt } from "@/components/ui/illustrations";
@@ -317,7 +318,7 @@ export function CreditBatchList({
         err instanceof Error
           ? err.message
           : "Credit batch was not created. Check the form.";
-      console.error("Credit batch create error:", err);
+      if (!isActionError(err)) console.error("Credit batch create error:", err);
       setCreateError(message);
     }
   };
