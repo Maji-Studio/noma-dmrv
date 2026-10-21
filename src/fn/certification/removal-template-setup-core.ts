@@ -15,7 +15,7 @@ import { setupBlockedReason } from "@/lib/certification/removal-template-setup-b
 import { setupPlanFingerprint } from "@/lib/certification/removal-template-setup-fingerprint";
 import { reviewLineSources } from "@/lib/certification/removal-template-review-sources";
 import { removalTemplateReviewLines } from "@/lib/certification/removal-template-review-lines";
-import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import { REMOVAL_TEMPLATE_BLOCKERS, SETUP_NOT_LINKED_MESSAGE } from "@/lib/certification/removal-template-blockers";
 import type { ApplyRemovalTemplateSetupInput } from "@/schemas/removal-template-setup";
 import { loadRemovalTemplateFacts } from "./removal-template-facts";
 import { readOnlyEntry } from "./removal-template-preview-core";
@@ -24,7 +24,7 @@ async function setupContext(ctx: OrgContext, facilityId: string) {
   await requireOrgFacility(ctx, facilityId);
   const facility = await getFacilityById(ctx, facilityId);
   const mapping = await getCertifierProjectByFacility(ctx, facilityId, "isometric");
-  if (!mapping) throw new SafeError("Link this facility to an Isometric project first.");
+  if (!mapping) throw new SafeError(SETUP_NOT_LINKED_MESSAGE);
   const client = await resolveIsometricClient(ctx);
   const templates = await listGhgEntryTemplates(client, mapping.externalProjectId);
   return { facility, mapping, client, templates };

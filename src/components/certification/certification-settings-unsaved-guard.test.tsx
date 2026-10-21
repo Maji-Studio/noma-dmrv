@@ -58,8 +58,8 @@ vi.mock("./env-banner", () => ({ EnvBanner: () => null }));
 vi.mock("./registry-source-visibility-settings", () => ({
   RegistrySourceVisibilitySettings: () => <div>Source visibility policy</div>,
 }));
-vi.mock("./removal-template-review-panel", () => ({
-  RemovalTemplateReviewPanel: () => <div>Removal templates pane</div>,
+vi.mock("./removal-template-summary-card", () => ({
+  RemovalTemplateSummaryCard: () => <div>Removal templates pane</div>,
 }));
 
 beforeEach(() => {

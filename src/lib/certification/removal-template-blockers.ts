@@ -1,3 +1,6 @@
+/** The setup read and action refuse a facility with no Isometric project link with this sentence; the summary card branches on it. */
+export const SETUP_NOT_LINKED_MESSAGE = "Link this facility to an Isometric project first.";
+
 export const REMOVAL_TEMPLATE_BLOCKERS = {
   forbiddenLine: "This component belongs at the project level in Isometric.",
   notRemovalTemplate: "This template is not a Removal template. Choose a Removal template for this credit batch.",
