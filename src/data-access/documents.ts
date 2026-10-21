@@ -525,8 +525,11 @@ export async function retireTombstonedEmissionEntryDocuments(
   const entries = await tx.select().from(emissionEntries)
     .where(and(eq(emissionEntries.organizationId, ctx.organizationId), inArray(emissionEntries.id, entryIds)))
     .for("update");
+  // A zero's confirmation identifies its draft Removal, not a send claim.
+  // Batch deletion tombstones live zeros before reaching this guard.
   if (entries.length !== entryIds.length || entries.some(entry => !entry.deletedAt ||
-    entry.sentByRemovalId || entry.sendReservedBySubmissionId || entry.confirmedForRemovalId)) {
+    entry.sentByRemovalId || entry.sendReservedBySubmissionId ||
+    (entry.kind !== "zero" && entry.confirmedForRemovalId))) {
     throw new SafeError("Delete this credit batch's emissions entries before deleting it.");
   }
   await retireOwnedDocuments(ctx, tx, entries.map(entry => ({
