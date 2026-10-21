@@ -51,8 +51,6 @@ export {
   type UseEntityOptionsParams,
 } from "./entity-select";
 
-export { FormDetailToggle, type FormDetailLevel } from "./form-detail-toggle";
-export { FormDetailProvider, FormDetailControl, DetailedOnly, DETAIL_EXPLANATION_ATTR, useFormDetailLevel } from "./form-detail-context";
 
 export { CompositionCard } from "./composition-card";
 export { DerivedHeadline } from "./derived-headline";

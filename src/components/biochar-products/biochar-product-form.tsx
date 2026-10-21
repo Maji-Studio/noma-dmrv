@@ -15,7 +15,6 @@ import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit
 import { EntitySelect, FormActions, FormField, FormInput, FormSection, FormSpine, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
 import { EventTimeInput } from "@/components/forms/event-time-input";
-import { DetailedOnly } from "@/components/forms/form-detail-context";
 import {
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
@@ -98,10 +97,10 @@ export function BiocharSourceMassFields({
 }
 
 /**
- * The product composition under the mix fields, at both levels once the
- * biochar or an ingredient has a mass. Before that it is a key of named
- * parts with no figures that only explains what will appear, so only Detailed
- * shows it. Stock history lives on the storage bin, not here.
+ * The product composition under the mix fields, once the biochar or an
+ * ingredient has a mass. Before that it is a key of named parts with no
+ * figures that only explains what will appear, so nothing renders. Stock
+ * history lives on the storage bin, not here.
  */
 export function ProductCompositionBlock({
   composition,
@@ -121,7 +120,7 @@ export function ProductCompositionBlock({
       note="Dry biochar is what leaves the biochar bin. Each ingredient splits into solids and water at its own moisture. Water counts the water in the biochar and in every ingredient."
     />
   );
-  return <DetailedOnly unless={started}>{preview}</DetailedOnly>;
+  return started ? preview : null;
 }
 
 // ============================================

@@ -29,8 +29,8 @@
 "use client";
 
 
-import { DetailedOnly } from "@/components/forms/form-detail-context";
 import * as React from "react";
+import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { cn } from "@/lib/utils";
 import {
   isMissingValueCopy,
@@ -108,6 +108,8 @@ interface DetailSectionProps {
   spine?: SpineMeta;
   /** Explanatory text behind an ⓘ beside the title. */
   hint?: React.ReactNode;
+  /** Tables or arithmetic behind the section's figures: the title's one ⓘ opens them, after the hint. */
+  explanation?: React.ReactNode;
 }
 
 function DetailSection({
@@ -117,8 +119,9 @@ function DetailSection({
   className,
   spine,
   hint,
+  explanation,
 }: DetailSectionProps) {
-  const label = title != null ? <SectionLabel hint={hint}>{title}</SectionLabel> : null;
+  const label = title != null ? <SectionLabel hint={hint} explanation={explanation} explanationTitle={title}>{title}</SectionLabel> : null;
 
   if (spine) {
     return (
@@ -174,6 +177,12 @@ interface DetailFieldProps {
   value: React.ReactNode;
   /** Explanation behind an ⓘ beside the label, mirroring the form field's. */
   hint?: React.ReactNode;
+  /**
+   * Tables or arithmetic behind this one figure. The label's single ⓘ opens
+   * them, after the `hint`. Titled by `explanationTitle`, else the label.
+   */
+  explanation?: React.ReactNode;
+  explanationTitle?: string;
   className?: string;
   certifyRequired?: boolean;
   /** Override the value-derived saved status for composite requirements. */
@@ -199,7 +208,7 @@ interface DetailFieldProps {
   pending?: boolean;
   /**
    * A second figure read under the value, such as the dry biochar under a wet
-   * mass. It is data, so both detail levels show it.
+   * mass. It is data, so it is always shown.
    */
   secondary?: DetailSecondaryValue;
 }
@@ -275,6 +284,8 @@ function DetailField({
   label,
   value,
   hint,
+  explanation,
+  explanationTitle,
   className,
   certifyRequired,
   certifyStatus,
@@ -295,7 +306,9 @@ function DetailField({
       <span className="flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
         {label}
         {certifyRequired && <CertificationFieldTag status={resolvedCertifyStatus} />}
-        {hint != null && <InfoHint side="top" label={`More about ${label}`}>{hint}</InfoHint>}
+        {explanation != null && explanation !== false
+          ? <ExplanationInfo title={explanationTitle ?? label} hint={hint}>{explanation}</ExplanationInfo>
+          : hint != null && <InfoHint side="top" label={`More about ${label}`}>{hint}</InfoHint>}
       </span>
       <span
         className={cn("body-medium break-words", valueClassName)}
@@ -344,14 +357,18 @@ function DetailSecondaryLine({
  * -----------------------------------------------------------------------------------------------*/
 
 /**
- * One read field. Simple and Detailed show the same fields, so there is
- * no per-field level flag; explanation goes in the section's `explanation`.
+ * One read field. Explanation behind one figure goes in the field's
+ * `explanation`; explanation for the whole section goes in the section's.
  */
 export interface DetailPanelField {
   label: string;
   value: React.ReactNode;
   /** Explanation behind an ⓘ beside the label, mirroring the form field's. */
   hint?: React.ReactNode;
+  /** Tables or arithmetic behind this figure: the label's one ⓘ opens them, after the `hint`. */
+  explanation?: React.ReactNode;
+  /** Names the panel and the ⓘ; defaults to the label. */
+  explanationTitle?: string;
   certifyRequired?: boolean;
   certifyStatus?: CertFieldStatus;
   /** Which missing-value token stands in when `value` is empty. Defaults to `notRecorded`. */
@@ -360,13 +377,13 @@ export interface DetailPanelField {
   valuePresent?: boolean;
   /** The value is still loading, so the field shows a skeleton, not a token. */
   pending?: boolean;
-  /** A second figure under the value (dry biochar under a wet mass). Shown at both levels. */
+  /** A second figure under the value (dry biochar under a wet mass). */
   secondary?: DetailSecondaryValue;
 }
 
 /**
- * One read section. Both detail levels show every section and its fields.
- * Headingless sections require a stable id; titled sections may key by title.
+ * One read section. Headingless sections require a stable id; titled sections
+ * may key by title.
  */
 export type DetailPanelSection = {
   /** Explanatory text behind an ⓘ beside the title. */
@@ -374,15 +391,19 @@ export type DetailPanelSection = {
   fields: DetailPanelField[];
   /** Optional extension content that belongs inside this mirrored section. */
   content?: React.ReactNode;
-  /**
-   * How the section's figures were computed: calculation rows, basis
-   * captions, formula or component provenance, raw versus capped values.
-   * Only Detailed renders it. Never put a field, action or decision info here.
-   */
-  explanation?: React.ReactNode;
 } & (
-  | { id: string; title?: string }
-  | { id?: string; title: string }
+  | { id: string; title?: string; explanation?: never }
+  | {
+      id?: string;
+      title: string;
+      /**
+       * How the section's figures were computed: calculation rows, basis
+       * captions, formula or component provenance, raw versus capped values.
+       * It opens from the (i) beside the title, after the `hint`. Never put a
+       * field, action or decision info here.
+       */
+      explanation?: React.ReactNode;
+    }
 );
 
 interface DetailSpineProps {
@@ -400,6 +421,7 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
           key={section.id ?? section.title}
           title={section.title}
           hint={section.hint}
+          explanation={section.explanation}
           divider={!numbered && sectionIdx > 0}
           spine={
             numbered
@@ -415,6 +437,8 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
                   label={field.label}
                   value={field.value}
                   hint={field.hint}
+                  explanation={field.explanation}
+                  explanationTitle={field.explanationTitle}
                   certifyRequired={field.certifyRequired}
                   certifyStatus={field.certifyStatus}
                   emptySituation={field.emptySituation}
@@ -425,7 +449,6 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
               ))}
             </DetailRow>
           ))}
-          {section.explanation && <DetailedOnly>{section.explanation}</DetailedOnly>}
           {section.content}
         </DetailSection>
       ))}
