@@ -78,7 +78,55 @@ function pageModel(): CreditBatchPageModel {
   };
 }
 
+const STATEMENT = { id: "statement-1", status: "FAILED_VERIFICATION" as const, reportingPeriodStartOn: "2026-07-01", reportingPeriodEndOn: "2026-09-30" };
+const returnedHealth = (correction: object) => ({
+  state: "ready", issueCount: 0, checks: [], removalCorrections: [correction],
+}) as never;
+
 describe("buildCreditBatchOpenItems", () => {
+  it("opens the Removal for a returned Removal whose sent components changed on this batch", () => {
+    const { check } = buildCreditBatchOpenItems({ ...batchContext, health: returnedHealth({
+      removalId: "removal-1", removalCode: "RM-26-003", windowOpen: true, resubmitNeeded: true, statement: STATEMENT,
+      batches: [{ id: "batch", code: "CB-1" }],
+      changed: [
+        { componentId: "a", componentName: "Diesel use", batchId: "batch", batchCode: "CB-1" },
+        { componentId: "b", componentName: "Transport to field", batchId: "batch", batchCode: "CB-1" },
+        { componentId: "a", componentName: "Diesel use", batchId: "batch", batchCode: "CB-1" },
+      ],
+    }) });
+    expect(check).toEqual([{
+      id: "correction:removal-1",
+      title: "RM-26-003: Resubmit needed",
+      detail: "Diesel use and Transport to field changed here since RM-26-003 was sent. Resubmit the Removal to send it.",
+      target: { href: "/certification/removals?facility=facility&removal=removal-1" },
+    }]);
+  });
+
+  it("says the Removal changed on another batch when nothing changed on this one", () => {
+    const [item] = buildCreditBatchOpenItems({ ...batchContext, health: returnedHealth({
+      removalId: "removal-1", removalCode: "RM-26-003", windowOpen: true, resubmitNeeded: true, statement: STATEMENT,
+      batches: [{ id: "batch", code: "CB-1" }, { id: "other", code: "CB-2" }], changed: [],
+    }) }).check;
+    expect(item.title).toBe("RM-26-003: Resubmit needed");
+    expect(item.detail).toBe("Entries changed on another credit batch since RM-26-003 was sent. Resubmit the Removal to send them.");
+  });
+
+  it.each([
+    ["FAILED_VERIFICATION", "GHG Statement Jul 1 to Sep 30, 2026 failed verification."],
+    ["DRAFT", "GHG Statement Jul 1 to Sep 30, 2026 is back in draft."],
+  ] as const)("sends a returned Removal with nothing changed to the Emissions tab: %s", (status, phrase) => {
+    const { check } = buildCreditBatchOpenItems({ ...batchContext, health: returnedHealth({
+      removalId: "removal-1", removalCode: "RM-26-003", windowOpen: true, resubmitNeeded: false,
+      statement: { ...STATEMENT, status }, batches: [{ id: "batch", code: "CB-1" }], changed: [],
+    }) });
+    expect(check).toEqual([{
+      id: "correction:removal-1",
+      title: "RM-26-003: Returned by Isometric",
+      detail: `${phrase} You can correct the sent entries on the Emissions tab.`,
+      target: { tab: "emissions" },
+    }]);
+  });
+
   it("keeps absent sources empty", () => {
     expect(buildCreditBatchOpenItems(batchContext)).toEqual({
       blocking: [],

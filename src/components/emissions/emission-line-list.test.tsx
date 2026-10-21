@@ -123,6 +123,14 @@ describe("EmissionLineList", () => {
     expect(within(table).getByRole("rowheader", { name: "Total" })).toBeTruthy();
     expect(within(table).getByText("152.5 kWh")).toBeTruthy();
   });
+  it("marks an entry re-entered for a returned Removal as waiting for it to be resubmitted, and no other", () => {
+    renderList([makeLine({
+      state: "filled", total: { magnitude: "80", unit: "kWh" },
+      entries: [makeEntry({ heldForRemovalId: "removal-1", sentByRemovalId: null }), SECOND_ENTRY],
+    })], ["line-1"]);
+    const table = within(screen.getByRole("region", { name: /details/ })).getByRole("table", { name: "Sources of Metered electricity use emissions" });
+    expect(within(table).getAllByText("Waiting for resubmit")).toHaveLength(1);
+  });
   it("drops the Total when one part makes the line", () => {
     renderList([makeLine({ state: "filled", total: { magnitude: "42.5", unit: "kWh" }, entries: [makeEntry()] })], ["line-1"]);
     expect(screen.getByText("Manual entry")).toBeTruthy();

@@ -43,6 +43,7 @@ import { SubmittedOnCell, submittedOnSortingFn, submittedOnText } from "./submit
 import { CertificationStatusBadge } from "./certification-status-badge";
 import { NewRemovalDialog } from "./new-removal-dialog";
 import { CORRECTION_NEEDED_LABEL, RemovalCorrectionCell } from "./removal-correction-needed";
+import { correctionStatus } from "@/lib/removal-correction-copy";
 import { useRecordLocks } from "@/hooks/use-record-locks";
 import type { RecordLockView, RecordLockViews } from "@/lib/record-lock-view";
 import { RemovalDetailSheet } from "./removal-detail-sheet";
@@ -206,6 +207,9 @@ export function StatusCell({ summary, lock }: { summary: RemovalListRow; lock?: 
     enrichmentStatus: summary.enrichmentStatus,
     readiness: summary.readiness,
   });
+  // A returned Removal with its correction window open names that state in
+  // place of its own status, and #1134's lock-based cell steps aside.
+  const shown = summary.correction ? correctionStatus(summary.correction) : status;
   const firstReason = status.reasons[0]?.split("\n")[0];
   const remainingReasonCount = status.reasons.length - 1;
 
@@ -214,8 +218,8 @@ export function StatusCell({ summary, lock }: { summary: RemovalListRow; lock?: 
       <CertificationStatusBadge
         entityType="removal"
         entityId={summary.removalId}
-        status={status.value}
-        label={status.label}
+        status={shown.value}
+        label={shown.label}
       />
       {firstReason && (
         // `relative` paints the reason above the badge's expanded hit area,
@@ -233,7 +237,7 @@ export function StatusCell({ summary, lock }: { summary: RemovalListRow; lock?: 
           </span>
         </span>
       )}
-      <RemovalCorrectionCell lock={lock} />
+      <RemovalCorrectionCell lock={summary.correction ? undefined : lock} />
       {status.canRetry && (
         <Button
           variant="default"
@@ -321,7 +325,9 @@ const createColumns = (
         enrichmentStatus: summary.enrichmentStatus,
         readiness: summary.readiness,
       });
-      return `${status.label} ${status.reasons.join(" ")}${locks[summary.removalId]?.returnedBy.length ? ` ${CORRECTION_NEEDED_LABEL}` : ""}`;
+      const correction = summary.correction;
+      const returned = correction ? ` ${correctionStatus(correction).label}` : locks[summary.removalId]?.returnedBy.length ? ` ${CORRECTION_NEEDED_LABEL}` : "";
+      return `${status.label} ${status.reasons.join(" ")}${returned}`;
     },
     cell: StatusColumnCell,
   },

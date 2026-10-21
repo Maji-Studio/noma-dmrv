@@ -1,4 +1,5 @@
 import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
+import { returnedStatementPhrase } from "@/lib/removal-correction-copy";
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -43,10 +44,7 @@ function HolderList({ holders }: { holders: readonly RecordLockLink[] }) {
   );
 }
 
-/** What Isometric said about the returned statement, in the operator's words. */
-export function returnedStatementPhrase(status: string | null): string {
-  return status === "FAILED_VERIFICATION" ? "failed verification" : "is back in draft";
-}
+export { returnedStatementPhrase };
 
 /**
  * Option A of #1101 open point 2: a returned record keeps its real level and
