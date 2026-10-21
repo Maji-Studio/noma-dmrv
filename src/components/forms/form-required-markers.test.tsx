@@ -136,8 +136,7 @@ const CREATE_CASES: FormCase[] = [
   { file: "components/production-runs/production-run-form.tsx", name: "production run", element: <ProductionRunForm onSubmit={noop} /> },
   { file: "components/production-runs/production-incident-form.tsx", name: "production incident", element: <ProductionIncidentForm facilityId="facility" productionRunId="run" onSubmit={noop} /> },
   { file: "components/production-runs/production-sample-form.tsx", name: "production sample", element: <ProductionSampleFormHarness /> },
-  // Its stock previews render only once bins are picked, which props cannot preset;
- 
+  // Its stock previews render only once bins are picked, which props cannot preset.
   { file: "components/biochar-products/biochar-product-form.tsx", name: "biochar product", element: <BiocharProductForm onSubmit={noop} /> },
   { file: "components/formulations/formulation-form.tsx", name: "formulation", element: <FormulationForm onSubmit={noop} /> },
   { file: "components/orders/order-form.tsx", name: "order", element: <OrderForm onSubmit={noop} /> },
