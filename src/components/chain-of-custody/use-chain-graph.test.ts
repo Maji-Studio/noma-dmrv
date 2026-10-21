@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Edge } from "@xyflow/react";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { buildLineageRollup } from "@/lib/chain-of-custody/lineage-rollup";
+import { expandProductLineages } from "./expand-product-lineages";
 import { formatWetDryMass } from "@/lib/mass-moisture";
-import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
+import type { ChainSourceLineage, ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type {
   ChainRollForwardProduct,
   ChainRunRollForward,
@@ -700,4 +702,137 @@ it("keeps both products sharing a run and one physical application in the graph"
   expect(graph.nodes.filter(n => n.id.startsWith("application:"))).toHaveLength(1);
   expect(graph.edges.filter(e => e.source.startsWith("biochar-product:")).map(e => e.data?.mass)).toEqual([0.45, 0.125]);
   expect(graph.edges.find(e => e.source === `delivery:${base.delivery.id}`)?.data?.kgLabel).toBe("Wet: 1,000 kg · Dry: 575 kg");
+});
+
+const RUN_ID = "production-run:run-1";
+const PRODUCT_ID = "biochar-product:product-1";
+const APPLICATION_ID = "application:application-1";
+const DELIVERY_ID = "delivery:delivery-1";
+const SOURCE_EDGE_ID = `${RUN_ID}->${PRODUCT_ID}`;
+const SHIPMENT_EDGE_ID = `${PRODUCT_ID}->${DELIVERY_ID}`;
+const APPLICATION_EDGE_ID = `${DELIVERY_ID}->${APPLICATION_ID}`;
+
+
+function rollupLineage(
+  wetKg: number | null = 120,
+  dryKg: number | null = 90,
+): ChainOfCustodyData {
+  const source: ChainSourceLineage = {
+    productionRun: {
+      id: "run-1", code: "PR-1", status: "complete", date: "2026-05-17",
+      biocharOutputKg: 1_000, biocharDryMassKg: 900, feedstockMassDryKg: 2_000,
+      href: "/production-runs",
+    },
+    reactor: null,
+    feedstocks: [{
+      id: "feedstock-1", code: "FS-1", status: "complete", deliveryDate: null,
+      massDryKg: 2_000, wetMassUsedKg: 3_000, supplierName: null,
+      feedstockTypeName: null, href: "/feedstocks",
+    }],
+    allocatedWetMassKg: wetKg,
+    allocatedDryMassKg: dryKg,
+  };
+  return {
+    facility: { id: "facility-1", code: "FAC-1", name: "Fixture facility" },
+    application: {
+      id: "application-1", code: "AP-1", status: "applied",
+      applicationDate: new Date("2026-05-20T00:00:00Z"), fieldIdentifier: null,
+      evidenceMethod: "visual", gisBoundary: null, soilTemperatureC: null,
+      biocharAppliedTons: wetKg == null ? null : kgToTonnes(wetKg),
+      biocharAppliedDryTons: dryKg == null ? null : kgToTonnes(dryKg),
+      href: "/applications",
+    },
+    delivery: {
+      id: "delivery-1", code: "DL-1", status: "delivered", proofOfDeliveryCount: 0,
+      deliveryDate: new Date("2026-05-19T00:00:00Z"), deliveredWetMassKg: 850,
+      massDryKg: 820, href: "/deliveries",
+    },
+    order: { id: "order-1", code: "OR-1", orderDate: new Date("2026-05-18T00:00:00Z"), quantityKg: 850, href: "/orders" },
+    biocharProduct: {
+      id: "product-1", code: "BP-1", status: "ready", productionDate: "2026-05-18",
+      massKg: 850, moistureContentPercent: 2, formulationName: null,
+      linkedProductionRunId: "run-1", href: "/biochar-products",
+    },
+    productionRun: source.productionRun,
+    reactor: source.reactor,
+    feedstocks: source.feedstocks,
+    sources: [source],
+    warnings: [],
+  };
+}
+
+describe("roll-up rendering integration", () => {
+  it.each([
+    [null, null, "Wet: Not recorded · Dry: Not recorded"],
+    [120, null, "Wet: 120 kg · Dry: Not recorded"],
+    [null, 90, "Wet: Not recorded · Dry: 90 kg"],
+    [0, 0, "Wet: 0 kg · Dry: 0 kg"],
+  ] as const)("renders product wet=%s and dry=%s without fabricating zero", (wet, dry, expected) => {
+    const data = rollupLineage(wet, dry);
+    expect(buildLineageNodes(data).find(node => node.id === PRODUCT_ID)?.details)
+      .toContainEqual({ label: "Applied from batch", value: expected });
+    expect(useBatchChainGraph([data], undefined).nodes.find(node => node.id === PRODUCT_ID)?.data.details)
+      .toContainEqual({ label: "Applied from batch", value: expected });
+  });
+
+  it.each([false, true])("looks up independently summed wet/dry values on merged edges (reversed: %s)", reversed => {
+    const data = [rollupLineage(120, null), rollupLineage(null, 90)];
+    const graph = useBatchChainGraph(reversed ? [...data].reverse() : data, undefined);
+    expect(graph.edges.find(edge => edge.id === SOURCE_EDGE_ID)?.data?.kgLabel)
+      .toBe("Wet: 120 kg · Dry: 90 kg");
+    for (const id of [SHIPMENT_EDGE_ID, APPLICATION_EDGE_ID]) {
+      expect(graph.edges.find(edge => edge.id === id)?.data?.kgLabel)
+        .toBe("Wet: 120 kg · Dry: 90 kg");
+    }
+    expect(graph.nodes.find(node => node.id === RUN_ID)?.data.details)
+      .toContainEqual({ label: "Applied from source", value: "Wet: 120 kg · Dry: 90 kg" });
+  });
+});
+
+it("shows the full run allocation in the Carbon Viewer popup for two products", () => {
+  const data = rollupLineage(300, 290);
+  const second = rollupLineage(200, 190);
+  data.application.biocharAppliedTons = 0.5;
+  data.application.biocharAppliedDryTons = 0.48;
+  data.products = [
+    { product: data.biocharProduct!, sources: data.sources!, allocatedWetMassKg: 300, allocatedDryMassKg: 290 },
+    { product: { ...second.biocharProduct!, id: "product-2" }, sources: second.sources!, allocatedWetMassKg: 200, allocatedDryMassKg: 190 },
+  ];
+  const slices = expandProductLineages(data);
+  const totals = buildLineageRollup(slices);
+  const expected = { label: "Applied from source", value: "Wet: 500 kg · Dry: 480 kg" };
+  const popupNodes = buildLineageNodes(data);
+  expect(popupNodes.filter(node => node.id === RUN_ID)).toHaveLength(1);
+  expect(popupNodes.filter(node => node.kind === "biocharProduct")).toHaveLength(2);
+  expect(popupNodes.find(node => node.id === RUN_ID)?.details).toContainEqual(expected);
+  for (const slice of slices) {
+    expect(buildLineageNodes(slice, totals).find(node => node.id === RUN_ID)?.details).toContainEqual(expected);
+  }
+  expect(useChainGraph(data).nodes.find(node => node.id === RUN_ID)?.data.details).toContainEqual(expected);
+});
+
+it("restores the application's 200.2 kg rounding boundary while retaining native edge floats", () => {
+  const graph = useBatchChainGraph([rollupLineage(100.002, 100.002), rollupLineage(100.148, 100.148)], undefined);
+  expect(graph.nodes.find(node => node.id === APPLICATION_ID)?.data.details)
+    .toContainEqual({ label: "Biochar applied", value: "Wet: 200.2 kg · Dry: 200.2 kg" });
+  for (const id of [SHIPMENT_EDGE_ID, APPLICATION_EDGE_ID]) {
+    expect(graph.edges.find(edge => edge.id === id)?.data?.mass).toBe(0.100002 + 0.100148);
+  }
+});
+
+it.each([0.0288, 0.82])("keeps the original %s tDry branch-share value exactly", dryTonnes => {
+  const data = rollupLineage();
+  data.application.biocharAppliedDryTons = dryTonnes;
+  const graph = useChainGraph(data);
+  for (const id of [SHIPMENT_EDGE_ID, APPLICATION_EDGE_ID]) {
+    expect(graph.edges.find(edge => edge.id === id)?.data?.mass).toBe(dryTonnes);
+  }
+});
+
+it("renders missing roll-up entries without throwing or fabricating mass", () => {
+  const nodes = buildLineageNodes(rollupLineage(), buildLineageRollup([]));
+  for (const [id, label] of [[PRODUCT_ID, "Applied from batch"], [APPLICATION_ID, "Biochar applied"]]) {
+    expect(nodes.find(node => node.id === id)?.details)
+      .toContainEqual({ label, value: "Wet: Not recorded · Dry: Not recorded" });
+  }
 });
