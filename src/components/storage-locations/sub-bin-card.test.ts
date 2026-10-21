@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { outputEntryMass } from "./output-entry-mass";
 import type { OutputSubBin } from "@/types/output-stock";
 import { bayFigure } from "./sub-bin-bays";
 import { contentsRows, movementMass, subBinMoistureCaption, subBinWetText } from "./sub-bin-card";
@@ -37,4 +38,8 @@ it("says when a sub-bin has no moisture reading, and names dry biochar in a move
   expect(subBinMoistureCaption(subBin(null))).toBe("No moisture reading");
   expect(subBinMoistureCaption({ ...subBin(1000), moisturePercent: 26.7 })).toBe("26.7% moisture");
   expect(movementMass({ id: "m1", kind: "removed", occurredAt: "2026-09-10T12:00:00.000Z", wetMassKg: null, dryMassKg: -90 })).toBe("90 kg dry biochar");
+});
+
+it("names dry biochar the same way on a deleted entry's amount", () => {
+  expect(outputEntryMass({ wetMassKg: null, dryMassKg: -90 })).toBe("90 kg dry biochar");
 });

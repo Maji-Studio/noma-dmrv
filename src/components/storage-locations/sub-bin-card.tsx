@@ -43,7 +43,7 @@ export function subBinMoistureCaption(subBin: OutputSubBin): string {
 }
 
 export function movementMass(movement: SubBinMovement): string {
-  return movement.wetMassKg === null ? `${formatMassKg(Math.abs(movement.dryMassKg))} dry biochar` : `${formatMassKg(Math.abs(movement.wetMassKg))} wet mass`;
+  return movement.wetMassKg === null ? outputStockFigure(null, Math.abs(movement.dryMassKg)) : `${formatMassKg(Math.abs(movement.wetMassKg))} wet mass`;
 }
 
 type TapTrigger = ReactElement<{ onClick?: (event: MouseEvent) => void }>;
