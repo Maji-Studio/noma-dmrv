@@ -11,7 +11,7 @@ it("publishes the evidence owner and type table including application photos and
   expect(allowsApiDocumentType("delivery", "photo")).toBe(true);
   expect(API_DOCUMENT_OWNERS.application).toEqual({ entityType: "application", path: "applications", documentTypes: ["photo", "pdf"], readScope: "applications:read", writeScope: "applications:write" });
   for (const type of ["gis_boundary", "weighbridge_ticket", "affidavit"] as const) expect(allowsApiDocumentType("application", type)).toBe(false);
-  expect(canAccessOwnerDocuments({ principal: { kind: "api-key" }, orgRole: "owner", scopes: ["deliveries:write"] }, "application", "write")).toBe(false);
+  expect(canAccessOwnerDocuments({ principal: { kind: "api-key" }, orgRole: "admin", scopes: ["deliveries:write"] }, "application", "write")).toBe(false);
 });
 
 it.each(Object.entries(API_DOCUMENT_OWNERS))("uses %s owner scopes without implying read or write", (ownerType, owner) => {
@@ -25,9 +25,9 @@ it.each(Object.entries(API_DOCUMENT_OWNERS))("uses %s owner scopes without imply
 });
 
 it.each(Object.entries(API_DOCUMENT_OWNERS))("enforces the API role floor for %s", (ownerType, owner) => {
-  for (const orgRole of ["owner", "admin", "member", null] satisfies (OrgRole | null)[]) {
+  for (const orgRole of ["admin", "member", null] satisfies (OrgRole | null)[]) {
     const context = { principal: { kind: "api-key" as const }, orgRole, scopes: [owner.readScope, owner.writeScope] };
-    const allowed = orgRole === "owner" || orgRole === "admin";
+    const allowed = orgRole === "admin";
     expect(canAccessOwnerDocuments(context, ownerType, "read")).toBe(allowed);
     expect(canAccessOwnerDocuments(context, ownerType, "write")).toBe(allowed);
   }

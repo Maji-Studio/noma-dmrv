@@ -44,7 +44,7 @@ it("shows a member only their own connections", () => {
   expect(screen.queryByRole("heading", { name: "All members" })).toBeNull();
 });
 
-it("adds an All members list with member names for Owners and Admins", () => {
+it("adds an All members list with member names for Admins", () => {
   list([grant(), grant({ id: "grant-2", userId: "user-2", memberName: "E2E Member Two" })]);
   render(<ConnectedApps {...props} canManageAll />);
   const all = screen.getByRole("list", { name: "All members" });

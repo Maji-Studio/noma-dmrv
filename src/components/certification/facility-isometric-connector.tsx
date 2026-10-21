@@ -10,13 +10,13 @@
  * submission-pinned mappings, production confirm) apply unchanged.
  *
  * Renders nothing for viewers who can't manage the link: saving is org
- * owner/admin-gated (`saveFacilityCertifierMapping` → requireOrgRole "admin"),
+ * admin-gated (`saveFacilityCertifierMapping` → requireOrgRole "admin"),
  * and the heavier management payload (available projects, link hints) must not
  * be fetched for viewers who can't act on it — they see the read-only
  * `FacilityCertifierSummary` in the facility view sheet instead. Management
  * capability comes from the server-computed `viewerCanManage` (same source as
  * Certification → Settings), NOT a client platform-admin check, so org
- * owners/admins the server already authorizes see this connector too.
+ * admins the server already authorizes see this connector too.
  */
 "use client";
 
@@ -54,7 +54,7 @@ export function FacilityIsometricConnector({
   facilityId,
 }: FacilityIsometricConnectorProps) {
   // Server-computed management capability (same source as Certification →
-  // Settings). Org owners/admins qualify, not just platform admins.
+  // Settings). Org admins qualify, not just platform admins.
   const { data: summary } = useFacilityCertifierSummary(
     facilityId,
     !!facilityId,
@@ -204,7 +204,7 @@ function ConnectorBody({
           />
         </FormField>
         <p className="body-small text-[var(--color-text-tertiary)]">
-          The registry connection is not configured. Ask an Owner or Admin to
+          The registry connection is not configured. Ask an Admin to
           add the connection credentials.
         </p>
       </ConnectorShell>

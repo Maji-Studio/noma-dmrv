@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({ create: vi.fn(), context: vi.fn() }));
 vi.mock("@/data-access/api-keys", () => ({ createApiKey: mocks.create }));
 vi.mock("@/lib/auth/server", () => ({ requireOrgContext: mocks.context }));
 vi.mock("@/lib/log", () => ({ logger: { error: vi.fn() }, sanitizeErrorMessage: () => "error" }));
-const ctx = { userId: "user", organizationId: "org", orgRole: "owner", isPlatformAdmin: false };
+const ctx = { userId: "user", organizationId: "org", orgRole: "admin", isPlatformAdmin: false };
 const input = { name: "Integration", scopes: ["feedstocks:read"], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS };
 
 beforeEach(() => {

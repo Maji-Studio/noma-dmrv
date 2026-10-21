@@ -52,7 +52,7 @@ const IDENTITY: CliIdentity = {
 };
 const CONTEXT: OrgContext = {
   ...IDENTITY,
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: true,
 };
 

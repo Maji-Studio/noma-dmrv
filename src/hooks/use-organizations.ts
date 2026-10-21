@@ -190,7 +190,7 @@ export function useCreateOrganization() {
     mutationFn: async (input: {
       name: string;
       slug: string;
-      ownerEmail: string;
+      adminEmail: string;
     }) => unwrap(await createOrganizationAction(input)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.directory() });

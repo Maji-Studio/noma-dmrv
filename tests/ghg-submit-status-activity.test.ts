@@ -41,7 +41,7 @@ let facilityId: string;
 beforeEach(async () => {
   vi.clearAllMocks();
   const id = `org_submit_activity_${crypto.randomUUID()}`;
-  ctx = { organizationId: id, userId: "submit-actor", orgRole: "owner", isPlatformAdmin: false };
+  ctx = { organizationId: id, userId: "submit-actor", orgRole: "admin", isPlatformAdmin: false };
   await db.insert(organizations).values({ id, name: "Submit activity fixture", slug: id });
   facilityId = crypto.randomUUID();
   await db.insert(facilities).values({

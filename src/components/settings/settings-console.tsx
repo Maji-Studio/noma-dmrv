@@ -5,7 +5,7 @@
  * `SettingsRail`, with one difference: these categories are routes, not
  * `?section=` panes. A route per category is right here because the two are
  * genuinely different pages with different access rules — the member roster is
- * readable by any member, the operating defaults only by Owners/Admins — and
+ * readable by any member, the operating defaults only by Admins — and
  * because `/settings/organization` was already a URL people have.
  *
  * The rail is the hub, which is why there is no `/settings` landing page: a
@@ -47,9 +47,9 @@ interface SettingsConsoleProps {
   access: string;
   /** Optional. Only when it says something the title and caption do not. */
   subtitle?: string;
-  /** Owner/Admin. Gates the Defaults category — it is Owner/Admin-only. */
+  /** Admin. Gates the Defaults category — it is Admin-only. */
   canManageDefaults: boolean;
-  /** Live Owner/Admin membership only. Platform status grants no override. */
+  /** Live Admin membership only. Platform status grants no override. */
   canManageApiKeys: boolean;
   /** Adds the cross-tenant organization directory to the rail. */
   isPlatformAdmin: boolean;

@@ -44,11 +44,11 @@ it.each(["plugin", "platform", "leave", "direct"] as const)("removal through %s 
   await expect(resolveAttemptGrant({ ...attempts[0], clientId: f.clientId, resource: OAUTH_TEST_RESOURCE })).rejects.toMatchObject({ code: "forbidden" });
 });
 
-it("a refused last-owner leave does not revoke a connection", async () => {
+it("a refused last-admin leave does not revoke a connection", async () => {
   const attempt = f.attempt();
   await selectOAuthOrganization(attempt);
   const grant = await resolveAttemptGrant({ ...attempt, clientId: f.clientId, resource: OAUTH_TEST_RESOURCE });
-  await db.update(members).set({ role: "owner" }).where(eq(members.id, f.memberIds[0]));
+  await db.update(members).set({ role: "admin" }).where(eq(members.id, f.memberIds[0]));
   await db.delete(members).where(eq(members.userId, f.actorId));
   await expect(auth.api.leaveOrganization({ headers: await headers(f.userId), body: { organizationId: f.orgIds[0] } })).rejects.toThrow();
   const [stored] = await db.select().from(oauthGrants).where(eq(oauthGrants.id, grant.id));
@@ -103,14 +103,14 @@ it.each(["remove", "leave"] as const)("a delayed %s hook preserves a replacement
   } finally { release(); await hook; }
 });
 
-it.each(["removed", "live", "last-owner"] as const)("leave disables API keys only after confirmed removal: %s", async state => {
-  await db.update(members).set({ role: "owner" }).where(eq(members.id, f.memberIds[0]));
+it.each(["removed", "live", "last-admin"] as const)("leave disables API keys only after confirmed removal: %s", async state => {
+  await db.update(members).set({ role: "admin" }).where(eq(members.id, f.memberIds[0]));
   const id = randomUUID();
   await db.insert(apiKeys).values({ id, referenceId: f.orgIds[0], key: createHash("sha256").update(randomUUID()).digest("hex") });
   await db.insert(apiKeyOwners).values({ credentialId: id, organizationId: f.orgIds[0], userId: f.userId, memberId: f.memberIds[0] });
   if (state === "live") {
     await revokeDeletedMemberOAuthGrants({ id: f.memberIds[0], organizationId: f.orgIds[0], userId: f.userId });
-  } else if (state === "last-owner") {
+  } else if (state === "last-admin") {
     await db.delete(members).where(eq(members.userId, f.actorId));
     await expect(auth.api.leaveOrganization({ headers: await headers(f.userId), body: { organizationId: f.orgIds[0] } })).rejects.toThrow();
   } else {

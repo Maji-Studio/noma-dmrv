@@ -8,8 +8,8 @@ const FACILITY_ID = "3e0a4a86-1af9-4b39-a97e-08fbd8b0f1aa";
 
 function makeStatus(overrides?: Partial<OnboardingStatus>): OnboardingStatus {
   return {
-    isOwnerOrAdmin: true,
-    isOrgOwnerOrAdmin: true,
+    canManage: true,
+    isOrgAdmin: true,
     facilityCount: 1,
     supplierCount: 1,
     facility: {
@@ -119,10 +119,10 @@ describe("resolveMode", () => {
     const fresh = makeStatus({ facilityCount: 0, supplierCount: 0, facility: null });
     expect(mode(fresh, { facilityId: null })).toBe("takeover-guide");
     expect(mode(fresh, { facilityId: null, collapsed: true })).toBe("takeover-guide");
-    expect(mode({ ...fresh, isOwnerOrAdmin: false }, { facilityId: null })).toBe(
+    expect(mode({ ...fresh, canManage: false }, { facilityId: null })).toBe(
       "takeover-member",
     );
-    expect(mode({ ...fresh, isOwnerOrAdmin: false }, { facilityId: null, collapsed: true })).toBe(
+    expect(mode({ ...fresh, canManage: false }, { facilityId: null, collapsed: true })).toBe(
       "takeover-member",
     );
   });
@@ -132,9 +132,9 @@ describe("resolveMode", () => {
     expect(mode(status, { facilityId: null })).toBe("none");
   });
 
-  it("collapses to a strip for an Owner/Admin who hid the guide", () => {
+  it("collapses to a strip for an Admin who hid the guide", () => {
     // A REQUIRED step is still open (no feedstock intake) → the guide takes
-    // over, or recedes to the strip when the Owner/Admin has hidden it.
+    // over, or recedes to the strip when the Admin has hidden it.
     const status = makeStatus({
       facility: { ...makeStatus().facility!, feedstockCount: 0 },
     });
@@ -143,7 +143,7 @@ describe("resolveMode", () => {
   });
 
   it("recedes to the real dashboard once every required step is done, even with the registry skipped", () => {
-    // The registry link is legitimately optional: an Owner/Admin who completed
+    // The registry link is legitimately optional: an Admin who completed
     // every required step but never connected Isometric must still get the full
     // dashboard, not a permanent 6/7 strip/takeover.
     const registrySkipped = makeStatus({
@@ -161,7 +161,7 @@ describe("resolveMode", () => {
 
   it("blocks a Member only while the facility is pre-operational", () => {
     const preOperational = makeStatus({
-      isOwnerOrAdmin: false,
+      canManage: false,
       facility: { ...makeStatus().facility!, reactorCount: 0 },
     });
     expect(mode(preOperational)).toBe("takeover-member");
@@ -169,7 +169,7 @@ describe("resolveMode", () => {
     // Reactor exists → the Member gets the real dashboard even though later
     // steps (e.g. the admin-managed registry link) are still open.
     const operational = makeStatus({
-      isOwnerOrAdmin: false,
+      canManage: false,
       facility: { ...makeStatus().facility!, registryConnected: false },
     });
     expect(mode(operational)).toBe("none");

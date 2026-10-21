@@ -39,7 +39,7 @@ const OTHER_ORG_ID = `org_fleet_other_${crypto.randomUUID().slice(0, 8)}`;
 const otherCtx: OrgContext = {
   userId: "user_fleet_other",
   organizationId: OTHER_ORG_ID,
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 };
 

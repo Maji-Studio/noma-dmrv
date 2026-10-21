@@ -88,7 +88,7 @@ interface CreditBatchFormProps {
   submitLabel?: string;
   /** Sticky CTA row (side sheet) — pass false when embedded in a page card. */
   stickyActions?: boolean;
-  /** Owner/admin capability, computed on the server by the page. */
+  /** Admin capability, computed on the server by the page. */
   canManage?: boolean;
   /** Create mode only: the values the form opens with instead of today's date. */
   defaultValues?: { feedstockTypeId?: string; startDate?: string; endDate?: string };

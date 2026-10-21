@@ -6,7 +6,7 @@ vi.mock('./output-stock', () => ({ recordOutputStockMovement: {} }));
 
 import { correctOutputStockEntry } from './output-stock-form-edits';
 
-const ctx = { organizationId: 'org', userId: 'user', orgRole: 'owner' as const, isPlatformAdmin: false };
+const ctx = { organizationId: 'org', userId: 'user', orgRole: 'admin' as const, isPlatformAdmin: false };
 const input = {
   storageLocationId: '00000000-0000-4000-8000-000000000001', facilityId: '00000000-0000-4000-8000-000000000002',
   correctsMovementId: '00000000-0000-4000-8000-000000000003', occurredAt: '2026-09-14T12:00:00.000Z',

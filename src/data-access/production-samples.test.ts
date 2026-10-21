@@ -18,7 +18,7 @@ vi.mock("./production-run-event-time", () => ({ resolveProductionRunEventTime: a
 const ctx: OrgContext = {
   organizationId: "org",
   userId: "user",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 };
 

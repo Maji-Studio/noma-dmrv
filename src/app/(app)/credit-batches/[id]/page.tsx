@@ -49,7 +49,7 @@ export default async function CreditBatchRoute({ params, searchParams }: CreditB
     redirect(`/credit-batches/${id}?${nextParams.toString()}`);
   }
 
-  const canManage = ctx.isPlatformAdmin || ctx.orgRole === "owner" || ctx.orgRole === "admin";
+  const canManage = ctx.isPlatformAdmin || ctx.orgRole === "admin";
   const state = createServerHydrationState([
     { queryKey: creditBatchKeys.detail(batch.id), data: batch },
   ]);

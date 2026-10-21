@@ -24,7 +24,7 @@ vi.mock("@/data-access/utils", () => ({}));
 vi.mock("@/lib/log", () => ({ logger: { error: vi.fn() }, sanitizeErrorMessage: vi.fn() }));
 
 const ID = "11111111-1111-4111-8111-111111111111";
-const ctx = { userId: ID, organizationId: ID, orgRole: "owner", isPlatformAdmin: false };
+const ctx = { userId: ID, organizationId: ID, orgRole: "admin", isPlatformAdmin: false };
 const cases = [
   { id: "record_production_sample", action: createProductionSampleFn, input: { productionRunId: ID, timestamp: new Date("2026-09-12T12:00:00Z"), weightGrams: 100 } },
   { id: "record_production_incident", action: createProductionIncidentFn, input: { productionRunId: ID, incidentTime: new Date("2026-09-12T12:00:00Z"), description: "Incident", severity: "low" as const } },

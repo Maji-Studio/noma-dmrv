@@ -29,7 +29,7 @@ async function main(): Promise<void> {
   const ctx: OrgContext = {
     userId: "isometric-link-demo-cli",
     organizationId: BOOTSTRAP_ORGANIZATION_ID,
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   };
 

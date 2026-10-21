@@ -20,7 +20,7 @@ const ACCESS_TOKEN = "e2e-onboarding-access-9999";
 const OWNER = {
   id: USER_ID,
   email: `test-onboarding-owner-${RUN_TAG}@e2e.local`,
-  name: "E2E Onboarding Owner",
+  name: "E2E Onboarding Admin",
   role: "user" as const,
   password: "TestPassword123!",
 };
@@ -59,7 +59,7 @@ test.describe("First-run onboarding", () => {
         id: `e2e-onboarding-member-${RUN_TAG}`,
         organizationId: ORG_ID,
         userId: USER_ID,
-        role: "owner",
+        role: "admin",
       });
     });
 
@@ -225,11 +225,13 @@ test.describe("First-run onboarding", () => {
         schema.suppliers,
         schema.reactors,
         schema.facilities,
-        schema.members,
       ] as const;
       for (const table of orgTables) {
         await db.delete(table).where(eq(table.organizationId, ORG_ID));
       }
+      await db
+        .delete(schema.organizations)
+        .where(eq(schema.organizations.id, ORG_ID));
       await db
         .delete(schema.sessions)
         .where(eq(schema.sessions.userId, USER_ID));
@@ -237,9 +239,6 @@ test.describe("First-run onboarding", () => {
         .delete(schema.accounts)
         .where(eq(schema.accounts.userId, USER_ID));
       await db.delete(schema.users).where(eq(schema.users.id, USER_ID));
-      await db
-        .delete(schema.organizations)
-        .where(eq(schema.organizations.id, ORG_ID));
       await pool.end();
     }
   });

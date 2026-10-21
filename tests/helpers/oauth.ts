@@ -21,7 +21,7 @@ export async function createOAuthFixture() {
   await db.insert(users).values([userId, actorId].map(id => ({ id, email: `${id}@e2e.local`, name: "E2E OAuth user", emailVerified: true })));
   await db.insert(members).values([
     ...orgIds.map((organizationId, i) => ({ id: memberIds[i], organizationId, userId, role: "member" })),
-    { id: randomUUID(), organizationId: orgIds[0], userId: actorId, role: "owner" },
+    { id: randomUUID(), organizationId: orgIds[0], userId: actorId, role: "admin" },
   ]);
   await db.insert(sessions).values({ id: sessionId, userId, token: randomUUID(), expiresAt: new Date(Date.now() + OAUTH_TEST_DAY_MS) });
   await db.insert(oauthClients).values({ id: randomUUID(), clientId, name: "E2E OAuth client", redirectUris: ["https://example.test/callback"] });

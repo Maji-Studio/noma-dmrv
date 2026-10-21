@@ -16,7 +16,7 @@ const REGISTRY_AT = "2026-10-14T10:00:00Z";
 let ctx: OrgContext;
 beforeEach(async () => {
   const id = `org_status_${crypto.randomUUID()}`;
-  ctx = { organizationId: id, userId: "status-actor", orgRole: "owner", isPlatformAdmin: false };
+  ctx = { organizationId: id, userId: "status-actor", orgRole: "admin", isPlatformAdmin: false };
   await db.insert(organizations).values({ id, name: "Status fixture", slug: id });
 });
 afterEach(async () => {

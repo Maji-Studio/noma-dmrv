@@ -1,7 +1,7 @@
 # Dashboard setup guide
 
 The dashboard guides first-time setup without opening a modal on arrival.
-Owners and Admins see the getting-started guide while required setup is
+Admins see the getting-started guide while required setup is
 incomplete. Members see Setup in progress until a reactor exists, then the
 ordinary dashboard.
 

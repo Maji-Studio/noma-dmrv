@@ -102,7 +102,7 @@ async function seedFixture(intakeWetKg = INTAKE_WET_KG): Promise<Fixture> {
   const ctx: OrgContext = {
     organizationId,
     userId,
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   };
 

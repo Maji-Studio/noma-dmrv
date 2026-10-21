@@ -64,7 +64,7 @@ export async function seedDeliveryFixture(caseId: DeliveryCaseId, now = new Date
   const localInstant = (daysAgo: number, time: string) => combineDateAndTime(addDaysIso(today, -daysAgo), time, timeZone);
   try {
     await db.insert(users).values({ id: fixture.ctx.userId, email: `${fixture.ctx.userId}@example.test`, name: "MCP evaluation", emailVerified: true });
-    await db.insert(members).values({ id: randomUUID(), organizationId: org, userId: fixture.ctx.userId, role: "owner" });
+    await db.insert(members).values({ id: randomUUID(), organizationId: org, userId: fixture.ctx.userId, role: "admin" });
     await db.update(facilities).set({ timezone: timeZone, archivedAt: null })
       .where(and(eq(facilities.organizationId, org), eq(facilities.id, fixture.facilityId)));
     const { customer, locations: [location] } = await db.transaction(tx => createCustomerInTransaction(fixture.ctx, tx, { code: CUSTOMER_CODE, name: "Evaluation customer", locations: [{ ...TEST_SITE_POSITION, name: "Evaluation destination",

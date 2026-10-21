@@ -70,8 +70,7 @@ import { requireOrgScope } from "./utils";
  * it too.
  *
  * Members may delete Removals that never touched the registry. Once the
- * boundary opened, the floor in removal-deletion-role.ts requires an Owner
- * or Admin; Platform Admins always pass.
+ * boundary opened, the floor in removal-deletion-role.ts requires an Admin; Platform Admins always pass.
  */
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -99,7 +98,7 @@ const REMOVAL_DELETE_MISSING_ERROR =
 export const REMOVAL_DELETE_CHANGED_ERROR =
   "This Removal changed while it was being deleted. Refresh the page and review its status.";
 export const REMOVAL_DELETE_ROLE_ERROR =
-  "Only Owners and Admins can delete a Removal that may have records on Isometric. Ask an Owner or Admin to delete it.";
+  "Only Admins can delete a Removal that may have records on Isometric. Ask an Admin to delete it.";
 
 /** Whether the loaded deletion facts indicate possible registry records. */
 export function removalDeletionOpensRegistryBoundary(facts: {

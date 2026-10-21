@@ -109,7 +109,7 @@ back to `getPublicDocumentById(id)`.
 Non-UUID `id` → 400. A row with neither `storageKey` nor `fileUrl`, or a
 `storageKey` row not yet `uploaded` → 500 / 404 respectively.
 
-An Owner or Admin can change visibility through the guarded document writer.
+An Admin can change visibility through the guarded document writer.
 It checks submitted lineage and increments the document version, without a
 provider call or object copy. API reads have no public-visibility fallback.
 
@@ -231,8 +231,7 @@ Client orchestration: `src/hooks/use-file-upload.ts` and
 Document mutations enforce organization, owner and submitted-lineage checks in
 transaction-aware data-access writers. The lock order is documented in
 [architecture.md](./architecture.md#database-boundaries). Archived owners refuse
-request and confirm; delete remains allowed. Visibility requires an Owner or
-Admin at the data-access boundary and bumps the document version, as does
+request and confirm; delete remains allowed. Visibility requires an Admin at the data-access boundary and bumps the document version, as does
 application evidence reclassification. Submitted lineage refuses every app
 mutation, including deletion of documents that are not registry Sources.
 Server-generated ledgers and GHG Statement reports retain their own writers.

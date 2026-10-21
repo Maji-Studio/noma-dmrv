@@ -21,7 +21,7 @@ export async function createOAuthFlowFixture(options: { scope?: string } = {}) {
     origin: env.NEXT_PUBLIC_APP_URL,
   });
   // Only a Platform Admin may register a client (clientPrivileges); the fixture's
-  // Owner actor is promoted for registration and removed with the fixture.
+  // Admin actor is promoted for registration and removed with the fixture.
   await db.update(tables.users).set({ role: "admin" }).where(eq(tables.users.id, f.actorId));
   const adminToken = randomBytes(32).toString("hex");
   await db.insert(tables.sessions).values({ id: randomBytes(16).toString("hex"), userId: f.actorId, token: adminToken, expiresAt: new Date(Date.now() + OAUTH_TEST_DAY_MS) });

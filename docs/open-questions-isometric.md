@@ -121,7 +121,7 @@ retired questions do not belong in this file.
 
 PR #1067 resolves runtime display-name binding: observations persist contracts
 by component ID, bootstrap the three known templates and carry surviving IDs
-forward. Owner/Admin assignment is limited to proposed, unassigned or invalid
+forward. Admin assignment is limited to proposed, unassigned or invalid
 lines inside the change review. A general binding editor (#894) stays closed.
 The remaining #893 work is to include observation identity and contracts in
 immutable submission snapshots and draft recompilation checks (plan §4.5, PR 4).

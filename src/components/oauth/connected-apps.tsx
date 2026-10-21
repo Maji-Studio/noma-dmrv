@@ -15,14 +15,14 @@ interface ConnectedAppsProps {
   organizationId: string;
   organizationName: string;
   userId: string;
-  /** Live Owner or Admin membership: adds the All members list. */
+  /** Live Admin membership: adds the All members list. */
   canManageAll: boolean;
   /** A live membership of the active organization. Platform status alone has none. */
   isMember: boolean;
 }
 
 export function ConnectedApps({ isMember, ...props }: ConnectedAppsProps) {
-  if (!isMember) return <Notice tone="info">Only members of this organization can connect apps. Ask an Owner to invite you.</Notice>;
+  if (!isMember) return <Notice tone="info">Only members of this organization can connect apps. Ask an Admin to invite you.</Notice>;
   return <ConnectedAppsManager key={props.organizationId} {...props} />;
 }
 
@@ -36,7 +36,7 @@ function ConnectedAppsManager({ organizationId, organizationName, userId, canMan
     return <ServerError message="Connected apps could not be loaded. Check your connection and try again."
       action={<Button onClick={() => { void query.refetch(); }}>Try again</Button>} />;
   }
-  // Owners and Admins receive every member's connections; their own are the subset they hold.
+  // Admins receive every member's connections; their own are the subset they hold.
   const own = query.data.filter(grant => grant.userId === userId);
 
   return (

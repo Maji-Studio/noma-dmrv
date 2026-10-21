@@ -15,7 +15,7 @@ import {
   orderQuantityBelowAllocated, orderReferenceNotFound, orderRelationshipFrozen,
 } from "./order-domain-errors";
 
-const ctx = { organizationId: "org", userId: "user", orgRole: "owner" as const, isPlatformAdmin: false };
+const ctx = { organizationId: "org", userId: "user", orgRole: "admin" as const, isPlatformAdmin: false };
 const options = { fallbackMessage: "Failed to save order", log: { message: "test" } };
 
 describe("order errors", () => {

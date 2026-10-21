@@ -114,7 +114,7 @@ test.describe("Double-click on Create", () => {
 
   test("saves one Sample with its lab report", async ({ adminPage: page, seededData, testUsers }) => {
     const { db, pool } = createDbConnection();
-    const ctx = { organizationId: DEC_ORG_ID, userId: testUsers.admin.id, orgRole: "owner" as const, isPlatformAdmin: true };
+    const ctx = { organizationId: DEC_ORG_ID, userId: testUsers.admin.id, orgRole: "admin" as const, isPlatformAdmin: true };
     const sampleIds: string[] = [];
     try {
       const batch = await seedCreditBatch(seededData.facility.id, crypto.randomUUID().slice(0, 8).toUpperCase(), seededData.feedstockType.id);
@@ -154,7 +154,7 @@ test.describe("Double-click on Create", () => {
 
   test("saves one application with its PDF attachment", async ({ adminPage: page, seededData, testUsers }, info) => {
     const { db, pool } = createDbConnection();
-    const ctx = { organizationId: DEC_ORG_ID, userId: testUsers.admin.id, orgRole: "owner" as const, isPlatformAdmin: true };
+    const ctx = { organizationId: DEC_ORG_ID, userId: testUsers.admin.id, orgRole: "admin" as const, isPlatformAdmin: true };
     const fieldIdentifier = `E2E-Double-Submit-${crypto.randomUUID()}`;
     const scope = and(eq(schema.applications.organizationId, DEC_ORG_ID), eq(schema.applications.fieldIdentifier, fieldIdentifier));
     try {

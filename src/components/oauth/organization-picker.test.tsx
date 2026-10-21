@@ -20,7 +20,7 @@ vi.mock("@/components/ui", async () => ({
 
 const QUERY = "client_id=app&redirect_uri=https%3A%2F%2Fclient.test%2Fcb&sig=s&ba_param=redirect_uri";
 const memberships = [
-  { organizationId: "org-1", name: "E2E Mafinga Biochar", role: "owner", disabledReason: undefined },
+  { organizationId: "org-1", name: "E2E Mafinga Biochar", role: "admin", disabledReason: undefined },
   { organizationId: "org-2", name: "E2E Second Organization", role: "member", disabledReason: undefined },
   { organizationId: "org-3", name: "E2E Closed Organization", role: "admin", disabledReason: "API access is disabled for this organization." },
 ];
@@ -38,7 +38,7 @@ it("names the app, lists roles and preselects the suggested organization", () =>
   expect(screen.getByRole("heading", { name: "Choose an organization" })).toBeTruthy();
   expect(screen.getByText("Claude will act for you in one organization. To use another, connect again.")).toBeTruthy();
   expect(screen.getAllByText("claude.ai").length).toBeGreaterThan(0);
-  expect(screen.getByText("Owner")).toBeTruthy();
+  expect(screen.getByText("Admin")).toBeTruthy();
   expect((screen.getByRole("radio", { name: /E2E Second Organization/ }) as HTMLInputElement).checked).toBe(true);
 });
 
@@ -56,7 +56,7 @@ it("shows an empty state without memberships", () => {
   mocks.choices.mockReturnValue(data({ memberships: [], preselectedOrganizationId: null }));
   render(<OrganizationPicker />);
   expect(screen.getByRole("heading", { name: "No organizations yet" })).toBeTruthy();
-  expect(screen.getByText("Ask an Owner to invite you.")).toBeTruthy();
+  expect(screen.getByText("Ask an Admin to invite you.")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
 });
 
@@ -65,7 +65,7 @@ it("tells a Platform Admin without memberships to join an organization as a memb
   render(<OrganizationPicker />);
   expect(screen.getByRole("heading", { name: "Join an organization first" })).toBeTruthy();
   expect(screen.getByText(/Apps connect as a member of an organization\. Platform Admins are not members/)).toBeTruthy();
-  expect(screen.queryByText("Ask an Owner to invite you.")).toBeNull();
+  expect(screen.queryByText("Ask an Admin to invite you.")).toBeNull();
 });
 
 it("submits the pick and follows a safe continuation", async () => {

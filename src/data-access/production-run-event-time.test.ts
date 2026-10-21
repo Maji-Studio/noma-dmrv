@@ -3,7 +3,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { resolveProductionRunEventTime } from "./production-run-event-time";
 import type { Executor } from "./utils";
 
-const ctx: OrgContext = { organizationId: "org", userId: "user", orgRole: "owner", isPlatformAdmin: false };
+const ctx: OrgContext = { organizationId: "org", userId: "user", orgRole: "admin", isPlatformAdmin: false };
 function executor(timeZone?: string) {
   const where = vi.fn().mockResolvedValue(timeZone ? [{ timeZone }] : []);
   const query = { from: () => query, innerJoin: () => query, where };

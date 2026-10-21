@@ -8,7 +8,7 @@
  * destination is a hop, not an index, so `/admin` goes straight there.
  *
  * Organization configuration an operator can change moved to `/settings`, which
- * is gated on org Owner/Admin rather than `users.role === "admin"`. The tile
+ * is gated on org Admin rather than `users.role === "admin"`. The tile
  * grid's audience could never reach the settings it advertised.
  *
  * The route is kept rather than deleted so the parent layout's requireAdmin()

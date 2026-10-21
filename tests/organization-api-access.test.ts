@@ -25,7 +25,7 @@ beforeEach(async () => {
     { id: adminId, email: `${adminId}@example.test`, name: "API access admin", role: "admin", emailVerified: true },
     { id: ownerId, email: `${ownerId}@example.test`, name: "API access owner", role: "user", emailVerified: true },
   ]);
-  await db.insert(members).values({ id: crypto.randomUUID(), organizationId: ids[0], userId: ownerId, role: "owner" });
+  await db.insert(members).values({ id: crypto.randomUUID(), organizationId: ids[0], userId: ownerId, role: "admin" });
   session.mockResolvedValue({ user: { id: adminId }, session: { activeOrganizationId: null } });
   await db.insert(organizationApiAccess).values([
     { organizationId: ids[1], enabled: true, changedByUserId: adminId },
@@ -67,7 +67,7 @@ describe("Platform Admin API access directory", () => {
     expect(await db.select().from(organizationApiAccess).where(eq(organizationApiAccess.organizationId, ids[0]))).toEqual([]);
   });
 
-  it("refuses an organization Owner without Platform Admin access in both layers", async () => {
+  it("refuses an organization Admin without Platform Admin access in both layers", async () => {
     session.mockResolvedValue({ user: { id: ownerId }, session: { activeOrganizationId: ids[0] } });
     await expect(listOrganizationApiAccess()).rejects.toThrow("Admin access is required");
     await expect(setOrganizationApiAccess(ids[0], false)).rejects.toThrow("Admin access is required");

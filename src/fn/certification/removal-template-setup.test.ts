@@ -9,7 +9,7 @@ import { saveFacilityCertifierMapping } from "./facility-mapping";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 
 const { ctx, environment } = vi.hoisted(() => ({
-  ctx: { userId: "setup-user", organizationId: "setup-org", orgRole: "owner", isPlatformAdmin: false } as OrgContext,
+  ctx: { userId: "setup-user", organizationId: "setup-org", orgRole: "admin", isPlatformAdmin: false } as OrgContext,
   environment: { ISOMETRIC_ENVIRONMENT: "sandbox" },
 }));
 vi.mock("@/config/env", async (importOriginal) => {
@@ -35,7 +35,7 @@ const facilityId = "00000000-0000-4000-8000-000000000001";
 const input = { facilityId, removalTemplateId: fixture.id };
 beforeEach(() => {
   vi.clearAllMocks();
-  ctx.orgRole = "owner";
+  ctx.orgRole = "admin";
   environment.ISOMETRIC_ENVIRONMENT = "sandbox";
   vi.mocked(requireOrgFacility).mockResolvedValue(undefined as never);
   vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id } as never);
@@ -54,7 +54,7 @@ describe.each([
     expect(requireOrgFacility).not.toHaveBeenCalled();
     expect(listGhgEntryTemplates).not.toHaveBeenCalled();
   });
-  it.each(["owner", "admin"] as const)("allows %s and observes the selected template", async (role) => {
+  it.each(["admin"] as const)("allows %s and observes the selected template", async (role) => {
     ctx.orgRole = role;
     expect((await action(input)).success).toBe(true);
     expect(requireOrgFacility).toHaveBeenCalledWith(ctx, facilityId);

@@ -18,7 +18,7 @@ vi.mock("@/components/onboarding", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/components/onboarding")>(),
   useSetupGuide: () => {
     const status: OnboardingStatus = {
-      isOwnerOrAdmin: true, isOrgOwnerOrAdmin: true,
+      canManage: true, isOrgAdmin: true,
       facilityCount: mocks.facilityId ? 1 : 0, supplierCount: 0,
       facility: mocks.facilityId ? {
         reactorCount: mocks.reactors, registryConnected: false, feedstockCount: 0,

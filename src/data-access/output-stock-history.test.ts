@@ -5,7 +5,7 @@ import { getOutputStockHistory } from './output-stock-history';
 const mocks = vi.hoisted(() => ({ select: vi.fn() }));
 vi.mock('./output-stock-edit-lock', () => ({ outputMovementLockReason: async () => null, getOutputMovementCertificationLocks: async () => new Map() }));
 vi.mock('@/db', () => ({ db: { select: mocks.select } }));
-const ctx = { organizationId: 'org', userId: 'user', orgRole: 'owner' as const, isPlatformAdmin: false };
+const ctx = { organizationId: 'org', userId: 'user', orgRole: 'admin' as const, isPlatformAdmin: false };
 const LAYER_A = '00000000-0000-4000-8000-00000000000a';
 const LAYER_B = '00000000-0000-4000-8000-00000000000b';
 const time = '2026-09-14T12:00:00.000Z';

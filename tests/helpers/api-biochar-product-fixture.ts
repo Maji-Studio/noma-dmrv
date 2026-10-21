@@ -58,7 +58,7 @@ async function issueKey(f: ApiProductParents, name: string, scopes: readonly Api
 export async function createApiProductFixture(): Promise<ApiProductFixture> {
   const f = await seedOutputStockParents(db);
   const organizationId = f.ctx.organizationId;
-  await db.insert(members).values({ id: randomUUID(), organizationId, userId: f.ctx.userId, role: "owner" });
+  await db.insert(members).values({ id: randomUUID(), organizationId, userId: f.ctx.userId, role: "admin" });
   const [pureBin] = await db.insert(storageLocations).values({ organizationId, facilityId: f.facility.id, formulationId: f.pure.id,
     code: `E2E-API-PB-${f.tag}`, name: `E2E Pure bin ${f.tag}`, type: "product_bin" }).returning();
   const [ingredientBin] = await db.insert(storageLocations).values({ organizationId, facilityId: f.facility.id, feedstockTypeId: f.ingredientType.id,

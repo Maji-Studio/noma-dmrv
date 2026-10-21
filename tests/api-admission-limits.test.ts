@@ -43,7 +43,7 @@ async function credential(kind: "api-key" | "oauth", mcp: boolean) {
     const access = await f.accessToken({ resource: mcp ? getOAuthConfig().mcp : getOAuthConfig().rest, scopes: ["feedstocks:read"] });
     return { id: access.grant.id, request: (path: string, init: RequestInit = {}) => oauthRequest(access, path, init) };
   }
-  const ctx = { ...f.ctx, userId: f.actorId, orgRole: "owner" as const };
+  const ctx = { ...f.ctx, userId: f.actorId, orgRole: "admin" as const };
   const key = await createApiKey(ctx, { name: "E2E admission key", scopes: ["feedstocks:read"], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS });
   return { id: key.id, request: (path: string, init: RequestInit = {}) => new Request(`http://localhost:3100${path}`, {
     ...init, headers: { ...Object.fromEntries(new Headers(init.headers)), authorization: `Bearer ${key.key}` },

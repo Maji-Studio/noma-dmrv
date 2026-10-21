@@ -74,7 +74,7 @@ export async function runWithCliOrgContext<T>(
   const ctx: OrgContext = {
     userId: await requirePlatformAdminUser(identity.userId),
     organizationId: await requireOrganization(identity.organizationId),
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: true,
   };
   return cliOrgContextStore.run(ctx, fn);

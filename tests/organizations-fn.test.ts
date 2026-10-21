@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SafeError } from "@/lib/errors";
 
-const mockCreateOrganizationWithOwner = vi.fn();
+const mockCreateOrganizationWithAdmin = vi.fn();
 const mockAcceptInvitation = vi.fn();
 const mockSetActiveOrganization = vi.fn();
 const mockPersistLastActiveOrganization = vi.fn();
@@ -32,8 +32,8 @@ vi.mock("@/lib/auth/providers/better-auth-server", () => ({
 vi.mock("@/data-access/organizations", () => ({
   cancelInvitationAsPlatformAdmin: vi.fn(),
   createInvitationAsPlatformAdmin: vi.fn(),
-  createOrganizationWithOwner: (...args: unknown[]) =>
-    mockCreateOrganizationWithOwner(...args),
+  createOrganizationWithAdmin: (...args: unknown[]) =>
+    mockCreateOrganizationWithAdmin(...args),
   findMembershipRole: vi.fn(),
   findUserIdByEmail: vi.fn(),
   getActiveOrganization: vi.fn(),
@@ -78,11 +78,11 @@ import { getBetterAuthSession } from "@/lib/auth/providers/better-auth-server";
 import { requireOrgContext, requireOrgRole, requirePlatformAdmin, type OrgContext } from "@/lib/auth/server";
 import { logger } from "@/lib/log";
 
-const OWNER_USER_ID = "owner-user-123";
+const ADMIN_USER_ID = "admin-user-123";
 const VALID_INPUT = {
   name: "Example Organization",
   slug: "example-organization",
-  ownerEmail: "owner@example.com",
+  adminEmail: "admin@example.com",
 };
 
 const ORG_CONTEXT: OrgContext = {
@@ -143,11 +143,11 @@ describe("createOrganizationAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requirePlatformAdmin).mockResolvedValue({} as never);
-    vi.mocked(findUserIdByEmail).mockResolvedValue(OWNER_USER_ID);
-    mockCreateOrganizationWithOwner.mockResolvedValue({ id: "organization-123" });
+    vi.mocked(findUserIdByEmail).mockResolvedValue(ADMIN_USER_ID);
+    mockCreateOrganizationWithAdmin.mockResolvedValue({ id: "organization-123" });
   });
 
-  it("requires Platform Admin authorization before resolving the owner", async () => {
+  it("requires Platform Admin authorization before resolving the admin", async () => {
     vi.mocked(requirePlatformAdmin).mockRejectedValue(
       new SafeError("Admin access is required for this action."),
     );
@@ -159,23 +159,23 @@ describe("createOrganizationAction", () => {
       error: "Admin access is required for this action.",
     });
     expect(findUserIdByEmail).not.toHaveBeenCalled();
-    expect(mockCreateOrganizationWithOwner).not.toHaveBeenCalled();
+    expect(mockCreateOrganizationWithAdmin).not.toHaveBeenCalled();
   });
 
-  it("creates through Better Auth with the selected owner user id", async () => {
+  it("creates through Better Auth with the selected admin user id", async () => {
     const result = await createOrganizationAction({
       ...VALID_INPUT,
       name: "  Example Organization  ",
       slug: "  EXAMPLE-ORGANIZATION  ",
-      ownerEmail: "  OWNER@EXAMPLE.COM  ",
+      adminEmail: "  ADMIN@EXAMPLE.COM  ",
     });
 
     expect(requirePlatformAdmin).toHaveBeenCalledOnce();
-    expect(findUserIdByEmail).toHaveBeenCalledWith("owner@example.com");
-    expect(mockCreateOrganizationWithOwner).toHaveBeenCalledWith({
+    expect(findUserIdByEmail).toHaveBeenCalledWith("admin@example.com");
+    expect(mockCreateOrganizationWithAdmin).toHaveBeenCalledWith({
       name: "Example Organization",
       slug: "example-organization",
-      ownerUserId: OWNER_USER_ID,
+      adminUserId: ADMIN_USER_ID,
     });
     expect(result).toEqual({
       success: true,
@@ -183,7 +183,7 @@ describe("createOrganizationAction", () => {
     });
   });
 
-  it("returns a clear error when the selected owner has no account", async () => {
+  it("returns a clear error when the selected admin has no account", async () => {
     vi.mocked(findUserIdByEmail).mockResolvedValue(null);
 
     const result = await createOrganizationAction(VALID_INPUT);
@@ -191,13 +191,13 @@ describe("createOrganizationAction", () => {
     expect(result).toEqual({
       success: false,
       error:
-        "No user account found for the owner email. The owner must have an account first.",
+        "No user account found for the admin email. The admin must have an account first.",
     });
-    expect(mockCreateOrganizationWithOwner).not.toHaveBeenCalled();
+    expect(mockCreateOrganizationWithAdmin).not.toHaveBeenCalled();
   });
 
   it("surfaces Better Auth API errors", async () => {
-    mockCreateOrganizationWithOwner.mockRejectedValue({
+    mockCreateOrganizationWithAdmin.mockRejectedValue({
       body: { message: "Organization slug is already taken." },
     });
 
@@ -210,7 +210,7 @@ describe("createOrganizationAction", () => {
   });
 
   it("uses the generic creation error for unexpected failures", async () => {
-    mockCreateOrganizationWithOwner.mockRejectedValue(new Error("database unavailable"));
+    mockCreateOrganizationWithAdmin.mockRejectedValue(new Error("database unavailable"));
 
     const result = await createOrganizationAction(VALID_INPUT);
 

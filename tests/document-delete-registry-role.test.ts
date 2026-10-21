@@ -195,7 +195,7 @@ describe("document registry deletion role floor", () => {
     await expectEvidencePresent(fixture, false);
   });
 
-  it("rolls back Member credit batch deletion, then lets an Owner retire the same evidence", async () => {
+  it("rolls back Member credit batch deletion, then lets an Admin retire the same evidence", async () => {
     const fixture = await createFixture();
     await expect(deleteCreditBatch(MEMBER, fixture.batch.id, INITIAL_VERSION))
       .rejects.toThrow(new SafeError(PARENT_DOCUMENT_REGISTRY_ROLE_ERROR));

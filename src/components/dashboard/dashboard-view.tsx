@@ -132,7 +132,7 @@ export function DashboardView() {
           key={facilityId}
           facilityId={facilityId}
           facilityLabel={selectedFacility?.code}
-          canManage={onboarding.status?.isOwnerOrAdmin ?? false}
+          canManage={onboarding.status?.canManage ?? false}
           onClose={() => setSetupSurface(null)}
         />
       )}

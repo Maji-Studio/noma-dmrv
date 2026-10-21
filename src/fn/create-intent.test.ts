@@ -27,7 +27,7 @@ vi.mock("@/data-access/utils", () => ({}));
 vi.mock("@/lib/log", () => ({ logger: { error: vi.fn() }, sanitizeErrorMessage: vi.fn() }));
 
 const ID = "11111111-1111-4111-8111-111111111111";
-const ctx = { userId: ID, organizationId: ID, orgRole: "owner", isPlatformAdmin: false };
+const ctx = { userId: ID, organizationId: ID, orgRole: "admin", isPlatformAdmin: false };
 const input = { facilityId: ID, customerId: ID, customerLocationId: ID, formulationId: ID, orderDate: new Date("2026-09-12"), quantityKg: 100, packaging: "loose" as const };
 beforeEach(() => {
   vi.clearAllMocks();

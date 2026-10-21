@@ -8,11 +8,11 @@ const mocks = vi.hoisted(() => ({ read: vi.fn(), owner: vi.fn(), candidate: vi.f
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/data-access/documents", () => ({ getDocumentById: mocks.read }));
 vi.mock("@/data-access/document-upload-preparation", () => ({ inspectUploadOwner: mocks.owner, recordDocumentPromotionCandidate: mocks.candidate }));
-vi.mock("@/lib/auth/server", () => ({ requireOrgContext: async () => ({ organizationId: "org", userId: "user", orgRole: "owner", isPlatformAdmin: false }) }));
+vi.mock("@/lib/auth/server", () => ({ requireOrgContext: async () => ({ organizationId: "org", userId: "user", orgRole: "admin", isPlatformAdmin: false }) }));
 import { prepareDocumentUpload, preparePendingDocumentUpload } from "./upload-preparation";
 import { documentFromConfirmOutcome, REFUSAL_MESSAGES, REFUSAL_POINTERS } from "./confirm-outcome";
 import { withAction } from "@/fn/with-action";
-const ctx = { organizationId: "org", userId: "user", orgRole: "owner" as const, isPlatformAdmin: false };
+const ctx = { organizationId: "org", userId: "user", orgRole: "admin" as const, isPlatformAdmin: false };
 const fileName = "private-evidence-name.pdf";
 const signedUrl = "https://storage.example.test/private?X-Amz-Signature=do-not-log";
 const bytes = Buffer.from("%PDF-1.7");

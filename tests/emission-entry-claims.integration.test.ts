@@ -37,7 +37,7 @@ const correctionRemote = vi.hoisted(() => ({ status: "AWAITING_VERIFICATION", su
 vi.mock("@/lib/isometric/ghg-statements", () => ({ getGhgStatement: async () => correctionRemote }));
 vi.mock("@/data-access/certifier-credentials", () => ({ resolveIsometricClient: async () => ({}) }));
 const userId = `entry-claims-${crypto.randomUUID()}`;
-const ctx = { ...makeTestOrgContext(userId), orgRole: "owner" as const };
+const ctx = { ...makeTestOrgContext(userId), orgRole: "admin" as const };
 let fixture: LineageFixture;
 let second: LineageFixture | undefined;
 let observation: typeof removalTemplateObservations.$inferSelect;

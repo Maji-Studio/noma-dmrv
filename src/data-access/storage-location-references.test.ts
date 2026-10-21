@@ -18,7 +18,7 @@ import {
 const CTX: OrgContext = {
   userId: "user-1",
   organizationId: "org-1",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 };
 

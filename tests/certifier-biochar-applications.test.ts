@@ -44,7 +44,7 @@ const FOREIGN_ORG_ID = "org_biochar_application_foreign";
 const foreignCtx: OrgContext = {
   organizationId: FOREIGN_ORG_ID,
   userId: "user-biochar-application-foreign",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 };
 const ids: Record<string, string> = {};

@@ -14,8 +14,8 @@ vi.mock("@/lib/auth/client", () => ({
 }));
 
 const emptyStatus: OnboardingStatus = {
-  isOwnerOrAdmin: true,
-  isOrgOwnerOrAdmin: true,
+  canManage: true,
+  isOrgAdmin: true,
   facilityCount: 0,
   supplierCount: 0,
   facility: null,

@@ -33,7 +33,7 @@ const viewers: Array<{
     canDeleteRegistryRemovals: true,
   },
   {
-    name: "owner",
+    name: "admin",
     ctx: makeTestOrgContext(),
     canDeleteRegistryRemovals: true,
   },

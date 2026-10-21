@@ -34,7 +34,7 @@ export async function seedFormulationFixture(caseId: FormulationCaseId): Promise
   const { ctx } = fixture;
   try {
     await db.insert(users).values({ id: ctx.userId, email: `${ctx.userId}@example.test`, name: "MCP evaluation", emailVerified: true });
-    await db.insert(members).values({ id: randomUUID(), organizationId: ctx.organizationId, userId: ctx.userId, role: "owner" });
+    await db.insert(members).values({ id: randomUUID(), organizationId: ctx.organizationId, userId: ctx.userId, role: "admin" });
     const compost = await createFeedstockType(ctx, { code: "COMPOST", name: "Compost", category: "compost", usage: "blend" });
     const formulation = await runOperationInProcess(createFormulation, ctx, { name: "Evaluation pure biochar", biocharRatio: PURE_BIOCHAR_RATIO }, scriptOptions);
     await runOperationInProcess(createFormulation, ctx, { name: "Other formulation", biocharRatio: PURE_BIOCHAR_RATIO }, scriptOptions);

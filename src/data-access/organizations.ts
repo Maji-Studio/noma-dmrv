@@ -9,6 +9,7 @@ import { revokeMemberOAuthGrants } from "./oauth-grant-lifecycle";
 import { disableOwnerApiKeys } from "./api-credential-auth";
 import { oauthRolePolicy } from "@/lib/auth/oauth-role-policy";
 import { canOwnApiKey } from "@/lib/auth/api-scopes";
+import { LAST_ADMIN_MESSAGE, rethrowLastAdmin } from "@/lib/auth/organization-role-policy";
 import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -31,7 +32,6 @@ const MILLISECONDS_PER_SECOND = 1_000;
 const ORGANIZATION_SLUG_CONSTRAINT = "organizations_slug_unique";
 const ORGANIZATION_SLUG_CONFLICT_MESSAGE =
   "An Organization with this slug already exists.";
-const LAST_OWNER_MESSAGE = "An Organization must keep at least one Owner.";
 
 export type OrgMemberRow = {
   memberId: string;
@@ -198,11 +198,8 @@ export async function updateMemberRoleAsPlatformAdmin(
 ): Promise<void> {
   requirePlatformAdminOverride(ctx);
   await db.transaction(async (tx) => {
-    await tx
-      .select({ id: organizations.id })
-      .from(organizations)
-      .where(eq(organizations.id, ctx.organizationId))
-      .for("update");
+    // The trigger serializes Admin losses after the member write, matching
+    // plugin lock order. This pre-count only supplies the sequential refusal.
     const [member] = await tx
       .select({ id: members.id, role: members.role, userId: members.userId })
       .from(members)
@@ -216,18 +213,18 @@ export async function updateMemberRoleAsPlatformAdmin(
     if (!member) {
       throw new SafeError("Member not found.");
     }
-    if (member.role === "owner" && role !== "owner") {
-      const [owners] = await tx
+    if (member.role === "admin" && role !== "admin") {
+      const [admins] = await tx
         .select({ value: count() })
         .from(members)
         .where(
           and(
             eq(members.organizationId, ctx.organizationId),
-            eq(members.role, "owner")
+            eq(members.role, "admin")
           )
         );
-      if (Number(owners?.value ?? 0) <= 1) {
-        throw new SafeError(LAST_OWNER_MESSAGE);
+      if (Number(admins?.value ?? 0) <= 1) {
+        throw new SafeError(LAST_ADMIN_MESSAGE);
       }
     }
     const updated = await tx
@@ -249,7 +246,7 @@ export async function updateMemberRoleAsPlatformAdmin(
     if (!canOwnApiKey(role)) {
       await disableOwnerApiKeys(ctx.organizationId, member.userId, tx);
     }
-  });
+  }).catch(rethrowLastAdmin);
 }
 
 /** Remove an organization member without plugin membership authorization. */
@@ -259,11 +256,8 @@ export async function removeMemberAsPlatformAdmin(
 ): Promise<void> {
   requirePlatformAdminOverride(ctx);
   await db.transaction(async (tx) => {
-    await tx
-      .select({ id: organizations.id })
-      .from(organizations)
-      .where(eq(organizations.id, ctx.organizationId))
-      .for("update");
+    // The trigger serializes Admin losses after the member write, matching
+    // plugin lock order. This pre-count only supplies the sequential refusal.
     const [member] = await tx
       .select({ id: members.id, role: members.role, userId: members.userId })
       .from(members)
@@ -277,18 +271,18 @@ export async function removeMemberAsPlatformAdmin(
     if (!member) {
       throw new SafeError("Member not found.");
     }
-    if (member.role === "owner") {
-      const [owners] = await tx
+    if (member.role === "admin") {
+      const [admins] = await tx
         .select({ value: count() })
         .from(members)
         .where(
           and(
             eq(members.organizationId, ctx.organizationId),
-            eq(members.role, "owner")
+            eq(members.role, "admin")
           )
         );
-      if (Number(owners?.value ?? 0) <= 1) {
-        throw new SafeError(LAST_OWNER_MESSAGE);
+      if (Number(admins?.value ?? 0) <= 1) {
+        throw new SafeError(LAST_ADMIN_MESSAGE);
       }
     }
     const removed = await tx
@@ -305,7 +299,7 @@ export async function removeMemberAsPlatformAdmin(
     }
     await disableOwnerApiKeys(ctx.organizationId, member.userId, tx);
     await revokeMemberOAuthGrants(ctx.organizationId, member.userId, memberId, tx);
-  });
+  }).catch(rethrowLastAdmin);
 }
 
 /** The active org's profile (name, slug, logo). */
@@ -338,23 +332,23 @@ export async function listAllOrganizations(): Promise<OrganizationSummary[]> {
   return rows.map((row) => ({ ...row, memberCount: Number(row.memberCount) }));
 }
 
-/** Create an organization and its selected Owner as one atomic unit. */
-export async function createOrganizationWithOwner(input: {
+/** Create an organization and its selected Admin as one atomic unit. */
+export async function createOrganizationWithAdmin(input: {
   name: string;
   slug: string;
-  ownerUserId: string;
+  adminUserId: string;
 }): Promise<{ id: string }> {
   await requirePlatformAdmin();
   const organizationId = randomUUID();
   try {
     await db.transaction(async (tx) => {
-      const [ownerUser] = await tx
+      const [adminUser] = await tx
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.id, input.ownerUserId))
+        .where(eq(users.id, input.adminUserId))
         .limit(1);
-      if (!ownerUser) {
-        throw new SafeError("The selected owner account no longer exists.");
+      if (!adminUser) {
+        throw new SafeError("The selected admin account no longer exists.");
       }
       await tx.insert(organizations).values({
         id: organizationId,
@@ -364,8 +358,8 @@ export async function createOrganizationWithOwner(input: {
       await tx.insert(members).values({
         id: randomUUID(),
         organizationId,
-        userId: input.ownerUserId,
-        role: "owner",
+        userId: input.adminUserId,
+        role: "admin",
       });
     });
   } catch (error) {
@@ -386,7 +380,7 @@ export async function createOrganizationWithOwner(input: {
   return { id: organizationId };
 }
 
-/** Look up a user id by email (for the create-org owner picker). */
+/** Look up a user id by email (for the create-org admin picker). */
 export async function findUserIdByEmail(email: string): Promise<string | null> {
   await requirePlatformAdmin();
   const [row] = await db

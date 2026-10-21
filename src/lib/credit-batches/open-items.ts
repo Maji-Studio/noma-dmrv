@@ -8,7 +8,7 @@ import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import type { BatchHealth, BatchHealthFixTarget } from "@/lib/certification/batch-health";
 import {
   certCheckLabel,
-  linesDecidedByOwnerOrAdmin,
+  linesDecidedByAdmin,
 } from "@/lib/certification/requirement-labels";
 import {
   batchHealthFixLinkFor,
@@ -51,7 +51,7 @@ export interface CreditBatchOpenItemsInput {
   durability?: DurabilityBatchSummary;
   emissionLines?: readonly BatchEmissionLine[];
   pageModel?: CreditBatchPageModel;
-  /** Owner or Admin. Members get no link to decide components, which only Owners and Admins can do. */
+  /** Admin. Members get no link to decide components, which only Admins can do. */
   canManage: boolean;
 }
 
@@ -96,7 +96,7 @@ function memberTemplateText(
   linesToDecide: number,
 ): string | null {
   if (canManage) return null;
-  if (fixTarget === "templateLineReview") return linesDecidedByOwnerOrAdmin(linesToDecide);
+  if (fixTarget === "templateLineReview") return linesDecidedByAdmin(linesToDecide);
   return null;
 }
 

@@ -14,7 +14,7 @@ export function makeTestOrgContext(
   return {
     userId,
     organizationId: TEST_ORG_ID,
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   };
 }

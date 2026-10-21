@@ -32,7 +32,7 @@ import { env } from "@/config/env";
 import {
   cancelInvitationAsPlatformAdmin,
   createInvitationAsPlatformAdmin,
-  createOrganizationWithOwner,
+  createOrganizationWithAdmin,
   findMembershipRole,
   findUserIdByEmail,
   listAllOrganizations,
@@ -303,19 +303,19 @@ export async function createOrganizationAction(
   input: unknown
 ): Promise<ActionResult<{ organizationId: string }>> {
   return toResult(async () => {
-    const { name, slug, ownerEmail } = createOrganizationSchema.parse(input);
+    const { name, slug, adminEmail } = createOrganizationSchema.parse(input);
     await requirePlatformAdmin();
 
-    const ownerUserId = await findUserIdByEmail(ownerEmail);
-    if (!ownerUserId) {
+    const adminUserId = await findUserIdByEmail(adminEmail);
+    if (!adminUserId) {
       throw new SafeError(
-        "No user account found for the owner email. The owner must have an account first."
+        "No user account found for the admin email. The admin must have an account first."
       );
     }
-    const organization = await createOrganizationWithOwner({
+    const organization = await createOrganizationWithAdmin({
       name,
       slug,
-      ownerUserId,
+      adminUserId,
     });
     return { organizationId: organization.id };
   }, "Failed to create organization.");

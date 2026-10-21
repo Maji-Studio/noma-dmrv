@@ -20,7 +20,7 @@ vi.mock("@/lib/operations/biochar-products", () => ({}));
 vi.mock("@/lib/operations/runner", () => ({}));
 
 const FACILITY_ID = "00000000-0000-4000-8000-000000000001";
-const CTX = { organizationId: "stats-org", userId: "stats-user", orgRole: "owner", isPlatformAdmin: false };
+const CTX = { organizationId: "stats-org", userId: "stats-user", orgRole: "admin", isPlatformAdmin: false };
 const ORDER_STATS = { totalOrders: 0, totalDeliveries: 0, totalQuantityKg: 0 };
 const PRODUCT_STATS = { totalProducts: 0, totalWetMassKg: null, totalDryBiocharMassKg: null };
 

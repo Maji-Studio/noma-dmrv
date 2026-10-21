@@ -4,7 +4,7 @@ import { ActionConflictError } from "@/lib/errors";
 import { conflictCode } from "@/lib/conflict-ref";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE } from "@/lib/stale-version";
 const mocks = vi.hoisted(() => ({ write: vi.fn(), read: vi.fn() }));
-vi.mock("@/lib/auth/server", () => ({ requireOrgContext: async () => ({ organizationId: "org", userId: "user", orgRole: "owner", isPlatformAdmin: false }) }));
+vi.mock("@/lib/auth/server", () => ({ requireOrgContext: async () => ({ organizationId: "org", userId: "user", orgRole: "admin", isPlatformAdmin: false }) }));
 vi.mock("@/data-access/code-generator", () => ({ CODE_CONFLICT_MESSAGES: {}, withAutoCode: vi.fn() }));
 vi.mock("@/data-access/samples", () => ({ getSampleById: mocks.read }));
 // Sample writes run the lab sample operations in process.

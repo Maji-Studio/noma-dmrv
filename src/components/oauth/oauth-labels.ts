@@ -1,4 +1,4 @@
-const ROLE_LABELS: Record<string, string> = { owner: "Owner", admin: "Admin", member: "Member" };
+const ROLE_LABELS: Record<string, string> = { admin: "Admin", member: "Member" };
 
 export function oauthRoleLabel(role: string): string {
   return ROLE_LABELS[role] ?? role;

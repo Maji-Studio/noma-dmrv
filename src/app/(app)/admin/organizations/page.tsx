@@ -5,7 +5,7 @@
  *
  * The only surface that genuinely lives under `/admin`: everything else it used
  * to advertise was organization configuration, which moved to `/settings` where
- * an org Owner/Admin can actually reach it.
+ * an org Admin can actually reach it.
  */
 import { PageHeader } from "@/components/ui";
 import { OrganizationsAdmin } from "@/components/organizations/organizations-admin";

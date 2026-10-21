@@ -48,7 +48,7 @@ export function OrganizationsAdmin() {
     try {
       await createOrg.mutateAsync(values);
       toast.success("Organization created.");
-      reset({ name: "", slug: "", ownerEmail: "" });
+      reset({ name: "", slug: "", adminEmail: "" });
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Organization was not created. Check the form."
@@ -137,17 +137,17 @@ export function OrganizationsAdmin() {
             />
           </FormField>
           <FormField
-            id="org-owner-email"
-            label="Owner email"
-            error={errors.ownerEmail?.message}
-            cue="Must be an existing user account; they become the org Owner."
+            id="org-admin-email"
+            label="Admin email"
+            error={errors.adminEmail?.message}
+            cue="Must be an existing user account. They become the organization Admin."
             required
           >
             <FormInput
-              id="org-owner-email"
+              id="org-admin-email"
               type="email"
-              placeholder="owner@example.com"
-              {...register("ownerEmail")}
+              placeholder="admin@example.com"
+              {...register("adminEmail")}
             />
           </FormField>
           <FormActions

@@ -122,7 +122,7 @@ async function isometricRequest<T = unknown>(
 ): Promise<T> {
   if (!credentials) {
     throw new IsometricApiError(
-      "The registry connection is not configured for this Organization. Ask an Owner or Admin to add the connection credentials.",
+      "The registry connection is not configured for this Organization. Ask an Admin to add the connection credentials.",
       undefined,
       undefined,
       "not_configured"
@@ -314,7 +314,7 @@ async function isometricGraphql<T>(
 ): Promise<GraphqlResponse<T>> {
   if (!credentials) {
     throw new IsometricApiError(
-      "The registry connection is not configured for this Organization. Ask an Owner or Admin to add the connection credentials.",
+      "The registry connection is not configured for this Organization. Ask an Admin to add the connection credentials.",
       undefined, undefined, "not_configured",
     );
   }

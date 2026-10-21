@@ -7,7 +7,7 @@
 import { z } from "zod";
 import { passwordSchema } from "@/schemas/auth";
 
-export const orgRoleSchema = z.enum(["owner", "admin", "member"]);
+export const orgRoleSchema = z.enum(["admin", "member"]);
 export type OrgRoleValue = z.infer<typeof orgRoleSchema>;
 
 export const inviteMemberSchema = z.object({
@@ -31,11 +31,11 @@ export const createOrganizationSchema = z.object({
       /^[a-z0-9-]+$/,
       "Slug may only contain lowercase letters, numbers, and hyphens."
     ),
-  ownerEmail: z
+  adminEmail: z
     .string()
     .trim()
     .toLowerCase()
-    .pipe(z.email("Enter a valid owner email.")),
+    .pipe(z.email("Enter a valid admin email.")),
 });
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 

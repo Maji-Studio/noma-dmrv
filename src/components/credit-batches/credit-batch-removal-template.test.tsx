@@ -49,7 +49,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("CreditBatchRemovalTemplate", () => {
-  it("names the pinned template and offers Switch template to Owners and Admins", () => {
+  it("names the pinned template and offers Switch template to Admins", () => {
     mount(true);
     expect(screen.getByText("Dark Earth Carbon Template")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Switch template" })).toBeTruthy();
@@ -71,7 +71,7 @@ describe("CreditBatchRemovalTemplate", () => {
     cleanup();
     mount(false);
     expect(screen.getByText("Not set")).toBeTruthy();
-    expect(screen.getByText("This credit batch has no Removal template. Ask an Owner or Admin to choose one.")).toBeTruthy();
+    expect(screen.getByText("This credit batch has no Removal template. Ask an Admin to choose one.")).toBeTruthy();
   });
 
   describe("while the template has components to decide", () => {
@@ -80,11 +80,11 @@ describe("CreditBatchRemovalTemplate", () => {
     it("tells a member who decides them, with no link", () => {
       mocks.linesToDecide = 17;
       mount(false);
-      expect(screen.getByText(`${LEAD} An Owner or Admin decides them in Removal templates.`)).toBeTruthy();
+      expect(screen.getByText(`${LEAD} An Admin decides them in Removal templates.`)).toBeTruthy();
       expect(screen.queryByRole("link", { name: "Decide components" })).toBeNull();
     });
 
-    it("gives Owners and Admins the Decide components link to this template", () => {
+    it("gives Admins the Decide components link to this template", () => {
       mocks.linesToDecide = 17;
       mount(true);
       expect(screen.getByText(LEAD)).toBeTruthy();
@@ -96,7 +96,7 @@ describe("CreditBatchRemovalTemplate", () => {
     it("says another Removal once a Removal holds the batch", () => {
       mocks.linesToDecide = 1;
       mount(false, true, undefined, true);
-      expect(screen.getByText("1 component to decide, so this credit batch can't go into another Removal. An Owner or Admin decides it in Removal templates.")).toBeTruthy();
+      expect(screen.getByText("1 component to decide, so this credit batch can't go into another Removal. An Admin decides it in Removal templates.")).toBeTruthy();
       cleanup();
       mocks.linesToDecide = 17;
       mount(true, false, undefined, true);

@@ -1,5 +1,5 @@
 import { createHmac, randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { certifierProjects, facilities, members, organizations, removalTemplateObservations, sessions, users } from "@/db/schema";
@@ -39,7 +39,7 @@ const SESSION_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const tag = randomUUID();
 const organizationId = `preview-observations-${tag}`;
 const userId = `preview-user-${tag}`;
-const ctx: OrgContext = { userId, organizationId, orgRole: "owner", isPlatformAdmin: false };
+const ctx: OrgContext = { userId, organizationId, orgRole: "admin", isPlatformAdmin: false };
 let facilityId: string;
 let template: GhgEntryTemplate;
 let enrichment: TemplateEnrichment;
@@ -47,7 +47,7 @@ let enrichment: TemplateEnrichment;
 beforeAll(async () => {
   await db.insert(organizations).values({ id: organizationId, name: "Preview observation tests", slug: organizationId });
   await db.insert(users).values({ id: userId, email: `${tag}@preview-observations.test`, emailVerified: true });
-  await db.insert(members).values({ id: randomUUID(), userId, organizationId, role: "owner" });
+  await db.insert(members).values({ id: randomUUID(), userId, organizationId, role: "admin" });
   const [facility] = await db.insert(facilities).values({
     ...TEST_SITE_POSITION, organizationId, timezone: "UTC", code: `FAC-PREVIEW-${tag}`, name: "Preview observation tests",
   }).returning();
@@ -86,9 +86,8 @@ afterAll(async () => {
   await db.delete(certifierProjects).where(eq(certifierProjects.organizationId, organizationId));
   await db.delete(facilities).where(eq(facilities.organizationId, organizationId));
   await db.delete(sessions).where(eq(sessions.userId, userId));
-  await db.delete(members).where(and(eq(members.organizationId, organizationId), eq(members.userId, userId)));
-  await db.delete(users).where(eq(users.id, userId));
   await db.delete(organizations).where(eq(organizations.id, organizationId));
+  await db.delete(users).where(eq(users.id, userId));
 });
 
 function storedObservations() {

@@ -74,7 +74,7 @@ it("uses the page builder for document, outlier, unpaired and emission Check ite
   if (!result.success) throw new Error("Expected summaries");
   const durability = buildDurabilityBatchSummaries(sampling as never);
   const pageItems = buildCreditBatchOpenItems({ facilityId, creditBatchId: ids[0], health,
-    canManage: ctx.isPlatformAdmin || ctx.orgRole === "owner" || ctx.orgRole === "admin",
+    canManage: ctx.isPlatformAdmin || ctx.orgRole === "admin",
     durability: durability[0], emissionLines });
   expect(pageItems.check.map(item => item.id)).toEqual([
     "document:lab-report", "outlier:S-1", "unpaired:S-2", "emission:diesel",

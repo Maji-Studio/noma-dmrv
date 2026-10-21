@@ -266,7 +266,7 @@ interface CreditBatchSheetSectionsOptions extends CreditBatchRunsContentProps {
   /** Removal/GHG lifecycle summary; undefined while loading or unavailable. */
   healthSummary?: CreditBatchHealthSummary;
   isHealthLoading: boolean;
-  /** Owner or Admin: may switch the batch's Removal template. */
+  /** Admin: may switch the batch's Removal template. */
   canManage?: boolean;
   /** A submitted Removal holds the batch, so its definition is locked. */
   locked?: boolean;
