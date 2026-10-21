@@ -32,13 +32,18 @@ export function subBinWetText(subBin: OutputSubBin): string {
   return outputStockFigure(subBin.wetEstimateKg, subBin.dryMassKg);
 }
 
-/** The sub-bin's estimated moisture, or the same reason as its wet figure. */
+/** The sub-bin's estimated moisture, or why there is none. */
 export function subBinMoistureText(subBin: OutputSubBin): string {
   return subBin.moisturePercent === null ? NO_MOISTURE_READING : formatMoisturePercent(subBin.moisturePercent);
 }
 
-function movementMass(movement: SubBinMovement): string {
-  return movement.wetMassKg === null ? `${formatMassKg(Math.abs(movement.dryMassKg))} dry` : `${formatMassKg(Math.abs(movement.wetMassKg))} wet mass`;
+/** A sub-bin's moisture as a caption: "26.7% moisture", or why there is no reading. */
+export function subBinMoistureCaption(subBin: OutputSubBin): string {
+  return subBin.moisturePercent === null ? NO_MOISTURE_READING : `${subBinMoistureText(subBin)} moisture`;
+}
+
+export function movementMass(movement: SubBinMovement): string {
+  return movement.wetMassKg === null ? `${formatMassKg(Math.abs(movement.dryMassKg))} dry biochar` : `${formatMassKg(Math.abs(movement.wetMassKg))} wet mass`;
 }
 
 type TapTrigger = ReactElement<{ onClick?: (event: MouseEvent) => void }>;

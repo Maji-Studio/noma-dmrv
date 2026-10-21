@@ -12,7 +12,7 @@ vi.mock("@/components/ui", () => ({
   },
   Button: ({ children, ...props }: { children: ReactNode }) => <button {...props}>{children}</button>,
 }));
-vi.mock("./sub-bin-card", () => ({ SubBinInfo: () => null, subBinWetText: () => "wet", subBinMoistureText: () => "26.7%" }));
+vi.mock("./sub-bin-card", () => ({ SubBinInfo: () => null, subBinWetText: () => "wet", subBinMoistureCaption: () => "26.7% moisture" }));
 import { SubBinOrderDialog } from "./sub-bin-order-dialog";
 
 // Focus goes back to the moved row once React renders; the stand-ins record where.

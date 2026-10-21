@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import type { OutputSubBin } from "@/types/output-stock";
 import { bayFigure } from "./sub-bin-bays";
-import { contentsRows, subBinWetText } from "./sub-bin-card";
+import { contentsRows, movementMass, subBinMoistureCaption, subBinWetText } from "./sub-bin-card";
 
 const subBin = (wetEstimateKg: number | null): OutputSubBin => ({
   layerId: "l1", code: "R-1", placedAt: "2026-09-10T12:00:00.000Z", dryMassKg: 900, solidsKg: 900, wetEstimateKg,
@@ -31,4 +31,10 @@ it("keeps the unnamed ingredient solids as one row, so the contents still add up
   expect(contentsRows({ dryMassKg: 90, solidsKg: 150, ingredients: [], waterKg: 40 })).toEqual([
     { label: "Water, estimated", value: "40 kg" }, { label: "Ingredient solids", value: "60 kg" }, { label: "Dry biochar", value: "90 kg" },
   ]);
+});
+
+it("says when a sub-bin has no moisture reading, and names dry biochar in a movement", () => {
+  expect(subBinMoistureCaption(subBin(null))).toBe("No moisture reading");
+  expect(subBinMoistureCaption({ ...subBin(1000), moisturePercent: 26.7 })).toBe("26.7% moisture");
+  expect(movementMass({ id: "m1", kind: "removed", occurredAt: "2026-09-10T12:00:00.000Z", wetMassKg: null, dryMassKg: -90 })).toBe("90 kg dry biochar");
 });
