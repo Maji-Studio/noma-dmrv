@@ -16,6 +16,12 @@ export interface ReestimatedLayer {
   layerId: string;
   name: string;
   moisturePercent: number;
+  /** What the sub-bin holds now, wet and at its own moisture; null when the preview does not carry it. */
+  beforeWetKg: number | null;
+  beforeMoisturePercent: number | null;
+  /** What stays in it after saving: wet mass over its solids, at the draw's reading. */
+  stayWetKg: number;
+  staySolidsKg: number;
 }
 
 /**
@@ -48,7 +54,13 @@ export function reestimateFigures(preview: Preview): ReestimateFigures | null {
   const layerSolidsKg = reestimate.layers.reduce((sum, layer) => sum + layer.staySolidsKg, 0);
   return {
     moisturePercent: reestimate.moisturePercent,
-    layers: reestimate.layers.map(({ layerId, name, moisturePercent }) => ({ layerId, name, moisturePercent })),
+    layers: reestimate.layers.map(({ layerId, name, moisturePercent, stayWetKg, staySolidsKg }) => {
+      const before = preview.beforeAllocations?.find((allocation) => allocation.layerId === layerId);
+      const beforeWetKg = before?.wetMassKg ?? null;
+      const beforeDryKg = before?.dryMassKg ?? null;
+      const beforeMoisturePercent = beforeWetKg !== null && beforeDryKg !== null ? moistureOf(beforeWetKg, beforeDryKg) : null;
+      return { layerId, name, moisturePercent, stayWetKg, staySolidsKg, beforeWetKg, beforeMoisturePercent };
+    }),
     wholeBin: preview.stockMode === "mix" || Math.abs(layerSolidsKg - reestimate.staySolidsKg) < SAME_SOLIDS_KG,
     binWetKg: beforeEstimatedWetKg, binSolidsKg: beforeSolidsKg,
     removedWetKg: Math.abs(removedWetKg), removedSolidsKg: Math.abs(preview.removedSolidsKg ?? beforeSolidsKg - (afterSolidsKg ?? beforeSolidsKg)),
@@ -76,8 +88,8 @@ function segments(parts: readonly MassFlowSegment[]): MassFlowSegment[] {
  * The mini flow: the bin's estimate (dry biochar that stays, dry biochar that
  * leaves, its water) into what stays and what leaves. The draw is wetter
  * than the estimate, so its water has to come from somewhere: the bin's own
- * water first, and the rest from a source of its own, "Water not in the
- * estimate", so the gap shows as mass the estimate never had.
+ * water first, and the rest from a source of its own, "Extra water", so the gap shows as mass the bin
+ * never held.
  */
 export function reestimateFlow(figures: ReestimateFigures, binName: string, kind: ReestimateKind): MassFlowDiagram {
   const binWaterKg = Math.max(figures.binWetKg - figures.binSolidsKg, 0);
@@ -90,7 +102,7 @@ export function reestimateFlow(figures: ReestimateFigures, binName: string, kind
   const missingKg = missingToRemovedKg + missingToStayKg;
   // A split bin re-estimates only the sub-bins the draw reached; the rest of what stays keeps its own estimate, so its moisture is not one figure.
   const stays = figures.wholeBin && figures.moisturePercent !== null
-    ? { name: "Stays, re-estimated", caption: `≈ ${formatMassKg(figures.stayWetKg)} at ${formatMoisturePercent(figures.moisturePercent)}` }
+    ? { name: "Stays after saving", caption: `≈ ${formatMassKg(figures.stayWetKg)} at ${formatMoisturePercent(figures.moisturePercent)}` }
     : { name: "Stays", caption: `≈ ${formatMassKg(figures.stayWetKg)}` };
   const nodes: MassFlowDiagram["nodes"] = [
     { id: "bin", column: 0, name: binName, caption: `≈ ${formatMassKg(figures.binWetKg)} at ${formatMoisturePercent(moistureOf(figures.binWetKg, figures.binSolidsKg))}`, segments: segments([
@@ -99,7 +111,7 @@ export function reestimateFlow(figures: ReestimateFigures, binName: string, kind
       { id: "bin-water-removed", kg: toRemovedKg, kind: "water" },
       { id: "bin-water-stays", kg: toStayKg, kind: "water" },
     ]) },
-    ...(missingKg >= MIN_WATER_KG ? [{ id: "missing", column: 0, name: "Water not in the estimate", caption: formatMassKg(missingKg), segments: segments([
+    ...(missingKg >= MIN_WATER_KG ? [{ id: "missing", column: 0, name: figures.moisturePercent === null ? "Extra water" : `Extra water at ${formatMoisturePercent(figures.moisturePercent)}`, caption: formatMassKg(missingKg), segments: segments([
       { id: "missing-stays", kg: missingToStayKg, kind: "water" },
       { id: "missing-removed", kg: missingToRemovedKg, kind: "water" },
     ]) }] : []),
