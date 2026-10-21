@@ -14,40 +14,8 @@ import {
 } from "./fixtures";
 import type { Locator } from "@playwright/test";
 import * as crypto from "crypto";
-import { and, eq } from "drizzle-orm";
-import { DEC_ORG_ID } from "@/db/org-defaults";
-import { certifierCredentials } from "@/db/schema/certification";
-import { encryptSecret } from "@/lib/crypto/secrets";
-import { createDbConnection } from "./fixtures/db";
-
-/**
- * Settings, Facilities waits on the organization's registry keys. Store
- * placeholder keys when the shared organization has none, and remove only the
- * row this call stored. Nothing here reaches Isometric.
- */
-async function ensureRegistryKeys(): Promise<() => Promise<void>> {
-  const { db, pool } = createDbConnection();
-  const where = and(
-    eq(certifierCredentials.organizationId, DEC_ORG_ID),
-    eq(certifierCredentials.provider, "isometric"),
-  );
-  const [existing] = await db.select({ id: certifierCredentials.organizationId }).from(certifierCredentials).where(where).limit(1);
-  if (!existing) {
-    await db.insert(certifierCredentials).values({
-      organizationId: DEC_ORG_ID,
-      provider: "isometric",
-      accessTokenEncrypted: encryptSecret(`e2e-tier-token-${RUN_ID}`),
-      clientSecretEncrypted: encryptSecret(`e2e-tier-secret-${RUN_ID}`),
-    });
-  }
-  return async () => {
-    try {
-      if (!existing) await db.delete(certifierCredentials).where(where);
-    } finally {
-      await pool.end();
-    }
-  };
-}
+import { createDirectAuthContext } from "./fixtures/auth-fixtures";
+import { seedDedicatedOrg } from "./fixtures/dedicated-org";
 
 // ============================================
 // Unique run identifier for this test file
@@ -328,27 +296,30 @@ test.describe("Facilities Duplicate Code Handling", () => {
 
 test.describe("Facility durability tier", () => {
   test("is set in Settings, Facilities, not in the facility form", async ({
-    adminPage: page,
-    seededData,
+    browser,
+    baseURL,
   }) => {
-    await page.goto("/facilities");
-    await expect(page.getByText("Active facilities")).toBeVisible({
-      timeout: 15000,
-    });
-
-    await page.getByRole("button", { name: /New facility/i }).click();
-    const dialog = page
-      .getByRole("dialog")
-      .filter({ has: page.getByRole("button", { name: /Create Facility/i }) });
-    await expect(dialog).toBeVisible();
-    // Q9 (#1277): the tier is certification configuration, not site data.
-    await expect(dialog.getByRole("radiogroup")).toHaveCount(0);
-    await expect(dialog.getByText("Durability tier")).toHaveCount(0);
-    await page.keyboard.press("Escape");
-
-    const removeKeys = await ensureRegistryKeys();
+    const fixture = await seedDedicatedOrg({ role: "admin", withRegistryKeys: true });
+    let context: Awaited<ReturnType<typeof createDirectAuthContext>> | null = null;
     try {
-      await page.goto(`/settings/facilities?facility=${seededData.facility.id}`);
+      context = await createDirectAuthContext(browser, fixture.user, baseURL!);
+      const page = await context.newPage();
+      await page.goto("/facilities");
+      await expect(page.getByText("Active facilities")).toBeVisible({
+        timeout: 15000,
+      });
+
+      await page.getByRole("button", { name: /New facility/i }).click();
+      const dialog = page
+        .getByRole("dialog")
+        .filter({ has: page.getByRole("button", { name: /Create Facility/i }) });
+      await expect(dialog).toBeVisible();
+      // Q9 (#1277): the tier is certification configuration, not site data.
+      await expect(dialog.getByRole("radiogroup")).toHaveCount(0);
+      await expect(dialog.getByText("Durability tier")).toHaveCount(0);
+      await page.keyboard.press("Escape");
+
+      await page.goto(`/settings/facilities?facility=${fixture.facilityId}`);
       await expect(page).toHaveURL(/\/settings\/facilities/, { timeout: 30000 });
 
       const tierGroup = page.getByRole("radiogroup", {
@@ -368,7 +339,11 @@ test.describe("Facility durability tier", () => {
         page.getByText("No soil reference temperature: only the 200-year model uses it."),
       ).toHaveCount(0);
     } finally {
-      await removeKeys();
+      try {
+        await context?.close();
+      } finally {
+        await fixture.cleanup();
+      }
     }
   });
 });

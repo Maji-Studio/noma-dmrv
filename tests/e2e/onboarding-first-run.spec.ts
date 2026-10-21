@@ -110,8 +110,8 @@ test.describe("First-run onboarding", () => {
 
       await guide.getByRole("button", { name: "Connect registry" }).click();
       const registry = page.getByRole("dialog", { name: "Connect your registry", exact: true });
-      await expect(registry.getByText("Puro.earth")).toBeVisible();
-      await expect(registry.getByText("CSI")).toBeVisible();
+      // Q8 (#1277): one registry, named in a status line, not a row of cards.
+      await expect(registry.getByText("Registry: Isometric")).toBeVisible();
       await expect(registry.getByLabel("Access token")).toBeVisible();
       await expect(registry.getByLabel("Client secret")).toBeVisible();
       await registry.getByLabel("Access token").fill("e2e-unsaved-token");

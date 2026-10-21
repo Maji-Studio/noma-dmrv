@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { expect, test } from "./fixtures";
 import { createDbConnection } from "./fixtures/db";
+import { createDirectAuthContext } from "./fixtures/auth-fixtures";
+import { seedDedicatedOrg } from "./fixtures/dedicated-org";
 import { certifierCredentials } from "@/db/schema/certification";
 import { organizations } from "@/db/schema/auth";
 import {
@@ -91,26 +93,25 @@ test.describe("Isometric credentials self-service", () => {
     }
   });
 
-  test("an organization member sees only the read-only registry state", async ({
-    operatorPage: page,
-    seededData,
+  test("an organization member with keys sees only the read-only registry state", async ({
+    browser,
+    baseURL,
   }) => {
-    await page.goto(`/settings/registry?facility=${seededData.facility.id}`);
+    const fixture = await seedDedicatedOrg({ role: "member", withRegistryKeys: true });
+    let context: Awaited<ReturnType<typeof createDirectAuthContext>> | null = null;
+    try {
+      context = await createDirectAuthContext(browser, fixture.user, baseURL!);
+      const page = await context.newPage();
+      await page.goto(`/settings/registry?facility=${fixture.facilityId}`);
+      await expect(
+        page.getByRole("heading", { name: "Registry", exact: true, level: 1 }),
+      ).toBeVisible();
+      await expect(page.getByText("Registry: Isometric")).toBeVisible();
+      await expect(page.getByLabel("Access token")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Save and test connection" })).toHaveCount(0);
 
-    // The pane itself is visible to a member, since it is where the connection
-    // state is readable, but the keys form is not.
-    await expect(
-      page.getByRole("heading", { name: "Registry", exact: true, level: 1 }),
-    ).toBeVisible();
-    await expect(page.getByText("Registry: Isometric")).toBeVisible();
-    await expect(page.getByLabel("Access token")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Save and test connection" })).toHaveCount(0);
-
-    // The project link is on Facilities, read-only. Without saved keys the
-    // route answers with Registry instead.
-    await page.goto(`/settings/facilities?facility=${seededData.facility.id}`);
-    await page.waitForURL(/\/settings\/(facilities|registry)/);
-    if (new URL(page.url()).pathname === "/settings/facilities") {
+      await page.goto(`/settings/facilities?facility=${fixture.facilityId}`);
+      await expect(page).toHaveURL(/\/settings\/facilities(?:[?#]|$)/);
       await expect(
         page.getByRole("button", { name: "Link Isometric project" }),
       ).toHaveCount(0);
@@ -120,8 +121,33 @@ test.describe("Isometric credentials self-service", () => {
           { exact: false },
         ),
       ).toBeVisible();
-    } else {
+    } finally {
+      try {
+        await context?.close();
+      } finally {
+        await fixture.cleanup();
+      }
+    }
+  });
+
+  test("an organization member without keys is sent to the registry state", async ({
+    browser,
+    baseURL,
+  }) => {
+    const fixture = await seedDedicatedOrg({ role: "member", withRegistryKeys: false });
+    let context: Awaited<ReturnType<typeof createDirectAuthContext>> | null = null;
+    try {
+      context = await createDirectAuthContext(browser, fixture.user, baseURL!);
+      const page = await context.newPage();
+      await page.goto(`/settings/facilities?facility=${fixture.facilityId}`);
+      await expect(page).toHaveURL(/\/settings\/registry(?:[?#]|$)/);
       await expect(page.getByText("Keys not saved.")).toBeVisible();
+    } finally {
+      try {
+        await context?.close();
+      } finally {
+        await fixture.cleanup();
+      }
     }
   });
 });
