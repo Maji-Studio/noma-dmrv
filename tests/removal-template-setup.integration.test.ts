@@ -27,7 +27,11 @@ let productionProcessId: string;
 let template: ReturnType<typeof protocolDefaultFixture>;
 let secondAdminId: string | null;
 const scope = () => and(eq(certifierProjects.organizationId, ctx.organizationId), eq(certifierProjects.facilityId, facilityId));
-beforeAll(async () => { await ensureTestOrg(); });
+beforeAll(async () => {
+  await ensureTestOrg();
+  // Apply records who reviewed the decisions; the reviewer must exist even when this file runs alone.
+  await db.insert(users).values({ id: ctx.userId, email: `${ctx.userId}@example.test` }).onConflictDoNothing();
+});
 beforeEach(async () => {
   vi.clearAllMocks();
   secondAdminId = null;
