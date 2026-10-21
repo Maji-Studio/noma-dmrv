@@ -166,14 +166,23 @@ export function traceabilityActivityHref(
   return `/traceability?${params.toString()}`;
 }
 
+/** Opens the Removal template setup dialog on the Removal templates pane; its value is the starting step. */
+export const CERTIFICATION_SETTINGS_SETUP_PARAM = "setup";
+/** "false" starts the dialog with Make default off, so decisions can be made first. */
+export const CERTIFICATION_SETTINGS_MAKE_DEFAULT_PARAM = "makeDefault";
+
+/**
+ * The Removal templates pane with the setup dialog open. The step defaults to
+ * the template list; `templateId` preselects a template and `makeDefault: false`
+ * leaves Make default off (the credit batch "Decide components" links).
+ */
 export function removalTemplateSetupHref(
   facilityId: string,
-  { templateId, step, makeDefault }: { templateId?: string; step?: "template" | "decisions" | "apply"; makeDefault?: boolean } = {},
+  { templateId, step = "template", makeDefault }: { templateId?: string; step?: "template" | "decisions" | "apply"; makeDefault?: boolean } = {},
 ): string {
-  const params = new URLSearchParams({ facility: facilityId });
-  if (templateId) params.set("template", templateId);
-  if (step) params.set("step", step);
+  let extra = `&${CERTIFICATION_SETTINGS_SETUP_PARAM}=${step}`;
+  if (templateId) extra += `&${CERTIFICATION_SETTINGS_TEMPLATE_PARAM}=${encodeURIComponent(templateId)}`;
   // Absent means Make default is on; the batch dialog sends "false" so decisions can be made first.
-  if (makeDefault === false) params.set("makeDefault", "false");
-  return `/certification/settings/removal-template-setup?${params.toString()}`;
+  if (makeDefault === false) extra += `&${CERTIFICATION_SETTINGS_MAKE_DEFAULT_PARAM}=false`;
+  return certificationSettingsSectionHref(facilityId, CERTIFICATION_SETTINGS_REMOVAL_TEMPLATES_SECTION, extra);
 }

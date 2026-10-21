@@ -171,12 +171,12 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
                       </span>
                     )}
                     <span className="flex min-w-0 flex-1 flex-col gap-4">
-                      <span className="flex items-center gap-8">
+                      <span className="flex flex-wrap items-center gap-x-8 gap-y-2">
                         <span className="body-small font-medium text-[var(--color-text-primary)] group-has-[input:disabled]:opacity-60">
                           {option.title}
                         </span>
                         {option.badge && (
-                          <span className="body-caption text-[var(--color-text-tertiary)]">
+                          <span className="body-caption whitespace-nowrap text-[var(--color-text-tertiary)]">
                             {option.badge}
                           </span>
                         )}

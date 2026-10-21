@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { dieselSource, electricityClash, startupDefault, template } from "@/components/certification/removal-template-setup/test-support";
-import { decisionQuestion, decisionSituation, entryCount, openDecisions, optionLabel, startState } from "./removal-template-setup-copy";
+import { decisionQuestion, decisionSituation, entryCount, openDecisions, notOfferedReason, optionLabel, startState } from "./removal-template-setup-copy";
 
 describe("removal template setup copy", () => {
   it("maps raw source ids to labels and writes the question in operator words", () => {
@@ -33,12 +33,20 @@ describe("removal template setup copy", () => {
     expect(entryCount(plan, { "clash:run-electricity": "pyrolyzer", fuel: "run-genset-diesel" }, { startup: "entry" })).toBe(2);
   });
 
-  it("starts on Apply only for the one fit with nothing to decide", () => {
+  it("preselects the one template that can be picked and always opens on the template list", () => {
     const ready = template("a", "A", { defaults: [startupDefault] });
     const asking = template("b", "B", { decisions: [dieselSource] });
-    expect(startState({ fitting: [ready], templateId: null, step: null })).toEqual({ templateId: "a", stepIndex: 2 });
+    expect(startState({ fitting: [ready], templateId: null, step: null })).toEqual({ templateId: "a", stepIndex: 0 });
     expect(startState({ fitting: [asking], templateId: null, step: null })).toEqual({ templateId: "b", stepIndex: 0 });
     expect(startState({ fitting: [ready, asking], templateId: null, step: null })).toEqual({ templateId: null, stepIndex: 0 });
     expect(startState({ fitting: [ready, asking], templateId: "b", step: "decisions" })).toEqual({ templateId: "b", stepIndex: 1 });
+  });
+
+  it("explains a linked template only when the list cannot show it", () => {
+    const data = { fitting: [{ id: "a" }], notFitting: [{ id: "n" }] };
+    expect(notOfferedReason(data, null)).toBeNull();
+    expect(notOfferedReason(data, "a")).toBeNull();
+    expect(notOfferedReason(data, "n")).toBeNull();
+    expect(notOfferedReason(data, "gone")).toMatch(/not in this Isometric project/);
   });
 });

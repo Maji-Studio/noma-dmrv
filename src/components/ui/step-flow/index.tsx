@@ -44,6 +44,8 @@ interface StepFlowProps {
   /** Action row pinned below the content (Back / Next / Submit). */
   footer?: React.ReactNode;
   orientation?: "horizontal" | "vertical";
+  /** Horizontal rail on a phone: only the active step keeps its label, so the rail never scrolls sideways. */
+  compactOnPhone?: boolean;
   className?: string;
 }
 
@@ -81,6 +83,7 @@ function RailItem({
   navigable,
   onNavigate,
   orientation,
+  compactOnPhone,
 }: {
   step: StepFlowStep;
   index: number;
@@ -88,6 +91,7 @@ function RailItem({
   navigable: boolean;
   onNavigate?: (index: number) => void;
   orientation: "horizontal" | "vertical";
+  compactOnPhone?: boolean;
 }) {
   const state = stepState(index, current);
   const labelClass = cn(
@@ -96,6 +100,8 @@ function RailItem({
     state === "active"
       ? "text-[var(--color-text-primary)]"
       : "text-[var(--color-text-tertiary)]",
+    // Still read by screen readers; only the sighted phone rail drops the words.
+    compactOnPhone && state !== "active" && "max-sm:sr-only",
   );
 
   const inner = (
@@ -123,7 +129,11 @@ function RailItem({
         type="button"
         onClick={() => onNavigate(index)}
         aria-current={state === "active" ? "step" : undefined}
-        className="flex min-w-0 items-center text-left transition-opacity hover:opacity-70"
+        className={cn(
+          "flex min-w-0 items-center text-left transition-opacity hover:opacity-70",
+          // 44px tap target on a phone; the 24px marker stays the visual.
+          compactOnPhone && "max-sm:min-h-44 max-sm:min-w-44 max-sm:justify-center",
+        )}
       >
         {inner}
       </button>
@@ -148,6 +158,7 @@ export function StepFlow({
   children,
   footer,
   orientation = "horizontal",
+  compactOnPhone = false,
   className,
 }: StepFlowProps) {
   const reach = furthest ?? current;
@@ -178,6 +189,7 @@ export function StepFlow({
               navigable={navigable}
               onNavigate={onNavigate}
               orientation={orientation}
+              compactOnPhone={compactOnPhone}
             />
             {orientation === "horizontal" && index < steps.length - 1 && (
               <span
