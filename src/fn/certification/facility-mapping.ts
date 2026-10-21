@@ -14,6 +14,7 @@ import {
 import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
 import {
   IsometricApiError,
   listProjects,
@@ -30,6 +31,9 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
+
+const HTTP_UNAUTHORIZED = 401;
+const HTTP_FORBIDDEN = 403;
 
 export interface FacilityCertifierMapping {
   mapping: CertifierProjectRow | null;
@@ -94,6 +98,15 @@ async function listProjectsWithConfiguration(
   } catch (err) {
     if (err instanceof IsometricApiError && err.code === "not_configured") {
       return { projects: [], isConfigured: false };
+    }
+    if (
+      err instanceof IsometricApiError &&
+      (err.status === HTTP_UNAUTHORIZED || err.status === HTTP_FORBIDDEN)
+    ) {
+      throw new DomainError(
+        "registry_read_refused",
+        "Isometric refused the saved keys. Replace them in Settings, Registry.",
+      );
     }
     throw err;
   }

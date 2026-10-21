@@ -8,7 +8,7 @@
  *  - Keys not saved: the organization has no Isometric keys.
  *  - Connected: Isometric listed projects with the saved keys just now.
  *  - Connection failing: the saved keys cannot be used to reach Isometric
- *    (the read answered "not configured").
+ *    (the read answered "not configured" or Isometric rejected the keys).
  *  - Not checked: the check itself failed (network, a 5xx, a rate limit). That
  *    says nothing about the keys, so it asks for nothing.
  *  - Keys saved: saved, not checked here (members, or no facility to check
@@ -30,6 +30,7 @@ import {
 import { useFacilityCertifierMapping } from "@/hooks/use-certification";
 import { useOrgCertifierCredentialsStatus } from "@/hooks/use-certifier-credentials";
 import { ORGANIZATION_SETTINGS_ROLES } from "@/lib/settings/panes";
+import { isActionError } from "@/lib/action-error";
 
 export const REGISTRY_NAME = "Isometric";
 
@@ -117,7 +118,11 @@ export function useRegistryConnectionStatus({
   if (keysSaved === undefined) return null;
   if (!keysSaved) return "keys-not-saved";
   if (!canManage || !facilityId || mapping.isLoading) return "keys-saved";
-  if (mapping.error) return "unchecked";
+  if (mapping.error) {
+    return isActionError(mapping.error) && mapping.error.code === "registry_read_refused"
+      ? "failing"
+      : "unchecked";
+  }
   if (mapping.data) return mapping.data.isConfigured ? "connected" : "failing";
   return "keys-saved";
 }
