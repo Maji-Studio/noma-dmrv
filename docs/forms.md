@@ -381,7 +381,10 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
   render through `CreditBatchLine`
   (`src/components/credit-batches/credit-batch-line.tsx`) from a form-specific
   `CreditBatchLineCopy`. The Lab Sample line repeats the batch chosen in the
-  form, read from the batch summary the form already loads. The line never blocks Save, and it shows "Checking" whenever
+  form, read from the batch summary the form already loads. The Emissions entry
+  line repeats the batch whose Emissions page opened the form, with no request;
+  that slide-over passes it to `SlideOverPanelFooter`'s `preview`, placed where
+  `FormActions` puts its own. The line never blocks Save, and it shows "Checking" whenever
   its last answer is not for the current inputs.
   Feedstock, Delivery, Application and Biochar Product render `RecordCreditBatchLine` from saved
   provenance via `getRecordCreditBatches` and show "Not yet computed" while creating.
