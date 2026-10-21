@@ -19,7 +19,7 @@ import { loadBatchEmissionEntryFacts } from "./emission-entry-facts";
 import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "./emission-entry-contenders";
 import { recordEmissionEntryActivity } from "./emission-entry-activity";
 import { assertRowVersion, nextVersion } from "./row-version";
-import { requireOrgScope } from "./utils";
+import { requireOrgScope, type Executor } from "./utils";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 
 /** A submitted, accepted or in-flight attempt freezes the recorded zeros. */
@@ -27,17 +27,42 @@ function submissionsLockZeros(submissions: (typeof certificationSubmissions.$inf
   return submissions.some((row) => row.submittedAt || row.status === "submitted" || row.status === "accepted" || isLiveEntryReservation(row, Date.now()));
 }
 
+async function loadZeroDraft(ctx: OrgContext, executor: Executor, removalId: string, { forUpdate }: { forUpdate: boolean }) {
+  requireOrgScope(ctx);
+  const query = executor.select().from(certifierRemovals).where(and(
+    eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, removalId),
+  ));
+  // Stamping holds batch locks before its sentByRemovalId FK takes KEY SHARE here.
+  // NO KEY UPDATE serializes zero writers without closing that batch/Removal cycle.
+  const [removal] = await (forUpdate ? query.for("no key update", { skipLocked: true }) : query);
+  // Deletion takes the Removal row before its artifact. Never wait on that
+  // inverse order while holding lineage artifacts.
+  if (forUpdate && !removal) {
+    const [existing] = await executor.select({ id: certifierRemovals.id }).from(certifierRemovals).where(and(
+      eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, removalId),
+    ));
+    if (existing) throw new DomainError("conflict", "This Removal is being updated. Refresh and retry.", { retryable: true });
+    throw new SafeError("This credit batch is not on an editable Removal.");
+  }
+  return {
+    removal,
+    // Evaluate after the writer's batch/member reads, preserving query order and lease timing.
+    hasFreshDeletionLease() { return !!removal && hasFreshRemovalDeletionLease(removal.metadata); },
+    loadSubmissions() {
+      return executor.select().from(certificationSubmissions).where(and(
+        eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityId, removalId),
+        eq(certificationSubmissions.localEntityType, "removal"), eq(certificationSubmissions.submissionType, "removal"),
+      ));
+    },
+  };
+}
+
 /** Whether recorded zeros may change now: the check `lockZeroDraft` applies, without the lock. */
 export async function isRemovalZeroEditable(ctx: OrgContext, removalId: string): Promise<boolean> {
   requireOrgScope(ctx);
-  const [removal] = await db.select().from(certifierRemovals).where(and(
-    eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, removalId),
-  ));
-  if (!removal || hasFreshRemovalDeletionLease(removal.metadata)) return false;
-  const submissions = await db.select().from(certificationSubmissions).where(and(
-    eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityId, removalId),
-    eq(certificationSubmissions.localEntityType, "removal"), eq(certificationSubmissions.submissionType, "removal"),
-  ));
+  const draft = await loadZeroDraft(ctx, db, removalId, { forUpdate: false });
+  if (!draft.removal || draft.hasFreshDeletionLease()) return false;
+  const submissions = await draft.loadSubmissions();
   if (!submissionsLockZeros(submissions)) return true;
   // A returned Removal with an open correction window may change its zeros, as `lockZeroDraft` allows.
   const members = await db.select({ id: creditBatchApplications.creditBatchId }).from(creditBatchApplications).where(and(
@@ -50,31 +75,16 @@ export async function isRemovalZeroEditable(ctx: OrgContext, removalId: string):
 async function lockZeroDraft(ctx: OrgContext, tx: DbTransaction, data: z.infer<typeof undoEmissionZerosSchema>, expectedVersion?: number) {
   requireOrgScope(ctx);
   await lockEmissionCorrectionScope(ctx, tx, data.creditBatchId);
-  // Stamping holds batch locks before its sentByRemovalId FK takes KEY SHARE here.
-  // NO KEY UPDATE serializes zero writers without closing that batch/Removal cycle.
-  const [removal] = await tx.select().from(certifierRemovals).where(and(
-    eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, data.removalId),
-  )).for("no key update", { skipLocked: true });
-  // Deletion takes the Removal row before its artifact. Never wait on that
-  // inverse order while holding lineage artifacts.
-  if (!removal) {
-    const [existing] = await tx.select({ id: certifierRemovals.id }).from(certifierRemovals).where(and(
-      eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, data.removalId),
-    ));
-    if (existing) throw new DomainError("conflict", "This Removal is being updated. Refresh and retry.", { retryable: true });
-    throw new SafeError("This credit batch is not on an editable Removal.");
-  }
+  const draft = await loadZeroDraft(ctx, tx, data.removalId, { forUpdate: true });
+  const { removal } = draft;
   const context = await lockedBatch(ctx, tx, data.creditBatchId);
   const members = await tx.select({ batch: creditBatches }).from(creditBatchApplications)
     .innerJoin(creditBatches, and(eq(creditBatches.id, creditBatchApplications.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId))).where(and(
     eq(creditBatchApplications.organizationId, ctx.organizationId),
     eq(creditBatchApplications.removalId, data.removalId),
   ));
-  if (!removal || !members.some(({ batch }) => batch.id === data.creditBatchId) || hasFreshRemovalDeletionLease(removal.metadata)) throw new SafeError("This credit batch is not on an editable Removal.");
-  const submissions = await tx.select().from(certificationSubmissions).where(and(
-    eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityId, data.removalId),
-    eq(certificationSubmissions.localEntityType, "removal"), eq(certificationSubmissions.submissionType, "removal"),
-  ));
+  if (!removal || !members.some(({ batch }) => batch.id === data.creditBatchId) || draft.hasFreshDeletionLease()) throw new SafeError("This credit batch is not on an editable Removal.");
+  const submissions = await draft.loadSubmissions();
   const correction = emissionCorrectionWindow(ctx, tx, data.creditBatchId, data.removalId);
   if (!correction && submissionsLockZeros(submissions)) {
     throw new SafeError("Recorded zeros can only be changed on an unsubmitted, idle Removal.");
