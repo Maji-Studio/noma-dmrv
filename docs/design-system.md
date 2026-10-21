@@ -33,10 +33,10 @@ Read these first. Each one fails quietly rather than loudly.
   an arbitrary value (`w-[120px]`) when a real off-scale number is intended.
   **44px is on the scale** because it is the minimum touch target; six controls
   had written `size-44` / `min-h-44` / `h-44` and were rendering at icon size.
-  Two sanctioned exceptions keep a 24px hit area (the WCAG 2.5.8 floor): the
-  inline `InfoHint` glyph, and the icon-only `IsometricLink` beside the ID it
-  opens. A 44px box on either would break label-row alignment wherever it
-  appears. The same silence hits a `var(--x)` whose property was renamed or never
+  Sanctioned exceptions keep a 24px hit area (the WCAG 2.5.8 floor): the
+  inline `InfoHint` and `ExplanationInfo` glyphs, and the icon-only
+  `IsometricLink` beside the ID it opens. A 44px box on any of them would break
+  label-row alignment wherever it appears. The same silence hits a `var(--x)` whose property was renamed or never
   defined; `pnpm check:css-vars` (CI) fails on it.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
@@ -1014,7 +1014,7 @@ behind an (i) and derived blocks, and the `@/schemas/helpers` numeric
 helpers. This doc owns only the form type set, lines and spacing
 ([above](#form-type-lines-and-spacing)).
 
-Explanation opens from an (i), never inline: see [forms.md](./forms.md#explanations-behind-an-i).
+Explanation opens from an (i); only the lines forms.md names stay inline: see [forms.md](./forms.md#explanations-behind-an-i).
 
 ## Naming, file structure, React rules
 
