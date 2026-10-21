@@ -98,6 +98,16 @@ export function useOutputStockHistory(storageLocationId: string, enabled = true)
   });
 }
 
+/**
+ * A failed stock save can mean the stock moved under the form: refresh every
+ * stock preview, and the credit batch previews planned on that stock (#1350),
+ * so neither keeps an answer for stock that is gone.
+ */
+export function invalidateAfterFailedStockSave(client: QueryClient): void {
+  void client.invalidateQueries({ queryKey: outputStockKeys.all });
+  void client.invalidateQueries({ queryKey: creditBatchKeys.recordPreviewPrefix() });
+}
+
 export function usePostOutputStock() {
   const client = useQueryClient();
   return useMutation({
@@ -108,7 +118,7 @@ export function usePostOutputStock() {
       return result.data;
     },
     onSuccess: (data) => updateOutputStockCaches(client, data),
-    onError: () => { void client.invalidateQueries({ queryKey: outputStockKeys.all }); },
+    onError: () => invalidateAfterFailedStockSave(client),
   });
 }
 
@@ -122,7 +132,7 @@ export function useRemoveOutputLoss() {
       return result.data;
     },
     onSuccess: (data) => updateOutputStockCaches(client, data),
-    onError: () => { void client.invalidateQueries({ queryKey: outputStockKeys.all }); },
+    onError: () => invalidateAfterFailedStockSave(client),
   });
 }
 

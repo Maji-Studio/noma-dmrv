@@ -14,7 +14,7 @@ const PREVIEWED: PreviewedRecordKind[] = ["delivery", "application", "biochar-pr
 const ONE = { id: "b1", code: "CB-26-001", startDate: "2026-10-01", endDate: "2026-10-31" };
 const TWO = { id: "b2", code: "CB-26-002", startDate: "2026-11-01", endDate: "2026-11-30" };
 const SEPTEMBER = { id: "b3", code: "CB-26-003", startDate: "2026-09-01", endDate: "2026-09-30" };
-const PREVIEW: RecordCreditBatchPreview = { batches: [], heldOut: false, exact: true, sourceRunCount: 2, unbatchedRunCount: 0 };
+const PREVIEW: RecordCreditBatchPreview = { batches: [], heldOut: false, basis: "planned", sourceRunCount: 2, unbatchedRunCount: 0 };
 const preview = (over: Partial<RecordCreditBatchPreview>) =>
   ({ state: "preview" as const, preview: { ...PREVIEW, ...over } });
 
@@ -38,7 +38,7 @@ describe("new feedstock", () => {
 });
 
 describe.each([
-  ["delivery", "Choose a source bin to see the credit batch."],
+  ["delivery", "Choose an actual source bin to see the credit batch."],
   ["application", "Choose a delivery to see the credit batch."],
   ["biochar-product", "Choose a biochar bin to see the credit batch."],
 ] as const)("new %s", (kind, lead) => {
@@ -81,26 +81,27 @@ describe.each(PREVIEWED)("preview (%s)", (kind) => {
   });
 
   it("says Could join when the source spans batches and the mass is not in yet", () => {
-    const copy = describeRecordCreditBatchLine(kind, preview({ batches: [ONE, TWO], exact: false }));
+    const copy = describeRecordCreditBatchLine(kind, preview({ batches: [ONE, TWO], basis: "source" }));
     expect(copy.lead).toBe("Could join credit batches ");
     expect(copy.batches).toEqual([ONE, TWO]);
     expect(copy.info).toContain("more than one credit batch");
-    expect(copy.info).toMatch(/Enter the .+ to see which this .+ joins\.$/);
+    expect(copy.info).toMatch(/Enter the .+ to see which credit batches this .+ joins\.$/);
   });
 
   it("says Could join for one batch beside runs in none", () => {
-    const copy = describeRecordCreditBatchLine(kind, preview({ batches: [ONE], exact: false, unbatchedRunCount: 1 }));
+    const copy = describeRecordCreditBatchLine(kind, preview({ batches: [ONE], basis: "source", unbatchedRunCount: 1 }));
     expect(copy.lead).toBe("Could join credit batch ");
     expect(copy.info).toContain("from this credit batch and from production runs that are in none yet");
+    expect(copy.info).toMatch(/to see which credit batch this .+ joins\.$/);
   });
 
   it("is definite before the mass when every run in the source is in one batch", () => {
-    expect(describeRecordCreditBatchLine(kind, preview({ batches: [ONE], exact: false })).lead).toBe("Joins credit batch ");
-    expect(describeRecordCreditBatchLine(kind, preview({ exact: false, unbatchedRunCount: 2 })).lead).toBe(`Credit batch: ${MISSING_VALUE.none}`);
+    expect(describeRecordCreditBatchLine(kind, preview({ batches: [ONE], basis: "source" })).lead).toBe("Joins credit batch ");
+    expect(describeRecordCreditBatchLine(kind, preview({ basis: "source", unbatchedRunCount: 2 })).lead).toBe(`Credit batch: ${MISSING_VALUE.none}`);
   });
 
   it("says None when the source holds nothing to draw", () => {
-    const copy = describeRecordCreditBatchLine(kind, preview({ sourceRunCount: 0, exact: false }));
+    const copy = describeRecordCreditBatchLine(kind, preview({ sourceRunCount: 0, basis: "source" }));
     expect(copy.lead).toBe(`Credit batch: ${MISSING_VALUE.none}`);
     expect(copy.info).toContain("so there is no credit batch to join.");
   });
@@ -108,13 +109,43 @@ describe.each(PREVIEWED)("preview (%s)", (kind) => {
   it("uses no dashes in any preview state", () => {
     const views = [
       preview({ batches: [ONE] }), preview({ unbatchedRunCount: 1 }), preview({ batches: [ONE], unbatchedRunCount: 1 }),
-      preview({ batches: [ONE, TWO], exact: false }), preview({ batches: [ONE], exact: false, unbatchedRunCount: 1 }),
+      preview({ batches: [ONE, TWO], basis: "source" }), preview({ batches: [ONE], basis: "source", unbatchedRunCount: 1 }),
       preview({ sourceRunCount: 0 }), preview({ heldOut: true }), { state: "new" as const },
+      preview({ basis: "refused", sourceRunCount: 0 }), preview({ basis: "untraceable", sourceRunCount: 0 }),
     ];
     for (const view of views) {
       const copy = describeRecordCreditBatchLine(kind, view);
       expect(`${copy.lead}${copy.tail}${copy.info ?? ""}`).not.toMatch(/[–—]/);
     }
+  });
+});
+
+describe.each([
+  ["delivery", "Enter the biochar product wet mass and moisture", "The actual source bin holds"],
+  ["application", "Enter the biochar product applied", "This delivery has"],
+  ["biochar-product", "Enter the biochar wet mass and moisture", "The biochar bin holds"],
+] as const)("form labels in the %s copy", (kind, enter, source) => {
+  it("names the fields as the form labels them", () => {
+    const copy = describeRecordCreditBatchLine(kind, preview({ batches: [ONE, TWO], basis: "source" }));
+    expect(copy.info).toContain(enter);
+    expect(copy.info?.startsWith(source)).toBe(true);
+  });
+});
+
+describe.each(PREVIEWED)("refused or untraceable preview (%s)", (kind) => {
+  it("claims no batch and asks for nothing already entered when the save would refuse the entry", () => {
+    const copy = describeRecordCreditBatchLine(kind, preview({ basis: "refused", sourceRunCount: 0 }));
+    expect(copy.lead).toBe(`Credit batch: ${MISSING_VALUE.notYetComputed}`);
+    expect(copy.batches).toEqual([]);
+    expect(copy.info).toContain("The save would refuse this");
+    expect(copy.info).not.toMatch(/Enter |Joins/);
+  });
+
+  it("names a missing or unbalanced stock allocation, not an empty delivery", () => {
+    const copy = describeRecordCreditBatchLine(kind, preview({ basis: "untraceable", sourceRunCount: 0 }));
+    expect(copy.lead).toBe(`Credit batch: ${MISSING_VALUE.notYetComputed}`);
+    expect(copy.info).toContain("saved stock allocation is missing or does not balance");
+    expect(copy.info).not.toContain("no biochar left");
   });
 });
 

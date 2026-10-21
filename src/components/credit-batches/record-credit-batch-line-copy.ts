@@ -54,9 +54,16 @@ const HELD_OUT_INFO = "This application's biochar was drawn from a mix bin, so i
 
 /** The field that decides the batch, as the form labels it. */
 const SOURCE: Record<PreviewedRecordKind, string> = {
-  delivery: "source bin",
-  application: "delivery",
-  "biochar-product": "biochar bin",
+  delivery: "an actual source bin",
+  application: "a delivery",
+  "biochar-product": "a biochar bin",
+};
+
+/** The chosen source, opening a sentence. */
+const THE_SOURCE: Record<PreviewedRecordKind, string> = {
+  delivery: "The actual source bin holds",
+  application: "This delivery has",
+  "biochar-product": "The biochar bin holds",
 };
 
 const RECORD: Record<PreviewedRecordKind, string> = {
@@ -65,18 +72,28 @@ const RECORD: Record<PreviewedRecordKind, string> = {
   "biochar-product": "this product",
 };
 
-/** What the operator still enters before the draw is planned. */
+/** What the operator still enters before the draw is planned, in the form's own labels. */
 const STILL_TO_ENTER: Record<PreviewedRecordKind, string> = {
-  delivery: "Enter the wet mass and moisture",
-  application: "Enter the amount applied",
+  delivery: "Enter the biochar product wet mass and moisture",
+  application: "Enter the biochar product applied",
   "biochar-product": "Enter the biochar wet mass and moisture",
 };
 
 const EMPTY_SOURCE_INFO: Record<PreviewedRecordKind, string> = {
-  delivery: "The source bin holds no biochar at this time, so there is no credit batch to join.",
+  delivery: "The actual source bin holds no biochar at this time, so there is no credit batch to join.",
   application: "This delivery has no biochar left to apply, so there is no credit batch to join.",
   "biochar-product": "The biochar bin holds no biochar at this time, so there is no credit batch to join.",
 };
+
+/** The entered draw or amount would be refused: no batch is claimed, and nothing is asked for twice. */
+const REFUSED_INFO: Record<PreviewedRecordKind, string> = {
+  delivery: "The save would refuse this load as entered, so its credit batch is not worked out. The stock message in the form says why.",
+  application: "The save would refuse this amount for this delivery, so its credit batch is not worked out.",
+  "biochar-product": "The save would refuse this biochar draw as entered, so its credit batch is not worked out. The stock message in the form says why.",
+};
+
+/** Only an application reads a delivery's saved stock allocation. */
+const UNTRACEABLE_INFO = "This delivery's saved stock allocation is missing or does not balance, so its credit batch cannot be worked out.";
 
 const PREVIEW_HELD_OUT_INFO = "This delivery's biochar was drawn from a mix bin, so this application is held out of credit batches.";
 
@@ -89,10 +106,12 @@ function sentence(text: string): string {
 /** Every batch the record could end up in is the same one, or none. */
 function isSettled(preview: RecordCreditBatchPreview): boolean {
   const outcomes = preview.batches.length + (preview.unbatchedRunCount > 0 ? 1 : 0);
-  return preview.exact || outcomes <= 1;
+  return preview.basis === "planned" || outcomes <= 1;
 }
 
 function previewCopy(kind: PreviewedRecordKind, preview: RecordCreditBatchPreview): CreditBatchLineCopy {
+  if (preview.basis === "refused") return missingLineCopy(MISSING_VALUE.notYetComputed, REFUSED_INFO[kind]);
+  if (preview.basis === "untraceable") return missingLineCopy(MISSING_VALUE.notYetComputed, UNTRACEABLE_INFO);
   if (preview.heldOut) return missingLineCopy(MISSING_VALUE.notApplicable, PREVIEW_HELD_OUT_INFO);
   if (preview.sourceRunCount === 0) return missingLineCopy(MISSING_VALUE.none, EMPTY_SOURCE_INFO[kind]);
   const { batches } = preview;
@@ -101,12 +120,11 @@ function previewCopy(kind: PreviewedRecordKind, preview: RecordCreditBatchPrevie
     const holds = plural
       ? "biochar from more than one credit batch"
       : "biochar from this credit batch and from production runs that are in none yet";
-    const source = kind === "application" ? "This delivery has" : `The ${SOURCE[kind]} holds`;
     return {
       ...CREDIT_BATCH_LINE_BASE,
       lead: plural ? "Could join credit batches " : "Could join credit batch ",
       batches,
-      info: `${source} ${holds}. ${STILL_TO_ENTER[kind]} to see which ${RECORD[kind]} joins.`,
+      info: `${THE_SOURCE[kind]} ${holds}. ${STILL_TO_ENTER[kind]} to see which credit ${plural ? "batches" : "batch"} ${RECORD[kind]} joins.`,
     };
   }
   if (batches.length === 0) {
@@ -133,7 +151,7 @@ export function describeRecordCreditBatchLine(
   switch (view.state) {
     case "new":
       if (kind === "feedstock") return { ...CREDIT_BATCH_LINE_BASE, lead: FEEDSTOCK_NEW_LEAD };
-      return { ...CREDIT_BATCH_LINE_BASE, lead: `Choose a ${SOURCE[kind]} to see the credit batch.`, info: RULE_INFO[kind] };
+      return { ...CREDIT_BATCH_LINE_BASE, lead: `Choose ${SOURCE[kind]} to see the credit batch.`, info: RULE_INFO[kind] };
     case "heldOut":
       return missingLineCopy(MISSING_VALUE.notApplicable, HELD_OUT_INFO);
     case "pending":

@@ -2,7 +2,7 @@
 /** The line reads saved provenance, or previews from the form's source, and renders each state. */
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CREDIT_BATCH_PREVIEW_DEBOUNCE_MS } from "./credit-batch-line-copy";
+import { PREVIEW_SETTLE_MS } from "@/hooks/use-settled-preview";
 import { RecordCreditBatchLine } from "./record-credit-batch-line";
 
 const hook = vi.fn();
@@ -51,7 +51,7 @@ describe("RecordCreditBatchLine", () => {
 
   it("names what decides the batch before a source is chosen, without asking the server", () => {
     render(<RecordCreditBatchLine kind="delivery" preview={null} />);
-    expect(screen.getByRole("status").textContent).toContain("Choose a source bin to see the credit batch.");
+    expect(screen.getByRole("status").textContent).toContain("Choose an actual source bin to see the credit batch.");
     expect(previewHook).toHaveBeenLastCalledWith(null);
     expect(hook).toHaveBeenLastCalledWith("delivery", undefined);
   });
@@ -59,18 +59,18 @@ describe("RecordCreditBatchLine", () => {
   it("previews the batch once the source settles, and says Checking while it changes", () => {
     vi.useFakeTimers();
     const input = { kind: "delivery" as const, bin: BIN, draw: null };
-    previewHook.mockReturnValue(result({ data: { batches: [BATCH], heldOut: false, exact: false, sourceRunCount: 1, unbatchedRunCount: 0 } }));
+    previewHook.mockReturnValue(result({ data: { batches: [BATCH], heldOut: false, basis: "source", sourceRunCount: 1, unbatchedRunCount: 0 } }));
     const { rerender } = render(<RecordCreditBatchLine kind="delivery" preview={null} />);
     rerender(<RecordCreditBatchLine kind="delivery" preview={input} />);
     expect(screen.getByRole("status").textContent).toContain("Checking credit batch...");
-    act(() => vi.advanceTimersByTime(CREDIT_BATCH_PREVIEW_DEBOUNCE_MS));
+    act(() => vi.advanceTimersByTime(PREVIEW_SETTLE_MS));
     expect(previewHook).toHaveBeenLastCalledWith(input);
     expect(screen.getByRole("status").textContent).toContain("Joins credit batch CB-26-001");
     expect(screen.getByRole("link", { name: /CB-26-001/ })).toBeTruthy();
   });
 
   it("never shows an earlier answer while a check runs", () => {
-    previewHook.mockReturnValue(result({ isFetching: true, data: { batches: [BATCH], heldOut: false, exact: true, sourceRunCount: 1, unbatchedRunCount: 0 } }));
+    previewHook.mockReturnValue(result({ isFetching: true, data: { batches: [BATCH], heldOut: false, basis: "planned", sourceRunCount: 1, unbatchedRunCount: 0 } }));
     render(<RecordCreditBatchLine kind="application" preview={{ kind: "application", deliveryId: "d1", appliedWetMassKg: 5, applicationId: null }} />);
     expect(screen.getByRole("status").textContent).toContain("Checking credit batch...");
     expect(screen.queryByRole("link")).toBeNull();

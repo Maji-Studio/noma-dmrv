@@ -11,12 +11,11 @@
  */
 "use client";
 
-import { useDebounce } from "@/hooks/use-debounce";
 import { useRecordCreditBatchPreview } from "@/hooks/use-record-credit-batch-preview";
 import { useRecordCreditBatches } from "@/hooks/use-record-credit-batches";
+import { settledPreview, useSettledInput } from "@/hooks/use-settled-preview";
 import type { RecordCreditBatchPreviewInput } from "@/schemas/record-credit-batches";
 import { CreditBatchLine } from "./credit-batch-line";
-import { CREDIT_BATCH_PREVIEW_DEBOUNCE_MS } from "./credit-batch-line-copy";
 import {
   describeRecordCreditBatchLine,
   type RecordCreditBatchKind,
@@ -40,25 +39,18 @@ interface RecordCreditBatchLineProps {
 export function RecordCreditBatchLine({ kind, id, preview, facilityId }: RecordCreditBatchLineProps) {
   const previewing = preview !== undefined;
   const saved = useRecordCreditBatches(kind, previewing ? undefined : id);
-  // A string key: equal inputs stay equal across renders, so the debounce
-  // settles, and the query key compares by value.
-  const requestKey = JSON.stringify(preview ?? null);
-  const settledKey = useDebounce(requestKey, CREDIT_BATCH_PREVIEW_DEBOUNCE_MS);
-  const settled = JSON.parse(settledKey) as RecordCreditBatchPreviewInput | null;
+  const { settled, settling } = useSettledInput(preview ?? null);
   const previewQuery = useRecordCreditBatchPreview(previewing ? settled : null);
   const query = previewing ? previewQuery : saved;
+  const answer = settledPreview(settling, previewQuery);
 
   // Error first: a failed refetch keeps old data, which must not stay claimed.
   const view: RecordCreditBatchLineView = previewing
     ? !preview
       ? { state: "new" }
-      : settledKey !== requestKey || previewQuery.isFetching
-        ? { state: "pending" }
-        : previewQuery.isError
-          ? { state: "error" }
-          : previewQuery.data
-            ? { state: "preview", preview: previewQuery.data }
-            : { state: "pending" }
+      : answer.state === "ready"
+        ? { state: "preview", preview: answer.data }
+        : answer
     : !id
       ? { state: "new" }
       : saved.isError

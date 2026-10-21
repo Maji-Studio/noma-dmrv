@@ -33,7 +33,7 @@ describe("applicationCreditBatchPreview", () => {
 
   it("sends a positive amount, and no amount otherwise", () => {
     expect(applicationCreditBatchPreview("del-1", 20)).toEqual({ kind: "application", deliveryId: "del-1", appliedWetMassKg: 20, applicationId: null });
-    for (const amount of [undefined, null, 0, -1, Number.NaN, "20"]) {
+    for (const amount of [undefined, null, 0, -1, Number.NaN, "20", 1.0001, 1e12]) {
       expect(applicationCreditBatchPreview("del-1", amount)?.appliedWetMassKg).toBeNull();
     }
   });

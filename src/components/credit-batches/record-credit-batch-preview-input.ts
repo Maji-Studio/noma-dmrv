@@ -2,6 +2,7 @@
  * Builds the credit batch preview request (#1350) from what a form holds.
  * Pure, so the request each form state sends is tested without rendering.
  */
+import { massKgSchema } from "@/schemas/helpers";
 import type { RecordCreditBatchPreviewInput } from "@/schemas/record-credit-batches";
 import type { OutputStockPreviewInput } from "@/types/output-stock";
 
@@ -44,6 +45,8 @@ export function applicationCreditBatchPreview(
   applicationId: string | null = null,
 ): RecordCreditBatchPreviewInput | null {
   if (!deliveryId) return null;
-  const amount = typeof appliedWetMassKg === "number" && Number.isFinite(appliedWetMassKg) && appliedWetMassKg > 0 ? appliedWetMassKg : null;
+  // The server's own bound, so an amount it would reject is sent as "not entered yet".
+  const parsed = massKgSchema().positive().safeParse(appliedWetMassKg);
+  const amount = parsed.success ? parsed.data : null;
   return { kind: "application", deliveryId, appliedWetMassKg: amount, applicationId };
 }

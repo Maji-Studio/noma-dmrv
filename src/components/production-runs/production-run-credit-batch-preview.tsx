@@ -11,8 +11,7 @@
 
 import { useWatch, type Control } from "react-hook-form";
 import { CreditBatchLine } from "@/components/credit-batches/credit-batch-line";
-import { CREDIT_BATCH_PREVIEW_DEBOUNCE_MS } from "@/components/credit-batches/credit-batch-line-copy";
-import { useDebounce } from "@/hooks/use-debounce";
+import { settledPreview, useSettledInput } from "@/hooks/use-settled-preview";
 import { useProductionRunCreditBatchPreview } from "@/hooks/use-production-run-credit-batch-preview";
 import { resolveRunWindow } from "@/lib/production-runs/run-window";
 import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
@@ -77,23 +76,10 @@ export function ProductionRunCreditBatchPreview<TFieldValues extends CreditBatch
     name: WATCHED_FIELDS,
   });
   const values: CreditBatchPreviewFormValues = { status, startDate, startTime, endDate, endTime, feedstockDraws };
-  // A string key: equal inputs stay equal across renders, so the debounce
-  // settles, and the query key compares by value.
-  const requestKey = JSON.stringify(buildCreditBatchPreviewInput(values, context));
-  const settledKey = useDebounce(requestKey, CREDIT_BATCH_PREVIEW_DEBOUNCE_MS);
-  const query = useProductionRunCreditBatchPreview(
-    JSON.parse(settledKey) as ProductionRunCreditBatchPreviewInput,
-  );
-
-  // Only a settled answer for exactly the current inputs is shown: while they
-  // settle or any check runs (a refetch on focus or after a save elsewhere
-  // included), the line says so instead of keeping the last match.
-  const view: ProductionRunCreditBatchPreviewView =
-    settledKey !== requestKey || query.isFetching
-      ? { state: "pending" }
-      : query.isError
-        ? { state: "error" }
-        : query.data ?? { state: "pending" };
+  const { settled, settling } = useSettledInput(buildCreditBatchPreviewInput(values, context));
+  const query = useProductionRunCreditBatchPreview(settled);
+  const preview = settledPreview(settling, query);
+  const view: ProductionRunCreditBatchPreviewView = preview.state === "ready" ? preview.data : preview;
   const copy = describeCreditBatchPreview(view);
 
   return (
