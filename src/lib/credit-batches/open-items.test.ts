@@ -97,9 +97,18 @@ describe("buildCreditBatchOpenItems", () => {
     expect(check).toEqual([{
       id: "correction:removal-1",
       title: "RM-26-003: Resubmit needed",
-      detail: "Diesel use and Transport to field changed here since RM-26-003 was sent. Resubmit the Removal to send it.",
+      detail: "Diesel use and Transport to field changed here since RM-26-003 was sent. Resubmit the Removal to send them.",
       target: { href: "/certification/removals?facility=facility&removal=removal-1" },
     }]);
+  });
+
+  it("says send it for a single changed component", () => {
+    const [item] = buildCreditBatchOpenItems({ ...batchContext, health: returnedHealth({
+      removalId: "removal-1", removalCode: "RM-26-003", windowOpen: true, resubmitNeeded: true, statement: STATEMENT,
+      batches: [{ id: "batch", code: "CB-1" }],
+      changed: [{ componentId: "a", componentName: "Diesel use", batchId: "batch", batchCode: "CB-1" }],
+    }) }).check;
+    expect(item.detail).toBe("Diesel use changed here since RM-26-003 was sent. Resubmit the Removal to send it.");
   });
 
   it("says the Removal changed on another batch when nothing changed on this one", () => {

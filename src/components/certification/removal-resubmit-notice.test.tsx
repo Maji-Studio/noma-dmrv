@@ -32,6 +32,13 @@ describe("RemovalResubmitNotice", () => {
     expect(screen.queryByRole("link", { name: "Open GHG Statement" })).toBeNull();
   });
 
+  it("falls back to a plain sentence when the Removal needs resubmitting but no component is listed", () => {
+    render(<RemovalResubmitNotice correction={correction({ resubmitNeeded: true, changed: [] })} facilityId={FACILITY} />);
+    expect(screen.getByRole("status").textContent).toBe(
+      "Entries changed since this Removal was sent. Resubmit it, then resubmit GHG Statement Jul 1 to Sep 30, 2026.",
+    );
+  });
+
   it.each([
     ["FAILED_VERIFICATION", "failed verification"],
     ["DRAFT", "is back in draft"],

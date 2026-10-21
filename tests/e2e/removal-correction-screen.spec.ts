@@ -114,7 +114,7 @@ test.describe("Returned Removal screens", () => {
         await page.goto(`/credit-batches/${changed.creditBatch.id}?facility=${facilityId}`);
         if (CHECK_COPY) {
           await expect(page.getByText(`${changed.removalCode}: Resubmit needed`)).toBeVisible({ timeout: 30_000 });
-          await expect(page.getByText(`Diesel use and Transport to field changed here since ${changed.removalCode} was sent. Resubmit the Removal to send it.`)).toBeVisible();
+          await expect(page.getByText(`Diesel use and Transport to field changed here since ${changed.removalCode} was sent. Resubmit the Removal to send them.`)).toBeVisible();
         } else {
           await expect(page.getByText(changed.creditBatch.code).first()).toBeVisible({ timeout: 30_000 });
         }

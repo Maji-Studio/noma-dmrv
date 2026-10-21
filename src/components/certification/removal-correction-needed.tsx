@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
-import { returnedStatementPhrase } from "@/components/record-locks/record-lock-notice";
+import { NOTICE_ACTION_LINK_CLASS } from "./removal-resubmit-notice";
+import { OPEN_GHG_STATEMENT_LABEL, returnedStatementPhrase } from "@/lib/removal-correction-copy";
 import { recordLockLinkHref, recordLockLinkText } from "@/components/record-locks/record-lock-labels";
 import { Notice } from "@/components/ui/notice";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -12,7 +13,6 @@ import type { RecordLockView } from "@/lib/record-lock-view";
  * action opens it there.
  */
 export const CORRECTION_NEEDED_LABEL = "Correction needed";
-const OPEN_STATEMENT_LABEL = "Open GHG Statement";
 
 function firstReturn(lock: RecordLockView | undefined) {
   return lock && lock.level !== "sent" ? lock.returnedBy[0] : undefined;
@@ -39,7 +39,7 @@ export function RemovalCorrectionCell({ lock }: { lock: RecordLockView | undefin
         // Paints above the badge's expanded hit area, and never opens the row.
         <Link href={href} onClick={(event) => event.stopPropagation()}
           className="relative inline-flex min-h-44 items-center body-caption underline underline-offset-4">
-          {OPEN_STATEMENT_LABEL}
+          {OPEN_GHG_STATEMENT_LABEL}
         </Link>
       )}
     </span>
@@ -56,7 +56,7 @@ export function RemovalCorrectionNotice({ lock }: { lock: RecordLockView | undef
       tone="warning"
       title={CORRECTION_NEEDED_LABEL}
       data-removal-correction
-      action={href ? <Link href={href} className="inline-flex min-h-44 items-center body-small underline underline-offset-4">{OPEN_STATEMENT_LABEL}</Link> : undefined}
+      action={href ? <Link href={href} className={NOTICE_ACTION_LINK_CLASS}>{OPEN_GHG_STATEMENT_LABEL}</Link> : undefined}
     >
       {correctionSentence(returned, " from the GHG Statement")}
     </Notice>

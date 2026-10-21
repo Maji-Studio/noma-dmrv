@@ -44,7 +44,6 @@ function HolderList({ holders }: { holders: readonly RecordLockLink[] }) {
   );
 }
 
-export { returnedStatementPhrase };
 
 /**
  * Option A of #1101 open point 2: a returned record keeps its real level and

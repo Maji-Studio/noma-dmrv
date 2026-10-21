@@ -53,7 +53,7 @@ import {
   EmptyComponentsStep,
   type FocusRequest,
 } from "./empty-components-step";
-import { PHONE_TOUCH_TARGET } from "./touch-target";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { Notice } from "@/components/ui/notice";
 import {
   continueRefusal,

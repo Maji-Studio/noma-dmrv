@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 import { buttonVariants } from "@/components/ui";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
+import { cn } from "@/lib/utils";
 import { Notice } from "@/components/ui/notice";
 import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
 import type { RemovalCorrection } from "@/lib/certification/removal-entry-correction";
@@ -15,7 +17,8 @@ import {
 } from "@/lib/removal-correction-copy";
 
 const LINK_CLASS = "underline underline-offset-4 text-[var(--color-text-primary)]";
-const ACTION_LINK_CLASS = "inline-flex min-h-44 items-center body-small underline underline-offset-4";
+/** The quiet underlined link a Notice carries as its action. */
+export const NOTICE_ACTION_LINK_CLASS = "inline-flex min-h-44 items-center body-small underline underline-offset-4";
 
 /** "A, B and C" over parts that carry their own links. */
 function JoinedParts({ parts }: { parts: { key: string; node: ReactNode }[] }) {
@@ -50,10 +53,17 @@ export function RemovalResubmitNotice({ correction, facilityId }: { correction: 
     return (
       // No title: the Status badge above already says "Resubmit needed".
       <Notice tone="warning" data-removal-correction="resubmit">
-        <JoinedParts parts={correction.changed.map((change) => ({
-          key: `${change.batchId}:${change.componentId}`,
-          node: <>{change.componentName} (<BatchLink batch={{ id: change.batchId, code: change.batchCode }} facilityId={facilityId} />)</>,
-        }))} /> changed since this Removal was sent. Resubmit it, then resubmit {statement}.
+        {correction.changed.length > 0 ? (
+          <>
+            <JoinedParts parts={correction.changed.map((change) => ({
+              key: `${change.batchId}:${change.componentId}`,
+              node: <>{change.componentName} (<BatchLink batch={{ id: change.batchId, code: change.batchCode }} facilityId={facilityId} />)</>,
+            }))} /> changed since this Removal was sent.
+          </>
+        ) : (
+          "Entries changed since this Removal was sent."
+        )}{" "}
+        Resubmit it, then resubmit {statement}.
       </Notice>
     );
   }
@@ -62,7 +72,7 @@ export function RemovalResubmitNotice({ correction, facilityId }: { correction: 
       tone="info"
       title={RETURNED_BY_ISOMETRIC_LABEL}
       data-removal-correction="returned"
-      action={<Link href={correctionStatementHref(correction, facilityId)} className={ACTION_LINK_CLASS}>{OPEN_GHG_STATEMENT_LABEL}</Link>}
+      action={<Link href={correctionStatementHref(correction, facilityId)} className={NOTICE_ACTION_LINK_CLASS}>{OPEN_GHG_STATEMENT_LABEL}</Link>}
     >
       {statement} {returnedStatementPhrase(correction.statement.status)}. Correct the sent entries on{" "}
       <JoinedParts parts={correction.batches.map((batch) => ({
@@ -82,7 +92,7 @@ export function RemovalResubmitNotice({ correction, facilityId }: { correction: 
 export function ResubmitRemovalAction({ correction, facilityId }: { correction: RemovalCorrection | undefined; facilityId: string }) {
   if (!correction?.resubmitNeeded) return null;
   return (
-    <Link href={removalResubmitHref(correction.removalId, facilityId)} className={buttonVariants({ variant: "primary" })}>
+    <Link href={removalResubmitHref(correction.removalId, facilityId)} className={cn(buttonVariants({ variant: "primary" }), PHONE_TOUCH_TARGET)}>
       {RESUBMIT_REMOVAL_LABEL}
     </Link>
   );

@@ -54,7 +54,7 @@ import { DebugDrawer } from "./debug-drawer";
 import { isRemovalCompilationReady } from "./submission-facts";
 import { SubmissionSummary } from "./submission-summary";
 import { allowsRemovalSubmission } from "./resume-state";
-import { PHONE_TOUCH_TARGET } from "./touch-target";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { RemovalEmissionsLedger } from "./removal-emissions-ledger";
 import { ComponentsSent } from "./components-sent";
 import { Notice } from "@/components/ui/notice";

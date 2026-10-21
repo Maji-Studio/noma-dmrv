@@ -290,6 +290,58 @@ export default async function globalTeardown() {
           )
       `);
 
+      // ─── Emissions entries of E2E credit batches (FK to credit_batches) ───
+      // A re-entered entry points at the sent one it replaces (replaces_entry_id
+      // self-FK), so the links go first. Template observations are referenced by
+      // entries, so they follow.
+      await client.query(`
+        DELETE FROM emission_entry_values
+        WHERE entry_id IN (
+          SELECT id FROM emission_entries
+          WHERE credit_batch_id IN (
+            SELECT id FROM credit_batches
+            WHERE code LIKE 'E2E-%'
+               OR facility_id IN (
+                    SELECT id FROM facilities
+                    WHERE code LIKE 'E2E-%'
+                       OR name LIKE 'UI %'
+                       OR name LIKE 'Chain %'
+                       OR name LIKE 'Duplicate Test %'
+                  )
+          )
+        )
+      `);
+      await client.query(`
+        UPDATE emission_entries SET replaces_entry_id = NULL
+        WHERE credit_batch_id IN (
+          SELECT id FROM credit_batches
+          WHERE code LIKE 'E2E-%'
+               OR facility_id IN (
+                    SELECT id FROM facilities
+                    WHERE code LIKE 'E2E-%'
+                       OR name LIKE 'UI %'
+                       OR name LIKE 'Chain %'
+                       OR name LIKE 'Duplicate Test %'
+                  )
+        )
+      `);
+      await client.query(`
+        DELETE FROM emission_entries
+        WHERE credit_batch_id IN (
+          SELECT id FROM credit_batches
+          WHERE code LIKE 'E2E-%'
+               OR facility_id IN (
+                    SELECT id FROM facilities
+                    WHERE code LIKE 'E2E-%'
+                       OR name LIKE 'UI %'
+                       OR name LIKE 'Chain %'
+                       OR name LIKE 'Duplicate Test %'
+                  )
+        )
+      `);
+      // The returned Removal spec's template (tests/e2e/fixtures/returned-removal-seed.ts).
+      await client.query(`DELETE FROM removal_template_observations WHERE external_template_id LIKE 'e2e-%'`);
+
       // ─── Credit batches ───
       // Delete by code prefix AND by facility reference (UI-created batches have auto-generated codes)
       await client.query(`
@@ -552,6 +604,22 @@ export default async function globalTeardown() {
              OR name LIKE 'Chain %'
              OR name LIKE 'Duplicate Test %'
         )
+      `);
+
+      // ─── GHG statement submission ledger rows (local_entity_id is a plain uuid) ───
+      await client.query(`
+        DELETE FROM certification_submissions
+        WHERE local_entity_type = 'ghgStatement'
+          AND local_entity_id IN (
+            SELECT id FROM certifier_ghg_statements
+            WHERE facility_id IN (
+              SELECT id FROM facilities
+              WHERE code LIKE 'E2E-%'
+                 OR name LIKE 'UI %'
+                 OR name LIKE 'Chain %'
+                 OR name LIKE 'Duplicate Test %'
+            )
+          )
       `);
 
       // ─── Certifier GHG statements (FK to facilities) ───

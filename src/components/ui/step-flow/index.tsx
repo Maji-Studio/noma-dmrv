@@ -24,6 +24,7 @@
 import * as React from "react";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { CheckIcon } from "@phosphor-icons/react/dist/ssr";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export interface StepFlowStep {
@@ -74,13 +75,9 @@ function PhoneBack({ steps, current, reach, onNavigate, canNavigate }: {
     .pop();
   if (back === undefined) return null;
   return (
-    <button
-      type="button"
-      onClick={() => onNavigate(back)}
-      className="mt-8 inline-flex min-h-44 items-center self-start body-small underline underline-offset-4"
-    >
+    <Button variant="noOutline" onClick={() => onNavigate(back)} className="mt-8 min-h-44 self-start px-0">
       Back to {steps[back].label}
-    </button>
+    </Button>
   );
 }
 
