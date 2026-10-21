@@ -6,7 +6,7 @@ it("grants every read and write, never deletes or identity scopes", () => {
   expect([...OAUTH_GRANTABLE_SCOPES]).toEqual(API_SCOPES.filter(scope => !scope.endsWith(":delete")));
   expect(OAUTH_REQUESTABLE_SCOPES).toEqual([...OAUTH_GRANTABLE_SCOPES, "offline_access"]);
 });
-it.each(["owner", "admin", "member"])("allows %s the grantable ceiling", role => {
+it.each(["admin", "member"])("allows %s the grantable ceiling", role => {
   expect(oauthRoleCeiling(role)).toEqual(OAUTH_GRANTABLE_SCOPES);
 });
 it("honors the role policy and denies unknown roles", () => {

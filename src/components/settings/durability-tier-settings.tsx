@@ -5,7 +5,7 @@
  * rules as before (1000-year selectable, 200-year shown locked until a
  * 200-year client onboards), saved through the facility update action with
  * only the tier in the payload, so the server's durability lock and its
- * Owner/Admin rule apply.
+ * Admin rule apply.
  *
  * The save is not optimistic. An optimistic write changes the facility in the
  * cache before the server answers, and a refusal (the tier is locked by a

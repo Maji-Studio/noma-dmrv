@@ -1,3 +1,5 @@
+import { loadRemovalEntryCorrection } from "@/data-access/removal-entry-correction";
+import { buildRemovalCorrection, deriveEntryCorrection, correctionForRemoval } from "@/lib/certification/removal-entry-correction";
 import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
@@ -14,18 +16,17 @@ import { listEmissionEntries, listEmissionEntriesForBatches } from "@/data-acces
 import { getTemplateObservationById, getTemplateObservationsByIds } from "@/data-access/removal-template-observations";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import { requireOrgFacility } from "@/data-access/utils";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib/certification/readiness";
 import { resolveTemplateInputs } from "./removal-template-inputs";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 
+vi.mock("@/data-access/removal-entry-correction", () => ({ loadRemovalEntryCorrection: vi.fn() }));
 vi.mock("@/data-access/emission-entry-contenders", () => ({ listEmissionEntryDraftContenders: vi.fn(), listEmissionEntryAvailableApplications: vi.fn(), loadEmissionEntryReservations: vi.fn() }));
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntries: vi.fn(), listEmissionEntriesForBatches: vi.fn() }));
 vi.mock("@/data-access/removal-template-observations", () => ({ getTemplateObservationById: vi.fn(), getTemplateObservationsByIds: vi.fn() }));
 vi.mock("@/data-access/batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: vi.fn() }));
 vi.mock("@/data-access/credit-batch-accounting", () => ({ loadCreditBatchRollups: vi.fn() }));
 vi.mock("@/data-access/utils", () => ({ requireOrgScope: vi.fn(), requireOrgFacility: vi.fn() }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: vi.fn(() => true) }));
 const template = {
   id: "template", display_name: "Template", groups: [{ id: "g", key: "pyrolysis", components: [{
     id: "line", display_name: "Lab electricity EU", blueprint_key: "grid_electricity_use",
@@ -35,7 +36,7 @@ const template = {
 const observation = { id: "current", externalTemplateId: template.id, definition: normalizeTemplateDefinition(template),
   enrichment: { line: { electricity_use: { unit: "kWh" } } },
   lineSources: { line: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } } };
-const facilityFacts = { templatesById: { template: { template, observation,
+const facilityFacts = { facilityTimezone: "UTC", templatesById: { template: { template, observation,
   lineSourceProblems: [], enrichmentProblems: [], blueprintsForTemplate: [], unresolvedBlueprintKeys: [],
   unbindableTemplateInputs: [], requiredTransportCategories: [],
 } } } as unknown as FacilityCertifierFacts;
@@ -48,7 +49,6 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(listEmissionEntryAvailableApplications).mockResolvedValue([]);
   vi.mocked(loadEmissionEntryReservations).mockResolvedValue([]);
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(true);
   vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([{ contenderKind: "draft", removalId: "removal", createdAt: "2026-01-01",
     creditBatchIds: ["one", "two", "three", "readable", "missing", "zero"], window: { start: "2026-01-01", end: "2026-02-01" } }]);
   vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([]);
@@ -192,15 +192,6 @@ it("uses batch-wide automatic figures instead of empty placeholders", async () =
   const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facts);
   expect(resolveRemovalTemplate(batches, facts, loaded).emissionLinesByBatchId.one[0]).toMatchObject({ state: "filled", total: { magnitude: "3", unit: "kWh" } });
 });
-it("does not query entries or automatic facts with the gate off", async () => {
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(false);
-  expect(await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts)).toEqual({});
-  expect(listEmissionEntriesForBatches).not.toHaveBeenCalled();
-  expect(getTemplateObservationsByIds).not.toHaveBeenCalled();
-  expect(loadBatchesEmissionAutomaticFacts).not.toHaveBeenCalled();
-  expect(loadCreditBatchRollups).not.toHaveBeenCalled();
-  expect(requireOrgFacility).not.toHaveBeenCalled();
-});
 
 it("keeps batch emissions unmet until a compatible changed entry is confirmed", async () => {
   const facts = structuredClone(facilityFacts);
@@ -252,7 +243,7 @@ it.each([false, true])("keeps removed-entry blockers in Removal readiness (group
   expect(resolveTemplateInputs({ template: resolved.removalTemplate!, lineSources: resolved.lineSources,
     emissionLines: resolved.emissionLines, blueprintsByKey: new Map(),
     agg: {} as Parameters<typeof resolveTemplateInputs>[0]["agg"], externalProjectId: "project",
-    sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: true, omitProductionComponents: false,
+    sourceIds: [], sourceBindingPlan: [], omitProductionComponents: false,
   })).toMatchObject({ monitored: [], fixed: [], datapointBodyByKey: new Map() });
   expect(live.template.groups).toEqual([]);
   expect(live.observation.definition.groups).toEqual([]);
@@ -272,4 +263,50 @@ it.each(["2026-01-01", "2026-03-01"])("allows an entry before an available appli
   vi.mocked(listEmissionEntryAvailableApplications).mockResolvedValue([{ creditBatchId: "one", applicationDate: new Date("2026-04-01") }]);
   const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts);
   expect(loaded.one.entriesWithoutRemoval).toEqual([]);
+});
+
+it("retains production reservation ownership when the batch has no entries", async () => {
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ one: { batch: {
+    facilityId: "facility", productionEmissionsClaimReservedBySubmissionId: "attempt",
+  } } } as never);
+  const result = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts);
+  expect(result.one.productionReservationSubmissionId).toBe("attempt");
+  expect(result.one.entries).toEqual([]);
+});
+
+it.each([false, true])("reuses one correction read for all member batches and the hub (changed=%s)", async (changed) => {
+  const ctx = makeTestOrgContext();
+  const batches = ["one", "two", "unrelated"].map((id) => ({ id, removalTemplateId: "template" }));
+  const contender = { contenderKind: "correction" as const, removalId: "returned", createdAt: "2026-01-01",
+    creditBatchIds: ["one", "two"], window: { start: "2026-01-01", end: "2026-02-01" } };
+  vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([contender]);
+  const previous = [{ componentId: "line", inputKey: "electricity_use", entries: [
+    { entryId: "entry", creditBatchId: "one", contentRevision: 1, kind: "value" as const,
+      value: { magnitude: "1", unit: "kWh" }, evidenceDocumentIds: ["file"] },
+  ] }];
+  const state = deriveEntryCorrection(true, previous, changed ? [] : previous);
+  const correction = buildRemovalCorrection({ removalId: "returned", removalCode: "RM-001", state,
+    statement: { id: "statement", status: "DRAFT", reportingPeriodStartOn: null, reportingPeriodEndOn: "2026-03-31" },
+    batches: [{ id: "one", code: "CB-001" }, { id: "two", code: "CB-002" }],
+    components: [{ id: "line", displayName: "Electricity" }],
+  });
+  vi.mocked(loadRemovalEntryCorrection).mockResolvedValue({ ...state, removalId: "returned", removalCode: "RM-001", correction });
+  const loaded = await loadBatchEmissionContext(ctx, "facility", batches, facilityFacts);
+  expect(loadRemovalEntryCorrection).toHaveBeenCalledExactlyOnceWith(ctx, "returned", [contender]);
+  expect(loaded.one.corrections?.[0].correction).toEqual(correction);
+  expect(loaded.two.corrections?.[0].correction).toEqual({ ...correction, changed: [] });
+  expect(loaded.unrelated.corrections).toBeUndefined();
+  const context = { memberBatches: batches, requiredTransportCategories: [],
+    entryCorrectionsByBatchId: Object.fromEntries(Object.entries(loaded).map(([id, batch]) => [id, batch.corrections ?? []])),
+  } as unknown as RemovalCertifyContext;
+  for (const id of ["one", "two"]) {
+    const health = deriveBatchHealth(toBatchHealthFacts(context, id));
+    expect(health.removalCorrections).toEqual([loaded[id].corrections![0].correction]);
+    expect(health.advisories).toEqual([{ removalId: "returned", removalCode: "RM-001", fixTarget: "removal",
+      message: changed ? "Resubmit needed: 1 component changed since this Removal was sent." : "Returned by Isometric" }]);
+  }
+  const states = Object.values(context.entryCorrectionsByBatchId!).flat();
+  expect(correctionForRemoval("returned", states)).toEqual(correction);
+  expect(correctionForRemoval("unrelated", states)).toBeUndefined();
+  expect(correctionForRemoval("returned", [{ ...state, correction: { ...correction, windowOpen: false } }])).toBeUndefined();
 });

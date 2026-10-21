@@ -76,12 +76,12 @@ test("Members have no Developers rail entry or controls", async ({ operatorPage:
   // The retired route still lands on the pane.
   await page.goto("/settings/api-keys");
   await expect(page).toHaveURL(/\/settings\/developers/);
-  await expect(page.getByText(/Only organization Owners and Admins with a membership/)).toBeVisible();
+  await expect(page.getByText(/Only organization Admins with a membership/)).toBeVisible();
   await expect(page.getByRole("button", { name: "New API key" })).toHaveCount(0);
 });
 
 test("a Platform Admin without membership sees the explanation", async ({ adminPage: page }) => {
   await page.goto("/settings/developers");
-  await expect(page.getByText(/Only organization Owners and Admins with a membership/)).toBeVisible({ timeout: UI_TIMEOUT_MS });
+  await expect(page.getByText(/Only organization Admins with a membership/)).toBeVisible({ timeout: UI_TIMEOUT_MS });
   await expect(page.getByRole("button", { name: "New API key" })).toHaveCount(0);
 });

@@ -32,7 +32,7 @@ function makeCtx(organizationId: string): OrgContext {
   return {
     userId: TEST_USER_ID,
     organizationId,
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   };
 }

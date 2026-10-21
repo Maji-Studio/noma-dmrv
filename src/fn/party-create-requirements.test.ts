@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ customer: vi.fn(), supplier: vi.fn() }));
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn().mockResolvedValue({
-    userId: "test-user", organizationId: "test-org", orgRole: "owner", isPlatformAdmin: false,
+    userId: "test-user", organizationId: "test-org", orgRole: "admin", isPlatformAdmin: false,
   }),
 }));
 vi.mock("@/lib/operations/runner", () => ({

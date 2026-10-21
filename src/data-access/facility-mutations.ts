@@ -165,7 +165,7 @@ export async function updateFacility(
     data.durabilityOption !== undefined &&
     data.durabilityOption !== existing.durabilityOption;
   // The tier is certification configuration: every member edits site details,
-  // only Owners and Admins (and Platform Admins) change the tier. A save that
+  // only Admins (and Platform Admins) change the tier. A save that
   // echoes the current tier is not a change and stays open to members.
   if (tierChangeRequested && !hasOrgRole(ctx, DURABILITY_TIER_MIN_ROLE)) {
     throw new SafeError(DURABILITY_TIER_ROLE_REFUSAL);

@@ -5,6 +5,13 @@
 > + drift panel this ADR introduced were removed — Isometric is the sole
 > system-of-record for project emissions. Kept as the historical record.
 
+> **Sandbox stub superseded:** [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
+> and [plan §4.5, Guard](../plans/2026-10-15-template-driven-emissions.md#45-submission-snapshots-and-claims-pr-4)
+> replace the sandbox zero stub with emissions entries and Removal-confirmed
+> zeros. No environment fabricates period-input values. Operating components
+> need recorded values or explicit confirmation on Empty components;
+> establishment and end-of-life components remain project-level in Isometric.
+
 > **Current route note:** The period-emissions journal described here was
 > removed by ADR 0018. There is no current period-emissions route. The surviving
 > facility configuration lives at
@@ -19,7 +26,7 @@
 > REMOVAL-scope and mapped in `INPUT_MAPPING`. The scope guard itself stands
 > for every other component (`docs/isometric/changes.md`, 2026-07-29).
 
-> **Status: Accepted, design-only** (2026-05-24). Resolves
+> **Original status: Accepted, design-only** (2026-05-24). Resolves
 > `isometric/phase-3.7-period-inputs` (originally raised 2026-05-21,
 > scope-revised 2026-05-22 under ADR 0003). Implementation tracked under
 > integration-plan Phase 3.7 "period-inputs follow-up". Extends the

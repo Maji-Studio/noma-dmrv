@@ -1,7 +1,8 @@
+import { loadRemovalEntryCorrection } from "@/data-access/removal-entry-correction";
+import type { EntryCorrectionState } from "@/lib/certification/removal-entry-correction";
 import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
 import { isLiveEntryReservation, entriesWithoutRemoval, type EntryContender } from "@/lib/certification/removal-emission-contributions";
 import type { OrgContext } from "@/lib/auth/server";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import type { loadBatchEmissionEntryFacts } from "@/data-access/emission-entry-facts";
 import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
 import { getTemplateObservationsByIds } from "@/data-access/removal-template-observations";
@@ -11,19 +12,24 @@ import { requireOrgFacility } from "@/data-access/utils";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 import { SafeError } from "@/lib/errors";
 import type { BatchEmissionLineFacts } from "@/lib/certification/emission-lines";
-import type { FacilityCertifierFacts } from "./facility-certifier-facts";
+import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
+
+/** Entry derivation only needs persisted observations, never registry facts. */
+export interface EntryTemplateContext {
+  templatesById: Partial<Record<string, { observation: RemovalTemplateObservation | null }>>;
+}
 
 export type BatchEmissionContext = Record<string,
-  Pick<BatchEmissionLineFacts, "automaticFigures" | "omittedAutomaticSources"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
+  Pick<BatchEmissionLineFacts, "automaticFigures" | "omittedAutomaticSources"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { corrections?: EntryCorrectionState[]; productionReservationSubmissionId?: string | null; contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
 
 /** Batch-wide facts, even when the Removal carries only some applications. */
 export async function loadBatchEmissionContext(
   ctx: OrgContext, facilityId: string,
   batches: readonly { id: string; removalTemplateId: string | null }[],
-  facilityFacts: FacilityCertifierFacts,
+  facilityFacts: EntryTemplateContext,
+  claimedAttempt?: { removalId: string; submissionId?: string },
 ): Promise<BatchEmissionContext> {
   const result: BatchEmissionContext = {};
-  if (!emissionsEntriesEnabled()) return result;
   const readableBatches = batches.flatMap((batch) => {
     const observation = batch.removalTemplateId
       ? facilityFacts.templatesById[batch.removalTemplateId]?.observation : null;
@@ -41,7 +47,7 @@ export async function loadBatchEmissionContext(
   const [storedEntries, automatic, contenders, availableApplications] = await Promise.all([
     listEmissionEntriesForBatches(ctx, ids),
     loadBatchesEmissionAutomaticFacts(ctx, ids),
-    listEmissionEntryDraftContenders(ctx, ids),
+    listEmissionEntryDraftContenders(ctx, ids, undefined, claimedAttempt),
     listEmissionEntryAvailableApplications(ctx, ids),
   ]);
   const reservations = await loadEmissionEntryReservations(ctx, [...new Set(storedEntries.flatMap((entry) => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []))]);
@@ -63,8 +69,18 @@ export async function loadBatchEmissionContext(
       [entry.observationId, observationsById.get(entry.observationId) ?? null] as const,
     ));
     const entries = deriveEmissionEntryFacts(stored, observation, previousObservations);
-    result[id] = { entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
+    result[id] = { productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
       entriesWithoutRemoval: entriesWithoutRemoval(entries, contenders, liveReservationIds, availableApplications) };
+  }
+  for (const contender of contenders.filter((item) => item.contenderKind === "correction")) {
+    const correction = await loadRemovalEntryCorrection(ctx, contender.removalId, contenders);
+    for (const id of correction.correction?.batches.map((batch) => batch.id) ?? correction.changedBatchIds ?? []) {
+      if (result[id]) (result[id].corrections ??= []).push({ ...correction,
+        correction: correction.correction ? { ...correction.correction,
+          changed: correction.correction.changed.filter((change) => change.batchId === id),
+        } : undefined,
+      });
+    }
   }
   return result;
 }

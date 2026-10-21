@@ -3,8 +3,8 @@
  * that seed new facilities and records (the former Defaults pane, Q12).
  *
  * The name is read-only text for now; renaming the organization arrives with
- * Profile in wave 2. Every member can open the pane (Q15); only Owners and
- * Admins get the controls, which the defaults form decides from the server.
+ * Profile in wave 2. Every member can open the pane (Q15); only Admins get
+ * the controls, which the defaults form decides from the server.
  */
 "use client";
 

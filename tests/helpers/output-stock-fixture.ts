@@ -12,7 +12,7 @@ export async function seedOutputStockParents(db: typeof database, options: { org
   const userId = options.userId ?? `e2e-fifo-user-${tag}`;
   if (!options.organizationId) await db.insert(organizations).values({ id: organizationId, name: `E2E FIFO ${tag}`, slug: `e2e-fifo-${tag.toLowerCase()}` });
   if (!options.userId) await db.insert(users).values({ id: userId, name: 'E2E FIFO operator', email: `fifo-${tag.toLowerCase()}@e2e.local`, emailVerified: true });
-  const ctx: OrgContext = { organizationId, userId, orgRole: 'owner', isPlatformAdmin: false };
+  const ctx: OrgContext = { organizationId, userId, orgRole: 'admin', isPlatformAdmin: false };
   const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId, code: `E2E-FIFO-F-${tag}`, name: `E2E FIFO ${tag}` }).returning();
   const [recipe] = await db.insert(formulations).values({ organizationId, code: `E2E-FIFO-M-${tag}`, name: `E2E FIFO mix ${tag}`, biocharRatio: 0.8 }).returning();
   const [pure] = await db.insert(formulations).values({ organizationId, code: `E2E-FIFO-P-${tag}`, name: `E2E Pure ${tag}`, biocharRatio: 1 }).returning();

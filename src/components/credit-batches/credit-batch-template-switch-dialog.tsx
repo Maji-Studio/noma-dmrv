@@ -8,9 +8,9 @@
  *
  * Only ready templates can be chosen: read in full, set up, and with no lines
  * to decide. A template that is not ready stays in the list, disabled, with its
- * count ("3 components to decide"), and the dialog links each one to Removal
- * templates ("Decide components"). The batch's current template stays selectable
- * even when it is not ready. The server refuses a template that is not ready.
+ * count ("3 components to decide"), and the dialog links each one to the
+ * Decisions step of Removal template setup ("Decide components", Make default
+ * off). The batch's current template stays selectable even when it is not ready. The server refuses a template that is not ready.
  *
  * The form sends the batch version it opened on, never a refetched one, so a
  * concurrent switch is refused instead of overwritten (#768). After a stale
@@ -33,7 +33,7 @@ import { useSwitchCreditBatchRemovalTemplate } from "@/hooks/use-removal-templat
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { Notice } from "@/components/ui/notice";
 import type { TemplateReadiness } from "@/components/certification/removal-template-review-model";
-import { removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
+import { removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL, removalTemplateSetupHref } from "@/lib/certification/links";
 import { getStaleVersionConflict, toSaveErrorMessage } from "@/lib/stale-version";
 import {
   switchRemovalTemplateFormSchema,
@@ -237,7 +237,9 @@ function SwitchTemplateForm({
                 {reason && <span className="body-caption text-[var(--color-text-tertiary)]">{reason}</span>}
                 {/* A new tab, so this dialog and its unsaved choice stay open. */}
                 <Link
-                  href={removalTemplatesSettingsHref(creditBatch.facilityId, template.id)}
+                  href={toDecide > 0
+                    ? removalTemplateSetupHref(creditBatch.facilityId, { templateId: template.id, step: "decisions", makeDefault: false })
+                    : removalTemplatesSettingsHref(creditBatch.facilityId)}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-4 body-small underline underline-offset-2"

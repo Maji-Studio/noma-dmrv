@@ -54,11 +54,9 @@ type EntryTarget = { line: EmissionLine; entry: EmissionEntry };
 
 interface BatchEmissionsPageProps {
   creditBatchId: string;
-  /** Manual entry writes are behind EMISSIONS_ENTRIES_ENABLED. */
-  entriesEnabled: boolean;
 }
 
-export function BatchEmissionsPage({ creditBatchId, entriesEnabled }: BatchEmissionsPageProps) {
+export function BatchEmissionsPage({ creditBatchId }: BatchEmissionsPageProps) {
   const { facilityId } = useFacilityContext();
   if (!facilityId) {
     return (
@@ -68,7 +66,7 @@ export function BatchEmissionsPage({ creditBatchId, entriesEnabled }: BatchEmiss
       </div>
     );
   }
-  return <BatchEmissions key={`${facilityId}-${creditBatchId}`} scope={{ facilityId, creditBatchId }} entriesEnabled={entriesEnabled} />;
+  return <BatchEmissions key={`${facilityId}-${creditBatchId}`} scope={{ facilityId, creditBatchId }} />;
 }
 
 function batchFacts(batch: FacilityEmissionsOverviewBatch): EmissionBatch {
@@ -95,7 +93,7 @@ function batchKpis(lines: EmissionLine[], timeZone: string, today: string): Batc
   };
 }
 
-function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; entriesEnabled: boolean }) {
+function BatchEmissions({ scope }: { scope: EmissionBatchScope }) {
   const toast = useToast();
   const { timeZone } = useFacilityClock(scope.facilityId);
   const today = formatFacilityDate(new Date(), timeZone);
@@ -112,12 +110,10 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
   const [stoppedDeleteError, setStoppedDeleteError] = useState<string | null>(null);
   const deleteEntry = useDeleteEmissionEntry(scope);
   const restoreEntry = useRestoreEmissionEntry(scope);
-
   const overviewBatch = overview.data?.batches.find((batch) => batch.creditBatchId === scope.creditBatchId) ?? null;
   const lines = linesQuery.data ?? [];
   const formLine = form ? (lines.find((line) => line.componentId === form.componentId) ?? null) : null;
   const visible = sortLines(lines.filter((line) => lineMatches(line, filter)), sort);
-
   if (overview.isSuccess && !overviewBatch) {
     return (
       <div className="container-max page-shell">
@@ -144,10 +140,8 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
     setExpandedLine(line, open);
     if (!open && editingCommentId === line.componentId) setEditingCommentId(null);
   };
-
   const deleteFailed = (line: EmissionLine, error: unknown) =>
     toSaveErrorMessage(error, `The manual entry on ${line.displayName} was not deleted. Try again.`);
-
   const removeEntry = async (line: EmissionLine, entry: EmissionEntry) => {
     // A stopped entry cannot be restored against the current template, so it gets no Undo: confirm first.
     if (!entry.counts) {
@@ -163,7 +157,6 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
       toast.error(deleteFailed(line, error));
     }
   };
-
   const confirmStoppedDelete = async () => {
     if (!stoppedDelete) return;
     const { line, entry } = stoppedDelete;
@@ -175,7 +168,6 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
       setStoppedDeleteError(deleteFailed(line, error));
     }
   };
-
   const undoLast = async () => {
     if (!undo) return;
     setUndoing(true);
@@ -188,17 +180,13 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
       setUndoing(false);
     }
   };
-
   const undoMessage = undo ? `Manual entry deleted on ${undo.line.displayName}.${undo.entry.documentCount ? " Undo brings back the values and the files." : ""}` : "";
-
   // Under its row while the row is listed; floating when the delete moved the line out of the filter or off the template.
   const undoInline = !!undo && visible.some((line) => line.componentId === undo.line.componentId);
   const undoBar = undo ? (
     <EmissionsUndoBar key={undo.id} inline={undoInline} message={undoMessage} undoing={undoing} onUndo={() => void undoLast()} onDismiss={() => setUndo(null)} />
   ) : null;
-
   const counts = lineCounts(lines);
-
   return (
     <div className="container-max page-shell">
       <div className="flex flex-col gap-4">
@@ -221,7 +209,6 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
           subtitle={overviewBatch ? batchSubtitle(overviewBatch) : SUBTITLE}
         />
       </div>
-      {!entriesEnabled && <Notice tone="info">Manual entries are not switched on yet. Components show what records hold.</Notice>}
       {isEmissionLinesBlocked(linesQuery.error) ? (
         <TemplateSetupNotice blocker={linesQuery.error.blocker} facilityId={scope.facilityId} creditBatchId={scope.creditBatchId} />
       ) : linesQuery.error && !linesQuery.data ? (
@@ -243,7 +230,6 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
               lines={visible}
               grouped={sort === "template"}
               scope={scope}
-              canWrite={entriesEnabled}
               expanded={expanded}
               editingCommentId={editingCommentId}
               undo={undo && undoInline ? { componentId: undo.line.componentId, bar: undoBar } : null}

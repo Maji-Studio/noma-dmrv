@@ -52,6 +52,7 @@ vi.mock("./removal-list-state", () => ({
       memberBatchCodes: [],
       externalId: null,
       version: null,
+      submittedOn: { kind: "never" },
       readiness: { reasons: [] },
     }) as unknown as RemovalListRow),
 }));

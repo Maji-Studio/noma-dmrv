@@ -5,15 +5,13 @@ import { getMetadataValue, SUBMISSION_METADATA_KEYS, SUBMISSION_EXTERNAL_MUTATIO
 import { omittedProductionSources } from "@/lib/certification/removal-emission-lines";
 import type { OrgContext } from "@/lib/auth/server";
 import { loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
-import { deriveRemovalEntryWindow } from "@/lib/certification/removal-emission-contributions";
+import { deriveRemovalEntryWindow, entryHoldingRemovalId } from "@/lib/certification/removal-emission-contributions";
 import { deriveRemovalEntryInputs } from "@/lib/certification/removal-entry-inputs";
-import type { BatchEmissionContext } from "./batch-emission-context";
-import type { FacilityCertifierFacts } from "./facility-certifier-facts";
+import type { BatchEmissionContext, EntryTemplateContext } from "./batch-emission-context";
 import type { RemovalScope } from "./removal-scope";
 
-export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalScope, facts: BatchEmissionContext, facility: FacilityCertifierFacts, frozenEntrySet?: { entryId: string; contentRevision: number }[]) {
-  if (!emissionsEntriesEnabled() || !scope.removalId) return undefined;
+export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalScope, facts: BatchEmissionContext, facility: EntryTemplateContext, frozenEntrySet?: { entryId: string; contentRevision: number }[]) {
+  if (!scope.removalId) return undefined;
   const observation = facility.templatesById[scope.memberBatches[0]?.removalTemplateId ?? ""]?.observation;
   if (!observation) return undefined;
   const allEntries = Object.values(facts).flatMap((batch) => batch.entries);
@@ -22,7 +20,7 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   // Historical sent singles remain omission facts, even though they are not part of this attempt's frozen set.
   const belongsToFrozenView = (entry: (typeof allEntries)[number]) => !frozenEntrySet ||
     frozenEntrySet.some((frozen) => frozen.entryId === entry.id) ||
-    (entry.kind === "value" && entry.lineRule === "single" && !!entry.sentByRemovalId && entry.sentByRemovalId !== scope.removalId);
+    (entry.kind === "value" && entry.lineRule === "single" && !!entryHoldingRemovalId(entry) && entryHoldingRemovalId(entry) !== scope.removalId);
   const entries = allEntries.filter(belongsToFrozenView);
   const contenders = Object.values(facts)[0]?.contenders ?? [];
   const reservations = await loadEmissionEntryReservations(ctx,
@@ -30,6 +28,7 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   const contributions = deriveRemovalEntryInputs({
     removalId: scope.removalId, memberBatchIds: scope.memberBatches.map((batch) => batch.id),
     window: deriveRemovalEntryWindow(scope.memberBatches, scope.lineages.map((lineage) => lineage.application.applicationDate)),
+    creditBatchCodes: Object.fromEntries(scope.memberBatches.map((batch) => [batch.id, batch.code])),
     contenders, entries, reservations, nowMs: Date.now(), frozen: !!frozenEntrySet, observation,
     entriesWithoutRemoval: frozenEntrySet ? [] : Object.values(facts).flatMap((batch) => batch.entriesWithoutRemoval ?? []),
   });
@@ -51,7 +50,9 @@ export function frozenEntriesForAttempt(submission: typeof certificationSubmissi
     typeof submission.payloadSnapshot !== "object" || !("frozenEntrySet" in submission.payloadSnapshot)) return undefined;
   const frozen = readRemovalEntrySnapshot(submission).frozenEntrySet;
   const entries = Object.values(facts).flatMap((batch) => batch.entries);
-  const reserved = frozen.length > 0 && frozen.every((item) => entries.some((entry) =>
+  // Both claim sets commit together, so production ownership also freezes an empty entry set.
+  const productionReserved = Object.values(facts).some((batch) => batch.productionReservationSubmissionId === submission.id);
+  const reserved = productionReserved || frozen.length > 0 && frozen.every((item) => entries.some((entry) =>
     entry.id === item.entryId && entry.sendReservedBySubmissionId === submission.id));
   const mutation = getMetadataValue(submission.metadata, SUBMISSION_METADATA_KEYS.externalMutation);
   return reserved || mutation === SUBMISSION_EXTERNAL_MUTATIONS.possible || mutation === SUBMISSION_EXTERNAL_MUTATIONS.confirmed ? frozen : undefined;

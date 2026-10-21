@@ -1,5 +1,5 @@
 /**
- * Settings, Members. Any member can view the roster; Owners/Admins (and
+ * Settings, Members. Any member can view the roster; Admins (and
  * Platform Admins) get the invite, role-change, remove, and revoke controls.
  */
 import { OrganizationSettings } from "@/components/organizations/organization-settings";

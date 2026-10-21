@@ -1,8 +1,8 @@
 /**
  * Settings, Developers: whether API access is on for the organization (a
  * Platform Admin switch, read-only here, Q7) and the organization's API keys.
- * Keys need a live Owner/Admin membership. The rail lists the pane only for
- * Owners, Admins and Platform Admins; anyone else who opens the URL reads why
+ * Keys need a live Admin membership. The rail lists the pane only for
+ * Admins and Platform Admins; anyone else who opens the URL reads why
  * there are no controls, as on the former API keys route.
  */
 import { ApiKeySettings } from "@/components/api-keys";

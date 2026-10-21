@@ -78,30 +78,28 @@ afterEach(() => {
 describe("BatchEmissionsPage undo", () => {
   it("shows Undo under the row and restores with the version the delete returned", async () => {
     mocks.deleteEntry.mockResolvedValue({ id: "entry-1", version: 9 });
-    render(<BatchEmissionsPage creditBatchId="cb" entriesEnabled />);
+    render(<BatchEmissionsPage creditBatchId="cb" />);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(mocks.deleteEntry).toHaveBeenCalledWith({ id: "entry-1", expectedVersion: 4 }));
     const row = screen.getByRole("listitem", { name: COUNTING.displayName });
     fireEvent.click(await within(row).findByRole("button", { name: "Undo" }));
     await waitFor(() => expect(mocks.restoreEntry).toHaveBeenCalledWith({ id: "entry-1", expectedVersion: 9 }));
   });
-
   it("keeps Undo on screen when the delete moves the line out of the filter", async () => {
     mocks.filter = "done";
     mocks.deleteEntry.mockImplementation(async () => {
       mocks.lines = [{ ...COUNTING, state: "empty", entries: [] }];
       return { id: "entry-1", version: 5 };
     });
-    render(<BatchEmissionsPage creditBatchId="cb" entriesEnabled />);
+    render(<BatchEmissionsPage creditBatchId="cb" />);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
     expect(screen.queryByRole("listitem", { name: COUNTING.displayName })).toBeNull();
     await waitFor(() => expect(mocks.restoreEntry).toHaveBeenCalledWith({ id: "entry-1", expectedVersion: 5 }));
   });
-
   it("confirms before deleting a stopped entry and offers no Undo", async () => {
     mocks.lines = [makeLine({ state: "needsReview", entries: [makeEntry({ counts: false, canConfirm: false, version: 2 })] })];
-    render(<BatchEmissionsPage creditBatchId="cb" entriesEnabled />);
+    render(<BatchEmissionsPage creditBatchId="cb" />);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(mocks.deleteEntry).not.toHaveBeenCalled();
     const dialog = await screen.findByRole("dialog");
@@ -117,16 +115,15 @@ describe("BatchEmissionsPage template blocker", () => {
   it("explains a missing template with a link and no Try again", () => {
     mocks.lines = [];
     mocks.linesError = new EmissionLinesBlockedError(removalTemplateBlocker("unpinnedTemplate"));
-    render(<BatchEmissionsPage creditBatchId="cb" entriesEnabled />);
+    render(<BatchEmissionsPage creditBatchId="cb" />);
     expect(screen.getByText("Choose a Removal template for this credit batch.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Set template" }).getAttribute("href")).toContain("/credit-batches/cb");
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
-
   it("keeps Try again for a real load failure", () => {
     mocks.lines = [];
     mocks.linesError = new Error("Network down");
-    render(<BatchEmissionsPage creditBatchId="cb" entriesEnabled />);
+    render(<BatchEmissionsPage creditBatchId="cb" />);
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 });

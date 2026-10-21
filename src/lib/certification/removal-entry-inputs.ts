@@ -18,7 +18,7 @@ export function deriveRemovalEntryInputs(args: Omit<Parameters<typeof deriveRemo
     ...args,
     entries: args.entries.map((entry): RemovalEntryFact => {
       const owner = entry.sendReservedBySubmissionId ? owners.get(entry.sendReservedBySubmissionId) : undefined;
-      return { ...entry, reservedByRemovalId: owner?.live ? owner.removalId : args.frozen ? args.removalId : null,
+      return { ...entry, reservedByRemovalId: owner?.live ? owner.removalId : args.frozen && !entry.heldForRemovalId ? args.removalId : null,
         reservationKnownInactive: !owner?.live };
     }),
     lineSources: args.observation.lineSources,
@@ -26,7 +26,7 @@ export function deriveRemovalEntryInputs(args: Omit<Parameters<typeof deriveRemo
       if (input.type !== "monitored") return [];
       const enriched = args.observation.enrichment[component.id]?.[input.key];
       const unit = enriched && !("status" in enriched) ? canonicalUnit(input.quantityKind, enriched.unit) : undefined;
-      return unit ? [{ componentId: component.id, inputKey: input.key, unit }] : [];
+      return unit ? [{ componentId: component.id, componentDisplayName: component.displayName, inputKey: input.key, unit }] : [];
     }))),
   });
 }

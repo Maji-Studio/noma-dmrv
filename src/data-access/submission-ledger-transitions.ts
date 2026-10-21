@@ -1,3 +1,4 @@
+import { releaseSubmissionReservations } from "./submission-reservation-release";
 import { recordActivityChange } from "./activity-events";
 import { emissionEntries } from "@/db/schema/emission-entries";
 import { readRemovalEntrySnapshot } from "@/lib/certification/removal-entry-snapshot";
@@ -64,7 +65,6 @@ export async function markSubmissionSubmitted(
         })
         .where(and(eq(certificationSubmissions.id, args.supersedePreviousId), eq(certificationSubmissions.organizationId, ctx.organizationId)));
     }
-    // Not flag-gated: entries reserved while the flag was on must still be stamped.
     if (args.productionEmissionsClaim) {
       // Match reservation/value writers: all member batches in id order, then entries.
       const members = await tx.select({ creditBatchId: creditBatchApplications.creditBatchId }).from(creditBatchApplications)
@@ -168,7 +168,7 @@ export async function retireStaleSubmissionDraft(
 ): Promise<void> {
   requireOrgScope(ctx);
   await withCertificationStatusActivity(ctx, [id], async (tx) => {
-    await tx
+    const [retired] = await tx
       .update(certificationSubmissions)
       .set({
         status: "superseded",
@@ -183,7 +183,8 @@ export async function retireStaleSubmissionDraft(
           eq(certificationSubmissions.status, "draft"),
           eq(certificationSubmissions.organizationId, ctx.organizationId),
         ),
-      );
+      ).returning({ removalId: certificationSubmissions.localEntityId });
+    if (retired) await releaseSubmissionReservations(ctx, tx, id, retired.removalId);
   });
 }
 
@@ -283,4 +284,3 @@ export async function clearTerminalStatusForResubmit(
       .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
   }, tx, origin);
 }
-

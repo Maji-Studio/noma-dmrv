@@ -1,15 +1,16 @@
+import { entryHoldingRemovalId } from "@/lib/certification/removal-emission-contributions";
+import { loadEmissionEntryHolds } from "./emission-entry-holds";
+import { lockEmissionCorrectionScope, revalidateEmissionCorrectionScope, emissionCorrectionWindow } from "./emission-entry-corrections";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { creditBatches, facilities, emissionEntries } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
-import { requireEmissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { requireOrgScope } from "./utils";
 import { nextVersion } from "./row-version";
 
 export async function lockEmissionEntry(ctx: OrgContext, tx: DbTransaction, id: string, options: { includeDeleted?: boolean } = {}) {
   requireOrgScope(ctx);
-  requireEmissionsEntriesEnabled();
   const [entry] = await tx
     .select()
     .from(emissionEntries)
@@ -27,15 +28,26 @@ export async function lockEmissionEntry(ctx: OrgContext, tx: DbTransaction, id: 
 export async function lockWritableEmissionEntry(ctx: OrgContext, tx: DbTransaction, id: string, options: { includeDeleted?: boolean } = {}) {
   requireOrgScope(ctx);
   const entry = await lockEmissionEntry(ctx, tx, id, options);
-  if (entry.sentByRemovalId || entry.sendReservedBySubmissionId)
+  const holds = await loadEmissionEntryHolds(ctx, [entry], tx);
+  const heldForRemovalId = holds.get(entry.id) ?? null;
+  const removalId = entryHoldingRemovalId({ ...entry, heldForRemovalId });
+  if ((removalId && !emissionCorrectionWindow(ctx, tx, entry.creditBatchId, removalId)) || entry.sendReservedBySubmissionId)
     throw new DomainError(
       "certification_locked",
       "This emissions entry is reserved or sent. It cannot be changed.",
     );
-  return entry;
+  return { ...entry, heldForRemovalId };
 }
 /** Discover unlocked, then lock facility before batch, matching facility archive. */
 export async function lockEmissionEntryBatch(ctx: OrgContext, tx: DbTransaction, creditBatchId: string) {
+  requireOrgScope(ctx);
+  await lockEmissionCorrectionScope(ctx, tx, creditBatchId);
+  const result = await lockEmissionCommentBatch(ctx, tx, creditBatchId);
+  await revalidateEmissionCorrectionScope(ctx, tx, creditBatchId);
+  return result;
+}
+/** Comments serialize with batch changes without entering the certification lineage. */
+export async function lockEmissionCommentBatch(ctx: OrgContext, tx: DbTransaction, creditBatchId: string) {
   requireOrgScope(ctx);
   const [initial] = await tx.select().from(creditBatches)
     .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, creditBatchId)));

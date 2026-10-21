@@ -24,7 +24,7 @@ import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
 import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { APPLIED_DRY_LABEL } from "@/lib/credit-batches/batch-page";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { LOAD_FAILED, MISSING_VALUE } from "@/lib/copy-utils";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { computeCohortInputTotals } from "./cohort-input-ledger";
 import { carbonGapLabels } from "@/lib/certification/batch-health-facts";
@@ -126,7 +126,7 @@ function CreditBatchCarbonEstimate({
                 label: "Production inputs",
                 value: (
                   <span aria-busy={isLoadingRuns || undefined} className="text-[var(--color-text-tertiary)]">
-                    {runsError ? `${MISSING_VALUE.notAvailable}. Reload the production runs.` : "Loading…"}
+                    {runsError ? `${LOAD_FAILED}. Reload the page.` : "Loading…"}
                   </span>
                 ),
               }]}
@@ -266,7 +266,7 @@ interface CreditBatchSheetSectionsOptions extends CreditBatchRunsContentProps {
   /** Removal/GHG lifecycle summary; undefined while loading or unavailable. */
   healthSummary?: CreditBatchHealthSummary;
   isHealthLoading: boolean;
-  /** Owner or Admin: may switch the batch's Removal template. */
+  /** Admin: may switch the batch's Removal template. */
   canManage?: boolean;
   /** A submitted Removal holds the batch, so its definition is locked. */
   locked?: boolean;
@@ -276,8 +276,6 @@ interface CreditBatchSheetSectionsOptions extends CreditBatchRunsContentProps {
   inRemoval?: boolean;
   /** Applied dry biochar (kg) from the page model; undefined while it loads, null when it failed. */
   appliedDryKg?: number | null;
-  /** The server's EMISSIONS_ENTRIES_ENABLED flag; set it to mount the Emissions panel between Production runs and Notes. */
-  emissionsEntriesEnabled?: boolean;
 }
 
 export function creditBatchSheetSections({
@@ -294,7 +292,6 @@ export function creditBatchSheetSections({
   activeFocusTarget,
   inRemoval = false,
   appliedDryKg,
-  emissionsEntriesEnabled,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
   const removalId = creditBatch.productionEmissionsClaimedByRemovalId ?? healthSummary?.removalId ?? null;
   const removalCode = creditBatch.productionEmissionsClaimedByRemovalId
@@ -357,9 +354,10 @@ export function creditBatchSheetSections({
         {
           // Dry, from the page model's slices, as on the batch page.
           label: APPLIED_DRY_LABEL,
-          value: appliedDryKg == null ? null : formatTonnes(kgToTonnes(appliedDryKg)),
+          // Null is a failed page model read, so the field says so instead of a token.
+          value: appliedDryKg === null ? LOAD_FAILED : appliedDryKg === undefined ? null : formatTonnes(kgToTonnes(appliedDryKg)),
           pending: appliedDryKg === undefined,
-          emptySituation: "notAvailable" as const,
+          ...(appliedDryKg === null ? { valuePresent: false } : {}),
         },
         ...(durabilityResult?.fDurable != null
           ? [{ label: "Durability estimate (capped)", value: formatDurabilityPercent(durabilityResult.fDurable) }]
@@ -373,8 +371,9 @@ export function creditBatchSheetSections({
           rows={[
             { label: "Raw durability estimate", value: formatDurabilityPercent(durabilityResult.rawFDurable) },
             { label: "Durability cap applied", value: durabilityResult.durabilityCapped ? "Yes" : "No" },
-            { label: "Preview component", value: preview?.componentKey ?? MISSING_VALUE.notAvailable },
-            { label: "Preview formula", value: preview?.formulaVersion ?? MISSING_VALUE.notAvailable },
+            // Provenance rows: one the preview does not carry is left out.
+            ...(preview?.componentKey ? [{ label: "Preview component", value: preview.componentKey }] : []),
+            ...(preview?.formulaVersion ? [{ label: "Preview formula", value: preview.formulaVersion }] : []),
           ]}
         />
       ) : undefined,
@@ -401,21 +400,16 @@ export function creditBatchSheetSections({
         </div>
       ),
     },
-    ...(emissionsEntriesEnabled === undefined
-      ? []
-      : [
-          {
-            id: "emissions",
-            fields: [],
-            content: (
-              <CreditBatchEmissionsPanel
-                creditBatchId={creditBatch.id}
-                facilityId={creditBatch.facilityId}
-                enabled={emissionsEntriesEnabled}
-              />
-            ),
-          },
-        ]),
+    {
+      id: "emissions",
+      fields: [],
+      content: (
+        <CreditBatchEmissionsPanel
+          creditBatchId={creditBatch.id}
+          facilityId={creditBatch.facilityId}
+        />
+      ),
+    },
     {
       id: "notes",
       fields: [{ label: "Notes", value: creditBatch.siteManagementNotes }],

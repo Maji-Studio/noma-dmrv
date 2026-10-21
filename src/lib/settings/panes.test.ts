@@ -30,7 +30,7 @@ describe("settings console rail", () => {
     expect(settingsPaneGroups(member).map((group) => group.key)).toEqual(["you", "organization", "certification"]);
   });
 
-  it("shows Developers to Owners and Admins and to Platform Admins", () => {
+  it("shows Developers to Admins and to Platform Admins", () => {
     expect(keys(admin)).toContain("developers");
     expect(keys(platformAdmin)).toContain("developers");
     expect(keys(admin)).not.toContain("diagnostics");

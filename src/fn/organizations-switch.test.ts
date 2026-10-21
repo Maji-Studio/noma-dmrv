@@ -40,7 +40,7 @@ vi.mock("@/lib/auth/server", () => ({
 vi.mock("@/data-access/organizations", () => ({
   cancelInvitationAsPlatformAdmin: vi.fn(),
   createInvitationAsPlatformAdmin: vi.fn(),
-  createOrganizationWithOwner: vi.fn(),
+  createOrganizationWithAdmin: vi.fn(),
   findMembershipRole: mocks.findMembershipRole,
   findUserIdByEmail: vi.fn(),
   getActiveOrganization: vi.fn(),

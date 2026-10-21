@@ -116,7 +116,7 @@ describe("RegistrySettingsPane", () => {
       <RegistrySettingsPane viewer={{ ...viewer, canManage: false, registryKeysSaved: false }} />,
     );
     expect(html).toContain("Keys not saved.");
-    expect(html).toContain("Owners and Admins save the Isometric keys here.");
+    expect(html).toContain("Admins save the Isometric keys here.");
     expect(html).not.toContain("Keys form");
     expect(html).toContain("Source visibility policy");
   });

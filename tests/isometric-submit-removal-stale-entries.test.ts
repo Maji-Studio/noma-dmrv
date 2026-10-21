@@ -9,7 +9,6 @@ import type { FacilityCertifierFacts } from "@/fn/certification/facility-certifi
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import * as isometric from "@/lib/isometric";
 vi.mock("@/data-access/emission-entry-contenders", () => ({ loadEmissionEntryReservations: vi.fn(async () => []) }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => true }));
 
 it("heals a crashed unreserved draft after a new entry is added and submits a new version", async () => {
   const org = makeTestOrgContext(USER_ID);
@@ -28,7 +27,7 @@ it("heals a crashed unreserved draft after a new entry is added and submits a ne
     values: [{ inputKey: "electricity_use", magnitude: "2", unit: "kWh" }], evidenceDocumentIds: ["doc-test-1"], sendReservedBySubmissionId: null }], previousObservations: new Map(), automaticFigures: {}, contenders: [{ contenderKind: "draft", removalId: REMOVAL_ID, creditBatchIds: [CREDIT_BATCH_ID], createdAt: "2026-01-01", window: { start: "2026-01-01", end: "2026-02-01" } }] } } as unknown as BatchEmissionContext;
   const scope = { removalId: REMOVAL_ID, memberBatches: [{ id: CREDIT_BATCH_ID, removalTemplateId: "template", startDate: "2026-01-01" }],
     lineages: [{ application: { applicationDate: new Date("2026-02-01") } }] } as RemovalScope;
-  const facility = { templatesById: { template: { observation: { id: "observation", semanticFingerprint: "fingerprint", lineSources: { line: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } },
+  const facility = { facilityTimezone: "UTC", templatesById: { template: { observation: { id: "observation", semanticFingerprint: "fingerprint", lineSources: { line: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } },
     definition: { groups: [{ components: [{ id: "line", inputs: [{ key: "electricity_use", type: "monitored", quantityKind: "energy" }] }] }] },
     enrichment: { line: { electricity_use: { unit: "kWh" } } } } } } } as unknown as FacilityCertifierFacts;
   let loadedFresh = false;

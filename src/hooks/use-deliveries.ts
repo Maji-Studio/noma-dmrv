@@ -1,7 +1,6 @@
 import { invalidateRecordedTransport } from "./transport-distance-query-keys";
-import { throwDeliveryActionError } from "@/lib/delivery-action-errors";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
-import { StaleVersionError } from "@/lib/stale-version";
+import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { outputStockKeys } from "./use-output-stock";
 /**
@@ -149,7 +148,7 @@ export function useCreateDelivery(
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.delivery),
     mutationFn: async (data: CreateDeliveryData) => {
       const result = await createDeliveryFn(data);
-      if (!result.success) throwDeliveryActionError(result);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onMutate: async (variables) => {
@@ -161,6 +160,7 @@ export function useCreateDelivery(
         queryClient.setQueryData(biocharProductKeys.detail(row.id), (old: object | undefined) => old ? { ...old, ...row } : old);
       }
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.details() });
       // Invalidate all delivery lists
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
@@ -204,7 +204,7 @@ export function useUpdateDelivery(
     mutationFn: async (data: UpdateDeliveryData) => {
       const result = await updateDeliveryFn(data);
       if (!result.success) {
-        throwDeliveryActionError(result);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -345,7 +345,7 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
     mutationFn: async (variables: DeleteDeliveryData) => {
       const result = await deleteDeliveryFn(variables);
       if (!result.success) {
-        throwDeliveryActionError(result);
+        throwActionError(result);
       }
       return;
     },
@@ -393,6 +393,7 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       void invalidateRecordedTransport(queryClient);
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.details() });
       void queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       // Deleting a delivery shrinks the derived biochar leg's evidence set.

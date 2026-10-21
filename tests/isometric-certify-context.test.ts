@@ -1,3 +1,4 @@
+vi.mock("@/fn/certification/batch-emission-context", () => ({ loadBatchEmissionContext: vi.fn(async () => ({})) }));
 vi.mock("@/data-access/transport-distance-fix-links", () => ({ getTransportDistanceFixLinks: vi.fn(async () => new Map()) }));
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations";
 import { reviewedTemplateSources } from "./helpers/template-line-sources";
@@ -15,39 +16,18 @@ import * as readingsActions from "@/fn/production-run-readings";
 import * as readingImportActions from "@/fn/production-run-reading-imports";
 import * as readingsCsv from "@/lib/production-readings/readings-csv";
 import { deriveRemovalReadiness } from "@/lib/certification/readiness";
-import {
-  getCertifierProjectByFacility,
-  type CertifierProjectRow,
-} from "@/data-access/certification";
+import { getCertifierProjectByFacility, type CertifierProjectRow } from "@/data-access/certification";
 import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
-import {
-  getCreditBatchById,
-  getCreditBatchActiveScopeRemovalId,
-} from "@/data-access/credit-batches";
-import {
-  listDocumentsForEntityIds,
-} from "@/data-access/documents";
+import { getCreditBatchById, getCreditBatchActiveScopeRemovalId } from "@/data-access/credit-batches";
+import { listDocumentsForEntityIds } from "@/data-access/documents";
 import { getProductionRunsForCertification } from "@/data-access/production-runs";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
-import {
-  listComponentBlueprints,
-  listProjects,
-  listGhgEntryTemplates,
-  type IsometricComponentBlueprint,
-  type IsometricProject,
-  type IsometricGhgEntryTemplate,
-} from "@/lib/isometric";
-import {
-  loadCertifyContextForCreditBatchForUser,
-} from "@/fn/certification/certify-context-core";
-import {
-  mockNormalizedLineageFacts,
-  satisfiedVisualEvidenceDocuments,
-  transportTemplate,
-} from "./fixtures/certify-context";
+import { listComponentBlueprints, listProjects, listGhgEntryTemplates, type IsometricComponentBlueprint, type IsometricProject, type IsometricGhgEntryTemplate } from "@/lib/isometric";
+import { loadCertifyContextForCreditBatchForUser } from "@/fn/certification/certify-context-core";
+import { mockNormalizedLineageFacts, satisfiedVisualEvidenceDocuments, transportTemplate } from "./fixtures/certify-context";
 
 vi.mock("@/data-access/production-run-readings");
 vi.mock("@/data-access/production-run-reading-imports");
@@ -57,6 +37,8 @@ vi.mock("@/lib/production-readings/readings-csv");
 
 const readingsFunctions = [readings, readingImports, readingsActions,
   readingImportActions, readingsCsv].flatMap((module) => Object.values(module));
+
+vi.mock("@/data-access/facilities", () => ({ getFacilityById: vi.fn(async () => ({ timezone: "UTC" })) }));
 
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: vi.fn(),
@@ -735,9 +717,10 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     // Recorded delivery transport loads even when the template omits it, so a dropped line warns.
     expect(loadBiocharDeliveryTransportLegs).toHaveBeenCalledTimes(1);
     expect(coverage.biochar.entityIds).toEqual(["bp-1"]);
-    expect(coverage.sample.count).toBe(1);
-    expect(coverage.sample.entityIds.sort()).toEqual(["s-1", "s-2"]);
-    expect(mockedGetLegs).toHaveBeenCalledTimes(2);
+    expect(coverage.sample.count).toBe(0);
+    expect(coverage.sample.entityIds).toEqual([]);
+    expect(mockedGetLegs.mock.calls.some((call) => call[1] === "sample")).toBe(false);
+    expect(mockedGetLegs).toHaveBeenCalledExactlyOnceWith(expect.anything(), "feedstock", ["fs-1", "fs-2"]);
   });
 });
 
@@ -783,7 +766,7 @@ describe("requiredTransportCategories", () => {
     mockedListBlueprints.mockResolvedValue([]);
   });
 
-  it("collects all three categories when the template requests all of them", async () => {
+  it("collects only feedstock and biochar when the template also requests sample shipping", async () => {
     mockedGetMapping.mockResolvedValue(
       mapping({ defaultRemovalTemplateId: "tpl_full" }),
     );
@@ -796,7 +779,6 @@ describe("requiredTransportCategories", () => {
     expect(result.requiredTransportCategories).toEqual([
       "feedstock",
       "biochar",
-      "sample",
     ]);
   });
 
@@ -897,7 +879,8 @@ describe("requiredTransportCategories", () => {
         expect.stringContaining("Application APP-1"),
       ]),
     );
-    expect(result.transportCoverage.sample.aggregationWarning).toContain("tl-s1");
+    expect(result.transportCoverage.sample.aggregationWarning).toBeNull();
+    expect(result.transportCoverage.sample.count).toBe(0);
   });
 
   it("requires 1000-year sample data from the credit batch durability pathway", async () => {

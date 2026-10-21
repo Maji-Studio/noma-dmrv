@@ -3,11 +3,6 @@ import { makeTestOrgContext } from "../../tests/helpers/test-org";
 
 const mocks = vi.hoisted(() => ({ select: vi.fn() }));
 vi.mock("@/db", () => ({ db: { select: mocks.select } }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({
-  requireEmissionsEntriesEnabled: vi.fn(() => {
-    throw new Error("Writes disabled");
-  }),
-}));
 import { listEmissionEntries } from "./emission-entries";
 
 beforeEach(() => vi.clearAllMocks());
@@ -30,9 +25,9 @@ it("assembles multiple entries with three queries and no per-entry re-read", asy
     return query;
   });
   expect(await listEmissionEntries(makeTestOrgContext(), "batch")).toEqual([
-    { id: "first", values: [values[1]], documentCount: 0, evidenceDocumentIds: [] },
-    { id: "second", values: [values[0]], documentCount: 2, evidenceDocumentIds: [] },
-    { id: "empty", values: [], documentCount: 0, evidenceDocumentIds: [] },
+    { id: "first", values: [values[1]], documentCount: 0, evidenceDocumentIds: [], heldForRemovalId: null },
+    { id: "second", values: [values[0]], documentCount: 2, evidenceDocumentIds: [], heldForRemovalId: null },
+    { id: "empty", values: [], documentCount: 0, evidenceDocumentIds: [], heldForRemovalId: null },
   ]);
   expect(mocks.select).toHaveBeenCalledTimes(3);
 });

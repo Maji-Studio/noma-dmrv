@@ -7,7 +7,7 @@ vi.mock("./bin-stock-guards", async (importOriginal) => ({
   ...await importOriginal<typeof import("./bin-stock-guards")>(),
   deriveBiocharAvailableKg: async () => -20,
 }));
-const ctx = { organizationId: "org", userId: "user", orgRole: "owner" as const, isPlatformAdmin: false };
+const ctx = { organizationId: "org", userId: "user", orgRole: "admin" as const, isPlatformAdmin: false };
 
 it("reports output-bin overdraw with the bin and available/requested dry kilograms", async () => {
   await expect(assertProductionRunBiocharStockNotOverdrawn(ctx, {} as DbTransaction,

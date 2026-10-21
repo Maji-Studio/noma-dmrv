@@ -40,12 +40,11 @@ beforeEach(() => {
 
 describe("loadSettingsViewer", () => {
   it.each([
-    ["owner", false, true, true],
     ["admin", false, true, true],
     ["member", false, false, false],
     [null, true, true, false],
     ["member", true, true, false],
-    ["owner", true, true, true],
+    ["admin", true, true, true],
   ])("role %s (platform %s) manages %s and owns API keys %s", async (orgRole, isPlatformAdmin, canManage, canManageApiKeys) => {
     context.mockResolvedValue({ orgRole, isPlatformAdmin, organizationId: "org-1", userId: "user-1" });
     const { viewer: loaded } = await loadSettingsViewer();

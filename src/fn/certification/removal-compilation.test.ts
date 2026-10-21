@@ -11,7 +11,7 @@ import type { OrgContext } from "@/lib/auth/server";
 const ORG_CTX = vi.hoisted((): OrgContext => ({
   userId: "user-test-1",
   organizationId: "org-test-1",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 }));
 
@@ -87,6 +87,7 @@ describe("loadRemovalCompilation preparation blockers", () => {
     groups: [{ components: [{ id: "cmp-1", blueprint_key: "electricity_grid", inputs: [] }] }],
   };
   const baseContext = {
+    facilityTimezone: "UTC",
     mapping: { externalProjectId: "prj-1" },
     hasOrgCredentials: true,
     templateBlockers: [],

@@ -214,9 +214,9 @@ describe("buildCreditBatchOpenItems", () => {
 
     const member = buildCreditBatchOpenItems({ ...input, canManage: false });
     expect(member.blocking[0]).toMatchObject({
-      title: "5 components to decide", detail: "An Owner or Admin decides them in Removal templates.", target: null,
+      title: "5 components to decide", detail: "An Admin decides them in Removal templates.", target: null,
     });
-    expect(member.check[0]).toMatchObject({ detail: "An Owner or Admin decides it in Removal templates.", target: null });
+    expect(member.check[0]).toMatchObject({ detail: "An Admin decides it in Removal templates.", target: null });
 
     const owner = buildCreditBatchOpenItems({ ...input, canManage: true });
     expect(owner.blocking[0]).toMatchObject({ detail: "Decide them in Removal templates." });

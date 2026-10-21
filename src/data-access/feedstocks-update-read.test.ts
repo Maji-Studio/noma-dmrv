@@ -36,7 +36,7 @@ import { updateFeedstockInTransaction } from "./feedstocks";
 const ctx: OrgContext = {
   organizationId: "org",
   userId: "user",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 };
 

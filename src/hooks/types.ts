@@ -3,10 +3,11 @@
  */
 
 import type { ActionResult } from "@/types/actions";
+import { throwActionError } from "@/lib/stale-version";
 
 export function unwrap<T>(result: ActionResult<T>): T {
   if (!result.success) {
-    throw new Error(result.error);
+    throwActionError(result);
   }
   return result.data;
 }

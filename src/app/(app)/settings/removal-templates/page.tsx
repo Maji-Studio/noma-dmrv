@@ -15,7 +15,7 @@ export default async function RemovalTemplatesSettingsPage({
   assertSettingsPaneVisible(viewer, "removal-templates", await searchParams);
   return (
     <SettingsConsole pane="removal-templates" viewer={viewer}>
-      <RemovalTemplatesSettingsPane viewer={viewer} />
+      <RemovalTemplatesSettingsPane />
     </SettingsConsole>
   );
 }

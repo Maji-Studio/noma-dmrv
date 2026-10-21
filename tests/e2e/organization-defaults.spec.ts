@@ -76,7 +76,7 @@ test.describe("Organization operating defaults", () => {
   test("a member reads the defaults without controls", async ({
     operatorPage: page,
   }) => {
-    // Q15: every member opens General; only Owners and Admins change it.
+    // Q15: every member opens General; only Admins change it.
     await page.goto("/settings/general");
     await expect(
       page.getByRole("heading", { name: "General", exact: true, level: 1 }),

@@ -20,7 +20,7 @@ const FUTURE = new Date("2026-07-15T12:00:00.001Z");
 const ctx: OrgContext = {
   userId: "user-test",
   organizationId: "org-test",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 };
 

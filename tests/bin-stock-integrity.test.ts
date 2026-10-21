@@ -102,7 +102,7 @@ async function seedFixture(intakeWetKg = INTAKE_WET_KG): Promise<Fixture> {
   const ctx: OrgContext = {
     organizationId,
     userId,
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   };
 
@@ -284,13 +284,14 @@ afterEach(async () => {
 });
 
 describe("feedstock writes cannot drive a bin lane negative", () => {
-  it("refuses an intake reduction below a recorded loss and names it for review", async () => {
+  it.each([false, true])("points a same-bin reduction at wet mass (bin supplied: %s)", async (supplyBin) => {
     const f = await fixture();
     const lossBlocker = await recordLoss(f, LOSS_WET_KG);
 
     await expect(
       db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, { expectedVersion: 1,
         massWetKg: REDUCED_BELOW_LOSS_WET_KG,
+        ...(supplyBin ? { storageLocationId: f.binId } : {}),
       })),
     ).rejects.toMatchObject({
       name: "DomainError",
@@ -298,6 +299,10 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
       message: `Feedstock was not saved. Bin ${binCodeOf(f)} would go ${SHORTFALL_AFTER_REDUCTION_KG} kg below zero. Review bin ${binCodeOf(f)} intake and withdrawal history, including recorded losses.`,
       blockers: [lossBlocker],
       conflict: { entity: "storageLocation", id: f.binId, code: binCodeOf(f) },
+      issues: [{ path: ["massWetKg"], code: "insufficient_stock",
+        message: `Bin ${binCodeOf(f)} would go ${SHORTFALL_AFTER_REDUCTION_KG} kg below zero.`,
+        meta: { storageLocationId: f.binId, availableWetKg: REDUCED_BELOW_LOSS_WET_KG, requestedWetKg: LOSS_WET_KG, unit: "kg" },
+      }],
     });
 
     expect(await readFeedstockWetKg(f)).toBe(INTAKE_WET_KG);
@@ -330,6 +335,37 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
     expect(unguardedStockKg).toBe(REDUCED_BELOW_LOSS_WET_KG - LOSS_WET_KG);
   });
 
+  it("points a move that overdraws the old bin at the storage location", async () => {
+    const f = await fixture();
+    const lossBlocker = await recordLoss(f, LOSS_WET_KG);
+    const bin = await readBin(f);
+    const [destination] = await db.insert(storageLocations).values({
+      organizationId: f.ctx.organizationId,
+      facilityId: f.facilityId,
+      feedstockTypeId: bin.feedstockTypeId,
+      type: "feedstock_bin",
+      code: `E2E-BINT-DEST-${f.tag}`,
+      name: `E2E Bin integrity destination ${f.tag}`,
+    }).returning({ id: storageLocations.id });
+
+    await expect(db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, {
+      expectedVersion: 1, storageLocationId: destination.id, massWetKg: REDUCED_BELOW_LOSS_WET_KG,
+    }))).rejects.toMatchObject({
+      code: "insufficient_stock",
+      message: negativeLaneMessage("save", binCodeOf(f), LOSS_WET_KG),
+      conflict: { entity: "storageLocation", id: f.binId, code: binCodeOf(f) },
+      blockers: [lossBlocker],
+      issues: [{ path: ["storageLocationId"], code: "insufficient_stock",
+        message: `Bin ${binCodeOf(f)} would go ${LOSS_WET_KG} kg below zero.`,
+        meta: { storageLocationId: f.binId, availableWetKg: 0, requestedWetKg: LOSS_WET_KG, unit: "kg" },
+      }],
+    });
+    const [saved] = await db.select().from(feedstocks).where(eq(feedstocks.id, f.feedstockId));
+    expect(saved).toMatchObject({ storageLocationId: f.binId, massWetKg: INTAKE_WET_KG, version: 1 });
+    expect(await deriveFeedstockWetStockKg(f.ctx, db, f.binId)).toBe(INTAKE_WET_KG - LOSS_WET_KG);
+    expect(await deriveFeedstockWetStockKg(f.ctx, db, destination.id)).toBe(0);
+  });
+
   it("accepts a reduction that lands on exactly zero", async () => {
     const f = await fixture();
     await recordLoss(f, LOSS_WET_KG);
@@ -352,6 +388,10 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
       message: negativeStockDeleteMessage(f),
       blockers: [lossBlocker],
       conflict: { entity: "storageLocation", id: f.binId, code: binCodeOf(f) },
+      issues: [{ path: ["storageLocationId"], code: "insufficient_stock",
+        message: `Bin ${binCodeOf(f)} would go ${LOSS_WET_KG} kg below zero.`,
+        meta: { storageLocationId: f.binId, availableWetKg: 0, requestedWetKg: LOSS_WET_KG, unit: "kg" },
+      }],
     });
 
     expect(await readFeedstockWetKg(f)).toBe(INTAKE_WET_KG);

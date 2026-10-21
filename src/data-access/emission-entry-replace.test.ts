@@ -4,13 +4,15 @@ import { documents, emissionEntries, emissionEntryValues } from "@/db/schema";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), latest: vi.fn(), previous: vi.fn(), activity: vi.fn(), gate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), latest: vi.fn(), previous: vi.fn(), activity: vi.fn(), holds: vi.fn(), window: vi.fn(), assertWindow: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 vi.mock("./batch-emission-automatic-figures", () => ({ loadBatchAutomaticFigures: vi.fn() }));
 vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: vi.fn() }));
 vi.mock("./removal-template-observations", () => ({ getLatestTemplateObservation: mocks.latest, getTemplateObservationById: mocks.previous }));
 vi.mock("./emission-entry-activity", () => ({ recordEmissionEntryActivity: mocks.activity }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ requireEmissionsEntriesEnabled: mocks.gate }));
+vi.mock("./emission-entry-holds", () => ({ loadEmissionEntryHolds: mocks.holds }));
+vi.mock("./emission-entry-corrections", () => ({ lockEmissionCorrectionScope: vi.fn(), revalidateEmissionCorrectionScope: vi.fn(),
+  emissionCorrectionWindow: mocks.window, assertSentEntryInCorrectionWindow: mocks.assertWindow }));
 import { replaceEmissionEntry } from "./emission-entries";
 
 const ctx = makeTestOrgContext();
@@ -20,7 +22,7 @@ const original: typeof emissionEntries.$inferSelect = {
   id, organizationId: ctx.organizationId, creditBatchId: "batch", removalTemplateId: "template",
   componentId: "line", inputShape: shape, lineRule: "additive", observationId: "old-observation",
   kind: "value", confirmedForRemovalId: null, occurredOn: "2026-01-02", note: "old note", createdBy: ctx.userId,
-  version: 2, contentRevision: 2, deletedAt: null, sentByRemovalId: null, sendReservedBySubmissionId: null,
+  version: 2, contentRevision: 2, deletedAt: null, sentByRemovalId: null, replacesEntryId: null, sendReservedBySubmissionId: null,
   createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-02"),
 };
 const previous: EntryObservation & { id: string } = {
@@ -56,6 +58,7 @@ function query(result: () => unknown[]) {
 beforeEach(() => {
   vi.resetAllMocks();
   locks.length = 0;
+  mocks.holds.mockResolvedValue(new Map());
   current = { ...previous, id: "current-observation", enrichment: { line: { electricity_use: { unit: "MJ" } } } };
   locked = { ...original };
   saved = { ...original, id: "replacement", observationId: current.id, version: 1, contentRevision: 1 };
@@ -77,6 +80,7 @@ beforeEach(() => {
   } }));
   insert.mockImplementation(table => ({ values: (data: object) => {
     inserted(table, data);
+    if (table === emissionEntries) saved = { ...saved, ...data };
     return query(() => table === emissionEntries ? [saved] : newValues);
   } }));
   const tx = { select, update, insert, delete: () => query(() => []) } as unknown as DbTransaction;
@@ -137,10 +141,8 @@ it("refuses a foreign or missing entry before locking or writing", async () => {
   expect(update).not.toHaveBeenCalled();
 });
 
-it("checks organization scope and the feature gate before opening a transaction", async () => {
+it("checks organization scope before opening a transaction", async () => {
   await expect(replaceEmissionEntry({ ...ctx, organizationId: "" }, input)).rejects.toThrow("Unauthorized");
-  mocks.gate.mockImplementation(() => { throw new Error("Disabled"); });
-  await expect(replaceEmissionEntry(ctx, input)).rejects.toThrow("Disabled");
   expect(mocks.transaction).not.toHaveBeenCalled();
 });
 
@@ -158,5 +160,28 @@ it.each([
   { occurredOn: "2025-12-31", message: "before the credit batch" },
 ])("applies create validation: $message", async ({ message, ...patch }) => {
   await expect(replaceEmissionEntry(ctx, { ...input, ...patch })).rejects.toThrow(message);
+  expect(insert).not.toHaveBeenCalled();
+});
+
+it.each([false, true])("links a replacement to its sent original without stamping (already held=%s)", async (held) => {
+  const sentId = held ? "sent-original" : id;
+  if (held) {
+    locked.replacesEntryId = sentId;
+    mocks.holds.mockImplementation(async (_ctx, entries: { id: string }[]) =>
+      new Map(entries.map((entry) => [entry.id, "removal"])));
+  } else locked.sentByRemovalId = "removal";
+  mocks.window.mockReturnValue({ start: "2026-01-01", end: "2026-01-31" });
+  await replaceEmissionEntry(ctx, input);
+  expect(inserted).toHaveBeenCalledWith(emissionEntries, expect.objectContaining({ replacesEntryId: sentId }));
+  expect(saved.sentByRemovalId).toBeNull();
+  expect(mocks.assertWindow).toHaveBeenCalledWith(ctx, expect.anything(), "batch", "removal", batch.endDate);
+  expect(mocks.activity.mock.calls.map(call => call[2])).toEqual(["deleted", "created"]);
+});
+
+it("refuses an unsent held replacement after the window closes", async () => {
+  locked.replacesEntryId = "sent-original";
+  mocks.holds.mockResolvedValue(new Map([[id, "removal"]]));
+  await expect(replaceEmissionEntry(ctx, input)).rejects.toThrow("reserved or sent");
+  expect(update).not.toHaveBeenCalled();
   expect(insert).not.toHaveBeenCalled();
 });

@@ -37,7 +37,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | Sample shipping | Entered per line. Old sample transport legs are deleted by the hand-run retirement CLI at activation (Kenji, 2026-10-16), rather than hidden. Certification-locked legs are skipped. Sample legs stop feeding Removals. There is no production data to keep. Sample labs are deferred. |
 | Lab electricity, consumables | Typed per batch with evidence. |
 | Project-wide flight | Goes on one batch the operator picks. |
-| Empty lines | Shown as "Not recorded" on the batch sheet (`docs/ux-writing.md`, missing values; Kenji, 2026-10-15, replacing "0 so far"). They show 0 only once confirmed. In the Removal flow, one confirmation covers the empty lines and records a zero per line. |
+| Empty lines | Shown as "Not recorded" on the batch sheet (`docs/ux-writing.md`, missing values; Kenji, 2026-10-15, replacing "0 so far"). They show 0 only once confirmed. In the Removal flow, the Empty components step records a zero per component with one note per credit batch. |
 | Extra fuel or electricity | Added on top of the run figures. The form shows the run total and the earlier entries, and the sum is sent. |
 | Meter readings | While a template asks for readings, the operator enters both. The form follows the template: two fields if it has two inputs, one if it has one. |
 | Late entries | Go on the next Removal from the same batch. If none is left, they go on the facility's next Removal covering their date (§7, deferred to #1059). |
@@ -46,7 +46,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | Testing | Kenji copies Cula into the sandbox (not 1:1). Tests use a fixture of Cula as read on 2026-10-15. A read-only production key is needed before the first real submission. |
 | Naming | "Emissions entry", with an "Add entry" button. "Activity" stays the history log of #1037-#1047. |
 | Durability | Build for both tiers. The Cula facility is 1000-year: one credit batch per Removal (`THOUSAND_YEAR_REMOVAL_BATCH_LIMIT`, `src/data-access/certifier-removals.ts`). |
-| Corrections | A submitted Removal is never corrected on noma's initiative. Edits reopen only when Isometric changes the state: a statement fails verification, or a statement noma submitted is back in DRAFT. The Removal is then marked "correction needed", and resubmitting supersedes it (Kenji, 2026-10-15). |
+| Corrections | A submitted Removal is never corrected on noma's initiative. Edits reopen only when Isometric changes the state: a statement fails verification, or a statement noma submitted is back in DRAFT. Resubmitting supersedes it (Kenji, 2026-10-15). A re-entered sent entry is held via a link and stamped on resubmit (Kenji, 2026-10-21, "link"). The derived state reads "Returned by Isometric" while the window is open with no changes and "Resubmit needed" once a sent fact changed (Kenji, 2026-10-21, screen variant A). #1134 keeps "Correction needed" for its lock-based notice. |
 | Reference template | The sandbox "Dark Earth Carbon Template (15 Oct)" (`rvt_1KS4S43VPSBXA26X`, edited in place) is more correct than Cula. It is the shape #1020 brings production to: 15 components, trucks as mass × distance, single-kWh electricity, the 1000-year storage line, two lab and two sample lines, pyrolyzer CO and CH₄, and staff travel. |
 
 ## 3. What the code tells us
@@ -59,7 +59,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 
 **Binding**
 - The catalog is keyed blueprint → input → roles by group (`SEMANTIC_BINDING_CATALOG`, `SemanticInputBinding`, `src/lib/isometric/semantic-binding-catalog.ts`). Role strategies are `aggregated-datapoint`, `measurement-sample` and `project-scope-forbidden`.
-- `PERIOD_INPUT_TUPLES` (`src/lib/isometric/datapoint-mapping.ts`) is the ADR 0018 guard. The sandbox's zero stub is `allowsPeriodInputStub`.
+- `PERIOD_INPUT_TUPLES` (`src/lib/isometric/datapoint-mapping.ts`) is the ADR 0018 guard. The former sandbox zero stub is removed under §4.5.
 - The two diesel components are told apart by display name (`PYROLYSIS_DIESEL_SPLIT`, `resolveDatapointSource`).
 - `findUnbindableTemplateInputs` (`src/lib/isometric/template-binding-coverage.ts`) flags `unmapped | ambiguous | project-scope | unrecognized-component`.
 - The only place that has `component.id`, the template input and the aggregate together is `resolveTemplateInputs`, which calls `buildCreateDatapointRequest` (`src/lib/isometric/transformers/datapoint.ts`).
@@ -86,7 +86,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - Batch health has exhaustive fix-target switches (`resolutionDestination` in `src/lib/certification/batch-health.ts`, `batch-health-links.ts`).
 
 **UI**
-- The Removal flow has two steps, select and submit (`src/components/certification/new-removal-dialog/index.tsx`). The per-input value table exists only inside the technical-details drawer (`compiled-submission-review.tsx`).
+- The Removal flow had two steps, select and submit (`src/components/certification/new-removal-dialog/index.tsx`); PR 4 adds the Empty components step between them (Removal flow, §4.5). The per-input value table exists only inside the technical-details drawer (`compiled-submission-review.tsx`).
 - The credit batch side sheet's sections are in `creditBatchSheetSections` (`src/components/credit-batches/credit-batch-view.tsx`). Self-fetching panels mount in `viewModeChildren` (`credit-batch-list.tsx`).
 - The Energy page is `src/app/(app)/energy/page.tsx` with `src/components/energy/*` and `src/lib/energy/*`. Its batch filter is client state, not in the URL.
 - The nearest reference for a small versioned, org-scoped child table with documents is production incidents (`src/db/schema/production.ts` `incidentReports`, `src/data-access/production-incidents.ts`).
@@ -168,6 +168,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 **Entry policy per input shape** (code, next to the catalog)
 - `additive`: entries sum, and add to the line's automatic source if it has one. Applies to fuel volume, electricity, mass, distance and mass × distance.
 - `single`: at most one active entry per batch, and never an automatic source. Applies to gas concentration with mass flow, and meter readings.
+- Paired mass and distance inputs on one component (the current production and Cula truck lines): one entry or none. With an automatic figure the component takes no manual entries; without one it takes a single entry (Kenji, 2026-10-21). A t·km input stays `additive`: it takes many entries, each with its own leg's sources, summed into one component. noma keeps that shape and does not follow Cula's paired inputs; #1020 brings production to it.
 - An unsupported shape shows "Needs setup".
 - The entry's `lineRule` column records the policy it was written under.
 
@@ -289,7 +290,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
   - otherwise the eligible Removal with the earliest window end, then the earliest draft creation, then the lowest id.
   - This rule is only for entry contenders. It does not reuse the production contender ordering (`listProductionClaimDraftContenders`, by reporting quarter).
 - An entry outside every draft window blocks only when no available, unsubmitted application is dated on or after it; otherwise it waits for a later Removal. The blocker gives the next action: change the entry date to fit the Removal period, or wait for a later Removal. If the batch is fully applied, #1059 sends it on the facility's next Removal (§7).
-- A 200-year Removal grouping two batches that both have an entry on the same `single` line is refused in v1. Paired inputs are never summed one input at a time. Whether Isometric accepts list-shaped inputs (`InputDataShape: LIST`) for these lines is a follow-up.
+- A 200-year Removal grouping two batches that both have an entry on the same `single` line is refused in v1. Paired inputs are never summed one input at a time; a paired mass and distance component takes one entry or none (§4.1). Whether Isometric accepts list-shaped inputs (`InputDataShape: LIST`) for these lines is a follow-up.
 
 **Reservation and claims**
 - Atomic with the production claim. One transaction locks the batch rows, then the entries in id order.
@@ -307,7 +308,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - A line can carry entries only when its contract is `operating` with an entry policy other than `none`. An entry existing on it is not enough.
 - Additive entries go alongside an automatic source when the contract has both, including entry-only follow-ups.
 - `forbidden` and `unassigned` lines stay blocked.
-- Part 3 removes the sandbox zero stub together with the nightly E2E update.
+- Period inputs are never stubbed. Empty operating components need entries or Removal-confirmed zeros; the nightly E2E template selector applies the same guard.
 
 **Snapshot and hash**
 - `semanticPayload` gains the semantic fingerprint and a contribution manifest per input: entry id, `contentRevision`, values and evidence document ids. Any change that alters what is sent therefore moves `payloadHash`.
@@ -322,9 +323,15 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - Snapshot readers (`removal-snapshot-readers.ts`) learn the new role.
 
 **Removal flow**
-- The submit step gets a "Lines sent" section, promoted from the technical drawer. It shows every line with its value, its source and its files.
-- Empty lines are grouped behind one "These n lines had nothing this batch" confirmation, which writes `kind: zero` entries.
-- Submit stays blocked until confirmed.
+Round 7, version B (Kenji, 2026-10-20). Screens say "component", never "line".
+- A new step, **Empty components**, sits between batch selection and Confirm & submit. The draft Removal already exists then (created on Continue from selection), and the zeros belong to it.
+  - One card per selected credit batch lists its components with nothing recorded for this Removal. Each has "Add entry", which opens that batch's Emissions page in a new tab.
+  - Per batch: one optional note, copied by the server into each zero entry, and "Record n components as zero". Recorded components read "Recorded zero".
+  - Undo (of that batch's recorded zeros) lives on this step only, and stays reachable from the submit step's rail until the Removal is submitted.
+  - Continue refuses with its reason while any component is unconfirmed. The step reads the server again on return from the Emissions tab, so an added entry counts.
+- The step is skipped when no selected batch has empty components, when zeros can no longer change (a submitted or in-flight Removal), and when the emissions entries switch is off (the dialog then looks as before). A reopened draft lands on the step while any component is unconfirmed.
+- The submit step gets a read-only **Components sent** section, promoted from the technical drawer's data. It shows every component with its value, its source (Automatic datapoints, manual entries, Recorded zero, Samples, or set in the template) and its files. A component the submission cannot send reads "Not sent" with the reason.
+- Submit stays blocked until every component is confirmed.
 
 **Sample legs**
 - `sampleTransportMassDistanceTonneKm` leaves aggregation, the catalog, `certify-field-registry.ts`, transport coverage, readiness and dashboard gaps, behind the activation gate.
@@ -332,7 +339,8 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - `isometric/sample-transport-template-drift` is resolved when the gate is switched on, not when PR 4 merges.
 
 **Corrections**
-- "Correction needed" is derived, not stored, and only inside an open correction window: the snapshot's contribution manifest differs from the current entries.
+- The state is derived, not stored, and only inside an open correction window. It reads "Returned by Isometric" with no changes and "Resubmit needed" once a sent fact changed: the snapshot's contribution manifest differs from the current entries (Kenji, 2026-10-21, screen variant A). #1134 keeps "Correction needed" for its lock-based notice.
+- A re-entered sent entry stays unsent and is held for its original Removal via a link. Re-entering a held replacement keeps the same sent-original link. Stamping happens in `markSubmissionSubmitted` on the corrected resubmit (Kenji, 2026-10-21, "link").
 - Once a Removal is submitted, the entries it sent stay locked, as today. noma never corrects a submitted Removal on its own initiative.
 - Edits reopen only after Isometric changes the state, and only when all of these hold:
   - a statement covering the lineage, freshly refreshed, is FAILED_VERIFICATION, or is back in DRAFT after it was sent to the verifier. `ghgStatementSubmissionId` is not enough: creating a statement already marks its ledger row submitted with remote status DRAFT (`finalizeGhgStatement`). "Sent to the verifier" follows #1101: a marker PR 4 records in `submitGhgStatementToVerifierCore`, or Certify's own record of a submission (REST `GhgStatement.submitted_at`, GraphQL `GhgStatement.submissions`), because a statement can be submitted from the Certify web UI and noma only learns of it on Refresh or Sync. A noma-only marker would leave such a statement locked after it returns to DRAFT;
@@ -366,8 +374,10 @@ Kenji's round 2 note asks to reopen general edits when Isometric pushes a submis
 
 **Activation gate:** one server-side flag, `EMISSIONS_ENTRIES_ENABLED`, off by default. `emissions-entry-gate.ts` parses it directly from `process.env` using the shared schema also used by `envSchema`. It always reads off in browser bundles, so the server sends gate-dependent results to client code. It covers entry UI, API and MCP availability, and the sample-leg retirement, including PR 4's removal of sample legs from aggregation and the catalog. PR 3 merges with it off, and it is switched on only once PR 4 is deployed. With it off, sample legs keep working as today.
 
-With the application environment supplied, run `pnpm exec tsx src/lib/cli/retire-sample-transport.ts --organization-id <org-id>` per organization for a dry-run; after switching the gate on, repeat with `--delete` to delete old sample legs and owned evidence (idempotent, counts/ids only).
-The CLI uses the existing Platform Admin bootstrap seam (`ALLOW_DEV_BOOTSTRAP`), so it runs against local, sandbox or staging databases only; running it against production needs Kenji's explicit approval and a matching change to the `ALLOW_DEV_BOOTSTRAP` entry in `docs/security.md`. Certification-locked legs are skipped and listed. Storage cleanup uses the durable deletion queue. Run `--delete` only once the deployed app has the gate on: after deletion, switching the gate back off would read the sample lines as 0 t·km, so a rollback then needs manual entries on those lines first.
+Removed on 2026-10-20: entries are always on.
+
+With the application environment supplied, run `pnpm exec tsx src/lib/cli/retire-sample-transport.ts --organization-id <org-id>` per organization for a dry-run, then repeat with `--delete` to delete old sample legs and owned evidence (idempotent, counts/ids only).
+The CLI uses the existing Platform Admin bootstrap seam (`ALLOW_DEV_BOOTSTRAP`), so it runs against local, sandbox or staging databases only; running it against production needs Kenji's explicit approval and a matching change to the `ALLOW_DEV_BOOTSTRAP` entry in `docs/security.md`. Certification-locked legs are skipped and listed. Storage cleanup uses the durable deletion queue. Run `--delete` only once the deployed app includes the flag removal (#1324).
 
 **Working rules**
 - Claude verifies each PR, commits, and runs E2E in the PR's worktree (`scripts/worktree.sh`).

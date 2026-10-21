@@ -30,12 +30,26 @@ these areas; the entry rules and invariants live in
   (decision 126), using `src/lib/auth/oauth-provider.ts:createOAuthProvider` and
   `src/lib/auth/oauth-config.ts:deriveOAuthConfig`. Settle its native redirect
   and link it to REST only.
+- **`api/claude-ai-disconnect-revoke`:** disconnecting inside claude.ai sends no
+  revoke call to noma, so the grant stays in Connected apps and the next consent
+  shows the board alone (`src/components/oauth/consent-form.tsx:hasConsent`),
+  with every allowed scope resubmitted. Options: let the board untick allowed
+  scopes, or show the three choices when the client starts a fresh connection.
+  Decision pending (round 15); until then, revoke in noma Connected apps to narrow.
+- **`api/cowork-step-up`:** Cowork shows "Forbidden" with no Connect card on a 403
+  `insufficient_scope` (`src/lib/api/problem.ts:oauthInsufficientScopeChallenge`);
+  claude.ai chat does step up. Reported as
+  anthropics/claude-ai-mcp#931. Nothing to change in noma; recheck on Cowork
+  updates.
+- **`api/connector-rate-tier`:** `src/config/api-rate-limits.ts` gives connector
+  egress ranges a 6,000 per minute pre-resolution tier. The c8 proof did not
+  measure connector load; revisit with real connector traffic.
 - **claude.ai metadata and refresh:**
   `src/lib/auth/oauth-cimd.ts:createOAuthCimdPlugins` uses the client's metadata
-  cache policy. Removing an identity can cause provider `invalid_client` on
-  refresh.
-  Record claude.ai's metadata `Cache-Control` and its reaction to that refusal
-  in c8, alongside client versions in [plan section 28](./plans/2026-10-06-data-entry-api.md#28-oauth-track-results-2026-10-19).
+  cache policy. claude.ai's document returns `Cache-Control: public, max-age=300`.
+  Its reaction to `invalid_client` on refresh is untested: a noma Disconnect
+  gives `invalid_grant`, which claude.ai turns into a sign-in prompt. Only a
+  dropped CIMD client gives `invalid_client`.
 - **Shared Disconnect touch target:**
   `src/components/oauth/connected-app-list.tsx:ConnectedAppList` uses the shared
   `src/components/ui/button/index.tsx:Button` at 40px. Resolve the shared target size
@@ -204,12 +218,12 @@ these areas; the entry rules and invariants live in
 ### An Organization cannot be renamed (`tenancy/organization-rename`, opened 2026-07-28)
 
 - `organizations.name` and `slug` (`src/db/schema/auth.ts`) are settable only at
-  creation, through `createOrganizationWithOwner`
+  creation, through `createOrganizationWithAdmin`
   (`src/data-access/organizations.ts`). There is no `updateOrganization`, so a
   typo at onboarding is permanent and shows in the sidebar brand, the settings
   subtitle, and every invitation email.
 - **To resolve:** add `updateOrganization` plus a name/slug field on
-  Settings, General (`/settings/general`, wave 2 of #1277) for Owners. A slug change needs a decision on
+  Settings, General (`/settings/general`, wave 2 of #1277) for Admins. A slug change needs a decision on
   existing invitation-accept URLs, which embed the invitation id rather than the
   slug — so probably none, but confirm before assuming.
 
@@ -485,7 +499,7 @@ follow-up, not permission to weaken the current guard.
 - **To resolve:** build the rule engine first. When it exists, the override
   surface is Settings, General (`/settings/general`)
   (`src/components/settings/organization-defaults-form.tsx`) — the table
-  `organization_settings` and its Owner/Admin gate are already in place. Keep
+  `organization_settings` and its Admin gate are already in place. Keep
   the distinction that page is built on: advisory thresholds may be
   org-editable, certification gates may not.
 

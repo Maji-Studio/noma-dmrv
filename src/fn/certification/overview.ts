@@ -1,8 +1,9 @@
 "use server";
 
+
+import { correctionForRemoval, type RemovalCorrection } from "@/lib/certification/removal-entry-correction";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { buildDurabilityBatchSummaries } from "@/lib/certification/durability-batch-summary";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
 import { loadBatchesEmissionLines } from "@/lib/read-models/batches-emission-lines";
 import { getRemovalCodes } from "@/data-access/removal-codes";
@@ -108,6 +109,7 @@ export interface CreditBatchHealthSummary {
 // submission identity, and the readiness verdict (the same one the table hint
 // and wizard submit step render).
 export interface RemovalPreflightSummary {
+  correction?: RemovalCorrection;
   removalId: string;
   code: string;
   startedOn: string | null;
@@ -174,8 +176,11 @@ async function buildRemovalPreflightSummary(
       startedOn,
       completedOn,
     });
+  // The batch context already evaluated correction windows from the loaded lineage.
+  const correction = correctionForRemoval(removalId, Object.values(ctx.entryCorrectionsByBatchId ?? {}).flat());
   return {
     removalId,
+    correction,
     code: scope.removal.code,
     startedOn,
     completedOn,
@@ -391,10 +396,7 @@ export async function loadCreditBatchHealthSummaries(
     );
     const [batchesWithSamples, emissionDisplayByBatch] = await Promise.all([
       getCreditBatchesWithSamples(orgCtx, ids),
-      // Match the page's flag: hidden Emissions panels contribute no Check items.
-      emissionsEntriesEnabled()
-        ? loadBatchesEmissionLines(orgCtx, ids.map((id) => batchRowById.get(id)!))
-        : Promise.resolve(undefined),
+      loadBatchesEmissionLines(orgCtx, ids.map((id) => batchRowById.get(id)!)),
     ]);
     const durabilityByBatch = new Map(
       buildDurabilityBatchSummaries(batchesWithSamples).map((summary) => [summary.creditBatchId, summary]),
@@ -425,7 +427,7 @@ export async function loadCreditBatchHealthSummaries(
         checkCount: buildCreditBatchOpenItems({
           facilityId: validFacilityId,
           creditBatchId: batchId,
-          canManage: orgCtx.isPlatformAdmin || orgCtx.orgRole === "owner" || orgCtx.orgRole === "admin",
+          canManage: orgCtx.isPlatformAdmin || orgCtx.orgRole === "admin",
           health,
           durability: durabilityByBatch.get(batchId),
           emissionLines: emissionDisplayByBatch?.get(batchId)?.lines,

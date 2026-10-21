@@ -1,6 +1,6 @@
 /**
  * Settings, General: the organization and its operating defaults. Every
- * member can open it; only Owners and Admins change the defaults, which the
+ * member can open it; only Admins change the defaults, which the
  * defaults action enforces as well.
  */
 import { GeneralSettingsPane, SettingsConsole } from "@/components/settings";

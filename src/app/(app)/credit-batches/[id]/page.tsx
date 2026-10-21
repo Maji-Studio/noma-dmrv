@@ -5,7 +5,6 @@ import { CreditBatchPage } from "@/components/credit-batches";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { creditBatchKeys } from "@/hooks/credit-batch-query-keys";
 import { requireOrgContext } from "@/lib/auth/server";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { createServerHydrationState } from "@/lib/react-query/server-hydration";
 
 /**
@@ -50,14 +49,14 @@ export default async function CreditBatchRoute({ params, searchParams }: CreditB
     redirect(`/credit-batches/${id}?${nextParams.toString()}`);
   }
 
-  const canManage = ctx.isPlatformAdmin || ctx.orgRole === "owner" || ctx.orgRole === "admin";
+  const canManage = ctx.isPlatformAdmin || ctx.orgRole === "admin";
   const state = createServerHydrationState([
     { queryKey: creditBatchKeys.detail(batch.id), data: batch },
   ]);
 
   return (
     <HydrationBoundary state={state}>
-      <CreditBatchPage creditBatchId={batch.id} canManage={canManage} emissionsEntriesEnabled={emissionsEntriesEnabled()} />
+      <CreditBatchPage creditBatchId={batch.id} canManage={canManage} />
     </HydrationBoundary>
   );
 }

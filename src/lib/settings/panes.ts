@@ -22,7 +22,7 @@ import {
  * The organization roles that may change organization settings, as one phrase.
  * Every access line below is built from it, so renaming the roles is one edit.
  */
-export const ORGANIZATION_SETTINGS_ROLES = "Owners and Admins";
+export const ORGANIZATION_SETTINGS_ROLES = "Admins";
 
 export const SETTINGS_ACCESS = {
   organization: `${ORGANIZATION_SETTINGS_ROLES} can change these.`,
@@ -138,7 +138,7 @@ export const SETTINGS_PANES: readonly SettingsPaneMeta[] = [
     label: "Removal templates",
     href: SETTINGS_REMOVAL_TEMPLATES_HREF,
     scope: "facility",
-    caption: "Choose the facility default and decide each component. Components to decide block Removals.",
+    caption: "The template this facility's credit batches use. Component decisions apply to every facility using the template.",
     access: SETTINGS_ACCESS.organization,
     audience: "everyone",
     needsRegistryKeys: true,
@@ -190,7 +190,7 @@ export const SETTINGS_PANES: readonly SettingsPaneMeta[] = [
 /** What decides which panes a viewer sees. */
 export interface SettingsPaneAccess {
   isPlatformAdmin: boolean;
-  /** A live Owner/Admin membership. Platform status grants no override. */
+  /** A live Admin membership. Platform status grants no override. */
   canManageApiKeys: boolean;
   registryKeysSaved: boolean;
 }
@@ -200,7 +200,7 @@ export interface SettingsViewer extends SettingsPaneAccess {
   organizationId: string;
   organizationName: string;
   organizationSlug: string | null;
-  /** Owner/Admin in the organization, or a Platform Admin. */
+  /** Admin in the organization, or a Platform Admin. */
   canManage: boolean;
   /** As loaded; the console follows the live credential status for managers. */
   registryKeysSaved: boolean;

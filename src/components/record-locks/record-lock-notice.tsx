@@ -1,3 +1,4 @@
+import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -56,7 +57,7 @@ export function RecordReturnedNotice({ lock }: { lock: RecordLockView | undefine
   return (
     <>
       {lock.returnedBy.map((returned) => (
-        <Notice key={`${returned.removal.id}:${returned.statement.id}`} tone="info" title="Returned by Isometric" data-record-lock-notice="returned">
+        <Notice key={`${returned.removal.id}:${returned.statement.id}`} tone="info" title={RETURNED_BY_ISOMETRIC_LABEL} data-record-lock-notice="returned">
           <HolderLink link={returned.statement} /> {returnedStatementPhrase(returned.statementStatus)}. Changes here go to{" "}
           <HolderLink link={returned.removal} /> when you resubmit it.
         </Notice>

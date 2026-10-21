@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { errorBox } from "../../../tests/helpers/error-box-text";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ModalProps } from "@/components/ui/modal";
@@ -44,7 +45,7 @@ it("shows a member only their own connections", () => {
   expect(screen.queryByRole("heading", { name: "All members" })).toBeNull();
 });
 
-it("adds an All members list with member names for Owners and Admins", () => {
+it("adds an All members list with member names for Admins", () => {
   list([grant(), grant({ id: "grant-2", userId: "user-2", memberName: "E2E Member Two" })]);
   render(<ConnectedApps {...props} canManageAll />);
   const all = screen.getByRole("list", { name: "All members" });
@@ -84,7 +85,7 @@ it("shows the conflict message on a stale version and retries with the refreshed
   const { rerender } = render(<ConnectedApps {...props} />);
   fireEvent.click(screen.getByRole("button", { name: "Disconnect Claude" }));
   fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Disconnect" }));
-  await screen.findByText(STALE_VERSION_MESSAGE);
+  await screen.findByText(errorBox(STALE_VERSION_MESSAGE));
   list([grant({ version: 4 })]);
   rerender(<ConnectedApps {...props} />);
   mocks.revoke.mockResolvedValueOnce({ id: "grant-1" });

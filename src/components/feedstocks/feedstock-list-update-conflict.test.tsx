@@ -7,6 +7,7 @@
 import type { ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
+import { ActionError } from "@/lib/action-error";
 import { ConflictError, conflictCode } from "@/lib/conflict-ref";
 import { STOCK_CONFLICT_ENTITY } from "@/lib/stock-conflict-entities";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
@@ -84,7 +85,7 @@ const mocks = vi.hoisted(() => ({
         onDistanceRefreshed?: () => Promise<void>;
         serverError?: string;
         serverErrorAction?: unknown;
-        onSubmit: (data: unknown) => Promise<void> | void;
+        onSubmit: (data: unknown, onRefusal?: (error: unknown) => { footer: string | null } | null) => Promise<void> | void;
       }
     | undefined,
   updateRejection: undefined as unknown,
@@ -282,6 +283,65 @@ describe("FeedstockList update conflict", () => {
     expect(JSON.stringify(renderer.toJSON())).not.toContain(
       "Drawing on this bin:",
     );
+  });
+});
+
+describe("FeedstockList refused update shown at fields", () => {
+  it("shows only the footer text the form hands back, with the form's aliases in the payload", async () => {
+    mocks.updateRejection = new ActionError({ error: "Locked by a Removal.", code: "certification_locked", issues: [] });
+    const renderer = renderList();
+    const onRefusal = vi.fn(() => ({ footer: "Sent to a Removal." }));
+
+    await act(async () => {
+      await mocks.form?.onSubmit(draft, onRefusal);
+    });
+
+    expect(onRefusal).toHaveBeenCalledWith(mocks.updateRejection);
+    expect(textOf(renderer, "server-error")).toBe("Sent to a Removal.");
+  });
+
+  it("clears the footer when every issue sits at a field", async () => {
+    mocks.updateRejection = new ActionError({ error: "Refused", issues: [] });
+    const renderer = renderList();
+
+    await act(async () => {
+      await mocks.form?.onSubmit(draft, () => ({ footer: null }));
+    });
+
+    expect(textOf(renderer, "server-error")).toBe("");
+  });
+
+  it("keeps the blockers when every reason sits at a field, so the box has no message", async () => {
+    mocks.updateRejection = refusal;
+    const renderer = renderList();
+
+    await act(async () => {
+      await mocks.form?.onSubmit(draft, () => ({ footer: null }));
+    });
+
+    expect(textOf(renderer, "server-error")).toBe("");
+    expect(JSON.stringify(renderer.toJSON())).toContain("PR-014");
+
+    // The next attempt clears them before the save runs.
+    mocks.updateRejection = new Error("Feedstock was not saved. Try again.");
+    act(() => renderer.update(<FeedstockList />));
+    await act(async () => {
+      await mocks.form?.onSubmit(draft);
+    });
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("PR-014");
+  });
+
+  it("keeps the stale-version message when the form leaves the refusal alone", async () => {
+    mocks.updateRejection = new StaleVersionError(STALE_VERSION_MESSAGE, {
+      entity: "feedstock", id: FEEDSTOCK_ID, code: STALE_VERSION_CONFLICT_CODE,
+    });
+    const renderer = renderList();
+
+    await act(async () => {
+      await mocks.form?.onSubmit(draft, () => null);
+    });
+
+    expect(textOf(renderer, "server-error")).toBe(STALE_VERSION_MESSAGE);
   });
 });
 

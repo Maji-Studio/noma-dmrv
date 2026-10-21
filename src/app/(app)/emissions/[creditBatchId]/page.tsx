@@ -7,7 +7,6 @@
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { BatchEmissionsPage } from "@/components/emissions";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 
 interface BatchEmissionsRouteProps {
   params: Promise<{ creditBatchId: string }>;
@@ -16,5 +15,5 @@ interface BatchEmissionsRouteProps {
 export default async function BatchEmissionsRoute({ params }: BatchEmissionsRouteProps) {
   const { creditBatchId } = await params;
   if (!z.uuid().safeParse(creditBatchId).success) notFound();
-  return <BatchEmissionsPage creditBatchId={creditBatchId.toLowerCase()} entriesEnabled={emissionsEntriesEnabled()} />;
+  return <BatchEmissionsPage creditBatchId={creditBatchId.toLowerCase()} />;
 }

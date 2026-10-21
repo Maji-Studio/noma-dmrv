@@ -39,7 +39,10 @@ components (UI)
   reuses the key. The helper rotates it after a successful save, before the
   caller's `onSuccess`, or when `startDraft()` is called for a new draft. Equal values with
   a new key create a separate entry. App replay uses the store's existing
-  retention period.
+  retention period. Quick-add dialogs that submit through `useQuickAddSubmit`
+  (formulation, driver, operator) hold the same draft key with
+  `useCreateIntentKey` directly. API key creation is the one keyed create outside the runner: a retry
+  replaces the unseen key instead of replaying it (docs/auth.md).
   The action shape is `withAction((ctx) => runOperationInProcess(op, ctx, input))`.
   `src/lib/operations/registry.ts` is the explicit allowlist of exposed
   operations; its keys match operation ids. Feedstock, production-run, biochar-product and
@@ -54,6 +57,11 @@ components (UI)
   correction and transport legs share its transaction. Both use the shared
   stock writer with the same dependency check as native corrections (ADR 0035).
   These UI options and the delivery operation are not published in REST/MCP.
+  Production sample, production incident, transport leg, driver, operator and
+  credit batch creates run app-only operations (`record_production_sample`,
+  `record_production_incident`, `record_transport_leg`, `create_driver`,
+  `create_operator`, `create_credit_batch`) so their forms can send an intent
+  key; the credit batch roll-up still runs after the runner returns.
 - The runner owns the transaction. Data-access ...InTransaction(ctx, tx, ...)
   functions and the helpers they call read and write only through `tx`,
   including reference checks and result enrichment. After-commit hooks run
@@ -172,11 +180,12 @@ history-row label, and the stale-version sentinel
 parent the operator manages it from: a feedstock-type delete blocked by a
 production process names its facility, one blocked by a formulation
 ingredient names its formulation. Mutation hooks re-throw a
-failure through `throwActionError` (`src/lib/stale-version.ts`): a stale save
-becomes `StaleVersionError`, any other conflict becomes `ConflictError` with
-its blockers. Forms are expected to honor both; the first list consumer is
-the feedstock edit sheet, which shows the runs and products a negative-stock
-refusal named.
+failure through `throwActionError` (`src/lib/stale-version.ts`) as an
+`ActionError` carrying `code`, `issues` (always an array), `conflict`, `blockers`
+and `preview`. A stale save becomes `StaleVersionError`; any other conflict
+becomes `ConflictError`. Both extend `ActionError`. Forms are expected to honor
+both; the first list consumer is the feedstock edit sheet, which shows the runs
+and products a negative-stock refusal named.
 
 The success branch may carry `warning?: string`: the write committed and a
 non-fatal follow-up did not (a preference that was not stored, an enrichment
@@ -286,17 +295,19 @@ runtime.
   `loadSettingsViewer()` and calls `assertSettingsPaneVisible()`: a pane
   outside the viewer's audience is a 404, and Removal templates and Facilities
   answer with Registry while the organization has no registry keys saved.
-  Every member opens General and Members read-only; Owners/Admins (and
-  Platform Admins) change them. Developers (API keys) requires a verified
-  Owner/Admin membership; a Platform Admin without one sees it without
-  controls. Certification panes configure the working facility from
+  Every member opens General and Members read-only; Admins (and Platform
+  Admins) change them. Developers (API keys) requires a verified Admin
+  membership; a Platform Admin without one sees it without controls.
+  Certification panes configure the working facility from
   `FacilityProvider`; there is no second facility picker. `/certification/settings`,
   `/settings/organization`, `/settings/defaults`, `/settings/api-keys` and
   `/settings/vehicles-and-crew` only redirect (`legacyCertificationSettingsRedirect`,
   `redirectPreservingQuery`). Vehicles and crew is a list page at
-  `/vehicles-and-crew` under Distribution. `/admin` is cross-tenant platform
-  administration (`users.role === "admin"`) and is only the organization
-  directory; `/admin` itself redirects to `/admin/organizations`.
+  `/vehicles-and-crew` under Distribution; every member can edit and delete
+  vehicles, drivers and operators there, as every member can create them from
+  a picker. `/admin` is cross-tenant platform administration
+  (`users.role === "admin"`) and is only the organization directory; `/admin`
+  itself redirects to `/admin/organizations`.
 - `src/proxy.ts` → `updateSession()` in `src/lib/auth/middleware.ts`. Node
   runtime (not Edge) so Better Auth can use `crypto`. The matcher covers
   everything except static assets — **including `/api`**; `/api/auth/*` is
@@ -362,10 +373,20 @@ runtime.
 
 ### Hook ActionResult unwrapping
 
-Hooks unwrap an `ActionResult` with `unwrap()` from `src/hooks/types.ts`.
+Hooks unwrap an `ActionResult` with `unwrap()` from `src/hooks/types.ts`,
+which delegates failures to `throwActionError`. Hooks throw `ActionError`
+(`src/lib/action-error.ts`) carrying the server message, `code`, `issues`
+(always an array), `conflict`, `blockers` and `preview`. Stale-version and
+conflict errors retain their subclasses.
 The only exception is a hook that reads `field`, `conflict` or `warning`, or
 returns something other than `result.data`; typed errors go through
 `throwActionError`. `pnpm check:action-boundaries` enforces this rule.
+
+A form shows what the hook kept: `useSaveRefusal` files each issue on the field
+it names and returns the footer text for the rest (see
+[forms.md](./forms.md#components), `FormError` / `ServerError`). Edit forms for
+deliveries, applications and feedstock updates use it; the other forms still
+show the one footer line.
 
 ### Authenticated read transport
 
@@ -659,7 +680,7 @@ operational `/certification/*` routes on the facility having a registry link;
 Settings stays open. It is mounted in the certification layout. **New
 operational certification routes must sit inside that guard.**
 
-**Generated GHG Statement report:** an Owner/Admin prepares a versioned PDF from
+**Generated GHG Statement report:** an Admin prepares a versioned PDF from
 live Isometric statement and GHG Entry facts, reviews it through the normal
 org-scoped document route, then approves it. Submission rotates a random
 per-report verifier token, stores only its SHA-256 digest, and sends Isometric

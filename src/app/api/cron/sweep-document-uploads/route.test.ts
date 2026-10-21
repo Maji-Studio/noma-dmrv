@@ -1,6 +1,9 @@
 import { beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ env: { CRON_SECRET: "cron-test-secret" as string | undefined }, sweep: vi.fn(), drain: vi.fn(), info: vi.fn(), error: vi.fn() }));
-vi.mock("@/config/env", () => ({ env: mocks.env }));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: mocks.env };
+});
 vi.mock("@/data-access/document-upload-sweep", () => ({ sweepDocumentUploads: mocks.sweep }));
 vi.mock("@/data-access/storage-object-deletions", () => ({ drainStorageObjectDeletionsAcrossOrganizations: mocks.drain }));
 vi.mock("@/lib/log", () => ({ logger: { info: mocks.info, error: mocks.error } }));

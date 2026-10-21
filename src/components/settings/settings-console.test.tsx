@@ -72,7 +72,7 @@ describe("SettingsConsole", () => {
     const html = render("members");
     expect(html).toContain(">Members</h1>");
     expect(html).toContain("Who can sign in to this organization");
-    expect(html).toContain("Owners and Admins can change these.");
+    expect(html).toContain("Admins can change these.");
     expect(html).toContain("Pane body");
   });
 

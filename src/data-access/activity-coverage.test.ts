@@ -47,6 +47,9 @@ const ACTIVITY_COVERAGE = {
     insertProductionRunReadingsSkippingDuplicates: { status: "exempt", reason: "Telemetry ingestion is measurement data, separate from operator entity activity." },
     recordReadingsImportOutcome: { status: "exempt", reason: "Import outcome metadata is internal bookkeeping; document lifecycle is recorded separately." },
   },
+  "submission-reservation-release.ts": {
+    releaseSubmissionReservations: { status: "direct" },
+  },
   "production-claim-reservations.ts": {
     reserveProductionEmissionsClaims: { status: "direct" },
     rejectSubmissionAndReleaseProductionClaims: { status: "direct" },
@@ -75,6 +78,7 @@ const ACTIVITY_COVERAGE = {
   },
   "credit-batches.ts": {
     createCreditBatch: { status: "direct" },
+    createCreditBatchInTransaction: { status: "direct" },
     updateCreditBatch: { status: "direct" },
     deleteCreditBatch: { status: "direct" },
   },
@@ -83,6 +87,7 @@ const ACTIVITY_COVERAGE = {
   },
   "credit-batch-removal-template.ts": {
     switchCreditBatchRemovalTemplate: { status: "direct" },
+    switchCreditBatchRemovalTemplateInTransaction: { status: "direct" },
   },
   "certifier-project-credit-batches.ts": {
     adoptCreditBatchesForIsometric: { status: "direct" },
@@ -135,11 +140,13 @@ const ACTIVITY_COVERAGE = {
   },
   "production-incidents.ts": {
     createProductionIncident: { status: "exempt", reason: "Incident records have no entity activity type; their document retirements are covered." },
+    createProductionIncidentInTransaction: { status: "exempt", reason: "Incident records have no entity activity type." },
     updateProductionIncident: { status: "exempt", reason: "Incident records have no entity activity type." },
     deleteProductionIncident: { status: "exempt", reason: "Incident records have no entity activity type; their document retirements are covered." },
   },
   "production-samples.ts": {
     createProductionSample: { status: "exempt", reason: "In-process measurements have no entity activity type; their document retirements are covered." },
+    createProductionSampleInTransaction: { status: "exempt", reason: "In-process measurements have no entity activity type." },
     updateProductionSample: { status: "exempt", reason: "In-process measurements have no entity activity type." },
     deleteProductionSample: { status: "exempt", reason: "In-process measurements have no entity activity type; their document retirements are covered." },
   },
@@ -162,6 +169,7 @@ const ACTIVITY_COVERAGE = {
     undoEmissionZeros: { status: "direct" },
   },
   "emission-entry-deletion.ts": {
+    deletedRemovalEntryFilter: { status: "exempt", reason: "Pure predicate builder; the caller records the deletion activity." },
     releaseDeletedRemovalEntries: { status: "direct" },
   },
   "certification.ts": {
@@ -174,6 +182,7 @@ const ACTIVITY_COVERAGE = {
     attachReportDocument: { status: "direct" },
     updateFacilityEmissionConfig: { status: "exempt", reason: "Facility energy configuration has no entity activity type." },
     updateFacilityDefaultRemovalTemplate: { status: "exempt", reason: "The facility default Removal template is reference configuration without an entity activity type." },
+    updateFacilityDefaultRemovalTemplateInTransaction: { status: "exempt", reason: "The facility default Removal template is reference configuration without an entity activity type." },
     deleteCertifierProject: { status: "exempt", reason: "Registry project mapping deletion changes reference configuration without an entity activity type." },
   },
   "ghg-statement-reports.ts": {
@@ -181,6 +190,7 @@ const ACTIVITY_COVERAGE = {
   },
   "transport-legs.ts": {
     createTransportLeg: { status: "direct" },
+    createTransportLegInTransaction: { status: "direct" },
     updateTransportLeg: { status: "direct" },
     deleteTransportLeg: { status: "direct" },
     deleteTransportLegsForEntity: { status: "direct" },

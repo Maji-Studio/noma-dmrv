@@ -1,4 +1,7 @@
+vi.mock("@/data-access/removal-entry-correction", () => ({ loadRemovalEntryCorrection: vi.fn(async () => ({ windowOpen: false, correctionNeeded: false, changedComponentIds: [], message: null })) }));
 import { beforeEach, expect, it, vi } from "vitest";
+import { collectFutureDatedMeasurements } from "./future-dated-measurements";
+
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
@@ -45,9 +48,10 @@ const scope = {
 function facts(template: GhgEntryTemplate): FacilityCertifierFacts {
   const lineSources = resolveLineSources({ definition: normalizeTemplateDefinition(template) });
   return {
+    facilityTimezone: "UTC",
     hasOrgCredentials: true, mapping: { externalProjectId: template.project_id },
     templatesById: { [template.id]: {
-      template, observation: { lineSources },
+      template, observation: { id: "observation", definition: normalizeTemplateDefinition(template), enrichment: {}, lineSources },
       enrichmentProblems: [], lineSourceProblems: [], blueprintsForTemplate: [], unresolvedBlueprintKeys: [],
       unbindableTemplateInputs: findUnbindableTemplateInputs(template, { lineSources }),
       requiredTransportCategories: deriveRequiredTransportCategories(template),
@@ -93,13 +97,12 @@ vi.mock("@/data-access/utils", async (original) => ({ ...await original<typeof i
 vi.mock("@/data-access/removal-codes", () => ({ getRemovalCodes: vi.fn(async () => new Map()) }));
 vi.mock("./batch-emission-context", () => ({ loadBatchEmissionContext: vi.fn(async () => ({})) }));
 vi.mock("@/data-access/emission-entry-contenders", () => ({ loadEmissionEntryReservations: vi.fn(async () => []) }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: vi.fn(() => false), requireEmissionsEntriesEnabled: vi.fn() }));
 vi.mock("@/data-access/certification", () => ({ listRecentSyncEvents: vi.fn(async () => []) }));
 vi.mock("@/data-access/certifier-removals", () => ({ listRemovalsForFacility: vi.fn(), listUngroupedCreditBatches: vi.fn(async () => []), getCertifierRemovalById: vi.fn() }));
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntriesForBatches: vi.fn(async () => []) }));
+vi.mock("@/data-access/emission-zeros", () => ({ isRemovalZeroEditable: vi.fn(async () => true) }));
 vi.mock("./biochar-application-source-readback", () => ({ refreshRemovalEvidenceLinks: vi.fn(async () => []) }));
 vi.mock("../with-action", () => ({ withAction: async (fn: (org: typeof ctx) => unknown) => ({ success: true, data: await fn(ctx) }) }));
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { getLatestSubmission } from "@/data-access/certification-submissions";
 import { listRemovalsForFacility, getCertifierRemovalById } from "@/data-access/certifier-removals";
 import { loadBatchEmissionContext } from "./batch-emission-context";
@@ -107,7 +110,6 @@ import { loadCertificationOverview } from "./overview";
 import { loadRemovalEmptyLines } from "./removal-empty-lines-core";
 
 it.each([new Date(0), new Date()])("loads context, Empty lines and overview after an unreserved draft entry changes (lock %s)", async (lockedAt) => {
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(true);
   const template = structuredClone(fixture) as GhgEntryTemplate;
   const facility = facts(template);
   const observation = facility.templatesById[template.id]!.observation!;
@@ -124,7 +126,30 @@ it.each([new Date(0), new Date()])("loads context, Empty lines and overview afte
     kind: "value", contentRevision: 2, counts: false, values: [], evidenceDocumentIds: [], occurredOn: "2026-01-02" }],
     previousObservations: new Map(), automaticFigures: {} } } as never);
   await expect(loadRemovalSubmissionContext(ctx, "removal-1")).resolves.toMatchObject({ latestSubmission: { id: "crashed" } });
-  await expect(loadRemovalEmptyLines(ctx, "removal-1")).resolves.toHaveProperty("batches");
+  await expect(loadRemovalEmptyLines(ctx, "removal-1")).resolves.toMatchObject({ editable: true, batches: expect.any(Array) });
   await expect(loadCertificationOverview(scope.facilityId)).resolves.toMatchObject({ success: true, data: { removals: [{ removalId: scope.removalId }] } });
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(false);
+});
+
+it.each(["Africa/Dar_es_Salaam", "America/Los_Angeles"])("passes the scoped facility zone to future measurement readiness (%s)", async (timezone) => {
+  const result = await buildRemovalContext(ctx, scope, { ...facts(fixture as GhgEntryTemplate), facilityTimezone: timezone });
+  expect(result.facilityTimezone).toBe(timezone);
+  expect(collectFutureDatedMeasurements).toHaveBeenLastCalledWith(expect.objectContaining({ facilityTimezone: timezone }));
+});
+
+it("carries the facility zone when there are no applications", async () => {
+  const timezone = "Africa/Dar_es_Salaam";
+  const emptyScope = { ...scope, memberBatches: scope.memberBatches.map((batch) => ({ ...batch, applicationIds: [] })) };
+  const result = await buildRemovalContext(ctx, emptyScope, { ...facts(fixture as GhgEntryTemplate), facilityTimezone: timezone });
+  expect(result.facilityTimezone).toBe(timezone);
+  expect(collectFutureDatedMeasurements).not.toHaveBeenCalled();
+});
+
+
+it.each([undefined, "claimed-draft"])("forwards the submission read scope for correction recovery: %s", async (claimedSubmissionId) => {
+  vi.mocked(resolveScopeForRemoval).mockResolvedValue(scope);
+  const facilityFacts = facts(fixture as GhgEntryTemplate);
+  vi.mocked(loadFacilityCertifierFacts).mockResolvedValue(facilityFacts);
+  await loadRemovalSubmissionContext(ctx, "removal-1", { claimedSubmissionId });
+  expect(loadBatchEmissionContext).toHaveBeenCalledWith(ctx, scope.facilityId, scope.memberBatches, facilityFacts,
+    { removalId: "removal-1", submissionId: claimedSubmissionId });
 });

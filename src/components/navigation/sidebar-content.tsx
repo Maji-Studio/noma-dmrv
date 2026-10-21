@@ -93,6 +93,10 @@ const SECTION_ACCENTS = {
 // guard sends a direct visit there (#1277).
 const CERTIFICATION_SECTION_TITLE = "Certification";
 
+// Screenshot mode: see next.config.ts and docs/testing.md#pr-screenshots.
+const SHOT_MODE = process.env.NODE_ENV !== "production" &&
+  process.env.NEXT_PUBLIC_SHOT_MODE === "true";
+
 // Dark vertical gradient shared by both the desktop aside and mobile drawer
 // so the two nav surfaces render identically.
 const SIDEBAR_BACKGROUND_GRADIENT =
@@ -385,12 +389,18 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             />
           </div>
           <div className="flex flex-col min-w-0 flex-1">
-            <span className="body-caption font-medium text-white truncate" suppressHydrationWarning>
-              {session?.user?.name ?? "User"}
-            </span>
-            <span className="text-[10px] text-[var(--color-white-25)] truncate" suppressHydrationWarning>
-              {session?.user?.email ?? " "}
-            </span>
+            {/* Screenshot mode (docs/testing.md#pr-screenshots) hides the
+                account text so PR evidence never shows a real email. */}
+            {!SHOT_MODE && (
+              <>
+                <span className="body-caption font-medium text-white truncate" suppressHydrationWarning>
+                  {session?.user?.name ?? "User"}
+                </span>
+                <span className="text-[10px] text-[var(--color-white-25)] truncate" suppressHydrationWarning>
+                  {session?.user?.email ?? " "}
+                </span>
+              </>
+            )}
           </div>
           {/* Straight to General rather than `/settings`, which only
               redirects there: the settings rail is the index, and General is

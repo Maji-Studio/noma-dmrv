@@ -89,14 +89,6 @@ integer columns.
 
 ## Environment Variables
 
-**`EMISSIONS_ENTRIES_ENABLED`** accepts `true` or `false` and defaults to `false`.
-The server refuses emissions entry writes and evidence changes while disabled.
-Existing entries stay visible in the batch display. Enabling it refuses new sample
-transport legs and retires sample legs from automatic figures, aggregation,
-catalog availability, transport coverage, readiness and dashboards. At activation,
-the hand-run retirement CLI deletes old sample legs, skipping certification-locked
-legs. Keep it disabled until entry submission support is deployed.
-
 **App environment list: the `envSchema` object in `src/config/env.ts`.**
 The logger validates `LOG_LEVEL` locally; standalone Isometric scripts and health
 checks validate their credential pair and environment in `src/lib/isometric/client-env.ts`. Templates:
@@ -160,8 +152,8 @@ Non-obvious semantics only:
 | `OAUTH_CIMD_CLIENT_IDS` | Comma-separated exact HTTPS metadata URLs; default empty (no CIMD) | Every environment requires a path and public DNS host, with no IP literal, local/special hostname, credentials, port, query or fragment. Production keeps the same validation. |
 
 [Env gates](../src/config/oauth-env-validation.ts) and
-[provider wiring](../src/lib/auth/oauth-provider.ts) fail closed. Keep the flag
-off everywhere until the [staging proof](./api.md#connecting-claude-and-chatgpt).
+[provider wiring](../src/lib/auth/oauth-provider.ts) fail closed. The flag is on for
+staging ([tested clients](./api.md#connecting-claude-and-chatgpt)).
 Production OAuth starts only after the production domain split: the issuer and
 both audiences embed the app host, so moving hosts invalidates connections.
 Never copy a staging issuer into production.
@@ -192,10 +184,10 @@ The application hook owns reuse and revocation; the patch is its backstop.
 
 Read directly from `process.env`, **not** validated by `env.ts`:
 
-- `EMISSIONS_ENTRIES_ENABLED` — `src/lib/certification/emissions-entry-gate.ts`
-  parses the same shared schema used by `envSchema` directly from `process.env`.
-  It always reads off in browser bundles, where this private variable is absent.
-  Client code must receive gate-dependent results from the server.
+- `NEXT_PUBLIC_SHOT_MODE` — `next.config.ts` and
+  `src/components/navigation/sidebar-content.tsx`. Only the literal `true` counts and it is ignored when
+  `NODE_ENV=production`. Hides the sidebar account text and the dev indicator for PR screenshots
+  (the PR screenshots section of `docs/testing.md`). Never put it in a 1Password item or a deployment.
 - `LOG_LEVEL` — validated in `src/lib/log/index.ts`: `trace`, `debug`, `info`,
   `warn`, `error`, `fatal`, or `silent`. Unset/blank defaults to `info` in
   production and `debug` otherwise; invalid values are rejected.
@@ -313,8 +305,7 @@ Notes:
 Runtime registry credentials are stored per organization in
 `certifier_credentials`, encrypted at rest with AES-256-GCM using
 `CREDENTIALS_ENCRYPTION_KEY`. Only masked status (configured, access-token last
-four, update time) may cross a server-action boundary. Each organization's Owners
-and Admins manage these write-only values themselves from the organization admin
+four, update time) may cross a server-action boundary. Each organization's Admins manage these write-only values themselves from the organization admin
 area, with Platform Admins as an override
 (`assertCanManageOrgCredentials`, `src/data-access/certifier-credentials.ts`; see
 [auth.md](./auth.md)). Certification readiness
@@ -363,7 +354,7 @@ skipping the shared local/test teammate. It is idempotent and never clobbers liv
 state (existing admin password untouched; credentials inserted only when none
 exist) and fails loudly rather than exiting 0 without a credential row. The
 Platform Admin must use the organization invitation flow to add the first real
-Owner.
+Admin.
 
 The manually confirmed `reset-seed-staging` job loads the Isometric trio from
 the staging item. The Mafinga seed stores the organization credentials and, when

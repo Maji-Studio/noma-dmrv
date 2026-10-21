@@ -1,24 +1,20 @@
 /**
- * Settings, Removal templates (Q10): the working facility's default Removal
- * template and the decision on each of its components. Removal readiness
- * blockers link here, so every member can read which components block a
- * Removal; only Owners and Admins decide them.
+ * Settings, Removal templates (Q10): a summary card for the working facility's
+ * default Removal template, with the setup dialog (#1276) behind its buttons.
+ * Removal readiness blockers link here, so every member can read which
+ * components block a Removal; only Admins set templates up.
  *
- * `?template=` narrows the pane to one template, even one no facility default
- * or credit batch uses yet (the credit batch template switch links that way).
+ * `?setup=` (with `template` and `makeDefault`) opens the dialog; the credit
+ * batch "Decide components" links arrive that way.
  */
 "use client";
 
-import { useQueryState } from "nuqs";
-import { RemovalTemplateReviewPanel } from "@/components/certification/removal-template-review-panel";
+import { RemovalTemplateSummaryCard } from "@/components/certification/removal-template-summary-card";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { REMOVAL_TEMPLATES_TEMPLATE_PARAM } from "@/lib/certification/links";
-import type { SettingsViewer } from "@/lib/settings/panes";
 
-export function RemovalTemplatesSettingsPane({ viewer }: { viewer: SettingsViewer }) {
+export function RemovalTemplatesSettingsPane() {
   const { facilityId } = useFacilityContext();
-  const [requestedTemplate] = useQueryState(REMOVAL_TEMPLATES_TEMPLATE_PARAM);
 
   if (!facilityId) {
     return (
@@ -27,11 +23,9 @@ export function RemovalTemplatesSettingsPane({ viewer }: { viewer: SettingsViewe
   }
 
   return (
-    <RemovalTemplateReviewPanel
-      key={`removal-template-review-${facilityId}`}
+    <RemovalTemplateSummaryCard
+      key={`removal-template-summary-${facilityId}`}
       facilityId={facilityId}
-      canManage={viewer.canManage}
-      templateId={requestedTemplate}
     />
   );
 }

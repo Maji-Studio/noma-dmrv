@@ -54,6 +54,8 @@ export interface ChoiceCardGroupProps {
   className?: string;
   /** Put the art above the text at every width, for drawings too wide to sit beside it. */
   stackArt?: boolean;
+  /** Keep two-up options in one column until the group is about 24rem wide (phones), for long titles. */
+  stackNarrow?: boolean;
 }
 
 /** Width of the group at which each column count starts. Cards keep about 176px. */
@@ -96,6 +98,7 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
       error,
       className,
       stackArt = false,
+      stackNarrow = false,
       ...aria
     },
     ref,
@@ -117,7 +120,7 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
           {required && <RequiredMarker visual={false} />}
         </legend>
         <div className="@container">
-          <div className={cn("grid grid-cols-1 gap-8", COLUMN_CLASSES[columns], className)}>
+          <div className={cn("grid grid-cols-1 gap-8", columns === 2 && stackNarrow ? "@min-[24rem]:grid-cols-2" : COLUMN_CLASSES[columns], className)}>
             {options.map((option) => {
               const optionDisabled = disabled || option.disabled;
               return (
@@ -168,12 +171,12 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
                       </span>
                     )}
                     <span className="flex min-w-0 flex-1 flex-col gap-4">
-                      <span className="flex items-center gap-8">
+                      <span className="flex flex-wrap items-center gap-x-8 gap-y-2">
                         <span className="body-small font-medium text-[var(--color-text-primary)] group-has-[input:disabled]:opacity-60">
                           {option.title}
                         </span>
                         {option.badge && (
-                          <span className="body-caption text-[var(--color-text-tertiary)]">
+                          <span className="body-caption whitespace-nowrap text-[var(--color-text-tertiary)]">
                             {option.badge}
                           </span>
                         )}

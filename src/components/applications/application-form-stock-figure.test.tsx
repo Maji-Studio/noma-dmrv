@@ -2,7 +2,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { Application } from "@/db/schema/application";
-import { deliveryStockOverdrawMessage } from "@/lib/stock-overdraw";
 import type { ApplicationDeliveryOption } from "./mass-utils";
 
 vi.mock("@/hooks/use-organization-settings", async () => {
@@ -65,11 +64,9 @@ function application(appliedKg: number): Application {
 function render({
   appliedKg = 400,
   alreadyAppliedWetKg = DELIVERY.alreadyAppliedWetKg,
-  errorMessage,
 }: {
   appliedKg?: number;
   alreadyAppliedWetKg?: number;
-  errorMessage?: string;
 } = {}): string {
   return renderToStaticMarkup(
     <QueryClientProvider client={new QueryClient()}>
@@ -77,7 +74,6 @@ function render({
         application={application(appliedKg)}
         deliveries={[{ ...DELIVERY, alreadyAppliedWetKg }]}
         onSubmit={() => undefined}
-        errorMessage={errorMessage}
       />
     </QueryClientProvider>,
   );
@@ -94,14 +90,6 @@ describe("ApplicationForm stock figure", () => {
 
     expect(html).toContain("1,000 kg available to this application");
     expect(html).not.toContain("Remaining now");
-  });
-
-  it("shows the delivery's remaining stock when a mass error replaces the cue", () => {
-    const html = render({ errorMessage: deliveryStockOverdrawMessage() });
-
-    expect(html).toContain(deliveryStockOverdrawMessage());
-    expect(html).not.toContain("available to this application");
-    expect(html).toContain("Remaining now: 600 kg wet mass, 270 kg dry biochar");
   });
 
   it("keeps one figure when the over-draw error states what is available", () => {

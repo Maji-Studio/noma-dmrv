@@ -1,6 +1,6 @@
 /**
  * Settings, Connected apps. Every member sees their own connections;
- * Owners and Admins also see every member's and can disconnect any.
+ * Admins also see every member's and can disconnect any.
  */
 import { ConnectedApps } from "@/components/oauth";
 import { SettingsConsole } from "@/components/settings";

@@ -59,7 +59,7 @@ describe("Removal cell registry record", () => {
     );
     expect(html).not.toContain("grm_");
     expect(html).not.toContain(MISSING_VALUE.none);
-    expect(html).not.toContain(MISSING_VALUE.notAvailable);
+    expect(html).not.toContain(MISSING_VALUE.notRecorded);
     expect(html).not.toContain("<a");
     expect(html).toMatch(/2026/);
   });

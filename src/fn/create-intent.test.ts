@@ -13,6 +13,7 @@ vi.mock("@/lib/auth/server", () => ({ requireOrgContext: auth }));
 vi.mock("@/lib/operations/runner", () => ({ runOperationInProcess: run }));
 vi.mock("@/lib/operations/orders", () => ({ recordOrder: { id: "record_order" } }));
 vi.mock("@/data-access/orders", () => ({}));
+vi.mock("@/data-access/order-stats", () => ({}));
 vi.mock("@/data-access/customers", () => ({}));
 vi.mock("@/data-access/suppliers", () => ({}));
 vi.mock("@/data-access/production-runs", () => ({}));
@@ -26,7 +27,7 @@ vi.mock("@/data-access/utils", () => ({}));
 vi.mock("@/lib/log", () => ({ logger: { error: vi.fn() }, sanitizeErrorMessage: vi.fn() }));
 
 const ID = "11111111-1111-4111-8111-111111111111";
-const ctx = { userId: ID, organizationId: ID, orgRole: "owner", isPlatformAdmin: false };
+const ctx = { userId: ID, organizationId: ID, orgRole: "admin", isPlatformAdmin: false };
 const input = { facilityId: ID, customerId: ID, customerLocationId: ID, formulationId: ID, orderDate: new Date("2026-09-12"), quantityKg: 100, packaging: "loose" as const };
 beforeEach(() => {
   vi.clearAllMocks();
