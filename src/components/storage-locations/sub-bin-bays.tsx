@@ -18,7 +18,7 @@ import { formatFacilityTime } from "@/lib/date-utils";
 import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
 import { ESTIMATED_WATER_LABEL, INGREDIENT_SOLIDS_LABEL } from "@/lib/output-stock/labels";
 import type { OutputSubBin } from "@/types/output-stock";
-import { formatWetEstimate } from "./stock-preview-shared";
+import { formatWetEstimate, outputStockFigure } from "./stock-preview-shared";
 import { DetailsTooltip, SubBinTooltip, ingredientSolidsParts, subBinMoistureText } from "./sub-bin-card";
 
 /** How much of a batch accent a bay's fill carries, so the figure on it stays legible. */
@@ -47,8 +47,9 @@ function bayIngredientsKg(subBin: OutputSubBin): number {
   return Math.max(subBin.solidsKg - subBin.dryMassKg, 0);
 }
 
-function bayFigure(subBin: OutputSubBin): string {
-  return subBin.wetEstimateKg === null ? `${formatWetEstimate(subBin.dryMassKg)} dry` : formatWetEstimate(subBin.wetEstimateKg);
+/** The bay face: the wet estimate, or the known dry biochar when there is none, never a placeholder. */
+export function bayFigure(subBin: OutputSubBin): string {
+  return subBin.wetEstimateKg === null ? outputStockFigure(null, subBin.dryMassKg) : formatWetEstimate(subBin.wetEstimateKg);
 }
 
 /**

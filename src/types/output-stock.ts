@@ -141,7 +141,11 @@ export interface OutputSubBin {
   placedAt: string;
   dryMassKg: number;
   solidsKg: number;
-  /** The sub-bin's wet stock, wet in less wet out from its last count; null when nothing dates it. */
+  /**
+   * The sub-bin's wet stock, wet in less wet out from its last count. Null for
+   * a mix-bin layer (a mix pile has one moisture, in the bin's totals) and for
+   * a split layer with no reading and no recorded wet mass.
+   */
   wetEstimateKg: number | null;
   moisturePercent: number | null;
   basis: MoistureBasis | null;
