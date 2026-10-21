@@ -16,8 +16,6 @@ import {
 } from "@/lib/isometric/template-observations/line-sources";
 import type { ComponentEnrichment, EntryPolicy, QuantityKind } from "@/lib/isometric/template-observations/types";
 import { humanizeEnum, ISOMETRIC_GIVES_NO_UNIT, MISSING_VALUE, UNIT_NOT_READ } from "@/lib/copy-utils";
-import { removalTemplateVerdict } from "@/lib/certification/removal-template-verdict";
-import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { sectionTemplateLines, type TemplateLineSection } from "@/lib/isometric/template-observations/template-sections";
 import { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE } from "@/lib/certification/requirement-labels";
 import { SOURCE_LABELS } from "@/lib/certification/removal-template-source-labels";
@@ -206,5 +204,3 @@ export function countedLabel(name: string, count: number): string {
   return `${name} (${count})`;
 }
 
-/** The title of a template no one has set up yet. */
-export const NOT_SET_UP_TITLE = "Not set up yet";

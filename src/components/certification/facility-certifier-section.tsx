@@ -181,7 +181,7 @@ function CertifierMappingFields({
           View on Isometric ↗
         </a>
       </Field>
-      <Field label="Default Removal template">
+      <Field label="Removal template">
         {resolvesNames ? (
           <>
             <span className="body-small">
