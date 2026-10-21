@@ -78,7 +78,9 @@ test.describe("Returned Removal screens", () => {
         if (CHECK_COPY) {
           await expect(seen("Resubmit needed", changed.removalCode)).toBeVisible({ timeout: 30_000 });
           await expect(seen("Correction needed", open.removalCode)).toBeVisible();
-          await expect(page.getByText("Correction needed")).toHaveCount(0);
+          // One status, not also #1134's lock-based cell with its reason line and action.
+          await expect(page.locator("[data-removal-correction]")).toHaveCount(0);
+          await expect(page.getByText("Correct this Removal's records")).toHaveCount(0);
         } else {
           await expect(seen("Correction needed", changed.removalCode)).toBeVisible({ timeout: 30_000 });
           await expect(seen("Correction needed", open.removalCode)).toBeVisible();
