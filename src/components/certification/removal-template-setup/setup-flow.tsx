@@ -138,7 +138,7 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
   return (
     <>
       <div className={`${GUTTER_CLASS} pb-16`}>
-        <StepFlow steps={STEPS} current={step} furthest={furthest} onNavigate={go} footer={null} className="gap-20">
+        <StepFlow steps={STEPS} current={step} furthest={furthest} onNavigate={go} footer={null} compactOnPhone className="gap-20">
           <div className="flex flex-col gap-20">
             <h3 className="sr-only">{STEP_TITLES[step]}</h3>
             {step === 0 && <TemplateStep data={data} templateId={templateId} onChange={pickTemplate} invalid={showMissing} notOffered={notOfferedReason(data, requestedTemplate)} certifierHref={certificationSettingsHref(facilityId)} />}

@@ -39,7 +39,7 @@ const SOURCE_NOUNS: Record<AutomaticSourceId, string> = {
   "feedstock-dry-mass": "feedstock dry mass",
   "biochar-dry-mass": "biochar dry mass",
   sequestration: "applications and lab results",
-  "safety-margin": "the safety margin on biochar dry mass",
+  "safety-margin": "the safety margin, which uses biochar dry mass",
 };
 
 const BLOCKED_COPY: Record<string, { reason: string; fix: string }> = {
