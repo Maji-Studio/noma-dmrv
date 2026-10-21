@@ -5,7 +5,7 @@
  */
 import { SafeError } from '@/lib/errors';
 import { add, decimal, grams, GRAMS_PER_KG, kilograms, rational, readRational, subtract, type Decimal, type Rational } from './exact';
-import type { LayerMoistureBasis } from './moisture-estimate';
+import type { LayerMoistureBasis, WetRemoval } from './moisture-estimate';
 import { planOutputStock, type OutputStockLayer } from './planner';
 
 /** Why a bin's layers do not resolve: one reason per place the projection gives up. */
@@ -160,7 +160,10 @@ export function outputStockBalance(layers: readonly OutputStockLayer[], at: stri
 export interface MoistureReadingRow { layerId: string; movementId: string; moisturePercent: number; solidsBasisKg: unknown; occurredAt: Date; sequence: bigint }
 
 /** The wet mass one posted allocation took from a layer, with its posting order; null when it took none (a count). */
-export interface WetRemovalRow { layerId: string; movementId: string; wetMassKg: string | null; reversesAllocationId: string | null; sequence: bigint }
+export interface WetRemovalRow { layerId: string; movementId: string; wetMassKg: string | null; reversesAllocationId: string | null; sequence: bigint;
+  /** Frozen exact allocation facts. Older unmeasured draws may have only wet mass. */
+  solidsKg?: unknown; wetShareKg?: unknown; moisturePercent?: number | null; occurredAt?: Date; kind?: string;
+}
 
 /**
  * The posting order of a product draw saved before the ledger. Every count is
@@ -186,13 +189,25 @@ export function projectMoistureBases(layers: readonly OutputStockLayer[], rows: 
   return layers.map(layer => {
     const wet = rows.recordedWetKg.get(layer.id);
     const recordedWetKg: Rational | null = wet == null || !WET_KG_PATTERN.test(wet) ? null : decimal(wet as Decimal);
+    // Walk live allocations backwards from today's exact balance, including count
+    // allocations (which have no wet share), to recover solids right after each draw.
+    let solids = layer.remainingSolidsKg!;
+    const removals: WetRemoval[] = [];
+    const live = rows.removals.filter(r => r.layerId === layer.id && !r.reversesAllocationId && !rows.reversedMovementIds.has(r.movementId))
+      .sort((a, b) => a.sequence > b.sequence ? -1 : a.sequence < b.sequence ? 1 : 0);
+    for (const removal of live) {
+      if (removal.wetMassKg != null) removals.push({
+        wetKg: removal.wetShareKg == null ? decimal(removal.wetMassKg as Decimal) : readRational(removal.wetShareKg),
+        solidsKg: solids, moisturePercent: removal.moisturePercent, occurredAt: removal.occurredAt?.toISOString(), kind: removal.kind, sequence: removal.sequence,
+      });
+      if (removal.solidsKg != null) solids = add(solids, readRational(removal.solidsKg));
+    }
     return {
       layerId: layer.id, placedAt: layer.placedAt, remainingSolidsKg: layer.remainingSolidsKg!,
       recorded: recordedWetKg ? { solidsKg: rational(grams(layer.establishedDryBiocharKg) + grams(layer.ingredientDrySolidsKg), GRAMS_PER_KG), wetKg: recordedWetKg } : null,
       readings: rows.readings.filter(reading => reading.layerId === layer.id && !rows.reversedMovementIds.has(reading.movementId))
         .map(reading => ({ moisturePercent: reading.moisturePercent, solidsKg: readRational(reading.solidsBasisKg), occurredAt: reading.occurredAt.toISOString(), sequence: reading.sequence })),
-      removals: rows.removals.filter(removal => removal.layerId === layer.id && removal.wetMassKg != null && !removal.reversesAllocationId && !rows.reversedMovementIds.has(removal.movementId))
-        .map(removal => ({ wetKg: decimal(removal.wetMassKg as Decimal), sequence: removal.sequence })),
+      removals,
     };
   });
 }

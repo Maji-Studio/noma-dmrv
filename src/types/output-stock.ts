@@ -46,9 +46,11 @@ export interface OutputStockPreview {
   /** Wet stock, wet in less wet out from each batch's last count, before and after this movement. */
   beforeEstimatedWetKg: number | null;
   afterEstimatedWetKg: number | null;
+  /** New previews return null unless this draw re-estimates remaining stock. Older saved previews omit it. */
+  reestimate?: { moisturePercent: number; stayWetKg: number; stayDryKg: number } | null;
   /** The bin's estimate before this movement: the hint beside a moisture field. */
   moistureEstimate?: OutputMoistureEstimate | null;
-  /** What a count's readings reset: the same remaining stock at its previous estimate, then at the count. Removals reset nothing. */
+  /** What a count's readings reset: the same remaining stock at its previous estimate, then at the count. Removal re-estimates use reestimate. */
   moistureReset?: OutputMoistureReset | null;
   /** The bin's stock mode at this movement's time; a merged bin is split before its merge. */
   stockMode?: OutputStockMode;
@@ -69,7 +71,7 @@ export interface OutputStockPreview {
 export interface OutputMoistureEstimate {
   moisturePercent: number | null;
   wetKg: number | null;
-  /** Where the estimate comes from: the last count, or the moisture recorded when the batch was added. */
+  /** Where the estimate comes from: the last count, a removal re-estimate, or the moisture recorded when the batch was added. */
   basis: MoistureBasis | null;
 }
 

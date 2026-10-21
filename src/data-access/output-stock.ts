@@ -199,14 +199,14 @@ async function readMoistureRows(ctx: OrgContext, bins: readonly Pick<OutputBinRe
       .where(and(eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.biocharStorageLocationId, biocharBinIds))) : [],
     productBinIds.length ? reader.select({ id: biocharProducts.id, wet: sql<string | null>`(${biocharProducts.massKg} + coalesce(${biocharProducts.waterAddedKg}, 0))::text` }).from(biocharProducts)
       .where(and(eq(biocharProducts.organizationId, ctx.organizationId), inArray(biocharProducts.storageLocationId, productBinIds), notInArray(biocharProducts.id, deletedProductIds(ctx, reader)))) : [],
-    // Only a count's reading sets a layer's moisture; readings older removals saved are history, not a basis.
+    // Count readings reset the layer. Removal re-estimates use the allocation's own reading below.
     reader.select({ reading: outputStockMoistureReadings, sequence: binMovements.postingSequence }).from(outputStockMoistureReadings)
       .innerJoin(binMovements, and(eq(binMovements.id, outputStockMoistureReadings.movementId), eq(binMovements.organizationId, ctx.organizationId)))
       .where(and(eq(outputStockMoistureReadings.organizationId, ctx.organizationId), inArray(outputStockMoistureReadings.storageLocationId, binIds), isCountMovementSql())),
     reader.select({ allocation: { biocharProductId: outputStockAllocations.biocharProductId, productionRunId: outputStockAllocations.productionRunId, storageLocationId: outputStockAllocations.sourceStorageLocationId,
       movementId: outputStockAllocations.movementId, wetMassKg: outputStockAllocations.wetMassKg, reversesAllocationId: outputStockAllocations.reversesAllocationId,
-      targetBiocharProductId: outputStockAllocations.targetBiocharProductId },
-    sequence: binMovements.postingSequence }).from(outputStockAllocations)
+      targetBiocharProductId: outputStockAllocations.targetBiocharProductId, basisSnapshot: outputStockAllocations.basisSnapshot },
+    sequence: binMovements.postingSequence, occurredAt: binMovements.occurredAt, kind: binMovements.outputKind, input: binMovements.inputSnapshot }).from(outputStockAllocations)
       .innerJoin(binMovements, and(eq(binMovements.id, outputStockAllocations.movementId), eq(binMovements.organizationId, ctx.organizationId)))
       .where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), inArray(outputStockAllocations.sourceStorageLocationId, binIds))),
     // A product draw saved before the ledger: its source row is the only record of the wet mass it took.
@@ -228,9 +228,12 @@ function moistureRowsFor(bin: Pick<OutputBinRef, 'id'>, rows: Awaited<ReturnType
     return reading.storageLocationId === bin.id && layerId ? [{ layerId, movementId: reading.movementId, moisturePercent: reading.moisturePercent, solidsBasisKg: reading.solidsBasisKg, occurredAt: reading.occurredAt, sequence }] : [];
   });
   const ledger = rows.removals.filter(({ allocation }) => allocation.storageLocationId === bin.id);
-  const removals: WetRemovalRow[] = ledger.flatMap(({ allocation, sequence }) => {
+  const removals: WetRemovalRow[] = ledger.flatMap(({ allocation, sequence, occurredAt, kind, input }) => {
     const layerId = allocation.biocharProductId ?? allocation.productionRunId;
-    return layerId ? [{ layerId, movementId: allocation.movementId, wetMassKg: allocation.wetMassKg, reversesAllocationId: allocation.reversesAllocationId, sequence }] : [];
+    return layerId ? [{ layerId, movementId: allocation.movementId, wetMassKg: allocation.wetMassKg, reversesAllocationId: allocation.reversesAllocationId, sequence,
+      solidsKg: allocation.basisSnapshot.solidsKg, wetShareKg: allocation.basisSnapshot.wetShareKg,
+      moisturePercent: allocation.basisSnapshot.readingPercent == null ? null : Number(allocation.basisSnapshot.readingPercent),
+      occurredAt: occurredAt ?? undefined, kind: kind === 'replacement' && typeof input?.kind === 'string' ? input.kind : kind ?? undefined }] : [];
   });
   removals.push(...preLedgerWetRemovals(rows.sourceDraws.filter(draw => draw.binId === bin.id), ledger.map(({ allocation }) => allocation)));
   return { recordedWetKg: rows.recordedWetKg, readings, removals, reversedMovementIds };

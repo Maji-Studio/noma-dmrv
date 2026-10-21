@@ -5,7 +5,8 @@ import { UNRESOLVED_STOCK_SENTENCES } from "@/lib/output-stock/layer-projection"
 import { publishKg, publishPercent } from "@/lib/output-stock/stock-precision";
 
 const moistureBasisSchema = z.object({
-  source: z.enum(["reading", "recorded"]).describe("A stock count reading or the mass recorded when the layer entered the bin."),
+  source: z.enum(["reading", "recorded", "removal"]).describe("A count, recorded intake, or removal that re-estimated remaining stock."),
+  kind: z.string().optional().describe("For a removal basis, the underlying movement kind, including when corrected."),
   at: z.iso.datetime().describe("Moisture basis instant in UTC, RFC 3339."),
 }).nullable().describe("Source and instant of the moisture estimate, or null when unavailable.");
 const figuresShape = {

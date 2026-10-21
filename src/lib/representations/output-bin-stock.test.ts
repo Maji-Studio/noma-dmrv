@@ -71,3 +71,12 @@ it("publishes draw order without reordering sub-bins and includes it in the body
   expect(bodyHashEtag(OUTPUT_BIN_STOCK_REPRESENTATION_REVISION, newest)).not.toBe(bodyHashEtag(OUTPUT_BIN_STOCK_REPRESENTATION_REVISION, oldest));
   expect(representOutputBinStock({ ...stock, stockMode: "mix", drawOrder: null }).drawOrder).toBeNull();
 });
+
+
+it('publishes the removal kind and date for both the bin and held sub-bin', () => {
+  const moistureBasis = { source: 'removal' as const, at: AT, kind: 'loss' };
+  const data = representOutputBinStock({ ...stock, totals: { ...figures, moistureBasis },
+    subBins: [{ ...stock.subBins[0], moistureBasis }] });
+  expect(data.totals?.moistureBasis).toEqual(moistureBasis);
+  expect(data.subBins[0].moistureBasis).toEqual(moistureBasis);
+});

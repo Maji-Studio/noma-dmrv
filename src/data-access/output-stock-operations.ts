@@ -7,7 +7,7 @@ import { ActionConflictError, SafeError } from '@/lib/errors';
 import { add, classifyPlannerFailure, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, rationalToNumber, SubBinOverdrawError, subtract, UntickSubBinError, type OutputStockBlocking, type OutputStockLayer, type OutputStockRequest } from '@/lib/output-stock';
 import { mixPileName, outputStockEventLabel } from '@/lib/output-stock/labels';
 import { resolveDrawPolicy, stockModeAt, type OutputStockMode, type StockModeChange } from '@/lib/output-stock/stock-mode';
-import { estimateStock, planReadings, planWetRemovals, withMovement, type LayerMoistureBasis, type PlannedReading } from '@/lib/output-stock/moisture-estimate';
+import { estimateStock, movementReestimates, planReadings, planWetRemovals, withMovement, type LayerMoistureBasis, type PlannedReading } from '@/lib/output-stock/moisture-estimate';
 import { formatFacilityDateTime } from '@/lib/format-utils';
 import { formatMoisturePercent, PERCENT_SCALE } from '@/lib/mass-moisture';
 import { STORED_PERCENT_INPUT_STEP } from '@/schemas/helpers';
@@ -109,14 +109,14 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   // A draw from several sub-bins has no single reading; its overall moisture is 1 − solids ÷ wet.
   const moisture = sources ? (plan ? (1 - rationalNumber(removedSolids) / input.wetMassKg) * PERCENT_SCALE : null) : input.moisturePercent ?? null;
   // A removal takes its wet mass from the wet stock and leaves the bin's
-  // moisture as it was; only a count's reading sets wet stock and moisture again.
+  // moisture as it was, unless wet would fall below solids and needs re-estimating.
   const bases = await getLayerMoistureBases(ctx, bin, layers, reader, { ignoreMovementId: input.correctsMovementId });
   // Every layer after the draw, not only the planning subset a reduced loss restores: a count describes them all.
   const afterLayers = layers.map(l => plan?.remainingLayers.find(a => a.id === l.id) ?? l);
   const readings = plan ? planReadings(request, { remainingLayers: afterLayers }, input.occurredAt) : [];
   const drawnBases = plan ? bases.map(basis => ({ ...basis, remainingSolidsKg: plan!.remainingLayers.find(l => l.id === basis.layerId)?.remainingSolidsKg ?? basis.remainingSolidsKg })) : bases;
   const nextSequence = (events.at(-1)?.sequence ?? BigInt(0)) + BigInt(1);
-  const afterBases = withMovement(drawnBases, { readings, removals: plan ? planWetRemovals(plan) : [] }, input.occurredAt, nextSequence);
+  const afterBases = withMovement(drawnBases, { readings, removals: plan ? planWetRemovals(plan) : [] }, input.occurredAt, nextSequence, input.kind);
   const estimateBefore = estimateStock(bases, input.occurredAt);
   const estimateAfter = estimateStock(afterBases, input.occurredAt);
   // A count of a mix bin describes the whole pile, so the change names the pile, not each batch.
@@ -144,6 +144,9 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
     movementMoisturePercent: moisture, beforeEstimatedWetKg: estimateBefore.wetKg,
     afterEstimatedWetKg: plan ? estimateAfter.wetKg : estimateBefore.wetKg,
     moistureEstimate: { moisturePercent: estimateBefore.moisturePercent, wetKg: estimateBefore.wetKg, basis: estimateBefore.basis },
+    reestimate: plan && movementReestimates(afterBases, input.occurredAt, nextSequence)
+      && estimateAfter.wetKg !== null && estimateAfter.moisturePercent !== null
+      ? { moisturePercent: estimateAfter.moisturePercent, stayWetKg: estimateAfter.wetKg, stayDryKg: beforeDryKg - Number(plan.drawnDryKg) } : null,
     moistureReset, stockMode,
     calculatedWithout: await calculatedWithout(),
     discrepancySolidsKg: plan ? rationalNumber(plan.discrepancySolidsKg) : 0,
@@ -278,7 +281,7 @@ export async function previewOutputStock(ctx: OrgContext, input: OutputStockPrev
     // readings carries none of its own, so its balance is read as a zero count.
     const balanceInput = input.moisturePercent == null ? { ...input, sources: undefined, kind: 'count' as const, wetMassKg: 0 } : { ...input, sources: undefined };
     const preview = (await prepareOutputStock(ctx, { ...balanceInput, correctsMovementId: undefined })).preview;
-    return { ...preview, discrepancySolidsKg: 0, moistureReset: null, afterDryKg: preview.beforeDryKg, afterSolidsKg: preview.beforeSolidsKg, afterEstimatedWetKg: preview.beforeEstimatedWetKg, afterAllocations: preview.beforeAllocations, allocations: [], removedDryKg: 0, removedWetKg: null, blockingMessage: error instanceof DomainError && error.code === "certification_locked" ? error.message : `${error.message} Replacement balances are unavailable until this dependency is resolved.`, blockers: error.blockers ?? (error.conflict ? [error.conflict] : []) };
+    return { ...preview, discrepancySolidsKg: 0, moistureReset: null, reestimate: null, afterDryKg: preview.beforeDryKg, afterSolidsKg: preview.beforeSolidsKg, afterEstimatedWetKg: preview.beforeEstimatedWetKg, afterAllocations: preview.beforeAllocations, allocations: [], removedDryKg: 0, removedWetKg: null, blockingMessage: error instanceof DomainError && error.code === "certification_locked" ? error.message : `${error.message} Replacement balances are unavailable until this dependency is resolved.`, blockers: error.blockers ?? (error.conflict ? [error.conflict] : []) };
   }
 }
 export async function getMatchingOutputBins(ctx: OrgContext, input: { facilityId: string; formulationId: string }): Promise<MatchingOutputBin[]> {

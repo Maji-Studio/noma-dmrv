@@ -1,3 +1,4 @@
+import { estimateStock } from './moisture-estimate';
 import { describe, expect, it } from 'vitest';
 import { rational, storeRational } from './exact';
 import { BEFORE_LEDGER_SEQUENCE, outputStockBalance, preLedgerWetRemovals, projectBiocharLayers, projectMoistureBases, projectProductLayers, UNRESOLVED_STOCK_REASONS, UNRESOLVED_STOCK_SENTENCES, UnresolvedOutputStockError, type AllocationEffectRow, type CompletedRunRow } from './layer-projection';
@@ -197,4 +198,35 @@ describe('unresolved stock reasons', () => {
     }
     expect(new Set(Object.values(UNRESOLVED_STOCK_SENTENCES)).size).toBe(UNRESOLVED_STOCK_REASONS.length);
   });
+});
+
+
+it('reconstructs exact solids after each live draw, including counts, without replaying allocation policy', () => {
+  const at = '2026-10-20T12:00:00.000Z';
+  const layer = { id: 'run', placedAt: '2026-10-19T12:00:00.000Z', postingSequence: BigInt(1),
+    establishedDryBiocharKg: '80', ingredientDrySolidsKg: '0', remainingDryBiocharKg: '40', remainingSolidsKg: rational(BigInt(40)),
+    runs: [{ productionRunId: 'run', establishedDryKg: '80', remainingDryKg: '40' }] };
+  const row = (movementId: string, sequence: number, solids: string, wetMassKg: string | null) => ({ layerId: 'run', movementId,
+    sequence: BigInt(sequence), solidsKg: { numerator: solids, denominator: '1' }, wetMassKg, reversesAllocationId: null,
+    moisturePercent: 50, occurredAt: new Date(at), kind: 'loss' });
+  const [basis] = projectMoistureBases([layer], { recordedWetKg: new Map([['run', '100']]), readings: [],
+    removals: [row('next', 3, '10', '20'), row('loss', 2, '25', '50'), row('count', 4, '5', null),
+      row('corrected', 1, '8', '10'), { ...row('reversal', 5, '-8', '-10'), reversesAllocationId: 'old-allocation' }],
+    reversedMovementIds: new Set(['corrected']) });
+  expect(basis.removals.map(r => [r.sequence, r.solidsKg])).toEqual([
+    [BigInt(3), rational(BigInt(45))], [BigInt(2), rational(BigInt(55))],
+  ]);
+  // Without a count reading, the later wet draw subtracts from the 110 kg re-estimate.
+  expect(estimateStock([basis], at)).toMatchObject({ wetKg: 90, solidsKg: 40, moisturePercent: 50, basis: { source: 'removal', at, kind: 'loss' } });
+});
+
+it('uses the frozen exact wet share rather than its rounded storage grams at the strict boundary', () => {
+  const at = '2026-10-20T12:00:00.000Z';
+  const layer = { id: 'run', placedAt: at, postingSequence: BigInt(1), establishedDryBiocharKg: '80', ingredientDrySolidsKg: '0',
+    remainingDryBiocharKg: '60', remainingSolidsKg: rational(BigInt(60)), runs: [] };
+  const [basis] = projectMoistureBases([layer], { recordedWetKg: new Map([['run', '100']]), readings: [], reversedMovementIds: new Set(),
+    removals: [{ layerId: 'run', movementId: 'draw', wetMassKg: '40.000', wetShareKg: { numerator: '400001', denominator: '10000' },
+      solidsKg: { numerator: '20', denominator: '1' }, sequence: BigInt(2), reversesAllocationId: null,
+      moisturePercent: 50, occurredAt: new Date(at), kind: 'delivery' }] });
+  expect(estimateStock([basis], at)).toMatchObject({ wetKg: 120, moisturePercent: 50, basis: { source: 'removal', at, kind: 'delivery' } });
 });
