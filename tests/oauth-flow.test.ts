@@ -86,7 +86,9 @@ it("a replayed code revokes the tokens already issued for it", async () => {
 it("narrows existing tokens and asks for consent again on escalation", async () => {
   f = await createOAuthFlowFixture();
   const original = await f.connect({ scope: "feedstocks:read feedstocks:write offline_access" });
-  const narrowing = await f.authorize({ scope: "feedstocks:read feedstocks:write offline_access", query: { prompt: "consent" } });
+  const narrowing = await f.authorize({ scope: "feedstocks:read feedstocks:write offline_access" });
+  expect(narrowing.location.pathname).toBe("/oauth/consent");
+  expect(narrowing.code.hasCode).toBe(false);
   const readOnly = await (await narrowing.consent("feedstocks:read offline_access")).exchange();
   expect(readOnly.hasRefresh).toBe(true);
   const resolved = await original.resolve();

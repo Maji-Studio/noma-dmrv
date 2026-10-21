@@ -232,3 +232,17 @@ it("filters new and already allowed scopes against a narrowed live role ceiling"
     newlyRequestedScopes: ["orders:read"], alreadyAllowedScopes: ["feedstocks:read"], stepUpScopes: ["orders:read"],
   } });
 });
+
+it("does not show step-up for a live refusal hint after stored consent was revoked", async () => {
+  const { getOAuthConsentViewFn } = await import("./oauth");
+  const { getOAuthAttemptConsent } = await import("@/data-access/oauth-provider");
+  const { assertGenerationEligible } = await import("@/lib/auth/oauth-eligibility");
+  vi.mocked(getOAuthAttemptConsent).mockResolvedValue({ organizationId: "org", name: "Organization", grantId: "generation", consentScopes: null });
+  vi.mocked(assertGenerationEligible).mockResolvedValue({ ok: true, role: "member" });
+  mocks.pending.mockResolvedValue(["feedstocks:write"]);
+  const query = new URLSearchParams(oauthQuery);
+  query.set("scope", "feedstocks:read feedstocks:write offline_access");
+  expect(await getOAuthConsentViewFn({ oauthQuery: query.toString() })).toMatchObject({ success: true, data: {
+    stepUpScopes: ["feedstocks:write"], isStepUp: false,
+  } });
+});

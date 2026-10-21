@@ -51,7 +51,8 @@ it.each([true, false])("client revoke replaces the plugin for refresh=%s, includ
 });
 it.each(["removed", "disconnected", "unverified", "api-off", "idle"])("refuses refresh and code exchange after %s", async reason => {
   f = await createOAuthFlowFixture();
-  const token = await f.connect(); const code = (await f.authorize()).code;
+  const token = await f.connect(); const flow = await f.authorize();
+  const code = flow.location.pathname === "/oauth/consent" ? await flow.consent() : flow.code;
   const grant = await generation();
   if (reason === "removed") await f.db.delete(f.tables.members).where(eq(f.tables.members.id, f.memberIds[0]));
   if (reason === "unverified") await f.db.update(f.tables.users).set({ emailVerified: false }).where(eq(f.tables.users.id, f.userId));

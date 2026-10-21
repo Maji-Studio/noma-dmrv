@@ -52,7 +52,7 @@ export async function getOAuthConsentViewFn(input: unknown) {
     return { ...display, organization: { id: view.organizationId, name: view.name },
       newlyRequestedScopes, stepUpScopes,
       alreadyAllowedScopes: apiScopes.filter(scope => allowed.has(scope)),
-      offlineAccessRequested: requested.includes("offline_access"), isStepUp: stepUpScopes.length > 0 };
+      offlineAccessRequested: requested.includes("offline_access"), isStepUp: view.consentScopes !== null && stepUpScopes.length > 0 };
   });
 }
 

@@ -61,7 +61,7 @@ describe("OAuth screen actions", () => {
     } finally { vi.useRealTimers(); }
   });
 
-  it("can create the sign-in session before the OAuth after-hook refuses", async () => {
+  it("can create the sign-in session before OAuth consent refuses", async () => {
     const { hashPassword } = await import("better-auth/crypto");
     const password = "e2e-oauth-test-password";
     await f.db.insert(f.tables.accounts).values({ id: randomUUID(), userId: f.userId,
@@ -72,10 +72,20 @@ describe("OAuth screen actions", () => {
     const before = await f.db.select({ id: f.tables.sessions.id }).from(f.tables.sessions).where(eq(f.tables.sessions.userId, f.userId));
     const response = await f.request("/sign-in/email", { email: `${f.userId}@e2e.local`, password,
       oauth_query: flow.location.search.slice(1) }, { cookie: "" });
-    expect(response.ok).toBe(false);
-    expect(await response.json()).toMatchObject({ error: "access_denied" });
+    expect(response.ok).toBe(true);
+    const continuation = await response.json();
+    expect(continuation).toMatchObject({ redirect: true });
+    const location = new URL(continuation.url, f.config.issuer);
+    expect(location.pathname).toBe("/oauth/consent");
+    expect(location.searchParams.has("code")).toBe(false);
     const after = await f.db.select({ id: f.tables.sessions.id }).from(f.tables.sessions).where(eq(f.tables.sessions.userId, f.userId));
     expect(after).toHaveLength(before.length + 1);
+    const headers = new Headers(f.headers);
+    headers.set("cookie", response.headers.getSetCookie().map(cookie => cookie.split(";")[0]).join("; "));
+    await expect(f.auth.api.oauth2Consent({ asResponse: false, headers,
+      request: new Request(`${f.config.issuer}/oauth2/consent`, { method: "POST", headers }),
+      body: { accept: true, oauth_query: location.search.slice(1) },
+    })).rejects.toMatchObject({ body: { error: "access_denied" } });
   });
 
   it("cannot read or change another session's bound attempt", async () => {
