@@ -15,16 +15,11 @@
  *
  * On a phone (below `sm`) either orientation shows the current step only: its
  * number, its label and "Step 2 of 3" under it. Desktop keeps the full rail.
- * A flow whose only way back is the rail sets `phoneBack`: on a phone it adds
- * one quiet "Back to <step>" under that box, for the nearest earlier step
- * `canNavigate` allows.
  */
 "use client";
 
 import * as React from "react";
-import { useIsMobile } from "@/hooks/use-media-query";
 import { CheckIcon } from "@phosphor-icons/react/dist/ssr";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export interface StepFlowStep {
@@ -52,33 +47,7 @@ interface StepFlowProps {
   /** Action row pinned below the content (Back / Next / Submit). */
   footer?: React.ReactNode;
   orientation?: "horizontal" | "vertical";
-  /** On a phone, add "Back to <step>" under the current step when an earlier step can be revisited. */
-  phoneBack?: boolean;
   className?: string;
-}
-
-/** Below Tailwind's `sm` (640px). */
-const PHONE_BREAKPOINT_PX = 640;
-
-/** One quiet control under the phone's current-step box: back to the nearest earlier step that can be revisited. */
-function PhoneBack({ steps, current, reach, onNavigate, canNavigate }: {
-  steps: StepFlowStep[];
-  current: number;
-  reach: number;
-  onNavigate?: (index: number) => void;
-  canNavigate?: (index: number) => boolean;
-}) {
-  const isPhone = useIsMobile(PHONE_BREAKPOINT_PX);
-  if (!isPhone || !onNavigate) return null;
-  const back = [...steps.keys()]
-    .filter((index) => index < current && index <= reach && (canNavigate?.(index) ?? true))
-    .pop();
-  if (back === undefined) return null;
-  return (
-    <Button variant="noOutline" onClick={() => onNavigate(back)} className="mt-8 min-h-44 self-start px-0">
-      Back to {steps[back].label}
-    </Button>
-  );
 }
 
 type StepState = "done" | "active" | "upcoming";
@@ -189,7 +158,6 @@ export function StepFlow({
   children,
   footer,
   orientation = "horizontal",
-  phoneBack = false,
   className,
 }: StepFlowProps) {
   const reach = furthest ?? current;
@@ -241,15 +209,6 @@ export function StepFlow({
     </ol>
   );
 
-  const railWithBack = (
-    <>
-      {rail}
-      {phoneBack && (
-        <PhoneBack steps={steps} current={current} reach={reach} onNavigate={onNavigate} canNavigate={canNavigate} />
-      )}
-    </>
-  );
-
   if (orientation === "vertical") {
     return (
       <div className={cn("flex flex-col gap-24 sm:flex-row", className)}>
@@ -257,7 +216,7 @@ export function StepFlow({
           aria-label="Steps"
           className="shrink-0 border-b border-[var(--color-border-secondary)] pb-16 sm:w-[200px] sm:border-b-0 sm:border-r sm:pb-0 sm:pr-24"
         >
-          {railWithBack}
+          {rail}
         </nav>
         <div className="flex min-w-0 flex-1 flex-col gap-24">
           <div className="flex flex-col">{children}</div>
@@ -273,7 +232,7 @@ export function StepFlow({
         aria-label="Steps"
         className="border-b border-[var(--color-border-secondary)] pb-16"
       >
-        {railWithBack}
+        {rail}
       </nav>
       <div className="flex flex-col">{children}</div>
       {footer && (
