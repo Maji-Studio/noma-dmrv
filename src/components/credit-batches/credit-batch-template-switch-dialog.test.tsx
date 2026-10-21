@@ -98,9 +98,9 @@ describe("CreditBatchTemplateSwitchDialog", () => {
     expect(screen.queryByText("2 components to decide")).toBeNull();
     const link = screen.getByRole("link", { name: /^Decide components/ });
     // The Decisions step of that template with Make default off, in a new tab so the unsaved choice stays here.
-    expect(link.getAttribute("href")).toContain("/certification/settings/removal-template-setup");
+    expect(link.getAttribute("href")).toContain("/certification/settings?section=removal-templates");
     expect(link.getAttribute("href")).toContain("template=rvt_new");
-    expect(link.getAttribute("href")).toContain("step=decisions");
+    expect(link.getAttribute("href")).toContain("setup=decisions");
     expect(link.getAttribute("href")).toContain("makeDefault=false");
     expect(link.getAttribute("target")).toBe("_blank");
   });

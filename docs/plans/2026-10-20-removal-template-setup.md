@@ -30,13 +30,13 @@ A component added later already lands as `proposed`; `linesToDecideCount` counts
 
 Data-access: split `reviewLineContracts`, `updateFacilityDefaultRemovalTemplate`, `switchCreditBatchRemovalTemplate` into `…InTransaction(ctx, tx, …)` cores. Public wrappers stay, with their Admin and archived-facility guards, the not-ready switch refusal and their tests. `loadRemovalTemplateReview`, `loadRemovalTemplateReviewEntry` and `readOnlyEntry` stay untouched.
 
-Also: schemas in `src/schemas/removal-template-setup.ts`; query key `certificationKeys.removalTemplateSetup(facilityId)`; hooks `useRemovalTemplateSetup`, `useApplyRemovalTemplateSetup` (invalidates certification, credit batches, activity, onboarding); link builder `removalTemplateSetupHref(facilityId, { templateId?, step? })`. `certificationRemovalTemplatesHref` keeps its signature.
+Also: schemas in `src/schemas/removal-template-setup.ts`; query key `certificationKeys.removalTemplateSetup(facilityId)`; hooks `useRemovalTemplateSetup`, `useApplyRemovalTemplateSetup` (invalidates certification, credit batches, activity, onboarding); link builder `removalTemplateSetupHref(facilityId, { templateId?, step?, makeDefault? })` (the Settings pane with the dialog params). `certificationRemovalTemplatesHref` keeps its signature.
 
 Lock order: boundary lock, then observation advisory lock, then batch locks. Confirm no path takes the observation lock before the boundary lock.
 
 ## 3. UI (PR 2, Claude)
 
-- Planned route file: src/app/(app)/certification/settings/removal-template-setup/page.tsx (`?facility&template&step`); Members are redirected to the Settings pane.
+- Superseded 2026-10-21 (Kenji's pick of variant A on #1276): no route. The setup is a stepper dialog opened from the Settings Removal templates card; deep links are `?section=removal-templates&setup=<step>&template=<id>&makeDefault=false` on the Settings pane, and Members only see the card.
 - Page: `PageHeader` "Set up Removal template", facility subtitle, back link to Settings. Vertical step rail:
   - **Template**: radio cards for fitting templates only, then one line naming those not offered and why. One fit is preselected; more than one, no preselection and Continue waits for a pick.
   - **Decisions**: numbered decision blocks, then the folded "noma decided N components" list with Change on noma's defaults. Decided components are read-only: "Decided for every facility using this template".

@@ -1,6 +1,6 @@
 /**
  * The three steps of Removal template setup: pick the template, decide what
- * noma cannot, apply. Presentational: the page owns every choice.
+ * noma cannot, apply. Presentational: the setup flow owns every choice.
  */
 "use client";
 
@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { ChoiceCardGroup, FormSelect } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
+import { InfoHint } from "@/components/ui/tooltip";
 import { LedgerBeforeAfter } from "@/components/storage-locations/stock-ledger";
 import type { useRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
@@ -39,25 +40,26 @@ const FILL_COLUMN_CLASS = "sm:w-[280px]";
 
 /* Template ----------------------------------------------------------------- */
 
-function notOfferedLine(notFitting: SetupData["notFitting"]): string {
-  const items = notFitting.map(({ name, reason }) => `${name} (${reason.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())})`);
-  return `Not offered: ${items.join("; ")}.`;
-}
+const NOT_FITTING_BADGE = "Does not fit";
 
 export function TemplateStep({ data, templateId, onChange, invalid, notOffered, certifierHref }: {
   data: SetupData;
   templateId: string | null;
   onChange: (id: string) => void;
   invalid: boolean;
-  /** Why the template a link named is not offered. */
+  /** Why the template a link named is not in this project. */
   notOffered: string | null;
   certifierHref: string;
 }) {
-  const only = data.fitting.length === 1 ? data.fitting[0] : null;
   const describe = (template: SetupTemplate) => template.blockedReason
     ? blockedCopy(template.blockedReason)
     : `${formatCount(template.componentCount, "component")}. ${toDecideLabel(template.plan.decisions.length)}.`;
   const project = data.projectName ?? "this project";
+  // Every Removal template in the project is listed; the ones that do not fit stay disabled with their reason.
+  const options = [
+    ...data.fitting.map((template) => ({ value: template.id, title: template.name, description: describe(template), disabled: !!template.blockedReason })),
+    ...data.notFitting.map((template) => ({ value: template.id, title: template.name, description: template.reason, disabled: true, badge: NOT_FITTING_BADGE })),
+  ];
   return (
     <div className="flex flex-col gap-16">
       {notOffered && <Notice tone="warning">{notOffered}</Notice>}
@@ -69,25 +71,14 @@ export function TemplateStep({ data, templateId, onChange, invalid, notOffered, 
           {`No Removal template in ${project} fits this facility. Check the facility's durability tier or add a template in Isometric.`}
         </Notice>
       )}
-      {only && templateId === only.id ? (
-        <div className="flex flex-col gap-4 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 py-10">
-          <span className="body-small font-medium text-[var(--color-text-primary)]">{only.name}</span>
-          <span className="body-caption text-[var(--color-text-tertiary)]">{describe(only)}</span>
-        </div>
-      ) : data.fitting.length > 0 && (
+      {options.length > 0 && (
         <ChoiceCardGroup
           legend="Removal template"
           value={templateId}
           onValueChange={onChange}
           error={invalid && !templateId}
-          options={data.fitting.map((template) => ({ value: template.id, title: template.name, description: describe(template), disabled: !!template.blockedReason }))}
+          options={options}
         />
-      )}
-      {(data.fitting.length > 1 || data.notFitting.length > 0) && (
-        <p className="body-caption text-[var(--color-text-tertiary)]">
-          {data.fitting.length > 1 && `${data.fitting.length} templates in ${project} fit this facility.`}
-          {data.notFitting.length > 0 && ` ${notOfferedLine(data.notFitting)}`}
-        </p>
       )}
     </div>
   );
@@ -333,13 +324,12 @@ export function ApplyStep({ data, template, answers, overrides, makeDefault, set
           {` ${others.length === 1 ? "keeps" : "keep"} ${others.length === 1 && others[0].templateName ? others[0].templateName : "their templates"}. An Admin can switch ${others.length === 1 ? "it" : "each"} on its credit batch page.`}
         </Notice>
       )}
-      <div className="flex flex-col gap-6">
-        <h3 className="body-small font-medium text-[var(--color-text-primary)]">What changes</h3>
-        <ul className="flex list-disc flex-col gap-4 pl-20 body-small text-[var(--color-text-secondary)]">
-          <li>{`${formatCount(entries, "component")} ${entries === 1 ? "takes" : "take"} an emissions entry on each credit batch. Emissions lists them as Not recorded until someone records a value or a zero.`}</li>
-          <li>{`The component decisions apply to every facility that uses ${template.name}.`}</li>
-        </ul>
-      </div>
+      <p className="body-small text-[var(--color-text-secondary)]">
+        {`${formatCount(entries, "component")} ${entries === 1 ? "takes" : "take"} an emissions entry on each credit batch.`}
+        <InfoHint label="What changes" className="ml-4">
+          {`Emissions lists them as Not recorded until someone records a value or a zero. The component decisions apply to every facility that uses ${template.name}.`}
+        </InfoHint>
+      </p>
     </div>
   );
 }

@@ -1,8 +1,8 @@
 /**
- * Guided Removal template setup (#1276): the Settings summary, the setup page
- * and the Member redirect.
+ * Guided Removal template setup (#1276): the Settings summary, the setup
+ * dialog and the Member view.
  *
- * The page reads the facility's templates live from the Isometric sandbox, so
+ * The dialog reads the facility's templates live from the Isometric sandbox, so
  * the spec is skipped without `ISOMETRIC_DEMO_PROJECT_ID` and is tagged @live.
  * It walks the steps and stops before Apply: which sandbox templates are fully
  * bound changes with the project, and Apply is covered by the component and
@@ -16,10 +16,9 @@ import {
   type SeededMapping,
 } from "./fixtures/certification-helpers";
 
-// The page waits on live Isometric reads; the first dev compile is slow too.
+// The dialog waits on live Isometric reads; the first dev compile is slow too.
 const LIVE_READ_TIMEOUT_MS = 60_000;
 const SETTINGS_PATH = "/certification/settings";
-const SETUP_PATH = "/certification/settings/removal-template-setup";
 
 test.describe("Removal template setup", { tag: "@live" }, () => {
   test.skip(!SANDBOX_PROJECT_ID, "requires an Isometric sandbox project ID (ISOMETRIC_DEMO_PROJECT_ID)");
@@ -30,7 +29,7 @@ test.describe("Removal template setup", { tag: "@live" }, () => {
     mapping = undefined;
   });
 
-  test("an Admin walks from the empty Settings pane through the steps", async ({ adminPage: page, seededData, cleanupTestData }) => {
+  test("an Admin opens the dialog from the empty Settings pane and walks the steps", async ({ adminPage: page, seededData, cleanupTestData }) => {
     void cleanupTestData;
     const facilityId = seededData.facility.id;
     await setFacilityDurabilityTier(facilityId, "1000_year");
@@ -38,45 +37,51 @@ test.describe("Removal template setup", { tag: "@live" }, () => {
 
     await page.goto(`${SETTINGS_PATH}?section=removal-templates&facility=${facilityId}`);
     await expect(page.getByText("No Removal template set")).toBeVisible({ timeout: LIVE_READ_TIMEOUT_MS });
-    await page.getByRole("link", { name: "Set up template" }).click();
+    await page.getByRole("button", { name: "Set up template" }).click();
 
-    await expect(page).toHaveURL(new RegExp(`${SETUP_PATH}\\?facility=${facilityId}`));
-    await expect(page.getByRole("heading", { name: "Set up Removal template" })).toBeVisible();
-    await expect(page.getByRole("complementary", { name: "What happens" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Pick the template" })).toBeVisible({ timeout: LIVE_READ_TIMEOUT_MS });
+    // The dialog sits over the pane: same page, params mark it open.
+    const dialog = page.getByRole("dialog", { name: "Set up Removal template" });
+    await expect(dialog).toBeVisible();
+    await expect(page).toHaveURL(/section=removal-templates/);
+    await expect(page).toHaveURL(/setup=template/);
+    await expect(dialog.getByRole("heading", { name: "Pick the template" })).toBeAttached({ timeout: LIVE_READ_TIMEOUT_MS });
 
-    // Several fits start with nothing picked, and Continue waits for a pick.
-    const radios = page.getByRole("radio");
+    // Every template of the project is listed; several fits start with nothing picked, and Next waits for a pick.
+    const radios = dialog.getByRole("radio");
     await expect(radios.first()).toBeVisible({ timeout: LIVE_READ_TIMEOUT_MS });
-    if ((await radios.count()) > 1) {
-      await expect(page.getByRole("radio", { checked: true })).toHaveCount(0);
-      await page.getByRole("button", { name: "Continue" }).click();
-      await expect(page.getByText("Pick a template to continue.")).toBeVisible();
-      // Templates Isometric cannot take yet are listed but disabled.
-      await page.getByRole("radio", { disabled: false }).first().check({ force: true });
+    if ((await dialog.getByRole("radio", { disabled: false }).count()) > 1) {
+      await expect(dialog.getByRole("radio", { checked: true })).toHaveCount(0);
+      await dialog.getByRole("button", { name: "Next" }).click();
+      await expect(dialog.getByText("Pick a template to continue.")).toBeVisible();
+      await dialog.getByRole("radio", { disabled: false }).first().check({ force: true });
     }
-    await page.getByRole("button", { name: "Continue" }).click();
+    await dialog.getByRole("button", { name: "Next" }).click();
 
     // A template with questions opens Decisions, one with none goes straight to Apply.
-    const heading = page.getByRole("heading", { name: /^(Decide what noma cannot|Apply the setup)$/ });
-    await expect(heading).toBeVisible();
+    const heading = dialog.getByRole("heading", { name: /^(Decide what noma cannot|Apply the setup)$/ });
+    await expect(heading).toBeAttached();
     if ((await heading.textContent()) === "Decide what noma cannot") {
-      await page.getByRole("button", { name: "Continue" }).click();
-      await expect(page.getByText(/to decide:/)).toBeVisible();
-      await page.getByRole("button", { name: /^Template/ }).click();
-      await expect(page.getByRole("heading", { name: "Pick the template" })).toBeVisible();
+      await dialog.getByRole("button", { name: "Next" }).click();
+      await expect(dialog.getByText(/to decide:/)).toBeVisible();
     }
+    await dialog.getByRole("button", { name: "Back" }).click();
+
+    // Cancel leaves nothing behind: the dialog closes and the params go with it.
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page).not.toHaveURL(/setup=/);
+    await expect(page.getByText("No Removal template set")).toBeVisible();
   });
 
-  test("a Member is sent back to the read-only Settings pane", async ({ operatorPage: page, seededData, cleanupTestData }) => {
+  test("a Member sees the read-only card and a setup link does not open the dialog", async ({ operatorPage: page, seededData, cleanupTestData }) => {
     void cleanupTestData;
     const facilityId = seededData.facility.id;
     mapping = await seedCertifierMapping(facilityId, { externalProjectId: SANDBOX_PROJECT_ID as string });
 
-    await page.goto(`${SETUP_PATH}?facility=${facilityId}`);
-    await expect(page).toHaveURL(new RegExp(`${SETTINGS_PATH}\\?.*section=removal-templates`), { timeout: LIVE_READ_TIMEOUT_MS });
+    await page.goto(`${SETTINGS_PATH}?section=removal-templates&facility=${facilityId}&setup=template`);
     await expect(page.getByText("No Removal template set")).toBeVisible({ timeout: LIVE_READ_TIMEOUT_MS });
-    await expect(page.getByRole("link", { name: "Set up template" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Set up template" })).toHaveCount(0);
+    await expect(page.getByRole("dialog", { name: "Set up Removal template" })).toHaveCount(0);
     await expect(page.getByText("Owners and Admins can change these.")).toBeVisible();
   });
 });
