@@ -114,7 +114,7 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
   { file: "components/facilities/facility-read-sections.tsx", name: "facility", sections: facilitySheetSections(as({
     id: "facility", name: "Mafinga", ...TEST_SITE_POSITION, country: "TZ", timezone: "Africa/Dar_es_Salaam", location: "Mafinga", address: null,
     contactEmail: null, contactPhone: null, durabilityOption: "200_year", reactorCount: 2,
-    storageSummary: { feedstockBinCount: 2, biocharBinCount: 1, productBinCount: 3 }, inventorySummary: { feedstockWetKg: 1200, biocharKg: 800, productKg: 400 },
+    storageSummary: { feedstockBinCount: 2, biocharBinCount: 1, productBinCount: 3 }, inventorySummary: { feedstockWetKg: 1200, biochar: { wetKg: 800, dryBiocharKg: 640 }, product: { wetKg: 400, dryBiocharKg: 200 } },
   })) },
   { file: "components/feedstock-types/feedstock-type-read-sections.tsx", name: "feedstock type", sections: feedstockTypeSheetSections(as({
     id: "type", name: "Maize cobs", code: "FT-001", category: "agricultural", usage: "pyrolysis", archivedAt: null, isometricFeedstockTypeId: null, registryUrl: null, description: null,
@@ -152,6 +152,31 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
 afterEach(cleanup);
 
 describe("read sheets", () => {
+  it.each([
+    { name: "wet mass", biochar: { wetKg: 800, dryBiocharKg: 640 }, product: { wetKg: 400, dryBiocharKg: 200 }, biocharFigure: "800 kg wet mass", productFigure: "400 kg wet mass" },
+    { name: "known dry biochar", biochar: { wetKg: null, dryBiocharKg: 640 }, product: { wetKg: null, dryBiocharKg: 200 }, biocharFigure: "640 kg dry biochar", productFigure: "200 kg dry biochar" },
+    { name: "unresolved stock", biochar: null, product: null, biocharFigure: "Not recorded", productFigure: "Not recorded" },
+    { name: "empty groups", biochar: { wetKg: 0, dryBiocharKg: 0 }, product: { wetKg: 0, dryBiocharKg: 0 }, biocharFigure: "0 kg wet mass", productFigure: "0 kg wet mass" },
+    { name: "independent groups", biochar: { wetKg: null, dryBiocharKg: 640 }, product: null, biocharFigure: "640 kg dry biochar", productFigure: "Not recorded" },
+  ])("shows the facility inventory with $name", ({ biochar, product, biocharFigure, productFigure }) => {
+    const sections = facilitySheetSections(as({
+      id: "facility", timezone: "UTC", durabilityOption: "200_year", reactorCount: 0,
+      storageSummary: { feedstockBinCount: 0, biocharBinCount: 0, productBinCount: 0 },
+      inventorySummary: { feedstockWetKg: 1200, biochar, product },
+    }));
+    const snapshot = sections.find(section => section.title === "Inventory snapshot")!;
+    expect(snapshot.fields).toEqual([
+      { label: "Feedstock on hand (wet)", value: "1.2 t" },
+      { label: "Biochar bins on hand", value: biocharFigure },
+      { label: "Product bins on hand", value: productFigure },
+    ]);
+    const { container } = render(<EntitySideSheetSections sections={[snapshot]} />);
+    expect(container.textContent).toContain(biocharFigure);
+    expect(container.textContent).toContain(productFigure);
+    expect(container.textContent).not.toContain("Not recorded kg");
+    expect(container.textContent).not.toMatch(/[\u2013\u2014]/);
+  });
+
   it.each([
     { name: "formulation", keys: ["name", "Blend composition by volume", "description"], first: "Formulation name", last: "Description" },
     { name: "reactor", keys: ["identifier", "Reactor configuration"], first: "Identifier", last: "Nominal throughput (tph)" },

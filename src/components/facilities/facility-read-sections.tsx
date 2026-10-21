@@ -6,8 +6,10 @@ import { formatTimezoneLabel } from "@/lib/date-utils";
 import { formatDurabilityOption } from "@/schemas/credit-batches";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { FacilityWithRelations } from "@/data-access/facilities";
+import { outputStockFigure } from "@/components/storage-locations/stock-preview-shared";
 
 export function facilitySheetSections(facility: FacilityWithRelations): DetailPanelSection[] {
+  const { biochar, product } = facility.inventorySummary;
   return [
     {
       title: "Facility information",
@@ -62,12 +64,12 @@ export function facilitySheetSections(facility: FacilityWithRelations): DetailPa
           value: formatMass(facility.inventorySummary.feedstockWetKg),
         },
         {
-          label: "Biochar on hand",
-          value: formatMass(facility.inventorySummary.biocharKg),
+          label: "Biochar bins on hand",
+          value: biochar === null ? "Not recorded" : outputStockFigure(biochar.wetKg, biochar.dryBiocharKg),
         },
         {
-          label: "Product mass",
-          value: formatMass(facility.inventorySummary.productKg),
+          label: "Product bins on hand",
+          value: product === null ? "Not recorded" : outputStockFigure(product.wetKg, product.dryBiocharKg),
         },
       ],
     },
