@@ -46,7 +46,7 @@ This is the per-surface log of what we tried, what replaced it, and why. Read it
 ## Stock, bins and transport
 
 - **Stock blocks** (PR 822 picks, #1001; 2026-09-23, 10-17): dry biochar headline → wet mass first, dry biochar below in a smaller, lighter line; correction previews show wet first.
-- **Stock history**: timeline. Bin history (#1004): always wet mass, dry when available, the rest in the table, top to bottom on phones.
+- **Stock history**: timeline. Bin history (#1004): always wet mass, dry when available, the rest in the table, top to bottom on phones. Wet mass and water estimates read in whole kg; the exception (#1349, 2026-10-21) is a change whole kg would hide (2 kg wet at 10% moisture takes 0.2 kg of water): the Change and After figures of that row, and the Wet mass total, show the first precision that keeps it visible (one decimal, then the three decimals a mass is stored at), so the row adds up and never reads "-0".
 - **Bin sheet** (#992): titled cards, the bin figure is hoverable, one text action top right per card, ⓘ next to the title, one "Adjust stock" (lost mass) action. Rejected: "Record loss" and "Reconcile stock" buttons; stock history buttons outside the bin route.
 - **Transport legs** (#892): derived transport on every record → transport only where goods move; route rail variant B, one line per leg with a menu, "View map" in a dialog. Rejected: two competing summary areas on the right.
 - **Distance refresh action** (#1262; Kenji, 2026-10-20): the outlined uppercase "Refresh from location" button was "huge" → "text only with underline and a refresh icon before, so it fits into the row". The edit row and the read-view notice both use it. Rejected: the boxed button on the hint line.

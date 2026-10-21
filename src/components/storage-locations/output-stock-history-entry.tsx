@@ -15,7 +15,7 @@ import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { MoistureResetChange } from "./moisture-reset-change";
-import { entryAmount, entrySentence, estimateKg, formatPartFigures, signedKg, WET_MASS_LABEL, type HistoryRow } from "./output-stock-history-days";
+import { entryAmount, entrySentence, formatPartFigures, WET_MASS_LABEL, type HistoryRow } from "./output-stock-history-days";
 import { LEDGER_SUMMARY_CLASS, LedgerCaret, LedgerFacts } from "./stock-ledger";
 import { StockChip } from "./stock-figures";
 import { StockSourceLink } from "./stock-source-link";
@@ -95,13 +95,16 @@ function PartsTable({ row, subject }: { row: HistoryRow; subject: string }) {
             </tr>
           );
         })}
-        {row.wet && (
-          <tr className="font-medium">
-            <th scope="row" className="py-6 pr-12 text-left font-medium">{WET_MASS_LABEL}</th>
-            <td className="py-6 pr-12 text-right">{signedKg(row.wet.changeKg, estimateKg)}</td>
-            <td className="py-6 text-right">{estimateKg(row.wet.afterKg)}</td>
-          </tr>
-        )}
+        {row.wet && (() => {
+          const wet = formatPartFigures({ label: WET_MASS_LABEL, ...row.wet, estimated: true });
+          return (
+            <tr className="font-medium">
+              <th scope="row" className="py-6 pr-12 text-left font-medium">{WET_MASS_LABEL}</th>
+              <td className="py-6 pr-12 text-right">{wet.change}</td>
+              <td className="py-6 text-right">{wet.after}</td>
+            </tr>
+          );
+        })()}
       </tbody>
     </table>
   );

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { formatMassKg } from "@/lib/format-utils";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { stockWaterKg } from "@/lib/output-stock/stock-replay";
-import { buildHistoryDays, entryParts, entrySentence, estimateKg, formatPartFigures, signedKg } from "./output-stock-history-days";
+import { buildHistoryDays, entryParts, entrySentence, estimateKg, formatPartFigures, signedKg, WET_MASS_LABEL } from "./output-stock-history-days";
 
 const TZ = "UTC";
 const DAY_ONE = "2026-10-14";
@@ -115,6 +115,15 @@ describe("formatPartFigures", () => {
       .toEqual({ change: "−22 kg", after: "88 kg" });
     expect(formatPartFigures({ label: "Dry biochar", changeKg: -1.8, afterKg: 268.2 }))
       .toEqual({ change: "−1.8 kg", after: "268.2 kg" });
+  });
+});
+
+describe("wet mass total row", () => {
+  it("keeps a small wet change visible and adds up, as the parts do", () => {
+    expect(formatPartFigures({ label: WET_MASS_LABEL, changeKg: -0.2, afterKg: 9.8, estimated: true }))
+      .toEqual({ change: "−0.2 kg", after: "9.8 kg" });
+    expect(formatPartFigures({ label: WET_MASS_LABEL, changeKg: -2, afterKg: 298, estimated: true }))
+      .toEqual({ change: "−2 kg", after: "298 kg" });
   });
 });
 
