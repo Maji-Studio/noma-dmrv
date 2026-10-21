@@ -22,7 +22,7 @@
 "use client";
 
 import * as React from "react";
-import { useSyncExternalStore } from "react";
+import { useIsMobile } from "@/hooks/use-media-query";
 import { CheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 
@@ -56,23 +56,8 @@ interface StepFlowProps {
   className?: string;
 }
 
-/** Below Tailwind's `sm` (640px). jsdom has no matchMedia: there it is never a phone. */
-const PHONE_QUERY = "(max-width: 639px)";
-
-function subscribePhone(onChange: () => void) {
-  if (typeof window.matchMedia !== "function") return () => {};
-  const mql = window.matchMedia(PHONE_QUERY);
-  mql.addEventListener("change", onChange);
-  return () => mql.removeEventListener("change", onChange);
-}
-
-function useIsPhone(): boolean {
-  return useSyncExternalStore(
-    subscribePhone,
-    () => typeof window.matchMedia === "function" && window.matchMedia(PHONE_QUERY).matches,
-    () => false,
-  );
-}
+/** Below Tailwind's `sm` (640px). */
+const PHONE_BREAKPOINT_PX = 640;
 
 /** One quiet control under the phone's current-step box: back to the nearest earlier step that can be revisited. */
 function PhoneBack({ steps, current, reach, onNavigate, canNavigate }: {
@@ -82,7 +67,7 @@ function PhoneBack({ steps, current, reach, onNavigate, canNavigate }: {
   onNavigate?: (index: number) => void;
   canNavigate?: (index: number) => boolean;
 }) {
-  const isPhone = useIsPhone();
+  const isPhone = useIsMobile(PHONE_BREAKPOINT_PX);
   if (!isPhone || !onNavigate) return null;
   const back = [...steps.keys()]
     .filter((index) => index < current && index <= reach && (canNavigate?.(index) ?? true))
