@@ -188,7 +188,7 @@ export function CertificationSettings() {
     icon: PlugsIcon,
     caption:
       "Your registry, its organization-wide keys, and the project this facility submits to.",
-    access: "Owners and Admins",
+    access: "Admins",
     // Either half missing blocks every submission from this facility, and both
     // are fixed here, so one marker covers them. `summary` is undefined while
     // loading — wait rather than flash a marker that then disappears.
@@ -216,12 +216,12 @@ export function CertificationSettings() {
     icon: GlobeIcon,
     caption:
       "Whether new Isometric Sources start private to verifiers or public on the registry.",
-    access: "Owners and Admins",
+    access: "Admins",
     content: <RegistrySourceVisibilitySettings />,
   });
 
   // Listed for every viewer: Removal readiness blockers link here, and members
-  // read which lines block a Removal. Only Owners and Admins assign lines.
+  // read which lines block a Removal. Only Admins assign lines.
   sections.push({
     key: CERTIFICATION_SETTINGS_REMOVAL_TEMPLATES_SECTION,
     tier: "facility",
@@ -229,7 +229,7 @@ export function CertificationSettings() {
     icon: ListChecksIcon,
     caption:
       "The template this facility's credit batches use. Component decisions apply to every facility using the template.",
-    access: "Owners and Admins",
+    access: "Admins",
     content: facilityId ? (
       <RemovalTemplateSummaryCard
         key={`removal-template-summary-${facilityId}`}
@@ -247,7 +247,7 @@ export function CertificationSettings() {
       caption: soilTierActive
         ? "Reference soil temperature for this facility's 200-year durability model."
         : "Soil reference values, used only by the 200-year durability model.",
-      access: "Owners and Admins",
+      access: "Admins",
       content: !soilTierActive ? (
         // ADR 0021: the tier is declared once per facility and 1000-year is the
         // available one, so on a default deployment this is the state everyone
@@ -310,7 +310,7 @@ export function CertificationSettings() {
   }
 
   // Resolve the selection against what this viewer can actually see: a deep
-  // link built for an Owner must not leave a member staring at an empty pane,
+  // link built for an Admin must not leave a member staring at an empty pane,
   // and an unknown `?section=` must not blank the console either. Retired keys
   // resolve to the pane that absorbed them before anything else is tried.
   const resolvedKey = requestedSection

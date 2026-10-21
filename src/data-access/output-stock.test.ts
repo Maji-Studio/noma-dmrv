@@ -10,7 +10,7 @@ import { assertProductionRunBiocharStockNotOverdrawn, deriveProductionRunUpdateB
 // Layer rules are tested with plain rows in lib/output-stock/layer-projection.test.ts.
 // These cases pin what only the readers own: scope predicates, batching and wiring.
 
-const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'owner', isPlatformAdmin: false };
+const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'admin', isPlatformAdmin: false };
 const input = { storageLocationId: 'bin', facilityId: 'facility', occurredAt: '2026-09-14T12:00:00.000Z' };
 const bin = { id: 'bin', facilityId: 'facility', type: 'biochar_bin', archivedAt: null };
 const run = { id: 'run', binId: 'bin', facilityId: 'facility', archivedAt: null, dryKg: '100.000', endTime: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1) };

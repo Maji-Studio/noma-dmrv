@@ -43,7 +43,7 @@ beforeEach(() => {
 it.each([
   { scopes: ["applications:read"], role: "admin", names: ["find_applications", "get_application"] },
   { scopes: ["applications:read", "deliveries:read"], role: "admin", names: ["find_applications", "get_application", "get_delivery_application_balance"] },
-  { scopes: ["applications:write"], role: "owner", names: ["record_application", "update_application"] },
+  { scopes: ["applications:write"], role: "admin", names: ["record_application", "update_application"] },
   { scopes: ["applications:read", "applications:write", "applications:delete", "deliveries:read"], role: "member", names: [] },
 ])("admits $role with $scopes", ({ scopes, role, names }) => {
   const ctx = { principal: { kind: "api-key" }, scopes: scopes as ApiScope[], orgRole: role } as ApiContext;

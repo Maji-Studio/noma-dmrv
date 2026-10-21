@@ -27,7 +27,7 @@ import type { RemovalScope } from "@/fn/certification/removal-scope";
 
 vi.mock("@/lib/isometric/ghg-statements", () => ({ getGhgStatement: async () => ({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: ["original"] }) }));
 const userId = crypto.randomUUID();
-const org = { ...makeTestOrgContext(userId), orgRole: "owner" as const };
+const org = { ...makeTestOrgContext(userId), orgRole: "admin" as const };
 let fixture: LineageFixture | undefined;
 let observationId: string | undefined;
 const documentIds: string[] = [];

@@ -15,7 +15,7 @@ const WRAP_NAME = "whitespace-normal break-words";
 export function ConnectedAppList({ grants, label, showMember, onDisconnect }: {
   grants: OAuthGrantListItem[];
   label: string;
-  /** Adds who connected the app, for the Owner and Admin view. */
+  /** Adds who connected the app, for the Admin view. */
   showMember: boolean;
   onDisconnect: (grant: OAuthGrantListItem) => void;
 }) {

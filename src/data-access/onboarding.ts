@@ -16,13 +16,13 @@ import { requireOrgFacility, requireOrgScope } from "./utils";
 const COMPLETE_PRODUCTION_RUN_STATUS = "complete";
 
 export interface OnboardingStatus {
-  isOwnerOrAdmin: boolean;
+  canManage: boolean;
   /**
-   * True only for a real org membership of owner/admin rank — excludes the
+   * True only for a real org membership of admin rank — excludes the
    * platform-admin fallback. The wizard auto-opens only for these users; a
    * platform admin browsing a fresh org gets the guide, not a modal.
    */
-  isOrgOwnerOrAdmin: boolean;
+  isOrgAdmin: boolean;
   facilityCount: number;
   supplierCount: number;
   facility: null | {
@@ -61,9 +61,9 @@ export async function getOnboardingStatus(
 ): Promise<OnboardingStatus> {
   requireOrgScope(ctx);
 
-  const isOrgOwnerOrAdmin =
-    ctx.orgRole === "owner" || ctx.orgRole === "admin";
-  const isOwnerOrAdmin = ctx.isPlatformAdmin || isOrgOwnerOrAdmin;
+  const isOrgAdmin =
+    ctx.orgRole === "admin";
+  const canManage = ctx.isPlatformAdmin || isOrgAdmin;
   const orgId = ctx.organizationId;
   const { facilityAgg, supplierAgg } = orgCountAggregates(orgId);
 
@@ -77,8 +77,8 @@ export async function getOnboardingStatus(
       .crossJoin(supplierAgg);
 
     return {
-      isOwnerOrAdmin,
-      isOrgOwnerOrAdmin,
+      canManage,
+      isOrgAdmin,
       facilityCount: row?.facilityCount ?? 0,
       supplierCount: row?.supplierCount ?? 0,
       facility: null,
@@ -164,8 +164,8 @@ export async function getOnboardingStatus(
   if (!row) throw new Error("onboarding aggregate returned no row");
 
   return {
-    isOwnerOrAdmin,
-    isOrgOwnerOrAdmin,
+    canManage,
+    isOrgAdmin,
     facilityCount: row.facilityCount,
     supplierCount: row.supplierCount,
     facility: {

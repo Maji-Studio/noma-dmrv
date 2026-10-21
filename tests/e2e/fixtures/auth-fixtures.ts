@@ -38,7 +38,7 @@ export type UserRole =
   | "operator"
   | "lab_technician"
   | "viewer";
-export type ProjectRole = "owner" | "admin" | "member" | "viewer";
+export type ProjectRole = "admin" | "member" | "viewer";
 
 // Test user configuration
 export interface TestUser {
@@ -101,7 +101,7 @@ const defaultTestUsers: Record<UserRole, Omit<TestUser, "id">> = {
     name: "E2E Admin User",
     role: "admin",
     password: "TestPassword123!",
-    projectRole: "owner",
+    projectRole: "admin",
   },
   org_admin: {
     email: `test-org-admin-${testRunId}@e2e.local`,

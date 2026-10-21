@@ -1,5 +1,5 @@
 /**
- * Issue #746: registry deletion requires Admin or Owner, while a Removal
+ * Issue #746: registry deletion requires Admin, while a Removal
  * that never touched the registry remains deletable by a Member.
  * Real Postgres owns claims and persistence; only the registry is faked.
  */
@@ -58,7 +58,7 @@ const APPLIED_WET_MASS_KG = 12_000;
 const APPLIED_DRY_MASS_KG = 10_800;
 const PRIOR_LOCKED_AT = new Date("2026-01-01T00:00:00Z");
 const EXPECTED_ROLE_ERROR =
-  "Only Owners and Admins can delete a Removal that may have records on Isometric. Ask an Owner or Admin to delete it.";
+  "Only Admins can delete a Removal that may have records on Isometric. Ask an Admin to delete it.";
 const memberCtx: OrgContext = { ...makeTestOrgContext(), orgRole: "member" };
 const adminCtx: OrgContext = { ...makeTestOrgContext(), orgRole: "admin" };
 const emptyRegistryOutcome: RemovalDeletionRegistryOutcome = {
@@ -77,7 +77,6 @@ const roles: Array<{ name: string; ctx: OrgContext; allowedAtRegistry: boolean }
     ctx: { ...makeTestOrgContext(), orgRole: "admin" },
     allowedAtRegistry: true,
   },
-  { name: "owner", ctx: makeTestOrgContext(), allowedAtRegistry: true },
   {
     name: "platform admin outside the organization",
     ctx: { ...makeTestOrgContext(), orgRole: null, isPlatformAdmin: true },

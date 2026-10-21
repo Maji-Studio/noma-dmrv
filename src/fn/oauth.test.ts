@@ -76,7 +76,7 @@ it("reads consent organization and allowed scopes from the bound generation", as
   } });
 });
 
-it.each(["member", "admin", "owner"] as const)("lists grants for the authenticated %s role", async role => {
+it.each(["member", "admin"] as const)("lists grants for the authenticated %s role", async role => {
   const { listOAuthGrantsFn } = await import("./oauth");
   const { requireOrgContext } = await import("@/lib/auth/server");
   const { listOwnOAuthGrants, listAllOAuthGrants } = await import("@/data-access/oauth-grants");

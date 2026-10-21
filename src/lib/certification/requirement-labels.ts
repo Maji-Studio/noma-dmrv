@@ -71,8 +71,8 @@ export const NO_REMOVAL_TEMPLATE_LABEL = "No Removal template chosen";
 export const EMISSION_ENTRIES_TO_CHECK_LABEL = "Emissions entries to check";
 
 /** Who settles components to decide, for a viewer who can't: members read this instead of a Decide components link. */
-export function linesDecidedByOwnerOrAdmin(count: number): string {
-  return `An Owner or Admin decides ${count === 1 ? "it" : "them"} in Removal templates.`;
+export function linesDecidedByAdmin(count: number): string {
+  return `An Admin decides ${count === 1 ? "it" : "them"} in Removal templates.`;
 }
 
 /** The unmet Components decided label when no line is undecided: the read or the lines are the problem. */

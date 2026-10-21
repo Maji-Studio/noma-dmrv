@@ -13,7 +13,7 @@ export default async function ApiKeysPage() {
     <SettingsConsole
       title="API keys"
       caption="A key acts as its owner, limited to the permissions you select."
-      access="Organization Owners and Admins"
+      access="Organization Admins"
       canManageDefaults={ctx.isPlatformAdmin || canManage}
       canManageApiKeys={canManage}
       isPlatformAdmin={ctx.isPlatformAdmin}

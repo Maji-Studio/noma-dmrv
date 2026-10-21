@@ -39,7 +39,7 @@ export async function createApiFeedstockFixture(label: string, scopes: readonly 
   });
   await db.insert(members).values({
     id: randomUUID(), organizationId: fixture.ctx.organizationId,
-    userId: fixture.ctx.userId, role: "owner",
+    userId: fixture.ctx.userId, role: "admin",
   });
   await db.update(storageLocations).set({ feedstockTypeId: fixture.feedstockTypeId })
     .where(and(eq(storageLocations.organizationId, fixture.ctx.organizationId), eq(storageLocations.id, fixture.binId)));

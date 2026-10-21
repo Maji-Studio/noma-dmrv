@@ -86,7 +86,7 @@ const SUBMISSION_ID = "submission-audit-test";
 const orgCtx = {
   userId: "user-audit-test",
   organizationId: "org-audit-test",
-  orgRole: "owner" as const,
+  orgRole: "admin" as const,
   isPlatformAdmin: false,
 };
 let submission: CertificationSubmissionRow;

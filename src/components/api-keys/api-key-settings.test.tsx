@@ -238,11 +238,11 @@ describe("API key management", () => {
     expect(state.revoke).toHaveBeenCalledWith({ id: activeKey.id, expectedVersion: 1 });
   });
 
-  it.each(["Member", "Platform Admin without an Owner/Admin membership"])("shows no controls or list request for %s", async () => {
+  it.each(["Member", "Platform Admin without an Admin membership"])("shows no controls or list request for %s", async () => {
     await render(<ApiKeySettings canManage={false} organizationId="org-1" />);
     expect(state.list).not.toHaveBeenCalled();
     expect(tree.root.findAllByType("button")).toHaveLength(0);
-    expect(text(tree.root)).toContain("Only organization Owners and Admins with a membership");
+    expect(text(tree.root)).toContain("Only organization Admins with a membership");
   });
 
   it("lists safe metadata and all statuses, keeping revoked keys as Disabled", async () => {

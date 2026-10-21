@@ -37,7 +37,7 @@ Application credentials are not environment-only:
 - each organization stores one Isometric access token and client secret in
   `certifier_credentials`;
 - both values are encrypted through `src/lib/crypto/secrets.ts`;
-- Owners/Admins manage their active organization's credentials through
+- Admins manage their active organization's credentials through
   `src/data-access/certifier-credentials.ts`;
 - application calls construct an organization-specific client with
   `resolveIsometricClient(ctx)` in `src/data-access/certifier-credentials.ts`,

@@ -422,7 +422,7 @@ export async function loadCreditBatchHealthSummaries(
         checkCount: buildCreditBatchOpenItems({
           facilityId: validFacilityId,
           creditBatchId: batchId,
-          canManage: orgCtx.isPlatformAdmin || orgCtx.orgRole === "owner" || orgCtx.orgRole === "admin",
+          canManage: orgCtx.isPlatformAdmin || orgCtx.orgRole === "admin",
           health,
           durability: durabilityByBatch.get(batchId),
           emissionLines: emissionDisplayByBatch?.get(batchId)?.lines,
