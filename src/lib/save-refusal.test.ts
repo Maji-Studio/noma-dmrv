@@ -109,6 +109,29 @@ describe("planSaveRefusal", () => {
     }
     const other = new ActionError({ error: "Taken", code: "conflict", conflict: { code: conflictCode("BIN-1"), entity: "storageLocation", id: "b1" }, issues: [issue(["x"])] });
     expect(planSaveRefusal(other, everything)).toBeNull();
+    const stale = new ActionError({ error: "Changed", code: "stale_version", issues: [issue(["massWetKg"])] });
+    expect(planSaveRefusal(stale, everything)).toBeNull();
+  });
+
+  it("plans an insufficient-stock conflict at the field and preserves its bin and blockers", () => {
+    const message = "Bin SL-26-001 would go 999 kg below zero.";
+    const conflict = { entity: "storageLocation", id: "bin-id", code: conflictCode("SL-26-001") };
+    const blockers = [{ entity: "productionRun", id: "run-id", code: conflictCode("PR-26-001") }];
+    try {
+      throwActionError({
+        error: `Feedstock was not saved. ${message} Review bin intake and withdrawal history.`,
+        code: "insufficient_stock", conflict, blockers,
+        issues: [issue(["massWetKg"], message, "insufficient_stock")],
+      });
+    } catch (error) {
+      expect(planSaveRefusal(error, everything)).toEqual({
+        fieldErrors: [{ field: "massWetKg", message, locked: false }],
+        footer: null,
+      });
+      expect(error).toMatchObject({ conflict, blockers });
+      return;
+    }
+    expect.fail("Expected the action refusal to throw");
   });
 
   it("shows a delivery source bin not_found refusal on the source bin field", () => {

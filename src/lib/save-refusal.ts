@@ -10,6 +10,7 @@ export const LOCKED_FIELD_MESSAGE = "Locked";
 
 const LOCK_CODE = "certification_locked";
 const STALE_VERSION_CODE = "stale_version";
+const INSUFFICIENT_STOCK_CODE = "insufficient_stock";
 const FOOTER_SEPARATOR = " ";
 
 export interface SaveRefusalFieldError {
@@ -41,12 +42,13 @@ function formField(path: readonly (string | number)[], aliases: Readonly<Record<
 
 /**
  * Null means the form has nothing to add: not an `ActionError`, no issues
- * (including a lock that names no field), or a stale-version or conflict
- * refusal, which keep their own message and blockers.
+ * (including a lock that names no field), a stale-version refusal, or a conflict
+ * other than insufficient stock. Stock issues can sit at fields while the caller
+ * keeps showing the bin conflict and its blockers.
  */
 export function planSaveRefusal(error: unknown, options: SaveRefusalOptions): SaveRefusalPlan | null {
   if (!isActionError(error) || error.issues.length === 0) return null;
-  if (error.conflict || error.code === STALE_VERSION_CODE) return null;
+  if (error.code === STALE_VERSION_CODE || (error.conflict && error.code !== INSUFFICIENT_STOCK_CODE)) return null;
   const aliases = options.aliases ?? {};
   const fieldErrors: SaveRefusalFieldError[] = [];
   const footer = new Set<string>();
