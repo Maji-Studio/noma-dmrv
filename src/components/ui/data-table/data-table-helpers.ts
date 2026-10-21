@@ -43,6 +43,7 @@ export const STICKY_END_HEADER_CLASSES =
  * stays available in the Columns menu.
  */
 export const FACILITY_COLUMN_HIDDEN_BY_DEFAULT = { facility: false } as const;
+
 const INTERACTIVE_ROW_CONTROL_SELECTOR =
   'button, a, label, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])';
 
