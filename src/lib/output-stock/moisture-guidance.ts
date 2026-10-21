@@ -1,4 +1,5 @@
 import { MOISTURE_READING_WARNING_POINTS } from '@/config/output-stock';
+import { formatFacilityTime } from '@/lib/date-utils';
 import { formatFacilityDateTime } from '@/lib/format-utils';
 import { formatMoisturePercent } from '@/lib/mass-moisture';
 import type { OutputMoistureEstimate } from '@/types/output-stock';
@@ -14,14 +15,37 @@ export interface MoistureFieldEstimate {
   basisText: string | null;
 }
 
+/** What a removal is called in a sentence, by the kind of movement that re-estimated the bin. */
+const REMOVAL_NAMES: Record<string, string> = {
+  loss: 'the lost mass',
+  delivery: 'the delivery',
+  production_draw: 'the product draw',
+};
+const FALLBACK_REMOVAL_NAME = 'a removal';
+
+function removalName(kind: string): string {
+  return REMOVAL_NAMES[kind] ?? FALLBACK_REMOVAL_NAME;
+}
+
 /** Where an output bin's estimate comes from, on the facility clock. */
 export function moistureBasisText(basis: MoistureBasis | null, timeZone: string): string | null {
   if (!basis) return null;
   const at = formatFacilityDateTime(basis.at, timeZone);
+  if (basis.source === 'removal') return `From ${removalName(basis.kind)} on ${at}, which was wetter than the bin's estimate.`;
   return basis.source === 'reading'
     // The app no longer records counts, but an old one still dates the estimate; it reads as its history entry does.
     ? `From the stock count on ${at}.`
     : `From the moisture recorded when the batch was added on ${at}.`;
+}
+
+/**
+ * The bin card's line when a removal measured wetter than the bin set its
+ * moisture: "Moisture estimated from the lost mass of Oct 20". Null for every
+ * other basis, since only this one surprises the operator.
+ */
+export function moistureRemovalCaption(basis: MoistureBasis | null | undefined, timeZone: string): string | null {
+  if (basis?.source !== 'removal') return null;
+  return `Moisture estimated from ${removalName(basis.kind)} of ${formatFacilityTime(new Date(basis.at), timeZone, 'MMM d')}`;
 }
 
 /** An output bin's estimate as a field estimate, dated on the facility clock. */

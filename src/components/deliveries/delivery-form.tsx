@@ -20,6 +20,8 @@ import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit
 import { FormActions, FormEntitySelect, FormField, FormSection, FormSpine, makeCertFieldStatus, MoistureField, FieldErrorRow, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
+import { focusMoistureField } from "@/components/storage-locations/reestimate-notice";
+import { showsReestimate } from "@/components/storage-locations/reestimate-flow";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import { TransportRoutePreview } from "@/components/transport-legs";
 import type { Delivery } from "@/db/schema";
@@ -54,6 +56,8 @@ const SET_VALUE_OPTS = {
   shouldValidate: true,
 } as const;
 
+/** The single moisture field, or a split load's first sub-bin reading. */
+const DELIVERY_MOISTURE_SELECTOR = "#moistureContentPercent, input[id^='delivery-moisture-']";
 const ROUTE_EMPTY = "Select an order and enter the delivered wet mass to see the route.";
 
 const isDeliveryCertifyField = (field: string) =>
@@ -372,6 +376,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             placeholder="e.g. 20"
             estimate={isEditMode ? undefined : moistureEstimate}
             reading={watchMoisture}
+            hideDeviationWarning={showsReestimate(stockPreview.data)}
             registration={register("moistureContentPercent")}
           /></div>}
           {/* The composition cards belong to the same grid as the two inputs
@@ -380,12 +385,12 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
               wrapper drops out while every child is hidden (before a bin and
               mass give a preview), so it adds no empty grid row under the inputs. */}
           <div className="md:col-span-2 space-y-16 [&:not(:has(>:not([hidden])))]:hidden">
-            {draw.active && <SubBinDrawField draw={draw} timeZone={deliveryClock.timeZone} idPrefix="delivery" disabled={isSubmitting || stockLocked} showErrors={attempted} />}
+            {draw.active && <SubBinDrawField draw={draw} timeZone={deliveryClock.timeZone} idPrefix="delivery" disabled={isSubmitting || stockLocked} showErrors={attempted} hideDeviationWarning={showsReestimate(stockPreview.data)} />}
             {draw.query.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{draw.query.error.message}</p>}
             {delivery && <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />}
             {stockPreview.isFetching && <p role="status" className="body-caption text-[var(--color-text-tertiary)]">Refreshing stock preview...</p>}
             {stockPreview.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{stockPreview.error.message}</p>}
-            {stockPreview.data && <OutputStockPreview variant="movement" hideBlockingMessage={deliveredWetMassError === blockingMessage || deliveryDateError === blockingMessage} preview={stockPreview.data} entry={{ kind: "delivery", wetMassKg: wetMass }} />}
+            {stockPreview.data && <OutputStockPreview variant="movement" hideBlockingMessage={deliveredWetMassError === blockingMessage || deliveryDateError === blockingMessage} preview={stockPreview.data} entry={{ kind: "delivery", wetMassKg: wetMass }} onMeasureAgain={() => focusMoistureField(DELIVERY_MOISTURE_SELECTOR)} />}
           </div>
         </div>
       </FormSection>
