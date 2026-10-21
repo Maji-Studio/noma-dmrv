@@ -1,4 +1,5 @@
 import { formatMassKg } from "@/lib/format-utils";
+import { outputStockFigure } from "./stock-preview-shared";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 
 /**
@@ -7,5 +8,5 @@ import type { OutputStockHistoryEntry } from "@/types/output-stock";
  * uses it as is.
  */
 export function outputEntryMass(entry: Pick<OutputStockHistoryEntry, "wetMassKg" | "dryMassKg">): string {
-  return entry.wetMassKg === null ? `${formatMassKg(Math.abs(entry.dryMassKg))} dry` : `${formatMassKg(entry.wetMassKg)} wet mass`;
+  return entry.wetMassKg === null ? outputStockFigure(null, Math.abs(entry.dryMassKg)) : `${formatMassKg(entry.wetMassKg)} wet mass`;
 }
