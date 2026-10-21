@@ -9,6 +9,7 @@ import { backdatedNotice } from "@/lib/output-stock/messages";
 import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/types/output-stock";
 import type { ReactNode } from "react";
 import { MoistureResetChange } from "./moisture-reset-change";
+import { ReestimateNotice } from "./reestimate-notice";
 import { IngredientStockInfo, StockLoadCard } from "./output-stock-load-card";
 import { StockBalanceChange, StockRows, type StockRow } from "./stock-figures";
 import { binLabel, capitalize, dryingNotice, formatWetEstimate, splitDryLabel, splitWetMassKg, stockCardHint } from "./stock-preview-shared";
@@ -46,12 +47,16 @@ const ENTRY_VERB: Record<Exclude<StockEntryKind, "count">, string> = {
  * movement in the headline's caption ("310 kg wet mass removed at 22.7% moisture"),
  * and its wet mass is the one figure a count cannot recover from the preview.
  *
+ * `onMeasureAgain` is the one action of the re-estimate notice: it takes the
+ * operator back to the moisture they entered. A movement that re-estimates
+ * what stays (`preview.reestimate`) shows that notice with the mass flow.
+ *
  * `hideBlockingMessage` is for forms that already render `preview.blockingMessage`
  * as the error on the field the operator must change. The same sentence in two
  * places reads as two separate problems, so the copy closest to the field wins
  * and the preview drops its own alert.
  */
-export function OutputStockPreview({ variant = "load", preview, entry, moreInfo, renderBlocker, hideBlockingMessage = false }: { variant?: "movement" | "load"; preview: Preview; entry?: StockEntry; moreInfo?: ReactNode; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode; hideBlockingMessage?: boolean }) {
+export function OutputStockPreview({ variant = "load", preview, entry, moreInfo, onMeasureAgain, renderBlocker, hideBlockingMessage = false }: { variant?: "movement" | "load"; preview: Preview; entry?: StockEntry; moreInfo?: ReactNode; onMeasureAgain?: (layerId?: string) => void; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode; hideBlockingMessage?: boolean }) {
   const blockingMessage = hideBlockingMessage ? null : preview.blockingMessage;
   const backdated = backdatedNotice(preview);
   return (
@@ -64,6 +69,7 @@ export function OutputStockPreview({ variant = "load", preview, entry, moreInfo,
           actions={moreInfo ?? (preview.lane === "ingredient" ? <IngredientStockInfo preview={preview} /> : null)}
         />
       )}
+      {variant === "movement" && <ReestimateNotice preview={preview} kind={removalKind(preview, entry)} onMeasureAgain={onMeasureAgain} />}
       {preview.discrepancySolidsKg > 0 && <Notice>Count exceeds tracked solids by {formatMassKg(preview.discrepancySolidsKg)}. This discrepancy adds no stock.</Notice>}
       {backdated && <Notice>{backdated}</Notice>}
       {blockingMessage && <Notice tone="error">{blockingMessage}</Notice>}
@@ -127,6 +133,12 @@ function StockMovementCard({ preview, entry, moreInfo }: { preview: Preview; ent
       {wet && dryPair}
     </CompositionCard>
   );
+}
+
+/** The kind of removal a re-estimate belongs to; a count removes nothing, so it never re-estimates. */
+function removalKind(preview: Preview, entry?: StockEntry): Exclude<StockEntryKind, "count"> {
+  const kind = entryKind(preview, entry);
+  return kind === "count" ? "correction" : kind;
 }
 
 /** A preview without an entry reads as a count when nothing was removed. */
