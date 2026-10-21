@@ -53,6 +53,8 @@ interface MassMoistureInputProps {
   label?: string;
   registration: UseFormRegisterReturn;
   error?: string;
+  /** The caller renders the error line (`FieldErrorRow`), so it can span the row. */
+  errorOutside?: boolean;
   warning?: string;
   required?: boolean;
   disabled?: boolean;
@@ -147,6 +149,7 @@ export function WetMassField({
   label,
   registration,
   error,
+  errorOutside,
   warning,
   required,
   disabled,
@@ -166,6 +169,7 @@ export function WetMassField({
       label={label ?? qualifyMassLabel(WET_MASS_FIELD_LABEL, materialLabel)}
       unit={unit}
       error={error}
+      errorOutside={errorOutside}
       warning={warning}
       helperText={helperText}
       cue={cue}

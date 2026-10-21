@@ -95,10 +95,10 @@ describe("FormErrorSummary", () => {
     expect(summary.getAttribute("role")).toBeNull();
     expect(announcementOf()).toBeTruthy();
     expect(links.map((link) => link.textContent)).toEqual([
-      "Credit batch: Select a credit batch.",
-      // The message already names its field, so no "Lab name:" lead.
-      "Lab name is required",
-      "pH: Must be between 0 and 14",
+      // Names only: the reason shows once, at the field.
+      "Credit batch",
+      "Lab name",
+      "pH",
     ]);
   });
 
@@ -107,7 +107,7 @@ describe("FormErrorSummary", () => {
 
     fireEvent.submit(screen.getByRole("form", { name: "Sample" }));
 
-    expect(await screen.findByRole("link", { name: "Credit batch: Select a credit batch." })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: "Credit batch" })).toBeTruthy();
   });
 
   it("moves focus to the first field in the form, not the first one RHF registered", async () => {
@@ -124,7 +124,7 @@ describe("FormErrorSummary", () => {
     await pressSave();
     await waitFor(() => expect(document.activeElement?.id).toBe("batchId"));
 
-    fireEvent.click(screen.getByRole("link", { name: "pH: Must be between 0 and 14" }));
+    fireEvent.click(screen.getByRole("link", { name: "pH" }));
 
     expect(document.activeElement?.id).toBe("ph");
   });
@@ -194,16 +194,16 @@ describe("FormErrorSummary rows", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Save blend" }));
 
-    expect(await screen.findByRole("link", { name: "Share, row 2: Enter at most 100." })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: "Share, row 2" })).toBeTruthy();
   });
 
-  it("keeps the row when the message already names its field", async () => {
+  it("names the field and its row, never the message", async () => {
     document.body.innerHTML = "";
     const errors = { ingredients: [undefined, { materialId: { type: "custom", message: "Blend material is required" } }] };
     const items = orderFieldErrors(listFieldErrors({ errors } as never), new Map([["ingredients.1.materialId", { label: "Blend material", index: 0 }]]));
     const { container } = render(<ul>{items.map((item) => <li key={item.path}><ItemText item={item} /></li>)}</ul>);
 
-    expect(container.textContent).toBe("Blend material is required (row 2)");
+    expect(container.textContent).toBe("Blend material, row 2");
   });
 });
 
@@ -274,5 +274,130 @@ describe("orderFieldErrors", () => {
       </form>`;
 
     expect(readFieldDirectory(document.querySelector("form")).get("status")?.label).toBe("Status");
+  });
+});
+
+describe("FormActions error box", () => {
+  function BoxForm({ message, action }: { message?: string; action?: string }) {
+    const { control, register, handleSubmit } = useForm<{ labName: string }>({ defaultValues: { labName: "x" } });
+    return (
+      <form aria-label="Box" onSubmit={handleSubmit(vi.fn())}>
+        <FormField id="labName" label="Lab name">
+          <FormInput id="labName" {...register("labName")} />
+        </FormField>
+        <FormActions
+          control={control}
+          submitLabel="Save box"
+          errorMessage={message}
+          errorAction={action ? <span>{action}</span> : undefined}
+        />
+      </form>
+    );
+  }
+
+  it("shows a server message as title and detail, with references last", () => {
+    render(<BoxForm message="Held by application AP-26-001. To change this, first correct or remove that application." action="Drawing on this bin: PR-014" />);
+
+    const box = screen.getByText("Held by application AP-26-001.").closest("[role='alert']") as HTMLElement;
+    expect(within(box).getByText("To change this, first correct or remove that application.")).toBeTruthy();
+    expect(box.textContent?.endsWith("Drawing on this bin: PR-014")).toBe(true);
+  });
+
+  it("sits before the sticky footer, not inside it", () => {
+    render(<BoxForm message="Action failed." />);
+
+    const box = screen.getByText("Action failed.").closest("[role='alert']") as HTMLElement;
+    const footer = screen.getByRole("button", { name: "Save box" }).closest(".sticky") as HTMLElement;
+    expect(footer.contains(box)).toBe(false);
+    expect(box.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("moves focus to a message-only box after a refused save, once per attempt", async () => {
+    render(<BoxForm message="This record is sent to a Removal. Correct the Removal first." />);
+    const wrapper = screen.getByText("This record is sent to a Removal.").closest("[tabindex='-1']") as HTMLElement;
+    expect(document.activeElement).not.toBe(wrapper);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save box" }));
+    });
+
+    await waitFor(() => expect(document.activeElement).toBe(wrapper));
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+  });
+
+  it("folds the message into the count box as its detail when fields are listed", async () => {
+    function Both() {
+      const { control, register, handleSubmit } = useForm<{ labName: string }>({ defaultValues: { labName: "" } });
+      return (
+        <form aria-label="Both" onSubmit={handleSubmit(() => {})}>
+          <FormField id="labName" label="Lab name">
+            <FormInput id="labName" {...register("labName", { required: "Lab name is required" })} />
+          </FormField>
+          <FormActions control={control} submitLabel="Save both" errorMessage="Locked by a Removal." />
+        </form>
+      );
+    }
+    render(<Both />);
+    fireEvent.click(screen.getByRole("button", { name: "Save both" }));
+
+    const title = await screen.findByText("Not saved. Fix 1 field.");
+    const box = title.closest("[data-form-error-summary]") as HTMLElement;
+    expect(within(box).getByText("Locked by a Removal.")).toBeTruthy();
+    expect(screen.getAllByRole("alert").filter((node) => node.textContent?.includes("Locked by a Removal."))).toHaveLength(0);
+  });
+
+  it("does not steal focus when a lock's field is put back and only the message is left", async () => {
+    function Locked() {
+      const { control, register, handleSubmit, setError, clearErrors } = useForm<{ labName: string }>({ defaultValues: { labName: "x" } });
+      return (
+        <form aria-label="Locked" onSubmit={handleSubmit(() => setError("labName", { type: "locked", message: "Locked" }))}>
+          <FormField id="labName" label="Lab name">
+            <FormInput id="labName" {...register("labName")} />
+          </FormField>
+          <button type="button" onClick={() => clearErrors("labName")}>Revalidate</button>
+          <FormActions control={control} submitLabel="Save locked" errorMessage="Locked by a Removal." />
+        </form>
+      );
+    }
+    render(<Locked />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save locked" }));
+    });
+    await waitFor(() => expect(document.activeElement?.id).toBe("labName"));
+    const scrolls = vi.mocked(Element.prototype.scrollIntoView).mock.calls.filter(([arg]) => (arg as ScrollIntoViewOptions)?.block === "nearest").length;
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Revalidate" }));
+    });
+
+    expect(document.activeElement?.id).toBe("labName");
+    expect(vi.mocked(Element.prototype.scrollIntoView).mock.calls.filter(([arg]) => (arg as ScrollIntoViewOptions)?.block === "nearest").length).toBe(scrolls);
+  });
+});
+
+describe("FormActions error box without control", () => {
+  function Plain({ message }: { message?: string }) {
+    return (
+      <form aria-label="Plain">
+        <FormActions submitLabel="Save plain" errorMessage={message} />
+      </form>
+    );
+  }
+
+  it("scrolls a new message into view without moving focus", () => {
+    const { rerender } = render(<Plain />);
+    const scroll = vi.mocked(Element.prototype.scrollIntoView);
+    scroll.mockClear();
+    const before = document.activeElement;
+
+    rerender(<Plain message="Template was not saved. Try again." />);
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
+    expect(document.activeElement).toBe(before);
+
+    rerender(<Plain message="Template was not saved. Try again." />);
+    expect(scroll).toHaveBeenCalledTimes(1);
+    rerender(<Plain message="Something else failed." />);
+    expect(scroll).toHaveBeenCalledTimes(2);
   });
 });

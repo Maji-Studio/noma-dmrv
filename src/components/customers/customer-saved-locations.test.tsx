@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { squashed } from "../../../tests/helpers/error-box-text";
 import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -134,7 +135,7 @@ describe("CustomerSavedLocations", () => {
     state.archive.mockRejectedValue(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "customerLocation", id: "l1", code: STALE_VERSION_CONFLICT_CODE }));
     render(<CustomerSavedLocations customerId="c1" />);
     fireEvent.click(screen.getByRole("button", { name: "Archive E2E North Block" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("Location E2E North Block was not archived. It changed since the list loaded. Review it before archiving.");
+    expect(squashed((await screen.findByRole("alert")).textContent)).toBe(squashed("Location E2E North Block was not archived. It changed since the list loaded. Review it before archiving."));
   });
 
   it("offers Archive instead when a delete is refused because orders use the location", async () => {

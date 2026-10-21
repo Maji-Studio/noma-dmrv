@@ -762,6 +762,8 @@ export async function updateFeedstockInTransaction(
       tx,
       [locked.storageLocationId, effectiveStorageLocationId],
       "save",
+      (binId) => binId === locked.storageLocationId && effectiveStorageLocationId === locked.storageLocationId
+        ? ["massWetKg"] : ["storageLocationId"],
     );
   }
 

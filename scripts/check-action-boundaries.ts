@@ -95,12 +95,6 @@ export const ACTION_BOUNDARY_ALLOWLIST: readonly ActionBoundaryException[] = [
     reason: "Member removal surfaces Better Auth's own non-SafeError APIError message.",
   },
   {
-    file: "src/hooks/types.ts",
-    function: "unwrap",
-    sites: { "hook-unwrap": 1 },
-    reason: "Canonical unwrap implementation owns the shared ActionResult error throw.",
-  },
-  {
     file: "src/hooks/use-bin-movements.ts",
     function: "throwRecordLossError",
     sites: { "hook-unwrap": 1 },

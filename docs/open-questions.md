@@ -631,9 +631,14 @@ before allowing confirmation to convert stored entry values to the new unit.
 
 ## Refusal UIs match server copy (`errors/action-error-code`) - **deferred**
 
-- `src/lib/stale-version.ts:throwActionError` rethrows a failed action as a plain
-  `Error` carrying only the message, so the server's refusal `code` and meta are
-  lost. `src/components/ui/lifecycle-notices.tsx:isInUseDeleteRefusal` (marker in `src/lib/delete-refusal.ts`)
-  therefore matches the message text to offer "Archive instead". Carry the action
-  error code and meta to the client (for example on a typed error subclass) so
-  refusal UIs branch on the code, not on copy.
+- Hooks now throw `ActionError` (`src/lib/action-error.ts`) carrying the refusal's
+  `code` and `issues`, but `src/components/ui/lifecycle-notices.tsx:isInUseDeleteRefusal`
+  (marker in `src/lib/delete-refusal.ts`) still matches the message text to offer
+  "Archive instead". Branch on the code instead (#1327).
+
+## Save refusals on the remaining forms (#1327) - **deferred**
+
+- Only delivery, application and feedstock edit use `useSaveRefusal`; the other forms
+  keep the bottom line. Also left: re-reading locks after a lock refusal (Kenji left it
+  out of #1298), delivery's server alias seam beside its client alias map, and per-field
+  detail for feedstock lineage locks.

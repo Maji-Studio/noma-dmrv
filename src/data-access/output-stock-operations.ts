@@ -278,7 +278,7 @@ export async function previewOutputStock(ctx: OrgContext, input: OutputStockPrev
     // readings carries none of its own, so its balance is read as a zero count.
     const balanceInput = input.moisturePercent == null ? { ...input, sources: undefined, kind: 'count' as const, wetMassKg: 0 } : { ...input, sources: undefined };
     const preview = (await prepareOutputStock(ctx, { ...balanceInput, correctsMovementId: undefined })).preview;
-    return { ...preview, discrepancySolidsKg: 0, moistureReset: null, afterDryKg: preview.beforeDryKg, afterSolidsKg: preview.beforeSolidsKg, afterEstimatedWetKg: preview.beforeEstimatedWetKg, afterAllocations: preview.beforeAllocations, allocations: [], removedDryKg: 0, removedWetKg: null, blockingMessage: `${error.message} Replacement balances are unavailable until this dependency is resolved.`, blockers: error.blockers ?? (error.conflict ? [error.conflict] : []) };
+    return { ...preview, discrepancySolidsKg: 0, moistureReset: null, afterDryKg: preview.beforeDryKg, afterSolidsKg: preview.beforeSolidsKg, afterEstimatedWetKg: preview.beforeEstimatedWetKg, afterAllocations: preview.beforeAllocations, allocations: [], removedDryKg: 0, removedWetKg: null, blockingMessage: error instanceof DomainError && error.code === "certification_locked" ? error.message : `${error.message} Replacement balances are unavailable until this dependency is resolved.`, blockers: error.blockers ?? (error.conflict ? [error.conflict] : []) };
   }
 }
 export async function getMatchingOutputBins(ctx: OrgContext, input: { facilityId: string; formulationId: string }): Promise<MatchingOutputBin[]> {

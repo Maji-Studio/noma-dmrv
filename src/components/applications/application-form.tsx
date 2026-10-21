@@ -16,11 +16,10 @@ import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
 import { recordInUseFreeFields } from "@/lib/record-lock";
 import { FACILITY_REFERENCE_TEMPERATURE_NOTICE } from "@/lib/application-guidance";
 import { nullableNumericValue, numericValue } from "@/lib/form-utils";
-import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
-import { formatDayString } from "@/lib/format-utils";
+import { toDateInputValue } from "@/lib/date-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useController, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
@@ -42,7 +41,9 @@ import {
 } from "@/schemas/applications";
 import type { Application } from "@/db/schema/application";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
-import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
+import { SERVER_ERROR_TYPE, useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
+import { APPLICATION_REFUSAL_ALIASES } from "@/lib/application-operation-input";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import type { DurabilityOption } from "@/schemas/credit-batches";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
@@ -62,7 +63,6 @@ import {
   type ApplicationDeliveryOption,
 } from "./mass-utils";
 import {
-  deliveryStockOverdrawMessage,
   formatStockLimitKg,
   isStockOverdraw,
   wholeStockDrawKg,
@@ -133,7 +133,8 @@ interface ApplicationFormProps {
   /** Available deliveries for selection */
   deliveries?: ApplicationDeliveryOption[];
   /** Form submission handler */
-  onSubmit: (data: ApplicationFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1298). */
+  onSubmit: (data: ApplicationFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -166,6 +167,7 @@ export function ApplicationForm({
   lock,
 }: ApplicationFormProps) {
   const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!application;
   // A Removal slice refuses delivery and applied mass changes (`assertMutableSlices`).
   // Fail closed: until the lock answers, fields an In use application holds stay disabled.
@@ -207,6 +209,7 @@ export function ApplicationForm({
     setValue,
     resetField,
     getFieldState,
+    clearErrors,
     formState: { errors },
   } = useForm<z.input<typeof applicationFormSchema>, unknown, ApplicationFormData>({
     resolver: zodResolver(applicationFormSchema),
@@ -222,6 +225,10 @@ export function ApplicationForm({
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
   const { field: deliveryField } = useController({ control, name: "deliveryId" });
   const watchedAppliedKg = useWatch({ control, name: "biocharAppliedKg" });
+  // A refused over-draw named the old delivery's remaining mass; another delivery voids it.
+  useClearOnDependencyChange(selectedDeliveryId, () => {
+    if (getFieldState("biocharAppliedKg").error?.type === SERVER_ERROR_TYPE) clearErrors("biocharAppliedKg");
+  });
   const evidenceMethod = useWatch({ control, name: "evidenceMethod" }) as ApplicationEvidenceMethod;
   const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as number | null | undefined;
   const gpsLongitude = useWatch({ control, name: "gpsLongitude" }) as number | null | undefined;
@@ -356,19 +363,9 @@ export function ApplicationForm({
     isStockOverdraw(appliedKgValid, availableKg)
       ? `Only ${formatStockLimitKg(availableKg)} remains in this delivery. Reduce the applied mass.`
       : undefined;
-  const applicationMassFingerprint = [
-    selectedDeliveryId,
-    watchedAppliedKg,
-  ].join(":");
-  const routedServerError = useInlineStockServerError(
-    errorMessage,
-    applicationMassFingerprint,
-    (message) => message === deliveryStockOverdrawMessage(),
-  );
   const biocharAppliedError =
     errors.biocharAppliedKg?.message ??
-    applicationStockError ??
-    routedServerError.inlineError;
+    applicationStockError;
   const wholeAvailableKg =
     availableKg !== null ? wholeStockDrawKg(availableKg) : null;
   const stockCues = applicationStockCues({
@@ -379,35 +376,9 @@ export function ApplicationForm({
     overdrawError: applicationStockError,
   });
 
+  const refuseSave = useSaveRefusal({ control, setError, formId, aliases: APPLICATION_REFUSAL_ALIASES });
   const handleFormSubmit = latched(handleSubmit(async (data) => {
     if (applicationStockError) return;
-
-    // Custody ordering (issue #284): the server rejects this too — but a
-    // legacy application can still reference an undelivered delivery (the
-    // option is disabled yet survives edit-mode defaults), so surface a
-    // field error instead of a generic server error.
-    if (selectedDelivery && selectedDelivery.status !== "delivered") {
-      setError("deliveryId", {
-        type: "manual",
-        message:
-          "This delivery is not marked as delivered. Mark it as delivered before recording an application.",
-      });
-      return;
-    }
-
-    // Custody ordering (issue #284): the server rejects this too — surface a
-    // field error here instead of a generic server error. Both sides compare
-    // the typed day with the delivery's day on its facility clock.
-    if (
-      selectedDelivery?.deliveryDay &&
-      formatUtcDate(data.applicationDate) < selectedDelivery.deliveryDay
-    ) {
-      setError("applicationDate", {
-        type: "manual",
-        message: `Application date cannot be before the delivery date (${formatDayString(selectedDelivery.deliveryDay)})`,
-      });
-      return;
-    }
 
     if (appliedDryBiocharKg == null) {
       setError("root.serverError", {
@@ -420,11 +391,11 @@ export function ApplicationForm({
     await onSubmit({
       ...data,
       gisBoundary: data.evidenceMethod === "boundary" ? data.gisBoundary : null,
-    });
+    }, refuseSave);
   }));
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormSpine control={control}>
       {/* === Section 1: Application Details === */}
@@ -708,7 +679,7 @@ export function ApplicationForm({
         control={control}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
-        errorMessage={routedServerError.footerError}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
         preview={<RecordCreditBatchLine kind="application" id={application?.id} />}

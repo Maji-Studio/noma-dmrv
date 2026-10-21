@@ -244,7 +244,7 @@ describe("FeedstockForm single-bin mass editing", () => {
         totalWetMassKg: mass,
         moisturePercent: 25,
         allocations: [{ storageLocationId: feedstock.storageLocationId, allocatedWetMassKg: mass }],
-      }));
+      }), expect.any(Function));
     } finally {
       await act(async () => renderer.unmount());
     }
@@ -273,7 +273,7 @@ describe("FeedstockForm single-bin mass editing", () => {
       await submit(renderer);
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         transportDistanceKm: undefined, transportDistanceSource: undefined, distanceNote: undefined,
-      }));
+      }), expect.any(Function));
     } finally { await act(async () => renderer.unmount()); }
   });
 
@@ -298,7 +298,7 @@ describe("FeedstockForm single-bin mass editing", () => {
       await submit(renderer);
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         transportDistanceKm: 60, transportDistanceSource: "manual",
-      }));
+      }), expect.any(Function));
     } finally { await act(async () => renderer.unmount()); }
   });
 
@@ -332,7 +332,7 @@ describe("FeedstockForm single-bin mass editing", () => {
       await submit(renderer);
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         transportDistanceKm: undefined, transportDistanceSource: undefined, distanceNote: undefined,
-      }));
+      }), expect.any(Function));
     } finally { await act(async () => renderer.unmount()); }
   });
 
@@ -352,7 +352,7 @@ describe("FeedstockForm single-bin mass editing", () => {
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         supplierId: "66666666-6666-4666-8666-666666666666",
         transportDistanceKm: 60, transportDistanceSource: "manual", distanceNote: null,
-      }));
+      }), expect.any(Function));
     } finally { await act(async () => renderer.unmount()); }
   });
 
@@ -364,7 +364,7 @@ describe("FeedstockForm single-bin mass editing", () => {
       await submit(renderer);
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         transportDistanceKm: null, transportDistanceSource: undefined, distanceNote: null,
-      }));
+      }), expect.any(Function));
     } finally { await act(async () => renderer.unmount()); }
   });
 
@@ -386,7 +386,7 @@ describe("FeedstockForm single-bin mass editing", () => {
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         totalWetMassKg: 160,
         allocations: [{ storageLocationId: feedstock.storageLocationId, allocatedWetMassKg }],
-      }));
+      }), expect.any(Function));
     } finally {
       await act(async () => renderer.unmount());
     }

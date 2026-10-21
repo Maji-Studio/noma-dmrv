@@ -9,6 +9,8 @@
  * client components can use it.
  */
 
+import { ActionError, type ActionFailure } from "@/lib/action-error";
+
 declare const CONFLICT_CODE_BRAND: unique symbol;
 
 /** An operator-readable label, proven non-blank by `conflictCode()`. */
@@ -46,15 +48,13 @@ export function conflictCode(value: string): ConflictCode {
  * record. Distinct from a plain `Error` so the form can show detail about
  * the records the refusal named.
  */
-export class ConflictError extends Error implements ConflictPayload {
+export class ConflictError extends ActionError implements ConflictPayload {
   readonly conflict: ConflictRef;
-  readonly blockers?: ConflictRef[];
 
-  constructor(message: string, payload: ConflictPayload) {
-    super(message);
+  constructor(message: string, payload: ConflictPayload & Omit<ActionFailure, "error">) {
+    super({ ...payload, error: message });
     this.name = "ConflictError";
     this.conflict = payload.conflict;
-    if (payload.blockers) this.blockers = payload.blockers;
   }
 }
 

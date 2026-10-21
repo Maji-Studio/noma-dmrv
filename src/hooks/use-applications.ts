@@ -1,3 +1,4 @@
+import { applicationOperationInput } from "@/lib/application-operation-input";
 import { useIntentMutation } from "./use-create-intent-key";
 import type { ActionResult } from "@/types/actions";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
@@ -194,11 +195,4 @@ export function useDeleteApplication() {
       invalidateCertificationReadiness(queryClient);
     },
   });
-}
-
-function applicationOperationInput(data: ApplicationFormData) {
-  const { biocharAppliedKg, applicationMethodType, ...fields } = data;
-  return { ...fields, gpsLatitude: fields.gpsLatitude ?? null, gpsLongitude: fields.gpsLongitude ?? null,
-    soilTemperatureC: fields.soilTemperatureC ?? null, soilTemperatureSource: fields.soilTemperatureSource ?? null,
-    appliedWetMassKg: biocharAppliedKg, applicationMethod: applicationMethodType };
 }

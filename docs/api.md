@@ -417,7 +417,7 @@ Stock-lane refusals return `insufficient_stock` with the bin and blockers plus
 `errors[].meta`: `storageLocationId`, `availableWetKg`, `requestedWetKg` and
 `unit: "kg"`. For post-write integrity, available mass is the proposed intake
 supply plus positive net movements; requested mass is existing consumption plus
-negative net movements. The operator message remains unchanged.
+negative net movements. The operator message remains unchanged. The short issue message names the bin and shortfall; its path is `massWetKg` for an intake edit in the same bin, otherwise `storageLocationId` (including deletes and loss corrections).
 
 ### Intake lookup REST adapters
 

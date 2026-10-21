@@ -143,7 +143,7 @@ describe("feedstock REST concurrency", { timeout: SUITE_TIMEOUT_MS }, () => {
     const loser = responses[loserIndex];
     const failure = await expectFeedstockProblem(loser, 409, "insufficient_stock");
     expect(failure.errors).toEqual([expect.objectContaining({
-      pointer: "/storageLocationId", code: "insufficient_stock", meta: {
+      pointer: "/massWetKg", code: "insufficient_stock", meta: {
         storageLocationId: fixture.binId, availableWetKg: CONCURRENT_WRITERS * REDUCED_WET_KG,
         requestedWetKg: CONCURRENT_WRITERS * DRAW_PER_INTAKE_WET_KG, unit: "kg",
       },

@@ -53,6 +53,8 @@ import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import { DistanceOverrideField } from "@/components/transport-legs/distance-override-field";
 import { DistanceDriftAction, SAVE_BEFORE_REFRESH_REASON } from "@/components/transport-legs/transport-distance-drift";
 import { distanceOverridePatch, emptyToNullSource, hasSavedOverride, overrideDistanceError } from "@/components/transport-legs/distance-override";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { feedstockRefusalAliases } from "./feedstock-update-payload";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { supplierLocationDistanceLink } from "@/lib/location-distance-links";
 
@@ -72,7 +74,8 @@ const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = FEEDSTOCK_BIN_TYPES.join(",");
 interface FeedstockFormProps {
   /** Existing feedstock for editing (undefined = create mode) */
   feedstock?: FeedstockWithRelations;
-  onSubmit: (data: FeedstockFormData) => Promise<void> | void;
+  /** An edit hands `onRefusal` on so a refused save shows at its fields (#1298). */
+  onSubmit: (data: FeedstockFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   submitLabel?: string;
@@ -310,6 +313,7 @@ export function FeedstockForm({
     }
   }, [fields.length, getValues, hasEditedAllocationMass, isEditMode, setValue, watchWetMass, dirtyFields.allocations]);
 
+  const refuseSave = useSaveRefusal({ control, setError, formId, aliases: feedstockRefusalAliases(hasEditedAllocationMass) });
   const handleFormSubmit = latched(handleSubmit((data) => {
     const submitted = {
       overriding,
@@ -331,7 +335,7 @@ export function FeedstockForm({
       transportDistanceKm: patch.distanceKm,
       transportDistanceSource: patch.source,
       distanceNote: patch.note,
-    } as FeedstockFormData);
+    } as FeedstockFormData, refuseSave);
   }));
 
   return (

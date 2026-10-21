@@ -6,6 +6,7 @@
  * customers silently drops everyone past the page and leaves no way to reach
  * them (#774).
  */
+import { errorBox } from "../../../tests/helpers/error-box-text";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -338,7 +339,7 @@ describe("OrderForm customer field", () => {
       const picker = screen.getByRole("combobox", { name: /^Customer location/ });
       expect(picker.getAttribute("aria-readonly")).toBe("true");
       expect(screen.queryByTestId("entity-select-edit")).toBeNull();
-      expect(screen.getByText("The customer could not be loaded, so the customer location is locked. Try again.")).toBeTruthy();
+      expect(screen.getByText(errorBox("The customer could not be loaded, so the customer location is locked. Try again."))).toBeTruthy();
       fireEvent.click(screen.getByRole("button", { name: "Try again" }));
       expect(state.refetchCustomer).toHaveBeenCalledTimes(1);
       client.clear();

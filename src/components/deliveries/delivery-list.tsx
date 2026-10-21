@@ -10,6 +10,7 @@ import { deliveryDeepLinkHref } from "@/lib/delivery-links";
 import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
@@ -296,7 +297,7 @@ export function DeliveryList() {
   const createWithEvidence = useCreateWithEvidence({
     entityType: "delivery",
     entityNoun: "Delivery",
-    executeCreate: async ({ data }: { data: DeliveryFormData; onError: (error: unknown) => boolean }) => {
+    executeCreate: async ({ data }: { data: DeliveryFormData; onError: SaveRefusalHandler }) => {
       if (!contextFacilityId) {
         throw new Error("No facility selected. Select a facility and try again.");
       }
@@ -326,8 +327,11 @@ export function DeliveryList() {
     },
     setError: setFormError,
     setUpdateError: setFormError,
-    getCreateErrorMessage: (error, { onError }) =>
-      onError(error) ? null : error instanceof Error ? error.message : "Delivery was not created. Check the form.",
+    getCreateErrorMessage: (error, { onError }) => {
+      const shown = onError(error);
+      if (shown) return shown.footer;
+      return error instanceof Error ? error.message : "Delivery was not created. Check the form.";
+    },
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this delivery.",
     openEditOnFailure: (delivery) =>
@@ -410,11 +414,11 @@ export function DeliveryList() {
   ]);
 
   // Handlers
-  const handleCreate = async (data: DeliveryFormData, onError: (error: unknown) => boolean) => {
+  const handleCreate = async (data: DeliveryFormData, onError: SaveRefusalHandler) => {
     await createWithEvidence.handleCreate({ data, onError });
   };
 
-  const handleUpdate = async (data: DeliveryFormData, onError: (error: unknown) => boolean, expectedVersion?: number) => {
+  const handleUpdate = async (data: DeliveryFormData, onError: SaveRefusalHandler, expectedVersion?: number) => {
     if (!displaySideSheet?.entity) return;
     setFormError(null);
     if (createWithEvidence.guardUpdate()) return;
@@ -427,9 +431,8 @@ export function DeliveryList() {
       closeSideSheet();
       toast.success("Delivery updated.");
     } catch (error) {
-      if (!onError(error)) {
-        setFormError(error instanceof Error ? error.message : "Delivery was not saved. Try again.");
-      }
+      const shown = onError(error);
+      setFormError(shown ? shown.footer : error instanceof Error ? error.message : "Delivery was not saved. Try again.");
     }
   };
 

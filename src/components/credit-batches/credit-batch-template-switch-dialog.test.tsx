@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { errorBox } from "../../../tests/helpers/error-box-text";
 import type { ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -166,7 +167,7 @@ describe("CreditBatchTemplateSwitchDialog", () => {
     });
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Switch template" })); });
 
-    expect(screen.getByText(STALE_VERSION_MESSAGE)).toBeTruthy();
+    expect(screen.getByText(errorBox(STALE_VERSION_MESSAGE))).toBeTruthy();
     expect(onStale).toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
     expect((document.getElementById("removalTemplateId") as HTMLSelectElement).value).toBe("rvt_new");

@@ -23,6 +23,7 @@ This is the per-surface log of what we tried, what replaced it, and why. Read it
 - **Section headings** (#995): "Required information", "Additional information" → removed; section titles are optional, and read views follow the form.
 - **Stock entries**: a "Correct entry" action on stock movements → rejected; correct the source form or use a named correction.
 - **Production run status** (#991): Draft and Running on create → create as Running or Complete; Cancelled is an action.
+- **Refused saves** (#1298; 2026-10-20): one bottom line, delivery all-or-nothing → each reason at the field it names, the rest at the bottom. A lock shows "Locked" at each changed field with the reason once; the summary says "Not saved. 1 field is locked.", not "Fix". Whole-record locks stay at the bottom. Locks are not re-read after a refusal (#1327). 2026-10-21 look pass: one box, names-only links, title/detail split, full-width field messages.
 - **Choice controls** (form cleanup, 2026-09-29): selector text → choice cards when the choice has a consequence, segmented controls for short equal options, selects for the rest.
 
 ## Onboarding
