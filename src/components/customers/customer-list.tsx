@@ -19,6 +19,7 @@ import {
   useRestoreCustomer,
   useCustomerLocations,
   useCustomers,
+  useCustomerStats,
   useUpdateCustomer,
 } from "@/hooks/use-customers";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -198,7 +199,6 @@ export function CustomerList() {
   const customers = customersData?.items ?? [];
 
   // Computed stats
-  const totalCustomers = customersData?.total ?? 0;
   const totalPages = customersData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -206,7 +206,7 @@ export function CustomerList() {
     isLoading,
     setCurrentPage,
   });
-  const totalLocations = customers.reduce((sum, c) => sum + c.locationCount, 0);
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useCustomerStats({ archived: showArchived });
   const hasActiveSearch = searchInput.trim().length > 0;
 
   // Side sheet helpers
@@ -441,15 +441,19 @@ export function CustomerList() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
           title={showArchived ? "Archived customers" : "Active customers"}
-          value={totalCustomers}
+          value={statsData?.totalCustomers ?? 0}
+          description={showArchived ? "All archived customers" : "All customers that are not archived"}
           icon={<UsersIcon size={24} weight="bold" />}
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
         <StatCard
-          title="Locations on this page"
-          value={totalLocations}
+          title="Total locations"
+          value={statsData?.totalLocations ?? 0}
+          description={showArchived ? "Locations of all archived customers" : "Locations of all customers that are not archived"}
           icon={<MapTrifoldIcon size={24} weight="bold" />}
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
       </div>
 
