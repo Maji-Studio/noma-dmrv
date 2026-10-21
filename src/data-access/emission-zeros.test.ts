@@ -101,11 +101,12 @@ it("refuses a stale optional Removal review token", async () => {
   expect(insert).not.toHaveBeenCalled();
 });
 
-it.each(["sent-single", "omitted-production", "automatic-figure", "stale-value"])("refuses %s through the server writer", async (scenario) => {
+it.each(["sent-single", "held-single", "omitted-production", "automatic-figure", "stale-value"])("refuses %s through the server writer", async (scenario) => {
   const current = structuredClone(observation);
-  if (scenario === "sent-single") {
+  if (scenario === "sent-single" || scenario === "held-single") {
     mocks.facts.mockResolvedValue({ entries: [{ id: "sent", componentId: "line", kind: "value", lineRule: "single", counts: true,
-      creditBatchId, occurredOn: "2026-01-02", sentByRemovalId: "earlier", values: [], evidenceDocumentIds: ["file"] }] });
+      creditBatchId, occurredOn: "2026-01-02", sentByRemovalId: scenario === "sent-single" ? "earlier" : null,
+      heldForRemovalId: scenario === "held-single" ? "earlier" : null, values: [], evidenceDocumentIds: ["file"] }] });
   } else if (scenario === "stale-value") {
     mocks.facts.mockResolvedValue({ entries: [{ id: "stale", componentId: "line", kind: "value", counts: false,
       creditBatchId, occurredOn: "2026-01-02", values: [], evidenceDocumentIds: [] }] });

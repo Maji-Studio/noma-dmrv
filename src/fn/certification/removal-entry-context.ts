@@ -20,7 +20,7 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   // Historical sent singles remain omission facts, even though they are not part of this attempt's frozen set.
   const belongsToFrozenView = (entry: (typeof allEntries)[number]) => !frozenEntrySet ||
     frozenEntrySet.some((frozen) => frozen.entryId === entry.id) ||
-    (entry.kind === "value" && entry.lineRule === "single" && !!entry.sentByRemovalId && entry.sentByRemovalId !== scope.removalId);
+    (entry.kind === "value" && entry.lineRule === "single" && !!(entry.sentByRemovalId ?? entry.heldForRemovalId) && (entry.sentByRemovalId ?? entry.heldForRemovalId) !== scope.removalId);
   const entries = allEntries.filter(belongsToFrozenView);
   const contenders = Object.values(facts)[0]?.contenders ?? [];
   const reservations = await loadEmissionEntryReservations(ctx,

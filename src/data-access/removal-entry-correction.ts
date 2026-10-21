@@ -1,3 +1,4 @@
+import { getEffectiveReportingPeriodEndOn } from "./certifier-ghg-statements";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -41,6 +42,7 @@ export async function loadRemovalEntryCorrection(ctx: OrgContext, removalId: str
   const [identity] = await db.select({ code: certifierRemovals.code,
     reportingPeriodStartOn: certifierGhgStatements.reportingPeriodStartOn,
     reportingPeriodEndOn: certifierGhgStatements.reportingPeriodEndOn,
+    metadata: certifierGhgStatements.metadata,
   }).from(certifierRemovals)
     .innerJoin(certifierGhgStatements, and(eq(certifierGhgStatements.organizationId, ctx.organizationId),
       eq(certifierGhgStatements.id, correction.returnedStatement.id)))
@@ -57,7 +59,7 @@ export async function loadRemovalEntryCorrection(ctx: OrgContext, removalId: str
   return { ...state, removalId, removalCode: identity.code,
     correction: buildRemovalCorrection({ removalId, removalCode: identity.code, state,
       statement: { ...correction.returnedStatement, reportingPeriodStartOn: identity.reportingPeriodStartOn,
-        reportingPeriodEndOn: identity.reportingPeriodEndOn },
+        reportingPeriodEndOn: getEffectiveReportingPeriodEndOn(identity) },
       batches: batches.map(({ id, code }) => ({ id, code })),
       components,
     }),

@@ -18,7 +18,7 @@ export function deriveRemovalEntryInputs(args: Omit<Parameters<typeof deriveRemo
     ...args,
     entries: args.entries.map((entry): RemovalEntryFact => {
       const owner = entry.sendReservedBySubmissionId ? owners.get(entry.sendReservedBySubmissionId) : undefined;
-      return { ...entry, reservedByRemovalId: owner?.live ? owner.removalId : args.frozen ? args.removalId : null,
+      return { ...entry, reservedByRemovalId: owner?.live ? owner.removalId : args.frozen && !entry.heldForRemovalId ? args.removalId : null,
         reservationKnownInactive: !owner?.live };
     }),
     lineSources: args.observation.lineSources,

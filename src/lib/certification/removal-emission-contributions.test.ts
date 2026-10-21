@@ -1,3 +1,4 @@
+import { deriveRemovalBatchEmissionLines } from "./removal-emission-lines";
 import { describe, expect, it } from "vitest";
 import { deriveRemovalEntryContributions, deriveRemovalEntryWindow, entriesWithoutRemoval, isLiveEntryReservation, removalEntryOwner, type EntryContender, type RemovalEntryFact } from "./removal-emission-contributions";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
@@ -150,4 +151,21 @@ it("holds an unsent replacement before drafts, including after the window closes
   expect(removalEntryOwner({ ...held, sentByRemovalId: "sent" }, [])).toBe("sent");
   expect(removalEntryOwner({ ...held, reservedByRemovalId: "reserved" }, [])).toBe("reserved");
   expect(removalEntryOwner({ ...held, sendReservedBySubmissionId: "unknown" }, [])).toBeNull();
+});
+
+it("omits another Removal's held single and keeps its follow-up batch line filled", () => {
+  const held = entry({ lineRule: "single", heldForRemovalId: "r2" });
+  const lineSources = { c1: { scope: "operating" as const, entryPolicy: "single" as const, origin: "reviewed" as const } };
+  const contributions = derive([held], { lineSources });
+  expect(contributions.sentSingleComponentIds).toEqual(["c1"]);
+  expect(contributions.entrySet).toEqual([]);
+  const lines = deriveRemovalBatchEmissionLines({
+    definition: { groups: [{ id: "g", key: "pyrolysis", displayName: "Group", description: "", components: [{
+      id: "c1", displayName: "Electricity", description: null, blueprintKey: "metered_energy_based_ci_emissions",
+      inputs: [{ key: "initial_readout", type: "monitored", quantityKind: "energy" }, { key: "final_readout", type: "monitored", quantityKind: "energy" }],
+    }] }] },
+    lineSources, problems: [], enrichmentComplete: true, automaticFigures: {}, entries: [], entriesCanSubmit: true,
+  }, "b1", { entries: [held] }, contributions);
+  expect(lines[0]).toMatchObject({ state: "filled", blocker: undefined });
+  expect(held.sentByRemovalId).toBeNull();
 });

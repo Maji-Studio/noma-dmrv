@@ -124,7 +124,8 @@ export function deriveRemovalEntryContributions(args: {
       code: "entryHasNoRemoval", message: ENTRY_HAS_NO_REMOVAL, fixTarget: "emissions", creditBatchId: entry.creditBatchId,
       lineRef: { componentId: entry.componentId, displayName: entry.componentId },
     });
-    if (entry.kind === "value" && entry.lineRule === "single" && entry.sentByRemovalId && entry.sentByRemovalId !== args.removalId) {
+    const holdingRemovalId = entry.sentByRemovalId ?? entry.heldForRemovalId;
+    if (entry.kind === "value" && entry.lineRule === "single" && holdingRemovalId && holdingRemovalId !== args.removalId) {
       result.sentSingleComponentIds.push(entry.componentId);
       continue;
     }

@@ -26,7 +26,7 @@ export function deriveRemovalBatchEmissionLines(
     }
     const sent = contributions && batchId && batch?.entries.some((entry) =>
       entry.componentId === line.componentId && entry.lineRule === "single" && entry.kind === "value" &&
-      entry.sentByRemovalId && !(contributions.ownedEntryIds ?? contributions.selectedEntryIds).includes(entry.id));
+      (entry.sentByRemovalId ?? entry.heldForRemovalId) && !(contributions.ownedEntryIds ?? contributions.selectedEntryIds).includes(entry.id));
     if (sent && line.state === "empty") return { ...line, state: "filled" as const, blocker: undefined };
     return line;
   });

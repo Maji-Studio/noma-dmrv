@@ -72,13 +72,15 @@ it("treats a missing reservation row as inactive", async () => {
   expect(result?.contributions.selectedEntryIds).toContain("entry-b1");
   expect(result?.contributions.blockers).toEqual([]);
 });
-it("keeps earlier sent singles as omission facts when retrying a frozen set", async () => {
+it.each(["sent", "held"] as const)("keeps earlier %s singles as omission facts when retrying a frozen set", async (state) => {
   const loaded = facts();
   loaded.b1.entries[0].lineRule = "single";
-  loaded.b1.entries[0].sentByRemovalId = "earlier";
+  if (state === "sent") loaded.b1.entries[0].sentByRemovalId = "earlier";
+  else loaded.b1.entries[0].heldForRemovalId = "earlier";
   const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, loaded, facility, []);
   expect(result?.contributions.sentSingleComponentIds).toEqual(["electricity"]);
   expect(result?.contributions.entrySet).toEqual([]);
+  expect(result?.contributions.ownedEntryIds).toEqual([]);
   expect(result?.batchFacts.b1.entries).toHaveLength(1);
 });
 
