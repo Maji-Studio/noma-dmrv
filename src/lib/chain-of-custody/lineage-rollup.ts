@@ -5,8 +5,7 @@ import { sumNullable } from "@/lib/nullable-sum";
 import { splitWetMass } from "@/lib/mass-moisture";
 import { resolveChainSources } from "./sources";
 
-export const PRODUCTION_RUN_NODE_PREFIX = "production-run:";
-export const productionRunNodeId = (id: string) => `${PRODUCTION_RUN_NODE_PREFIX}${id}`;
+export const productionRunNodeId = (id: string) => `production-run:${id}`;
 export const productNodeId = (id: string) => `biochar-product:${id}`;
 export const applicationNodeId = (id: string) => `application:${id}`;
 export const deliveryNodeId = (id: string) => `delivery:${id}`;
@@ -47,7 +46,7 @@ export function edgeMass(rollup: LineageRollup, from: string, to: string): Linea
   return rollup.edges.get(flowEdgeId(from, to)) ?? { ...UNKNOWN, mass: null, unit: "kg" };
 }
 
-/** Contributions retain the units in which the original graph summed each figure. */
+/** Units are documented at each map: sums retain the original graph's native units. */
 interface MassPair {
   wet: number | null;
   dry: number | null;
@@ -82,11 +81,16 @@ function sourceMass(source: ChainSourceLineage): MassPair {
   return { wet: source.allocatedWetMassKg, dry: source.allocatedDryMassKg };
 }
 
+/** Node contributions use wet kg and dry kg. */
 function finishNodes(contributions: Contributions): Map<string, LineageNodeMass> {
   return new Map([...contributions].map(([id, values]) => [id, kilograms(total(values))]));
 }
 
-/** Shipment edges sum wet kg and dry tonnes, matching the original branch-share units. */
+/**
+ * Wet contributions always use kg. Dry contributions use kg for allocations
+ * and draws, or tonnes for shipments. Retain that dry unit for branch shares
+ * and convert only the kg label; allocation shares may fall back to wet kg.
+ */
 function finishEdges(
   contributions: Contributions,
   unit: LineageEdgeMass["unit"],
@@ -109,12 +113,12 @@ function finishEdges(
  * their source records. Each mass basis uses the same nullable-sum rule.
  */
 export function buildLineageRollup(lineages: readonly ChainOfCustodyData[]): LineageRollup {
-  const nodes: Contributions = new Map();
-  const applications: Contributions = new Map();
-  const allocations: Contributions = new Map();
-  const shipments: Contributions = new Map();
-  const legacyCandidates = new Map<string, MassPair>();
-  const productAllocations: Contributions = new Map();
+  const nodes: Contributions = new Map(); // Wet kg, dry kg.
+  const applications: Contributions = new Map(); // Wet tonnes, dry tonnes.
+  const allocations: Contributions = new Map(); // Wet kg, dry kg.
+  const shipments: Contributions = new Map(); // Wet kg, dry tonnes.
+  const legacyCandidates = new Map<string, MassPair>(); // Wet kg, dry kg.
+  const productAllocations: Contributions = new Map(); // Wet kg, dry kg.
 
   for (const lineage of lineages) {
     const sources = resolveChainSources(lineage);
@@ -179,10 +183,10 @@ export function buildLineageRollup(lineages: readonly ChainOfCustodyData[]): Lin
 
 /** Recorded draws sum in kg; shipments sum wet kg and each run's dry-tonne share. */
 export function buildRollForwardRollup(rollForwards: readonly ChainRunRollForward[]): LineageRollup {
-  const nodes: Contributions = new Map();
-  const draws: Contributions = new Map();
-  const shipments: Contributions = new Map();
-  const recordedShipments: Contributions = new Map();
+  const nodes: Contributions = new Map(); // Wet kg, dry kg.
+  const draws: Contributions = new Map(); // Wet kg, dry kg.
+  const shipments: Contributions = new Map(); // Wet kg, dry tonnes.
+  const recordedShipments: Contributions = new Map(); // Wet kg, dry kg.
   for (const { source, products } of rollForwards) {
     for (const { product, drawnWetMassKg, drawnDryMassKg, deliveries } of products) {
       const productId = productNodeId(product.id);

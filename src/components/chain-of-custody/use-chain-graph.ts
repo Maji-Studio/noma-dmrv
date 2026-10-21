@@ -445,18 +445,20 @@ function buildDeliveryNode(delivery: Omit<ChainDeliveryLineage, "proofOfDelivery
 export function buildLineageNodes(
   data: ChainOfCustodyData,
   totals: LineageRollup = buildLineageRollup(expandProductLineages(data)),
+  productMassBasis: "sourceAllocation" | "applied" = "sourceAllocation",
 ): LineageGraphNode[] {
   if (data.products?.length) {
-    const nodes = expandProductLineages(data).flatMap(slice => buildLineageNodes(slice, totals));
+    const nodes = expandProductLineages(data).flatMap(slice => buildLineageNodes(slice, totals, productMassBasis));
     return [...new Map(nodes.map(node => [node.id, node])).values()];
   }
   const sources = resolveChainSources(data);
   const nodes = buildSourceNodes(sources, totals);
 
   if (data.biocharProduct) {
+    const productId = productNodeId(data.biocharProduct.id);
     const details: LineageDetailRow[] = [];
     addRow(details, "Applied from batch", formatWetDryMass(
-      sourceAllocationMass(totals, productNodeId(data.biocharProduct.id)),
+      productMassBasis === "applied" ? nodeMass(totals, productId) : sourceAllocationMass(totals, productId),
     ));
 
     nodes.push({
@@ -794,13 +796,7 @@ function buildMergedChainGraph(
   const nodeById = new Map<string, LineageGraphNode>();
   const edgeById = new Map<string, Edge>();
   for (const lineage of lineages) {
-    for (const node of buildLineageNodes(lineage, totals)) {
-      if (node.kind === "biocharProduct") {
-        node.details = [{
-          label: "Applied from batch",
-          value: formatWetDryMass(nodeMass(totals, node.id)),
-        }];
-      }
+    for (const node of buildLineageNodes(lineage, totals, "applied")) {
       if (!nodeById.has(node.id)) nodeById.set(node.id, node);
     }
     for (const lineageEdge of buildLineageEdges(lineage, totals)) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ChainOfCustodyData, ChainSourceLineage } from "@/data-access/chain-of-custody";
+import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type { ChainRunRollForward } from "@/data-access/chain-of-custody-roll-forward";
 import { kgToTonnes, tonnesToKg } from "@/lib/calculations/unit-conversions";
 import {
@@ -11,63 +11,18 @@ import {
   type LineageMass,
   type LineageRollup,
 } from "./lineage-rollup";
+import {
+  RUN_ID,
+  PRODUCT_ID,
+  APPLICATION_ID,
+  DELIVERY_ID,
+  SOURCE_EDGE_ID,
+  SHIPMENT_EDGE_ID,
+  APPLICATION_EDGE_ID,
+  rollupLineage as lineage,
+} from "./lineage-rollup.fixtures";
 
-const RUN_ID = "production-run:run-1";
-const PRODUCT_ID = "biochar-product:product-1";
-const APPLICATION_ID = "application:application-1";
-const DELIVERY_ID = "delivery:delivery-1";
-const SOURCE_EDGE_ID = `${RUN_ID}->${PRODUCT_ID}`;
-const SHIPMENT_EDGE_ID = `${PRODUCT_ID}->${DELIVERY_ID}`;
-const APPLICATION_EDGE_ID = `${DELIVERY_ID}->${APPLICATION_ID}`;
 const UNKNOWN = { wetKg: null, dryKg: null };
-
-function lineage(
-  wetKg: number | null = 120,
-  dryKg: number | null = 90,
-): ChainOfCustodyData {
-  const source: ChainSourceLineage = {
-    productionRun: {
-      id: "run-1", code: "PR-1", status: "complete", date: "2026-05-17",
-      biocharOutputKg: 1_000, biocharDryMassKg: 900, feedstockMassDryKg: 2_000,
-      href: "/production-runs",
-    },
-    reactor: null,
-    feedstocks: [{
-      id: "feedstock-1", code: "FS-1", status: "complete", deliveryDate: null,
-      massDryKg: 2_000, wetMassUsedKg: 3_000, supplierName: null,
-      feedstockTypeName: null, href: "/feedstocks",
-    }],
-    allocatedWetMassKg: wetKg,
-    allocatedDryMassKg: dryKg,
-  };
-  return {
-    facility: { id: "facility-1", code: "FAC-1", name: "Fixture facility" },
-    application: {
-      id: "application-1", code: "AP-1", status: "applied",
-      applicationDate: new Date("2026-05-20T00:00:00Z"), fieldIdentifier: null,
-      evidenceMethod: "visual", gisBoundary: null, soilTemperatureC: null,
-      biocharAppliedTons: wetKg == null ? null : kgToTonnes(wetKg),
-      biocharAppliedDryTons: dryKg == null ? null : kgToTonnes(dryKg),
-      href: "/applications",
-    },
-    delivery: {
-      id: "delivery-1", code: "DL-1", status: "delivered", proofOfDeliveryCount: 0,
-      deliveryDate: new Date("2026-05-19T00:00:00Z"), deliveredWetMassKg: 850,
-      massDryKg: 820, href: "/deliveries",
-    },
-    order: { id: "order-1", code: "OR-1", orderDate: new Date("2026-05-18T00:00:00Z"), quantityKg: 850, href: "/orders" },
-    biocharProduct: {
-      id: "product-1", code: "BP-1", status: "ready", productionDate: "2026-05-18",
-      massKg: 850, moistureContentPercent: 2, formulationName: null,
-      linkedProductionRunId: "run-1", href: "/biochar-products",
-    },
-    productionRun: source.productionRun,
-    reactor: source.reactor,
-    feedstocks: source.feedstocks,
-    sources: [source],
-    warnings: [],
-  };
-}
 
 function edgeKilograms(totals: LineageRollup, id: string): LineageMass | undefined {
   const mass = totals.edges.get(id);
@@ -332,6 +287,47 @@ describe("buildRollForwardRollup", () => {
     expect(edgeMass(totals, PRODUCT_ID, DELIVERY_ID)).toEqual({
       wetKg: 400, dryKg: tonnesToKg(0.3 + 0.08), mass: 0.3 + 0.08, unit: "tDry",
     });
+  });
+
+  it("is exactly order independent for float-sensitive shares and the single-shipment kg override", () => {
+    const shares = [0.1, 0.2, 0.3];
+    const rollForwards = shares.map(share => {
+      const data = forward("run-1", share, tonnesToKg(share));
+      data.products[0].drawnWetMassKg = share;
+      data.products[0].drawnDryMassKg = share;
+      return data;
+    });
+    const singleDeliveryId = "delivery:delivery-single";
+    const recordedDryKg = 63.7;
+    const deliveries = rollForwards[0].products[0].deliveries;
+    deliveries.push({
+      delivery: { ...deliveries[0].delivery, id: "delivery-single" },
+      wetMassKg: recordedDryKg,
+      dryMassKg: recordedDryKg,
+    });
+    const original = structuredClone(rollForwards);
+    const expected = buildRollForwardRollup(rollForwards);
+    const shareSum = 0.1 + 0.2 + 0.3;
+    expect(nodeMass(expected, PRODUCT_ID)).toEqual({ wetKg: shareSum, dryKg: shareSum });
+    expect(edgeMass(expected, RUN_ID, PRODUCT_ID)).toEqual({
+      wetKg: shareSum, dryKg: shareSum, mass: shareSum, unit: "kg",
+    });
+    expect(edgeMass(expected, PRODUCT_ID, DELIVERY_ID)).toEqual({
+      wetKg: shareSum, dryKg: tonnesToKg(shareSum), mass: shareSum, unit: "tDry",
+    });
+    // Choose a recorded value whose kg/tonne round trip changes its exact float.
+    expect(tonnesToKg(kgToTonnes(recordedDryKg))).not.toBe(recordedDryKg);
+    expect(edgeMass(expected, PRODUCT_ID, singleDeliveryId)).toEqual({
+      wetKg: recordedDryKg, dryKg: recordedDryKg, mass: kgToTonnes(recordedDryKg), unit: "tDry",
+    });
+    for (const reordered of [
+      [...rollForwards].reverse(),
+      [rollForwards[1], rollForwards[2], rollForwards[0]],
+      [rollForwards[2], rollForwards[0], rollForwards[1]],
+    ]) {
+      expect(buildRollForwardRollup(reordered)).toEqual(expected);
+    }
+    expect(rollForwards).toEqual(original);
   });
 
   it("uses the same nullable sum independently for draws and shipments", () => {
