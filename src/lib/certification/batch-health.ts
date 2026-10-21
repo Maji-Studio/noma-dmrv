@@ -1,3 +1,4 @@
+import type { RemovalCorrection } from "./removal-entry-correction";
 import { templateLineFixTarget } from "./template-fix-targets";
 import type { BatchEmissionLine } from "./emission-lines";
 import type { SampleDocumentWarningKey } from "./sample-document-warnings";
@@ -191,7 +192,7 @@ export interface BatchHealthFacts {
 export interface BatchHealth {
   /** Advisory actions belong to the returned Removal and never affect batch eligibility. */
   advisories?: { message: string; fixTarget: "removal"; removalId: string; removalCode?: string }[];
-  removalCorrections?: import("./removal-entry-correction").RemovalCorrection[];
+  removalCorrections?: RemovalCorrection[];
   warnings?: string[];
   /** Non-blocking Sample document gaps behind `warnings`, as typed keys. */
   documentWarnings?: SampleDocumentWarningKey[];
