@@ -1,5 +1,23 @@
 import { expect, it } from "vitest";
-import { contentsRows } from "./sub-bin-card";
+import type { OutputSubBin } from "@/types/output-stock";
+import { bayFigure } from "./sub-bin-bays";
+import { contentsRows, subBinWetText } from "./sub-bin-card";
+
+const subBin = (wetEstimateKg: number | null): OutputSubBin => ({
+  layerId: "l1", code: "R-1", placedAt: "2026-09-10T12:00:00.000Z", dryMassKg: 900, solidsKg: 900, wetEstimateKg,
+  moisturePercent: null, basis: null, recentMovements: [], ingredients: [],
+});
+
+it("shows a sub-bin without a wet figure as its known dry biochar, never a placeholder", () => {
+  expect(subBinWetText(subBin(null))).toBe("900 kg dry biochar");
+  expect(subBinWetText(subBin(1000))).toBe("1,000 kg wet mass");
+  expect(bayFigure(subBin(null))).toBe("900 kg dry biochar");
+  expect(bayFigure(subBin(1000))).toBe("1,000");
+  // A fractional dry mass reads the same on the bay and in the order row.
+  const small = { ...subBin(null), dryMassKg: 0.4, solidsKg: 0.4 };
+  expect(bayFigure(small)).toBe(subBinWetText(small));
+  expect(bayFigure(small)).toBe("0.4 kg dry biochar");
+});
 
 it("lists a sub-bin's contents top down as the bay draws them: water, each ingredient's solids, dry biochar", () => {
   expect(contentsRows({ dryMassKg: 90, solidsKg: 160, ingredients: [{ name: "Compost", solidsKg: 70 }], waterKg: 40 })).toEqual([
