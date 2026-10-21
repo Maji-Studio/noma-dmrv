@@ -77,6 +77,27 @@ for (const width of [1440, 390]) {
   });
 }
 
+test("the open panel stays inside the sheet at 1440px", async ({ adminPage: page, seededData }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+  await page.getByRole("button", { name: /New production run/i }).click();
+  await waitForSideSheet(page);
+  const dialog = page.getByRole("dialog").first();
+  await selectEntity(page, "Source Bin", seededData.feedstockStorageLocation.id, seededData.feedstockStorageLocation.name);
+  await dialog.locator('input[name="feedstockDraws.0.wetMassKg"]').fill("50");
+  await dialog.locator('input[name="feedstockMoisturePercent"]').fill("15");
+  const info = dialog.getByRole("button", { name: "About Feedstock composition" });
+  await info.evaluate(el => el.scrollIntoView({ block: "center" }));
+  await settledBox(info);
+  await info.click();
+  const panel = page.getByRole("dialog", { name: "Feedstock composition", exact: true });
+  await expect(panel).toBeVisible();
+  const sheetBox = (await dialog.boundingBox())!;
+  const panelBox = (await panel.boundingBox())!;
+  expect(panelBox.x).toBeGreaterThanOrEqual(sheetBox.x);
+  expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(sheetBox.x + sheetBox.width);
+});
+
 test("a mouse hover opens the explanation on desktop", async ({ adminPage: page, seededData }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/production-runs?facility=${seededData.facility.id}`);

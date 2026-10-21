@@ -68,6 +68,12 @@ interface PopoverProps {
    * open; Base UI wires Enter and Space onto a non-native trigger itself.
    */
   nativeTrigger?: boolean;
+  /**
+   * How the popup avoids the viewport edge. Default is Base UI's (flip both
+   * axes). A wide panel passes `{ side: "flip", align: "shift" }` to slide along
+   * the edge instead of flipping its alignment out of its container.
+   */
+  collisionAvoidance?: React.ComponentProps<typeof BasePopover.Positioner>["collisionAvoidance"];
 }
 
 function Popover({
@@ -79,6 +85,7 @@ function Popover({
   className,
   openOnHover = false,
   nativeTrigger = true,
+  collisionAvoidance,
 }: PopoverProps) {
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
   const popupRef = React.useRef<HTMLDivElement | null>(null);
@@ -109,6 +116,7 @@ function Popover({
           align={align}
           sideOffset={SIDE_OFFSET_PX}
           collisionPadding={COLLISION_PADDING_PX}
+          collisionAvoidance={collisionAvoidance}
           className="z-[var(--z-layer-popover)]"
         >
           <BasePopover.Popup

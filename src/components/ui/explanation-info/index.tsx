@@ -33,6 +33,8 @@ import { cn } from "@/lib/utils";
 const ICON_PX = 14;
 // Panels hold tables, so they may be wider than a plain popover on desktop.
 // Phones keep a 16px gutter either side.
+// Slide along the edge instead of flipping the alignment out of the sheet.
+const SHIFT_ALONG_EDGE = { side: "flip", align: "shift" } as const;
 const PANEL_CLASS = "w-[min(420px,calc(100vw-32px))]";
 
 interface ExplanationInfoProps {
@@ -50,6 +52,7 @@ function ExplanationInfo({ title, hint, children, className }: ExplanationInfoPr
     <Popover
       openOnHover
       nativeTrigger={false}
+      collisionAvoidance={SHIFT_ALONG_EDGE}
       title={title}
       className={PANEL_CLASS}
       trigger={(
