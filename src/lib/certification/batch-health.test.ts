@@ -50,7 +50,7 @@ describe("deriveBatchHealth", () => {
       .filter((check) => check.key === "templateSet" || check.key === "templateLines")
       .map((check) => batchHealthFixLinkFor(check, "facility-1", "batch-1"));
     expect(links).toEqual([
-      { label: "Switch template", href: "/credit-batches/batch-1?facility=facility-1&focus=removal-template" },
+      { label: "Set template", href: "/settings/removal-templates?facility=facility-1&setup=template" },
       { label: "Open Removal templates", href: "/settings/removal-templates?facility=facility-1" },
       { label: "Decide components", href: "/settings/removal-templates?facility=facility-1" },
     ]);
@@ -93,7 +93,7 @@ describe("deriveBatchHealth", () => {
     }));
     const checks = result.checks.filter((check) => check.key === "templateSet" || check.key === "templateLines");
     expect(checks.map(certCheckLabel)).toEqual(["Template cannot be used", "Template not fully read", label]);
-    expect(checks.map((check) => check.fixTarget)).toEqual(["creditBatchTemplate", "templateLines", "templateLineReview"]);
+    expect(checks.map((check) => check.fixTarget)).toEqual(["templateSetup", "templateLines", "templateLineReview"]);
   });
 
   it("uses the general pin label when an unpinned batch is not the only pin problem", () => {

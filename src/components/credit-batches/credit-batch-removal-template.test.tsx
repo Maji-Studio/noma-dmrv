@@ -14,7 +14,7 @@ vi.mock("@/hooks/use-removal-template-review", () => ({
 }));
 vi.mock("@/hooks/use-certification", () => ({
   useFacilityCertifierSummary: () => ({
-    data: { mapping: { externalProjectId: "prj_test", defaultRemovalTemplateId: "rvt_new" } },
+    data: { mapping: { externalProjectId: "prj_test", removalTemplateId: "rvt_new" } },
     isLoading: false, isSuccess: true,
   }),
   useIsometricProjectTemplates: () => ({

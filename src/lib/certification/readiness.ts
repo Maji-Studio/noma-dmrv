@@ -549,10 +549,10 @@ function withRequirementMeta(
 function templateRequirementChecks(facts: RemovalReadinessFacts): RemovalRequirementCheckBase[] {
   const canEvaluate = facts.hasMapping && facts.hasOrgCredentials;
   const pinBlockers = (facts.templateBlockers ?? []).filter(
-    (blocker) => removalTemplateBlockerDestination(blocker.code) === "creditBatchTemplate",
+    (blocker) => removalTemplateBlockerDestination(blocker.code) === "templateSetup",
   );
   const lineBlockers = (facts.templateBlockers ?? []).filter(
-    (blocker) => removalTemplateBlockerDestination(blocker.code) !== "creditBatchTemplate",
+    (blocker) => removalTemplateBlockerDestination(blocker.code) !== "templateSetup",
   );
   // Unbindable inputs come from the line decisions, so they belong to the lines check.
   const pinFacts = { ...facts, templateBlockers: pinBlockers, emissionLineBlockers: [], unbindableTemplateInputs: [] };

@@ -123,4 +123,4 @@ export {
   type MirrorResult,
 } from "./sources";
 
-export { loadRemovalTemplateReview, loadRemovalTemplateReviewEntry, switchCreditBatchRemovalTemplate } from "./removal-template-review";
+export { loadRemovalTemplateReview, loadRemovalTemplateReviewEntry } from "./removal-template-review";

@@ -233,6 +233,6 @@ it("directs a missing external facility ID to certification settings", () => {
 });
 
 it("sends a missing default Removal template to Removal templates", () => {
-  const copy = setupGapCopy({ kind: "default_template" });
+  const copy = setupGapCopy({ kind: "removal_template" });
   expect(copy.action).toEqual({ label: "Choose a default in Removal templates", target: "removalTemplates" });
 });

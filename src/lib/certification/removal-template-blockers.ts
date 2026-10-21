@@ -31,24 +31,24 @@ export type TemplateRoutedBlockerCode = RemovalTemplateBlockerCode | TemplateLin
 
 /**
  * Where an operator settles a template blocker. The one routing table:
- * - `creditBatchTemplate`: the credit batch's own template pin (Switch template);
+ * - `templateSetup`: the facility template setup in Settings (Set template);
  * - `templateLineReview`: lines without a decision (Decide components);
  * - `templateLines`: decided lines or a read problem (Open Removal templates);
  * - `templateReplacement`: a decided line only another template can fill
- *   (Switch template, else Open Removal templates). Set as data by the line
+ *   (Set template in Settings). Set as data by the line
  *   binding; no code maps to it by default.
  */
-export type RemovalTemplateBlockerDestination = "creditBatchTemplate" | "templateLineReview" | "templateLines" | "templateReplacement";
+export type RemovalTemplateBlockerDestination = "templateSetup" | "templateLineReview" | "templateLines" | "templateReplacement";
 const BLOCKER_DESTINATIONS: Record<TemplateRoutedBlockerCode, RemovalTemplateBlockerDestination> = {
   forbiddenLine: "templateLines",
-  notRemovalTemplate: "creditBatchTemplate",
-  unpinnedTemplate: "creditBatchTemplate",
-  mixedTemplatePins: "creditBatchTemplate",
-  templateNotFound: "creditBatchTemplate",
+  notRemovalTemplate: "templateSetup",
+  unpinnedTemplate: "templateSetup",
+  mixedTemplatePins: "templateSetup",
+  templateNotFound: "templateSetup",
   templateNotFullyRead: "templateLines",
-  unsupportedSequestration: "creditBatchTemplate",
+  unsupportedSequestration: "templateSetup",
   // Line review cannot supply a fixed value. The operator can switch to a corrected template.
-  missingFixedDatapoint: "creditBatchTemplate",
+  missingFixedDatapoint: "templateSetup",
   templateLinesNeedReview: "templateLineReview",
   lineNeedsReview: "templateLineReview",
   lineNeedsSetup: "templateLines",

@@ -15,7 +15,6 @@ import type { BatchHealthFixTarget } from "@/lib/certification/batch-health";
 import {
   buildCreditBatchOpenItems,
   CREDIT_BATCH_DETAILS_ROW,
-  CREDIT_BATCH_TEMPLATE_ROW,
 } from "./open-items";
 
 const batchContext = { facilityId: "facility", creditBatchId: "batch", canManage: true };
@@ -225,13 +224,12 @@ describe("buildCreditBatchOpenItems", () => {
   });
 
   it.each<BatchHealthFixTarget>([
-    "creditBatchTemplate", "batchDetails", "labSamples", "emissions",
+    "templateSetup", "batchDetails", "labSamples", "emissions",
     "templateLineReview", "templateLines", "certificationTemplates", "certificationEmissions", "productionRuns",
   ])("preserves the repair destination for %s", fixTarget => {
     const check = { key: "templateSet" as const, label: "Template", requirementLabel: "Template ready", unmetLabel: "Template not ready",
       status: "unmet" as const, fixTarget };
     const localTargets = {
-      creditBatchTemplate: { tab: "overview", rowId: CREDIT_BATCH_TEMPLATE_ROW },
       batchDetails: { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW },
       labSamples: { tab: "samples" },
       emissions: { tab: "emissions" },

@@ -298,7 +298,7 @@ export function ApplyStep({ data, template, answers, overrides, makeDefault, set
   const without = data.batchesWithoutTemplate;
   const entries = entryCount(template.plan, answers, overrides);
   const others = data.batchesOnOtherTemplates;
-  const isCurrentDefault = template.id === data.defaultRemovalTemplateId;
+  const isCurrentDefault = template.id === data.removalTemplateId;
   return (
     <div className="flex flex-col gap-20">
       {!isCurrentDefault && (

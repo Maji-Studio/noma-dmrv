@@ -11,7 +11,7 @@ import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { removalTemplatesSettingsHref } from "@/lib/certification/links";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
-import { creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
+import { removalTemplateSetupHref } from "@/lib/certification/links";
 
 const template = templateFixture as GhgEntryTemplate;
 
@@ -19,7 +19,7 @@ function facts(): FacilityCertifierFacts {
   return {
     facilityTimezone: "UTC",
     // Deliberately a different default. It must never be used for a Removal.
-    defaultTemplate: { ...template, id: "other-default" },
+    currentTemplate: { ...template, id: "other-default" },
     templatesById: {
       [template.id]: {
         template, observation: { lineSources: {} }, enrichmentProblems: [], lineSourceProblems: [],
@@ -101,7 +101,7 @@ describe("Removal template pins", () => {
     const batchCheck = health.checks.find((check) => check.key === "templateSet")!;
     expect(batchCheck).toMatchObject({ status: "unmet", detail: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint });
     expect(batchHealthFixLinkFor(batchCheck, "facility-1", "batch-1")).toEqual({
-      label: "Switch template", href: creditBatchRemovalTemplateHref("batch-1", "facility-1"),
+      label: "Set template", href: removalTemplateSetupHref("facility-1"),
     });
   });
 });

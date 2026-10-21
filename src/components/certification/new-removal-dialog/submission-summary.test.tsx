@@ -130,7 +130,7 @@ describe("SubmissionSummary", () => {
         ...COMPILATION,
         blockers: ["Choose a Removal template for this credit batch.", "Complete these fields before submitting the Removal:\nRecord Sample moisture"],
         removalBlockers: [
-          { code: "unpinnedTemplate", message: "Choose a Removal template for this credit batch.", fixTarget: "creditBatchTemplate" },
+          { code: "unpinnedTemplate", message: "Choose a Removal template for this credit batch.", fixTarget: "templateSetup" },
           { code: "entityReadiness", message: "Complete these fields before submitting the Removal:\nRecord Sample moisture", fixTarget: null },
         ],
         snapshot: null,

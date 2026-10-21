@@ -63,7 +63,7 @@ export function makeMapping(): CertifierProjectRow {
     externalProjectId: EXTERNAL_PROJECT_ID,
     protocolSlug: "biochar",
     protocolVersion: "1.2",
-    defaultRemovalTemplateId: "rvt_1",
+    removalTemplateId: "rvt_1",
     webhookSecret: null,
     metadata: null,
     createdAt: new Date(),

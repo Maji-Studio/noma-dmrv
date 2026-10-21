@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   getCertifierProjectByFacility,
-  updateFacilityDefaultRemovalTemplateInTransaction,
+  updateFacilityRemovalTemplateInTransaction,
   upsertCertifierProject,
 } from "@/data-access/certification";
 import { db } from "@/db";
@@ -241,8 +241,8 @@ describe("upsertCertifierProject protocol version", () => {
 });
 
 /** The setup apply transaction is the only writer of the default; its guards run inside it. */
-function updateFacilityDefaultRemovalTemplate(ctx: Parameters<typeof updateFacilityDefaultRemovalTemplateInTransaction>[0], input: Parameters<typeof updateFacilityDefaultRemovalTemplateInTransaction>[2]) {
-  return db.transaction((tx) => updateFacilityDefaultRemovalTemplateInTransaction(ctx, tx, input));
+function updateFacilityRemovalTemplate(ctx: Parameters<typeof updateFacilityRemovalTemplateInTransaction>[0], input: Parameters<typeof updateFacilityRemovalTemplateInTransaction>[2]) {
+  return db.transaction((tx) => updateFacilityRemovalTemplateInTransaction(ctx, tx, input));
 }
 
 describe("facility default Removal template", () => {
@@ -253,11 +253,11 @@ describe("facility default Removal template", () => {
       facilityId, provider: "isometric" as const,
       externalFacilityId: `fcl_test_${facilityId}`, externalProjectId: "prj_default_original",
     };
-    await upsertCertifierProject(ctx, { ...mapping, defaultRemovalTemplateId: "template-original" });
+    await upsertCertifierProject(ctx, { ...mapping, removalTemplateId: "template-original" });
     const unchanged = await upsertCertifierProject(ctx, mapping);
-    expect(unchanged.defaultRemovalTemplateId).toBe("template-original");
+    expect(unchanged.removalTemplateId).toBe("template-original");
     const rebound = await upsertCertifierProject(ctx, { ...mapping, externalProjectId: "prj_default_new" });
-    expect(rebound.defaultRemovalTemplateId).toBeNull();
+    expect(rebound.removalTemplateId).toBeNull();
   });
 
   it("changes only the default and refuses foreign scope or a stale project", async () => {
@@ -269,13 +269,13 @@ describe("facility default Removal template", () => {
       externalProjectId, protocolVersion: "1.1",
     });
     const input = { facilityId, externalProjectId, removalTemplateId: "template-chosen" };
-    const updated = await updateFacilityDefaultRemovalTemplate(ctx, input);
+    const updated = await updateFacilityRemovalTemplate(ctx, input);
     expect(updated).toEqual({
-      ...original, defaultRemovalTemplateId: input.removalTemplateId, updatedAt: updated.updatedAt,
+      ...original, removalTemplateId: input.removalTemplateId, updatedAt: updated.updatedAt,
     });
-    await expect(updateFacilityDefaultRemovalTemplate({ ...ctx, organizationId: "foreign-org" }, input)).rejects.toThrow(new SafeError("Facility not found or archived."));
-    await expect(updateFacilityDefaultRemovalTemplate(ctx, { ...input, externalProjectId: "stale-project" })).rejects.toThrow(/project link changed/);
-    expect((await getCertifierProjectByFacility(ctx, facilityId))?.defaultRemovalTemplateId).toBe(input.removalTemplateId);
+    await expect(updateFacilityRemovalTemplate({ ...ctx, organizationId: "foreign-org" }, input)).rejects.toThrow(new SafeError("Facility not found or archived."));
+    await expect(updateFacilityRemovalTemplate(ctx, { ...input, externalProjectId: "stale-project" })).rejects.toThrow(/project link changed/);
+    expect((await getCertifierProjectByFacility(ctx, facilityId))?.removalTemplateId).toBe(input.removalTemplateId);
   });
 
   it("refuses a member context and preserves the mapping", async () => {
@@ -284,10 +284,10 @@ describe("facility default Removal template", () => {
     const externalProjectId = "prj_default_member";
     const original = await upsertCertifierProject(ctx, {
       facilityId, provider: "isometric", externalFacilityId: `fcl_test_${facilityId}`,
-      externalProjectId, defaultRemovalTemplateId: "template-original",
+      externalProjectId, removalTemplateId: "template-original",
     });
 
-    await expect(updateFacilityDefaultRemovalTemplate({ ...ctx, orgRole: "member" }, {
+    await expect(updateFacilityRemovalTemplate({ ...ctx, orgRole: "member" }, {
       facilityId, externalProjectId, removalTemplateId: "template-chosen",
     })).rejects.toThrow(new SafeError("You don't have permission to perform this action."));
     expect(await getCertifierProjectByFacility(ctx, facilityId)).toEqual(original);
@@ -299,11 +299,11 @@ describe("facility default Removal template", () => {
     const externalProjectId = "prj_default_archived";
     const original = await upsertCertifierProject(ctx, {
       facilityId, provider: "isometric", externalFacilityId: `fcl_test_${facilityId}`,
-      externalProjectId, defaultRemovalTemplateId: "template-original",
+      externalProjectId, removalTemplateId: "template-original",
     });
     await archiveFacility(ctx, facilityId, await masterDataVersion(ctx, "facilities", facilityId));
 
-    await expect(updateFacilityDefaultRemovalTemplate(ctx, {
+    await expect(updateFacilityRemovalTemplate(ctx, {
       facilityId, externalProjectId, removalTemplateId: "template-chosen",
     })).rejects.toThrow(new SafeError("Facility not found or archived."));
     expect(await getCertifierProjectByFacility(ctx, facilityId)).toEqual(original);

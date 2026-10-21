@@ -35,13 +35,22 @@ export async function loadRemovalTemplateSetupCore(ctx: OrgContext, facilityId: 
   const [batches, blueprints, projects] = await Promise.all([
     listSetupCreditBatches(ctx, facilityId), listComponentBlueprints(client), listProjects(client),
   ]);
+  const impact = (templateId: string | null) => ({
+    batchesThatSwitch: batches.filter((batch) => !batch.reason && batch.removalTemplateId !== templateId)
+      .map(({ id, code }) => ({ id, code })),
+    batchesKept: batches.filter((batch) => batch.reason && batch.removalTemplateId !== templateId)
+      .map((batch) => ({ id: batch.id, code: batch.code,
+        templateName: templates.find((template) => template.id === batch.removalTemplateId)?.display_name ?? null,
+        reason: batch.reason!,
+      })),
+  });
   const fitting = [];
   const notFitting = [];
   for (const template of templates.filter((candidate) => candidate.credit_type === "REMOVAL")) {
     const fit = templateFitsFacility(template, facility.durabilityOption);
     if ("reason" in fit) { notFitting.push({ id: template.id, name: template.display_name, reason: fit.reason }); continue; }
     const latest = await getLatestTemplateObservation(ctx, "isometric", template.id);
-    const used = template.id === mapping.defaultRemovalTemplateId || batches.some((batch) => batch.removalTemplateId === template.id);
+    const used = template.id === mapping.removalTemplateId || batches.some((batch) => batch.removalTemplateId === template.id);
     const facts = viewerCanManage && used ? await loadRemovalTemplateFacts(ctx, { client, template, externalProjectId: mapping.externalProjectId, blueprints }) : null;
     const preview = facts ? null : await readOnlyEntry(client, template, blueprints, latest, mapping.externalProjectId);
     const observation = facts?.observation ?? null;
@@ -68,7 +77,7 @@ export async function loadRemovalTemplateSetupCore(ctx: OrgContext, facilityId: 
     const verdict = removalTemplateVerdict(entry);
     const plan = setupPlan(definition, sources, problems);
     const blockedReason: string | null = verdict.setupBlocker ? REMOVAL_TEMPLATE_BLOCKERS[verdict.setupBlocker] : null;
-    fitting.push({ id: template.id, name: template.display_name,
+    fitting.push({ id: template.id, name: template.display_name, ...impact(template.id),
       componentCount: entry.lines.length, plan, planFingerprint: setupPlanFingerprint(plan),
       ready: verdict.ready, toDecideCount: verdict.toDecideCount,
       blockedReason,
@@ -78,11 +87,11 @@ export async function loadRemovalTemplateSetupCore(ctx: OrgContext, facilityId: 
   return { facility: { id: facility.id, name: facility.name },
     projectName: projects.find((project) => project.id === mapping.externalProjectId)?.name ?? null,
     tier: facility.durabilityOption, fitting, notFitting,
-    defaultRemovalTemplateId: mapping.defaultRemovalTemplateId,
-    defaultToDecideCount: fitting.find((template) => template.id === mapping.defaultRemovalTemplateId)?.toDecideCount ?? 0,
-    batchesWithoutTemplate: batches.filter((batch) => !batch.removalTemplateId).map(({ id, code, version }) => ({ id, code, version })),
-    batchesOnOtherTemplates: batches.filter((batch) => batch.removalTemplateId && batch.removalTemplateId !== mapping.defaultRemovalTemplateId)
-      .map((batch) => ({ code: batch.code, removalTemplateId: batch.removalTemplateId, templateName: templates.find((template) => template.id === batch.removalTemplateId)?.display_name ?? null })),
+    removalTemplateId: mapping.removalTemplateId,
+    currentToDecideCount: fitting.find((template) => template.id === mapping.removalTemplateId)?.toDecideCount ?? 0,
+    currentTemplateName: templates.find((template) => template.id === mapping.removalTemplateId)?.display_name ?? null,
+    ...impact(mapping.removalTemplateId),
+    batchVersions: batches.map(({ id, version, removalTemplateId }) => ({ id, expectedVersion: version, removalTemplateId })),
     viewerCanManage,
   };
 }
@@ -90,7 +99,7 @@ export async function loadRemovalTemplateSetupCore(ctx: OrgContext, facilityId: 
 export async function applyRemovalTemplateSetupCore(ctx: OrgContext, input: ApplyRemovalTemplateSetupInput) {
   requireOrgRole(ctx, "admin");
   const { facility, mapping, client, templates } = await setupContext(ctx, input.facilityId);
-  // Setup may change only the default, so a non-Removal template gets templateFitsFacility's refusal, not the credit batch one.
+  // Validate the project template before any setup writes.
   const template = templates.find((candidate) => candidate.id === input.removalTemplateId);
   if (!template) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFound);
   const fit = templateFitsFacility(template, facility.durabilityOption);

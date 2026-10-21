@@ -749,7 +749,7 @@ describe("submitRemoval — happy path", () => {
     expect(removalsDA.updateRemovalDates).not.toHaveBeenCalled();
 
     await recoverWith({
-      mapping: { ...recoveryContext.mapping!, defaultRemovalTemplateId: null },
+      mapping: { ...recoveryContext.mapping!, removalTemplateId: null },
     });
     expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
     expect(removalsDA.updateRemovalDates).toHaveBeenCalledTimes(1);

@@ -75,10 +75,10 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
   const template = data.fitting.find((candidate) => candidate.id === templateId) ?? null;
   const open = template ? openDecisions(template.plan, answers) : [];
   const decisionCount = template?.plan.decisions.length ?? 0;
-  const defaultName = data.fitting.find((candidate) => candidate.id === data.defaultRemovalTemplateId)?.name
-    ?? data.notFitting.find((candidate) => candidate.id === data.defaultRemovalTemplateId)?.name ?? null;
+  const defaultName = data.fitting.find((candidate) => candidate.id === data.removalTemplateId)?.name
+    ?? data.notFitting.find((candidate) => candidate.id === data.removalTemplateId)?.name ?? null;
   const allBlocked = data.fitting.every((candidate) => candidate.blockedReason);
-  const effectiveMakeDefault = makeDefault && template?.id !== data.defaultRemovalTemplateId;
+  const effectiveMakeDefault = makeDefault && template?.id !== data.removalTemplateId;
   const batchCount = setBatches ? data.batchesWithoutTemplate.length : 0;
 
   const go = (next: number) => {

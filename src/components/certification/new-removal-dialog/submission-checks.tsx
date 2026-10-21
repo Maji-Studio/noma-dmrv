@@ -68,7 +68,7 @@ function templateFixLinks(
   if (destinations.has("templateLineReview")) destinations.delete("templateLines");
   return [...destinations].flatMap((fixTarget) => {
     const target = { key: "templateLines", fixTarget } as const;
-    return fixTarget === "creditBatchTemplate" || fixTarget === "templateReplacement"
+    return fixTarget === "templateSetup" || fixTarget === "templateReplacement"
       ? perBatchLinks(target, facilityId, creditBatches)
       : [batchHealthFixLinkFor(target, facilityId)];
   }).filter((link, index, links) => links.findIndex((item) => item.href === link.href) === index);

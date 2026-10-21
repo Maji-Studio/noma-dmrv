@@ -158,8 +158,6 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       target = { tab: "samples" };
     } else if (fix === "emissions") {
       target = { tab: "emissions" };
-    } else if (fix === "creditBatchTemplate") {
-      target = { tab: "overview", rowId: CREDIT_BATCH_TEMPLATE_ROW };
     } else if (fix === "batchDetails") {
       target = { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW };
     } else {

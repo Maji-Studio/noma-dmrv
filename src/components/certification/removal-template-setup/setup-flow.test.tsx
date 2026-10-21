@@ -210,7 +210,7 @@ describe("RemovalTemplateSetupFlow", () => {
   });
 
   it("hides Now to After and Make default for the template that is already the default", () => {
-    renderFlow(setupData({ fitting: [nothingToDecide], defaultRemovalTemplateId: "tpl-ready" }), { step: "apply" });
+    renderFlow(setupData({ fitting: [nothingToDecide], removalTemplateId: "tpl-ready" }), { step: "apply" });
     expect(screen.queryByText("Now")).toBeNull();
     expect(screen.queryByRole("checkbox", { name: /Make it the default/ })).toBeNull();
     expect(screen.getByRole("button", { name: "Set on 2 credit batches" })).toBeTruthy();

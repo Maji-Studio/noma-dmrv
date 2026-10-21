@@ -20,9 +20,9 @@ export const SETUP_STEP_KEYS: readonly SetupStepKey[] = ["template", "decisions"
  * Change template opens on Template while a default exists; everything else
  * (Set up template, a blocker link) is a first setup.
  */
-export function setupDialogTitle({ step, hasDefaultTemplate }: { step: SetupStepKey | null; hasDefaultTemplate: boolean }): string {
+export function setupDialogTitle({ step, hasCurrentTemplate }: { step: SetupStepKey | null; hasCurrentTemplate: boolean }): string {
   if (step === "decisions") return "Review decisions";
-  if (step === "template" && hasDefaultTemplate) return "Change Removal template";
+  if (step === "template" && hasCurrentTemplate) return "Change Removal template";
   return "Set up Removal template";
 }
 

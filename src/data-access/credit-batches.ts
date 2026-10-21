@@ -153,7 +153,7 @@ async function resolveCreditBatchCertifier(
     throw new SafeError("Credit batches currently support only Isometric certifier mappings.");
   }
   if (!provider) return { provider: null, removalTemplateId: null };
-  const [project] = await executor.select({ removalTemplateId: certifierProjects.defaultRemovalTemplateId })
+  const [project] = await executor.select({ removalTemplateId: certifierProjects.removalTemplateId })
     .from(certifierProjects).where(and(
       eq(certifierProjects.organizationId, ctx.organizationId), eq(certifierProjects.facilityId, facilityId),
       eq(certifierProjects.provider, provider),

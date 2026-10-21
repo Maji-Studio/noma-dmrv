@@ -64,7 +64,7 @@ export function setupGapCopy(gap: FacilitySetupGap): {
           "The organization's registry connection credentials are not set, so the registry cannot be reached. Ask an Admin to add them before linking this facility.",
         action: null,
       };
-    case "default_template":
+    case "removal_template":
       return {
         message:
           "This facility is linked, but no default Removal template is set for it.",

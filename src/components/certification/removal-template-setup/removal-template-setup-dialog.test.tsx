@@ -11,7 +11,7 @@ vi.mock("@/hooks/use-removal-template-setup", () => ({
   useApplyRemovalTemplateSetup: () => ({ isPending: state.pending, reset: vi.fn(), mutateAsync: vi.fn() }),
   useRemovalTemplateSetup: (facilityId: string, enabled: boolean) => {
     state.read.push({ facilityId, enabled });
-    return { data: state.error || state.loading ? undefined : setupData({ defaultRemovalTemplateId: state.defaultId }), isError: state.error, isFetching: false, refetch: state.refetch };
+    return { data: state.error || state.loading ? undefined : setupData({ removalTemplateId: state.defaultId }), isError: state.error, isFetching: false, refetch: state.refetch };
   },
 }));
 vi.mock("./setup-flow", () => ({
@@ -25,7 +25,7 @@ afterEach(() => { cleanup(); state.read.length = 0; state.error = false; state.l
 describe("RemovalTemplateSetupDialog", () => {
   it("reads and writes the facility it is given and hands the link's start to the flow", () => {
     state.refetch = vi.fn();
-    render(<RemovalTemplateSetupDialog hasDefaultTemplate={false} isOpen facilityId={ACTIVE} templateId="tpl" step="decisions" makeDefault={false} onClose={vi.fn()} />);
+    render(<RemovalTemplateSetupDialog hasCurrentTemplate={false} isOpen facilityId={ACTIVE} templateId="tpl" step="decisions" makeDefault={false} onClose={vi.fn()} />);
     expect(new Set(state.read.map((read) => read.facilityId))).toEqual(new Set([ACTIVE]));
     expect(screen.getByRole("dialog", { name: "Review decisions" })).toBeTruthy();
     expect(screen.getByText(`flow for ${ACTIVE} tpl decisions no default`)).toBeTruthy();
@@ -36,7 +36,7 @@ describe("RemovalTemplateSetupDialog", () => {
     state.refetch = vi.fn();
     const titleFor = (step: string | undefined, defaultId: string | null) => {
       state.defaultId = defaultId;
-      render(<RemovalTemplateSetupDialog hasDefaultTemplate={defaultId !== null} isOpen facilityId={ACTIVE} step={step} onClose={vi.fn()} />);
+      render(<RemovalTemplateSetupDialog hasCurrentTemplate={defaultId !== null} isOpen facilityId={ACTIVE} step={step} onClose={vi.fn()} />);
       const title = screen.getByRole("dialog").getAttribute("aria-labelledby");
       const text = document.getElementById(title ?? "")?.textContent;
       cleanup();
@@ -51,7 +51,7 @@ describe("RemovalTemplateSetupDialog", () => {
   it("keeps the Change template title while the read loads or fails", () => {
     state.refetch = vi.fn();
     const titleNow = () => {
-      render(<RemovalTemplateSetupDialog hasDefaultTemplate isOpen facilityId={ACTIVE} step="template" onClose={vi.fn()} />);
+      render(<RemovalTemplateSetupDialog hasCurrentTemplate isOpen facilityId={ACTIVE} step="template" onClose={vi.fn()} />);
       const text = screen.getByRole("dialog", { name: "Change Removal template" }).textContent;
       cleanup();
       return text;
@@ -65,17 +65,17 @@ describe("RemovalTemplateSetupDialog", () => {
 
   it("ignores a step it does not know and reads nothing while closed", () => {
     state.refetch = vi.fn();
-    render(<RemovalTemplateSetupDialog hasDefaultTemplate={false} isOpen={false} facilityId={ACTIVE} step="bogus" onClose={vi.fn()} />);
+    render(<RemovalTemplateSetupDialog hasCurrentTemplate={false} isOpen={false} facilityId={ACTIVE} step="bogus" onClose={vi.fn()} />);
     expect(state.read).toEqual([]);
     cleanup();
-    render(<RemovalTemplateSetupDialog hasDefaultTemplate={false} isOpen facilityId={ACTIVE} step="bogus" onClose={vi.fn()} />);
+    render(<RemovalTemplateSetupDialog hasCurrentTemplate={false} isOpen facilityId={ACTIVE} step="bogus" onClose={vi.fn()} />);
     expect(screen.getByText(`flow for ${ACTIVE} no template no step default`)).toBeTruthy();
   });
 
   it("shows a skeleton while loading", () => {
     state.refetch = vi.fn();
     state.loading = true;
-    render(<RemovalTemplateSetupDialog hasDefaultTemplate={false} isOpen facilityId={ACTIVE} onClose={vi.fn()} />);
+    render(<RemovalTemplateSetupDialog hasCurrentTemplate={false} isOpen facilityId={ACTIVE} onClose={vi.fn()} />);
     expect(screen.getByLabelText("Loading Removal templates")).toBeTruthy();
   });
 
@@ -83,7 +83,7 @@ describe("RemovalTemplateSetupDialog", () => {
     state.refetch = vi.fn();
     state.error = true;
     const onClose = vi.fn();
-    render(<RemovalTemplateSetupDialog hasDefaultTemplate={false} isOpen facilityId={ACTIVE} onClose={onClose} />);
+    render(<RemovalTemplateSetupDialog hasCurrentTemplate={false} isOpen facilityId={ACTIVE} onClose={onClose} />);
     expect(screen.getByText("The Removal templates could not be read from Isometric.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(state.refetch).toHaveBeenCalled();
@@ -95,7 +95,7 @@ describe("RemovalTemplateSetupDialog", () => {
     state.refetch = vi.fn();
     state.pending = true;
     const onClose = vi.fn();
-    render(<RemovalTemplateSetupDialog hasDefaultTemplate={false} isOpen facilityId={ACTIVE} onClose={onClose} />);
+    render(<RemovalTemplateSetupDialog hasCurrentTemplate={false} isOpen facilityId={ACTIVE} onClose={onClose} />);
     expect((screen.getByRole("button", { name: "Close" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(onClose).not.toHaveBeenCalled();

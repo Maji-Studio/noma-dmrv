@@ -86,7 +86,6 @@ const ACTIVITY_COVERAGE = {
     syncCreditBatchEntryDates: { status: "direct" },
   },
   "credit-batch-removal-template.ts": {
-    switchCreditBatchRemovalTemplate: { status: "direct" },
     switchCreditBatchRemovalTemplateInTransaction: { status: "direct" },
   },
   "certifier-project-credit-batches.ts": {
@@ -181,7 +180,7 @@ const ACTIVITY_COVERAGE = {
     upsertCertifierProject: { status: "exempt", reason: "Registry project mappings are reference configuration without an entity activity type." },
     attachReportDocument: { status: "direct" },
     updateFacilityEmissionConfig: { status: "exempt", reason: "Facility energy configuration has no entity activity type." },
-    updateFacilityDefaultRemovalTemplateInTransaction: { status: "exempt", reason: "The facility default Removal template is reference configuration without an entity activity type." },
+    updateFacilityRemovalTemplateInTransaction: { status: "exempt", reason: "The facility default Removal template is reference configuration without an entity activity type." },
     deleteCertifierProject: { status: "exempt", reason: "Registry project mapping deletion changes reference configuration without an entity activity type." },
   },
   "ghg-statement-reports.ts": {

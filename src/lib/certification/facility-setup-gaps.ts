@@ -21,7 +21,7 @@ export type FacilitySetupGap =
   | { kind: "project_link" }
   | { kind: "credentials" }
   | { kind: "external_facility_id" }
-  | { kind: "default_template" }
+  | { kind: "removal_template" }
   | { kind: "template_resolution"; templateId: string }
   | { kind: "blueprint_keys"; keys: string[] }
   | { kind: "template_unbindable"; inputs: UnbindableTemplateInput[] };
@@ -30,10 +30,10 @@ export interface FacilitySetupGapFacts {
   hasOrgCredentials: boolean;
   /** The facility → Isometric project mapping row, or null when unlinked. */
   mapping: { externalFacilityId?: string | null } | null;
-  /** The cleanly-resolved default removal template, or null. */
-  defaultTemplate: unknown | null;
-  /** Set when a configured default template id no longer resolves remotely. */
-  missingDefaultTemplateId: string | null;
+  /** The cleanly-resolved current Removal template, or null. */
+  currentTemplate: unknown | null;
+  /** Set when a configured template id no longer resolves remotely. */
+  missingCurrentTemplateId: string | null;
   unresolvedBlueprintKeys: string[];
   unbindableTemplateInputs: UnbindableTemplateInput[];
 }
@@ -69,16 +69,16 @@ export function deriveFacilityConnectionGaps(
   return [];
 }
 
-/** Settings advice includes the default used when creating future batches. */
+/** Settings advice includes the template used for this facility. */
 export function deriveFacilitySetupGaps(facts: FacilitySetupGapFacts): FacilitySetupGap[] {
   const connectionGaps = deriveFacilityConnectionGaps(facts);
   if (connectionGaps.length) return connectionGaps;
-  if (facts.missingDefaultTemplateId) {
+  if (facts.missingCurrentTemplateId) {
     return [
-      { kind: "template_resolution", templateId: facts.missingDefaultTemplateId },
+      { kind: "template_resolution", templateId: facts.missingCurrentTemplateId },
     ];
   }
-  if (!facts.defaultTemplate) return [{ kind: "default_template" }];
+  if (!facts.currentTemplate) return [{ kind: "removal_template" }];
   if (facts.unresolvedBlueprintKeys.length > 0) {
     return [{ kind: "blueprint_keys", keys: facts.unresolvedBlueprintKeys }];
   }

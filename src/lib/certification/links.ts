@@ -21,8 +21,6 @@ export const DECIDE_LINES_LINK_LABEL = "Decide components";
 export const REMOVAL_TEMPLATES_TEMPLATE_PARAM = "template";
 /** Opens the Removal template setup dialog on the Removal templates pane; its value is the starting step. */
 export const REMOVAL_TEMPLATES_SETUP_PARAM = "setup";
-/** "false" starts the dialog with Make default off, so decisions can be made first. */
-export const REMOVAL_TEMPLATES_MAKE_DEFAULT_PARAM = "makeDefault";
 
 /**
  * Settings, Registry: which registry, its organization-wide keys, Source
@@ -60,17 +58,14 @@ export function removalTemplatesSettingsHref(
 
 /**
  * The Removal templates pane with the setup dialog open. The step defaults to
- * the template list; `templateId` preselects a template and `makeDefault: false`
- * leaves Make default off (the credit batch "Decide components" links).
+ * the template list; `templateId` preselects a template.
  */
 export function removalTemplateSetupHref(
   facilityId: string,
-  { templateId, step = "template", makeDefault }: { templateId?: string; step?: "template" | "decisions" | "apply"; makeDefault?: boolean } = {},
+  { templateId, step = "template" }: { templateId?: string; step?: "template" | "decisions" | "apply" } = {},
 ): string {
   let href = `${withFacilityParam(SETTINGS_REMOVAL_TEMPLATES_HREF, facilityId)}&${REMOVAL_TEMPLATES_SETUP_PARAM}=${step}`;
   if (templateId) href += `&${REMOVAL_TEMPLATES_TEMPLATE_PARAM}=${encodeURIComponent(templateId)}`;
-  // Absent means Make default is on; the batch dialog sends "false" so decisions can be made first.
-  if (makeDefault === false) href += `&${REMOVAL_TEMPLATES_MAKE_DEFAULT_PARAM}=false`;
   return href;
 }
 
@@ -102,7 +97,6 @@ const FORWARDED_LEGACY_PARAMS = [
   "facility",
   REMOVAL_TEMPLATES_TEMPLATE_PARAM,
   REMOVAL_TEMPLATES_SETUP_PARAM,
-  REMOVAL_TEMPLATES_MAKE_DEFAULT_PARAM,
 ] as const;
 
 function firstValue(value: string | string[] | undefined): string | undefined {

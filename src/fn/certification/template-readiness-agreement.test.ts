@@ -130,7 +130,7 @@ it.each([
   expect(facts.lineSourceProblems.length > 0).toBe(verdict.toDecideCount > 0);
   const resolved = resolveRemovalTemplate([{ id: "batch", removalTemplateId: template.id }], facility);
   expect(resolved.templateBlockers).toEqual([{ code, message: REMOVAL_TEMPLATE_BLOCKERS[code] }]);
-  const switchReadiness = templateReadiness({ ...entry, isDefault: false, isPinned: true });
+  const switchReadiness = templateReadiness({ ...entry, isCurrent: false, isPinned: true });
   expect(switchReadiness).toEqual(code === "missingFixedDatapoint"
     ? { ready: false, reason: REMOVAL_TEMPLATE_BLOCKERS[code] }
     : { ready: false, reason: "2 components to decide", toDecide: verdict.toDecideCount });
@@ -138,7 +138,7 @@ it.each([
   const check = health.checks.find((check) => check.key === key)!;
   expect(check).toMatchObject({
     status: "unmet", detail: REMOVAL_TEMPLATE_BLOCKERS[code],
-    fixTarget: code === "missingFixedDatapoint" ? "creditBatchTemplate" : "templateLineReview",
+    fixTarget: code === "missingFixedDatapoint" ? "templateSetup" : "templateLineReview",
   });
   if (code === "missingFixedDatapoint") expect(check.detail).toBe(switchReadiness.reason);
   else expect(check.unmetLabel).toBe(switchReadiness.reason);
@@ -162,7 +162,7 @@ it.each([DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR, UNSAMPLED_SEQUESTRATION_B
     template.groups[0].components[0].blueprint_key = blueprintKey;
     const entry = removalTemplateReviewEntry({ templateId: template.id, ...facility.templatesById[template.id]! });
     expect(removalTemplateVerdict(entry).blocker).toBe("unsupportedSequestration");
-    expect(templateReadiness({ ...entry, isDefault: false, isPinned: true })).toEqual({
+    expect(templateReadiness({ ...entry, isCurrent: false, isPinned: true })).toEqual({
       ready: false, reason: REMOVAL_TEMPLATE_BLOCKERS.unsupportedSequestration,
     });
     expect(resolveRemovalTemplate([{ removalTemplateId: template.id }], facility).templateBlockers).toEqual([]);

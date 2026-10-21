@@ -1,12 +1,7 @@
-import { throwActionError } from "@/lib/stale-version";
-import { patchArrayListCachesByPrefixWithSavedRow } from "./list-cache-utils";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { loadRemovalTemplateReviewEntry, loadRemovalTemplateReview, switchCreditBatchRemovalTemplate } from "@/fn/certification/removal-template-review";
-import type { SwitchCreditBatchRemovalTemplateInput } from "@/schemas/removal-template-review";
+import { useQuery } from "@tanstack/react-query";
+import { loadRemovalTemplateReviewEntry, loadRemovalTemplateReview } from "@/fn/certification/removal-template-review";
 import { unwrap } from "./types";
 import { certificationKeys } from "./use-certification";
-import { creditBatchKeys } from "./credit-batch-query-keys";
-import { activityKeys } from "./activity-query-keys";
 
 const REVIEW_STALE_MS = 60_000;
 
@@ -31,25 +26,5 @@ export function useRemovalTemplateReviewEntry(facilityId: string, removalTemplat
     queryFn: async () => unwrap(await loadRemovalTemplateReviewEntry({ facilityId, removalTemplateId })),
     enabled: enabled && !!facilityId && !!removalTemplateId,
     staleTime: REVIEW_STALE_MS,
-  });
-}
-
-export function useSwitchCreditBatchRemovalTemplate() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: SwitchCreditBatchRemovalTemplateInput) => {
-      const result = await switchCreditBatchRemovalTemplate(input);
-      if (!result.success) throwActionError(result);
-      return result.data;
-    },
-    onSuccess: async (batch) => {
-      void client.invalidateQueries({ queryKey: activityKeys.all });
-      patchArrayListCachesByPrefixWithSavedRow(client, creditBatchKeys.lists(), batch);
-      client.setQueryData(creditBatchKeys.detail(batch.id), (old: object | undefined) => old ? { ...old, ...batch } : old);
-      await Promise.all([
-        client.invalidateQueries({ queryKey: certificationKeys.all }),
-        client.invalidateQueries({ queryKey: creditBatchKeys.all }),
-      ]);
-    },
   });
 }

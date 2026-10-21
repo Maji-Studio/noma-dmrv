@@ -9,11 +9,6 @@ it("opens the Removal templates pane with the setup dialog, encoding facility, t
   expect(removalTemplatesSettingsHref("facility", "template")).toBe("/settings/removal-templates?facility=facility&template=template");
 });
 
-it("sends makeDefault=false only when asked", () => {
-  expect(removalTemplateSetupHref("f", { makeDefault: false })).toContain("makeDefault=false");
-  expect(removalTemplateSetupHref("f", { makeDefault: true })).not.toContain("makeDefault");
-});
-
 it("keeps an old setup deep link opening the dialog", () => {
   const target = legacyCertificationSettingsRedirect({
     section: "removal-templates",
@@ -22,5 +17,5 @@ it("keeps an old setup deep link opening the dialog", () => {
     template: "t",
     makeDefault: "false",
   });
-  expect(target).toBe("/settings/removal-templates?facility=f&template=t&setup=decisions&makeDefault=false");
+  expect(target).toBe("/settings/removal-templates?facility=f&template=t&setup=decisions");
 });
