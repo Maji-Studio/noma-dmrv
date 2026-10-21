@@ -2,31 +2,50 @@
  * RemovalTemplateSummaryCard: the "Removal templates" pane of Certification
  * settings. One card for the template this facility's credit batches use:
  * status, where it is used, how many components were decided and by whom, and
- * how many take an emissions entry. Owners and Admins get Review decisions and
- * Change template, both leading to the setup page; Members read the same card
- * without buttons. Decisions are stored per organization and template, so the
- * caption says they reach every facility using it.
+ * how many take an emissions entry. Admins get Set up template, Review
+ * decisions and Change template, all opening the setup dialog; Members read the
+ * same card without buttons and a setup link does not open the dialog for them.
+ * Decisions are stored per organization and template, so the caption says they
+ * reach every facility using it.
  *
  * Read live from Isometric through the setup read, which stores nothing.
  */
 "use client";
 
 import Link from "next/link";
+import { parseAsString, useQueryStates } from "nuqs";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
-import { certificationSettingsHref, removalTemplateSetupHref } from "@/lib/certification/links";
-import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
+import {
+  CERTIFICATION_SETTINGS_MAKE_DEFAULT_PARAM,
+  CERTIFICATION_SETTINGS_SETUP_PARAM,
+  CERTIFICATION_SETTINGS_TEMPLATE_PARAM,
+  certificationSettingsHref,
+} from "@/lib/certification/links";
+import { formatCount } from "@/lib/copy-utils";
 import { SETUP_NOT_LINKED_MESSAGE } from "@/lib/certification/removal-template-blockers";
+import { RemovalTemplateSetupDialog } from "./removal-template-setup/removal-template-setup-dialog";
 import { blockedCopy, blockedReasonLine, storedEntryCount } from "@/lib/certification/removal-template-setup-copy";
 
 const EMPTY_ICON_SIZE = 32;
+/** The dialog is open while `setup` is in the URL, so a link and a button open the same thing. */
+const SETUP_PARAMS = {
+  [CERTIFICATION_SETTINGS_SETUP_PARAM]: parseAsString,
+  [CERTIFICATION_SETTINGS_TEMPLATE_PARAM]: parseAsString,
+  [CERTIFICATION_SETTINGS_MAKE_DEFAULT_PARAM]: parseAsString,
+};
+const CLOSED_SETUP = {
+  [CERTIFICATION_SETTINGS_SETUP_PARAM]: null,
+  [CERTIFICATION_SETTINGS_TEMPLATE_PARAM]: null,
+  [CERTIFICATION_SETTINGS_MAKE_DEFAULT_PARAM]: null,
+};
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -38,6 +57,33 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 export function RemovalTemplateSummaryCard({ facilityId }: { facilityId: string }) {
+  const query = useRemovalTemplateSetup(facilityId);
+  const [request, setRequest] = useQueryStates(SETUP_PARAMS, { shallow: true, history: "replace" });
+  const openSetup = (step: "template" | "decisions", templateId: string | null) => void setRequest({
+    ...CLOSED_SETUP,
+    [CERTIFICATION_SETTINGS_SETUP_PARAM]: step,
+    [CERTIFICATION_SETTINGS_TEMPLATE_PARAM]: templateId,
+  });
+  // The dialog sits beside the card, not inside a branch, so it survives the card changing state after Apply.
+  // Members never mount it, so a setup link only shows them the card.
+  return (
+    <>
+      <SummaryBody facilityId={facilityId} onOpenSetup={openSetup} />
+      {query.data?.viewerCanManage && (
+        <RemovalTemplateSetupDialog
+          isOpen={!!request.setup}
+          facilityId={facilityId}
+          templateId={request.template}
+          step={request.setup}
+          makeDefault={request.makeDefault !== "false"}
+          onClose={() => void setRequest(CLOSED_SETUP)}
+        />
+      )}
+    </>
+  );
+}
+
+function SummaryBody({ facilityId, onOpenSetup }: { facilityId: string; onOpenSetup: (step: "template" | "decisions", templateId: string | null) => void }) {
   const query = useRemovalTemplateSetup(facilityId);
   const batches = useCreditBatches(facilityId);
   const retry = () => void query.refetch();
@@ -71,7 +117,7 @@ export function RemovalTemplateSummaryCard({ facilityId }: { facilityId: string 
   const defaultTemplate = data.fitting.find((template) => template.id === defaultId);
   const unfit = data.notFitting.find((template) => template.id === defaultId);
   // Review keeps the template; Change starts with nothing picked, like a first setup.
-  const setupHref = (step: "template" | "decisions") => removalTemplateSetupHref(facilityId, { templateId: step === "decisions" ? defaultTemplate?.id : undefined, step });
+  const openSetup = (step: "template" | "decisions") => onOpenSetup(step, step === "decisions" ? (defaultTemplate?.id ?? null) : null);
 
   if (!defaultId) {
     return (
@@ -83,7 +129,7 @@ export function RemovalTemplateSummaryCard({ facilityId }: { facilityId: string 
           : "Credit batches need a template before a Removal can be sent."}
         padding="sm"
         action={canManage ? (
-          <Link href={removalTemplateSetupHref(facilityId)} className={buttonVariants({ variant: "primary" })}>Set up template</Link>
+          <Button variant="primary" onClick={() => openSetup("template")}>Set up template</Button>
         ) : undefined}
       />
     );
@@ -145,9 +191,9 @@ export function RemovalTemplateSummaryCard({ facilityId }: { facilityId: string 
       {canManage && (
         <div className="flex flex-wrap items-center gap-12 border-t border-[var(--color-border-tertiary)] px-20 py-12">
           {defaultTemplate && !defaultTemplate.blockedReason && (
-            <Link href={setupHref("decisions")} className={buttonVariants({ size: "small", variant: "default" })}>Review decisions</Link>
+            <Button size="small" variant="default" onClick={() => openSetup("decisions")}>Review decisions</Button>
           )}
-          <Link href={setupHref("template")} className={buttonVariants({ size: "small", variant: "noOutline" })}>Change template</Link>
+          <Button size="small" variant="noOutline" onClick={() => openSetup("template")}>Change template</Button>
         </div>
       )}
     </article>

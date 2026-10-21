@@ -531,11 +531,13 @@ operators now confirm empty components as a **Recorded zero** instead.
 The Isometric template (credit type REMOVAL) a **Removal** is built from. It
 lists the components Isometric expects, in groups. Each facility has one
 default Removal template; a new **credit batch** starts on it, and an Admin can
-switch a batch to another. Only templates that fit the facility are offered. A
-template is set up on the Removal template setup page (Settings, Removal
-templates, "Set up template"): pick the template, decide what noma cannot,
-apply. Admins set it up; Members read the summary card. Component decisions are
-stored per organization and template, so they apply to every facility using it.
+switch a batch to another. A template is set up in the Removal template setup
+dialog (Settings, Removal templates, "Set up template"): pick the template,
+decide what noma cannot, apply. It lists every Removal template in the project;
+those that do not fit the facility are marked "Does not fit" and cannot be
+picked. Admins set up templates; Members read the summary card. Component
+decisions are stored per organization and template, so they apply to every
+facility using it.
 _Avoid_: GHG entry template (the registry's API name), template pin, active
 template.
 
@@ -555,11 +557,11 @@ The components without a saved decision, always shown with their count
 ("3 components to decide"). A Removal template with components to decide
 blocks the Removals of every credit batch on it. A component added to a template
 after setup reopens as "1 to decide". The link to settle them reads "Decide
-components": it opens the Decisions step of Removal template setup for that
+components": it opens the Decisions step of the Removal template setup dialog for that
 template where the page knows it (the credit batch page and the switch dialog),
 and Removal templates in Settings otherwise. A decided component noma cannot
 fill links "Open Removal templates" (the Settings pane) instead.
-noma decides what it can; the setup page asks only the rest. In the New Removal checks
+noma decides what it can; the setup dialog asks only the rest. In the New Removal checks
 this is the **Components decided** check; the batch's own template choice is
 the **Template set** check.
 _Avoid_: lines to decide, needs review, unresolved, template review.

@@ -30,7 +30,7 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { conflictCode, type ConflictRef } from "@/lib/conflict-ref";
-import { DomainError } from "@/lib/domain-errors";
+import { DomainError, type DomainIssue } from "@/lib/domain-errors";
 import { formatDateTime, formatMassKg } from "@/lib/format-utils";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { STOCK_CONFLICT_ENTITY } from "@/lib/stock-conflict-entities";
@@ -190,6 +190,7 @@ async function listLaneWithdrawals(
  * Refuse the transaction when any of these bins now derives a negative wet
  * feedstock lane. The conflict names the offending bin, and the blockers
  * name its withdrawals for the operator to review.
+ * Callers can point the issue at the input responsible for that bin's shortfall.
  * A reduction that lands on exactly zero passes.
  */
 export async function assertFeedstockBinLanesNotNegative(
@@ -197,6 +198,7 @@ export async function assertFeedstockBinLanesNotNegative(
   tx: DbTransaction,
   storageLocationIds: ReadonlyArray<string | null | undefined>,
   write: FeedstockStockWrite,
+  issuePath: (storageLocationId: string) => DomainIssue["path"] = () => ["storageLocationId"],
 ): Promise<void> {
   requireOrgScope(ctx);
   const binIds = [
@@ -219,12 +221,13 @@ export async function assertFeedstockBinLanesNotNegative(
     if (isNegativeStock(stock.feedstockStockWetKg)) {
       const blockers = await listLaneWithdrawals(ctx, tx, bin.id);
       const message = negativeLaneMessage(write, bin.code, Math.abs(stock.feedstockStockWetKg));
+      const issueMessage = `Bin ${bin.code} would go ${formatMassKg(Math.abs(stock.feedstockStockWetKg))} below zero.`;
       // Compare the proposed intake supply with existing withdrawals. Movement
       // adjustments contribute to supply or demand according to their net sign.
       throw new DomainError("insufficient_stock", message, {
         conflict: { entity: CONFLICT_ENTITY, id: bin.id, code: conflictCode(bin.code) },
         blockers,
-        issues: [{ path: ["storageLocationId"], code: "insufficient_stock", message, meta: {
+        issues: [{ path: issuePath(bin.id), code: "insufficient_stock", message: issueMessage, meta: {
           storageLocationId: bin.id,
           availableWetKg: stock.feedstockIntakeWetKg + Math.max(stock.feedstockMovementDeltaKg, 0),
           requestedWetKg: stock.feedstockConsumedWetKg + Math.max(-stock.feedstockMovementDeltaKg, 0),

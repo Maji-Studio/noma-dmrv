@@ -14,6 +14,7 @@ import {
   conflictCode,
   type ConflictRef,
 } from "@/lib/conflict-ref";
+import { ActionError, type ActionFailure } from "@/lib/action-error";
 
 /**
  * Discriminator on `ActionResult["conflict"].code` for a refused stale save.
@@ -35,23 +36,16 @@ export function staleDeleteMessage(recordLabel: string): string {
 /** Structured reference to the record whose version moved on. */
 export type StaleVersionConflict = ConflictRef;
 
-/** Failure half of `ActionResult`, narrowed to what the conflict check needs. */
-interface ConflictCarryingFailure {
-  error: string;
-  conflict?: ConflictRef;
-  blockers?: ConflictRef[];
-}
-
 /**
  * Thrown by a mutation hook when the server refused a save because the record
  * changed underneath the open form. Distinct from a plain `Error` so the form
  * can keep the draft instead of treating it as an ordinary save failure.
  */
-export class StaleVersionError extends Error {
+export class StaleVersionError extends ActionError {
   readonly conflict: StaleVersionConflict;
 
-  constructor(message: string, conflict: StaleVersionConflict) {
-    super(message);
+  constructor(message: string, conflict: StaleVersionConflict, details: Omit<ActionFailure, "error" | "conflict"> = {}) {
+    super({ ...details, error: message, conflict });
     this.name = "StaleVersionError";
     this.conflict = conflict;
   }
@@ -66,7 +60,7 @@ export function getStaleVersionConflict(
 
 /** True when a failed `ActionResult` was refused by the version check. */
 export function isStaleVersionFailure(
-  result: ConflictCarryingFailure,
+  result: ActionFailure,
 ): boolean {
   return result.conflict?.code === STALE_VERSION_CONFLICT_CODE;
 }
@@ -74,20 +68,19 @@ export function isStaleVersionFailure(
 /**
  * Throw a failed action result from a mutation hook, preserving a stale-version
  * refusal as `StaleVersionError` and any other conflicting record as
- * `ConflictError` (with its blockers). Anything else stays a plain `Error`, so
- * the hooks that already threw one behave exactly as before.
+ * `ConflictError`. Every branch carries the full refusal as an `ActionError`.
  */
-export function throwActionError(result: ConflictCarryingFailure): never {
+export function throwActionError(result: ActionFailure): never {
   if (result.conflict && isStaleVersionFailure(result)) {
-    throw new StaleVersionError(result.error, result.conflict);
+    throw new StaleVersionError(result.error, result.conflict, result);
   }
   if (result.conflict) {
     throw new ConflictError(result.error, {
+      ...result,
       conflict: result.conflict,
-      blockers: result.blockers,
     });
   }
-  throw new Error(result.error);
+  throw new ActionError(result);
 }
 
 /**

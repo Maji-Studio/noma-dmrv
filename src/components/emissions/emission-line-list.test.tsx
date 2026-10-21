@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { errorBox } from "../../../tests/helpers/error-box-text";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -259,7 +260,7 @@ describe("EmissionLineList", () => {
     await waitFor(() =>
       expect(mocks.setComment).toHaveBeenCalledWith(expect.objectContaining({ body: "My draft", id: "c1", expectedVersion: 3 })),
     );
-    expect(await screen.findByText(STALE_VERSION_MESSAGE)).toBeTruthy();
+    expect(await screen.findByText(errorBox(STALE_VERSION_MESSAGE))).toBeTruthy();
     rerender(list({ ...COMMENT, id: "c2", body: "Their words", version: 2 }));
     expect(screen.getByRole("textbox", { name: "Comment" })).toHaveProperty("value", "My draft");
   });
@@ -284,7 +285,7 @@ describe("EmissionLineList", () => {
     fireEvent.click(screen.getByRole("button", { name: "Actions for the comment" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Delete comment" }));
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
-    expect(await screen.findByText(STALE_VERSION_MESSAGE)).toBeTruthy();
+    expect(await screen.findByText(errorBox(STALE_VERSION_MESSAGE))).toBeTruthy();
     rerender(list({ ...COMMENT, body: "Their words", version: 4 }));
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(mocks.deleteComment).toHaveBeenCalledTimes(2));

@@ -1,28 +1,25 @@
 /**
- * The setup flow once the template list is loaded: a step rail on the left,
- * the step in the middle, a What happens aside. Nothing is stored until Apply.
- * Owner and Admin only; the route redirects Members to the Settings summary.
+ * The setup flow once the template list is loaded: a compact step rail over the
+ * step, and a footer with Next, Back and Cancel. Nothing is stored until Apply.
+ * Admin only; the Settings card never opens the dialog for a Member.
  */
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
-import { FormActions } from "@/components/forms";
+import { useState } from "react";
+import { reserveStickyFooterSpace } from "@/components/forms/form-actions";
+import { ServerError } from "@/components/forms/server-error";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { useToast } from "@/components/ui/toast";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
-import { useApplyRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
-import { certificationRemovalTemplatesHref, certificationSettingsHref } from "@/lib/certification/links";
-import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
+import type { useApplyRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
+import { certificationSettingsHref } from "@/lib/certification/links";
 import { getStaleVersionConflict } from "@/lib/stale-version";
 import {
   type Answers,
-  answerSummary,
   decisionQuestion,
   notOfferedReason,
-  entryCount,
   openDecisions,
   startState,
   toDecideLabel,
@@ -32,6 +29,14 @@ import { ApplyStep, applyLabel, DecisionsStep, TemplateStep, type SetupData } fr
 
 const APPLY_BUTTON_CLASS = "h-auto min-h-[40px] whitespace-normal py-8 text-left";
 const STEP_TITLES = ["Pick the template", "Decide what noma cannot", "Apply the setup"];
+const STEPS: StepFlowStep[] = [
+  { key: "template", label: "Template" },
+  { key: "decisions", label: "Decisions" },
+  { key: "apply", label: "Apply" },
+];
+const LAST_STEP = STEPS.length - 1;
+/** Horizontal gutter of the dialog body and its footer. */
+const GUTTER_CLASS = "px-20";
 
 export interface RemovalTemplateSetupFlowProps {
   data: SetupData;
@@ -39,19 +44,21 @@ export interface RemovalTemplateSetupFlowProps {
   templateId: string | null;
   step: SetupStepKey | null;
   makeDefault: boolean;
-  /** Reads the template list again; the page then resets the flow. */
+  /** Reads the template list again; the dialog then resets the flow. */
   onReload: () => void;
+  /** The Apply mutation, owned by the dialog so it can refuse to close while a save is pending. */
+  apply: ReturnType<typeof useApplyRemovalTemplateSetup>;
+  /** Closes the dialog, after Apply or on Cancel. */
+  onClose: () => void;
 }
 
 interface ApplyError { message: string; stale: boolean }
 
-export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templateId: requestedTemplate, step: requestedStep, makeDefault: initialMakeDefault, onReload }: RemovalTemplateSetupFlowProps) {
+export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templateId: requestedTemplate, step: requestedStep, makeDefault: initialMakeDefault, onReload, apply, onClose }: RemovalTemplateSetupFlowProps) {
   // The draft keeps the read it started from (fingerprints, batch versions) until an explicit reload remounts the flow.
   const [data] = useState(loadedData);
-  const router = useRouter();
   const toast = useToast();
   const latched = useLatchedSubmit();
-  const apply = useApplyRemovalTemplateSetup();
   const start = startState({ fitting: data.fitting, templateId: requestedTemplate, step: requestedStep });
   const [templateId, setTemplateId] = useState(start.templateId);
   const [step, setStep] = useState(start.stepIndex);
@@ -71,12 +78,6 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
   const allBlocked = data.fitting.every((candidate) => candidate.blockedReason);
   const effectiveMakeDefault = makeDefault && template?.id !== data.defaultRemovalTemplateId;
   const batchCount = setBatches ? data.batchesWithoutTemplate.length : 0;
-
-  const steps: StepFlowStep[] = [
-    { key: "template", label: "Template", description: data.fitting.length === 1 ? "Only one fits" : (template?.name ?? "Pick one") },
-    { key: "decisions", label: "Decisions", description: !template ? "After the template" : decisionCount === 0 ? "Nothing to decide" : `${decisionCount - open.length} of ${decisionCount} decided` },
-    { key: "apply", label: "Apply", description: "Default and credit batches" },
-  ];
 
   const go = (next: number) => {
     setStep(next);
@@ -112,7 +113,7 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
         batches: setBatches ? data.batchesWithoutTemplate.map(({ id, version }) => ({ id, expectedVersion: version })) : [],
       });
       toast.success(`${template.name} is set up.`);
-      router.push(certificationRemovalTemplatesHref(facilityId));
+      onClose();
     } catch (caught) {
       setError({
         message: caught instanceof Error ? caught.message : "The template was not set up. Try again.",
@@ -120,6 +121,8 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
       });
     }
   };
+
+  const back = () => go(step === LAST_STEP && decisionCount === 0 ? 0 : step - 1);
 
   const next = async () => {
     if (step === 0) {
@@ -132,46 +135,14 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
   };
 
   const applyLatched = latched(async () => submit());
+  const decided = decisionCount - open.length;
 
   return (
-    <div className="grid gap-24 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-      <section className="border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)] p-20 sm:p-24">
-        <StepFlow
-          steps={steps}
-          current={step}
-          furthest={furthest}
-          onNavigate={go}
-          orientation="vertical"
-          footer={
-            <div className="flex flex-col gap-16">
-              {allBlocked && step === 0 && (
-                <Notice tone="warning">
-                  {data.fitting.length === 0 ? "No template can be set up yet." : data.fitting.length === 1 ? "This template cannot be set up yet." : "None of these templates can be set up yet."}
-                  {data.fitting.length > 0 && " Fix what each card says in Isometric, then come back."}
-                </Notice>
-              )}
-              {showMissing && step === 0 && !allBlocked && <Notice tone="error">Pick a template to continue.</Notice>}
-              {showMissing && step === 1 && open.length > 0 && (
-                <Notice tone="error">{`${toDecideLabel(open.length)}: ${open.map((decision) => decisionQuestion(decision)).join(" ")}`}</Notice>
-              )}
-              <FormActions
-                sticky={false}
-                submitType="button"
-                submitLabel={step === 2 ? applyLabel(effectiveMakeDefault, batchCount) : "Continue"}
-                submittingLabel="Applying…"
-                submitClassName={step === 2 ? APPLY_BUTTON_CLASS : undefined}
-                isSubmitting={apply.isPending}
-                submitDisabled={allBlocked && step === 0}
-                // Only Apply writes, so only Apply is latched; the latch holds until the save settles.
-                onSubmitClick={() => (step === 2 ? void applyLatched({ preventDefault: () => undefined }) : void next())}
-                errorMessage={error?.message}
-                errorAction={error?.stale ? <Button size="small" variant="weak" onClick={onReload}>Reload template</Button> : undefined}
-              />
-            </div>
-          }
-        >
+    <>
+      <div className={`${GUTTER_CLASS} pb-16`}>
+        <StepFlow steps={STEPS} current={step} furthest={furthest} onNavigate={go} footer={null} className="gap-20">
           <div className="flex flex-col gap-20">
-            <h2 className="title-heading-3">{STEP_TITLES[step]}</h2>
+            <h3 className="sr-only">{STEP_TITLES[step]}</h3>
             {step === 0 && <TemplateStep data={data} templateId={templateId} onChange={pickTemplate} invalid={showMissing} notOffered={notOfferedReason(data, requestedTemplate)} certifierHref={certificationSettingsHref(facilityId)} />}
             {step === 1 && template && (
               <DecisionsStep
@@ -184,69 +155,58 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
               />
             )}
             {step === 2 && template && (
-              <div className="flex flex-col gap-20">
-                <ApplyStep
-                  data={data}
-                  template={template}
-                  answers={answers}
-                  overrides={overrides}
-                  makeDefault={effectiveMakeDefault}
-                  setBatches={setBatches}
-                  onMakeDefault={setMakeDefault}
-                  onSetBatches={setSetBatches}
-                  facilityId={facilityId}
-                  defaultName={defaultName}
-                />
-              </div>
+              <ApplyStep
+                data={data}
+                template={template}
+                answers={answers}
+                overrides={overrides}
+                makeDefault={effectiveMakeDefault}
+                setBatches={setBatches}
+                onMakeDefault={setMakeDefault}
+                onSetBatches={setSetBatches}
+                facilityId={facilityId}
+                defaultName={defaultName}
+              />
             )}
           </div>
         </StepFlow>
-      </section>
+      </div>
 
-      <aside aria-label="What happens" className="flex flex-col gap-16 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20 lg:sticky lg:top-24">
-        <h2 className="body-medium font-medium text-[var(--color-text-primary)]">What happens</h2>
-        <dl className="flex flex-col gap-12">
-          {whatHappensRows({ template, open: open.length, answers, overrides, makeDefault: effectiveMakeDefault, batchCount, defaultName }).map((row) => (
-            <div key={row.label} className="flex flex-col gap-2">
-              <dt className="body-caption text-[var(--color-text-tertiary)]">{row.label}</dt>
-              <dd className="body-small text-[var(--color-text-primary)]">{row.value}</dd>
-            </div>
-          ))}
-        </dl>
-      </aside>
-    </div>
+      <div ref={reserveStickyFooterSpace} className={`sticky bottom-0 z-10 flex flex-col gap-12 border-t border-[var(--color-border-secondary)] bg-[var(--color-background-white)] ${GUTTER_CLASS} py-12`}>
+        {allBlocked && step === 0 && (
+          <Notice tone="warning">
+            {data.fitting.length === 0 ? "No template can be set up yet." : data.fitting.length === 1 ? "This template cannot be set up yet." : "None of these templates can be set up yet."}
+            {data.fitting.length > 0 && " Fix what each card says in Isometric, then come back."}
+          </Notice>
+        )}
+        {showMissing && step === 0 && !allBlocked && <Notice tone="error">Pick a template to continue.</Notice>}
+        {showMissing && step === 1 && open.length > 0 && (
+          <Notice tone="error">{`${toDecideLabel(open.length)}: ${open.map((decision) => decisionQuestion(decision)).join(" ")}`}</Notice>
+        )}
+        <ServerError
+          message={error?.message}
+          action={error?.stale ? <Button size="small" variant="weak" onClick={onReload}>Reload template</Button> : undefined}
+        />
+        <div className="flex flex-wrap items-center justify-start gap-x-16 gap-y-12">
+          <div className="flex flex-wrap items-center gap-12">
+            <Button
+              variant="primary"
+              busy={apply.isPending}
+              disabled={allBlocked && step === 0}
+              className={step === LAST_STEP ? APPLY_BUTTON_CLASS : undefined}
+              // Only Apply writes, so only Apply is latched; the latch holds until the save settles.
+              onClick={() => (step === LAST_STEP ? void applyLatched({ preventDefault: () => undefined }) : void next())}
+            >
+              {apply.isPending ? "Applying…" : step === LAST_STEP ? applyLabel(effectiveMakeDefault, batchCount) : "Next"}
+            </Button>
+            {step > 0 && <Button variant="default" disabled={apply.isPending} onClick={back}>Back</Button>}
+            <Button variant="default" disabled={apply.isPending} onClick={onClose}>Cancel</Button>
+          </div>
+          {step === 1 && decisionCount > 0 && (
+            <span className="body-caption text-[var(--color-text-tertiary)]">{`${decided} of ${decisionCount} decided`}</span>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
-
-function whatHappensRows({ template, open, answers, overrides, makeDefault, batchCount, defaultName }: {
-  template: SetupData["fitting"][number] | null;
-  open: number;
-  answers: Answers;
-  overrides: Answers;
-  makeDefault: boolean;
-  batchCount: number;
-  defaultName: string | null;
-}): { label: string; value: ReactNode }[] {
-  if (!template) return [{ label: "Template", value: MISSING_VALUE.notSet }];
-  const { plan } = template;
-  const answered = plan.decisions.flatMap((decision) => {
-    const option = decision.options.find((candidate) => candidate.id === answers[decision.id]);
-    return option ? [answerSummary(decision, option)] : [];
-  });
-  return [
-    { label: "Default for this facility", value: makeDefault ? template.name : (defaultName ?? MISSING_VALUE.notSet) },
-    {
-      label: "Your decisions",
-      value: plan.decisions.length === 0 ? MISSING_VALUE.none : (
-        <span className="flex flex-col gap-4">
-          <span>{`${plan.decisions.length - open} of ${plan.decisions.length}`}</span>
-          {answered.map((line) => <span key={line} className="text-[var(--color-text-secondary)]">{line}</span>)}
-        </span>
-      ),
-    },
-    { label: "Decided by noma", value: formatCount(plan.defaults.length, "component") },
-    { label: "Credit batches set now", value: batchCount === 0 ? MISSING_VALUE.none : String(batchCount) },
-    { label: "Entries on each credit batch", value: formatCount(entryCount(plan, answers, overrides), "component") },
-  ];
-}
-

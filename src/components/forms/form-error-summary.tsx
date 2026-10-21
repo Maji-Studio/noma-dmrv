@@ -5,10 +5,16 @@
  * a link that focuses its field. The list follows the form's live errors, so
  * a fixed field drops out and the summary goes once nothing is left.
  * Rendered by FormActions for every form that passes `control`.
+ *
+ * It is also the form's one error box: a server message (the lock reason, or
+ * an issue for a field not on screen) shows as the detail under the count
+ * line, and the references the refusal named (`action`) come last. With no
+ * field errors it shows the message alone, and a refused save moves focus to
+ * it, since the operator may be far above the end of a long form.
  */
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   useFormState,
   type Control,
@@ -16,20 +22,25 @@ import {
   type FormState,
 } from "react-hook-form";
 import { Notice } from "@/components/ui/notice";
+import { ServerError } from "./server-error";
+import { pluralize } from "@/lib/copy-utils";
 import {
   focusField,
   locateInDirectory,
   type FieldDirectory,
 } from "./form-error-summary-dom";
 
-/**
- * A long list scrolls inside the sticky footer instead of pushing the
- * fields off a phone screen. `dvh` shrinks with the on-screen keyboard.
- */
-const LIST_HEIGHT_CLASS = "max-h-[20dvh] overflow-y-auto";
-
 /** Read once per refused save; the visible title keeps the live count. */
 const ANNOUNCEMENT = "Not saved. Fix the fields that show an error.";
+/** "Not saved. 1 field is locked. Undo that change to save." */
+function lockedAnnouncement(count: number): string {
+  return count === 1
+    ? "Not saved. 1 field is locked. Undo that change to save."
+    : `Not saved. ${count} ${pluralize(count, "field")} are locked. Undo those changes to save.`;
+}
+
+/** `setError` type of a lock refusal (see `useSaveRefusal`): worded apart from a fix. */
+export const LOCKED_ERROR_TYPE = "locked";
 
 export interface FieldErrorItem {
   path: string;
@@ -37,6 +48,8 @@ export interface FieldErrorItem {
   label: string | null;
   /** False when no control in the form matches the path: shown, not linked. */
   located: boolean;
+  /** A lock refusal: counted as locked, not as a field to fix. */
+  locked?: boolean;
 }
 
 function isLeafError(value: object): value is { message?: unknown; type?: unknown } {
@@ -54,13 +67,13 @@ function isLeafError(value: object): value is { message?: unknown; type?: unknow
  */
 export function listFieldErrors(
   formState: Pick<FormState<FieldValues>, "errors">,
-): Array<{ path: string; message: string }> {
-  const items: Array<{ path: string; message: string }> = [];
+): Array<{ path: string; message: string; locked?: boolean }> {
+  const items: Array<{ path: string; message: string; locked?: boolean }> = [];
   const visit = (value: unknown, path: string) => {
     if (typeof value !== "object" || value === null) return;
     if (isLeafError(value)) {
       if (typeof value.message === "string" && value.message.length > 0) {
-        items.push({ path, message: value.message });
+        items.push({ path, message: value.message, ...(value.type === LOCKED_ERROR_TYPE ? { locked: true } : {}) });
       }
       return;
     }
@@ -81,7 +94,7 @@ export function listFieldErrors(
  * only, without a link.
  */
 export function orderFieldErrors(
-  errors: Array<{ path: string; message: string }>,
+  errors: Array<{ path: string; message: string; locked?: boolean }>,
   directory: FieldDirectory | null,
 ): FieldErrorItem[] {
   return errors
@@ -105,31 +118,29 @@ function rowNumber(path: string): number | null {
   return index === undefined ? null : Number(index) + 1;
 }
 
-/** "Identifier is required" already names its field; no "Identifier:" lead. */
-function namesItsField(label: string, message: string): boolean {
-  return message.toLowerCase().startsWith(label.toLowerCase());
-}
-
 /**
- * "Share, row 2: Enter at most 100." A message that already names its field
- * keeps only the row: "Blend material is required (row 2)".
+ * The field's name only: "Share, row 2". The reason shows once, at the field.
+ * An entry with no label (a field the form never named) shows its message.
  */
 export function ItemText({ item }: { item: FieldErrorItem }) {
   const row = rowNumber(item.path);
-  if (!item.label || namesItsField(item.label, item.message)) {
+  if (!item.label) {
     return <>{row === null ? item.message : `${item.message} (row ${row})`}</>;
   }
-  return (
-    <>
-      <span className="font-medium">{row === null ? item.label : `${item.label}, row ${row}`}</span>
-      {": "}
-      {item.message}
-    </>
-  );
+  return <>{row === null ? item.label : `${item.label}, row ${row}`}</>;
 }
 
-function countLabel(count: number): string {
-  return `Not saved. Fix ${count} ${count === 1 ? "field" : "fields"}.`;
+/**
+ * "Not saved. Fix 2 fields." A lock is not a fix: "Not saved. 2 fields are
+ * locked." Both together: "Not saved. Fix 1 field. 2 fields are locked."
+ */
+function countLabel(items: readonly FieldErrorItem[]): string {
+  const locked = items.filter((item) => item.locked).length;
+  const toFix = items.length - locked;
+  const parts = ["Not saved."];
+  if (toFix > 0) parts.push(`Fix ${toFix} ${pluralize(toFix, "field")}.`);
+  if (locked > 0) parts.push(`${locked} ${pluralize(locked, "field")} ${locked === 1 ? "is" : "are"} locked.`);
+  return parts.join(" ");
 }
 
 interface FormErrorSummaryProps<
@@ -142,13 +153,17 @@ interface FormErrorSummaryProps<
   directory: FieldDirectory | null;
   /** The form element that holds the fields. */
   getForm: () => HTMLElement | null;
+  /** The refusal's server message: the detail under the count line. */
+  message?: string;
+  /** References the refusal named, last in the box. */
+  action?: ReactNode;
 }
 
 export function FormErrorSummary<
   TFieldValues extends FieldValues,
   TContext,
   TTransformed,
->({ control, directory, getForm }: FormErrorSummaryProps<TFieldValues, TContext, TTransformed>) {
+>({ control, directory, getForm, message, action }: FormErrorSummaryProps<TFieldValues, TContext, TTransformed>) {
   const formState = useFormState({ control });
   const { submitCount, isSubmitSuccessful } = formState;
   const items = orderFieldErrors(
@@ -158,6 +173,9 @@ export function FormErrorSummary<
   const visible = submitCount > 0 && !isSubmitSuccessful && items.length > 0;
   const firstPath = visible ? items[0].path : null;
   const focusedAttempt = useRef(submitCount);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const focusedBox = useRef(submitCount);
+  const messageOnly = !visible && Boolean(message);
 
   // Sanctioned useEffect: moving focus after a refused save is imperative DOM
   // work. Once per attempt, and after react-hook-form's own focus (it runs a
@@ -165,12 +183,29 @@ export function FormErrorSummary<
   // form gets focus, not the first one registered.
   useEffect(() => {
     if (firstPath === null || focusedAttempt.current === submitCount) return;
+    // One consumed attempt across both paths: a lock keeps its message, and
+    // once the field is put back the message-only box must not take focus.
+    focusedBox.current = submitCount;
     const timer = setTimeout(() => {
       focusedAttempt.current = submitCount;
       focusField(getForm(), firstPath);
     }, 0);
     return () => clearTimeout(timer);
   }, [firstPath, submitCount, getForm]);
+
+  // Sanctioned useEffect: a refusal with no field to focus (a whole-record
+  // lock) leaves the message in a box at the end of the form, possibly below
+  // the operator. Bring it into view and focus it, once per attempt. RHF
+  // counts the attempt as successful when no field error was filed, so the
+  // attempt count, not `isSubmitSuccessful`, tells a new attempt apart.
+  useEffect(() => {
+    if (!messageOnly || submitCount === 0 || focusedBox.current === submitCount) return;
+    focusedBox.current = submitCount;
+    const box = boxRef.current;
+    if (!box) return;
+    box.scrollIntoView({ block: "nearest" });
+    box.focus({ preventScroll: true });
+  }, [messageOnly, submitCount]);
 
   // The list changes as fields are fixed; announcing it whole on every
   // change would drown the field the user is editing. One line per refused
@@ -179,21 +214,36 @@ export function FormErrorSummary<
   // The attempt whose refusal listed fields. Adjusted while rendering, so a
   // save that failed without field errors (a thrown action) never claims
   // fields, and a list that empties and refills keeps the same line.
-  const [announcedAttempt, setAnnouncedAttempt] = useState(0);
-  if (visible && announcedAttempt !== submitCount) setAnnouncedAttempt(submitCount);
+  const [announced, setAnnounced] = useState({ attempt: 0, lockedOnly: 0 });
+  // Locked items when every listed item is a lock, else 0.
+  const lockedOnly = items.length > 0 && items.every((item) => item.locked) ? items.length : 0;
+  if (visible && announced.attempt !== submitCount) setAnnounced({ attempt: submitCount, lockedOnly });
+  const announcedAttempt = announced.attempt;
   const announcement = announcedAttempt === submitCount && submitCount > 0 && !isSubmitSuccessful ? (
     <p key={submitCount} role="alert" className="sr-only">
-      {ANNOUNCEMENT}
+      {announced.lockedOnly > 0 ? lockedAnnouncement(announced.lockedOnly) : ANNOUNCEMENT}
     </p>
   ) : null;
 
-  if (!visible) return announcement;
+  if (!visible) {
+    return (
+      <>
+        {announcement}
+        {message && (
+          <div ref={boxRef} tabIndex={-1}>
+            <ServerError message={message} action={action} />
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
     <>
       {announcement}
-      <Notice tone="error" live={false} title={countLabel(items.length)} data-form-error-summary="">
-        <ul className={`mt-4 flex flex-col ${LIST_HEIGHT_CLASS}`}>
+      <Notice tone="error" live={false} title={countLabel(items)} data-form-error-summary="">
+        {message && <p className="body-small">{" "}{message}</p>}
+        <ul className="mt-4 flex flex-col">
           {items.map((item) => (
             <li key={item.path}>
               {item.located ? (
@@ -211,11 +261,12 @@ export function FormErrorSummary<
                   </span>
                 </a>
               ) : (
-                <p className="flex min-h-44 items-center py-4">{item.message}</p>
+                <p className="body-small flex min-h-44 items-center py-4">{item.message}</p>
               )}
             </li>
           ))}
         </ul>
+        {action && <div className="mt-8">{action}</div>}
       </Notice>
     </>
   );
