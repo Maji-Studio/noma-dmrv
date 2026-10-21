@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Edge } from "@xyflow/react";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import { buildLineageRollup } from "@/lib/chain-of-custody/lineage-rollup";
+import { buildRollbackMassTotals } from "@/lib/chain-of-custody/lineage-mass-totals";
 import {
   RUN_ID,
   PRODUCT_ID,
@@ -9,8 +9,8 @@ import {
   SOURCE_EDGE_ID,
   SHIPMENT_EDGE_ID,
   APPLICATION_EDGE_ID,
-  rollupLineage,
-} from "@/lib/chain-of-custody/lineage-rollup.fixtures";
+  massTotalsLineage,
+} from "@/lib/chain-of-custody/lineage-mass-totals-test-fixtures";
 import { expandProductLineages } from "./expand-product-lineages";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
@@ -715,10 +715,10 @@ it("keeps both products sharing a run and one physical application in the graph"
 
 describe("roll-up rendering integration", () => {
   it("chooses source allocations for popups and applied totals for merged product cards", () => {
-    const data = rollupLineage(850, 820);
+    const data = massTotalsLineage(850, 820);
     data.sources![0].allocatedWetMassKg = 900;
     data.sources![0].allocatedDryMassKg = 833;
-    const totals = buildLineageRollup([data]);
+    const totals = buildRollbackMassTotals([data]);
     const sourceRow = { label: "Applied from batch", value: "Wet: 900 kg · Dry: 833 kg" };
     const appliedRow = { label: "Applied from batch", value: "Wet: 850 kg · Dry: 820 kg" };
     expect(buildLineageNodes(data).find(node => node.id === PRODUCT_ID)?.details).toEqual([sourceRow]);
@@ -735,7 +735,7 @@ describe("roll-up rendering integration", () => {
     [null, 90, "Wet: Not recorded · Dry: 90 kg"],
     [0, 0, "Wet: 0 kg · Dry: 0 kg"],
   ] as const)("renders product wet=%s and dry=%s without fabricating zero", (wet, dry, expected) => {
-    const data = rollupLineage(wet, dry);
+    const data = massTotalsLineage(wet, dry);
     expect(buildLineageNodes(data).find(node => node.id === PRODUCT_ID)?.details)
       .toContainEqual({ label: "Applied from batch", value: expected });
     expect(useBatchChainGraph([data], undefined).nodes.find(node => node.id === PRODUCT_ID)?.data.details)
@@ -743,7 +743,7 @@ describe("roll-up rendering integration", () => {
   });
 
   it.each([false, true])("looks up independently summed wet/dry values on merged edges (reversed: %s)", reversed => {
-    const data = [rollupLineage(120, null), rollupLineage(null, 90)];
+    const data = [massTotalsLineage(120, null), massTotalsLineage(null, 90)];
     const graph = useBatchChainGraph(reversed ? [...data].reverse() : data, undefined);
     expect(graph.edges.find(edge => edge.id === SOURCE_EDGE_ID)?.data?.kgLabel)
       .toBe("Wet: 120 kg · Dry: 90 kg");
@@ -757,8 +757,8 @@ describe("roll-up rendering integration", () => {
 });
 
 it("shows the full run allocation in the Carbon Viewer popup for two products", () => {
-  const data = rollupLineage(300, 290);
-  const second = rollupLineage(200, 190);
+  const data = massTotalsLineage(300, 290);
+  const second = massTotalsLineage(200, 190);
   data.application.biocharAppliedTons = 0.5;
   data.application.biocharAppliedDryTons = 0.48;
   data.products = [
@@ -766,7 +766,7 @@ it("shows the full run allocation in the Carbon Viewer popup for two products", 
     { product: { ...second.biocharProduct!, id: "product-2" }, sources: second.sources!, allocatedWetMassKg: 200, allocatedDryMassKg: 190 },
   ];
   const slices = expandProductLineages(data);
-  const totals = buildLineageRollup(slices);
+  const totals = buildRollbackMassTotals(slices);
   const expected = { label: "Applied from source", value: "Wet: 500 kg · Dry: 480 kg" };
   const popupNodes = buildLineageNodes(data);
   expect(popupNodes.filter(node => node.id === RUN_ID)).toHaveLength(1);
@@ -779,7 +779,7 @@ it("shows the full run allocation in the Carbon Viewer popup for two products", 
 });
 
 it("restores the application's 200.2 kg rounding boundary while retaining native edge floats", () => {
-  const graph = useBatchChainGraph([rollupLineage(100.002, 100.002), rollupLineage(100.148, 100.148)], undefined);
+  const graph = useBatchChainGraph([massTotalsLineage(100.002, 100.002), massTotalsLineage(100.148, 100.148)], undefined);
   expect(graph.nodes.find(node => node.id === APPLICATION_ID)?.data.details)
     .toContainEqual({ label: "Biochar applied", value: "Wet: 200.2 kg · Dry: 200.2 kg" });
   for (const id of [SHIPMENT_EDGE_ID, APPLICATION_EDGE_ID]) {
@@ -788,7 +788,7 @@ it("restores the application's 200.2 kg rounding boundary while retaining native
 });
 
 it.each([0.0288, 0.82])("keeps the original %s tDry branch-share value exactly", dryTonnes => {
-  const data = rollupLineage();
+  const data = massTotalsLineage();
   data.application.biocharAppliedDryTons = dryTonnes;
   const graph = useChainGraph(data);
   for (const id of [SHIPMENT_EDGE_ID, APPLICATION_EDGE_ID]) {
@@ -797,7 +797,7 @@ it.each([0.0288, 0.82])("keeps the original %s tDry branch-share value exactly",
 });
 
 it("renders missing roll-up entries without throwing or fabricating mass", () => {
-  const nodes = buildLineageNodes(rollupLineage(), buildLineageRollup([]));
+  const nodes = buildLineageNodes(massTotalsLineage(), buildRollbackMassTotals([]));
   for (const [id, label] of [[PRODUCT_ID, "Applied from batch"], [APPLICATION_ID, "Biochar applied"]]) {
     expect(nodes.find(node => node.id === id)?.details)
       .toContainEqual({ label, value: "Wet: Not recorded · Dry: Not recorded" });

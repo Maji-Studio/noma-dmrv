@@ -27,26 +27,26 @@ export interface LineageEdgeMass extends LineageMass {
   unit: "kg" | "tDry";
 }
 
-export interface LineageRollup {
+export interface LineageMassTotals {
   nodes: ReadonlyMap<string, LineageNodeMass>;
   edges: ReadonlyMap<string, LineageEdgeMass>;
 }
 
 const UNKNOWN: LineageMass = { wetKg: null, dryKg: null };
 
-export function nodeMass(rollup: LineageRollup, id: string): LineageNodeMass {
+export function nodeMass(rollup: LineageMassTotals, id: string): LineageNodeMass {
   return rollup.nodes.get(id) ?? { ...UNKNOWN };
 }
 
-export function sourceAllocationMass(rollup: LineageRollup, id: string): LineageMass {
+export function sourceAllocationMass(rollup: LineageMassTotals, id: string): LineageMass {
   return nodeMass(rollup, id).sourceAllocation ?? { ...UNKNOWN };
 }
 
-export function edgeMass(rollup: LineageRollup, from: string, to: string): LineageEdgeMass {
+export function edgeMass(rollup: LineageMassTotals, from: string, to: string): LineageEdgeMass {
   return rollup.edges.get(flowEdgeId(from, to)) ?? { ...UNKNOWN, mass: null, unit: "kg" };
 }
 
-/** Units are documented at each map: sums retain the original graph's native units. */
+/** Units are documented at each map; each figure sums in its native unit and converts once. */
 interface MassPair {
   wet: number | null;
   dry: number | null;
@@ -108,11 +108,11 @@ function finishEdges(
 }
 
 /**
- * Roll up expanded application/product slices. Only the figures consumed by
+ * Total the mass of expanded application/product slices (rollback side). Only the figures consumed by
  * graph cards and applied edges live here; upstream recorded facts stay on
  * their source records. Each mass basis uses the same nullable-sum rule.
  */
-export function buildLineageRollup(lineages: readonly ChainOfCustodyData[]): LineageRollup {
+export function buildRollbackMassTotals(lineages: readonly ChainOfCustodyData[]): LineageMassTotals {
   const nodes: Contributions = new Map(); // Wet kg, dry kg.
   const applications: Contributions = new Map(); // Wet tonnes, dry tonnes.
   const allocations: Contributions = new Map(); // Wet kg, dry kg.
@@ -182,7 +182,7 @@ export function buildLineageRollup(lineages: readonly ChainOfCustodyData[]): Lin
 }
 
 /** Recorded draws sum in kg; shipments sum wet kg and each run's dry-tonne share. */
-export function buildRollForwardRollup(rollForwards: readonly ChainRunRollForward[]): LineageRollup {
+export function buildRollForwardMassTotals(rollForwards: readonly ChainRunRollForward[]): LineageMassTotals {
   const nodes: Contributions = new Map(); // Wet kg, dry kg.
   const draws: Contributions = new Map(); // Wet kg, dry kg.
   const shipments: Contributions = new Map(); // Wet kg, dry tonnes.
@@ -203,8 +203,8 @@ export function buildRollForwardRollup(rollForwards: readonly ChainRunRollForwar
   const shipmentTotals = finishEdges(shipments, "tDry");
   for (const [id, values] of recordedShipments) {
     const shipment = shipmentTotals.get(id);
-    // A single shipment displayed its recorded kg; only merged shipments
-    // converted their summed dry tonnes back to kg for the label.
+    // A single shipment keeps its recorded kg; only merged shipments
+    // convert their summed dry tonnes back to kg for the label.
     if (values.length === 1 && shipment) {
       shipmentTotals.set(id, { ...shipment, ...kilograms(total(values)) });
     }

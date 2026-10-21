@@ -134,7 +134,7 @@ inside batch context, with a "Batch roll-up" button back.
 | Data Access | `src/data-access/chain-of-custody-geo.ts` | Geo payload (node coordinates + transport legs) |
 | Data Access | `src/data-access/chain-of-custody-trail.ts` | Trail evidence joins keyed by DAG node id |
 | Pure lib | `src/lib/chain-of-custody/sankey.ts` | `buildBatchSankey` — dedupe + mass-balance aggregation |
-| Pure lib | `src/lib/chain-of-custody/lineage-rollup.ts` | Wet/dry totals per DAG node and edge, rollback and roll-forward |
+| Pure lib | `src/lib/chain-of-custody/lineage-mass-totals.ts` | Wet/dry totals per DAG node and edge, rollback and roll-forward |
 | Server Action | `src/fn/chain-of-custody.ts` | Validates ids; application, batch, batch-geo, trail actions |
 | React Query Hook | `src/hooks/use-chain-of-custody.ts` | Caches by application / batch id |
 | Batch List | `src/hooks/use-credit-batches.ts` | Facility-scoped, newest-first cards query |
@@ -208,7 +208,7 @@ See [docs/testing.md](testing.md) for fixtures and E2E conventions. Suites:
 - `tests/credit-batch-accounting-contract.test.ts`,
   `tests/credit-batch-context-set.test.ts`
 - `src/lib/chain-of-custody/sankey.test.ts`
-- `src/lib/chain-of-custody/lineage-rollup.test.ts` (shares `lineage-rollup.fixtures.ts` with the graph suite)
+- `src/lib/chain-of-custody/lineage-mass-totals.test.ts` (shares `lineage-mass-totals-test-fixtures.ts` with the graph suite)
 - `src/components/chain-of-custody/use-chain-graph.test.ts`
 - `src/components/chain-of-custody/use-credit-batch-card-selection.test.ts`
 - `src/components/chain-of-custody/map/viewer-utils.test.ts`

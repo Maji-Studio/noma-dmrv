@@ -7,8 +7,8 @@ import type {
 import type { ChainRunRollForward } from "@/data-access/chain-of-custody-roll-forward";
 import {
   applicationNodeId,
-  buildLineageRollup,
-  buildRollForwardRollup,
+  buildRollbackMassTotals,
+  buildRollForwardMassTotals,
   deliveryNodeId,
   edgeMass,
   flowEdgeId,
@@ -16,8 +16,8 @@ import {
   productNodeId,
   productionRunNodeId,
   sourceAllocationMass,
-  type LineageRollup,
-} from "@/lib/chain-of-custody/lineage-rollup";
+  type LineageMassTotals,
+} from "@/lib/chain-of-custody/lineage-mass-totals";
 import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
 import { formatCalendarDate, formatDate } from "@/lib/format-utils";
@@ -327,7 +327,7 @@ function addRow(
 /** Reactor, feedstock and production-run cards for a set of chain sources. */
 function buildSourceNodes(
   sources: ChainSourceLineage[],
-  totals?: LineageRollup,
+  totals?: LineageMassTotals,
 ): LineageGraphNode[] {
   const nodes: LineageGraphNode[] = [];
   const seenNodeIds = new Set<string>();
@@ -444,7 +444,7 @@ function buildDeliveryNode(delivery: Omit<ChainDeliveryLineage, "proofOfDelivery
 /** Also feeds the Carbon Viewer's marker popups (same codes + detail rows). */
 export function buildLineageNodes(
   data: ChainOfCustodyData,
-  totals: LineageRollup = buildLineageRollup(expandProductLineages(data)),
+  totals: LineageMassTotals = buildRollbackMassTotals(expandProductLineages(data)),
   productMassBasis: "sourceAllocation" | "applied" = "sourceAllocation",
 ): LineageGraphNode[] {
   if (data.products?.length) {
@@ -581,7 +581,7 @@ function buildSourceEdges(source: ChainSourceLineage): Edge[] {
  * between records read directly off the graph. (Per-step CO₂e isn't recorded
  * along the lineage — the batch-level net removal lives on the Sankey.)
  */
-function buildLineageEdges(data: ChainOfCustodyData, totals: LineageRollup): Edge[] {
+function buildLineageEdges(data: ChainOfCustodyData, totals: LineageMassTotals): Edge[] {
   const edges: Edge[] = [];
   const sources = resolveChainSources(data);
 
@@ -617,7 +617,7 @@ function buildLineageEdges(data: ChainOfCustodyData, totals: LineageRollup): Edg
 function massFlowEdge(
   source: string,
   target: string,
-  totals: LineageRollup,
+  totals: LineageMassTotals,
   massBasis: EdgeMassBasis = "applied",
 ): Edge {
   const mass = edgeMass(totals, source, target);
@@ -639,7 +639,7 @@ function massFlowEdge(
  */
 export function buildRollForwardGraph(
   rollForward: ChainRunRollForward,
-  totals: LineageRollup = buildRollForwardRollup([rollForward]),
+  totals: LineageMassTotals = buildRollForwardMassTotals([rollForward]),
 ): {
   nodes: LineageGraphNode[];
   edges: Edge[];
@@ -674,7 +674,7 @@ export function buildRollForwardGraph(
  */
 export function buildRollForwardNodes(
   rollForwards: ChainRunRollForward[],
-  totals: LineageRollup = buildRollForwardRollup(rollForwards),
+  totals: LineageMassTotals = buildRollForwardMassTotals(rollForwards),
 ): LineageGraphNode[] {
   const nodeById = new Map<string, LineageGraphNode>();
   for (const rollForward of rollForwards) {
@@ -792,7 +792,7 @@ function buildMergedChainGraph(
   }
 
   lineages = (lineages ?? []).flatMap(expandProductLineages);
-  const totals = buildLineageRollup(lineages);
+  const totals = buildRollbackMassTotals(lineages);
   const nodeById = new Map<string, LineageGraphNode>();
   const edgeById = new Map<string, Edge>();
   for (const lineage of lineages) {
@@ -804,7 +804,7 @@ function buildMergedChainGraph(
     }
   }
 
-  const forwardTotals = buildRollForwardRollup(rollForwards);
+  const forwardTotals = buildRollForwardMassTotals(rollForwards);
   for (const node of buildRollForwardNodes(rollForwards, forwardTotals)) {
     if (!nodeById.has(node.id)) nodeById.set(node.id, node);
   }

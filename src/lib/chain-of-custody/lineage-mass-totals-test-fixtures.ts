@@ -9,7 +9,7 @@ export const SOURCE_EDGE_ID = `${RUN_ID}->${PRODUCT_ID}`;
 export const SHIPMENT_EDGE_ID = `${PRODUCT_ID}->${DELIVERY_ID}`;
 export const APPLICATION_EDGE_ID = `${DELIVERY_ID}->${APPLICATION_ID}`;
 
-export function rollupLineage(
+export function massTotalsLineage(
   wetKg: number | null = 120,
   dryKg: number | null = 90,
 ): ChainOfCustodyData {

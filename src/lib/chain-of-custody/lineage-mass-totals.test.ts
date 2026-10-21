@@ -3,14 +3,14 @@ import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type { ChainRunRollForward } from "@/data-access/chain-of-custody-roll-forward";
 import { kgToTonnes, tonnesToKg } from "@/lib/calculations/unit-conversions";
 import {
-  buildLineageRollup,
-  buildRollForwardRollup,
+  buildRollbackMassTotals,
+  buildRollForwardMassTotals,
   edgeMass,
   nodeMass,
   sourceAllocationMass,
   type LineageMass,
-  type LineageRollup,
-} from "./lineage-rollup";
+  type LineageMassTotals,
+} from "./lineage-mass-totals";
 import {
   RUN_ID,
   PRODUCT_ID,
@@ -19,12 +19,12 @@ import {
   SOURCE_EDGE_ID,
   SHIPMENT_EDGE_ID,
   APPLICATION_EDGE_ID,
-  rollupLineage as lineage,
-} from "./lineage-rollup.fixtures";
+  massTotalsLineage as lineage,
+} from "./lineage-mass-totals-test-fixtures";
 
 const UNKNOWN = { wetKg: null, dryKg: null };
 
-function edgeKilograms(totals: LineageRollup, id: string): LineageMass | undefined {
+function edgeKilograms(totals: LineageMassTotals, id: string): LineageMass | undefined {
   const mass = totals.edges.get(id);
   return mass && { wetKg: mass.wetKg, dryKg: mass.dryKg };
 }
@@ -34,7 +34,7 @@ function expectAllocatedTotals(
   expected: LineageMass,
   expectedSourceEdge: LineageMass = expected,
 ): void {
-  const totals = buildLineageRollup(lineages);
+  const totals = buildRollbackMassTotals(lineages);
   expect(totals.nodes.get(RUN_ID)).toEqual(expected);
   expect(totals.nodes.get(PRODUCT_ID)).toEqual({ ...expected, sourceAllocation: expected });
   expect(totals.nodes.get(APPLICATION_ID)).toEqual(expected);
@@ -44,9 +44,9 @@ function expectAllocatedTotals(
   }
 }
 
-describe("buildLineageRollup", () => {
+describe("buildRollbackMassTotals", () => {
   it("has no totals without lineages", () => {
-    expect(buildLineageRollup([])).toEqual({ nodes: new Map(), edges: new Map() });
+    expect(buildRollbackMassTotals([])).toEqual({ nodes: new Map(), edges: new Map() });
   });
 
   it("returns wet/dry kg per run, product, application and flow edge", () => {
@@ -57,7 +57,7 @@ describe("buildLineageRollup", () => {
     const first = lineage(12, 9);
     const second = lineage(24, 18);
     second.application.id = "application-2";
-    const totals = buildLineageRollup([first, second]);
+    const totals = buildRollbackMassTotals([first, second]);
 
     expect(totals.nodes.get(RUN_ID)).toEqual({ wetKg: 36, dryKg: 27 });
     expect(totals.nodes.get(PRODUCT_ID)).toMatchObject({ wetKg: 36, dryKg: 27 });
@@ -101,7 +101,7 @@ describe("buildLineageRollup", () => {
   it("keeps applied product totals distinct from source allocations", () => {
     const data = lineage(850, 820);
     data.sources![0].allocatedDryMassKg = 833;
-    const totals = buildLineageRollup([data]);
+    const totals = buildRollbackMassTotals([data]);
     expect(totals.nodes.get(RUN_ID)).toEqual({ wetKg: 850, dryKg: 833 });
     expect(totals.nodes.get(PRODUCT_ID)).toEqual({
       wetKg: 850, dryKg: 820, sourceAllocation: { wetKg: 850, dryKg: 833 },
@@ -115,7 +115,7 @@ describe("buildLineageRollup", () => {
     const second = lineage(340, 320.2);
     second.sources![0].productionRun.id = "run-2";
     second.sources![0].allocatedDryMassKg = 333.2;
-    const totals = buildLineageRollup([first, second]);
+    const totals = buildRollbackMassTotals([first, second]);
 
     expect(totals.nodes.get(RUN_ID)).toEqual({ wetKg: 510, dryKg: 499.8 });
     expect(totals.nodes.get("production-run:run-2")).toEqual({ wetKg: 340, dryKg: 333.2 });
@@ -133,7 +133,7 @@ describe("buildLineageRollup", () => {
     const first = lineage(750, 450);
     const second = lineage(250, 125);
     second.biocharProduct!.id = "product-2";
-    const totals = buildLineageRollup([first, second]);
+    const totals = buildRollbackMassTotals([first, second]);
     expect(totals.nodes.get(RUN_ID)).toEqual({ wetKg: 1_000, dryKg: 575 });
     expect(totals.nodes.get(APPLICATION_ID)).toEqual({ wetKg: 1_000, dryKg: 575 });
     expect(totals.nodes.get(PRODUCT_ID)).toMatchObject({ wetKg: 750, dryKg: 450 });
@@ -152,7 +152,7 @@ describe("buildLineageRollup", () => {
       productionRun: { ...data.productionRun!, id: "run-2" },
       allocatedWetMassKg: 340, allocatedDryMassKg: 333.2,
     });
-    const totals = buildLineageRollup([data]);
+    const totals = buildRollbackMassTotals([data]);
     expect(totals.nodes.get(PRODUCT_ID)).toEqual({
       wetKg: 850, dryKg: 820, sourceAllocation: { wetKg: 850, dryKg: 833 },
     });
@@ -162,14 +162,14 @@ describe("buildLineageRollup", () => {
   it.each([undefined, []])("uses whole lot mass only on the legacy singular source edge (%s)", sources => {
     const data = lineage();
     data.sources = sources;
-    const totals = buildLineageRollup([data]);
+    const totals = buildRollbackMassTotals([data]);
     expect(totals.nodes.get(RUN_ID)).toEqual(UNKNOWN);
     expect(edgeKilograms(totals, SOURCE_EDGE_ID)).toEqual({ wetKg: 850, dryKg: 833 });
     expect(totals.nodes.get(PRODUCT_ID)).toEqual({ wetKg: 120, dryKg: 90, sourceAllocation: UNKNOWN });
   });
 
   it("keeps explicit missing node allocations unknown even when the edge falls back", () => {
-    const totals = buildLineageRollup([lineage(null, null)]);
+    const totals = buildRollbackMassTotals([lineage(null, null)]);
     expect(edgeKilograms(totals, SOURCE_EDGE_ID)).toEqual({ wetKg: 850, dryKg: 833 });
     expect(totals.nodes.get(RUN_ID)).toEqual(UNKNOWN);
     expect(totals.nodes.get(PRODUCT_ID)?.sourceAllocation).toEqual(UNKNOWN);
@@ -182,7 +182,7 @@ describe("buildLineageRollup", () => {
     [0, null, { wetKg: 0, dryKg: 833 }],
     [null, 0, { wetKg: 850, dryKg: 0 }],
   ] as const)("falls back per basis only on the single-source edge (wet=%s, dry=%s)", (wet, dry, expected) => {
-    const totals = buildLineageRollup([lineage(wet, dry)]);
+    const totals = buildRollbackMassTotals([lineage(wet, dry)]);
     expect(edgeKilograms(totals, SOURCE_EDGE_ID)).toEqual(expected);
     expect(totals.nodes.get(RUN_ID)).toEqual({ wetKg: wet, dryKg: dry });
     expect(totals.nodes.get(PRODUCT_ID)?.sourceAllocation).toEqual({ wetKg: wet, dryKg: dry });
@@ -191,7 +191,7 @@ describe("buildLineageRollup", () => {
   it("keeps a null product mass unknown in the single-source fallback", () => {
     const data = lineage(null, null);
     data.biocharProduct!.massKg = null;
-    const totals = buildLineageRollup([data]);
+    const totals = buildRollbackMassTotals([data]);
     expect(edgeKilograms(totals, SOURCE_EDGE_ID)).toEqual(UNKNOWN);
     expect(totals.nodes.get(PRODUCT_ID)?.sourceAllocation).toEqual(UNKNOWN);
   });
@@ -203,7 +203,7 @@ describe("buildLineageRollup", () => {
       productionRun: { ...data.productionRun!, id: "run-2" },
       allocatedWetMassKg: 120,
     });
-    const totals = buildLineageRollup([data]);
+    const totals = buildRollbackMassTotals([data]);
     expect(edgeKilograms(totals, SOURCE_EDGE_ID)).toEqual(UNKNOWN);
     expect(edgeKilograms(totals, `production-run:run-2->${PRODUCT_ID}`)).toEqual({ wetKg: 120, dryKg: null });
     expect(totals.nodes.get(PRODUCT_ID)?.sourceAllocation).toEqual({ wetKg: 120, dryKg: null });
@@ -215,7 +215,7 @@ describe("buildLineageRollup", () => {
     data.productionRun = null;
     data.biocharProduct = null;
     data.order = null;
-    const totals = buildLineageRollup([data]);
+    const totals = buildRollbackMassTotals([data]);
     expect(totals.nodes.has(RUN_ID)).toBe(false);
     expect(totals.nodes.has(PRODUCT_ID)).toBe(false);
     expect(totals.edges.size).toBe(1);
@@ -226,8 +226,15 @@ describe("buildLineageRollup", () => {
     expectAllocatedTotals([lineage(null, null), lineage(null, null)], UNKNOWN, { wetKg: 850, dryKg: 833 });
   });
 
+  it("does not add the whole product mass to an edge that already has an allocated slice", () => {
+    // The whole-product fallback applies only when no slice on the edge has an
+    // allocation, so the product's mass is never double counted.
+    const totals = buildRollbackMassTotals([lineage(100, 98), lineage(null, null)]);
+    expect(edgeKilograms(totals, SOURCE_EDGE_ID)).toEqual({ wetKg: 100, dryKg: 98 });
+  });
+
   it("returns unknown masses for missing node, allocation and edge entries", () => {
-    const totals = buildLineageRollup([]);
+    const totals = buildRollbackMassTotals([]);
     expect(nodeMass(totals, RUN_ID)).toEqual(UNKNOWN);
     expect(sourceAllocationMass(totals, PRODUCT_ID)).toEqual(UNKNOWN);
     expect(edgeMass(totals, RUN_ID, PRODUCT_ID)).toEqual({ ...UNKNOWN, mass: null, unit: "kg" });
@@ -235,7 +242,7 @@ describe("buildLineageRollup", () => {
 
   it("sums application tonnes before converting, retaining kg sums for product cards", () => {
     const slices = [lineage(100.002, 100.002), lineage(100.148, 100.148)];
-    const totals = buildLineageRollup(slices);
+    const totals = buildRollbackMassTotals(slices);
     const tonnesSumInKg = tonnesToKg(0.100002 + 0.100148);
     expect(totals.nodes.get(APPLICATION_ID)).toEqual({ wetKg: tonnesSumInKg, dryKg: tonnesSumInKg });
     expect(totals.nodes.get(PRODUCT_ID)).toMatchObject({ wetKg: 100.002 + 100.148, dryKg: 100.002 + 100.148 });
@@ -247,7 +254,7 @@ describe("buildLineageRollup", () => {
   it.each([0.0288, 0.82])("retains the exact native dry-tonne edge mass %s", dryTonnes => {
     const data = lineage();
     data.application.biocharAppliedDryTons = dryTonnes;
-    const totals = buildLineageRollup([data]);
+    const totals = buildRollbackMassTotals([data]);
     for (const id of [SHIPMENT_EDGE_ID, APPLICATION_EDGE_ID]) {
       expect(totals.edges.get(id)?.mass).toBe(dryTonnes);
       expect(totals.edges.get(id)?.unit).toBe("tDry");
@@ -257,19 +264,19 @@ describe("buildLineageRollup", () => {
   it("is exactly order independent, including floating-point sums, and does not mutate lineages", () => {
     const lineages = [lineage(0.1, 0.3), lineage(0.2, null), lineage(0.3, 0.1), lineage(null, 0.2)];
     const original = structuredClone(lineages);
-    const expected = buildLineageRollup(lineages);
+    const expected = buildRollbackMassTotals(lineages);
     for (const reordered of [
       [...lineages].reverse(),
       [lineages[2], lineages[0], lineages[3], lineages[1]],
       [lineages[1], lineages[3], lineages[2], lineages[0]],
     ]) {
-      expect(buildLineageRollup(reordered)).toEqual(expected);
+      expect(buildRollbackMassTotals(reordered)).toEqual(expected);
     }
     expect(lineages).toEqual(original);
   });
 });
 
-describe("buildRollForwardRollup", () => {
+describe("buildRollForwardMassTotals", () => {
   function forward(runId: string, wetKg: number | null, dryKg: number): ChainRunRollForward {
     const data = lineage();
     return {
@@ -282,7 +289,7 @@ describe("buildRollForwardRollup", () => {
   }
 
   it("sums draws in kg and per-run shipments in dry tonnes", () => {
-    const totals = buildRollForwardRollup([forward("run-1", 320, 300), forward("run-2", 80, 80)]);
+    const totals = buildRollForwardMassTotals([forward("run-1", 320, 300), forward("run-2", 80, 80)]);
     expect(nodeMass(totals, PRODUCT_ID)).toEqual({ wetKg: 1_200, dryKg: 1_140 });
     expect(edgeMass(totals, PRODUCT_ID, DELIVERY_ID)).toEqual({
       wetKg: 400, dryKg: tonnesToKg(0.3 + 0.08), mass: 0.3 + 0.08, unit: "tDry",
@@ -306,7 +313,7 @@ describe("buildRollForwardRollup", () => {
       dryMassKg: recordedDryKg,
     });
     const original = structuredClone(rollForwards);
-    const expected = buildRollForwardRollup(rollForwards);
+    const expected = buildRollForwardMassTotals(rollForwards);
     const shareSum = 0.1 + 0.2 + 0.3;
     expect(nodeMass(expected, PRODUCT_ID)).toEqual({ wetKg: shareSum, dryKg: shareSum });
     expect(edgeMass(expected, RUN_ID, PRODUCT_ID)).toEqual({
@@ -325,7 +332,7 @@ describe("buildRollForwardRollup", () => {
       [rollForwards[1], rollForwards[2], rollForwards[0]],
       [rollForwards[2], rollForwards[0], rollForwards[1]],
     ]) {
-      expect(buildRollForwardRollup(reordered)).toEqual(expected);
+      expect(buildRollForwardMassTotals(reordered)).toEqual(expected);
     }
     expect(rollForwards).toEqual(original);
   });
@@ -335,15 +342,15 @@ describe("buildRollForwardRollup", () => {
     missing.products[0].drawnWetMassKg = NaN;
     missing.products[0].drawnDryMassKg = NaN;
     const known = forward("run-2", 0, 0);
-    const totals = buildRollForwardRollup([missing, known]);
+    const totals = buildRollForwardMassTotals([missing, known]);
     expect(nodeMass(totals, PRODUCT_ID)).toEqual({ wetKg: 600, dryKg: 570 });
     expect(edgeMass(totals, PRODUCT_ID, DELIVERY_ID)).toEqual({ wetKg: 0, dryKg: 0, mass: 0, unit: "tDry" });
-    expect(edgeMass(buildRollForwardRollup([missing]), PRODUCT_ID, DELIVERY_ID))
+    expect(edgeMass(buildRollForwardMassTotals([missing]), PRODUCT_ID, DELIVERY_ID))
       .toEqual({ ...UNKNOWN, mass: null, unit: "tDry" });
   });
 
   it("retains a reported wet share alongside an unknown wet share", () => {
-    const totals = buildRollForwardRollup([forward("run-1", null, 300), forward("run-2", 80, 80)]);
+    const totals = buildRollForwardMassTotals([forward("run-1", null, 300), forward("run-2", 80, 80)]);
     expect(edgeMass(totals, PRODUCT_ID, DELIVERY_ID)).toEqual({ wetKg: 80, dryKg: 380, mass: 0.38, unit: "tDry" });
   });
 });
