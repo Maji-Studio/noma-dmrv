@@ -11,7 +11,7 @@ vi.mock("@/components/forms", () => ({
   FormInput: (props: React.InputHTMLAttributes<HTMLInputElement> & { error?: boolean }) => { const { error, ...rest } = props; return <input {...rest} aria-invalid={error} />; },
   ServerError: ({ message }: { message: string }) => <div>{message}</div>,
 }));
-vi.mock("@/components/ui", () => ({ Button: ({ children, type, disabled }: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button type={type} disabled={disabled}>{children}</button> }));
+vi.mock("@/components/ui", () => ({ Button: ({ children, type, disabled, busy }: React.ButtonHTMLAttributes<HTMLButtonElement> & { busy?: boolean }) => <button type={type} disabled={disabled || busy} aria-busy={busy || undefined}>{children}</button> }));
 vi.mock("@/components/ui/notice", () => ({ Notice: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 
 beforeEach(() => {
@@ -70,4 +70,23 @@ it("refuses a callback added outside the signed parameter list", async () => {
   await submit();
   await screen.findByText("Start again from the app.");
   expect(mocks.assign).not.toHaveBeenCalled();
+});
+
+const signInButton = () => screen.getByRole("button", { name: "Sign in" }) as HTMLButtonElement;
+
+it("stays busy after the OAuth continuation starts, until the page leaves", async () => {
+  mocks.search = new URLSearchParams("sig=test&ba_param=client_id&client_id=app");
+  mocks.signIn.mockResolvedValue({ success: true, redirectUrl: "/oauth/organization?signed=test" });
+  await submit();
+  await waitFor(() => expect(mocks.assign).toHaveBeenCalled());
+  expect(signInButton().getAttribute("aria-busy")).toBe("true");
+  expect(signInButton().disabled).toBe(true);
+});
+
+it("clears busy when the sign-in fails or the continuation is refused", async () => {
+  mocks.signIn.mockResolvedValue({ success: false, error: "Wrong password." });
+  await submit();
+  await screen.findByText("Wrong password.");
+  expect(signInButton().getAttribute("aria-busy")).toBeNull();
+  expect(signInButton().disabled).toBe(false);
 });

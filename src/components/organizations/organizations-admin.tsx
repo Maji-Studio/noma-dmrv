@@ -4,12 +4,12 @@
  */
 "use client";
 
-import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { BuildingsIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
+import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import { Notice } from "@/components/ui/notice";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
@@ -35,7 +35,8 @@ export function OrganizationsAdmin() {
   const apiAccessByOrg = new Map((apiAccess.isError ? undefined : apiAccess.data)?.map((row) => [row.organizationId, row.enabled]));
   const createOrg = useCreateOrganization();
   const enterOrganization = useEnterOrganization();
-  const [enteringId, setEnteringId] = useState<string | null>(null);
+  // The Open button stays busy until the page reloads into the organization; only a failure clears it.
+  const entering = useBusyUntilUnload<string>();
   const activeOrganizationId = useViewerOrg()?.organizationId ?? null;
 
   const {
@@ -59,15 +60,16 @@ export function OrganizationsAdmin() {
   }
 
   async function enterOrg(organizationId: string, organizationName: string) {
-    setEnteringId(organizationId);
+    entering.hold(organizationId);
     try {
       const result = await enterOrganization(organizationId, organizationName);
       if (!result.success) {
+        entering.release();
         toast.error(result.error);
-        return;
       }
-    } finally {
-      setEnteringId(null);
+    } catch (error) {
+      entering.release();
+      throw error;
     }
   }
 
@@ -100,7 +102,7 @@ export function OrganizationsAdmin() {
                 key={org.id}
                 org={org}
                 apiAccessEnabled={apiAccessByOrg.get(org.id)}
-                entering={enteringId === org.id}
+                entering={entering.held === org.id}
                 current={org.id === activeOrganizationId}
                 onEnter={() => enterOrg(org.id, org.name)}
               />

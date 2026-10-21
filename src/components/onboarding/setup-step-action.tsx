@@ -1,5 +1,6 @@
 "use client";
 
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui";
 import type { SetupActions } from "./setup-actions";
@@ -15,6 +16,8 @@ export function SetupStepAction({
   actions: SetupActions;
 }) {
   const router = useRouter();
+  // The button stays busy until the step's page has rendered.
+  const [navigating, startNavigation] = useTransition();
   const open = {
     facility: actions.onOpenFacility,
     reactor: actions.onOpenReactor,
@@ -26,10 +29,11 @@ export function SetupStepAction({
     <Button
       variant={active ? "primary" : "default"}
       size="small"
+      busy={navigating}
       disabled={needsFacility && !actions.facilityId}
       onClick={() => {
         if (step.id in open) open[step.id as keyof typeof open]();
-        else router.push(step.href);
+        else startNavigation(() => router.push(step.href));
       }}
     >
       {step.ctaLabel}

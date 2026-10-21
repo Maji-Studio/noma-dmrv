@@ -15,6 +15,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { CaretDownIcon, CheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { authClient } from "@/lib/auth/client";
+import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import {
   useActiveOrganizationProfile,
@@ -80,7 +81,8 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
   const listboxId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [isSwitching, setIsSwitching] = useState(false);
+  const switching = useBusyUntilUnload();
+  const isSwitching = !!switching.held;
 
   // Override-aware active-org lookup: the plugin's useActiveOrganization() is
   // members-only, so it never resolves for Platform Admins inside an org they
@@ -140,16 +142,18 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
       setIsOpen(false);
       return;
     }
-    setIsSwitching(true);
+    // Stay "Switching" until the page reloads into the new organization; only a failure clears it.
+    switching.hold(true);
     try {
       const result = await enterOrganization(organizationId, organizationName);
       if (!result.success) {
-        setIsSwitching(false);
+        switching.release();
         return;
       }
       setIsOpen(false);
-    } finally {
-      setIsSwitching(false);
+    } catch (error) {
+      switching.release();
+      throw error;
     }
   }
 

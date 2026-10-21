@@ -505,6 +505,13 @@ Always use `Button`; never a raw `<button>` with manual styling.
 - **`busy` is the one sanctioned in-flight convention.** It disables the button
   and renders a leading spinner. Do not hand-roll `disabled={isPending}` plus a
   text swap or your own spinner — `busy` exists to replace exactly that mix.
+- **Busy lasts until the result is visible.** When the action ends in a
+  navigation, the button stays busy through it: a `window.location` navigation
+  holds until the page unloads (`useBusyUntilUnload`, which also drops the hold
+  when Back restores the page from the back-forward cache), an in-app
+  `router.push` is wrapped in `startTransition` and holds until the route
+  renders. Only a failure clears it. The clicked button carries the spinner and
+  its siblings are disabled.
 - **Quiet icon button:** `size="icon"` with `variant="noOutline"` (or
   `variant="destructive"` for a delete row action), plus an `aria-label`. Use
   this rather than `width="square"`, which yields a differently-sized control.
