@@ -598,7 +598,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         />
         <StatCard
           title="Total biochar applied"
-          value={formatApplicationKgFromTons(statsData?.totalBiocharAppliedTons ?? 0)}
+          value={formatApplicationKgFromTons(statsData?.totalBiocharAppliedTons)}
           description="Across all applications in this facility"
           icon={<LeafIcon size={24} weight="bold" />}
           isLoading={statsLoading}

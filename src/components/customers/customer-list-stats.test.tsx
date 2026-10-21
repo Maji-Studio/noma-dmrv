@@ -80,7 +80,8 @@ describe("CustomerList summary cards", () => {
     state.stats = { data: { totalCustomers: TOTAL_CUSTOMERS, totalLocations: TOTAL_LOCATIONS }, isLoading: false, isError: false };
     const { container } = render(<CustomerList />);
     expect(container.textContent).not.toMatch(/on this page/i);
-    expect(screen.getByText("All customers that are not archived")).toBeTruthy();
+    expect(screen.getByText("Locations of all customers that are not archived")).toBeTruthy();
+    expect(screen.queryByText("All customers that are not archived")).toBeNull();
   });
 
   it("shows the failure, not zeros, when the totals could not load", () => {

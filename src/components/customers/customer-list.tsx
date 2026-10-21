@@ -442,7 +442,6 @@ export function CustomerList() {
         <StatCard
           title={showArchived ? "Archived customers" : "Active customers"}
           value={statsData?.totalCustomers ?? 0}
-          description={showArchived ? "All archived customers" : "All customers that are not archived"}
           icon={<UsersIcon size={24} weight="bold" />}
           isLoading={statsLoading}
           isError={statsError}
