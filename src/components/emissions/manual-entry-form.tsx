@@ -31,6 +31,8 @@ import {
   invalidateEmissionEntryReads,
 } from "@/hooks/use-emission-entries";
 import { toSaveErrorMessage } from "@/lib/stale-version";
+import { CreditBatchLine } from "@/components/credit-batches/credit-batch-line";
+import { describeEmissionEntryCreditBatchLine } from "./emission-entry-credit-batch-line-copy";
 import { EntryFileNames, ENTRY_ENTITY_TYPE } from "./emission-entry-files";
 import {
   ENTRY_FILE_ACCEPT,
@@ -231,7 +233,9 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
           <button type="submit" hidden aria-hidden="true" tabIndex={-1} disabled={saving} />
         </form>
       </SlideOverPanelBody>
-      <SlideOverPanelFooter>
+      <SlideOverPanelFooter
+        preview={<CreditBatchLine copy={describeEmissionEntryCreditBatchLine(batch)} facilityId={scope.facilityId} />}
+      >
         <Button variant="weak" onClick={onCancel} disabled={saving}>Cancel</Button>
         <Button variant="primary" busy={saving} onClick={() => void save()}>Save</Button>
       </SlideOverPanelFooter>
