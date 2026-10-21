@@ -1,7 +1,7 @@
 /**
  * Organization operating-defaults form and action schema.
  *
- * Shared by `/settings/defaults` (react-hook-form + zodResolver) and
+ * Shared by Settings, General (react-hook-form + zodResolver) and
  * `src/fn/organization-settings.ts`, so client validation and the server trust
  * boundary cannot drift. `organizationId` is never in this payload: it is
  * stamped server-side from the session's active organization.

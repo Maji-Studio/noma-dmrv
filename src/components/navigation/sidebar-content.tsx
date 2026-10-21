@@ -39,6 +39,7 @@ import {
   GearSixIcon,
   BuildingsIcon,
   SignOutIcon,
+  SteeringWheelIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import {
@@ -52,6 +53,11 @@ import { useToast } from "@/components/ui/toast";
 import { FacilitySelector } from "./facility-selector";
 import { OrgBrand } from "./org-brand";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import {
+  SETTINGS_GENERAL_HREF,
+  VEHICLES_AND_CREW_HREF,
+  withFacilityParam,
+} from "@/lib/settings/links";
 
 interface NavItem {
   href: string;
@@ -81,12 +87,11 @@ const SECTION_ACCENTS = {
   default: "var(--clr-rose)",
 } as const;
 
-// Certification is a conditional workspace (ADR 0007): its operational routes
-// only surface once the current facility is linked to a registry. Settings is
-// the lone exception — it's the only place that link gets created, so it stays
-// visible even when unlinked (otherwise an admin could never link a facility).
+// Certification is a conditional workspace (ADR 0007): its routes only surface
+// once the current facility is linked to a registry. Without a link the section
+// shows nothing; the link is made in Settings, Certification, and the registry
+// guard sends a direct visit there (#1277).
 const CERTIFICATION_SECTION_TITLE = "Certification";
-const CERTIFICATION_SETTINGS_HREF = "/certification/settings";
 
 // Screenshot mode: see next.config.ts and docs/testing.md#pr-screenshots.
 const SHOT_MODE = process.env.NODE_ENV !== "production" &&
@@ -134,6 +139,7 @@ const navSections: NavSection[] = [
       { href: "/orders", label: "Orders", icon: ShoppingCartIcon },
       { href: "/deliveries", label: "Deliveries", icon: TruckIcon },
       { href: "/applications", label: "Applications", icon: MapPinIcon },
+      { href: VEHICLES_AND_CREW_HREF, label: "Vehicles and crew", icon: SteeringWheelIcon },
     ],
   },
   {
@@ -154,7 +160,6 @@ const navSections: NavSection[] = [
     items: [
       { href: "/certification/removals", label: "Removals", icon: StackIcon },
       { href: "/certification/ghg-statements", label: "GHG Statements", icon: FileTextIcon },
-      { href: "/certification/settings", label: "Settings", icon: GearSixIcon },
     ],
   },
 ];
@@ -309,10 +314,10 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   // src/app/admin/layout.tsx remains the actual access boundary.
   const isAdmin = useIsAdmin();
 
-  // Gate the Certification operational routes on the current facility having a
-  // registry link. The summary is DB-only (no Isometric API) and shared with
-  // the certification pages, so it's usually a cache hit. Until a link is
-  // confirmed, only Settings is shown — the entry point for creating one.
+  // Gate the Certification routes on the current facility having a registry
+  // link. The summary is DB-only (no Isometric API) and shared with the
+  // certification pages, so it's usually a cache hit. Until a link is
+  // confirmed the section is left out.
   const { data: certifierSummary } = useFacilityCertifierSummary(
     facilityParam ?? "",
     !!facilityParam,
@@ -320,15 +325,8 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const hasRegistry = Boolean(certifierSummary?.mapping);
 
   const baseSections = isAdmin ? [...navSections, adminSection] : navSections;
-  const sections = baseSections.map((section) =>
-    section.title === CERTIFICATION_SECTION_TITLE && !hasRegistry
-      ? {
-          ...section,
-          items: section.items.filter(
-            (item) => item.href === CERTIFICATION_SETTINGS_HREF,
-          ),
-        }
-      : section,
+  const sections = baseSections.filter(
+    (section) => section.title !== CERTIFICATION_SECTION_TITLE || hasRegistry,
   );
 
   return (
@@ -404,18 +402,15 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               </>
             )}
           </div>
-          {/* Straight to Members rather than `/settings`, which only
-              redirects here — the settings rail is the index.
-
-              The name stays "Organization settings": the Certification section
-              already carries a link named exactly "Settings", and two links in
-              the same nav with one accessible name is ambiguous for screen
-              reader users and for any by-name lookup. */}
+          {/* Straight to General rather than `/settings`, which only
+              redirects there: the settings rail is the index, and General is
+              the pane every member can open (Q15). The only link in the nav
+              named "Settings" since Certification lost its own. */}
           <Link
-            href="/settings/organization"
+            href={withFacilityParam(SETTINGS_GENERAL_HREF, facilityParam)}
             onClick={onNavigate}
             className="flex items-center justify-center size-44 md:size-28 text-[var(--color-white-25)] hover:text-white transition-colors duration-150"
-            aria-label="Organization settings"
+            aria-label="Settings"
           >
             <GearSixIcon size={16} />
           </Link>

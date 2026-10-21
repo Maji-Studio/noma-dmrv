@@ -43,14 +43,14 @@ const FILL_COLUMN_CLASS = "sm:w-[280px]";
 const NOT_FITTING_BADGE = "Does not fit";
 const NOT_READY_BADGE = "Not ready";
 
-export function TemplateStep({ data, templateId, onChange, invalid, notOffered, certifierHref }: {
+export function TemplateStep({ data, templateId, onChange, invalid, notOffered, facilitySettingsHref }: {
   data: SetupData;
   templateId: string | null;
   onChange: (id: string) => void;
   invalid: boolean;
   /** Why the template a link named is not in this project. */
   notOffered: string | null;
-  certifierHref: string;
+  facilitySettingsHref: string;
 }) {
   const describe = (template: SetupTemplate) => template.blockedReason
     ? blockedCopy(template.blockedReason)
@@ -67,7 +67,7 @@ export function TemplateStep({ data, templateId, onChange, invalid, notOffered, 
       {data.fitting.length === 0 && (
         <Notice
           tone="warning"
-          action={<Link href={certifierHref} className="body-small underline underline-offset-2">Open Certifier</Link>}
+          action={<Link href={facilitySettingsHref} className="body-small underline underline-offset-2">Open Settings, Facilities</Link>}
         >
           {`No Removal template in ${project} fits this facility. Check the facility's durability tier or add a template in Isometric.`}
         </Notice>

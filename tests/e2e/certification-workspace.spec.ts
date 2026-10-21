@@ -11,7 +11,7 @@ import { insertRemovalFixture } from "../helpers/removal-fixture";
  *     "linked" — the operational routes (Removals / GHG Statements) are gated
  *     behind a registry link (ADR 0007), and the gate reads the
  *     DB-only `readFacilityCertifierSummary`, so no real project is required.
- *     Then visits each of the three routes via its nav link and asserts the
+ *     Then visits each of the two routes via its nav link and asserts the
  *     per-route heading plus that the active `?facility=` scope is preserved on
  *     every hop. Links are addressed by accessible name (sidebar section per
  *     ADR 0007, amended 2026-06-04).
@@ -20,10 +20,9 @@ import { insertRemovalFixture } from "../helpers/removal-fixture";
  *     detail sheet, and closes it with Escape.
  *  3. Settings round-trip — needs a seeded `certifier_projects` mapping against
  *     the REAL sandbox project (the connection card resolves the project from
- *     Isometric), so it's gated behind the sandbox skip. Asserts the Settings
- *     page renders the linked project in the Certifier pane (the console's
- *     default) and that the admin-only categories — Emissions and Diagnostics,
- *     reached from the settings rail — mount. The link/edit/unlink dialog
+ *     Isometric), so it's gated behind the sandbox skip. Asserts the retired
+ *     route redirects, Settings, Facilities renders the linked project, and
+ *     Registry and Diagnostics, reached from the settings rail, mount. The link/edit/unlink dialog
  *     behaviour is covered by `facility-certifier-mapping.spec.ts`.
  *
  * Playwright loads `.env.test` only; we additionally pull `.env.local` (without
@@ -48,7 +47,6 @@ import { createDbConnection } from "./fixtures/db";
 const SECTIONS = [
   { label: "Removals", path: "/certification/removals" },
   { label: "GHG Statements", path: "/certification/ghg-statements" },
-  { label: "Settings", path: "/certification/settings" },
 ] as const;
 
 // DB-only link target to un-gate the operational routes; never reaches
@@ -264,17 +262,17 @@ test.describe("Certification workspace — Settings", { tag: "@live" }, () => {
 
     const mapping = await seedCertifierMapping(facilityId, { externalProjectId });
     try {
-      await page.goto(`/certification/settings?facility=${facilityId}`);
+      // The retired route redirects to the pane that absorbed the section.
+      await page.goto(`/certification/settings?section=certifier&facility=${facilityId}`);
+      await expect(page).toHaveURL(new RegExp(`/settings/registry\\?facility=${facilityId}`), {
+        timeout: COLD_COMPILE_TIMEOUT_MS,
+      });
 
+      // A · The project link is on Settings, Facilities.
+      await page.goto(`/settings/facilities?facility=${facilityId}`);
       await expect(
-        page.getByRole("heading", { name: "Settings", level: 1 }),
+        page.getByRole("heading", { name: "Facilities", level: 1 }),
       ).toBeVisible({ timeout: 15000 });
-
-      // A · Certifier is the console's default pane — the seeded project
-      // resolves into it, below the organization keys.
-      await expect(
-        page.getByRole("heading", { name: "Certifier", level: 2 }),
-      ).toBeVisible();
       await expect(page.getByText(externalProjectId).first()).toBeVisible();
       // Admin sees the management controls (canManage = viewerCanManage).
       await expect(
@@ -284,23 +282,20 @@ test.describe("Certification workspace — Settings", { tag: "@live" }, () => {
         page.getByRole("button", { name: "Unlink", exact: true }),
       ).toBeVisible();
 
-      // B/C · The other categories are rail entries, not tabs: clicking one
-      // swaps the pane, and only the selected pane is mounted.
-      const rail = page.getByRole("navigation", {
-        name: "Certification settings categories",
-      });
-      await rail.getByRole("button", { name: "Emissions" }).click();
+      // B/C · The other categories are rail links, one route each, and the
+      // working facility rides along.
+      const rail = page.getByRole("navigation", { name: "Settings categories" });
+      await rail.getByRole("link", { name: "Registry" }).click();
       await expect(
-        page.getByRole("heading", { name: "Emissions", level: 2 }),
-      ).toBeVisible();
-      await expect(
-        page.getByRole("heading", { name: "Certifier", level: 2 }),
-      ).toHaveCount(0);
+        page.getByRole("heading", { name: "Registry", level: 1 }),
+      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+      await expect(page).toHaveURL(new RegExp(`facility=${facilityId}`));
+      await expect(page.getByText("Registry: Isometric")).toBeVisible();
 
-      await rail.getByRole("button", { name: "Diagnostics" }).click();
+      await rail.getByRole("link", { name: "Diagnostics" }).click();
       await expect(
-        page.getByRole("heading", { name: "Diagnostics", level: 2 }),
-      ).toBeVisible();
+        page.getByRole("heading", { name: "Diagnostics", level: 1 }),
+      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
     } finally {
       await mapping.cleanup();
     }

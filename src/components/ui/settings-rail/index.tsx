@@ -1,36 +1,34 @@
 /**
- * SettingsRail — the category menu for a settings console.
+ * SettingsRail — the category menu of the settings console.
  *
- * Every category is listed under the tier that owns it — Organization,
- * Facility, Platform — so a click names the category and its reach together and
- * no selection can land on the wrong tier. This is deliberately not a scope
- * switch above a category list: with a switch, the same word ("Registry") means
- * two different things depending on hidden state.
+ * Every category is listed under the group that owns it (You, the
+ * Organization, Certification, Platform), so a click names the category and its
+ * reach together. This is deliberately not a scope switch above a category
+ * list: with a switch, the same word means two different things depending on
+ * hidden state.
  *
- * Two consoles use it and they select differently. `/certification/settings` is
- * one route that swaps panes via `?section=`, so its rows are buttons with
- * `onSelect`. `/settings` is a route per category, so its rows carry `href` and
- * render as links — a settings category an operator may want to bookmark or open
- * in a new tab should be a real URL. A section supplies one or the other; a row
- * with `href` ignores `onSelect`.
+ * Each row is a link, because a settings category an operator may want to
+ * bookmark or open in a new tab should be a real URL. `onNavigate` lets the
+ * host hold a plain click (an unsaved draft asks before it is dropped); a
+ * modified click (new tab, new window) always goes through.
+ *
+ * Below `lg` the rail is one grouped select, so the pane starts on the first
+ * screen of a phone instead of below ten menu rows (#1277).
  */
 "use client";
 
 import type { Icon } from "@phosphor-icons/react";
+import type { MouseEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-/** Which tier a category configures. Renders as the rail's group heading. */
-export type SettingsTier = "organization" | "facility" | "platform";
-
-export interface SettingsSectionMeta {
-  /** Stable identity: the `?section=` value, or the route's own key. */
+export interface SettingsRailItem {
+  /** Stable identity, compared with `selectedKey`. */
   key: string;
-  tier: SettingsTier;
-  /** One word. The pane header repeats it; the caption explains it. */
+  /** One or two words. The page title repeats it; the caption explains it. */
   label: string;
+  href: string;
   icon: Icon;
-  /** Render as a link to this route instead of an in-place selector. */
-  href?: string;
   /**
    * True when something here has to be decided before the surface works. Drawn
    * as a dot, never a count: digits in a menu read as step numbers, and these
@@ -39,96 +37,170 @@ export interface SettingsSectionMeta {
   needsAttention?: boolean;
 }
 
-const TIER_LABELS: Record<SettingsTier, string> = {
-  organization: "Organization",
-  facility: "Facility",
-  platform: "Platform",
-};
+export interface SettingsRailGroup {
+  key: string;
+  label: string;
+  /** A second line under the group label, such as the organization's name. */
+  detail?: string;
+  items: readonly SettingsRailItem[];
+}
 
-const TIER_ORDER: readonly SettingsTier[] = [
-  "organization",
-  "facility",
-  "platform",
-];
+const SELECT_LABEL = "Settings page";
+/** The phone select's value while the current page is not a rail row. */
+const UNLISTED_VALUE = "";
+
+function isPlainLeftClick(event: MouseEvent): boolean {
+  return (
+    event.button === 0 &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.shiftKey &&
+    !event.altKey
+  );
+}
+
+function optionLabel(item: SettingsRailItem): string {
+  return item.needsAttention ? `${item.label} (needs attention)` : item.label;
+}
 
 export function SettingsRail({
-  sections,
+  groups,
   selectedKey,
-  onSelect,
+  onNavigate,
   ariaLabel = "Settings categories",
   idPrefix = "settings-rail",
+  currentLabel,
 }: {
-  sections: readonly SettingsSectionMeta[];
+  groups: readonly SettingsRailGroup[];
   selectedKey: string;
-  /** Required for sections without an `href`; ignored for link rows. */
-  onSelect?: (key: string) => void;
+  /**
+   * The page's own name, for when it is not one of the rail's rows (a URL the
+   * viewer may open but the rail does not list for them). The phone select
+   * shows it as the current choice, so picking any listed row navigates.
+   */
+  currentLabel?: string;
+  /**
+   * Called instead of the default navigation for a plain click on a row and
+   * for a change of the phone select. Omit to let links navigate as usual.
+   */
+  onNavigate?: (href: string) => void;
   ariaLabel?: string;
-  /** Disambiguates the tier heading ids when two rails share a document. */
+  /** Disambiguates the group heading ids when two rails share a document. */
   idPrefix?: string;
 }) {
-  return (
-    <nav
-      aria-label={ariaLabel}
-      // Sticky against `main`, which is the app shell's scrollport on desktop
-      // (src/app/(app)/layout.tsx). Capped and scrollable so a long menu can
-      // never push its own last row out of reach.
-      className="border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)] lg:sticky lg:top-24 lg:max-h-[calc(100vh-48px-var(--platform-admin-bar-height))] lg:overflow-y-auto"
-    >
-      {TIER_ORDER.map((tier) => {
-        const tierSections = sections.filter((s) => s.tier === tier);
-        if (tierSections.length === 0) return null;
+  const router = useRouter();
+  const items = groups.flatMap((group) => group.items);
+  const selected = items.find((item) => item.key === selectedKey);
+  const selectId = `${idPrefix}-select`;
 
-        const headingId = `${idPrefix}-tier-${tier}`;
-        return (
-          <div
-            key={tier}
-            className="border-b-[1.5px] border-[var(--clr-dark-purple-40)] last:border-b-0"
-          >
-            <h2
-              id={headingId}
-              className="title-chapter-title border-b-[1px] border-[var(--clr-dark-purple-10)] px-12 py-10 text-[var(--color-text-tertiary)]"
+  return (
+    <>
+      <div className="flex flex-col gap-4 lg:hidden">
+        <label htmlFor={selectId} className="body-small font-medium text-[var(--color-text-secondary)]">
+          {SELECT_LABEL}
+        </label>
+        <select
+          id={selectId}
+          value={selected?.href ?? UNLISTED_VALUE}
+          onChange={(event) => {
+            const href = event.target.value;
+            if (onNavigate) onNavigate(href);
+            else router.push(href);
+          }}
+          className="body-medium h-44 w-full border border-[var(--color-border-secondary)] bg-[var(--paper)] px-12"
+        >
+          {!selected && (
+            <option value={UNLISTED_VALUE} disabled>
+              {currentLabel ?? SELECT_LABEL}
+            </option>
+          )}
+          {groups.map((group) => (
+            <optgroup
+              key={group.key}
+              label={group.detail ? `${group.label}: ${group.detail}` : group.label}
             >
-              {TIER_LABELS[tier]}
-            </h2>
-            <ul aria-labelledby={headingId} className="flex flex-col py-4">
-              {tierSections.map((section) => (
-                <li key={section.key}>
-                  <RailRow
-                    section={section}
-                    selected={section.key === selectedKey}
-                    onSelect={onSelect}
-                  />
-                </li>
+              {group.items.map((item) => (
+                <option key={item.key} value={item.href}>
+                  {optionLabel(item)}
+                </option>
               ))}
-            </ul>
-          </div>
-        );
-      })}
-    </nav>
+            </optgroup>
+          ))}
+        </select>
+      </div>
+
+      <nav
+        aria-label={ariaLabel}
+        // Sticky against `main`, which is the app shell's scrollport on desktop
+        // (src/app/(app)/layout.tsx). Capped and scrollable so a long menu can
+        // never push its own last row out of reach.
+        className="hidden border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)] lg:sticky lg:top-24 lg:block lg:max-h-[calc(100vh-48px-var(--platform-admin-bar-height))] lg:overflow-y-auto"
+      >
+        {groups.map((group) => {
+          const headingId = `${idPrefix}-group-${group.key}`;
+          return (
+            <div
+              key={group.key}
+              className="border-b-[1.5px] border-[var(--clr-dark-purple-40)] last:border-b-0"
+            >
+              <div className="flex flex-col gap-4 border-b-[1px] border-[var(--clr-dark-purple-10)] px-12 py-10">
+                <h2 id={headingId} className="title-chapter-title text-[var(--color-text-tertiary)]">
+                  {group.label}
+                </h2>
+                {group.detail && (
+                  <span className="body-small truncate text-[var(--color-text-secondary)]">
+                    {group.detail}
+                  </span>
+                )}
+              </div>
+              <ul aria-labelledby={headingId} className="flex flex-col py-4">
+                {group.items.map((item) => (
+                  <li key={item.key}>
+                    <RailRow
+                      item={item}
+                      selected={item.key === selectedKey}
+                      onNavigate={onNavigate}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </nav>
+    </>
   );
 }
 
 function RailRow({
-  section,
+  item,
   selected,
-  onSelect,
+  onNavigate,
 }: {
-  section: SettingsSectionMeta;
+  item: SettingsRailItem;
   selected: boolean;
-  onSelect?: (key: string) => void;
+  onNavigate?: (href: string) => void;
 }) {
-  const SectionIcon = section.icon;
-  const className = `flex w-full items-center gap-10 border-l-[2px] py-10 pl-16 pr-12 text-left transition-colors ${
-    selected
-      ? "border-l-[var(--clr-red)] bg-[var(--sea)]"
-      : "border-l-transparent hover:bg-[var(--sea)]"
-  }`;
-
-  const body = (
-    <>
-      <SectionIcon
+  const ItemIcon = item.icon;
+  return (
+    <Link
+      href={item.href}
+      aria-current={selected ? "page" : undefined}
+      onClick={(event) => {
+        if (!onNavigate || !isPlainLeftClick(event)) return;
+        event.preventDefault();
+        onNavigate(item.href);
+      }}
+      className={`flex w-full items-center gap-10 border-l-[2px] py-10 pl-16 pr-12 text-left transition-colors ${
+        selected
+          ? "border-l-[var(--clr-red)] bg-[var(--sea)]"
+          : "border-l-transparent hover:bg-[var(--sea)]"
+      }`}
+    >
+      <ItemIcon
         size={16}
         weight="bold"
+        aria-hidden
         className={
           selected
             ? "shrink-0 text-[var(--clr-red)]"
@@ -142,37 +214,15 @@ function RailRow({
             : "text-[var(--color-text-secondary)]"
         }`}
       >
-        {section.label}
+        {item.label}
       </span>
-      {section.needsAttention && (
+      {item.needsAttention && (
         <span
+          role="img"
           aria-label="Needs attention"
           className="size-6 shrink-0 rounded-full bg-[var(--st-wait)]"
         />
       )}
-    </>
-  );
-
-  if (section.href) {
-    return (
-      <Link
-        href={section.href}
-        aria-current={selected ? "page" : undefined}
-        className={className}
-      >
-        {body}
-      </Link>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect?.(section.key)}
-      aria-current={selected ? "page" : undefined}
-      className={className}
-    >
-      {body}
-    </button>
+    </Link>
   );
 }

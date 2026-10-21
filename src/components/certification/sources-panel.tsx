@@ -127,7 +127,7 @@ function PanelBodyForRemoval({
   if (!query.data.hasMapping) {
     return (
       <p className="body-small text-[var(--color-text-secondary)]">
-        Link this facility to an Isometric project in facility settings
+        Link this facility to an Isometric project in Settings, Facilities
         before submitting sources.
       </p>
     );

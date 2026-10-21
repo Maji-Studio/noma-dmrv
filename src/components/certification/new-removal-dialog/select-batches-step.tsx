@@ -14,7 +14,7 @@ import Link from "next/link";
 import { formatUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import { InfoHint } from "@/components/ui/tooltip";
-import { certificationRemovalTemplatesHref, certificationSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
+import { removalTemplatesSettingsHref, facilityCertificationSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
 import {
   facilityBlueprintLabel,
   type FacilitySetupGap,
@@ -142,7 +142,7 @@ export function SelectBatchesStep({
               action={
                 copy.action && (
                   <Link
-                    href={copy.action.target === "removalTemplates" ? certificationRemovalTemplatesHref(facilityId) : certificationSettingsHref(facilityId)}
+                    href={copy.action.target === "removalTemplates" ? removalTemplatesSettingsHref(facilityId) : facilityCertificationSettingsHref(facilityId)}
                     className="inline-flex items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
                   >
                     {copy.action.label}

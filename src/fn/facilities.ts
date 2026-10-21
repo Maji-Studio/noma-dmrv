@@ -23,6 +23,7 @@ import {
   createFacilitySchema,
   restoreFacilitySchema,
   updateFacilitySchema,
+  type CreateFacilityData,
 } from "@/schemas/facilities";
 import type { ActionResult } from "@/types/actions";
 import {
@@ -63,7 +64,7 @@ export async function getFacilityCountriesFn(
  * Create a new facility
  */
 export async function createFacilityFn(
-  data: z.infer<typeof createFacilitySchema>
+  data: CreateFacilityData
 ): Promise<ActionResult<Facility>> {
   return withAction(async (ctx) => {
     const validated = createFacilitySchema.parse(data);

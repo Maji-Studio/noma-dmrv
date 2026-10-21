@@ -24,10 +24,10 @@ import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import {
-  CERTIFICATION_SETTINGS_MAKE_DEFAULT_PARAM,
-  CERTIFICATION_SETTINGS_SETUP_PARAM,
-  CERTIFICATION_SETTINGS_TEMPLATE_PARAM,
-  certificationSettingsHref,
+  REMOVAL_TEMPLATES_MAKE_DEFAULT_PARAM,
+  REMOVAL_TEMPLATES_SETUP_PARAM,
+  REMOVAL_TEMPLATES_TEMPLATE_PARAM,
+  facilityCertificationSettingsHref,
 } from "@/lib/certification/links";
 import { formatCount } from "@/lib/copy-utils";
 import { SETUP_NOT_LINKED_MESSAGE } from "@/lib/certification/removal-template-blockers";
@@ -37,14 +37,14 @@ import { blockedCopy, blockedReasonLine, storedEntryCount } from "@/lib/certific
 const EMPTY_ICON_SIZE = 32;
 /** The dialog is open while `setup` is in the URL, so a link and a button open the same thing. */
 const SETUP_PARAMS = {
-  [CERTIFICATION_SETTINGS_SETUP_PARAM]: parseAsString,
-  [CERTIFICATION_SETTINGS_TEMPLATE_PARAM]: parseAsString,
-  [CERTIFICATION_SETTINGS_MAKE_DEFAULT_PARAM]: parseAsString,
+  [REMOVAL_TEMPLATES_SETUP_PARAM]: parseAsString,
+  [REMOVAL_TEMPLATES_TEMPLATE_PARAM]: parseAsString,
+  [REMOVAL_TEMPLATES_MAKE_DEFAULT_PARAM]: parseAsString,
 };
 const CLOSED_SETUP = {
-  [CERTIFICATION_SETTINGS_SETUP_PARAM]: null,
-  [CERTIFICATION_SETTINGS_TEMPLATE_PARAM]: null,
-  [CERTIFICATION_SETTINGS_MAKE_DEFAULT_PARAM]: null,
+  [REMOVAL_TEMPLATES_SETUP_PARAM]: null,
+  [REMOVAL_TEMPLATES_TEMPLATE_PARAM]: null,
+  [REMOVAL_TEMPLATES_MAKE_DEFAULT_PARAM]: null,
 };
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -61,8 +61,8 @@ export function RemovalTemplateSummaryCard({ facilityId }: { facilityId: string 
   const [request, setRequest] = useQueryStates(SETUP_PARAMS, { shallow: true, history: "replace" });
   const openSetup = (step: "template" | "decisions", templateId: string | null) => void setRequest({
     ...CLOSED_SETUP,
-    [CERTIFICATION_SETTINGS_SETUP_PARAM]: step,
-    [CERTIFICATION_SETTINGS_TEMPLATE_PARAM]: templateId,
+    [REMOVAL_TEMPLATES_SETUP_PARAM]: step,
+    [REMOVAL_TEMPLATES_TEMPLATE_PARAM]: templateId,
   });
   // The dialog sits beside the card, not inside a branch, so it survives the card changing state after Apply.
   // Members never mount it, so a setup link only shows them the card.
@@ -93,9 +93,9 @@ function SummaryBody({ facilityId, onOpenSetup }: { facilityId: string; onOpenSe
       <EmptyState
         icon={<ListChecksIcon size={EMPTY_ICON_SIZE} weight="bold" />}
         title="No Removal templates yet"
-        description="Link this facility to an Isometric project in Certifier. Its Removal templates show here."
+        description="Link this facility to an Isometric project in Settings, Facilities. Its Removal templates show here."
         padding="sm"
-        action={<Link href={certificationSettingsHref(facilityId)} className="body-small underline underline-offset-2">Open Certifier</Link>}
+        action={<Link href={facilityCertificationSettingsHref(facilityId)} className="body-small underline underline-offset-2">Open Settings, Facilities</Link>}
       />
     );
   }

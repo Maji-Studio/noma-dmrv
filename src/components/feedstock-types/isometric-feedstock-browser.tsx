@@ -22,9 +22,8 @@ import type { IsometricFeedstockType } from "@/lib/isometric";
 import { cn } from "@/lib/utils";
 import { IsometricLink } from "@/components/certification/isometric-link";
 import { isometricRegistry } from "@/lib/isometric/links";
+import { facilityCertificationSettingsHref } from "@/lib/certification/links";
 
-const settingsHref = (facilityId: string) =>
-  `/certification/settings?facility=${encodeURIComponent(facilityId)}`;
 
 interface IsometricFeedstockBrowserProps {
   onSelect?: (type: IsometricFeedstockType) => void;
@@ -67,10 +66,10 @@ export function IsometricFeedstockBrowser({
         This facility isn&apos;t linked to an Isometric project, so the
         registry catalogue isn&apos;t available. Link it in{" "}
         <Link
-          href={settingsHref(facilityId)}
+          href={facilityCertificationSettingsHref(facilityId)}
           className="underline underline-offset-2 hover:text-[var(--color-text-primary)]"
         >
-          Certification → Settings
+          Settings, Facilities
         </Link>
         .
       </Message>

@@ -106,12 +106,14 @@ const facilityFormBaseSchema = z.object({
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLongitudeSchema),
   contactEmail: contactEmailSchema,
   contactPhone: contactPhoneSchema,
-  // Authoritative durability tier for the facility (ADR 0021) — inherited by
-  // its credit batches and samples. 1000-year is the go-forward default.
-  durabilityOption: z.enum(durabilityOptions).default("1000_year"),
   timezone: requiredTimezoneSchema(),
 });
 
+/**
+ * The facility form: site details only. The durability tier is certification
+ * configuration and is set in Settings, Facilities (#1277), so the form never
+ * sends it and an edit cannot reset it.
+ */
 export const facilityFormSchema =
   facilityFormBaseSchema.superRefine(gpsPairSuperRefine);
 
@@ -120,10 +122,14 @@ export const facilityFormSchema =
 // ============================================
 
 /**
- * Schema for creating a facility (server action)
- * Same as form schema - all required fields must be present
+ * Schema for creating a facility (server action): the form's fields plus the
+ * authoritative durability tier (ADR 0021), inherited by the facility's credit
+ * batches and Samples. 1000-year is the go-forward default; the API and the
+ * seed may name it, the form does not.
  */
-export const createFacilitySchema = facilityFormSchema;
+export const createFacilitySchema = facilityFormBaseSchema
+  .extend({ durabilityOption: z.enum(durabilityOptions).default("1000_year") })
+  .superRefine(gpsPairSuperRefine);
 
 /**
  * Schema for updating a facility (server action)
@@ -217,7 +223,8 @@ export const facilityFilterSchema = z.object({
 
 export type { GpsCoordinates } from "./helpers";
 export type FacilityFormData = z.infer<typeof facilityFormSchema>;
-export type CreateFacilityData = z.infer<typeof createFacilitySchema>;
+/** The tier is optional on input: the schema defaults it to 1000-year. */
+export type CreateFacilityData = FacilityFormData & { durabilityOption?: DurabilityOption };
 export type UpdateFacilityData = z.infer<typeof updateFacilitySchema>;
 export type ArchiveFacilityData = z.infer<typeof archiveFacilitySchema>;
 export type FacilityFilterData = z.infer<typeof facilityFilterSchema>;

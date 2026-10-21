@@ -140,7 +140,7 @@ describe("buildCreditBatchOpenItems", () => {
     expect(result.blocking.map(row => [row.title, row.target])).toEqual([
       ["No Sample data", { tab: "samples" }],
       ["Emissions not recorded", { tab: "emissions" }],
-      ["Template components not ready", { href: "/certification/settings?section=removal-templates&facility=facility" }],
+      ["Template components not ready", { href: "/settings/removal-templates?facility=facility" }],
       ["Distances not recorded", { href: "/customers?location=location" }],
     ]);
   });
