@@ -23,6 +23,7 @@ This is the per-surface log of what we tried, what replaced it, and why. Read it
 - **Section headings** (#995): "Required information", "Additional information" → removed; section titles are optional, and read views follow the form.
 - **Stock entries**: a "Correct entry" action on stock movements → rejected; correct the source form or use a named correction.
 - **Production run status** (#991): Draft and Running on create → create as Running or Complete; Cancelled is an action.
+- **Refused saves** (#1298; 2026-10-20): one bottom line, delivery all-or-nothing → each reason at the field it names, the rest at the bottom. A lock shows "Locked" at each changed field with the reason once; the summary says "Not saved. 1 field is locked.", not "Fix". Whole-record locks stay at the bottom. Locks are not re-read after a refusal (#1327). 2026-10-21 look pass: one box, names-only links, title/detail split, full-width field messages.
 - **Choice controls** (form cleanup, 2026-09-29): selector text → choice cards when the choice has a consequence, segmented controls for short equal options, selects for the rest.
 
 ## OAuth consent
@@ -32,6 +33,10 @@ This is the per-surface log of what we tried, what replaced it, and why. Read it
 ## Onboarding
 
 - **Setup wizard** (#500 → #940 → #965; 2026-07-22 to 10-13): wizard with Back and Skip → Continue only, back through the step header → wizard removed; setup runs from the dashboard guide through the normal create sheets.
+
+## Certification settings
+
+- **Removal template setup** (#1276, PR 2; 2026-10-20, Kenji picked variant B): the "Removal templates" pane listed every template with every component to review (103 open questions on the audit, Save about 5000px down) → a summary card in the pane plus a full-page setup (`/certification/settings/removal-template-setup`): step rail (Template, Decisions, Apply), a What happens aside that fills in as you decide, only templates that fit the facility offered, one line naming the rest. noma decides what it can; the page asks only what it cannot, and the other components stay folded with Change. One fit with nothing to decide opens on Apply. No recommended template: with several fits nothing is preselected. Owner and Admin are one level; Members see the card without buttons. Why it is not #965: that removed a multi-entity wizard with Back and Skip that duplicated the create sheets; this is one configuration task with 0 to 3 real questions, entered from the summary or a blocker, never gating first run, no Skip, and it stores nothing until Apply. Rejected: a checklist inside Settings (C) and a stepper dialog (A).
 
 ## Stock, bins and transport
 

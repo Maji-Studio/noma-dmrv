@@ -164,7 +164,7 @@ export const selectOrganizationSchema = createSelectSchema(organizations);
  *
  * Platform Admins deliberately have NO member rows (their override comes from
  * `users.role = "admin"`); a member row always means "real org user".
- * `role` is one of owner | admin | member (plugin defaults).
+ * `role` is one of admin | member (plugin defaults).
  */
 export const members = pgTable(
   "members",
@@ -176,7 +176,7 @@ export const members = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    role: text("role").notNull().default("member"), // owner | admin | member
+    role: text("role").notNull().default("member"), // admin | member
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [

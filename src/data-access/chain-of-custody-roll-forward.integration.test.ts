@@ -20,7 +20,7 @@ const probe = new Client({ connectionString: url, connectionTimeoutMillis: CONNE
 const available = await probe.connect().then(() => true, () => false);
 await probe.end();
 if (!available && process.env.CI) throw new Error("Roll-forward tests require PostgreSQL in CI");
-const ctx: OrgContext = { organizationId: "roll-forward-org", userId: "roll-forward-user", orgRole: "owner", isPlatformAdmin: false };
+const ctx: OrgContext = { organizationId: "roll-forward-org", userId: "roll-forward-user", orgRole: "admin", isPlatformAdmin: false };
 const ids = Object.fromEntries(["formulation", "facility", "bin", "run", "outsideRun", "shipped", "stocked", "foreign", "legacy", "delivery", "order", "batch"].map(key => [key, randomUUID()]));
 const org = { organizationId: ctx.organizationId };
 let client: Client;

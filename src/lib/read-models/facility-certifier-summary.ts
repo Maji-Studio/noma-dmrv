@@ -51,7 +51,6 @@ export async function readFacilityCertifierSummary(
     viewerCanDeleteRegistryRemovals: hasOrgRole(ctx, REMOVAL_REGISTRY_DELETION_MIN_ROLE),
     viewerCanManage:
       ctx.isPlatformAdmin ||
-      ctx.orgRole === "owner" ||
       ctx.orgRole === "admin",
   };
 }

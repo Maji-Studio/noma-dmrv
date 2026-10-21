@@ -13,7 +13,7 @@ export async function loadRemovalEmptyLines(ctx: OrgContext, removalId: string) 
   const editable = await isRemovalZeroEditable(ctx, removalId);
   const emptyLines = emptyRemovalEmissionLines(context.emissionLinesByBatchId ?? {});
   return { removalVersion: removal?.updatedAt.getTime() ?? null,
-    /** False once an attempt was submitted or is in flight, or the Removal is being deleted: zeros cannot change. */
+    /** False once an attempt was submitted or is in flight, or the Removal is being deleted: zeros cannot change. A returned Removal with an open correction window stays editable. */
     editable, batches: context.memberBatches.map((batch) => {
     const templateLines = context.emissionLinesByBatchId?.[batch.id] ?? [];
     // Template order (group, then component): the derived lines are already sorted that way.

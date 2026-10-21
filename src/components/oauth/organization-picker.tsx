@@ -14,7 +14,7 @@ import { oauthAppNameStart, oauthRoleLabel } from "./oauth-labels";
 const EMPTY_ICON_SIZE = 32;
 const TITLE = "Choose an organization";
 const EMPTY_TITLE = "No organizations yet";
-const EMPTY_DESCRIPTION = "Ask an Owner to invite you.";
+const EMPTY_DESCRIPTION = "Ask an Admin to invite you.";
 const EMPTY_ADMIN_TITLE = "Join an organization first";
 const EMPTY_ADMIN_DESCRIPTION = "Apps connect as a member of an organization. Platform Admins are not members, so invite yourself to one in Settings, then connect again.";
 

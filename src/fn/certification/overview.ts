@@ -1,5 +1,6 @@
 "use server";
 
+
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { buildDurabilityBatchSummaries } from "@/lib/certification/durability-batch-summary";
 import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
@@ -421,7 +422,7 @@ export async function loadCreditBatchHealthSummaries(
         checkCount: buildCreditBatchOpenItems({
           facilityId: validFacilityId,
           creditBatchId: batchId,
-          canManage: orgCtx.isPlatformAdmin || orgCtx.orgRole === "owner" || orgCtx.orgRole === "admin",
+          canManage: orgCtx.isPlatformAdmin || orgCtx.orgRole === "admin",
           health,
           durability: durabilityByBatch.get(batchId),
           emissionLines: emissionDisplayByBatch?.get(batchId)?.lines,

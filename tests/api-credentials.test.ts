@@ -82,7 +82,7 @@ beforeEach(async () => {
         id: randomUUID(),
         organizationId: ctx.organizationId,
         userId: actorId,
-        role: "owner",
+        role: "admin",
       },
     ]);
   const token = randomUUID();
@@ -278,7 +278,7 @@ describe("credential issuance and management", () => {
     })).rejects.toMatchObject({ code: "not_found" });
     await expect(revokeApiKey(foreign, { id: created.id, expectedVersion: 1 })).rejects.toMatchObject({ code: "not_found" });
   });
-  it.each(["create", "update", "delete"])("refuses the client plugin %s endpoint even with an Owner cookie", async (action) => {
+  it.each(["create", "update", "delete"])("refuses the client plugin %s endpoint even with an Admin cookie", async (action) => {
     const created = await createApiKey(ctx, input());
     const response = await auth.handler(new Request(`http://localhost:3100/api/auth/api-key/${action}`, {
       method: "POST",
@@ -351,7 +351,7 @@ describe("credential resolution", () => {
     const managerCtx = {
       ...ctx,
       userId: actorId,
-      orgRole: "owner" as const,
+      orgRole: "admin" as const,
     };
     expect((await listApiKeys(managerCtx)).find((key) => key.id === created.id)?.enabled).toBe(false);
     await auth.api.addMember({

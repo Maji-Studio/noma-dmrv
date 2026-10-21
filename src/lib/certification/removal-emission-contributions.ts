@@ -18,7 +18,7 @@ export function deriveRemovalEntryWindow(
   return { start: starts[0], end: ends[ends.length - 1] };
 }
 export interface EntryContender {
-  contenderKind: "draft";
+  contenderKind: "draft" | "correction";
   removalId: string;
   createdAt: string;
   creditBatchIds: readonly string[];
@@ -66,7 +66,7 @@ export function isLiveEntryReservation(row: {
   if (row.status !== "draft") return true;
   return nowMs - (row.lockedAt?.getTime() ?? 0) < LOCK_TTL_MS;
 }
-function inWindow(entry: RemovalEntryFact, window: RemovalEntryWindow) {
+export function inWindow(entry: { occurredOn: string }, window: RemovalEntryWindow) {
   return entry.occurredOn >= window.start && entry.occurredOn <= window.end;
 }
 export function removalEntryOwner(entry: RemovalEntryFact, contenders: readonly EntryContender[]): string | null {
@@ -76,7 +76,7 @@ export function removalEntryOwner(entry: RemovalEntryFact, contenders: readonly 
   if (entry.sendReservedBySubmissionId && !entry.reservationKnownInactive) return null;
   return contenders.filter((draft) => draft.creditBatchIds.includes(entry.creditBatchId) && inWindow(entry, draft.window) &&
     (entry.kind !== "zero" || entry.confirmedForRemovalId === draft.removalId))
-    .sort((a, b) => a.window.end.localeCompare(b.window.end) || a.createdAt.localeCompare(b.createdAt) || a.removalId.localeCompare(b.removalId))[0]?.removalId ?? null;
+    .sort((a, b) => Number(b.contenderKind === "correction") - Number(a.contenderKind === "correction") || a.window.end.localeCompare(b.window.end) || a.createdAt.localeCompare(b.createdAt) || a.removalId.localeCompare(b.removalId))[0]?.removalId ?? null;
 }
 
 /** Shared by batch reads and the transactional zero writer. */
@@ -130,7 +130,12 @@ export function deriveRemovalEntryContributions(args: {
   for (const componentId of components) {
     const entries = selected.filter((entry) => entry.componentId === componentId).sort((a, b) => a.id.localeCompare(b.id));
     const values = entries.filter((entry) => entry.kind === "value");
-    if (args.lineSources[componentId].entryPolicy === "single" && values.length > 1) {
+    const inputs = args.monitoredInputs.filter((input) => input.componentId === componentId);
+    if (inputs.length > 1 && effectiveContract(args.lineSources[componentId]).entryPolicy === "additive") {
+      result.blockers.push({ code: "lineNeedsReview", message: "Review this component's entry policy. Paired inputs require a single entry.", fixTarget: "emissions", creditBatchId: entries[0].creditBatchId, lineRef: { componentId, displayName: componentId } });
+      continue;
+    }
+    if ((inputs.length > 1 || effectiveContract(args.lineSources[componentId]).entryPolicy === "single") && values.length > 1) {
       result.blockers.push({ code: "singleLineMultipleEntries", message: "This component has values on more than one credit batch. Create separate Removals for these batches.", fixTarget: "emissions", creditBatchId: values[0].creditBatchId, lineRef: { componentId, displayName: componentId } });
       continue;
     }

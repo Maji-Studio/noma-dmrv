@@ -22,7 +22,7 @@ credential and denial contracts.
 
 ### OAuth for API callers
 
-Use an OAuth connection for an app acting as a member, or an Owner/Admin API key
+Use an OAuth connection for an app acting as a member, or an Admin API key
 for scripts and internal agents. Send one `Authorization: Bearer <credential>`;
 cookies and `x-api-key` never authenticate. [Auth](./auth.md#oauth-connections)
 owns generation checks and denial precedence; [security](./security.md#oauth-provider-and-client-controls)
@@ -51,7 +51,7 @@ REST and MCP tokens are not interchangeable: the other audience gives 401
 
 [Grantable scopes](../src/lib/auth/oauth-scopes.ts) are the API `:read` and
 `:write` set, never `:delete`. Unknown or delete scopes give `invalid_scope`.
-Owner, Admin and Member have the same OAuth ceiling; domain guards still apply.
+Admin and Member have the same OAuth ceiling; domain guards still apply.
 Every connect except a step-up offers three choices: Read only, Read and write
 (never deletes) and Choose per area. A first connect starts at Read only; a
 reconnect starts from the stored consent: Read only when it is exactly the requested
@@ -86,7 +86,7 @@ tier stays until real connector traffic exists (see
 #### Connected apps
 
 At `/settings/connected-apps`, each member sees and disconnects their own
-connections in the active organization. Owners and Admins also have All members
+connections in the active organization. Admins also have All members
 and may disconnect anyone's connection. A Platform Admin needs real membership.
 Disconnect ends the generation immediately; records it saved stay. Reconnecting
 creates a new generation and idempotency namespace. The picker chooses the
@@ -422,7 +422,7 @@ Stock-lane refusals return `insufficient_stock` with the bin and blockers plus
 `errors[].meta`: `storageLocationId`, `availableWetKg`, `requestedWetKg` and
 `unit: "kg"`. For post-write integrity, available mass is the proposed intake
 supply plus positive net movements; requested mass is existing consumption plus
-negative net movements. The operator message remains unchanged.
+negative net movements. The operator message remains unchanged. The short issue message names the bin and shortfall; its path is `massWetKg` for an intake edit in the same bin, otherwise `storageLocationId` (including deletes and loss corrections).
 
 ### Intake lookup REST adapters
 

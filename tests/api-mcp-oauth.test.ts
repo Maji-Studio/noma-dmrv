@@ -54,7 +54,7 @@ async function call(token: Awaited<ReturnType<typeof access>>, name: string, arg
 }
 
 describe("OAuth MCP admission and writes", { timeout: TIMEOUT_MS }, () => {
-  it.each(["owner", "admin", "member"])("lists grantable tools within the live %s ceiling", async role => {
+  it.each(["admin", "member"])("lists grantable tools within the live %s ceiling", async role => {
     await db.update(members).set({ role }).where(and(eq(members.organizationId, f.ctx.organizationId), eq(members.id, memberId)));
     const token = await access();
     const response = await MCP(oauthRpc(token, "tools/list"));

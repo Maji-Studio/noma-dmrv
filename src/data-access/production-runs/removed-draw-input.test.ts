@@ -3,7 +3,7 @@ import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import { createProductionRunInTransaction } from "./mutations";
 
-const ctx: OrgContext = { organizationId: "org", userId: "user", orgRole: "owner", isPlatformAdmin: false };
+const ctx: OrgContext = { organizationId: "org", userId: "user", orgRole: "admin", isPlatformAdmin: false };
 
 describe("explicit production draw inputs", () => {
   it("does not turn obsolete bin and mass properties into a draw", async () => {

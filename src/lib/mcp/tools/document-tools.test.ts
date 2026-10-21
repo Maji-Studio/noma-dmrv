@@ -17,7 +17,7 @@ it.each([
   { scopes: ["deliveries:read"], role: "admin", names: ["find_documents", "get_document_download_url"] },
   { scopes: ["orders:write"], role: "admin", names: [] },
   { scopes: ["deliveries:read", "deliveries:write"], role: "member", names: [] },
-  { scopes: ["lab-samples:write"], role: "owner", names: ["request_document_upload", "confirm_document_upload"] },
+  { scopes: ["lab-samples:write"], role: "admin", names: ["request_document_upload", "confirm_document_upload"] },
 ])("shows only the document tools admitted by $role and $scopes", ({ scopes, role, names }) => {
   expect(all().filter(tool => tool.visible!(context(scopes as ApiScope[], role))).map(tool => tool.name)).toEqual(names);
 });

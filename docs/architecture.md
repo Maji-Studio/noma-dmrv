@@ -180,11 +180,12 @@ history-row label, and the stale-version sentinel
 parent the operator manages it from: a feedstock-type delete blocked by a
 production process names its facility, one blocked by a formulation
 ingredient names its formulation. Mutation hooks re-throw a
-failure through `throwActionError` (`src/lib/stale-version.ts`): a stale save
-becomes `StaleVersionError`, any other conflict becomes `ConflictError` with
-its blockers. Forms are expected to honor both; the first list consumer is
-the feedstock edit sheet, which shows the runs and products a negative-stock
-refusal named.
+failure through `throwActionError` (`src/lib/stale-version.ts`) as an
+`ActionError` carrying `code`, `issues` (always an array), `conflict`, `blockers`
+and `preview`. A stale save becomes `StaleVersionError`; any other conflict
+becomes `ConflictError`. Both extend `ActionError`. Forms are expected to honor
+both; the first list consumer is the feedstock edit sheet, which shows the runs
+and products a negative-stock refusal named.
 
 The success branch may carry `warning?: string`: the write committed and a
 non-fatal follow-up did not (a preference that was not stored, an enrichment
@@ -287,9 +288,9 @@ runtime.
 - `src/app/(app)/layout.tsx` enforces auth and mounts `FacilityProvider`.
 - **Three configuration surfaces, deliberately not one.** `/settings`
   (`Members` · `Defaults` · `Vehicles and crew` · `API keys`) is org configuration. Every member can view the
-  Members roster; only Owners/Admins (and Platform Admins) can mutate membership
+  Members roster; only Admins (and Platform Admins) can mutate membership
   or open Defaults. Every member can edit and delete vehicles, drivers and
-  operators in Vehicles and crew, as every member can create them from a picker. API keys require a verified Owner/Admin membership; a
+  operators in Vehicles and crew, as every member can create them from a picker. API keys require a verified Admin membership; a
   Platform Admin without that membership cannot manage keys.
   `/certification/settings` is registry configuration and
   stays there by ADR
@@ -364,10 +365,20 @@ runtime.
 
 ### Hook ActionResult unwrapping
 
-Hooks unwrap an `ActionResult` with `unwrap()` from `src/hooks/types.ts`.
+Hooks unwrap an `ActionResult` with `unwrap()` from `src/hooks/types.ts`,
+which delegates failures to `throwActionError`. Hooks throw `ActionError`
+(`src/lib/action-error.ts`) carrying the server message, `code`, `issues`
+(always an array), `conflict`, `blockers` and `preview`. Stale-version and
+conflict errors retain their subclasses.
 The only exception is a hook that reads `field`, `conflict` or `warning`, or
 returns something other than `result.data`; typed errors go through
 `throwActionError`. `pnpm check:action-boundaries` enforces this rule.
+
+A form shows what the hook kept: `useSaveRefusal` files each issue on the field
+it names and returns the footer text for the rest (see
+[forms.md](./forms.md#components), `FormError` / `ServerError`). Edit forms for
+deliveries, applications and feedstock updates use it; the other forms still
+show the one footer line.
 
 ### Authenticated read transport
 
@@ -661,7 +672,7 @@ operational `/certification/*` routes on the facility having a registry link;
 Settings stays open. It is mounted in the certification layout. **New
 operational certification routes must sit inside that guard.**
 
-**Generated GHG Statement report:** an Owner/Admin prepares a versioned PDF from
+**Generated GHG Statement report:** an Admin prepares a versioned PDF from
 live Isometric statement and GHG Entry facts, reviews it through the normal
 org-scoped document route, then approves it. Submission rotates a random
 per-report verifier token, stores only its SHA-256 digest, and sends Isometric

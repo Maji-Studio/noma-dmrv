@@ -89,7 +89,7 @@ describe.sequential("certifier credentials authorization", () => {
     ).resolves.toMatchObject({ configured: false, accessTokenLast4: null });
   });
 
-  for (const role of ["owner", "admin"] as const) {
+  for (const role of ["admin"] as const) {
     it(`allows an organization ${role} to manage the active organization`, async () => {
       const ctx = context(role);
       await upsert(ctx, `${role}-5678`);

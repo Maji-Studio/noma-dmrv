@@ -6,7 +6,7 @@ import { getCertifierProjectByFacility, updateFacilityDefaultRemovalTemplate, ty
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
-import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import { REMOVAL_TEMPLATE_BLOCKERS, SETUP_NOT_LINKED_MESSAGE } from "@/lib/certification/removal-template-blockers";
 import { SafeError } from "@/lib/errors";
 import { listComponentBlueprints, listGhgEntryTemplates } from "@/lib/isometric";
 import { assertSequestrationTemplateSelectable } from "@/lib/isometric/transformers/sequestration-binding";
@@ -22,7 +22,7 @@ import { ISOMETRIC_PROVIDER } from "./shared";
 async function loadSetupTarget(ctx: OrgContext, input: StartRemovalTemplateSetupInput) {
   await requireOrgFacility(ctx, input.facilityId);
   const mapping = await getCertifierProjectByFacility(ctx, input.facilityId, ISOMETRIC_PROVIDER);
-  if (!mapping) throw new SafeError("Link this facility to an Isometric project first.");
+  if (!mapping) throw new SafeError(SETUP_NOT_LINKED_MESSAGE);
   const client = await resolveIsometricClient(ctx);
   const templates = await listGhgEntryTemplates(client, mapping.externalProjectId);
   const template = templates.find((candidate) => candidate.id === input.removalTemplateId);

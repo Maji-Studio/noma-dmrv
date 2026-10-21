@@ -22,7 +22,7 @@ const EXPLICIT_PRODUCTION_DAY = "2026-01-09";
 const ctx: OrgContext = {
   organizationId: `calendar-day-${randomUUID()}`,
   userId: `calendar-day-actor-${randomUUID()}`,
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 };
 

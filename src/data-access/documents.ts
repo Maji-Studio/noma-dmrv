@@ -54,9 +54,9 @@ const TRANSPORT_LEDGER_DOCUMENT_ENTITY_TYPE = "credit_batch";
 const TRANSPORT_LEDGER_DOCUMENT_TYPE = "pdf";
 
 export const DOCUMENT_REGISTRY_ROLE_ERROR =
-  "Only Owners and Admins can delete a document that has a Source on Isometric. Ask an Owner or Admin to delete it.";
+  "Only Admins can delete a document that has a Source on Isometric. Ask an Admin to delete it.";
 export const PARENT_DOCUMENT_REGISTRY_ROLE_ERROR =
-  "Only Owners and Admins can delete this record while one of its documents has a Source on Isometric. Ask an Owner or Admin to delete it.";
+  "Only Admins can delete this record while one of its documents has a Source on Isometric. Ask an Admin to delete it.";
 
 export type DocumentRow = typeof documents.$inferSelect;
 export type NewDocumentRow = typeof documents.$inferInsert;
@@ -525,8 +525,11 @@ export async function retireTombstonedEmissionEntryDocuments(
   const entries = await tx.select().from(emissionEntries)
     .where(and(eq(emissionEntries.organizationId, ctx.organizationId), inArray(emissionEntries.id, entryIds)))
     .for("update");
+  // A zero's confirmation identifies its draft Removal, not a send claim.
+  // Batch deletion tombstones live zeros before reaching this guard.
   if (entries.length !== entryIds.length || entries.some(entry => !entry.deletedAt ||
-    entry.sentByRemovalId || entry.sendReservedBySubmissionId || entry.confirmedForRemovalId)) {
+    entry.sentByRemovalId || entry.sendReservedBySubmissionId ||
+    (entry.kind !== "zero" && entry.confirmedForRemovalId))) {
     throw new SafeError("Delete this credit batch's emissions entries before deleting it.");
   }
   await retireOwnedDocuments(ctx, tx, entries.map(entry => ({

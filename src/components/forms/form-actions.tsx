@@ -5,8 +5,10 @@
  * Sticky by default (side-sheet forms); pass `sticky={false}` for nested
  * inline forms (e.g. transport legs, child-entity editors).
  *
- * Footer order, top to bottom: action error, refused-field summary, why Save
- * is off, the optional association `preview`, then the buttons.
+ * The one error box (action error, refused-field summary, references) is
+ * normal flow at the end of the form, directly above the footer. The footer
+ * order, top to bottom: why Save is off, the optional association `preview`,
+ * then the buttons.
  */
 "use client";
 
@@ -59,6 +61,8 @@ interface FormActionsProps<
   submitLabel?: string;
   showSubmit?: boolean;
   submitVariant?: React.ComponentProps<typeof Button>["variant"];
+  /** Extra classes for the submit button, for a label that must wrap on phones. */
+  submitClassName?: string;
   submittingLabel?: string;
   defaultSubmitLabel?: string;
   /** Context-specific label for the secondary action. */
@@ -101,6 +105,7 @@ export function FormActions<
   submitLabel,
   showSubmit = true,
   submitVariant = "primary",
+  submitClassName,
   submittingLabel = "Saving...",
   defaultSubmitLabel = "Save",
   cancelLabel = "Cancel",
@@ -159,6 +164,20 @@ export function FormActions<
       )}
     {/* A read-only form (a lock that arrived Sent) offers no actions here; its
         container keeps the way back and the lock line says why. */}
+    {/* The error box scrolls with the form, after its last field. */}
+    {!block?.readOnly && (
+      control && showSubmit ? (
+        <FormErrorSummary
+          control={control}
+          directory={fieldDirectory}
+          getForm={getForm}
+          message={errorMessage}
+          action={errorAction}
+        />
+      ) : (
+        <ScrolledServerError message={errorMessage} action={errorAction} />
+      )
+    )}
     {!block?.readOnly && (showSubmit || handleCancel || errorMessage) && <div
       ref={sticky ? reserveStickyFooterSpace : undefined}
       className={cn(
@@ -172,10 +191,6 @@ export function FormActions<
           : "pt-20"
       )}
     >
-      <ServerError message={errorMessage} action={errorAction} />
-      {control && showSubmit && (
-        <FormErrorSummary control={control} directory={fieldDirectory} getForm={getForm} />
-      )}
       {/* Why Save is off sits above the buttons, in the tone of the block. */}
       {showSubmit && block && (
         <Notice
@@ -196,6 +211,7 @@ export function FormActions<
           ref={attachSubmit}
           type={submitType}
           variant={submitVariant}
+          className={submitClassName}
           form={formId}
           onClick={(event) => {
             if (submitType === "submit") skipNativeChecksUnlessUnparsed(event.currentTarget);
@@ -214,6 +230,25 @@ export function FormActions<
       </div>
     </div>}
     </>
+  );
+}
+
+/**
+ * The error box of a form without the summary (no `control`, or no Save). It
+ * sits at the end of the form, so a new message scrolls into view; focus stays
+ * put because the alert role announces it.
+ */
+function ScrolledServerError({ message, action }: { message?: string; action?: React.ReactNode }) {
+  const boxRef = React.useRef<HTMLDivElement>(null);
+  // Sanctioned useEffect: scrolling is imperative DOM work.
+  React.useEffect(() => {
+    if (message) boxRef.current?.scrollIntoView({ block: "nearest" });
+  }, [message]);
+  if (!message) return null;
+  return (
+    <div ref={boxRef}>
+      <ServerError message={message} action={action} />
+    </div>
   );
 }
 

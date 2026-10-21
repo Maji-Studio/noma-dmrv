@@ -253,7 +253,7 @@ describe("CertificationSettings", () => {
   it("keeps the certifier pane visible to a member who cannot manage it", () => {
     // Members cannot change the keys or the link, but the pane is where the
     // current connection state is readable — hiding it leaves them with no
-    // answer to "is this facility connected?". Emissions is Owner/Admin only.
+    // answer to "is this facility connected?". Emissions is Admin only.
     viewerState.canManage = false;
 
     const html = renderToStaticMarkup(<CertificationSettings />);
@@ -264,7 +264,7 @@ describe("CertificationSettings", () => {
   });
 
   it("falls back to a visible section when the URL asks for one this viewer lacks", () => {
-    // A deep link built by an Owner must not leave a member on an empty pane.
+    // A deep link built by an Admin must not leave a member on an empty pane.
     viewerState.canManage = false;
     urlState.section = "emission-estimates";
 

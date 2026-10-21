@@ -38,7 +38,7 @@ are not examples for new domain tables. Domain tenancy is enforced in
 - `organization_api_access`: one Platform Admin policy row per organization,
   with enabled state and change attribution. A missing row means enabled.
   Credential resolution and cross-organization administration are explicit
-  privileged seams, marked `// org-scope-ok:` in data-access. Owners/Admins
+  privileged seams, marked `// org-scope-ok:` in data-access. Admins
   without Platform Admin access cannot administer this policy.
 
 The purge helpers are system seams that delete expired idempotency records and
@@ -100,7 +100,7 @@ Named privileged seams use these exact waiver reasons:
 
 Connected-app management is ordinary org-scoped data access. It checks live
 membership, filters by organization, limits Members to their own connections,
-and requires the expected management version to disconnect. Owners and Admins
+and requires the expected management version to disconnect. Admins
 can list and disconnect all connections in their organization. Role policy
 lives in `oauth-role-policy.ts`; Platform Admin status gives no override. Role
 changes keep connections under the default policy. If Member connections are
@@ -505,7 +505,7 @@ submission and configuration boundary. Purpose per table:
 
 `removal_template_observations` stores normalized Isometric templates, enriched
 input metadata, fingerprints and versioned component-ID line contracts. Reviews
-require Owner/Admin permission; compilation requires complete enrichment and
+require Admin permission; compilation requires complete enrichment and
 valid contracts. See [ADR 0032](./adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
 
 `credit_batches.removal_template_id` pins the facility default at creation.
@@ -586,8 +586,15 @@ by a database trigger. See [ADR 0022](./adr/0022-method-b-is-computed-eligibilit
 `emission_entries` binds one batch entry to a template observation and component.
 All domain references include `organization_id`. `version` changes on every write;
 `content_revision` changes for values, dates, template confirmation and uploaded
-evidence. Notes change only the version. Membership writers lock the batch before
-the entry; evidence writers lock the entry. Reserved or sent entries refuse edits.
+evidence. Notes change only the version. Membership and evidence writers lock lineage artifacts, then the facility, batch
+and entry. Reserved entries refuse edits. Sent entries reopen only with
+fresh returned-statement facts under the shared
+certification lineage locks. Unknown or stale statuses and in-flight lineage
+submissions keep the correction window closed. The window also controls date
+edits and sent-zero replacement; dates must stay within the Removal's entry window.
+Correction state compares the last submitted contribution manifest with the
+current contribution and is never stored. A new attempt reserves the current set
+and supersedes the prior attempt without transferring its entry claims.
 Ordinary entry deletion tombstones the entry and keeps its values and evidence.
 Removal draft deletion first records an activity tombstone, then hard-deletes
 its never-sent recorded zeros, including already tombstoned zeros. The zero-owner

@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   snapshot: vi.fn(), row: vi.fn(), preview: vi.fn(), guard: vi.fn(), recheck: vi.fn(), update: vi.fn(), sync: vi.fn(), activity: vi.fn(),
 }));
 vi.mock("@/lib/auth/server", () => ({
-  requireOrgContext: async () => ({ organizationId: "session-org", userId: "actor", orgRole: "owner", isPlatformAdmin: false }),
+  requireOrgContext: async () => ({ organizationId: "session-org", userId: "actor", orgRole: "admin", isPlatformAdmin: false }),
 }));
 vi.mock("@/data-access/owned-transaction", () => ({
   runOwnedTransaction: async (_ctx: unknown, _deadline: unknown, work: (tx: unknown) => Promise<unknown>) => {

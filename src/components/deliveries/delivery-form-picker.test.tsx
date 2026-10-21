@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Delivery } from "@/db/schema";
+import { ActionError } from "@/lib/action-error";
 import { DeliveryForm } from "./delivery-form";
 import { useCreateCustomerLocation, useUpdateCustomerLocation, useDeleteCustomerLocation } from "@/hooks/use-customers";
 import { orderKeys } from "@/hooks/use-orders";
@@ -146,10 +147,25 @@ it("locks delivery date, mass and moisture with the newer-stock reason", () => {
 
 it("shows typed server refusals beside the delivery field", async () => {
   const validDelivery = { ...delivery, orderId: "00000000-0000-4000-8000-000000000001", storageLocationId: "00000000-0000-4000-8000-000000000002" };
-  const onSubmit = vi.fn((_data, onError) => onError(Object.assign(new Error("Refused"), { issues: [{ path: ["deliveryDate"], code: "validation_failed", message: "Enter a time at or before now." }] })));
+  const onSubmit = vi.fn((_data, onError) => onError(new ActionError({ error: "Refused", issues: [{ path: ["deliveryDate"], code: "validation_failed", message: "Enter a time at or before now." }] })));
   const { container } = render(<DeliveryForm delivery={validDelivery} onSubmit={onSubmit} />, { wrapper });
   fireEvent.submit(container.querySelector("form")!);
   expect(await screen.findByText("Enter a time at or before now.")).toBeTruthy();
+});
+
+it("splits a partly shown refusal: the date at its field, the driver in the footer text", async () => {
+  const validDelivery = { ...delivery, orderId: "00000000-0000-4000-8000-000000000001", storageLocationId: "00000000-0000-4000-8000-000000000002" };
+  let footer: string | null | undefined;
+  const onSubmit = vi.fn((_data, onError) => {
+    footer = onError(new ActionError({ error: "Refused", issues: [
+      { path: ["deliveryDate"], code: "validation_failed", message: "Enter a time at or before now." },
+      { path: ["driverId"], code: "validation_failed", message: "Driver was not found." },
+    ] }))?.footer;
+  });
+  const { container } = render(<DeliveryForm delivery={validDelivery} onSubmit={onSubmit} />, { wrapper });
+  fireEvent.submit(container.querySelector("form")!);
+  expect(await screen.findByText("Enter a time at or before now.")).toBeTruthy();
+  expect(footer).toBe("Driver was not found.");
 });
 
 it("refuses a typed zero override with the server's message", async () => {
@@ -164,12 +180,12 @@ it("refuses a typed zero override with the server's message", async () => {
 it("reports a handled mass refusal and focuses its field", async () => {
   const validDelivery = { ...delivery, orderId: "00000000-0000-4000-8000-000000000001", storageLocationId: "00000000-0000-4000-8000-000000000002" };
   const onSubmit = vi.fn((_data, onError) => {
-    expect(onError(Object.assign(new Error("Refused"), { issues: [{ path: ["deliveredWetMassKg"], code: "conflict", message: "Only 100 kg remains on this order." }] }))).toBe(true);
+    expect(onError(new ActionError({ error: "Refused", issues: [{ path: ["deliveredWetMassKg"], code: "conflict", message: "Only 100 kg remains on this order." }] }))).toEqual({ footer: null });
   });
   const { container } = render(<DeliveryForm delivery={validDelivery} onSubmit={onSubmit} />, { wrapper });
   fireEvent.submit(container.querySelector("form")!);
   await screen.findByText("Only 100 kg remains on this order.");
-  expect(document.activeElement).toBe(screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("spinbutton", { name: /Biochar product wet mass/ })));
 });
 
 it("refreshes a missing snapshot after a nested repair without discarding the delivery draft", async () => {
