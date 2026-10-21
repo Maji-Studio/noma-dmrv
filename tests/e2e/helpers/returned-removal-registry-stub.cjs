@@ -16,8 +16,21 @@ const TEMPLATE = {
     })),
   }],
 };
+// A second template that fits the facility (it has a storage component), for the template setup dialog.
+const SETUP_TEMPLATE = {
+  id: "e2e-setup-template", name: "E2E setup template", credit_type: "REMOVAL",
+  groups: [{
+    id: "e2e-setup-group", key: "storage", display_name: "Storage", description: "",
+    components: [{
+      id: "e2e-storage", display_name: "Sequestration", description: null, blueprint_key: "biochar_sequestration_200_year_c_org",
+      inputs: [{ input_key: "biochar_mass", type: "monitored", quantity_kind: "mass", datapoint_id: null, display_name: "Biochar mass" }],
+    }],
+  }],
+};
 const BLUEPRINT = { key: "grid_electricity_use", display_name: "Grid electricity use",
   inputs: [{ input_key: "electricity_use", quantity_kind: "energy", compatible_unit: "kWh", data_shape: "SCALAR" }] };
+const STORAGE_BLUEPRINT = { key: "biochar_sequestration_200_year_c_org", display_name: "Biochar sequestration",
+  inputs: [{ input_key: "biochar_mass", quantity_kind: "mass", compatible_unit: "kg", data_shape: "SCALAR" }] };
 globalThis.fetch = async function stubbedFetch(input, init) {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   const statement = /isometric\.com\/mrv\/v0\/ghg_statements\/(ghg_e2e_returned_[^/?]+)/.exec(url);
@@ -27,8 +40,8 @@ globalThis.fetch = async function stubbedFetch(input, init) {
       ghg_entry_ids: [`rmv_e2e_returned_${id.split("_").pop()}`] });
   }
   if (/isometric\.com\/mrv\/v0\/projects\?/.test(url)) return page([{ id: "prj_e2e_returned", name: "E2E returned project" }]);
-  if (/isometric\.com\/mrv\/v0\/projects\/prj_e2e_returned\/ghg_entry_templates/.test(url)) return page([TEMPLATE]);
-  if (/isometric\.com\/mrv\/v0\/component_blueprints/.test(url)) return page([BLUEPRINT]);
+  if (/isometric\.com\/mrv\/v0\/projects\/prj_e2e_returned\/ghg_entry_templates/.test(url)) return page([TEMPLATE, SETUP_TEMPLATE]);
+  if (/isometric\.com\/mrv\/v0\/component_blueprints/.test(url)) return page([BLUEPRINT, STORAGE_BLUEPRINT]);
   if (/isometric\.com\/(mrv|graphql)/.test(url)) return json({ detail: "stubbed for the returned Removal screens" }, 404);
   return realFetch(input, init);
 };
