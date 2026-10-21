@@ -22,9 +22,8 @@ import {
   useFacilityCountries,
   useRestoreFacility,
   useUpdateFacility,
+  useFacilityStats,
 } from "@/hooks/use-facilities";
-import { formatMass } from "@/lib/format-utils";
-import { formatCount } from "@/lib/copy-utils";
 import { toSaveErrorMessage, StaleVersionError, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
 import { ServerError } from "@/components/forms";
 import {
@@ -104,6 +103,7 @@ export function FacilityList() {
   };
 
   const { data: facilitiesData, isLoading, error: fetchError } = useFacilities(filters);
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useFacilityStats(showArchived);
   // Country options follow the visible collection — the archived view offers
   // archived facilities' countries, not the active set's.
   const { data: countries } = useFacilityCountries(showArchived);
@@ -115,7 +115,6 @@ export function FacilityList() {
   const toast = useToast();
 
   const facilities = facilitiesData?.items ?? [];
-  const totalFacilities = facilitiesData?.total ?? 0;
   const totalPages = facilitiesData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -123,15 +122,6 @@ export function FacilityList() {
     isLoading,
     setCurrentPage,
   });
-  const totalReactors = facilities.reduce((sum, facility) => sum + facility.reactorCount, 0);
-  const totalStorageBins = facilities.reduce(
-    (sum, facility) => sum + facility.storageLocationCount,
-    0
-  );
-  const feedstockOnHandKg = facilities.reduce(
-    (sum, facility) => sum + facility.inventorySummary.feedstockWetKg,
-    0
-  );
 
   const handleCreate = async (data: FacilityFormData) => {
     setCreateError(null);
@@ -283,24 +273,27 @@ export function FacilityList() {
       <div className="grid grid-cols-1 gap-24 md:grid-cols-2 xl:grid-cols-3">
         <StatCard
           title={showArchived ? "Archived facilities" : "Active facilities"}
-          value={totalFacilities}
+          value={statsData?.totalFacilities ?? 0}
           icon={<FactoryIcon size={24} weight="bold" />}
-          description="Matching the current filters"
-          isLoading={isLoading}
+          description={showArchived ? "All archived facilities" : "All active facilities"}
+          isLoading={statsLoading}
+          isError={statsError}
         />
         <StatCard
           title="Total reactors"
-          value={totalReactors}
+          value={statsData?.totalReactors ?? 0}
           icon={<LightningIcon size={24} weight="bold" />}
-          description="Installed across the visible facilities"
-          isLoading={isLoading}
+          description={showArchived ? "Across all archived facilities" : "Across all active facilities"}
+          isLoading={statsLoading}
+          isError={statsError}
         />
         <StatCard
-          title="Wet feedstock on hand"
-          value={formatMass(feedstockOnHandKg)}
+          title="Total storage bins"
+          value={statsData?.totalStorageBins ?? 0}
           icon={<PackageIcon size={24} weight="bold" />}
-          description={`${formatCount(totalStorageBins, "storage bin")} on this page`}
-          isLoading={isLoading}
+          description={showArchived ? "Across all archived facilities" : "Across all active facilities"}
+          isLoading={statsLoading}
+          isError={statsError}
         />
       </div>
 

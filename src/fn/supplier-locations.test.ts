@@ -5,6 +5,7 @@ vi.mock("./with-action", () => ({ withAction: async (fn: (ctx: typeof mocks.ctx)
 vi.mock("@/lib/operations/runner", () => ({ runOperationInProcess: mocks.run }));
 vi.mock("@/lib/operations/suppliers", () => ({ createSupplier: {}, updateSupplier: {}, deleteSupplier: {}, archiveSupplier: {}, restoreSupplier: {} }));
 vi.mock("@/lib/operations/supplier-locations", () => ({ addSupplierLocation: { id: "add_supplier_location" }, updateSupplierLocation: { id: "update_supplier_location" }, deleteSupplierLocation: { id: "delete_supplier_location" } }));
+vi.mock("@/data-access/supplier-stats", () => ({}));
 vi.mock("@/data-access/suppliers", () => ({ getSuppliers: vi.fn(), getSupplierById: vi.fn(), getSupplierLocationsBySupplier: vi.fn() }));
 import { createSupplierLocationFn, updateSupplierLocationFn, deleteSupplierLocationFn } from "./suppliers";
 

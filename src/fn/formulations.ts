@@ -1,5 +1,7 @@
 "use server";
 
+import { getFormulationStats as getFormulationStatsData, type FormulationStats } from "@/data-access/formulation-stats";
+
 import { withAction } from "./with-action";
 
 /**
@@ -26,6 +28,23 @@ import type { ActionResult } from "@/types/actions";
 import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
 
 const LOG_MESSAGE = "formulation action failed";
+
+const formulationStatsFilterSchema = z.object({
+  archived: z.boolean().optional(),
+}).optional();
+
+export async function getFormulationStatsFn(
+  filters?: { archived?: boolean },
+): Promise<ActionResult<FormulationStats>> {
+  return withAction(async (ctx) => {
+    const validatedFilters = formulationStatsFilterSchema.parse(filters);
+    return getFormulationStatsData(ctx, validatedFilters);
+  }, {
+    fallbackMessage: "Failed to load formulation stats",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: LOG_MESSAGE, context: { op: "formulation:stats" } },
+  });
+}
 
 // ============================================
 // Formulation List/Query Operations

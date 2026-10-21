@@ -21,6 +21,7 @@ import {
   useFetchSupplier,
   useSupplierLocationsBySupplier,
   useUpdateSupplier,
+  useSupplierStats,
 } from "@/hooks/use-suppliers";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
@@ -168,6 +169,7 @@ export function SupplierList() {
     page: currentPage,
     pageSize,
   });
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useSupplierStats(showArchived);
   const deepLinkedSupplier = useSupplier(focusedSupplierId ?? "", !!focusedSupplierId);
   // A deep-linked sheet opens on a copy of the supplier taken once, as openEdit
   // does: a later refetch (a location save, a refused stale save) must not move
@@ -235,7 +237,6 @@ export function SupplierList() {
   const suppliers = suppliersData?.items ?? [];
 
   // Computed stats
-  const totalSuppliers = suppliersData?.total ?? 0;
   const totalPages = suppliersData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -414,9 +415,11 @@ export function SupplierList() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
           title={showArchived ? "Archived suppliers" : "Active suppliers"}
-          value={totalSuppliers}
+          value={statsData?.totalSuppliers ?? 0}
+          description={showArchived ? "All archived suppliers" : "All active suppliers"}
           icon={<UsersIcon size={24} weight="bold" />}
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
       </div>
 
