@@ -4,6 +4,7 @@ import { checkDeliveryCapacity } from "./calculations/delivery-inventory";
 import { kgToTonnes } from "./calculations/unit-conversions";
 import { formatFacilityDate, formatUtcDate } from "./date-utils";
 import { DomainError, type DomainErrorCode } from "./domain-errors";
+import { formatDayString } from "./format-utils";
 
 export function applicationRefusal(code: DomainErrorCode, path: string, message: string, meta?: Record<string, unknown>): DomainError {
   return new DomainError(code, message, { issues: [{ path: [path], code, message, ...(meta ? { meta } : {}) }] });
@@ -34,6 +35,7 @@ export function resolveApplicationDryMassTons(input: {
 }
 export function assertApplicationDate(date: Date, deliveredAt: Date, zone: string, deliveryCode: string, now: Date | null = new Date()): void {
   const day = formatUtcDate(date);
-  if (day < formatFacilityDate(deliveredAt, zone)) throw applicationRefusal("validation_failed", "applicationDate", `Application date cannot be before the delivery date of ${deliveryCode}`);
+  const deliveryDay = formatFacilityDate(deliveredAt, zone);
+  if (day < deliveryDay) throw applicationRefusal("validation_failed", "applicationDate", `Application date cannot be before the delivery date of ${deliveryCode} (${formatDayString(deliveryDay)}). Choose that day or a later one.`);
   if (now !== null && day > formatFacilityDate(now, zone)) throw applicationRefusal("validation_failed", "applicationDate", "Application date is in the future. Choose today or an earlier date.");
 }

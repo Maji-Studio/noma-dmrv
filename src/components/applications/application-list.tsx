@@ -11,6 +11,7 @@ import { applicationDeepLinkHref } from "@/lib/application-links";
 import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
@@ -335,7 +336,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const createWithEvidence = useCreateWithEvidence({
     entityType: "application",
     entityNoun: "Application",
-    executeCreate: async (data: ApplicationFormData) => {
+    executeCreate: async ({ data }: { data: ApplicationFormData; onRefusal: SaveRefusalHandler }) => {
       const result = await createApplication.mutateAsync(data);
       if (result.success === false) {
         throw new Error(result.error || "Application was not created. Check the form.");
@@ -358,8 +359,11 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     },
     setError: setCreateError,
     setUpdateError,
-    getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "Application was not created. Check the form.",
+    getCreateErrorMessage: (error, { onRefusal }) => {
+      const shown = onRefusal(error);
+      if (shown) return shown.footer;
+      return error instanceof Error ? error.message : "Application was not created. Check the form.";
+    },
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this application.",
     openEditOnFailure: (application) =>
@@ -375,9 +379,10 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
   // Handlers
-  const handleCreate = createWithEvidence.handleCreate;
+  const handleCreate = (data: ApplicationFormData, onRefusal: SaveRefusalHandler) =>
+    createWithEvidence.handleCreate({ data, onRefusal });
 
-  const handleUpdate = async (data: ApplicationFormData) => {
+  const handleUpdate = async (data: ApplicationFormData, onRefusal: SaveRefusalHandler) => {
     if (!displaySideSheet?.entity) return;
     const applicationId = displaySideSheet.entity.id;
     setUpdateError(null);
@@ -438,7 +443,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         );
       }
     } catch (error) {
-      setUpdateError(toSaveErrorMessage(error, "Application was not saved. Try again."));
+      const shown = onRefusal(error);
+      setUpdateError(shown ? shown.footer : toSaveErrorMessage(error, "Application was not saved. Try again."));
     }
   };
 

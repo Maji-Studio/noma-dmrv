@@ -6,7 +6,7 @@
 "use client";
 
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
-import { deliveryActionFieldIssues } from "@/lib/delivery-action-errors";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { Notice } from "@/components/ui/notice";
 import { deliveryAfterDistanceFill } from "@/lib/delivery-distance-refresh";
 import { useDeliveryWithRelations } from "@/hooks/use-deliveries";
@@ -17,7 +17,7 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useId, useState } from "react";
 
 import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
-import { FormActions, FormEntitySelect, FormField, FormSection, FormSpine, makeCertFieldStatus, MoistureField, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
+import { FormActions, FormEntitySelect, FormField, FormSection, FormSpine, makeCertFieldStatus, MoistureField, FieldErrorRow, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
@@ -67,11 +67,14 @@ const isDeliveryCertifyField = (field: string) =>
 // Component
 // ============================================
 
+/** Server issue paths the form names differently: a source row refusal sits on the load mass. */
+const DELIVERY_REFUSAL_ALIASES = { sources: "deliveredWetMassKg" } as const;
+
 interface DeliveryFormProps {
   /** Existing delivery data for editing (undefined for create mode) */
   delivery?: Delivery;
   /** Form submission handler */
-  onSubmit: (data: DeliveryFormData, onError: (error: unknown) => boolean, expectedVersion?: number) => Promise<void> | void;
+  onSubmit: (data: DeliveryFormData, onError: SaveRefusalHandler, expectedVersion?: number) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -240,6 +243,11 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
   const defaultSubmitLabel = isEditMode ? "Update delivery" : "Create delivery";
 
+  const refuseSave = useSaveRefusal({
+    control, setError, formId, aliases: DELIVERY_REFUSAL_ALIASES,
+    // The single moisture field is only on screen for a load with one reading.
+    isEnabled: (field) => field !== "moistureContentPercent" || stockLocked || draw.usesSingleMoisture,
+  });
   const submitDelivery = latched(handleSubmit(async (data) => {
     if (!canSave || (stockLocked && (massChanged || dateChanged))) return;
     const submitted = { overriding, distanceKm: data.distanceKmOverride, source: data.distanceSource, note: data.distanceNote };
@@ -254,18 +262,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     // A failed save needs no refetch here: the host reports the error and the
     // mutation hooks invalidate `outputStockKeys.all`, which refreshes this preview.
     await onSubmit({ ...data, ...distanceFields, status: "delivered", idempotencyKey, basisFingerprint: basisFingerprint ?? "pending-preview", correctsMovementId: stockChanged ? openedMovement?.id : undefined,
-      ...(isEditMode && !stockChanged ? { sources: undefined, deliveredWetMassKg: delivery.deliveredWetMassKg, moistureContentPercent: delivery.moistureContentPercent ?? undefined } : {}) } as DeliveryFormData, (error) => {
-      const issues = deliveryActionFieldIssues(error, [
-        "deliveryDate", "orderId", "storageLocationId", "deliveredWetMassKg",
-        ...(stockLocked || draw.usesSingleMoisture ? ["moistureContentPercent" as const] : []),
-        ...(overriding ? ["distanceKmOverride" as const, "distanceSource" as const, "distanceNote" as const] : []),
-      ] as const);
-      if (!issues) return false;
-      issues.forEach((issue, index) => {
-        setError(issue.field, { type: "server", message: issue.message }, { shouldFocus: index === 0 });
-      });
-      return true;
-    }, distanceRecord?.version);
+      ...(isEditMode && !stockChanged ? { sources: undefined, deliveredWetMassKg: delivery.deliveredWetMassKg, moistureContentPercent: delivery.moistureContentPercent ?? undefined } : {}) } as DeliveryFormData, refuseSave, distanceRecord?.version);
   }));
 
   return (
@@ -345,22 +342,27 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         fields={["deliveredWetMassKg", "moistureContentPercent"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <WetMassField
-            id="deliveredWetMassKg"
-            label="Biochar product wet mass"
-            unit="kg"
-            error={deliveredWetMassError}
-            hint="Measured wet mass at departure, water included."
-            required
-            disabled={isSubmitting || stockLocked}
-            placeholder="e.g. 1000"
-            certifyRequired={isDeliveryCertifyField("deliveredWetMassKg")}
-            certifyStatus={certStatus("deliveredWetMassKg")}
-            registration={register("deliveredWetMassKg", {
-              setValueAs: nullableNumericValue,
-            })}
-          />
-          {(stockLocked || draw.usesSingleMoisture) && <MoistureField
+          {/* The message can be long, so it takes its own full-width row under both columns. */}
+          <div className="md:col-start-1 md:row-start-1">
+            <WetMassField
+              id="deliveredWetMassKg"
+              label="Biochar product wet mass"
+              unit="kg"
+              error={deliveredWetMassError}
+              errorOutside
+              hint="Measured wet mass at departure, water included."
+              required
+              disabled={isSubmitting || stockLocked}
+              placeholder="e.g. 1000"
+              certifyRequired={isDeliveryCertifyField("deliveredWetMassKg")}
+              certifyStatus={certStatus("deliveredWetMassKg")}
+              registration={register("deliveredWetMassKg", {
+                setValueAs: nullableNumericValue,
+              })}
+            />
+          </div>
+          <FieldErrorRow id="deliveredWetMassKg-error" message={deliveredWetMassError} className="md:col-span-2 md:row-start-2" />
+          {(stockLocked || draw.usesSingleMoisture) && <div className="md:col-start-2 md:row-start-1"><MoistureField
             id="moistureContentPercent"
             label="Biochar product moisture"
             unit="%"
@@ -371,7 +373,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             estimate={isEditMode ? undefined : moistureEstimate}
             reading={watchMoisture}
             registration={register("moistureContentPercent")}
-          />}
+          /></div>}
           {/* The composition cards belong to the same grid as the two inputs
               above them, so they align to the field columns and inherit the
               row rhythm instead of stacking on a second spacing scale. The
