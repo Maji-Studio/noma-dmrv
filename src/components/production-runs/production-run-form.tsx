@@ -8,7 +8,7 @@
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { nullableNumericValue } from "@/lib/form-utils";
-import { formatLocalDate, resolveFacilityTimezone } from "@/lib/date-utils";
+import { resolveFacilityTimezone } from "@/lib/date-utils";
 import {
   buildProductionRunResolver,
   buildProductionRunWindow,
@@ -241,6 +241,7 @@ export function ProductionRunForm({
   const feedstockWetInput = summarizeFeedstockWetInput(watchedFeedstockDraws);
   const selectedFeedstockDrawCount = feedstockWetInput.binCount;
   const watchedDestBinId = useWatch({ control, name: "biocharStorageLocationId" });
+  const watchedStartDate = useWatch({ control, name: "startDate" });
   const watchedEndDate = useWatch({ control, name: "endDate" });
   const watchedEndTime = useWatch({ control, name: "endTime" });
   const watchedBiocharKg = useWatch({ control, name: "biocharOutputKg" });
@@ -319,15 +320,6 @@ export function ProductionRunForm({
   const defaultSubmitLabel = isEditMode ? "Update production run" : "Create production run";
 
   const handleFormSubmit = latched(handleSubmit(async (data) => {
-    // Dates arrive as "YYYY-MM-DD" strings from the inputs. The end date
-    // defaults to the start date when only an end time was entered.
-    const startDateStr =
-      typeof data.startDate === "string" ? data.startDate : formatLocalDate(data.startDate as Date);
-    const endDateStr = data.endDate
-      ? typeof data.endDate === "string"
-        ? data.endDate
-        : formatLocalDate(data.endDate as Date)
-      : startDateStr;
     // A touched value or newly entered physical outcome submits that Date;
     // otherwise undefined means "unchanged", so a no-op edit of an already
     // terminal run never rewrites the stored end.
@@ -343,10 +335,7 @@ export function ProductionRunForm({
       existingEndTime: productionRun?.endTime,
     });
     const runWindow = buildProductionRunWindow({
-      startDateStr,
-      startTimeStr: data.startTime as string,
-      endDateStr,
-      endTimeStr: data.endTime as string | undefined,
+      ...data,
       includeEndTime,
       clearEndTime,
       timeZone: formTimezone,
@@ -703,7 +692,7 @@ export function ProductionRunForm({
             )}
           />
         </FormField>
-        <ProductionRunMixBinNotice binId={watchedDestBinId} facilityId={watchedFacilityId} endDate={watchedEndDate} endTime={watchedEndTime} timeZone={formTimezone} complete={watchedStatus === "complete" && (productionRun?.status !== "complete" || !!dirtyFields.endDate || !!dirtyFields.endTime || !!dirtyFields.biocharStorageLocationId)} />
+        <ProductionRunMixBinNotice binId={watchedDestBinId} facilityId={watchedFacilityId} startDate={watchedStartDate} endDate={watchedEndDate} endTime={watchedEndTime} timeZone={formTimezone} complete={watchedStatus === "complete" && (productionRun?.status !== "complete" || !!dirtyFields.endDate || !!dirtyFields.endTime || !!dirtyFields.biocharStorageLocationId)} />
 
         <MassMoistureFields
           materialLabel="Biochar"

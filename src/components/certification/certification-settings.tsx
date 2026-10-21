@@ -72,7 +72,6 @@ import {
   CERTIFICATION_SETTINGS_SECTION_PARAM,
   CERTIFICATION_SETTINGS_SOURCES_SECTION,
   CERTIFICATION_SETTINGS_TEMPLATE_MAPPING_SECTION,
-  CERTIFICATION_SETTINGS_TEMPLATE_PARAM,
 } from "@/lib/certification/links";
 import { CertificationHealthPanel } from "./certification-health-panel";
 import { CertifierSettingsPanel } from "./certifier-settings-panel";
@@ -81,7 +80,7 @@ import { ProtocolsInUse } from "./protocols-in-use";
 import { RegistrySourceVisibilitySettings } from "./registry-source-visibility-settings";
 import { SettingsRail, type SettingsSectionMeta } from "@/components/ui";
 import { RemovalTemplateDiagnosticPanel } from "./removal-template-diagnostic-panel";
-import { RemovalTemplateReviewPanel } from "./removal-template-review-panel";
+import { RemovalTemplateSummaryCard } from "./removal-template-summary-card";
 import { useUnsavedPaneGuard } from "./use-unsaved-pane-guard";
 
 const SECTION_CERTIFIER = CERTIFICATION_SETTINGS_CERTIFIER_SECTION;
@@ -170,7 +169,6 @@ export function CertificationSettings() {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 
-  const [requestedTemplate] = useQueryState(CERTIFICATION_SETTINGS_TEMPLATE_PARAM);
   // Panes with drafts report their dirty state through `guard.actions`; a rail
   // click on another section asks before the pane unmounts and drops them.
   const guard = useUnsavedPaneGuard();
@@ -230,14 +228,12 @@ export function CertificationSettings() {
     label: "Removal templates",
     icon: ListChecksIcon,
     caption:
-      "Choose the facility default and decide each component. Components to decide block Removals.",
+      "The template this facility's credit batches use. Component decisions apply to every facility using the template.",
     access: "Admins",
     content: facilityId ? (
-      <RemovalTemplateReviewPanel
-        key={`removal-template-review-${facilityId}`}
+      <RemovalTemplateSummaryCard
+        key={`removal-template-summary-${facilityId}`}
         facilityId={facilityId}
-        canManage={viewerCanManage}
-        templateId={requestedTemplate}
       />
     ) : null,
   });

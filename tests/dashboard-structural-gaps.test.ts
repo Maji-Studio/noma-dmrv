@@ -1,5 +1,3 @@
-beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
-afterEach(() => { vi.unstubAllEnvs(); });
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { outputProductFixtureValues, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 /**
@@ -7,7 +5,7 @@ import { outputProductFixtureValues, deleteOutputProductFixtures, deleteOutputFa
  * gaps. The fixture exercises canonical supplier-origin GPS, all three parent
  * types that own transport legs, and credit-batch scope for Samples.
  */
-import { beforeEach, afterAll, beforeAll, describe, expect, it, vi, afterEach } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -499,7 +497,7 @@ describe("dashboard structural certification gaps", () => {
 
     expect(counts).toEqual({
       missingFeedstockGps: 1,
-      transportEndpointGpsGaps: 2,
+      transportEndpointGpsGaps: 1,
       missingFeedstockGpsSupplierId: fixture.missingGpsSupplierId,
       transportEndpointGpsTarget: {
         entityType: "biochar",
@@ -519,40 +517,16 @@ describe("dashboard structural certification gaps", () => {
       },
       {
         key: "transportEndpointGps",
-        metadata: "Biochar product form · Transport route · 2 affected",
-        count: 2,
+        metadata: "Biochar product form · Transport route · 1 affected",
+        count: 1,
         href: `/biochar-products?facility=${fixture.gapFacilityId}&biocharProduct=${fixture.activeBiocharProductId}&mode=edit&focus=transport-route`,
       },
-    ]);
-  });
-
-  it("builds a supported parent deep link for a sample leg", () => {
-    const facilityId = "00000000-0000-4000-8000-000000000001";
-    const gaps = buildDashboardStructuralGaps(
-      {
-        missingFeedstockGps: 0,
-        transportEndpointGpsGaps: 1,
-        missingFeedstockGpsSupplierId: null,
-        transportEndpointGpsTarget: {
-          entityType: "sample",
-          entityId: fixture?.validBatchSampleId ?? "sample-id",
-        },
-      },
-      facilityId,
-    );
-
-    expect(gaps.map(({ href }) => href)).toEqual([
-      `/samples?facility=${facilityId}&sample=${fixture?.validBatchSampleId ?? "sample-id"}&mode=edit&focus=transport-route`,
-    ]);
-    expect(gaps.map(({ metadata }) => metadata)).toEqual([
-      "Sample form · Transport route · 1 affected",
     ]);
   });
 
   it.each([
     ["feedstock", "Feedstock form"],
     ["biochar", "Biochar product form"],
-    ["sample", "Sample form"],
   ] as const)(
     "names the %s destination form for transport gaps",
     (entityType, formName) => {
@@ -596,9 +570,8 @@ describe("dashboard structural certification gaps", () => {
   });
 });
 
-it.for([false, true])("excludes legacy sample GPS gaps only after activation (gate: %s)", async (enabled, ctx) => {
+it("excludes legacy sample GPS gaps only after retirement", async (ctx) => {
   if (!dbReachable || !fixture) { ctx.skip(); return; }
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
   const counts = await loadDashboardStructuralGapCounts(makeTestOrgContext(TEST_USER_ID), fixture.gapFacilityId);
-  expect(counts.transportEndpointGpsGaps).toBe(enabled ? 1 : 2);
+  expect(counts.transportEndpointGpsGaps).toBe(1);
 });

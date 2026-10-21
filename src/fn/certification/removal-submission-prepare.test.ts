@@ -188,7 +188,7 @@ it("blocks entry-only components", () => {
   const removalTemplate = production as RegistryComponents["schemas"]["GhgEntryTemplate"];
   const result = prepareRemovalSubmission(context({ removalTemplate }));
   const findings = findUnbindableTemplateInputs(removalTemplate);
-  expect(findings).toHaveLength(13);
+  expect(findings).toHaveLength(14);
   expect(result.blockers).toContainEqual({ code: "templateUnbindable", message: formatUnbindableTemplateInputsText(findings) });
   expect(result.blockers.some((blocker) => blocker.message.includes("project level"))).toBe(false);
 });

@@ -24,6 +24,7 @@ describe("coverage health check", () => {
     expect(entryOnly).toHaveLength(9);
     expect(entryOnly.map((finding) => finding.componentId).sort()).toEqual(expectedIds);
     expect(entryOnly.every((finding) => finding.state === "empty")).toBe(true);
+    expect(entryOnly.map((finding) => finding.componentId)).toEqual(expect.arrayContaining(["rtc_1M4ZRPH1RSBXADG2", "rtc_1M4ZRRN6PSBXHQ7C"]));
   });
 
   it("fails for an extra component without a settled bootstrap contract", () => {

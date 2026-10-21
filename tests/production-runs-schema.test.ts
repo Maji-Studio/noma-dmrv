@@ -610,3 +610,24 @@ describe("complete run output requirements", () => {
       cancellationReason: "Recorded in error", biocharStorageLocationId: null, biocharMoisturePercent: null }).success).toBe(true);
   });
 });
+
+// The schema reads times with the same wall-clock rule as `resolveRunWindow`,
+// so a time it accepts always resolves to an instant the window checks see.
+describe("makeProductionRunFormSchema wall-clock times", () => {
+  it.each([
+    ["startTime", "24:00", "Enter a valid start time."],
+    ["endTime", "24:00", "Enter a valid end time."],
+  ])("refuses %s %s", (field, value, message) => {
+    const result = makeProductionRunFormSchema("UTC").safeParse({
+      ...completeProductionRunInput,
+      [field]: value,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: [field], message })]),
+      );
+    }
+  });
+});

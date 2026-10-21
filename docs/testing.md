@@ -397,7 +397,9 @@ name hyphens with underscores.
 ### Landing a PR and reading red CI
 
 `scripts/pr-land.sh <pr> [--teardown <name>] [--dry-run]` merges `origin/staging` into the
-PR branch when behind (in the worktree that has it checked out) and pushes, waits for
+PR branch only when it conflicts (`mergeStateStatus` is `DIRTY`, in the worktree that has it
+checked out) and pushes. A PR that is merely behind is enqueued as is because the queue
+retests on top of staging. The script waits for
 GitHub to show that head and for every required check to pass, enqueues the PR in the merge queue
 through GraphQL, and watches until MERGED. A drop from the queue prints the
 `RemovedFromMergeQueueEvent` reason and exits non-zero. `--teardown` runs
@@ -405,6 +407,39 @@ through GraphQL, and watches until MERGED. A drop from the queue prints the
 nothing. `scripts/ci-failures.sh <pr>` lists failing checks and prints the Vitest and
 Playwright failing test names with their error lines from the failed Actions logs.
 Neither script runs tests or deletes branches itself; `--teardown` delegates to `teardown`, which deletes the branch once merged.
+
+## Stale mocks: lint rule and pre-push hook
+
+A hand-written `vi.mock` factory silently drops any export added to the mocked
+module later, so CI can fail while targeted local runs pass. Two guards:
+
+- **Lint:** `vi.mock("@/config/env", factory)` and `vi.mock("@/db/schema", factory)`
+  must call `importOriginal` and spread the result
+  (`...(await importOriginal<typeof import("@/config/env")>())`), then override
+  only what the test needs. `vi.mock(path)` without a factory, and a factory
+  that only throws (a "must not load" tripwire), are allowed.
+- **Pre-push:** `.githooks/pre-push` runs two stages on the `src/` and
+  `tests/` files changed since the merge-base with `origin/staging`:
+  1. Always: changed test files plus test files that `vi.mock(` a changed
+     module by its `@/` alias path (`src/lib/api/problem.ts` matches
+     `@/lib/api/problem`; an index file also matches its directory and
+     `/index`). `pnpm vitest run`; a failure blocks the push. This stage has no
+     time limit and can include DB-backed specs, so start Postgres
+     (`pnpm docker:up`) first.
+  2. Then `pnpm vitest related --run`, cut off after
+     `PRE_PUSH_RELATED_TIMEOUT_SECONDS` (default 300, overridable by env). On a
+     cut-off it prints one line, CI runs the rest, and the push goes through; a
+     real failure inside the bound blocks.
+
+  It skips when only docs or other non-code files changed and on deletion-only
+  pushes, and never runs the full suite (CI does). `new` in `scripts/worktree.sh`
+  enables it with `git config --worktree core.hooksPath .githooks`, which stays
+  local to that worktree; `new` enables `extensions.worktreeConfig` on the shared
+  repo first. In a worktree not created by `new`, run that command once
+  yourself. Skip it for one push with
+  `git push --no-verify`.
+- **Known gaps:** the lint selector misses an aliased `vi`, a factory passed by
+  identifier, and the `vi.mock(import("@/config/env"), ...)` form. The stage 1 match ignores relative-path mocks.
 
 ## E2E data naming is a hard contract
 

@@ -26,8 +26,8 @@ Use an OAuth connection for an app acting as a member, or an Admin API key
 for scripts and internal agents. Send one `Authorization: Bearer <credential>`;
 cookies and `x-api-key` never authenticate. [Auth](./auth.md#oauth-connections)
 owns generation checks and denial precedence; [security](./security.md#oauth-provider-and-client-controls)
-owns deployment gates and the exact client allowlist. The provider stays off
-until the staging connector proof.
+owns deployment gates and the exact client allowlist. The provider is on for
+staging; production stays off until the domain split.
 
 [OAuth config](../src/lib/auth/oauth-config.ts) derives the issuer and audiences
 from the `NEXT_PUBLIC_APP_URL` origin. For origin `<origin>`:
@@ -52,14 +52,14 @@ REST and MCP tokens are not interchangeable: the other audience gives 401
 [Grantable scopes](../src/lib/auth/oauth-scopes.ts) are the API `:read` and
 `:write` set, never `:delete`. Unknown or delete scopes give `invalid_scope`.
 Admin and Member have the same OAuth ceiling; domain guards still apply.
-The first consent offers grantable reads and writes; reads start ticked and
-writes start unticked. A missing authorize scope defaults to registered grantable
+The first consent offers three choices: Read only (preselected), Read and write
+(never deletes) and Choose per area. A missing authorize scope defaults to registered grantable
 scopes plus `offline_access`. Request `offline_access` to keep the connection
 through rotating refresh tokens; consent preserves it without a checkbox. Access tokens
 last one hour; 30 days without API use ends the connection. Refresh is not use.
 
 With `OAUTH_PROVIDER_ENABLED=true`, 401 challenges include the audience's
-`resource_metadata` and all requestable scopes, including `offline_access`.
+`resource_metadata` and every grantable read and write scope plus `offline_access` (no delete scopes).
 OAuth bearer denials add `error="invalid_token"`. Missing grantable scopes return 403 `missing_scope`
 with `error="insufficient_scope"` and the union of current and required scopes
 in `WWW-Authenticate`. Re-authorize with that union for step-up consent; only
@@ -76,8 +76,9 @@ Admission applies to both credential kinds. A pre-resolution IP bucket allows
 (initially Anthropic `160.79.104.0/21`). After resolution, a per-credential
 `admit` bucket allows 720 per minute and charges before scope, method or body
 refusals. Read/write credential and organization buckets still apply. Values
-live in [rate-limit config](../src/config/api-rate-limits.ts); revisit the
-connector tier after the proof.
+live in [rate-limit config](../src/config/api-rate-limits.ts); the connector
+tier stays until real connector traffic exists (see
+[open questions](./open-questions-architecture.md#oauth-connection-follow-ups)).
 
 #### Connected apps
 
@@ -91,26 +92,28 @@ See [management guards](../src/data-access/oauth-grants.ts).
 
 #### Connecting Claude and ChatGPT
 
-Run this c8 proof on staging after merge, enabling OAuth there only (plan decision
-129). Use `https://staging.app.noma.maji.studio/api/mcp`. Prove Claude first;
-ChatGPT follows once its CIMD `private_key_jwt` path has a verified fix or
-workaround (decision 122). Allowlist Claude's exact client identity,
-`https://claude.ai/oauth/mcp-oauth-client-metadata`, in `OAUTH_CIMD_CLIENT_IDS`
-for the proof. Add ChatGPT only after verifying its exact identity. Dynamic
-registration is off.
+Connector URL on staging: `https://staging.app.noma.maji.studio/api/mcp`. Claude
+is proven; ChatGPT follows once its CIMD `private_key_jwt` path has a verified
+fix or workaround (decision 122). Claude's exact client identity,
+`https://claude.ai/oauth/mcp-oauth-client-metadata`, must be in
+`OAUTH_CIMD_CLIENT_IDS`; add ChatGPT only after verifying its identity. Dynamic
+registration is off. Results: [plan section 28](./plans/2026-10-06-data-entry-api.md#28-oauth-track-results-2026-10-19).
 
-1. Add the connector by URL and connect. Sign in, pick the organization (use a
-   person with two eligible memberships to exercise the picker), and allow reads
-   only.
-2. Call `whoami` and a `find_*` tool. Confirm the selected organization and reads.
-3. Ask for a write. Confirm 403 `insufficient_scope`, accept the step-up consent,
-   then confirm the intended write succeeds.
-4. Disconnect in noma Settings, Connected apps. Confirm the next call fails and
-   the app asks to reconnect.
-5. Record client versions, results and blockers in [plan section 28](./plans/2026-10-06-data-entry-api.md#28-oauth-track-results-2026-10-19).
-   Record claude.ai metadata `Cache-Control`, its reaction to `invalid_client`
-   on refresh, concurrent refresh behavior and connector rate-limit observations.
-   Never retain raw codes, tokens or signed storage URLs in proof artifacts.
+- Cowork shows "Forbidden" with no Connect card when a write is refused for
+  scope (`api/cowork-step-up` in open questions). Choose Read and write, or the
+  needed areas, on first consent.
+- claude.ai Disconnect does not revoke at noma; revoke in Connected apps first
+  (decision pending: [open questions](./open-questions-architecture.md#oauth-connection-follow-ups)).
+- claude.ai chat gives the model only a tool result's text, so `toolText` in
+  `src/lib/mcp/results.ts` joins the summary and the JSON with
+  `TOOL_TEXT_SEPARATOR`. Cowork and Claude Code read `structuredContent`.
+- noma does not advertise `tools.listChanged`; otherwise clients hold a
+  `subscriptions/listen` request open until the 30 second function timeout.
+- Disconnect in noma Settings, Connected apps revokes at once: the next refresh
+  gets 400 `invalid_grant` and the client asks to sign in again.
+- A Platform Admin has no membership and sees "Join an organization first" in the
+  picker. Use a real member.
+- Never retain raw codes, tokens or signed storage URLs in proof artifacts.
 
 ### Lab samples on the runner
 

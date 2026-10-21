@@ -1,4 +1,3 @@
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { tombstoneEmissionZeros } from "./emission-entries";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
@@ -31,7 +30,7 @@ export async function syncCreditBatchEntryDates(
   )).orderBy(asc(emissionEntries.id)).for("update");
 
   const narrowsWindow = startDate > batch.startDate || endDate < batch.endDate;
-  const outside = entries.filter((entry) => narrowsWindow && !(emissionsEntriesEnabled() && entry.kind === "zero") && entry.lineRule !== "single" &&
+  const outside = entries.filter((entry) => narrowsWindow && entry.kind !== "zero" && entry.lineRule !== "single" &&
     (entry.occurredOn < startDate || entry.occurredOn > endDate));
   if (outside.length) {
     const observations = await getTemplateObservationsByIds(ctx, outside.map((entry) => entry.observationId), tx);
@@ -48,9 +47,9 @@ export async function syncCreditBatchEntryDates(
     );
   }
 
-  const toRedate = entries.filter((entry) => (entry.lineRule === "single" || (emissionsEntriesEnabled() && entry.kind === "zero" && !entry.sentByRemovalId && !entry.sendReservedBySubmissionId)) &&
+  const toRedate = entries.filter((entry) => (entry.lineRule === "single" || (entry.kind === "zero" && !entry.sentByRemovalId && !entry.sendReservedBySubmissionId)) &&
     startDate !== batch.startDate && entry.occurredOn !== startDate);
-  // Match the entry writer's reserved/sent guard, including when the feature is off.
+  // Match the entry writer's reserved/sent guard.
   if (toRedate.some((entry) => entry.sentByRemovalId || entry.sendReservedBySubmissionId)) {
     throw new DomainError("certification_locked", "This emissions entry is reserved or sent. It cannot be changed.");
   }
@@ -71,5 +70,5 @@ export async function syncCreditBatchEntryDates(
       action: "updated", source: "form",
     }, before, after);
   }
-  if (emissionsEntriesEnabled()) for (const entry of redatedValues) await tombstoneEmissionZeros(ctx, tx, entry);
+  for (const entry of redatedValues) await tombstoneEmissionZeros(ctx, tx, entry);
 }

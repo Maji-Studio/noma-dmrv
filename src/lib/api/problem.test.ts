@@ -6,7 +6,10 @@ import { problemSchema, customerDeleteConflictSchema } from "./problem-schema";
 import { conflictCode } from "@/lib/conflict-ref";
 import type { ApiContextDenial } from "@/lib/auth/api-context";
 
-vi.mock("@/config/env", () => ({ env: { NEXT_PUBLIC_APP_URL: "https://example.test", OAUTH_PROVIDER_ENABLED: false } }));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: { NEXT_PUBLIC_APP_URL: "https://example.test", OAUTH_PROVIDER_ENABLED: false } };
+});
 beforeEach(() => { env.OAUTH_PROVIDER_ENABLED = false; });
 
 // Independent expectations from the REST plan, section 4 (Errors).

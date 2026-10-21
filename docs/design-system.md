@@ -583,6 +583,9 @@ width. It is the one exception to monoline: filled grains in three fixed batch
 tones (`--stock-batch-*` in `globals.css`). It can play a loop on card hover and focus through CSS in
 `globals.css` ("Stock mode art"), gated by `prefers-reduced-motion`; the
 settled state is the static drawing.
+Options with long titles pass `stackNarrow`: two-up options stay in one column
+until the group is about 24rem wide (a phone shows one column, a sheet or page
+column two).
 
 The old `RadioCardGroup` is gone; `ChoiceCardGroup` replaces it. The sr-only
 input is not the touch target: the whole label is, and `SegmentedControl`

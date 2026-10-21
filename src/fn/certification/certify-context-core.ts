@@ -1,14 +1,12 @@
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { frozenEntriesForAttempt, loadRemovalEntryContext } from "./removal-entry-context";
 import { loadBatchEmissionContext } from "./batch-emission-context";
 import { getRemovalCodes } from "@/data-access/removal-codes";
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 import { getTransportDistanceFixLinks } from "@/data-access/transport-distance-fix-links";
-import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
 import { TRANSPORT_CATEGORIES } from "@/lib/isometric/semantic-binding-catalog";
 import { resolveScopeForCreditBatch, resolveSingleBatchScope, resolveScopeForRemoval, type RemovalScope } from "./removal-scope";
 import { loadFacilityCertifierFacts, type FacilityCertifierFacts } from "./facility-certifier-facts";
-import { buildSubmissionLineageBlockers, collectFeedstockCodes } from "./certify-lineage-blockers";
+import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
 import { hasDurabilityMeasurementComponents, durabilityConfigurationBlockers } from "@/lib/certification/submission-readiness";
 import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
@@ -119,7 +117,7 @@ export async function buildRemovalContext(
       loadLinkedGhgStatementStatus(orgCtx, scope.removal),
     ]);
   const batchEmissionFacts = await loadBatchEmissionContext(orgCtx, scope.facilityId, scope.memberBatches, facilityFacts);
-  const frozenEntrySet = emissionsEntriesEnabled() ? frozenEntriesForAttempt(latestSubmission, batchEmissionFacts) : undefined;
+  const frozenEntrySet = frozenEntriesForAttempt(latestSubmission, batchEmissionFacts);
   const loadedRemovalEntries = await loadRemovalEntryContext(orgCtx, scope, batchEmissionFacts, facilityFacts, frozenEntrySet);
   const removalEntryContext = loadedRemovalEntries && { contributions: loadedRemovalEntries.contributions,
     observationId: loadedRemovalEntries.observationId, semanticFingerprint: loadedRemovalEntries.semanticFingerprint };
@@ -317,7 +315,6 @@ export async function buildRemovalContext(
     removalId: scope.removalId,
     memberBatches: scope.memberBatches,
     lineages,
-    batchesWithSamples,
   });
   const requiredTransportCategories = collectProductionClaimAwareRequiredTransportCategories({
     removalId: scope.removalId,
@@ -467,7 +464,6 @@ function projectUiContext(
     unbindableTemplateInputs: ctx.unbindableTemplateInputs,
     memberBatches: ctx.memberBatches,
     emissionsLedger: buildRemovalLedgerPreview(ctx),
-    emissionsEntriesEnabled: emissionsEntriesEnabled(),
     feedstockTypeMappingGaps: ctx.feedstockTypeMappingGaps,
     transportCoverage: ctx.transportCoverage,
     requiredTransportCategories: ctx.requiredTransportCategories,

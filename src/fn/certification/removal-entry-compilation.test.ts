@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { IsometricComponentBlueprint, IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { deriveRemovalEntryContributions, type RemovalEntryFact } from "@/lib/certification/removal-emission-contributions";
 import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
@@ -49,7 +49,7 @@ const blueprints = [{
   inputs: [{ input_key: "product_mass", compatible_unit: "kg", quantity_kind: "mass", data_shape: "SCALAR" }],
 }] as IsometricComponentBlueprint[];
 
-function context(kind: "zero" | "value", entriesEnabled = true) {
+function context(kind: "zero" | "value", withEntryContext = true) {
   const window = { start: "2026-01-01", end: "2026-01-03" };
   const entries: RemovalEntryFact[] = ENTRY_COMPONENT_IDS.map((componentId) => ({
     id: `entry-${componentId}`, componentId, creditBatchId: BATCH_ID, contentRevision: 1,
@@ -76,7 +76,7 @@ function context(kind: "zero" | "value", entriesEnabled = true) {
     transportLegs: { feedstock: [], biochar: [], sample: [] },
     memberBatchClaims: [{ creditBatchId: BATCH_ID, code: "CB-1", productionRunIds: ["run"], claimedByRemovalId: null }],
     memberBatches: [{ id: BATCH_ID, code: "CB-1" }], facilityReferenceSoilTemperature: null,
-    ...(entriesEnabled ? { removalEntryContext: { contributions, batchFacts: {}, observationId: "observation", semanticFingerprint: "fingerprint" } } : {}),
+    ...(withEntryContext ? { removalEntryContext: { contributions, batchFacts: {}, observationId: "observation", semanticFingerprint: "fingerprint" } } : {}),
   } as unknown as RemovalSubmissionContext;
   return ctx;
 }
@@ -90,8 +90,6 @@ async function compile(ctx: RemovalSubmissionContext) {
 }
 
 describe("entry-only component compilation", () => {
-  beforeEach(() => vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true"));
-  afterEach(() => vi.unstubAllEnvs());
   it.each(["zero", "value"] as const)("compiles recorded %s entries without an unbindable blocker", async (kind) => {
     const ctx = context(kind);
     expect(ctx.removalEntryContext?.contributions.blockers).toEqual([]);
@@ -108,7 +106,6 @@ describe("entry-only component compilation", () => {
   });
 
   it("keeps entry-only components unbindable without an entry context", async () => {
-    vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false");
     const { preparation, compiled } = await compile(context("zero", false));
     expect(preparation.blockers.map((blocker) => blocker.code)).toContain("templateUnbindable");
     expect(compiled.blockers).toEqual([preparation.blockers.find((blocker) => blocker.code === "templateUnbindable")!.message]);

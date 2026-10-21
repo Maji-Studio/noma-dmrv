@@ -1,6 +1,3 @@
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
-import type { CreditBatchDurabilityInput } from "./durability-aggregation";
-
 type TransportLineageInput = {
   feedstocks: Array<{ id: string }>;
   biocharProduct: { id: string } | null;
@@ -15,13 +12,9 @@ export interface TransportEntityIdsByCategory {
 
 export function collectTransportEntityIds(
   lineages: TransportLineageInput[],
-  // Sample transport legs hang off the batch-pooled lab Samples (issue #309:
-  // a sample anchors on its credit batch, so runs no longer carry them).
-  batchesWithSamples: CreditBatchDurabilityInput[],
 ): TransportEntityIdsByCategory {
   const feedstockIds = new Set<string>();
   const biocharProductIds = new Set<string>();
-  const sampleIds = new Set<string>();
 
   for (const lineage of lineages) {
     for (const product of lineage.products?.map(p => p.product) ?? (lineage.biocharProduct ? [lineage.biocharProduct] : [])) {
@@ -32,15 +25,9 @@ export function collectTransportEntityIds(
     }
   }
 
-  for (const batch of batchesWithSamples) {
-    for (const sample of batch.samples) {
-      sampleIds.add(sample.id);
-    }
-  }
-
   return {
     feedstockIds: Array.from(feedstockIds),
     biocharProductIds: Array.from(biocharProductIds),
-    sampleIds: emissionsEntriesEnabled() ? [] : Array.from(sampleIds),
+    sampleIds: [],
   };
 }

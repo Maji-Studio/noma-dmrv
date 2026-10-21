@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Merge staging into a PR's local branch, wait for CI, enqueue, and watch it land.
+# Merge staging only when a PR is DIRTY (conflicts), wait for CI, enqueue, and watch it land.
+# A PR that is merely behind goes straight to the head and CI wait, then enqueue.
 # Usage: scripts/pr-land.sh <pr> [--teardown <worktree-name>] [--dry-run]
 set -euo pipefail
 
@@ -8,6 +9,8 @@ OWNER="${REPO%/*}"
 NAME="${REPO#*/}"
 BASE_REF="origin/staging"
 BASE_BRANCH="staging"
+MERGE_STATE_POLL_INTERVAL_SECONDS=5
+MERGE_STATE_TIMEOUT_SECONDS=60
 HEAD_POLL_INTERVAL_SECONDS=10
 HEAD_TIMEOUT_SECONDS=300
 CHECK_POLL_INTERVAL_SECONDS=30
@@ -34,15 +37,16 @@ usage() {
   cat <<'EOF'
 Usage: scripts/pr-land.sh <pr> [--teardown <worktree-name>] [--dry-run]
 
-Merge origin/staging into the checked-out PR branch when behind, push, wait for
-the exact head and CI, enqueue, then watch for MERGED. Already queued PRs go
+Merge origin/staging into the checked-out PR branch only when the PR is DIRTY
+(conflicts), then push. A PR that is merely behind goes straight to the exact
+head and CI wait, then enqueue. Watch for MERGED. Already queued PRs go
 straight to watching, without merging or pushing. Never runs tests or deletes
 branches itself. Open dependent PRs produce a warning to retarget them to staging.
 
   --teardown <name>  Run scripts/worktree.sh teardown <name> only after MERGED.
   --dry-run          Read current state and print proposed actions, then exit 0.
                      Does not fetch, merge, push, enqueue, watch, or tear down.
-                     Uses the existing origin/staging ref and current local SHA;
+                     Uses GitHub's merge state and the current local SHA;
                      a proposed merge would change that SHA and require new CI.
   --help            Show this help.
 
@@ -54,7 +58,7 @@ Exit codes:
   1  Closed/merged input, failed CI, conflict, queue removal, or command failure
   2  Invalid arguments, configuration, or missing dependency
   3  Head changed while waiting or preparing to enqueue
-  4  Head sync, checks, missing-check grace, or queue watch timed out
+  4  Merge state, head sync, checks, missing-check grace, or queue watch timed out
 Teardown failures are reported as exit 1, after printing the merge commit.
 EOF
 }
@@ -123,6 +127,20 @@ pause_before_deadline() {
   [ "$remaining" -gt 0 ] || return 0
   if [ "$remaining" -lt "$interval" ]; then interval="$remaining"; fi
   sleep "$interval"
+}
+
+wait_for_merge_state() {
+  local deadline merge_state
+  deadline=$((SECONDS + MERGE_STATE_TIMEOUT_SECONDS))
+  while true; do
+    read_pr
+    merge_state="$(printf '%s\n' "$PR_JSON" | jq -r '.mergeStateStatus')"
+    [ "$merge_state" = UNKNOWN ] || return 0
+    [ "$SECONDS" -lt "$deadline" ] ||
+      die "$EXIT_TIMEOUT" "#$PR merge state remained UNKNOWN after ${MERGE_STATE_TIMEOUT_SECONDS}s; stopping"
+    info "#$PR merge state UNKNOWN; waiting"
+    pause_before_deadline "$deadline" "$MERGE_STATE_POLL_INTERVAL_SECONDS"
+  done
 }
 
 watch_queue() {
@@ -214,15 +232,16 @@ ensure_pr_head() {
 }
 
 prepare_branch() {
-  local status=0 conflicts
+  local merge_state conflicts
   git fetch origin || die "$EXIT_FAILURE" "could not fetch origin"
   ensure_local_head
-  git -C "$WORKTREE" merge-base --is-ancestor "$BASE_REF" HEAD || status=$?
-  case "$status" in
-    0) return 0 ;;
-    1) ;;
-    *) die "$EXIT_FAILURE" "could not compare $BASE_REF with HEAD in $WORKTREE" ;;
-  esac
+  wait_for_merge_state
+  merge_state="$(printf '%s\n' "$PR_JSON" | jq -r '.mergeStateStatus')"
+  if [ "$merge_state" != DIRTY ]; then
+    info "merge state $merge_state; not merging staging"
+    return 0
+  fi
+  info "merge state DIRTY; merging staging"
   watch_if_queued
   [ -z "$(git -C "$WORKTREE" status --porcelain)" ] ||
     die "$EXIT_FAILURE" "$WORKTREE has uncommitted changes; commit or stash them before merging"
@@ -298,7 +317,7 @@ wait_for_checks() {
 }
 
 dry_run() {
-  local queued status=0 merge_state remote_head
+  local queued merge_state remote_head
   read_checks
   read_pr
   read_queue
@@ -311,16 +330,18 @@ dry_run() {
   if [ "$queued" = true ]; then
     info "#$PR already queued; would watch for MERGED without pushing or enqueueing"
   else
+    wait_for_merge_state
+    merge_state="$(printf '%s\n' "$PR_JSON" | jq -r '.mergeStateStatus')"
+    remote_head="$(printf '%s\n' "$PR_JSON" | jq -r '.headRefOid')"
     find_worktree
     LOCAL_HEAD="$(git -C "$WORKTREE" rev-parse HEAD)"
-    info "dry-run uses existing $BASE_REF; would fetch origin before a live run"
-    git -C "$WORKTREE" merge-base --is-ancestor "$BASE_REF" HEAD || status=$?
-    case "$status" in
-      0) ;;
-      1) info "would merge origin/staging into $WORKTREE and push"
-         info "the proposed merge would change HEAD and require checking the new SHA" ;;
-      *) die "$EXIT_FAILURE" "could not compare $BASE_REF with HEAD in $WORKTREE" ;;
-    esac
+    info "would fetch origin before a live run"
+    if [ "$merge_state" = DIRTY ]; then
+      info "would merge origin/staging into $WORKTREE and push"
+      info "the proposed merge would change HEAD and require checking the new SHA"
+    else
+      info "merge state $merge_state: would not merge origin/staging"
+    fi
     info "local head: $LOCAL_HEAD; GitHub head: $remote_head"
     if [ "$remote_head" != "$LOCAL_HEAD" ]; then
       info "a live run would wait for GitHub to match the local head; check for unpushed commits"

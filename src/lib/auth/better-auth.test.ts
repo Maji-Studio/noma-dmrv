@@ -9,12 +9,16 @@ vi.mock("@/db", async () => {
   return { db: drizzle.mock({ schema }) };
 });
 vi.mock("@/db/org-defaults", () => ({ seedOrgDefaults: vi.fn() }));
-vi.mock("@/config/env", () => ({
-  env: {
-    NEXT_PUBLIC_APP_URL: "http://localhost:3100",
-    BETTER_AUTH_SECRET: "unit-test-secret-with-at-least-32-characters",
-  },
-}));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return {
+    ...actual,
+    env: {
+      NEXT_PUBLIC_APP_URL: "http://localhost:3100",
+      BETTER_AUTH_SECRET: "unit-test-secret-with-at-least-32-characters",
+    },
+  };
+});
 
 import { auth } from "./better-auth";
 

@@ -172,8 +172,15 @@ describe("GHG verifier success audit failures", () => {
         lastReportDocumentId: REPORT_DOCUMENT_ID,
         submittedToVerifierAt: expect.any(String),
       });
-      expect(certification.appendSyncEvent).toHaveBeenCalledOnce();
+      // The submit audit event, then the registry-sync event recorded after it
+      // (best-effort too: its failure must not fail the submit either).
+      expect(certification.appendSyncEvent).toHaveBeenCalledTimes(2);
       const event = vi.mocked(certification.appendSyncEvent).mock.calls[0][1];
+      expect(vi.mocked(certification.appendSyncEvent).mock.calls[1][1]).toMatchObject({
+        operation: "ghg_statement:sync",
+        status: "succeeded",
+        entityId: STATEMENT_ID,
+      });
       const response = event.responsePayload as Record<string, unknown>;
       expect(event.status).toBe("succeeded");
       expect(logger.warn).toHaveBeenCalledWith(

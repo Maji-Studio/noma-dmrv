@@ -14,8 +14,7 @@ vi.mock("@/lib/auth/server", () => ({ requireOrgRole: vi.fn() }));
 const ctx: OrgContext = { organizationId: "review-org", userId: "review-user", orgRole: "admin", isPlatformAdmin: false };
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
 
-it.each([false, true])("only reopens the settled sample line for an additive assignment after retirement (gate: %s)", async (enabled) => {
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
+it("only reopens the settled sample line for an additive assignment after retirement", async () => {
   const definition = normalizeTemplateDefinition(fixture as GhgEntryTemplate);
   const componentId = "rtc_1M4ZRPH1RSBXADG2";
   definition.groups = definition.groups.filter((group) => group.components.some((component) => component.id === componentId));
@@ -36,17 +35,12 @@ it.each([false, true])("only reopens the settled sample line for an additive ass
     }) }) };
   });
   set.mockImplementation((values: unknown) => ({ where: () => ({ returning: async () => [values] }) }));
-  expect(lineNeedsReview(componentId, lineSources[componentId], validateLineSources(definition, lineSources))).toBe(enabled);
+  expect(lineNeedsReview(componentId, lineSources[componentId], validateLineSources(definition, lineSources))).toBe(true);
   const review = reviewLineContracts(ctx, { observationId: row.id, expectedVersion: row.version,
     assignments: { [componentId]: { scope: "operating", entryPolicy: "additive" } },
   });
-  if (enabled) {
-    const reviewed = await review;
-    expect(reviewed.lineSources[componentId]).toMatchObject({ scope: "operating", entryPolicy: "additive", origin: "reviewed" });
-    expect(reviewed.lineSources[componentId].automaticSource).toBeUndefined();
-    expect(set).toHaveBeenCalledOnce();
-  } else {
-    await expect(review).rejects.toThrow("This template component is already decided.");
-    expect(set).not.toHaveBeenCalled();
-  }
+  const reviewed = await review;
+  expect(reviewed.lineSources[componentId]).toMatchObject({ scope: "operating", entryPolicy: "additive", origin: "reviewed" });
+  expect(reviewed.lineSources[componentId].automaticSource).toBeUndefined();
+  expect(set).toHaveBeenCalledOnce();
 });

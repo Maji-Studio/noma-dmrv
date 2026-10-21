@@ -8,7 +8,7 @@ import { frozenEntriesForAttempt } from "@/fn/certification/removal-entry-contex
 import { discardLocalRemovalDraft } from "@/data-access/certifier-removals";
 import { deleteCreditBatchApplicationSlices } from "@/data-access/credit-batch-delete-slices";
 /** Real PostgreSQL coverage. Deliberately not run by the offline implementation verification. */
-import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, certificationSubmissions, creditBatchApplications, creditBatches, emissionEntries, emissionEntryValues,
@@ -25,7 +25,6 @@ import { readRemovalEntrySnapshot } from "@/lib/certification/removal-entry-snap
 import { cleanupLineageFixture, createLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
 
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => true, requireEmissionsEntriesEnabled: () => {} }));
 const userId = `entry-claims-${crypto.randomUUID()}`;
 const ctx = { ...makeTestOrgContext(userId), orgRole: "admin" as const };
 let fixture: LineageFixture;

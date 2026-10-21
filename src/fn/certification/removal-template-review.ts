@@ -1,7 +1,6 @@
 "use server";
 
-import { automaticSourceAvailable } from "@/lib/isometric/template-observations/catalog-sources";
-import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
+import { reviewLineSources } from "@/lib/certification/removal-template-review-sources";
 
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 
@@ -13,9 +12,9 @@ import { getLatestTemplateObservation, getPreviousTemplateObservation, reviewLin
 import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
-import { listComponentBlueprints, listGhgEntryTemplates, type IsometricClient, type IsometricComponentBlueprint, type IsometricGhgEntryTemplate } from "@/lib/isometric";
-import { compareTemplateObservations, enrichmentProblems, normalizeTemplateDefinition, lineSourcesForObservation, validateLineSources, type ComponentChange } from "@/lib/isometric/template-observations";
-import { enrichmentForObservation } from "./observe-removal-template";
+import { listComponentBlueprints, listGhgEntryTemplates } from "@/lib/isometric";
+import { compareTemplateObservations, enrichmentProblems, normalizeTemplateDefinition, validateLineSources } from "@/lib/isometric/template-observations";
+import { readOnlyEntry } from "./removal-template-preview-core";
 import {
   loadRemovalTemplateReviewSchema, removalTemplateReviewPreviewSchema, reviewRemovalTemplateLinesSchema, switchCreditBatchRemovalTemplateSchema,
   type RemovalTemplateReviewPreviewInput, type ReviewRemovalTemplateLinesInput, type SwitchCreditBatchRemovalTemplateInput,
@@ -25,36 +24,8 @@ import { loadRemovalTemplateFacts } from "./removal-template-facts";
 import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
 import { removalTemplateReviewLines as reviewLines } from "@/lib/certification/removal-template-review-lines";
 import { isTemplateReady, linesToDecideCount } from "@/lib/certification/removal-template-readiness";
-import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
-
-/** The browser validates these contracts without access to the server's gate. */
-function reviewLineSources(lineSources: LineSources): LineSources {
-  return Object.fromEntries(Object.entries(lineSources).map(([id, contract]) => [id,
-    contract.automaticSource && !automaticSourceAvailable(contract.automaticSource)
-      ? { ...contract, automaticSource: undefined }
-      : contract,
-  ]));
-}
-
-async function readOnlyEntry(
-  client: IsometricClient, template: IsometricGhgEntryTemplate, blueprints: IsometricComponentBlueprint[],
-  latest: RemovalTemplateObservation | null, externalProjectId: string,
-) {
-  const definition = normalizeTemplateDefinition(template);
-  const { enrichment } = await enrichmentForObservation({
-    client, template, definition, previous: latest, externalProjectId,
-    loadBlueprints: async () => blueprints,
-  });
-  const lineSources = lineSourcesForObservation({ definition, enrichment, latest });
-  return {
-    templateId: template.id, template, observation: null, preview: true,
-    availability: "listed" as const, enrichment,
-    changes: {} as Record<string, ComponentChange>,
-    lines: reviewLines(definition, reviewLineSources(lineSources), {}, blueprints, template),
-    enrichmentProblems: enrichmentProblems(definition, enrichment),
-    lineSourceProblems: validateLineSources(definition, lineSources),
-  };
-}
+import { hasMissingFixedDatapoint } from "@/lib/certification/template-fixed-datapoints";
+import { assertSequestrationTemplateSelectable } from "@/lib/isometric/transformers/sequestration-binding";
 
 export async function loadRemovalTemplateReview(facilityId: string) {
   return withAction(async (ctx) => {
@@ -111,7 +82,8 @@ export async function loadRemovalTemplateReview(facilityId: string) {
 export async function reviewRemovalTemplateLines(input: ReviewRemovalTemplateLinesInput) {
   return withAction(async (ctx) => {
     requireOrgRole(ctx, "admin");
-    return reviewLineContracts(ctx, reviewRemovalTemplateLinesSchema.parse(input));
+    const reviewed = await reviewLineContracts(ctx, reviewRemovalTemplateLinesSchema.parse(input));
+    return { ...reviewed, lineSources: reviewLineSources(reviewed.lineSources) };
   });
 }
 
@@ -128,7 +100,9 @@ export async function switchCreditBatchRemovalTemplate(input: SwitchCreditBatchR
     const template = templates.find((candidate) => candidate.id === parsed.removalTemplateId);
     if (!template) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFound);
     if (template.credit_type !== "REMOVAL") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.notRemovalTemplate);
+    assertSequestrationTemplateSelectable(template);
     const changingTemplate = batch.removalTemplateId !== parsed.removalTemplateId;
+    if (changingTemplate && hasMissingFixedDatapoint(template)) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint);
     if (changingTemplate) {
       const latest = await getLatestTemplateObservation(ctx, ISOMETRIC_PROVIDER, template.id);
       if (!latest) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
