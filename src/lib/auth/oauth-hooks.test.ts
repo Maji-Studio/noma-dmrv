@@ -16,7 +16,8 @@ vi.mock("@/data-access/oauth-grant-lifecycle", () => ({ revokeGeneration: vi.fn(
 vi.mock("./oauth-eligibility", () => ({ assertGenerationEligible: vi.fn() }));
 
 beforeEach(() => vi.resetAllMocks());
-const authorize = (query: Record<string, string>) => oauthBefore({ path: "/oauth2/authorize", query } as Parameters<typeof oauthBefore>[0]);
+const authorize = (query: Record<string, string>) => oauthBefore({ path: "/oauth2/authorize", method: "GET",
+  request: new Request("https://noma.test/api/auth/oauth2/authorize"), query } as Parameters<typeof oauthBefore>[0]);
 it("defaults an allowlisted CIMD client to every requestable scope before registration", async () => {
   mocks.scopes.mockResolvedValue(undefined);
   expect(await authorize({ client_id: "https://listed.test/metadata", resource: "https://noma.test/api/mcp" }))
@@ -75,5 +76,33 @@ it("also intersects an explicit form authorization before provider validation", 
   expect(await oauthBefore({ path: "/oauth2/authorize", method: "POST",
     request: new Request("https://noma.test/api/auth/oauth2/authorize", { method: "POST" }),
     body: { client_id: "registered", resource: "https://noma.test/api/mcp", scope: OAUTH_REQUESTABLE_SCOPES.join(" ") },
-  } as Parameters<typeof oauthBefore>[0])).toMatchObject({ context: { body: { scope: "feedstocks:read offline_access" } } });
+  } as Parameters<typeof oauthBefore>[0])).toMatchObject({ context: { body: { scope: "feedstocks:read offline_access", prompt: "consent" } } });
+});
+
+it.each([
+  { prompt: undefined, expected: "consent" },
+  { prompt: "login", expected: "login consent" },
+  { prompt: "login select_account", expected: "login select_account consent" },
+  { prompt: "login consent", expected: "login consent" },
+  { prompt: "none", expected: "none" },
+  { prompt: "none login", expected: "none login" },
+])("re-offers consent on GET authorize entry while preserving prompt=$prompt", async ({ prompt, expected }) => {
+  expect(await authorize({ resource: "https://noma.test/api/mcp", ...(prompt === undefined ? {} : { prompt }) }))
+    .toMatchObject({ context: { query: { prompt: expected } } });
+});
+it.each([
+  { requestPath: "/oauth2/consent", prompt: undefined },
+  { requestPath: "/oauth2/consent", prompt: "login" },
+  { requestPath: "/oauth2/continue", prompt: "consent" },
+  { requestPath: "/oauth2/continue", prompt: "login" },
+  { requestPath: undefined, prompt: undefined },
+])("leaves prompt=$prompt unchanged during authorize re-dispatch from $requestPath", async ({ requestPath, prompt }) => {
+  const query: Record<string, string> = { resource: "https://noma.test/api/mcp", ...(prompt === undefined ? {} : { prompt }) };
+  expect(await oauthBefore({ path: "/oauth2/authorize", method: "POST",
+    request: requestPath === undefined ? undefined : new Request(`https://noma.test/api/auth${requestPath}`, { method: "POST" }),
+    query,
+  } as Parameters<typeof oauthBefore>[0])).toEqual({ context: { query } });
+});
+it("does not add consent to a signed continuation", async () => {
+  expect(await oauthBefore({ path: "/oauth2/continue", body: { oauth_query: "prompt=login&sig=signed", postLogin: true } } as Parameters<typeof oauthBefore>[0])).toBeUndefined();
 });

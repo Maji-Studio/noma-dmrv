@@ -36,4 +36,4 @@ Judge these on the 390 screenshot. This list is their only home; the related sec
 ## Consistency and history
 
 - A style change reaches every sibling surface in the same PR: `docs/design-system.md` § Consistency across sibling surfaces.
-- Nothing returns that `docs/design-decisions.md` lists as tried and replaced or rejected. Read the entries for the touched surface (§ Cross-cutting, § Pickers and forms, § Onboarding, § Stock, bins and transport, § Credit batches and locks).
+- Nothing returns that `docs/design-decisions.md` lists as tried and replaced or rejected. Read the entries for the touched surface (§ Cross-cutting, § Pickers and forms, § Onboarding, § Stock, bins and transport, § Credit batches and locks, § OAuth consent).

@@ -104,7 +104,7 @@ it("ignores an expired pending hint in consent even when all scopes are requeste
   const flow = await f.authorize({ query: { scope: null } });
   const { getOAuthConsentViewFn } = await import("@/fn/oauth");
   expect(await getOAuthConsentViewFn({ oauthQuery: flow.location.search.slice(1) })).toMatchObject({ success: true, data: {
-    newlyRequestedScopes: ["feedstocks:write"], stepUpScopes: [], isStepUp: true,
+    newlyRequestedScopes: ["feedstocks:write"], stepUpScopes: [], isStepUp: false,
   } });
 });
 

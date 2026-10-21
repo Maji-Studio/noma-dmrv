@@ -18,13 +18,19 @@ export async function oauthBefore(ctx: OAuthHookContext) {
   if (!ctx.path?.startsWith("/oauth2/")) return;
   if ((ctx.request || ctx.headers) && !OAUTH_HTTP_PATHS.has(ctx.path)) throw new APIError("NOT_FOUND");
   if (ctx.path === "/oauth2/authorize") {
-    const isFormAuthorize = ctx.method === "POST" && ctx.request && new URL(ctx.request.url).pathname.endsWith("/oauth2/authorize");
+    const isAuthorizeEntry = ctx.request && new URL(ctx.request.url).pathname.endsWith("/oauth2/authorize");
+    const isFormAuthorize = ctx.method === "POST" && isAuthorizeEntry;
     const query = (isFormAuthorize ? ctx.body : ctx.query) ?? {};
     guardOAuthAuthorize(query);
     // The raw URL preserves repeated parameters before endpoint schema parsing.
     if (ctx.request && new URL(ctx.request.url).searchParams.getAll("resource").length > 1) refuseOAuth("invalid_target");
     // Normalize before the provider signs the authorization.
     const normalized: Record<string, unknown> = { ...query };
+    // Re-offer consent on client entry only; internal re-dispatch would loop.
+    if (isAuthorizeEntry) {
+      const prompts = typeof query.prompt === "string" ? query.prompt.trim().split(/\s+/).filter(Boolean) : [];
+      if (!prompts.includes("none") && !prompts.includes("consent")) normalized.prompt = [...prompts, "consent"].join(" ");
+    }
     // Offer registered reads and writes plus offline access. Round 14 Q100
     // supersedes decision 123: reads start ticked, writes start unticked.
     if (typeof query.client_id === "string") {

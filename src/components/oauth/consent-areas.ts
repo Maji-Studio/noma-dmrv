@@ -69,3 +69,15 @@ export function groupState(ticked: readonly ApiScope[], scopes: readonly ApiScop
   if (on === 0) return "off";
   return on === scopes.length ? "on" : "mixed";
 }
+
+/** Where a fresh (non step-up) consent starts: the preset the stored consent matches, or the open board with exactly its scopes. */
+export function seedFromStored(areas: readonly ConsentArea[], requested: readonly ApiScope[], stored: readonly ApiScope[]): { preset: "read" | "write" | "custom"; ticked: ApiScope[] } {
+  const offered = requested.filter((scope) => areas.some((area) => area.read === scope || area.write === scope));
+  const reads = offered.filter(isReadScope);
+  const kept = offered.filter((scope) => stored.includes(scope));
+  const same = (a: readonly ApiScope[], b: readonly ApiScope[]) => a.length === b.length && a.every((scope) => b.includes(scope));
+  if (kept.length === 0) return { preset: "read", ticked: reads };
+  if (same(kept, reads)) return { preset: "read", ticked: reads };
+  if (same(kept, offered)) return { preset: "write", ticked: offered };
+  return { preset: "custom", ticked: kept };
+}
