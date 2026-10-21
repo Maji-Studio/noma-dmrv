@@ -23,7 +23,7 @@ import { acquireTemplateObservationLock, getLatestTemplateObservation, reviewLin
 import { updateFacilityRemovalTemplateInTransaction } from "./certification";
 import { switchCreditBatchRemovalTemplateInTransaction } from "./credit-batch-removal-template";
 import { readCreditBatchMembershipSubmissionLock } from "./credit-batch-certification-lock";
-import { getCertifiedLineage, isSubmittedLineageRow } from "./certification-lineage-guards";
+import { getSavedCertifiedLineage, isSubmittedLineageRow } from "./certification-lineage-guards";
 import type { TemplateKeptReason } from "./credit-batch-removal-template";
 
 export function staleSetupTemplate(templateId: string) {
@@ -32,6 +32,7 @@ export function staleSetupTemplate(templateId: string) {
   });
 }
 
+/** Preview only: reads saved registry facts (no registry calls); the apply-time guard re-reads fresh and stays authoritative. */
 export async function listSetupCreditBatches(ctx: OrgContext, facilityId: string) {
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
@@ -43,7 +44,7 @@ export async function listSetupCreditBatches(ctx: OrgContext, facilityId: string
       let reason: TemplateKeptReason | null = null;
       if (batch.archivedAt) reason = "archived";
       else if (await readCreditBatchMembershipSubmissionLock(ctx, tx, batch.id)) reason = "removalSent";
-      else if ((await getCertifiedLineage(ctx, tx, { entityType: "creditBatch", entityId: batch.id })).some(isSubmittedLineageRow)) reason = "certified";
+      else if ((await getSavedCertifiedLineage(ctx, tx, { entityType: "creditBatch", entityId: batch.id })).some(isSubmittedLineageRow)) reason = "certified";
       result.push({ ...batch, reason });
     }
     return result;

@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { db } from "@/db";
+import { createCreditBatch } from "@/data-access/credit-batches";
 import { activityEvents, certifierProjects, creditBatches, facilities, feedstockTypes, productionProcesses, removalTemplateObservations, users } from "@/db/schema";
 import { applyRemovalTemplateSetup, loadRemovalTemplateSetup } from "@/fn/certification/removal-template-setup";
 import { requireOrgContext } from "@/lib/auth/server";
@@ -234,4 +235,33 @@ it("keeps archived and already-current batches without activity or version chang
   expect(rows.find((row) => row.id === archived.id)).toMatchObject({ removalTemplateId: "older-template", version: archived.version });
   expect(rows.find((row) => row.id === current.id)).toMatchObject({ removalTemplateId: template.id, version: current.version });
   expect(await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.facilityId, facilityId)))).toHaveLength(0);
+});
+
+it("a credit batch created while Set template holds the project row waits and ends on the new template", async () => {
+  // Setup's UPDATE of certifier_projects is simulated by a held update on the same row; the
+  // create must queue behind it (FOR SHARE) and then read the committed template.
+  let release!: () => void;
+  let locked!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  const lockTaken = new Promise<void>((resolve) => { locked = resolve; });
+  const setup = db.transaction(async (tx) => {
+    await tx.update(certifierProjects).set({ removalTemplateId: template.id }).where(scope());
+    locked();
+    await held;
+  });
+  await lockTaken;
+  const creating = createCreditBatch(ctx, { code: `CB-RACE-${randomUUID()}`, facilityId, feedstockTypeId,
+    startDate: new Date("2026-02-01T00:00:00.000Z"), endDate: new Date("2026-02-28T00:00:00.000Z"), productionRunIds: [] });
+  let waiting = false;
+  for (let attempt = 0; attempt < 100 && !waiting; attempt++) {
+    const rows = await db.execute<{ n: number }>(sql`select count(*)::int as n from pg_stat_activity
+      where wait_event_type = 'Lock' and query ilike '%certifier_projects%' and datname = current_database()`);
+    waiting = Number((rows as unknown as { rows?: { n: number }[] }).rows?.[0]?.n ?? (rows as unknown as { n: number }[])[0]?.n) > 0;
+    if (!waiting) await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  expect(waiting).toBe(true);
+  release();
+  await setup;
+  const created = await creating;
+  expect(created.removalTemplateId).toBe(template.id);
 });

@@ -42,7 +42,7 @@ describe("CreditBatchEmissionsPanel", () => {
   it("explains an unpinned template and links to the Set template setup in Settings, without Retry", () => {
     query.error = new EmissionLinesBlockedError(removalTemplateBlocker("unpinnedTemplate"));
     render_();
-    expect(screen.getByText("Choose a Removal template for this credit batch.")).toBeTruthy();
+    expect(screen.getByText("Set a Removal template in Settings, Removal templates.")).toBeTruthy();
     const link = screen.getByRole("link", { name: "Set template" });
     expect(link.getAttribute("href")).toBe("/settings/removal-templates?facility=f-1&setup=template");
     expect(link.getAttribute("href")).toContain("facility=f-1");

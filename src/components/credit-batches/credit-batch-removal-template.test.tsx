@@ -4,13 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
 import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
 
-const mocks = vi.hoisted(() => ({ pin: "rvt_new" as string | null, listed: ["rvt_new"] as string[], linesToDecide: 0 }));
+const mocks = vi.hoisted(() => ({ pin: "rvt_new" as string | null, listed: ["rvt_new"] as string[], linesToDecide: 0, facilityTemplate: "rvt_new" as string | null }));
 vi.mock("@/hooks/use-credit-batches", () => ({
   useCreditBatch: () => ({ data: undefined, refetch: vi.fn() }),
 }));
 vi.mock("@/hooks/use-certification", () => ({
   useFacilityCertifierSummary: () => ({
-    data: { mapping: { externalProjectId: "prj_test", removalTemplateId: "rvt_new" } },
+    data: { mapping: { externalProjectId: "prj_test", removalTemplateId: mocks.facilityTemplate } },
     isLoading: false, isSuccess: true,
   }),
   useIsometricProjectTemplates: () => ({
@@ -39,6 +39,7 @@ beforeEach(() => {
   mocks.pin = "rvt_new";
   mocks.listed = ["rvt_new"];
   mocks.linesToDecide = 0;
+  mocks.facilityTemplate = "rvt_new";
   Element.prototype.scrollIntoView = vi.fn();
 });
 afterEach(cleanup);
@@ -76,7 +77,7 @@ describe("CreditBatchRemovalTemplate", () => {
     it("tells a member who decides them, with no link", () => {
       mocks.linesToDecide = 17;
       mount(false);
-      expect(screen.getByText(`${LEAD} An Admin answers them in Settings, Removal template.`)).toBeTruthy();
+      expect(screen.getByText(`${LEAD} An Admin answers them in Settings, Removal templates.`)).toBeTruthy();
       expect(screen.queryByRole("link", { name: "Answer in Settings" })).toBeNull();
     });
 
@@ -89,10 +90,18 @@ describe("CreditBatchRemovalTemplate", () => {
       );
     });
 
+    it("shows plain text, no Answer link, when the batch was kept on an older template than the facility's", () => {
+      mocks.linesToDecide = 3;
+      mocks.facilityTemplate = "rvt_other";
+      mount(true);
+      expect(screen.getByText("3 components to decide, so this credit batch can't go into a Removal.")).toBeTruthy();
+      expect(screen.queryByRole("link", { name: "Answer in Settings" })).toBeNull();
+    });
+
     it("says another Removal once a Removal holds the batch", () => {
       mocks.linesToDecide = 1;
       mount(false, true, undefined, true);
-      expect(screen.getByText("1 component to decide, so this credit batch can't go into another Removal. An Admin answers it in Settings, Removal template.")).toBeTruthy();
+      expect(screen.getByText("1 component to decide, so this credit batch can't go into another Removal. An Admin answers it in Settings, Removal templates.")).toBeTruthy();
       cleanup();
       mocks.linesToDecide = 17;
       mount(true, false, undefined, true);

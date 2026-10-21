@@ -3,14 +3,14 @@ export const SETUP_NOT_LINKED_MESSAGE = "Link this facility to an Isometric proj
 
 export const REMOVAL_TEMPLATE_BLOCKERS = {
   forbiddenLine: "This component belongs at the project level in Isometric.",
-  notRemovalTemplate: "This template is not a Removal template. Choose a Removal template for this credit batch.",
-  unpinnedTemplate: "Choose a Removal template for this credit batch.",
+  notRemovalTemplate: "This template is not a Removal template. Set a Removal template in Settings, Removal templates.",
+  unpinnedTemplate: "Set a Removal template in Settings, Removal templates.",
   mixedTemplatePins: "These credit batches use different Removal templates.",
   templateNotFound: "Template no longer exists in Isometric.",
   templateNotFullyRead: "Template not fully read. Try again.",
   unsupportedSequestration: "This template uses an unsupported storage component.",
   missingFixedDatapoint: "Set each value in the Isometric template editor before submitting.",
-  templateLinesNeedReview: "This Removal template has components to decide. Answer them in Settings, Removal template.",
+  templateLinesNeedReview: "This Removal template has components to decide. Answer them in Settings, Removal templates.",
 } as const;
 /**
  * Landing line for a deep link to a credit batch's template block when the

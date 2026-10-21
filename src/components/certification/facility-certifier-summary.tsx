@@ -105,7 +105,7 @@ function SummaryBody({
         </span>
       </Field>
 
-      <Field label="Default Removal template">
+      <Field label="Removal template">
         {mapping.removalTemplateId ? (
           <span className="body-small font-mono text-[var(--color-text-primary)]">
             {mapping.removalTemplateId}

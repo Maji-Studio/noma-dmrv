@@ -72,7 +72,7 @@ export const EMISSION_ENTRIES_TO_CHECK_LABEL = "Emissions entries to check";
 
 /** Who settles components to decide, for a viewer who can't: members read this instead of an Answer in Settings link. */
 export function linesDecidedByAdmin(count: number): string {
-  return `An Admin answers ${count === 1 ? "it" : "them"} in Settings, Removal template.`;
+  return `An Admin answers ${count === 1 ? "it" : "them"} in Settings, Removal templates.`;
 }
 
 /** The unmet Components decided label when no line is undecided: the read or the lines are the problem. */

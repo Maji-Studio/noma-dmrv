@@ -11,7 +11,9 @@
  *
  * While the pinned template has components to decide, every role sees it here with
  * the count the Components decided check uses (#1201); Admins also get an
- * "Answer in Settings" link to the setup's Check step with this template picked.
+ * "Answer in Settings" link to the setup's Check step with this template picked,
+ * unless the batch was kept on an older template than the facility's (see
+ * docs/open-questions.md, "Answering components for a kept batch's older template").
  */
 "use client";
 
@@ -70,6 +72,9 @@ export function CreditBatchRemovalTemplate({
   const pinnedId = batch.removalTemplateId;
   const summary = useFacilityCertifierSummary(batch.facilityId);
   const projectId = summary.data?.mapping?.externalProjectId ?? null;
+  // Answering in Settings makes the picked template the facility's and switches every
+  // open batch, so a kept batch on an older template gets text, not that link.
+  const pinIsFacilityTemplate = summary.data?.mapping?.removalTemplateId === pinnedId;
   const templates = useIsometricProjectTemplates(pinnedId ? projectId : null);
 
   const pinned = pinnedId ? templates.data?.find((template) => template.id === pinnedId) : undefined;
@@ -137,7 +142,7 @@ export function CreditBatchRemovalTemplate({
       {linesToDecide > 0 && pinnedId && (
         <Notice
           tone="warning"
-          action={canManage ? (
+          action={canManage && pinIsFacilityTemplate ? (
             <Link
               href={removalTemplateSetupHref(batch.facilityId, { templateId: pinnedId, step: "check" })}
               className="inline-flex min-h-44 items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"

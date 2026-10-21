@@ -128,16 +128,16 @@ describe("SubmissionSummary", () => {
     const html = render({
       compilation: {
         ...COMPILATION,
-        blockers: ["Choose a Removal template for this credit batch.", "Complete these fields before submitting the Removal:\nRecord Sample moisture"],
+        blockers: ["Set a Removal template in Settings, Removal templates.", "Complete these fields before submitting the Removal:\nRecord Sample moisture"],
         removalBlockers: [
-          { code: "unpinnedTemplate", message: "Choose a Removal template for this credit batch.", fixTarget: "templateSetup" },
+          { code: "unpinnedTemplate", message: "Set a Removal template in Settings, Removal templates.", fixTarget: "templateSetup" },
           { code: "entityReadiness", message: "Complete these fields before submitting the Removal:\nRecord Sample moisture", fixTarget: null },
         ],
         snapshot: null,
         compilationHash: null,
       } as unknown as RemovalCompilationView,
     });
-    expect(html).toContain("Choose a Removal template for this credit batch.");
+    expect(html).toContain("Set a Removal template in Settings, Removal templates.");
     expect(html).toContain("Set template");
     expect(html).toContain("Record Sample moisture");
     expect(html.split("Set template")).toHaveLength(2);

@@ -48,6 +48,16 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
   bar a few pixels wide. Needs a design decision for bars whose 44px hit areas
   would overlap.
 
+## Answering components for a kept batch's older template - **open**
+
+- `src/components/credit-batches/credit-batch-removal-template.tsx:CreditBatchRemovalTemplate`
+  hides the "Answer in Settings" link when the batch's pinned template is not the
+  facility's current one: the setup's Check step makes the answered template the
+  facility's and switches every open batch (`src/data-access/removal-template-setup.ts:applySetupInTransaction`).
+  A returned Removal on an older template that gains a component therefore has no
+  decisions-only path. Options: a decisions-only apply that records the answers
+  without changing the facility template, or moving the batch to the current template.
+
 ## Late production runs after submission (`credit-batches/late-runs`) - **parked**
 
 - `src/data-access/credit-batch-membership.ts:assertNoOverlappingCreditBatchCohort`

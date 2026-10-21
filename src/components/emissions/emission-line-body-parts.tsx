@@ -262,7 +262,7 @@ export function ReviewNotice({ line, scope }: { line: EmissionLine; scope: Emiss
   const undecided = line.blocker?.code === "lineNeedsReview" && line.blocker.fixTarget === "templateLineReview";
   return (
     <Notice tone="warning" action={<TemplateReviewLink scope={scope} undecided={undecided} />}>
-      {line.blocker?.message ?? "This component has no decision yet. An Admin answers it in Settings, Removal template."}
+      {line.blocker?.message ?? "This component has no decision yet. An Admin answers it in Settings, Removal templates."}
     </Notice>
   );
 }

@@ -41,7 +41,7 @@ describe("Removal template pins", () => {
   it("blocks an unpinned member without substituting the default", () => {
     const result = resolveRemovalTemplate([{ removalTemplateId: template.id }, { removalTemplateId: null }], facts());
     expect(result.removalTemplate).toBeNull();
-    expect(result.templateBlockers).toEqual([{ code: "unpinnedTemplate", message: "Choose a Removal template for this credit batch." }]);
+    expect(result.templateBlockers).toEqual([{ code: "unpinnedTemplate", message: "Set a Removal template in Settings, Removal templates." }]);
   });
   it("refuses mixed pins", () => {
     expect(resolveRemovalTemplate([{ removalTemplateId: template.id }, { removalTemplateId: "other-default" }], facts()).templateBlockers)

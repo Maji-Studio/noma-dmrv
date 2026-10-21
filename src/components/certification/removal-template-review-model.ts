@@ -208,25 +208,3 @@ export function countedLabel(name: string, count: number): string {
 
 /** The title of a template no one has set up yet. */
 export const NOT_SET_UP_TITLE = "Not set up yet";
-
-/** Whether a Removal template can be chosen for a credit batch, and why not. */
-export interface TemplateReadiness {
-  ready: boolean;
-  /** Why it cannot be chosen yet: "3 components to decide", "Not set up yet". */
-  reason?: string;
-  /** Lines without a decision; only then does the link say "Decide components". */
-  toDecide?: number;
-}
-
-/** Why a template cannot be chosen yet, in the words Removal templates uses. */
-export function templateReadiness(entry: RemovalTemplateReviewEntry): TemplateReadiness {
-  const verdict = removalTemplateVerdict(entry);
-  if (verdict.ready) return { ready: true };
-  if (verdict.blocker === "templateLinesNeedReview") {
-    return { ready: false, reason: linesToDecideLabel(verdict.toDecideCount), toDecide: verdict.toDecideCount };
-  }
-  if (verdict.blocker === "templateNotFullyRead") {
-    return { ready: false, reason: entry.enrichmentProblems.length > 0 ? TEMPLATE_NOT_FULLY_READ_TITLE : NOT_SET_UP_TITLE };
-  }
-  return { ready: false, reason: verdict.blocker ? REMOVAL_TEMPLATE_BLOCKERS[verdict.blocker] : NOT_SET_UP_TITLE };
-}

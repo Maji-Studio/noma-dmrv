@@ -558,8 +558,8 @@ _Avoid_: line, emission line, template line, template input.
 The components without a saved decision, always shown with their count
 ("3 components to decide"). A Removal template with components to decide
 blocks the Removals of every credit batch on it. A component added to a template
-after setup reopens as "1 to decide". The link to settle them reads "Decide
-components": it opens the Set Removal template dialog, whose Check step asks the open questions, for that
+after setup reopens as "1 to decide". The link to settle them reads "Answer in
+Settings": it opens the Set Removal template dialog, whose Check step asks the open questions, for that
 template where the page knows it, and Removal templates in Settings otherwise. A decided component noma cannot
 fill links "Open Removal templates" (the Settings pane) instead.
 noma decides what it can; the Check step asks only the rest. In the New Removal checks
