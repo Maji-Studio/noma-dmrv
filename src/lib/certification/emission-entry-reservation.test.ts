@@ -8,7 +8,7 @@ it("accepts the exact reviewed revision, including this Removal's previous claim
   expect(emissionEntryCanBeReserved({ ...args, entry: { ...entry, sentByRemovalId: "r", sendReservedBySubmissionId: "s" } })).toBe(true);
 });
 it.each([
-  { contentRevision: 3 }, { deletedAt: new Date() }, { creditBatchId: "other" }, { sentByRemovalId: "other" },
+  { contentRevision: 3 }, { deletedAt: new Date() }, { creditBatchId: "other" }, { sentByRemovalId: "other" }, { heldForRemovalId: "other" },
   { sendReservedBySubmissionId: "other" }, { kind: "zero" as const, confirmedForRemovalId: "other" },
 ])("refuses changed content, membership and foreign ownership (%j)", (patch) => {
   expect(emissionEntryCanBeReserved({ ...args, entry: { ...entry, ...patch } })).toBe(false);
@@ -18,4 +18,9 @@ it("only takes a foreign reservation when the production takeover policy allows 
 });
 it("reserves only this draft's zero", () => {
   expect(emissionEntryCanBeReserved({ ...args, entry: { ...entry, kind: "zero", confirmedForRemovalId: "r" } })).toBe(true);
+});
+
+it("reserves a held replacement only for its holding Removal, even on reservation takeover", () => {
+  expect(emissionEntryCanBeReserved({ ...args, entry: { ...entry, heldForRemovalId: "r" } })).toBe(true);
+  expect(emissionEntryCanBeReserved({ ...args, entry: { ...entry, heldForRemovalId: "other" }, priorReservationTransferable: true })).toBe(false);
 });

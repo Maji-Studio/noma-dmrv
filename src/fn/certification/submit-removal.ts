@@ -1,3 +1,4 @@
+import { REMOVAL_SUBMISSION_CLAIM_POLICY } from "@/lib/isometric/utils/submission-claim";
 import { readRemovalEntrySnapshot } from "./removal-snapshot-readers";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import type { OrgContext } from "@/lib/auth/server";
@@ -367,7 +368,7 @@ async function submitRemovalCore(
       localEntityId: removalId,
     },
     guard: mappingGuard,
-    policy: { onSubmittedHashChanged: "supersede", allowEvidenceRefresh: true },
+    policy: REMOVAL_SUBMISSION_CLAIM_POLICY,
     tentativeInputs: initialBuild,
     hashOf: (inputs) => payloadHash(inputs.semanticPayload),
     mirrorDocumentIds: candidateDocumentIds,

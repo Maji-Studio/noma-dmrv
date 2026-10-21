@@ -34,7 +34,7 @@ const scope = { removalId: "removal", facilityId: "facility",
 const facts: BatchEmissionContext = { batch: {
   entries: [{ id: "entry", creditBatchId: "batch", componentId: "component", contentRevision: 1,
     kind: "value", lineRule: "additive", occurredOn: "2026-03-14", counts: true,
-    deletedAt: null, sentByRemovalId: null, sendReservedBySubmissionId: null, confirmedForRemovalId: null,
+    deletedAt: null, sentByRemovalId: null, replacesEntryId: null, heldForRemovalId: null, sendReservedBySubmissionId: null, confirmedForRemovalId: null,
     organizationId: ctx.organizationId, removalTemplateId: "template", observationId: "observation",
     inputShape: [], note: null, createdBy: null, version: 1, createdAt: timestamp, updatedAt: timestamp,
     documentCount: 1, reason: null, hasEvidence: true, unitMismatch: false, total: { magnitude: "2", unit: "kWh" }, canConfirm: false,

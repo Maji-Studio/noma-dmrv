@@ -74,7 +74,13 @@ export async function loadBatchEmissionContext(
   }
   for (const contender of contenders.filter((item) => item.contenderKind === "correction")) {
     const correction = await loadRemovalEntryCorrection(ctx, contender.removalId, contenders);
-    for (const id of correction.changedBatchIds ?? []) if (result[id]) (result[id].corrections ??= []).push(correction);
+    for (const id of correction.correction?.batches.map((batch) => batch.id) ?? correction.changedBatchIds ?? []) {
+      if (result[id]) (result[id].corrections ??= []).push({ ...correction,
+        correction: correction.correction ? { ...correction.correction,
+          changed: correction.correction.changed.filter((change) => change.batchId === id),
+        } : undefined,
+      });
+    }
   }
   return result;
 }

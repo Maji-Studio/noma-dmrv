@@ -1,0 +1,3 @@
+ALTER TABLE "emission_entries" ADD COLUMN "replaces_entry_id" uuid;--> statement-breakpoint
+ALTER TABLE "emission_entries" ADD CONSTRAINT "emission_entries_replaces_entry_id_organization_id_emission_entries_id_organization_id_fk" FOREIGN KEY ("replaces_entry_id","organization_id") REFERENCES "public"."emission_entries"("id","organization_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "emission_entries_replaces_entry_idx" ON "emission_entries" USING btree ("replaces_entry_id") WHERE "emission_entries"."replaces_entry_id" is not null;

@@ -38,6 +38,8 @@ export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
     contentRevision: "ignore",
     deletedAt: "value",
     sentByRemovalId: { link: "removal" },
+    replacesEntryId: { link: "emission_entry" },
+    heldForRemovalId: "ignore",
     sendReservedBySubmissionId: { link: "submission" },
     createdAt: "ignore",
     updatedAt: "ignore",

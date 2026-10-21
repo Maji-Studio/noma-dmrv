@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { ENTRY_HAS_NO_REMOVAL } from "@/lib/certification/emission-entry-messages";
 import { formatUtcDate } from "@/lib/date-utils";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
@@ -19,6 +20,7 @@ export function deriveRemovalEntryWindow(
 }
 export interface EntryContender {
   contenderKind: "draft" | "correction";
+  returnedStatement?: { id: string; status: "FAILED_VERIFICATION" | "DRAFT" };
   removalId: string;
   createdAt: string;
   creditBatchIds: readonly string[];
@@ -32,6 +34,7 @@ export interface RemovalEntryFact {
   id: string; creditBatchId: string; componentId: string; contentRevision: number;
   kind: "value" | "zero"; lineRule: "single" | "additive"; occurredOn: string;
   deletedAt: Date | string | null; sentByRemovalId: string | null;
+  heldForRemovalId?: string | null;
   confirmedForRemovalId: string | null;
   sendReservedBySubmissionId: string | null;
   /** Resolved only for a live reservation ledger row. */
@@ -40,12 +43,18 @@ export interface RemovalEntryFact {
   counts: boolean; unitMismatch?: boolean; reason?: string | null;
   values: readonly RemovalEntryValue[]; evidenceDocumentIds: readonly string[];
 }
-export interface EntryInputManifest {
-  componentId: string; inputKey: string; componentDisplayName?: string;
-  entries: { entryId: string; creditBatchId: string; creditBatchCode?: string; occurredOn?: string; contentRevision: number; kind: "value" | "zero";
-    value: EmissionFigure; massDistanceDetail?: RemovalEntryValue["massDistanceDetail"];
-    evidenceDocumentIds: string[] }[];
-}
+const entryManifestFigureSchema = z.object({ magnitude: z.string(), unit: z.string() });
+export const entryInputManifestSchema = z.object({
+  componentId: z.string(), inputKey: z.string(), componentDisplayName: z.string().optional(),
+  entries: z.array(z.object({
+    entryId: z.string(), creditBatchId: z.string(), creditBatchCode: z.string().optional(),
+    occurredOn: z.string().optional(), contentRevision: z.number(), kind: z.enum(["value", "zero"]),
+    value: entryManifestFigureSchema,
+    massDistanceDetail: z.object({ mass: entryManifestFigureSchema, distance: entryManifestFigureSchema }).nullable().optional(),
+    evidenceDocumentIds: z.array(z.string()),
+  })),
+});
+export type EntryInputManifest = z.infer<typeof entryInputManifestSchema>;
 export interface RemovalEntryContributions {
   manifest: EntryInputManifest[];
   inputs: { componentId: string; inputKey: string; value: EmissionFigure }[];
@@ -69,11 +78,15 @@ export function isLiveEntryReservation(row: {
 export function inWindow(entry: { occurredOn: string }, window: RemovalEntryWindow) {
   return entry.occurredOn >= window.start && entry.occurredOn <= window.end;
 }
+export function entryHoldingRemovalId(entry: Pick<RemovalEntryFact, "sentByRemovalId" | "heldForRemovalId">): string | null {
+  return entry.sentByRemovalId ?? entry.heldForRemovalId ?? null;
+}
 export function removalEntryOwner(entry: RemovalEntryFact, contenders: readonly EntryContender[]): string | null {
   if (entry.deletedAt) return null;
   if (entry.sentByRemovalId) return entry.sentByRemovalId;
   if (entry.reservedByRemovalId) return entry.reservedByRemovalId;
   if (entry.sendReservedBySubmissionId && !entry.reservationKnownInactive) return null;
+  if (entry.heldForRemovalId) return entry.heldForRemovalId;
   return contenders.filter((draft) => draft.creditBatchIds.includes(entry.creditBatchId) && inWindow(entry, draft.window) &&
     (entry.kind !== "zero" || entry.confirmedForRemovalId === draft.removalId))
     .sort((a, b) => Number(b.contenderKind === "correction") - Number(a.contenderKind === "correction") || a.window.end.localeCompare(b.window.end) || a.createdAt.localeCompare(b.createdAt) || a.removalId.localeCompare(b.removalId))[0]?.removalId ?? null;
@@ -84,7 +97,7 @@ export function entriesWithoutRemoval(
   entries: readonly RemovalEntryFact[], contenders: readonly EntryContender[], liveReservationIds: ReadonlySet<string>,
   applications: readonly { creditBatchId: string; applicationDate: Date }[],
 ): string[] {
-  return entries.filter((entry) => entry.kind === "value" && !entry.sentByRemovalId &&
+  return entries.filter((entry) => entry.kind === "value" && !entry.sentByRemovalId && !entry.heldForRemovalId &&
     !liveReservationIds.has(entry.sendReservedBySubmissionId ?? "") &&
     !removalEntryOwner({ ...entry, reservationKnownInactive: true }, contenders) &&
     !applications.some((application) => application.creditBatchId === entry.creditBatchId &&
@@ -114,7 +127,8 @@ export function deriveRemovalEntryContributions(args: {
       code: "entryHasNoRemoval", message: ENTRY_HAS_NO_REMOVAL, fixTarget: "emissions", creditBatchId: entry.creditBatchId,
       lineRef: { componentId: entry.componentId, displayName: entry.componentId },
     });
-    if (entry.kind === "value" && entry.lineRule === "single" && entry.sentByRemovalId && entry.sentByRemovalId !== args.removalId) {
+    const holdingRemovalId = entryHoldingRemovalId(entry);
+    if (entry.kind === "value" && entry.lineRule === "single" && holdingRemovalId && holdingRemovalId !== args.removalId) {
       result.sentSingleComponentIds.push(entry.componentId);
       continue;
     }

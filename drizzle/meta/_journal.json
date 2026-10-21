@@ -1191,6 +1191,13 @@
       "when": 1792513211518,
       "tag": "0169_preserve-last-admin",
       "breakpoints": true
+    },
+    {
+      "idx": 170,
+      "version": "7",
+      "when": 1792568968138,
+      "tag": "0170_emission_entry_replaces",
+      "breakpoints": true
     }
   ]
 }

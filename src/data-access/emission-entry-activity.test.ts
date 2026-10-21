@@ -21,7 +21,7 @@ const entry: typeof emissionEntries.$inferSelect & { values: (typeof emissionEnt
   version: 1,
   contentRevision: 1,
   deletedAt: null,
-  sentByRemovalId: null,
+  sentByRemovalId: null, replacesEntryId: null,
   sendReservedBySubmissionId: null,
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),

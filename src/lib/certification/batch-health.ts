@@ -1,3 +1,5 @@
+import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
+import type { RemovalCorrection } from "./removal-entry-correction";
 import { templateLineFixTarget } from "./template-fix-targets";
 import type { BatchEmissionLine } from "./emission-lines";
 import type { SampleDocumentWarningKey } from "./sample-document-warnings";
@@ -190,7 +192,8 @@ export interface BatchHealthFacts {
 
 export interface BatchHealth {
   /** Advisory actions belong to the returned Removal and never affect batch eligibility. */
-  advisories?: { message: string; fixTarget: "removal"; removalId: string }[];
+  advisories?: { message: string; fixTarget: "removal"; removalId: string; removalCode?: string }[];
+  removalCorrections?: RemovalCorrection[];
   warnings?: string[];
   /** Non-blocking Sample document gaps behind `warnings`, as typed keys. */
   documentWarnings?: SampleDocumentWarningKey[];
@@ -501,8 +504,8 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
  * uniformity) live in `deriveRemovalReadiness`, not here.
  */
 export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
-  const advisories = facts.entryCorrections?.flatMap((state) => state.message && state.removalId
-    ? [{ message: state.message, fixTarget: "removal" as const, removalId: state.removalId }] : []) ?? [];
+  const advisories = facts.entryCorrections?.flatMap((state) => (state.message || state.correction?.windowOpen) && state.removalId
+    ? [{ message: state.message ?? RETURNED_BY_ISOMETRIC_LABEL, fixTarget: "removal" as const, removalId: state.removalId, removalCode: state.removalCode }] : []) ?? [];
   const emissionIssues = new Map(facts.emissionLines
     ?.filter((line) => line.blocker?.fixTarget === "emissions")
     .map((line) => [line.componentId, line]));
@@ -555,6 +558,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
     issueCount,
     checks,
     advisories,
+    removalCorrections: facts.entryCorrections?.flatMap((state) => state.correction ? [state.correction] : []) ?? [],
     warnings: facts.warnings ?? [],
     documentWarnings: facts.documentWarnings ?? [],
   };

@@ -1,7 +1,7 @@
 import { withRemovedEntryComponents } from "./emission-line-definition";
 import { ENTRY_HAS_NO_REMOVAL } from "@/lib/certification/emission-entry-messages";
 import { deriveBatchEmissionLines, type BatchEmissionLineFacts } from "./emission-lines";
-import type { RemovalEntryContributions, RemovalEntryFact } from "./removal-emission-contributions";
+import { entryHoldingRemovalId, type RemovalEntryContributions, type RemovalEntryFact } from "./removal-emission-contributions";
 import { SOURCE_IDS } from "@/lib/isometric/template-observations/catalog-sources";
 import { SOURCE_BUCKETS } from "@/lib/isometric/utils/aggregation";
 
@@ -26,7 +26,7 @@ export function deriveRemovalBatchEmissionLines(
     }
     const sent = contributions && batchId && batch?.entries.some((entry) =>
       entry.componentId === line.componentId && entry.lineRule === "single" && entry.kind === "value" &&
-      entry.sentByRemovalId && !(contributions.ownedEntryIds ?? contributions.selectedEntryIds).includes(entry.id));
+      entryHoldingRemovalId(entry) && !(contributions.ownedEntryIds ?? contributions.selectedEntryIds).includes(entry.id));
     if (sent && line.state === "empty") return { ...line, state: "filled" as const, blocker: undefined };
     return line;
   });
