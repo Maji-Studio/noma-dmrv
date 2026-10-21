@@ -70,6 +70,14 @@ describe("ReestimateNotice", () => {
     expect(screen.getByRole("status").textContent).toContain("Check the moisture: 50% against P1's 20%");
   });
 
+  it("opens the mass flow from the (i), under the explanation, not under the notice", () => {
+    render(<ReestimateNotice preview={wetter} kind="loss" />);
+    expect(screen.queryByText("Stays after saving")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "About Why the bin goes up" }));
+    expect(screen.getAllByText("Stays after saving").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Extra water at 50%").length).toBeGreaterThan(0);
+  });
+
   it("names the product as the one that takes the biochar", () => {
     render(<ReestimateNotice preview={wetter} kind="biochar" />);
     fireEvent.click(screen.getByRole("button", { name: "About Why the bin goes up" }));

@@ -41,6 +41,8 @@ function listNames(names: readonly string[]): string {
   return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
+/** Wide enough for the flow diagram on desktop (the panel keeps a 16px gutter on a phone); tall enough that it does not scroll. */
+const FLOW_PANEL_CLASS = "w-[min(640px,calc(100vw-32px))] max-h-[min(640px,var(--available-height))]";
 const AFTER_SAVING_LABEL = "After saving";
 
 interface NoticeCopy {
@@ -101,7 +103,7 @@ function noticeCopy(figures: ReestimateFigures, kind: ReestimateKind): NoticeCop
  * measured wetter than the bin, so the bin would hold less wet mass than
  * biochar. The notice asks to check the moisture, shows the bin before and
  * after saving, offers the one action that helps (go back to the moisture
- * field of the affected sub-bin), and the mass flow shows the consequence.
+ * field of the affected sub-bin), and the mass flow opens from the (i).
  * Renders nothing otherwise.
  */
 export function ReestimateNotice({ preview, kind, onMeasureAgain }: {
@@ -121,14 +123,15 @@ export function ReestimateNotice({ preview, kind, onMeasureAgain }: {
         action={onMeasureAgain && <Button type="button" variant="weak" size="small" className="max-sm:min-h-44" onClick={() => onMeasureAgain(figures.wholeBin ? undefined : figures.layers[0]?.layerId)}>{MEASURE_AGAIN_LABEL}</Button>}
       >
         {copy.body}
-        <ExplanationInfo title={copy.whyTitle} hint={copy.why} />
+        <ExplanationInfo title={copy.whyTitle} hint={copy.why} panelClassName={FLOW_PANEL_CLASS}>
+          <MassFlowSankey diagram={reestimateFlow(figures, preview.binName, kind)} />
+        </ExplanationInfo>
         {copy.pairs.length > 0 && (
           <div className="mt-8 flex flex-col gap-8">
             {copy.pairs.map((pair) => <LedgerBeforeAfter key={pair.key} labels={[pair.beforeLabel, AFTER_SAVING_LABEL]} before={pair.before} after={pair.after} stackOnPhone />)}
           </div>
         )}
       </Notice>
-      <MassFlowSankey diagram={reestimateFlow(figures, preview.binName, kind)} />
     </div>
   );
 }

@@ -45,16 +45,18 @@ interface ExplanationInfoProps {
   /** Tables, ledgers and arithmetic. Mounts only while the panel is open. */
   children?: ReactNode;
   className?: string;
+  /** Replaces the panel's default width, for content that needs room, such as a diagram. */
+  panelClassName?: string;
 }
 
-function ExplanationInfo({ title, hint, children, className }: ExplanationInfoProps) {
+function ExplanationInfo({ title, hint, children, className, panelClassName }: ExplanationInfoProps) {
   return (
     <Popover
       openOnHover
       nativeTrigger={false}
       collisionAvoidance={SHIFT_ALONG_EDGE}
       title={title}
-      className={PANEL_CLASS}
+      className={cn(PANEL_CLASS, panelClassName)}
       trigger={(
         <span
           role="button"
