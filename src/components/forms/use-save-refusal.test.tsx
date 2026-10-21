@@ -71,7 +71,9 @@ describe("useSaveRefusal", () => {
     render(<Harness refusal={new ActionError({ error: "Refused", issues: [issue(["labName"], "Lab was not found.")] })} />);
     await save();
     expect(await screen.findByText("Not saved. Fix 1 field.")).toBeTruthy();
-    expect(screen.getAllByText(/Lab was not found\./).length).toBeGreaterThanOrEqual(2);
+    // The reason shows once, at the field; the summary names the field only.
+    expect(screen.getAllByText(/Lab was not found\./)).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Lab name" })).toBeTruthy();
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Lab name")));
   });
 
@@ -96,7 +98,8 @@ describe("useSaveRefusal", () => {
     const refusal = new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [issue(["weight"], LOCK_REASON, "certification_locked")] });
     render(<Harness refusal={refusal} />);
     await save();
-    expect(await screen.findByText(LOCK_REASON)).toBeTruthy();
+    expect(await screen.findByText("This record is sent to a Removal.")).toBeTruthy();
+    expect(screen.getByText("Correct the Removal first.")).toBeTruthy();
     expect(screen.queryByText("Locked")).toBeNull();
     expect(screen.queryByText(/Not saved\./)).toBeNull();
   });

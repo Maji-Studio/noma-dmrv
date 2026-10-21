@@ -17,7 +17,7 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useId, useState } from "react";
 
 import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
-import { FormActions, FormEntitySelect, FormField, FormSection, FormSpine, makeCertFieldStatus, MoistureField, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
+import { FormActions, FormEntitySelect, FormField, FormSection, FormSpine, makeCertFieldStatus, MoistureField, FieldErrorRow, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
@@ -342,22 +342,27 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         fields={["deliveredWetMassKg", "moistureContentPercent"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <WetMassField
-            id="deliveredWetMassKg"
-            label="Biochar product wet mass"
-            unit="kg"
-            error={deliveredWetMassError}
-            hint="Measured wet mass at departure, water included."
-            required
-            disabled={isSubmitting || stockLocked}
-            placeholder="e.g. 1000"
-            certifyRequired={isDeliveryCertifyField("deliveredWetMassKg")}
-            certifyStatus={certStatus("deliveredWetMassKg")}
-            registration={register("deliveredWetMassKg", {
-              setValueAs: nullableNumericValue,
-            })}
-          />
-          {(stockLocked || draw.usesSingleMoisture) && <MoistureField
+          {/* The message can be long, so it takes its own full-width row under both columns. */}
+          <div className="md:col-start-1 md:row-start-1">
+            <WetMassField
+              id="deliveredWetMassKg"
+              label="Biochar product wet mass"
+              unit="kg"
+              error={deliveredWetMassError}
+              errorOutside
+              hint="Measured wet mass at departure, water included."
+              required
+              disabled={isSubmitting || stockLocked}
+              placeholder="e.g. 1000"
+              certifyRequired={isDeliveryCertifyField("deliveredWetMassKg")}
+              certifyStatus={certStatus("deliveredWetMassKg")}
+              registration={register("deliveredWetMassKg", {
+                setValueAs: nullableNumericValue,
+              })}
+            />
+          </div>
+          <FieldErrorRow id="deliveredWetMassKg-error" message={deliveredWetMassError} className="md:col-span-2 md:row-start-2" />
+          {(stockLocked || draw.usesSingleMoisture) && <div className="md:col-start-2 md:row-start-1"><MoistureField
             id="moistureContentPercent"
             label="Biochar product moisture"
             unit="%"
@@ -368,7 +373,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             estimate={isEditMode ? undefined : moistureEstimate}
             reading={watchMoisture}
             registration={register("moistureContentPercent")}
-          />}
+          /></div>}
           {/* The composition cards belong to the same grid as the two inputs
               above them, so they align to the field columns and inherit the
               row rhythm instead of stacking on a second spacing scale. The

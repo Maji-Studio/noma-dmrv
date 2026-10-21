@@ -5,7 +5,7 @@ import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-blo
 import { FormActions, reserveStickyFooterSpace } from "./form-actions";
 
 describe("FormActions", () => {
-  it("renders an action error inside the sticky footer immediately above the buttons", () => {
+  it("renders an action error as flow content directly above the sticky footer", () => {
     const markup = renderToStaticMarkup(
       <FormActions errorMessage="Action failed" submitLabel="Save record" />,
     );
@@ -17,8 +17,9 @@ describe("FormActions", () => {
     );
 
     expect(stickyFooterIndex).toBeGreaterThanOrEqual(0);
-    expect(alertIndex).toBeGreaterThan(stickyFooterIndex);
-    expect(buttonRowIndex).toBeGreaterThan(alertIndex);
+    expect(alertIndex).toBeGreaterThanOrEqual(0);
+    expect(alertIndex).toBeLessThan(stickyFooterIndex);
+    expect(buttonRowIndex).toBeGreaterThan(stickyFooterIndex);
     expect(markup.match(/role="alert"/g)).toHaveLength(1);
     expect(markup).toContain("Action failed");
   });

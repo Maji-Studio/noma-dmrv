@@ -94,7 +94,8 @@ describe("ApplicationForm server refusals", () => {
     const message = "Delivery DL-26-001 is not marked as delivered. Mark it as delivered before recording an application.";
     const onSubmit = renderRefused(refusal("deliveryId", message));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect((await screen.findAllByText(message)).length).toBeGreaterThanOrEqual(2);
+    // The reason shows once, at the field; the summary link names the field only.
+    expect(await screen.findAllByText(message)).toHaveLength(1);
     expect(screen.getByText("Not saved. Fix 1 field.")).toBeTruthy();
   });
 
@@ -102,7 +103,8 @@ describe("ApplicationForm server refusals", () => {
     const message = "Application date cannot be before the delivery date of DL-26-001 (Sep 22, 2026). Choose that day or a later one.";
     const onSubmit = renderRefused(refusal("applicationDate", message));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect((await screen.findAllByText(message)).length).toBeGreaterThanOrEqual(2);
+    // The reason shows once, at the field; the summary link names the field only.
+    expect(await screen.findAllByText(message)).toHaveLength(1);
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Application date/)));
   });
 
@@ -110,7 +112,7 @@ describe("ApplicationForm server refusals", () => {
     const message = "Only 600 kg remains in this delivery. Reduce the applied mass.";
     const onSubmit = renderRefused(refusal("appliedWetMassKg", message));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect((await screen.findAllByText(new RegExp(message))).length).toBeGreaterThanOrEqual(2);
+    expect(await screen.findAllByText(new RegExp(message))).toHaveLength(1);
     expect(screen.getByText(/Remaining now/)).toBeTruthy();
   });
 

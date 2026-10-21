@@ -1,4 +1,5 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
+import { errorBox, squashed } from "../../../tests/helpers/error-box-text";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
@@ -103,7 +104,7 @@ describe("FleetSettingsSection", () => {
     await act(async () => { button("Delete").props.onClick(); });
 
     expect(onDelete).toHaveBeenCalledWith(row);
-    expect(text(tree.root)).toContain(BLOCKED);
+    expect(squashed(text(tree.root))).toContain(squashed(BLOCKED));
     expect(tree.root.findAllByProps({ role: "dialog" })).toHaveLength(1);
     expect(mocks.toastSuccess).not.toHaveBeenCalled();
   });
@@ -115,7 +116,7 @@ describe("FleetSettingsSection", () => {
     await render({ data: [row], onDelete });
     await act(async () => button("Delete Feedstock truck").props.onClick());
     await act(async () => { button("Delete").props.onClick(); });
-    expect(text(tree.root)).toContain("Vehicle VEH-001 was not deleted. It changed since the list loaded.");
+    expect(squashed(text(tree.root))).toContain(squashed("Vehicle VEH-001 was not deleted. It changed since the list loaded."));
   });
 
   it("retries a stale delete with the row version the list refreshed to", async () => {

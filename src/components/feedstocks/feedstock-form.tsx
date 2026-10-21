@@ -54,7 +54,7 @@ import { DistanceOverrideField } from "@/components/transport-legs/distance-over
 import { DistanceDriftAction, SAVE_BEFORE_REFRESH_REASON } from "@/components/transport-legs/transport-distance-drift";
 import { distanceOverridePatch, emptyToNullSource, hasSavedOverride, overrideDistanceError } from "@/components/transport-legs/distance-override";
 import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
-import { FEEDSTOCK_UPDATE_REFUSAL_ALIASES } from "./feedstock-update-payload";
+import { feedstockRefusalAliases } from "./feedstock-update-payload";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { supplierLocationDistanceLink } from "@/lib/location-distance-links";
 
@@ -313,7 +313,7 @@ export function FeedstockForm({
     }
   }, [fields.length, getValues, hasEditedAllocationMass, isEditMode, setValue, watchWetMass, dirtyFields.allocations]);
 
-  const refuseSave = useSaveRefusal({ control, setError, formId, aliases: FEEDSTOCK_UPDATE_REFUSAL_ALIASES });
+  const refuseSave = useSaveRefusal({ control, setError, formId, aliases: feedstockRefusalAliases(hasEditedAllocationMass) });
   const handleFormSubmit = latched(handleSubmit((data) => {
     const submitted = {
       overriding,

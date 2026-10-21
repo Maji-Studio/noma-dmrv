@@ -666,7 +666,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create feedstock"}
           serverError={createError || updateError || undefined}
           serverErrorAction={
-            updateError && updateBlockers.length > 0 ? (
+            updateBlockers.length > 0 ? (
               <span>
                 {BLOCKERS_LEAD}{" "}
                 {updateBlockers.map((blocker) => blocker.code).join(", ")}

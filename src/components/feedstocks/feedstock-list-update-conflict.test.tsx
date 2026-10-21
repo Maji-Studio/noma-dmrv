@@ -311,6 +311,26 @@ describe("FeedstockList refused update shown at fields", () => {
     expect(textOf(renderer, "server-error")).toBe("");
   });
 
+  it("keeps the blockers when every reason sits at a field, so the box has no message", async () => {
+    mocks.updateRejection = refusal;
+    const renderer = renderList();
+
+    await act(async () => {
+      await mocks.form?.onSubmit(draft, () => ({ footer: null }));
+    });
+
+    expect(textOf(renderer, "server-error")).toBe("");
+    expect(JSON.stringify(renderer.toJSON())).toContain("PR-014");
+
+    // The next attempt clears them before the save runs.
+    mocks.updateRejection = new Error("Feedstock was not saved. Try again.");
+    act(() => renderer.update(<FeedstockList />));
+    await act(async () => {
+      await mocks.form?.onSubmit(draft);
+    });
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("PR-014");
+  });
+
   it("keeps the stale-version message when the form leaves the refusal alone", async () => {
     mocks.updateRejection = new StaleVersionError(STALE_VERSION_MESSAGE, {
       entity: "feedstock", id: FEEDSTOCK_ID, code: STALE_VERSION_CONFLICT_CODE,

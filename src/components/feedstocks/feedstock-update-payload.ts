@@ -12,6 +12,17 @@ export const FEEDSTOCK_UPDATE_REFUSAL_ALIASES = {
   storageLocationId: "allocations.0.storageLocationId",
 } as const;
 
+/**
+ * The refusal aliases for the form's current state. The payload takes the mass
+ * from the bin row, which mirrors the total until the operator edits the row
+ * by hand; from then on an over-draw belongs to the row's own field.
+ */
+export function feedstockRefusalAliases(hasEditedAllocationMass: boolean): Readonly<Record<string, string>> {
+  return hasEditedAllocationMass
+    ? { ...FEEDSTOCK_UPDATE_REFUSAL_ALIASES, massWetKg: "allocations.0.allocatedWetMassKg" }
+    : FEEDSTOCK_UPDATE_REFUSAL_ALIASES;
+}
+
 /** The update input for an edited feedstock, built from the form's draft. */
 export function feedstockUpdatePayload(data: FeedstockFormData, editing: Pick<FeedstockWithRelations, "id" | "version">) {
   return {

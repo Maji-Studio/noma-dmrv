@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { errorBox, squashed } from "../../../../tests/helpers/error-box-text";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StaleVersionError } from "@/lib/stale-version";
@@ -102,7 +103,7 @@ describe("RemovalTemplateSetupFlow", () => {
     mutateAsync.mockRejectedValue(new StaleVersionError("The template changed in Isometric. Review it again.", { entity: "removal_template_observation", id: "tpl-ready", code: "stale_version" } as never));
     renderFlow(setupData({ fitting: [nothingToDecide] }), { onReload });
     fireEvent.click(screen.getByRole("button", { name: /Make default/ }));
-    expect(await screen.findByText("The template changed in Isometric. Review it again.")).toBeTruthy();
+    expect(await screen.findByText(errorBox("The template changed in Isometric. Review it again."))).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Reload template" }));
     expect(onReload).toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();

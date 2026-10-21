@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { errorBox, squashed } from "../../../tests/helpers/error-box-text";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -90,7 +91,7 @@ describe("TransportDistanceDriftNotice", () => {
     renderNotice();
     fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Refresh" })); });
-    expect(await screen.findByText(message)).toBeTruthy();
+    expect(await screen.findByText(errorBox(message))).toBeTruthy();
     expect(screen.getByText("Refresh distance from location?")).toBeTruthy();
     expect(mocks.success).not.toHaveBeenCalled();
   });
@@ -211,7 +212,7 @@ describe("DistanceDriftAction", () => {
     expect((screen.getByRole("button", { name: /Refreshing/ }) as HTMLButtonElement).disabled).toBe(true);
 
     await act(async () => { landRecheck(); });
-    expect(await screen.findByText(message)).toBeTruthy();
+    expect(await screen.findByText(errorBox(message))).toBeTruthy();
     expect((screen.getByRole("button", { name: "Refresh" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -220,7 +221,7 @@ describe("DistanceDriftAction", () => {
     renderRefused(message);
     fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Refresh" })); });
-    expect(await screen.findByText(message)).toBeTruthy();
+    expect(await screen.findByText(errorBox(message))).toBeTruthy();
 
     mocks.drift.mockResolvedValue({ success: true, data: { ...drift, hasDrift: false } });
     await act(async () => { await client.refetchQueries({ queryKey: transportDistanceKeys.detail(target) }); });

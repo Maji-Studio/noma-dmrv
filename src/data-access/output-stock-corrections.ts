@@ -97,8 +97,8 @@ export async function assertOutputCorrectionDependencies(
   if (deliveryId) {
     const [application] = await reader.select({ id: applications.id, code: applications.code }).from(applications).where(and(eq(applications.organizationId, ctx.organizationId), eq(applications.deliveryId, deliveryId)));
     if (application) {
-      const lock = recordLocks.stockEntry({ removals: [], dependents: [{ kind: 'application', id: application.id, label: application.code }] });
-      throw new DomainError('certification_locked', withRecordLockGuidance(`Correction blocked by application ${application.code}.`, lock), { conflict: { entity: "application", id: application.id, code: conflictCode(application.code) } });
+      // The holder is named once, then the next action (a field message runs the form width).
+      throw new DomainError('certification_locked', `Held by application ${application.code}. To change this, first correct or remove that application.`, { conflict: { entity: "application", id: application.id, code: conflictCode(application.code) } });
     }
   }
 }
