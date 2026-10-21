@@ -7,7 +7,7 @@
  */
 import { ApiKeySettings } from "@/components/api-keys";
 import { ApiAccessLine, SettingsConsole } from "@/components/settings";
-import { readOrganizationApiAccess } from "@/lib/read-models/organization-registry-status";
+import { readOrganizationApiAccess } from "@/lib/read-models/organization-api-access";
 import { loadSettingsViewer } from "@/lib/settings/settings-viewer";
 
 export default async function DevelopersSettingsPage() {

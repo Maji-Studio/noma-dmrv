@@ -86,7 +86,7 @@ export function EmissionEstimatesForm({
     return (
       <p className="body-medium text-[var(--color-text-secondary)]">
         This facility isn&apos;t linked to an Isometric project yet. Link it
-        from the facility settings before configuring emission estimates.
+        in Settings, Facilities before configuring emission estimates.
       </p>
     );
   }

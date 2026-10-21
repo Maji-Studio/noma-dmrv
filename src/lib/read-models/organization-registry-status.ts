@@ -1,7 +1,5 @@
 import { env } from "@/config/env";
 import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
-import { getOrganizationApiAccess } from "@/data-access/organization-api-access";
-import { requireOrgScope } from "@/data-access/utils";
 import type { OrgContext } from "@/lib/auth/server";
 import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
 
@@ -22,13 +20,4 @@ export async function readOrganizationRegistryStatus(
     keysSaved: await hasCertifierCredentials(ctx, ISOMETRIC_PROVIDER),
     isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
   };
-}
-
-/**
- * Whether API keys and connected apps may act for the active organization.
- * A Platform Admin switch; the organization only reads it.
- */
-export async function readOrganizationApiAccess(ctx: OrgContext): Promise<boolean> {
-  requireOrgScope(ctx);
-  return getOrganizationApiAccess(ctx.organizationId);
 }

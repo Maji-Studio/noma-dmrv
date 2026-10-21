@@ -67,7 +67,7 @@ export function TemplateStep({ data, templateId, onChange, invalid, notOffered, 
       {data.fitting.length === 0 && (
         <Notice
           tone="warning"
-          action={<Link href={facilitySettingsHref} className="body-small underline underline-offset-2">Open Facilities</Link>}
+          action={<Link href={facilitySettingsHref} className="body-small underline underline-offset-2">Open Settings, Facilities</Link>}
         >
           {`No Removal template in ${project} fits this facility. Check the facility's durability tier or add a template in Isometric.`}
         </Notice>

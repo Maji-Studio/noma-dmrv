@@ -81,7 +81,7 @@ describe("batchHealthFixLinkFor", () => {
       check("facilityEmissions", "certificationEmissions"),
       facilityId,
     );
-    expect(link.label).toBe("Open facility settings");
+    expect(link.label).toBe("Open Settings, Facilities");
     expect(link.href).toBe(
       `/settings/facilities?facility=${facilityId}`,
     );

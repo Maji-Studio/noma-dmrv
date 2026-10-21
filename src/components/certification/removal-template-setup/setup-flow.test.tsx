@@ -211,7 +211,7 @@ describe("RemovalTemplateSetupFlow", () => {
   it("offers a way out when no template fits", () => {
     renderFlow(setupData({ fitting: [] }));
     expect(screen.getByText(/No Removal template in Tanzania biochar fits this facility/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Open Facilities" }).getAttribute("href")).toContain("/settings/facilities");
+    expect(screen.getByRole("link", { name: "Open Settings, Facilities" }).getAttribute("href")).toContain("/settings/facilities");
     expect((screen.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled).toBe(true);
   });
 

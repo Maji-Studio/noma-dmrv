@@ -95,7 +95,7 @@ function SummaryBody({ facilityId, onOpenSetup }: { facilityId: string; onOpenSe
         title="No Removal templates yet"
         description="Link this facility to an Isometric project in Settings, Facilities. Its Removal templates show here."
         padding="sm"
-        action={<Link href={facilityCertificationSettingsHref(facilityId)} className="body-small underline underline-offset-2">Open Facilities</Link>}
+        action={<Link href={facilityCertificationSettingsHref(facilityId)} className="body-small underline underline-offset-2">Open Settings, Facilities</Link>}
       />
     );
   }

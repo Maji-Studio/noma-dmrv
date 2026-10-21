@@ -10,7 +10,7 @@
  */
 "use client";
 
-import { useContext, useState, type ContextType, type ReactNode } from "react";
+import { useContext, useState, type ContextType } from "react";
 import { EmissionEstimatesForm } from "@/components/admin/emission-estimates-form";
 import { FacilityCertifierSection } from "@/components/certification/facility-certifier-section";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -22,6 +22,8 @@ import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import type { SettingsViewer } from "@/lib/settings/panes";
 import { DurabilityTierSettings } from "./durability-tier-settings";
+import { Notice } from "@/components/ui/notice";
+import { PaneSection } from "./pane-section";
 
 /** The durability tier the soil reference temperature is configuration for. */
 const SOIL_MODELLED_TIER = "200_year";
@@ -59,16 +61,6 @@ function useTrackedDraft(): { dirty: boolean; actions: DialogActions } {
       },
     },
   };
-}
-
-/** A hairline-separated block; untitled when its one field already names it. */
-function PaneSection({ title, children }: { title?: string; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-12 border-t-[1px] border-[var(--clr-dark-purple-10)] pt-16 first:border-t-0 first:pt-0">
-      {title && <h3 className="body-caption text-[var(--color-text-tertiary)]">{title}</h3>}
-      {children}
-    </section>
-  );
 }
 
 export function FacilitySettingsPane({ viewer }: { viewer: SettingsViewer }) {
@@ -114,7 +106,7 @@ export function FacilitySettingsPane({ viewer }: { viewer: SettingsViewer }) {
         ) : error || !summary ? (
           <ServerError message="Couldn't load the soil reference temperature. Refresh the page to retry." />
         ) : !summary.mapping ? (
-          <p className="body-small text-[var(--color-text-tertiary)]">{SOIL_REFERENCE_NEEDS_LINK_TEXT}</p>
+          <Notice tone="info">{SOIL_REFERENCE_NEEDS_LINK_TEXT}</Notice>
         ) : canManage ? (
           // The form seeds its defaultValues from `mapping` at mount, so it
           // must not mount before the summary lands or saved values render blank.

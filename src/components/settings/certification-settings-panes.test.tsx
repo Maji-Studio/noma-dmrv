@@ -92,7 +92,7 @@ describe("RegistrySettingsPane", () => {
     state.configured = false;
     const html = renderToStaticMarkup(<RegistrySettingsPane viewer={viewer} />);
     expect(html).toContain("Keys not saved.");
-    expect(html).toContain(REGISTRY_UNLOCKS_TEXT.replaceAll(",", ","));
+    expect(html).toContain(REGISTRY_UNLOCKS_TEXT);
     expect(html.indexOf("Keys not saved.")).toBeLessThan(html.indexOf("Keys form"));
   });
 

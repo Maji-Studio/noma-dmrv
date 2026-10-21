@@ -122,7 +122,7 @@ export function batchHealthFixLinkFor(
       };
     case "certificationEmissions":
       return {
-        label: "Open facility settings",
+        label: "Open Settings, Facilities",
         href: facilityCertificationSettingsHref(facilityId),
       };
     case "applications":

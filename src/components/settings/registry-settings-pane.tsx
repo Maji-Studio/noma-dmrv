@@ -11,7 +11,6 @@
  */
 "use client";
 
-import type { ReactNode } from "react";
 import Link from "next/link";
 import { OrganizationCertifierCredentials } from "@/components/organizations/organization-certifier-credentials";
 import { ProtocolsInUse } from "@/components/certification/protocols-in-use";
@@ -26,17 +25,9 @@ import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { facilityCertificationSettingsHref } from "@/lib/certification/links";
 import type { SettingsViewer } from "@/lib/settings/panes";
+import { PaneSection } from "./pane-section";
 
 export const REGISTRY_UNLOCKS_TEXT = `Saving the ${REGISTRY_NAME} keys unlocks Removal templates and Facilities, where each facility is linked to its ${REGISTRY_NAME} project.`;
-
-function PaneSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-12 border-t-[1px] border-[var(--clr-dark-purple-10)] pt-16">
-      <h3 className="body-caption text-[var(--color-text-tertiary)]">{title}</h3>
-      {children}
-    </section>
-  );
-}
 
 export function RegistrySettingsPane({ viewer }: { viewer: SettingsViewer }) {
   const { facilityId, selectedFacility } = useFacilityContext();
@@ -55,7 +46,7 @@ export function RegistrySettingsPane({ viewer }: { viewer: SettingsViewer }) {
       <div className="flex flex-col gap-12">
         <RegistryStatusLine status={status} canManage={viewer.canManage} />
         {status === "keys-not-saved" && (
-          <p className="body-small text-[var(--color-text-secondary)]">{REGISTRY_UNLOCKS_TEXT}</p>
+          <Notice tone="info">{REGISTRY_UNLOCKS_TEXT}</Notice>
         )}
         {keysSaved && facilityId && summary && !summary.mapping && (
           <Notice
@@ -63,13 +54,13 @@ export function RegistrySettingsPane({ viewer }: { viewer: SettingsViewer }) {
             action={
               <Link
                 href={facilityCertificationSettingsHref(facilityId)}
-                className="body-small font-medium underline underline-offset-2"
+                className="body-small inline-flex min-h-44 items-center font-medium underline underline-offset-2 md:min-h-0"
               >
-                Open Facilities
+                Open Settings, Facilities
               </Link>
             }
           >
-            {facilityLabel ?? "This facility"} has no {REGISTRY_NAME} project link. Link it in Facilities before submitting.
+            {facilityLabel ?? "This facility"} has no {REGISTRY_NAME} project link. Link it in Settings, Facilities before submitting.
           </Notice>
         )}
       </div>

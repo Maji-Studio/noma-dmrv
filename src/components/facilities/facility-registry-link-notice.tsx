@@ -9,6 +9,7 @@
 "use client";
 
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { facilityCertificationSettingsHref } from "@/lib/certification/links";
@@ -34,13 +35,9 @@ export function FacilityRegistryLinkNotice({
           >
             Link registry project
           </Link>
-          <button
-            type="button"
-            onClick={onDismiss}
-            className="body-small inline-flex min-h-44 items-center text-[var(--color-text-secondary)] underline underline-offset-2 md:min-h-0"
-          >
+          <Button type="button" variant="noOutline" size="small" className="min-h-44 md:min-h-0" onClick={onDismiss}>
             Dismiss
-          </button>
+          </Button>
         </span>
       }
     >

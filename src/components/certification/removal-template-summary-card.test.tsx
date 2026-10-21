@@ -134,6 +134,6 @@ describe("RemovalTemplateSummaryCard", () => {
   it("sends an unlinked facility to Settings, Facilities", () => {
     state.error = new Error(SETUP_NOT_LINKED_MESSAGE);
     render(<NuqsTestingAdapter><RemovalTemplateSummaryCard facilityId={FACILITY} /></NuqsTestingAdapter>);
-    expect(screen.getByRole("link", { name: "Open Facilities" }).getAttribute("href")).toContain("/settings/facilities");
+    expect(screen.getByRole("link", { name: "Open Settings, Facilities" }).getAttribute("href")).toContain("/settings/facilities");
   });
 });
