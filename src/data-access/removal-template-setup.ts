@@ -10,10 +10,10 @@ import { STALE_VERSION_CONFLICT_CODE } from "@/lib/stale-version";
 import { DomainError } from "@/lib/domain-errors";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { assignmentsFromPlan, setupPlan, templateFitsFacility } from "@/lib/certification/removal-template-setup-plan";
-import { setupBlockedReason } from "@/lib/certification/removal-template-setup-blockers";
+import { removalTemplateVerdict } from "@/lib/certification/removal-template-verdict";
 import { setupPlanFingerprint } from "@/lib/certification/removal-template-setup-fingerprint";
 import { reviewLineSources } from "@/lib/certification/removal-template-review-sources";
-import { enrichmentProblems, lineNeedsReview, validateLineSources } from "@/lib/isometric/template-observations";
+import { enrichmentProblems, validateLineSources } from "@/lib/isometric/template-observations";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { ApplyRemovalTemplateSetupInput } from "@/schemas/removal-template-setup";
 import { requireOrgScope } from "./utils";
@@ -57,9 +57,12 @@ export async function applySetupInTransaction(ctx: OrgContext, tx: DbTransaction
   if (Object.keys(assignments).length) row = await reviewLineContractsInTransaction(ctx, tx, { observationId: row.id, expectedVersion: row.version, assignments });
   const reviewedSources = reviewLineSources(row.lineSources);
   const problems = validateLineSources(row.definition, row.lineSources);
-  if (row.definition.groups.some((group) => group.components.some((component) => lineNeedsReview(component.id, reviewedSources[component.id], problems)))) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview);
-  const blockedReason = setupBlockedReason(template, enrichmentProblems(row.definition, row.enrichment));
-  if (blockedReason) throw new SafeError(blockedReason);
+  const verdict = removalTemplateVerdict({ availability: "listed", template, observation: row,
+    enrichmentProblems: enrichmentProblems(row.definition, row.enrichment), lineSourceProblems: problems,
+    lines: row.definition.groups.flatMap((group) => group.components.map((component) => ({ component, contract: reviewedSources[component.id] }))),
+  });
+  if (verdict.toDecideCount > 0) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview);
+  if (verdict.setupBlocker) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS[verdict.setupBlocker]);
   if (input.makeDefault) await updateFacilityDefaultRemovalTemplateInTransaction(ctx, tx, { facilityId: input.facilityId, externalProjectId: template.project_id, removalTemplateId: template.id });
   for (const selected of [...input.batches].sort((a, b) => a.id.localeCompare(b.id))) {
     const [batch] = await tx.select().from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, selected.id), eq(creditBatches.facilityId, input.facilityId)));

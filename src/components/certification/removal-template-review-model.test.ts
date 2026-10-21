@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR, UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import {
   inputUnitLabel,
   MISSING_TEMPLATE_NAME,
@@ -27,6 +28,12 @@ function entry(overrides: Record<string, unknown> = {}): RemovalTemplateReviewEn
 }
 
 describe("templateReadiness", () => {
+  it.each([DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR, UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR])("gives the switch dialog a reason for rejected storage component %s", (blueprintKey) => {
+    expect(templateReadiness(entry({
+      template: { credit_type: "REMOVAL", groups: [{ components: [{ blueprint_key: blueprintKey, inputs: [] }] }] },
+    }))).toEqual({ ready: false, reason: REMOVAL_TEMPLATE_BLOCKERS.unsupportedSequestration });
+  });
+
   it("marks a template read in full with every line decided as ready", () => {
     expect(templateReadiness(entry())).toEqual({ ready: true });
   });

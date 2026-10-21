@@ -13,7 +13,7 @@ import { observeRemovalTemplate, TEMPLATE_ENRICHMENT_TTL_MS } from "./observe-re
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { enrichmentProblems, fullFingerprint, lineNeedsReview, lineSourcesForObservation, normalizeTemplateDefinition, resolveLineSources, semanticFingerprint, validateLineSources, type TemplateEnrichment } from "@/lib/isometric/template-observations";
 import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/load-enrichment";
-import { loadRemovalTemplateReview, loadRemovalTemplateReviewEntry, reviewRemovalTemplateLines, switchCreditBatchRemovalTemplate } from "./removal-template-review";
+import { loadRemovalTemplateReview, loadRemovalTemplateReviewEntry, switchCreditBatchRemovalTemplate } from "./removal-template-review";
 import { canAcceptProposal, problemMessages } from "@/components/certification/removal-template-review-model";
 import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR, UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 
@@ -277,24 +277,11 @@ describe("switch readiness", () => {
   });
 });
 describe("Removal template action guards", () => {
-  it("denies members before review or switch reads", async () => {
+  it("denies members before switch reads", async () => {
     ctx.orgRole = "member";
-    expect((await reviewRemovalTemplateLines({ observationId: id, expectedVersion: 1, assignments: {} })).success).toBe(false);
     expect((await switchCreditBatchRemovalTemplate({ creditBatchId: id, removalTemplateId: "rvt-1", expectedVersion: 1 })).success).toBe(false);
     expect(reviewLineContracts).not.toHaveBeenCalled();
     expect(getCreditBatchById).not.toHaveBeenCalled();
-  });
-  it.each(["admin"] as const)("permits %s reviews with server-resolved scope", async (role) => {
-    ctx.orgRole = role;
-    vi.mocked(reviewLineContracts).mockResolvedValue({ id, lineSources: {} } as never);
-    const input = { observationId: id, expectedVersion: 1, assignments: {} };
-    expect(await reviewRemovalTemplateLines(input)).toEqual({ success: true, data: { id, lineSources: {} } });
-    expect(reviewLineContracts).toHaveBeenCalledWith(ctx, input);
-  });
-  it("validates contracts and versions before persistence", async () => {
-    expect((await reviewRemovalTemplateLines({ observationId: id, expectedVersion: 0, assignments: {} })).success).toBe(false);
-    expect((await reviewRemovalTemplateLines({ observationId: id, expectedVersion: 1, assignments: { line: { scope: "operating", automaticSource: "invented" as never, entryPolicy: "additive" } } })).success).toBe(false);
-    expect(reviewLineContracts).not.toHaveBeenCalled();
   });
 });
 
@@ -548,15 +535,6 @@ describe("read-only entry enrichment reuse", () => {
   });
 });
 
-
-it("gates automatic sources in the saved review response", async () => {
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
-  const sources = { component: { scope: "operating", entryPolicy: "additive", automaticSource: "sample-transport", origin: "reviewed" } };
-  vi.mocked(reviewLineContracts).mockResolvedValue({ id, lineSources: sources } as never);
-  const result = await reviewRemovalTemplateLines({ observationId: id, expectedVersion: 1, assignments: {} });
-  expect(result).toMatchObject({ success: true, data: { lineSources: { component: { automaticSource: undefined } } } });
-  expect(sources.component.automaticSource).toBe("sample-transport");
-});
 
 it("refuses to switch to a reviewed legacy transport pair", async () => {
   const { template, observation } = legacyTransportObservation();

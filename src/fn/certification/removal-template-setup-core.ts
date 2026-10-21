@@ -9,9 +9,9 @@ import { hasOrgRole, requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import { listComponentBlueprints, listGhgEntryTemplates, listProjects } from "@/lib/isometric";
 import { compareTemplateObservations, fullFingerprint, normalizeTemplateDefinition, semanticFingerprint, validateLineSources } from "@/lib/isometric/template-observations";
-import { isTemplateReady, linesToDecideCount } from "@/lib/certification/removal-template-readiness";
+import { removalTemplateVerdict } from "@/lib/certification/removal-template-verdict";
+import { findListedRemovalTemplate } from "@/lib/certification/listed-removal-template";
 import { setupPlan, templateFitsFacility } from "@/lib/certification/removal-template-setup-plan";
-import { setupBlockedReason } from "@/lib/certification/removal-template-setup-blockers";
 import { setupPlanFingerprint } from "@/lib/certification/removal-template-setup-fingerprint";
 import { reviewLineSources } from "@/lib/certification/removal-template-review-sources";
 import { removalTemplateReviewLines } from "@/lib/certification/removal-template-review-lines";
@@ -65,11 +65,13 @@ export async function loadRemovalTemplateSetupCore(ctx: OrgContext, facilityId: 
     const entry = { availability: "listed" as const, template, observation: currentObservation,
       enrichmentProblems: facts?.enrichmentProblems ?? preview?.enrichmentProblems ?? [], lineSourceProblems: problems,
       lines: removalTemplateReviewLines(definition, sources, changes, blueprints, template) };
+    const verdict = removalTemplateVerdict(entry);
     const plan = setupPlan(definition, sources, problems);
+    const blockedReason: string | null = verdict.setupBlocker ? REMOVAL_TEMPLATE_BLOCKERS[verdict.setupBlocker] : null;
     fitting.push({ id: template.id, name: template.display_name,
       componentCount: entry.lines.length, plan, planFingerprint: setupPlanFingerprint(plan),
-      ready: isTemplateReady(entry), toDecideCount: linesToDecideCount(entry),
-      blockedReason: setupBlockedReason(template, entry.enrichmentProblems),
+      ready: verdict.ready, toDecideCount: verdict.toDecideCount,
+      blockedReason,
       ...fingerprints,
     });
   }
@@ -88,8 +90,7 @@ export async function loadRemovalTemplateSetupCore(ctx: OrgContext, facilityId: 
 export async function applyRemovalTemplateSetupCore(ctx: OrgContext, input: ApplyRemovalTemplateSetupInput) {
   requireOrgRole(ctx, "admin");
   const { facility, mapping, client, templates } = await setupContext(ctx, input.facilityId);
-  const template = templates.find((candidate) => candidate.id === input.removalTemplateId);
-  if (!template) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFound);
+  const template = findListedRemovalTemplate(templates, input.removalTemplateId);
   const fit = templateFitsFacility(template, facility.durabilityOption);
   if ("reason" in fit) throw new SafeError(fit.reason);
   const facts = await loadRemovalTemplateFacts(ctx, { client, template, externalProjectId: mapping.externalProjectId, blueprints: await listComponentBlueprints(client) });

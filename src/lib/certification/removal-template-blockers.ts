@@ -8,6 +8,7 @@ export const REMOVAL_TEMPLATE_BLOCKERS = {
   mixedTemplatePins: "These credit batches use different Removal templates.",
   templateNotFound: "Template no longer exists in Isometric.",
   templateNotFullyRead: "Template not fully read. Try again.",
+  unsupportedSequestration: "This template uses an unsupported storage component.",
   missingFixedDatapoint: "Set each value in the Isometric template editor before submitting.",
   templateLinesNeedReview: "This Removal template has components to decide. Decide them in Removal templates.",
 } as const;
@@ -45,6 +46,7 @@ const BLOCKER_DESTINATIONS: Record<TemplateRoutedBlockerCode, RemovalTemplateBlo
   mixedTemplatePins: "creditBatchTemplate",
   templateNotFound: "creditBatchTemplate",
   templateNotFullyRead: "templateLines",
+  unsupportedSequestration: "creditBatchTemplate",
   // Line review cannot supply a fixed value. The operator can switch to a corrected template.
   missingFixedDatapoint: "creditBatchTemplate",
   templateLinesNeedReview: "templateLineReview",

@@ -5,7 +5,6 @@
  * operator words, so the review card and its tests read the same strings.
  */
 import type { useRemovalTemplateReview } from "@/hooks/use-removal-template-review";
-import type { ReviewRemovalTemplateLinesInput } from "@/schemas/removal-template-review";
 import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
 import type { ComponentChange } from "@/lib/isometric/template-observations/compare";
 import {
@@ -17,23 +16,22 @@ import {
 } from "@/lib/isometric/template-observations/line-sources";
 import type { ComponentEnrichment, EntryPolicy, QuantityKind } from "@/lib/isometric/template-observations/types";
 import { humanizeEnum, ISOMETRIC_GIVES_NO_UNIT, MISSING_VALUE, UNIT_NOT_READ } from "@/lib/copy-utils";
-import { isTemplateReady, linesToDecideCount } from "@/lib/certification/removal-template-readiness";
+import { removalTemplateVerdict } from "@/lib/certification/removal-template-verdict";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
-import { hasMissingFixedDatapoint } from "@/lib/certification/template-fixed-datapoints";
 import { sectionTemplateLines, type TemplateLineSection } from "@/lib/isometric/template-observations/template-sections";
 import { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE } from "@/lib/certification/requirement-labels";
 import { SOURCE_LABELS } from "@/lib/certification/removal-template-source-labels";
 
 export { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE };
 export { SOURCE_LABELS };
-/** Section grouping, lines still to decide and readiness, under the names the review uses. */
-export { isTemplateReady, linesToDecideCount, sectionTemplateLines };
+/** Section grouping under the name the review uses. */
+export { sectionTemplateLines };
 
 export type RemovalTemplateReviewEntry = NonNullable<
   ReturnType<typeof useRemovalTemplateReview>["data"]
 >[number];
 export type RemovalTemplateReviewLine = RemovalTemplateReviewEntry["lines"][number];
-export type LineAssignment = ReviewRemovalTemplateLinesInput["assignments"][string];
+export type LineAssignment = Pick<LineContract, "scope" | "automaticSource" | "entryPolicy">;
 export type LineScope = LineContract["scope"];
 
 export const SCOPE_LABELS: Record<LineScope, string> = {
@@ -222,12 +220,13 @@ export interface TemplateReadiness {
 
 /** Why a template cannot be chosen yet, in the words Removal templates uses. */
 export function templateReadiness(entry: RemovalTemplateReviewEntry): TemplateReadiness {
-  if (isTemplateReady(entry)) return { ready: true };
-  if (entry.template && hasMissingFixedDatapoint(entry.template)) {
-    return { ready: false, reason: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint };
+  const verdict = removalTemplateVerdict(entry);
+  if (verdict.ready) return { ready: true };
+  if (verdict.blocker === "templateLinesNeedReview") {
+    return { ready: false, reason: linesToDecideLabel(verdict.toDecideCount), toDecide: verdict.toDecideCount };
   }
-  const toDecide = linesToDecideCount(entry);
-  if (toDecide > 0) return { ready: false, reason: linesToDecideLabel(toDecide), toDecide };
-  if (entry.enrichmentProblems.length > 0) return { ready: false, reason: TEMPLATE_NOT_FULLY_READ_TITLE };
-  return { ready: false, reason: NOT_SET_UP_TITLE };
+  if (verdict.blocker === "templateNotFullyRead") {
+    return { ready: false, reason: entry.enrichmentProblems.length > 0 ? TEMPLATE_NOT_FULLY_READ_TITLE : NOT_SET_UP_TITLE };
+  }
+  return { ready: false, reason: verdict.blocker ? REMOVAL_TEMPLATE_BLOCKERS[verdict.blocker] : NOT_SET_UP_TITLE };
 }

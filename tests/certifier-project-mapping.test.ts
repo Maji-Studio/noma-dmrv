@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   getCertifierProjectByFacility,
-  updateFacilityDefaultRemovalTemplate,
+  updateFacilityDefaultRemovalTemplateInTransaction,
   upsertCertifierProject,
 } from "@/data-access/certification";
 import { db } from "@/db";
@@ -239,6 +239,11 @@ describe("upsertCertifierProject protocol version", () => {
     expect(mapping?.protocolVersion).toBe("1.2");
   });
 });
+
+/** The setup apply transaction is the only writer of the default; its guards run inside it. */
+function updateFacilityDefaultRemovalTemplate(ctx: Parameters<typeof updateFacilityDefaultRemovalTemplateInTransaction>[0], input: Parameters<typeof updateFacilityDefaultRemovalTemplateInTransaction>[2]) {
+  return db.transaction((tx) => updateFacilityDefaultRemovalTemplateInTransaction(ctx, tx, input));
+}
 
 describe("facility default Removal template", () => {
   it("preserves the default on the same project and clears it on a project change", async () => {

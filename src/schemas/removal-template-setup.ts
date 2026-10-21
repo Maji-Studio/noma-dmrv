@@ -1,18 +1,9 @@
 import { z } from "zod";
 
-export const startRemovalTemplateSetupSchema = z.object({
+export const loadRemovalTemplateSetupSchema = z.uuid();
+export const applyRemovalTemplateSetupSchema = z.object({
   facilityId: z.uuid(),
   removalTemplateId: z.string().trim().min(1, "Choose a Removal template."),
-});
-
-/** The default only decides which template new credit batches start on; nothing is sent to Isometric. */
-export const setFacilityDefaultRemovalTemplateSchema = startRemovalTemplateSetupSchema;
-
-export type StartRemovalTemplateSetupInput = z.infer<typeof startRemovalTemplateSetupSchema>;
-export type SetFacilityDefaultRemovalTemplateInput = z.infer<typeof setFacilityDefaultRemovalTemplateSchema>;
-
-export const loadRemovalTemplateSetupSchema = z.uuid();
-export const applyRemovalTemplateSetupSchema = startRemovalTemplateSetupSchema.extend({
   fingerprints: z.object({ semanticFingerprint: z.string().min(1), fullFingerprint: z.string().min(1) }),
   planFingerprint: z.string().min(1),
   answers: z.record(z.string().min(1), z.string().min(1)),

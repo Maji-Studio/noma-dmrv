@@ -1,3 +1,4 @@
+import { hasMissingFixedDatapoint } from "@/lib/certification/template-fixed-datapoints";
 import { deriveRemovalEmissionLines } from "@/lib/certification/removal-emission-lines";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
@@ -37,9 +38,7 @@ export function resolveRemovalTemplate(
   if (!facts) return unresolved("templateNotFound");
   const templateBlockers: RemovalTemplateBlocker[] = [];
   if (!facts.observation || facts.enrichmentProblems.length) templateBlockers.push(removalTemplateBlocker("templateNotFullyRead"));
-  if (facts.template.groups.some((group) => group.components.some((component) =>
-    component.inputs.some((input) => input.type === "fixed" && !input.datapoint_id),
-  ))) templateBlockers.push(removalTemplateBlocker("missingFixedDatapoint"));
+  if (hasMissingFixedDatapoint(facts.template)) templateBlockers.push(removalTemplateBlocker("missingFixedDatapoint"));
   if (facts.lineSourceProblems.length) {
     templateBlockers.push(removalTemplateBlocker("templateLinesNeedReview"));
   }

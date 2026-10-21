@@ -359,15 +359,6 @@ export async function upsertCertifierProject(
   );
 }
 
-export async function updateFacilityDefaultRemovalTemplate(
-  ctx: OrgContext,
-  input: { facilityId: string; externalProjectId: string; removalTemplateId: string },
-): Promise<CertifierProjectRow> {
-  requireOrgScope(ctx);
-  requireOrgRole(ctx, "admin");
-  return db.transaction((tx) => updateFacilityDefaultRemovalTemplateInTransaction(ctx, tx, input));
-}
-
 export async function updateFacilityDefaultRemovalTemplateInTransaction(
   ctx: OrgContext, tx: DbTransaction,
   input: { facilityId: string; externalProjectId: string; removalTemplateId: string },
