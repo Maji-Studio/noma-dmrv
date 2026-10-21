@@ -38,7 +38,7 @@ export async function getFacilityStats(
       ))
       .where(and(
         eq(reactors.organizationId, ctx.organizationId),
-        isNull(reactors.archivedAt),
+        // getFacilities counts reactors in every archive state for the selected facilities.
         facilityArchiveFilter,
       )),
     db.select({ totalStorageBins: count() })

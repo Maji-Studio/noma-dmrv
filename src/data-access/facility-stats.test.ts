@@ -10,6 +10,7 @@ import { getFacilityStats } from "./facility-stats";
 const FACILITY_COUNT = 25;
 const PAGE_SIZE = 10;
 const BINS_PER_TYPE = 2;
+const REACTORS_PER_FACILITY = 2;
 const FEEDSTOCK_WET_KG_STEP = 100;
 const FEEDSTOCK_MOISTURE_PERCENT = 20;
 const PERCENT = 100;
@@ -87,21 +88,24 @@ describe("getFacilityStats whole-list totals", () => {
   it("counts every active facility and its children independently of pagination and search", async () => {
     const expected = {
       totalFacilities: FACILITY_COUNT,
-      totalReactors: FACILITY_COUNT,
+      totalReactors: FACILITY_COUNT * REACTORS_PER_FACILITY,
       totalStorageBins: FACILITY_COUNT * STORAGE_BIN_TYPES.length * BINS_PER_TYPE,
       totalFeedstockWetKg: TOTAL_ACTIVE_FEEDSTOCK_WET_KG,
     };
     expect(await getFacilityStats(fixture.ctx)).toEqual(expected);
     let totalFeedstockWetKg = 0;
+    let rowReactors = 0;
     const pageCount = Math.ceil(FACILITY_COUNT / PAGE_SIZE);
     for (let page = 1; page <= pageCount; page++) {
       const list = await getFacilities(fixture.ctx, { page, pageSize: PAGE_SIZE });
       expect(list.items).toHaveLength(Math.min(PAGE_SIZE, FACILITY_COUNT - (page - 1) * PAGE_SIZE));
       expect(list.total).toBe(FACILITY_COUNT);
       expect(list.items.every((item) => item.storageLocationCount === STORAGE_BIN_TYPES.length * BINS_PER_TYPE)).toBe(true);
+      rowReactors += list.items.reduce((sum, item) => sum + item.reactorCount, 0);
       totalFeedstockWetKg += list.items.reduce((sum, item) => sum + item.inventorySummary.feedstockWetKg, 0);
       expect(await getFacilityStats(fixture.ctx)).toEqual(expected);
     }
+    expect(rowReactors).toBe(expected.totalReactors);
     expect(totalFeedstockWetKg).toBe(TOTAL_ACTIVE_FEEDSTOCK_WET_KG);
     expect((await getFacilityStats(fixture.ctx)).totalFeedstockWetKg).toBe(totalFeedstockWetKg);
     const searched = await getFacilities(fixture.ctx, { page: 1, pageSize: PAGE_SIZE, search: `E2E-STATS-${fixture.tag}-0` });
@@ -113,16 +117,19 @@ describe("getFacilityStats whole-list totals", () => {
 
   it("selects only archived facilities with the same child rules and excludes foreign rows", async () => {
     expect(await getFacilityStats(fixture.ctx, { archived: true })).toEqual({
-      totalFacilities: 1, totalReactors: 1, totalStorageBins: STORAGE_BIN_TYPES.length * BINS_PER_TYPE,
+      totalFacilities: 1, totalReactors: REACTORS_PER_FACILITY, totalStorageBins: STORAGE_BIN_TYPES.length * BINS_PER_TYPE,
       totalFeedstockWetKg: ARCHIVED_FEEDSTOCK_WET_KG_PER_BIN * BINS_PER_TYPE,
     });
     const archived = await getFacilities(fixture.ctx, { archived: true });
     expect(archived.total).toBe(1);
+    expect((await getFacilityStats(fixture.ctx, { archived: true })).totalReactors).toBe(
+      archived.items.reduce((sum, item) => sum + item.reactorCount, 0),
+    );
     expect((await getFacilityStats(fixture.ctx, { archived: true })).totalFeedstockWetKg).toBe(
       archived.items.reduce((sum, item) => sum + item.inventorySummary.feedstockWetKg, 0),
     );
     expect(await getFacilityStats(foreign.ctx)).toEqual({
-      totalFacilities: 1, totalReactors: 1, totalStorageBins: STORAGE_BIN_TYPES.length * BINS_PER_TYPE,
+      totalFacilities: 1, totalReactors: REACTORS_PER_FACILITY, totalStorageBins: STORAGE_BIN_TYPES.length * BINS_PER_TYPE,
       totalFeedstockWetKg: FOREIGN_FEEDSTOCK_WET_KG_PER_BIN * BINS_PER_TYPE,
     });
     expect((await getFacilityStats(foreign.ctx, { archived: true })).totalFeedstockWetKg).toBe(
