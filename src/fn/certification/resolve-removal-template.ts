@@ -1,4 +1,5 @@
-import { hasMissingFixedDatapoint } from "@/lib/certification/template-fixed-datapoints";
+import { removalTemplateReviewEntry } from "@/lib/certification/removal-template-review-entry";
+import { removalTemplateVerdict } from "@/lib/certification/removal-template-verdict";
 import { deriveRemovalEmissionLines } from "@/lib/certification/removal-emission-lines";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
@@ -10,7 +11,7 @@ import { withTemplateOrder } from "@/lib/isometric/template-observations/templat
 import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { lineNeedsReview, validateLineSources, type LineSources } from "@/lib/isometric/template-observations/line-sources";
-import { removalTemplateBlocker, type RemovalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
+import { removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 import type { FacilityCertifierFacts } from "./facility-certifier-facts";
 
 /** A datapoint fixed in the template, read with the observation's enrichment. */
@@ -36,13 +37,11 @@ export function resolveRemovalTemplate(
   if ("code" in result) return unresolved(result.code);
   const facts = facilityFacts.templatesById[result.pin];
   if (!facts) return unresolved("templateNotFound");
-  const templateBlockers: RemovalTemplateBlocker[] = [];
-  if (!facts.observation || facts.enrichmentProblems.length) templateBlockers.push(removalTemplateBlocker("templateNotFullyRead"));
-  if (hasMissingFixedDatapoint(facts.template)) templateBlockers.push(removalTemplateBlocker("missingFixedDatapoint"));
-  if (facts.lineSourceProblems.length) {
-    templateBlockers.push(removalTemplateBlocker("templateLinesNeedReview"));
-  }
   const definition = normalizeTemplateDefinition(facts.template);
+  const verdict = removalTemplateVerdict(removalTemplateReviewEntry({
+    templateId: facts.template.id, ...facts, definition,
+  }), "pinned");
+  const templateBlockers = verdict.blockers.map(removalTemplateBlocker);
   const sources = facts.observation?.lineSources;
   const problems = sources ? [...facts.lineSourceProblems, ...validateLineSources(definition, sources)] : [];
   // Only current template components count, never removed components kept for stale entries.

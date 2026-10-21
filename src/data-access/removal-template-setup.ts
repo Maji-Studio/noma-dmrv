@@ -10,10 +10,11 @@ import { STALE_VERSION_CONFLICT_CODE } from "@/lib/stale-version";
 import { DomainError } from "@/lib/domain-errors";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { assignmentsFromPlan, setupPlan, templateFitsFacility } from "@/lib/certification/removal-template-setup-plan";
+import { removalTemplateReviewEntry } from "@/lib/certification/removal-template-review-entry";
 import { removalTemplateVerdict } from "@/lib/certification/removal-template-verdict";
 import { setupPlanFingerprint } from "@/lib/certification/removal-template-setup-fingerprint";
 import { reviewLineSources } from "@/lib/certification/removal-template-review-sources";
-import { enrichmentProblems, validateLineSources } from "@/lib/isometric/template-observations";
+import { validateLineSources } from "@/lib/isometric/template-observations";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { ApplyRemovalTemplateSetupInput } from "@/schemas/removal-template-setup";
 import { requireOrgScope } from "./utils";
@@ -55,12 +56,7 @@ export async function applySetupInTransaction(ctx: OrgContext, tx: DbTransaction
   if (setupPlanFingerprint(plan) !== input.planFingerprint) throw staleSetupTemplate(template.id);
   const assignments = assignmentsFromPlan(plan, input.answers, input.overrides);
   if (Object.keys(assignments).length) row = await reviewLineContractsInTransaction(ctx, tx, { observationId: row.id, expectedVersion: row.version, assignments });
-  const reviewedSources = reviewLineSources(row.lineSources);
-  const problems = validateLineSources(row.definition, row.lineSources);
-  const verdict = removalTemplateVerdict({ availability: "listed", template, observation: row,
-    enrichmentProblems: enrichmentProblems(row.definition, row.enrichment), lineSourceProblems: problems,
-    lines: row.definition.groups.flatMap((group) => group.components.map((component) => ({ component, contract: reviewedSources[component.id] }))),
-  });
+  const verdict = removalTemplateVerdict(removalTemplateReviewEntry({ templateId: template.id, template, observation: row }));
   if (verdict.toDecideCount > 0) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview);
   if (verdict.setupBlocker) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS[verdict.setupBlocker]);
   if (input.makeDefault) await updateFacilityDefaultRemovalTemplateInTransaction(ctx, tx, { facilityId: input.facilityId, externalProjectId: template.project_id, removalTemplateId: template.id });

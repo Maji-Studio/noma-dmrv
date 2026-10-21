@@ -13,7 +13,7 @@ import { removalTemplateVerdict } from "@/lib/certification/removal-template-ver
 import { setupPlan, templateFitsFacility } from "@/lib/certification/removal-template-setup-plan";
 import { setupPlanFingerprint } from "@/lib/certification/removal-template-setup-fingerprint";
 import { reviewLineSources } from "@/lib/certification/removal-template-review-sources";
-import { removalTemplateReviewLines } from "@/lib/certification/removal-template-review-lines";
+import { removalTemplateReviewEntry } from "@/lib/certification/removal-template-review-entry";
 import { REMOVAL_TEMPLATE_BLOCKERS, SETUP_NOT_LINKED_MESSAGE } from "@/lib/certification/removal-template-blockers";
 import type { ApplyRemovalTemplateSetupInput } from "@/schemas/removal-template-setup";
 import { loadRemovalTemplateFacts } from "./removal-template-facts";
@@ -61,9 +61,10 @@ export async function loadRemovalTemplateSetupCore(ctx: OrgContext, facilityId: 
       ? await getPreviousTemplateObservation(ctx, "isometric", template.id, currentObservation.id) : latest;
     const changes = previous ? compareTemplateObservations(previous, { definition, enrichment }) : {};
     const problems = facts?.lineSourceProblems ?? preview?.lineSourceProblems ?? validateLineSources(definition, sources);
-    const entry = { availability: "listed" as const, template, observation: currentObservation,
+    const entry = removalTemplateReviewEntry({ templateId: template.id, template, observation: currentObservation,
+      definition, lineSources: sources, blueprintsForTemplate: blueprints,
       enrichmentProblems: facts?.enrichmentProblems ?? preview?.enrichmentProblems ?? [], lineSourceProblems: problems,
-      lines: removalTemplateReviewLines(definition, sources, changes, blueprints, template) };
+    }, changes);
     const verdict = removalTemplateVerdict(entry);
     const plan = setupPlan(definition, sources, problems);
     const blockedReason: string | null = verdict.setupBlocker ? REMOVAL_TEMPLATE_BLOCKERS[verdict.setupBlocker] : null;

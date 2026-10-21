@@ -66,8 +66,6 @@ export interface DirectSequestrationDatapoint {
   body: CreateDatapointRequest;
 }
 
-export { assertSequestrationTemplateSelectable } from "../sequestration-template-selection";
-
 /** Applies the transform the active binding declares. */
 export function transformSequestrationSourceValue(
   blueprintKey: string,

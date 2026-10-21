@@ -143,11 +143,9 @@ describe("switch readiness", () => {
   });
 
   it.each([
-    [DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-      "The selected template uses the legacy 1,000-year component with total-carbon and uncapped durability semantics. Select a template using biochar_sequestration_1000_year_f_durable_max."],
-    [UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-      "The selected template uses the unsampled 1,000-year component. Unsampled Method B is not supported; select the sampled 1,000-year template."],
-  ])("refuses the unselectable %s template before any write", async (blueprintKey, reason) => {
+    DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+    UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  ])("refuses the unselectable %s template before any write", async (blueprintKey) => {
     const component = fixture.groups[1].components[0];
     const rejected = { ...template, groups: [{
       ...fixture.groups[1], components: [{ ...component, blueprint_key: blueprintKey, inputs: [] }],
@@ -162,7 +160,7 @@ describe("switch readiness", () => {
       template: rejected, observation: settled, blueprintsForTemplate: [], enrichmentProblems: [], lineSourceProblems: [],
     } as never);
 
-    expect(await switchCreditBatchRemovalTemplate(input)).toEqual({ success: false, error: reason });
+    expect(await switchCreditBatchRemovalTemplate(input)).toEqual({ success: false, error: REMOVAL_TEMPLATE_BLOCKERS.unsupportedSequestration });
     expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
     expect(persistSwitch).not.toHaveBeenCalled();
   });

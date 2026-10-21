@@ -22,7 +22,7 @@ import { loadRemovalTemplateFacts } from "./removal-template-facts";
 import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
 import { removalTemplateVerdict } from "@/lib/certification/removal-template-verdict";
 import { findListedRemovalTemplate } from "@/lib/certification/listed-removal-template";
-import { removalTemplateReviewEntry } from "./removal-template-review-core";
+import { removalTemplateReviewEntry } from "@/lib/certification/removal-template-review-entry";
 
 export async function loadRemovalTemplateReview(facilityId: string) {
   return withAction(async (ctx) => {
@@ -83,7 +83,7 @@ export async function switchCreditBatchRemovalTemplate(input: SwitchCreditBatchR
     const template = findListedRemovalTemplate(templates, parsed.removalTemplateId);
     const entry = removalTemplateReviewEntry({ templateId: template.id, template, observation: null });
     const selection = removalTemplateVerdict(entry);
-    if (selection.sequestrationError) throw new SafeError(selection.sequestrationError);
+    if (selection.blocker === "unsupportedSequestration") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS[selection.blocker]);
     const changingTemplate = batch.removalTemplateId !== parsed.removalTemplateId;
     if (changingTemplate && selection.setupBlocker) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS[selection.setupBlocker]);
     if (changingTemplate) {

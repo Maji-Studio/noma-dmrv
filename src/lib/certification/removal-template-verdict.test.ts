@@ -9,9 +9,7 @@ const ready: RemovalTemplateVerdictEntry = {
 };
 
 const readyVerdict: RemovalTemplateVerdict = {
-  listed: true, removalType: true, fullyRead: true, fixedValuesSet: true,
-  sequestrationSelectable: true, sequestrationError: null,
-  toDecideIds: [], toDecideCount: 0, ready: true, blocker: null, setupBlocker: null,
+  toDecideCount: 0, blockers: [], ready: true, blocker: null, setupBlocker: null,
 };
 const templateWithComponent = (blueprintKey: string, inputs: { type: string; datapoint_id?: string }[] = []) => ({
   credit_type: "REMOVAL", groups: [{ components: [{ blueprint_key: blueprintKey, inputs }] }],
@@ -20,41 +18,31 @@ const pending = [{ component: { id: "pending" }, contract: undefined }];
 const unread = { observation: null, enrichmentProblems: ["unread input"] };
 const cases: { shape: string; entry: Partial<RemovalTemplateVerdictEntry>; verdict: Partial<RemovalTemplateVerdict> }[] = [
   { shape: "missing", entry: { availability: "missing", template: null, observation: null, lines: [] },
-    verdict: { listed: false, removalType: false, fullyRead: false, fixedValuesSet: false, sequestrationSelectable: false,
-      ready: false, blocker: "templateNotFound", setupBlocker: "templateNotFound" } },
+    verdict: { ready: false, blockers: ["templateNotFound", "missingFixedDatapoint", "templateNotFullyRead"], blocker: "templateNotFound", setupBlocker: "templateNotFound" } },
   { shape: "unlisted despite a stored template", entry: { availability: "missing" },
-    verdict: { listed: false, ready: false, blocker: "templateNotFound", setupBlocker: "templateNotFound" } },
+    verdict: { ready: false, blockers: ["templateNotFound"], blocker: "templateNotFound", setupBlocker: "templateNotFound" } },
   { shape: "null template despite listed availability", entry: { template: null },
-    verdict: { listed: false, removalType: false, fixedValuesSet: false, sequestrationSelectable: false,
-      ready: false, blocker: "templateNotFound", setupBlocker: "templateNotFound" } },
+    verdict: { ready: false, blockers: ["templateNotFound", "missingFixedDatapoint"], blocker: "templateNotFound", setupBlocker: "templateNotFound" } },
   { shape: "not Removal, before storage or decisions", entry: { template: { ...templateWithComponent(DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR), credit_type: "REDUCTION" }, lines: pending, ...unread },
-    verdict: { removalType: false, fullyRead: false, sequestrationSelectable: false,
-      sequestrationError: "The selected template uses the legacy 1,000-year component with total-carbon and uncapped durability semantics. Select a template using biochar_sequestration_1000_year_f_durable_max.",
-      toDecideIds: ["pending"], toDecideCount: 1, ready: false, blocker: "notRemovalTemplate", setupBlocker: "notRemovalTemplate" } },
+    verdict: { toDecideCount: 1, ready: false, blockers: ["notRemovalTemplate", "unsupportedSequestration", "templateLinesNeedReview", "templateNotFullyRead"], blocker: "notRemovalTemplate", setupBlocker: "notRemovalTemplate" } },
   { shape: "deprecated sequestration, before missing fixed values", entry: { template: templateWithComponent(DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR, [{ type: "fixed" }]), lines: pending, ...unread },
-    verdict: { fullyRead: false, fixedValuesSet: false, sequestrationSelectable: false,
-      sequestrationError: "The selected template uses the legacy 1,000-year component with total-carbon and uncapped durability semantics. Select a template using biochar_sequestration_1000_year_f_durable_max.",
-      toDecideIds: ["pending"], toDecideCount: 1, ready: false, blocker: "unsupportedSequestration", setupBlocker: "unsupportedSequestration" } },
+    verdict: { toDecideCount: 1, ready: false, blockers: ["unsupportedSequestration", "missingFixedDatapoint", "templateLinesNeedReview", "templateNotFullyRead"], blocker: "unsupportedSequestration", setupBlocker: "unsupportedSequestration" } },
   { shape: "unsampled Method B sequestration", entry: { template: templateWithComponent(UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR) },
-    verdict: { sequestrationSelectable: false,
-      sequestrationError: "The selected template uses the unsampled 1,000-year component. Unsampled Method B is not supported; select the sampled 1,000-year template.",
-      ready: false, blocker: "unsupportedSequestration", setupBlocker: "unsupportedSequestration" } },
+    verdict: { ready: false, blockers: ["unsupportedSequestration"], blocker: "unsupportedSequestration", setupBlocker: "unsupportedSequestration" } },
   { shape: "fixed input without datapoint, before decisions or unread inputs", entry: { template: templateWithComponent("grid_electricity_use", [{ type: "fixed" }]), lines: pending, ...unread },
-    verdict: { fixedValuesSet: false, fullyRead: false, toDecideIds: ["pending"], toDecideCount: 1,
-      ready: false, blocker: "missingFixedDatapoint", setupBlocker: "missingFixedDatapoint" } },
+    verdict: { toDecideCount: 1, ready: false, blockers: ["missingFixedDatapoint", "templateLinesNeedReview", "templateNotFullyRead"], blocker: "missingFixedDatapoint", setupBlocker: "missingFixedDatapoint" } },
   { shape: "components to decide, before unread inputs", entry: { lines: pending, ...unread },
-    verdict: { fullyRead: false, toDecideIds: ["pending"], toDecideCount: 1,
-      ready: false, blocker: "templateLinesNeedReview", setupBlocker: "templateNotFullyRead" } },
+    verdict: { toDecideCount: 1, ready: false, blockers: ["templateLinesNeedReview", "templateNotFullyRead"], blocker: "templateLinesNeedReview", setupBlocker: "templateNotFullyRead" } },
   { shape: "components to decide in a complete read", entry: { lines: pending },
-    verdict: { toDecideIds: ["pending"], toDecideCount: 1, ready: false, blocker: "templateLinesNeedReview" } },
+    verdict: { toDecideCount: 1, ready: false, blockers: ["templateLinesNeedReview"], blocker: "templateLinesNeedReview" } },
   { shape: "not fully read", entry: { enrichmentProblems: ["unread input"] },
-    verdict: { fullyRead: false, ready: false, blocker: "templateNotFullyRead", setupBlocker: "templateNotFullyRead" } },
+    verdict: { ready: false, blockers: ["templateNotFullyRead"], blocker: "templateNotFullyRead", setupBlocker: "templateNotFullyRead" } },
   { shape: "read-only preview can enter setup", entry: { observation: null },
-    verdict: { fullyRead: false, ready: false, blocker: "templateNotFullyRead" } },
+    verdict: { ready: false, blockers: ["templateNotFullyRead"], blocker: "templateNotFullyRead" } },
   { shape: "ready", entry: {}, verdict: {} },
 ];
 
-it.each(cases)("returns the whole verdict for $shape", ({ entry, verdict }) => {
+it.each(cases)("returns the caller-facing verdict for $shape", ({ entry, verdict }) => {
   expect(removalTemplateVerdict({ ...ready, ...entry })).toEqual({ ...readyVerdict, ...verdict });
 });
 
@@ -72,7 +60,7 @@ it("counts each undecided line once, including invalid saved decisions", () => {
   const entry: RemovalTemplateVerdictEntry = {
     ...ready,
     lines: [
-      ...ready.lines,
+      ...ready.lines, ...ready.lines,
       { component: { id: "missing" }, contract: undefined },
       { component: { id: "proposal" }, contract: { scope: "operating", origin: "proposed", entryPolicy: "additive" } },
       { component: { id: "unassigned" }, contract: { scope: "unassigned", origin: "reviewed", entryPolicy: "none" } },
@@ -80,7 +68,6 @@ it("counts each undecided line once, including invalid saved decisions", () => {
     lineSourceProblems: [{ componentId: "line", code: "ambiguous" }, { componentId: "line", code: "foreign-automatic-source" }],
   };
   expect(removalTemplateVerdict(entry).toDecideCount).toBe(4);
-  expect(removalTemplateVerdict(entry).toDecideIds).toEqual(["line", "missing", "proposal", "unassigned"]);
   expect(removalTemplateVerdict(entry).ready).toBe(false);
   expect(removalTemplateVerdict(ready).toDecideCount).toBe(0);
 });

@@ -1,4 +1,4 @@
-import { SafeError } from "@/lib/errors";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { classifySequestration1000YearComponent } from "./storage-blueprints";
 
 export interface SequestrationSelectionTemplate {
@@ -15,17 +15,9 @@ export function sequestrationTemplateSelectionError(template: SequestrationSelec
     const classification = classifySequestration1000YearComponent(
       component.blueprint_key,
     );
-    if (classification === "deprecated") {
-      return "The selected template uses the legacy 1,000-year component with total-carbon and uncapped durability semantics. Select a template using biochar_sequestration_1000_year_f_durable_max.";
-    }
-    if (classification === "unsupported-unsampled") {
-      return "The selected template uses the unsampled 1,000-year component. Unsampled Method B is not supported; select the sampled 1,000-year template.";
+    if (classification === "deprecated" || classification === "unsupported-unsampled") {
+      return REMOVAL_TEMPLATE_BLOCKERS.unsupportedSequestration;
     }
   }
   return null;
-}
-
-export function assertSequestrationTemplateSelectable(template: SequestrationSelectionTemplate): void {
-  const error = sequestrationTemplateSelectionError(template);
-  if (error) throw new SafeError(error);
 }
