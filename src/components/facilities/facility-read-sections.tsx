@@ -1,16 +1,43 @@
 /** Facility side-sheet view mode: the sections config for EntitySideSheet. */
-import { formatCount } from "@/lib/copy-utils";
+import { formatCount, LOAD_FAILED } from "@/lib/copy-utils";
+import { formatMass } from "@/lib/format-utils";
 import { FacilityCertifierSummary } from "@/components/certification";
 import { formatTimezoneLabel } from "@/lib/date-utils";
 import { formatDurabilityOption } from "@/schemas/credit-batches";
-import type { DetailPanelSection } from "@/components/ui/detail-panel";
+import type { DetailPanelField, DetailPanelSection } from "@/components/ui/detail-panel";
 import type { FacilityWithRelations } from "@/data-access/facilities";
-import type { FacilityOutputStock } from "@/data-access/facility-output-stock";
+import type { FacilityOutputStock, FacilityOutputStockGroup } from "@/data-access/facility-output-stock";
 import { facilityStockFigure } from "@/components/storage-locations/stock-preview-shared";
 
-export function facilitySheetSections(facility: FacilityWithRelations, inventory?: FacilityOutputStock): DetailPanelSection[] {
-  const biochar = inventory?.biochar;
-  const product = inventory?.product;
+/** The facility's output-bin stock query, as the sheet needs it. */
+export interface FacilityStockState {
+  data?: FacilityOutputStock;
+  isPending: boolean;
+  isError: boolean;
+}
+
+const WET_ESTIMATE_HINT = "Estimated: the wet mass is computed at each batch's moisture. A bin without a wet estimate shows its dry biochar instead.";
+
+/**
+ * One output-bin row. A row is left out once the read settled without a
+ * derivable figure; while there is no data it loads or says why it failed.
+ */
+function stockRow(label: string, scope: string, group: FacilityOutputStockGroup | null | undefined, state: FacilityStockState | undefined): DetailPanelField[] {
+  const hint = `${WET_ESTIMATE_HINT} Sum of this facility's ${scope}, archived bins included.`;
+  if (group) {
+    return [{
+      label, hint, value: facilityStockFigure(group.wetKg, group.dryBiocharKg),
+      secondary: group.wetKg === null ? undefined : { label: "Dry biochar", value: formatMass(group.dryBiocharKg) },
+    }];
+  }
+  if (group === null) return [];
+  if (state?.isError) return [{ label, hint, value: LOAD_FAILED, valuePresent: false }];
+  return [{ label, hint, value: null, pending: true }];
+}
+
+export function facilitySheetSections(facility: FacilityWithRelations, stock?: FacilityStockState): DetailPanelSection[] {
+  const biochar = stockRow("Biochar in bins", "biochar bins", stock?.data?.biochar, stock);
+  const product = stockRow("Products in bins", "product bins", stock?.data?.product, stock);
   return [
     {
       title: "Facility information",
@@ -62,10 +89,10 @@ export function facilitySheetSections(facility: FacilityWithRelations, inventory
       fields: [
         {
           label: "Feedstock in bins",
-          value: facilityStockFigure(facility.inventorySummary.feedstockWetKg, 0),
+          value: `${formatMass(facility.inventorySummary.feedstockWetKg)} wet mass`,
         },
-        ...(biochar ? [{ label: "Biochar in bins", value: facilityStockFigure(biochar.wetKg, biochar.dryBiocharKg) }] : []),
-        ...(product ? [{ label: "Products in bins", value: facilityStockFigure(product.wetKg, product.dryBiocharKg) }] : []),
+        ...biochar,
+        ...product,
       ],
     },
     {

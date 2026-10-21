@@ -33,8 +33,10 @@ import {
 import { facilities as facilitiesTable } from "@/db/schema";
 import { getFacilityOutputStock, type FacilityOutputStock } from "@/data-access/facility-output-stock";
 
+import { uuidSchema } from "@/schemas/helpers";
+
 const LOG_MESSAGE = "facility action failed";
-const facilityOutputStockSchema = z.object({ facilityId: z.uuid() });
+const facilityOutputStockSchema = z.object({ facilityId: uuidSchema() });
 
 // ============================================
 // List/Query Operations

@@ -264,7 +264,7 @@ export function FacilityList() {
     sideSheetMode === "create" ? undefined : sideSheetEntity?.name;
 
   const sideSheetSections = sideSheetEntity
-    ? facilitySheetSections(sideSheetEntity, inventory.isError ? undefined : inventory.data)
+    ? facilitySheetSections(sideSheetEntity, { data: inventory.data, isPending: inventory.isPending, isError: inventory.isError })
     : undefined;
 
   return (
