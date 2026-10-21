@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { makeEntry, makeLine } from "./emission-line-test-fixtures";
 import { ManualEntryForm } from "./manual-entry-form";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 
 const mutations = vi.hoisted(() => ({
   replace: vi.fn(),
@@ -19,10 +20,13 @@ vi.mock("@/hooks/use-emission-entries", () => ({
 }));
 vi.mock("@/components/ui/slide-over-panel", () => {
   const Plain = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
+  const Footer = ({ children, preview }: { children?: React.ReactNode; preview?: React.ReactNode }) => (
+    <div>{preview}{children}</div>
+  );
   return {
     SlideOverPanelBody: Plain,
     SlideOverPanelDescription: Plain,
-    SlideOverPanelFooter: Plain,
+    SlideOverPanelFooter: Footer,
     SlideOverPanelHeader: Plain,
     SlideOverPanelTitle: Plain,
   };
@@ -32,7 +36,7 @@ vi.mock("@/hooks/use-deferred-attachments", () => ({
 }));
 
 const SCOPE = { facilityId: "fac", creditBatchId: "cb" };
-const BATCH = { code: "CB-1", startDate: "2026-09-01" } as never;
+const BATCH = { creditBatchId: "cb", code: "CB-1", startDate: "2026-09-01", endDate: "2026-09-30" };
 
 afterEach(() => {
   cleanup();
@@ -79,5 +83,25 @@ describe("ManualEntryForm template units", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(mutations.create).toHaveBeenCalledTimes(1));
     expect(mutations.create.mock.calls[0][0].values[0]).toMatchObject({ magnitude: "2000", unit: "Wh" });
+  });
+});
+
+describe("ManualEntryForm credit batch line", () => {
+  const renderForm = (mode: React.ComponentProps<typeof ManualEntryForm>["mode"]) =>
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ManualEntryForm line={makeLine()} batch={BATCH} scope={SCOPE} today="2026-10-10" mode={mode} onCancel={vi.fn()} onSaved={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+  it("names the batch as a link in add mode", () => {
+    renderForm({ kind: "add" });
+    const link = screen.getByRole("link", { name: /CB-1/ });
+    expect(link.getAttribute("href")).toBe(creditBatchDeepLinkHref("cb", "fac"));
+  });
+
+  it("names the same batch in edit mode", () => {
+    renderForm({ kind: "edit", entry: makeEntry({}) });
+    expect(screen.getByRole("link", { name: /CB-1/ }).getAttribute("href")).toBe(creditBatchDeepLinkHref("cb", "fac"));
   });
 });

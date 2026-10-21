@@ -72,7 +72,7 @@ it("reads consent organization and allowed scopes from the bound generation", as
   vi.mocked(assertGenerationEligible).mockResolvedValue({ ok: true, role: "member" });
   expect(await getOAuthConsentViewFn({ oauthQuery: oauthQuery.replace("feedstocks%3Aread", "feedstocks%3Aread+feedstocks%3Awrite"), organizationId: "forged-org", scopes: ["orders:write"] })).toMatchObject({ success: true, data: {
     organization: { id: "bound-org", name: "Bound organization" }, newlyRequestedScopes: ["feedstocks:write"],
-    alreadyAllowedScopes: ["feedstocks:read"], offlineAccessRequested: true, isStepUp: true,
+    alreadyAllowedScopes: ["feedstocks:read"], offlineAccessRequested: true, isStepUp: false,
   } });
 });
 
@@ -230,5 +230,19 @@ it("filters new and already allowed scopes against a narrowed live role ceiling"
   query.set("scope", "feedstocks:read feedstocks:write orders:read orders:write offline_access");
   expect(await getOAuthConsentViewFn({ oauthQuery: query.toString() })).toMatchObject({ success: true, data: {
     newlyRequestedScopes: ["orders:read"], alreadyAllowedScopes: ["feedstocks:read"], stepUpScopes: ["orders:read"],
+  } });
+});
+
+it("does not show step-up for a live refusal hint after stored consent was revoked", async () => {
+  const { getOAuthConsentViewFn } = await import("./oauth");
+  const { getOAuthAttemptConsent } = await import("@/data-access/oauth-provider");
+  const { assertGenerationEligible } = await import("@/lib/auth/oauth-eligibility");
+  vi.mocked(getOAuthAttemptConsent).mockResolvedValue({ organizationId: "org", name: "Organization", grantId: "generation", consentScopes: null });
+  vi.mocked(assertGenerationEligible).mockResolvedValue({ ok: true, role: "member" });
+  mocks.pending.mockResolvedValue(["feedstocks:write"]);
+  const query = new URLSearchParams(oauthQuery);
+  query.set("scope", "feedstocks:read feedstocks:write offline_access");
+  expect(await getOAuthConsentViewFn({ oauthQuery: query.toString() })).toMatchObject({ success: true, data: {
+    stepUpScopes: ["feedstocks:write"], isStepUp: false,
   } });
 });

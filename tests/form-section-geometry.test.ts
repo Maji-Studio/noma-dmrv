@@ -38,6 +38,6 @@ describe("headingless section capture geometry", () => {
       { level: "section", value: SECTION_GAP, between: "Name → Description" },
     ]);
     expect(geometry.alignment.controlLeftEdges.map(group => group.section)).toEqual(["Name", "Description"]);
-    expect(geometry.r1.sectionTitles).toEqual([]);
+    expect(geometry.sectionTitles).toEqual([]);
   });
 });

@@ -22,6 +22,14 @@
 > home. The sidebar now exposes three concrete routes: Removals · GHG Statements
 > · Settings. `/certification` remains as a compatibility redirect to Removals
 > and preserves `?facility=`.
+> **Amendment (2026-10-20, #1277) — registry settings move into the settings
+> console.** `/certification/settings` folds into `/settings` as a
+> Certification group (Registry, Removal templates, Facilities; Diagnostics and
+> Template mapping under Platform). The old route redirects every `?section=`
+> to its pane. The sidebar Certification group keeps Removals and GHG
+> Statements and shows nothing while the facility has no registry link; the
+> registry guard sends direct visits to Settings, Registry. Decisions 4 and 5
+> below stand for where submission lives; only the configuration home moved.
 
 ## Context
 

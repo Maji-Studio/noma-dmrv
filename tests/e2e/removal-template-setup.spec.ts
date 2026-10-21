@@ -18,7 +18,7 @@ import {
 
 // The dialog waits on live Isometric reads; the first dev compile is slow too.
 const LIVE_READ_TIMEOUT_MS = 60_000;
-const SETTINGS_PATH = "/certification/settings";
+const SETTINGS_PATH = "/settings/removal-templates";
 
 test.describe("Removal template setup", { tag: "@live" }, () => {
   test.skip(!SANDBOX_PROJECT_ID, "requires an Isometric sandbox project ID (ISOMETRIC_DEMO_PROJECT_ID)");
@@ -35,14 +35,14 @@ test.describe("Removal template setup", { tag: "@live" }, () => {
     await setFacilityDurabilityTier(facilityId, "1000_year");
     mapping = await seedCertifierMapping(facilityId, { externalProjectId: SANDBOX_PROJECT_ID as string });
 
-    await page.goto(`${SETTINGS_PATH}?section=removal-templates&facility=${facilityId}`);
+    await page.goto(`${SETTINGS_PATH}?facility=${facilityId}`);
     await expect(page.getByText("No Removal template set")).toBeVisible({ timeout: LIVE_READ_TIMEOUT_MS });
     await page.getByRole("button", { name: "Set up template" }).click();
 
     // The dialog sits over the pane: same page, params mark it open.
     const dialog = page.getByRole("dialog", { name: "Set up Removal template" });
     await expect(dialog).toBeVisible();
-    await expect(page).toHaveURL(/section=removal-templates/);
+    await expect(page).toHaveURL(/\/settings\/removal-templates/);
     await expect(page).toHaveURL(/setup=template/);
     await expect(dialog.getByRole("heading", { name: "Pick the template" })).toBeAttached({ timeout: LIVE_READ_TIMEOUT_MS });
 
@@ -78,7 +78,7 @@ test.describe("Removal template setup", { tag: "@live" }, () => {
     const facilityId = seededData.facility.id;
     mapping = await seedCertifierMapping(facilityId, { externalProjectId: SANDBOX_PROJECT_ID as string });
 
-    await page.goto(`${SETTINGS_PATH}?section=removal-templates&facility=${facilityId}&setup=template`);
+    await page.goto(`${SETTINGS_PATH}?facility=${facilityId}&setup=template`);
     await expect(page.getByText("No Removal template set")).toBeVisible({ timeout: LIVE_READ_TIMEOUT_MS });
     await expect(page.getByRole("button", { name: "Set up template" })).toHaveCount(0);
     await expect(page.getByRole("dialog", { name: "Set up Removal template" })).toHaveCount(0);

@@ -3,8 +3,18 @@
  * Provides sidebar navigation and authenticated layout wrapper
  */
 import { getOrgContext, requireAuth } from "@/lib/auth/server";
+import { getActiveOrganization } from "@/data-access/organizations";
 import { getOrganizationDefaults } from "@/data-access/organization-settings";
-import { AppSidebar, MobileNav } from "@/components/navigation";
+import {
+  AppSidebar,
+  MobileNav,
+  OrgSwitchToast,
+  PLATFORM_ADMIN_BAR_HEIGHT,
+  PlatformAdminBar,
+  ViewerOrgProvider,
+  shouldShowPlatformAdminBar,
+  type ViewerOrg,
+} from "@/components/navigation";
 import { FacilityProvider } from "@/components/navigation/facility-provider";
 import { SessionSignOutListener } from "@/components/auth/session-signout-listener";
 
@@ -37,12 +47,29 @@ export default async function AppLayout({
       }
     : undefined;
 
+  // Where the viewer is and as whom, for the sidebar chip, the mobile top bar
+  // and the Platform Admin bar. Resolved here so all three agree on first paint.
+  const activeOrganization = orgContext ? await getActiveOrganization(orgContext) : null;
+  const viewerOrg: ViewerOrg | null =
+    orgContext && activeOrganization
+      ? {
+          organizationId: orgContext.organizationId,
+          organizationName: activeOrganization.name,
+          orgRole: orgContext.orgRole,
+          isPlatformAdmin: orgContext.isPlatformAdmin,
+        }
+      : null;
+
+  const showPlatformAdminBar = shouldShowPlatformAdminBar(viewerOrg);
+
   return (
+    <ViewerOrgProvider value={viewerOrg}>
     <FacilityProvider
       initialOrganizationId={orgContext?.organizationId ?? null}
       initialOrganizationDefaults={organizationDefaults}
     >
       <SessionSignOutListener />
+      <OrgSwitchToast />
       {/* Desktop: sidebar + main side by side. Mobile: a sticky top bar
           stacks above a full-width main (the sidebar is hidden, its nav lives
           in the drawer that MobileNav opens).
@@ -67,10 +94,23 @@ export default async function AppLayout({
         </a>
         <AppSidebar />
         <MobileNav />
-        <main id="main-content" tabIndex={-1} className="flex-1 min-w-0 overflow-auto focus:outline-none">
-          {children}
-        </main>
+        {/* The Platform Admin bar sits above `main`, inside this column, so it
+            pushes the page down instead of covering it. */}
+        <div
+          className="flex flex-1 min-w-0 flex-col md:min-h-0"
+          style={
+            showPlatformAdminBar
+              ? ({ "--platform-admin-bar-height": PLATFORM_ADMIN_BAR_HEIGHT } as React.CSSProperties)
+              : undefined
+          }
+        >
+          <PlatformAdminBar />
+          <main id="main-content" tabIndex={-1} className="flex-1 min-h-0 min-w-0 overflow-auto focus:outline-none">
+            {children}
+          </main>
+        </div>
       </div>
     </FacilityProvider>
+    </ViewerOrgProvider>
   );
 }

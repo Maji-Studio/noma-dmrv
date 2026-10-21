@@ -39,7 +39,7 @@ function sectionWithHeading(page: Page, heading: string): Locator {
 
 async function openOrganizationSettings(page: Page): Promise<void> {
   await enterDefaultOrganization(page);
-  await page.goto("/settings/organization");
+  await page.goto("/settings/members");
   // First render may hit a dev-server compile of this route; allow extra time.
   // The route is now a pane inside the settings console: `Members` is both the
   // page title and the pane heading, and the rail carries the rest.
@@ -151,8 +151,24 @@ test.describe("Organization foundation UI", () => {
       createSection.getByRole("button", { name: "Create organization" }),
     ).toBeEnabled();
 
-    await organization.getByRole("button", { name: "Enter" }).click();
-    await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
+    // Opens it, or recognizes it as current when an earlier test already did.
+    await enterDefaultOrganization(page);
+
+    // A Platform Admin without a membership works under the Platform Admin bar.
+    const bar = page.getByRole("region", { name: "Platform Admin" });
+    await expect(bar).toContainText(`Platform Admin in ${ORGANIZATION_NAME}`);
+    await expect(bar.getByRole("link", { name: "Back to Platform" })).toHaveAttribute(
+      "href",
+      "/admin/organizations",
+    );
+
+    // The organization the admin is in carries "Current" and no Open button.
+    await page.goto("/admin/organizations");
+    const current = sectionWithHeading(page, "Organizations")
+      .getByRole("listitem")
+      .filter({ hasText: ORGANIZATION_NAME });
+    await expect(current).toContainText("Current");
+    await expect(current.getByRole("button", { name: "Open" })).toHaveCount(0);
   });
 
   test("single-organization sidebar renders the active organization as a dashboard link", async ({

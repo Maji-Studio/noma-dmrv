@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OrgBrand } from "./org-brand";
+import { ViewerOrgProvider } from "./viewer-org";
+import type { ViewerOrg } from "./viewer-org-rules";
 
 const state = vi.hoisted(() => ({
   isAdmin: false,
@@ -179,5 +181,48 @@ describe("OrgBrand", () => {
     expect(html).toContain('aria-haspopup="listbox"');
     expect(html).toContain("Dark Earth Carbon");
     expect(html).not.toContain('role="status"');
+  });
+
+  describe("role chip", () => {
+    function settle(viewer: ViewerOrg, orgs: { id: string; name: string }[]) {
+      state.isAdmin = viewer.isPlatformAdmin;
+      state.session = { data: { session: { activeOrganizationId: viewer.organizationId } }, isPending: false };
+      state.activeProfile = {
+        data: { id: viewer.organizationId, name: viewer.organizationName },
+        isPending: false,
+      };
+      state.memberOrganizations = { data: viewer.isPlatformAdmin ? [] : orgs, isPending: false };
+      state.allOrganizations = { data: orgs, isPending: false };
+      return renderToStaticMarkup(
+        <ViewerOrgProvider value={viewer}>
+          <OrgBrand />
+        </ViewerOrgProvider>,
+      );
+    }
+    const base = { organizationId: "org-1", organizationName: "Dark Earth Carbon" };
+    const one = [{ id: "org-1", name: "Dark Earth Carbon" }];
+    const two = [...one, { id: "org-2", name: "Second Organization" }];
+
+    it("shows the member's role on the plain header", () => {
+      const html = settle({ ...base, orgRole: "member", isPlatformAdmin: false }, one);
+
+      expect(html).toContain("Member");
+      expect(html).toContain('href="/dashboard"');
+      expect(html).not.toContain('aria-haspopup="listbox"');
+    });
+
+    it("shows Admin and keeps the switcher for a member of several organizations", () => {
+      const html = settle({ ...base, orgRole: "admin", isPlatformAdmin: false }, two);
+
+      expect(html).toContain("Admin");
+      expect(html).toContain('aria-haspopup="listbox"');
+    });
+
+    it("shows no chip for a Platform Admin without a membership (the bar says it)", () => {
+      const html = settle({ ...base, orgRole: null, isPlatformAdmin: true }, two);
+
+      expect(html).not.toContain("Platform Admin");
+      expect(html).toContain('aria-haspopup="listbox"');
+    });
   });
 });

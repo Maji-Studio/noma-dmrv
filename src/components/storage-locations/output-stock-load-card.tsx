@@ -39,7 +39,7 @@ export function StockLoadCard({ preview, actions }: { preview: Preview; actions?
       title={preview.binName}
       hint={stockCardHint(preview)}
       actions={actions}
-      calculation={rows.length > 0 || preview.allocations.length > 0 ? <>
+      explanation={rows.length > 0 || preview.allocations.length > 0 ? <>
         {rows.length > 0 && <StockRows label="Figures behind this movement" rows={rows} />}
         <OutputStockAllocations allocations={preview.allocations} />
       </> : undefined}
@@ -87,7 +87,7 @@ function enteredCaption(preview: Preview): string {
 
 /**
  * The entered figures and the estimate the headline leaves out. These are the
- * inputs, not the consequence, so they sit behind the disclosure.
+ * inputs, not the consequence, so they sit behind the (i).
  */
 function movementRows(preview: Preview): StockRow[] {
   const dryLabel = preview.dryLabel ?? "dry biochar";

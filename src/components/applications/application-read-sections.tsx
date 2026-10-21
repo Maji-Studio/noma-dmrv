@@ -68,8 +68,8 @@ export function applicationSheetSections(application: ApplicationListItem, conte
         : undefined,
     },
     ...(application.allocationShares.length > 0 ? [{
-      // The bar and key line show at both levels; the ledger and source
-      // runs are the block's explanation, so Detailed only.
+      // The bar and key line are always visible; the ledger and source runs
+      // open from the block's (i).
       title: "Batch shares",
       fields: [],
       content: <ApplicationAllocationShares shares={application.allocationShares} />,

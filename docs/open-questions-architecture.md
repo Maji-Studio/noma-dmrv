@@ -18,6 +18,14 @@ these areas; the entry rules and invariants live in
   attempts, tokens and assertions in one statement each, unlike the bounded
   batches of the other purge helpers. Volumes are small before production; batch
   it before connections are on in production (PR #1161 review round 2).
+- **`api/consent-subset-reauthorize`:** `src/lib/auth/oauth-hooks.ts:oauthBefore`
+  forces consent on every client connect (#1330), so a re-authorize that asks for
+  fewer scopes than are stored replaces the consent with the smaller set on Allow.
+  The provider refuses submitting scopes the request did not ask for, and the
+  authorize hook runs before the organization, so the grant, is known. claude.ai
+  requests every scope, so it does not hit this today. Options: skip forcing
+  consent when the request is a strict subset of the stored consent (needs the
+  grant at authorize entry), or accept it.
 - **`api/dpop`:** `src/lib/auth/oauth-request-policy.ts:guardOAuthTokenInput`
   refuses proofs and `src/lib/auth/oauth-context.ts:resolveOAuthContext` refuses
   sender-bound rows. Full DPoP needs proof, nonce and replay validation before
@@ -30,12 +38,6 @@ these areas; the entry rules and invariants live in
   (decision 126), using `src/lib/auth/oauth-provider.ts:createOAuthProvider` and
   `src/lib/auth/oauth-config.ts:deriveOAuthConfig`. Settle its native redirect
   and link it to REST only.
-- **`api/claude-ai-disconnect-revoke`:** disconnecting inside claude.ai sends no
-  revoke call to noma, so the grant stays in Connected apps and the next consent
-  shows the board alone (`src/components/oauth/consent-form.tsx:hasConsent`),
-  with every allowed scope resubmitted. Options: let the board untick allowed
-  scopes, or show the three choices when the client starts a fresh connection.
-  Decision pending (round 15); until then, revoke in noma Connected apps to narrow.
 - **`api/cowork-step-up`:** Cowork shows "Forbidden" with no Connect card on a 403
   `insufficient_scope` (`src/lib/api/problem.ts:oauthInsufficientScopeChallenge`);
   claude.ai chat does step up. Reported as
@@ -215,19 +217,6 @@ these areas; the entry rules and invariants live in
 - **To resolve:** UX decision with DEC; adjacent to #253 (cross-facility
   context reconciliation), which any switch-while-open flow must satisfy.
 
-### Registry picker needs approved Puro Earth / CSI logo assets (`onboarding/registry-picker-logos`, opened 2026-07-22)
-
-- The archived onboarding plan
-  ([`2026-07-21-onboarding.md`](./archive/plans/2026-07-21-onboarding.md)) asks the registry picker to show Puro Earth and CSI greyed **with their logos**.
-  `src/components/certification/registry-picker.tsx` deliberately renders styled
-  text wordmarks instead: we hold no approved logo files, and bundling
-  unofficial reproductions of third-party registry branding is worse than no
-  logo. (The component moved out of `onboarding/` on 2026-07-28 when the
-  certifier settings pane became its second consumer.)
-- **To resolve:** DEC obtains approved logo assets (and usage permission) for
-  both registries, or amends the plan to accept text wordmarks. Swap the
-  wordmark spans in `registry-picker.tsx` for the assets when they arrive.
-
 ### An Organization cannot be renamed (`tenancy/organization-rename`, opened 2026-07-28)
 
 - `organizations.name` and `slug` (`src/db/schema/auth.ts`) are settable only at
@@ -236,7 +225,7 @@ these areas; the entry rules and invariants live in
   typo at onboarding is permanent and shows in the sidebar brand, the settings
   subtitle, and every invitation email.
 - **To resolve:** add `updateOrganization` plus a name/slug field on
-  `/settings/organization` for Admins. A slug change needs a decision on
+  Settings, General (`/settings/general`, wave 2 of #1277) for Admins. A slug change needs a decision on
   existing invitation-accept URLs, which embed the invitation id rather than the
   slug — so probably none, but confirm before assuming.
 
@@ -501,7 +490,7 @@ follow-up, not permission to weaken the current guard.
   soon as it is not.
 - **To resolve:** a Platform-Admin choice at org creation, or an onboarding step
   that picks a catalog. Not an operating default: it creates records rather than
-  seeding a form, so it does not belong on `/settings/defaults`.
+  seeding a form, so it does not belong on Settings, General (`/settings/general`).
 
 ### ADR 0026's org-level plausibility overrides are unbuilt (`data-quality/plausibility-overrides`, opened 2026-07-28)
 
@@ -510,7 +499,7 @@ follow-up, not permission to weaken the current guard.
   Organization override". No plausibility module exists under `src/`, so neither
   half is implemented.
 - **To resolve:** build the rule engine first. When it exists, the override
-  surface is `/settings/defaults`
+  surface is Settings, General (`/settings/general`)
   (`src/components/settings/organization-defaults-form.tsx`) — the table
   `organization_settings` and its Admin gate are already in place. Keep
   the distinction that page is built on: advisory thresholds may be

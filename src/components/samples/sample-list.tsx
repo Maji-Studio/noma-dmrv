@@ -627,8 +627,6 @@ export function SampleList({
       />
 
       <EntitySideSheet
-        detailToggle={false}
-        detailScope={displaySideSheet?.entity?.id ?? "create"}
         numberedSections
         open={!!displaySideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}

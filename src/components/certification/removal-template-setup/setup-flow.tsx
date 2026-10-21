@@ -14,7 +14,7 @@ import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { useToast } from "@/components/ui/toast";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import type { useApplyRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
-import { certificationSettingsHref } from "@/lib/certification/links";
+import { facilityCertificationSettingsHref } from "@/lib/certification/links";
 import { getStaleVersionConflict } from "@/lib/stale-version";
 import {
   type Answers,
@@ -27,6 +27,8 @@ import {
 } from "@/lib/certification/removal-template-setup-copy";
 import { SETUP_GUTTER_CLASS } from "./layout";
 import { ApplyStep, applyLabel, DecisionsStep, TemplateStep, type SetupData } from "./setup-steps";
+import { cn } from "@/lib/utils";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 
 const APPLY_BUTTON_CLASS = "h-auto min-h-[40px] whitespace-normal py-8 text-left";
 const APPLYING_LABEL = "Applying…";
@@ -140,10 +142,10 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
   return (
     <>
       <div className={`${SETUP_GUTTER_CLASS} pb-16`}>
-        <StepFlow steps={STEPS} current={step} furthest={furthest} onNavigate={go} footer={null} compactOnPhone className="gap-20">
+        <StepFlow steps={STEPS} current={step} furthest={furthest} onNavigate={go} footer={null} className="gap-20">
           <div className="flex flex-col gap-20">
             <h3 className="sr-only">{STEP_TITLES[step]}</h3>
-            {step === 0 && <TemplateStep data={data} templateId={templateId} onChange={pickTemplate} invalid={showMissing} notOffered={notOfferedReason(data, requestedTemplate)} certifierHref={certificationSettingsHref(facilityId)} />}
+            {step === 0 && <TemplateStep data={data} templateId={templateId} onChange={pickTemplate} invalid={showMissing} notOffered={notOfferedReason(data, requestedTemplate)} facilitySettingsHref={facilityCertificationSettingsHref(facilityId)} />}
             {step === 1 && template && (
               <DecisionsStep
                 template={template}
@@ -191,16 +193,16 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
           <div className="flex flex-wrap items-center gap-12">
             <Button
               variant="primary"
-              // Same contract as FormActions: disabled while saving, the label says what is happening.
-              disabled={apply.isPending || (allBlocked && step === 0)}
-              className={step === LAST_STEP ? APPLY_BUTTON_CLASS : undefined}
+              busy={apply.isPending}
+              disabled={allBlocked && step === 0}
+              className={cn(step === LAST_STEP ? APPLY_BUTTON_CLASS : undefined, PHONE_TOUCH_TARGET)}
               // Only Apply writes, so only Apply is latched; the latch holds until the save settles.
               onClick={() => (step === LAST_STEP ? void applyLatched({ preventDefault: () => undefined }) : void next())}
             >
               {apply.isPending ? APPLYING_LABEL : step === LAST_STEP ? applyLabel(effectiveMakeDefault, batchCount) : "Next"}
             </Button>
-            {step > 0 && <Button variant="default" disabled={apply.isPending} onClick={back}>Back</Button>}
-            <Button variant="default" disabled={apply.isPending} onClick={onClose}>Cancel</Button>
+            {step > 0 && <Button className={PHONE_TOUCH_TARGET} variant="default" disabled={apply.isPending} onClick={back}>Back</Button>}
+            <Button className={PHONE_TOUCH_TARGET} variant="default" disabled={apply.isPending} onClick={onClose}>Cancel</Button>
           </div>
           {step === 1 && decisionCount > 0 && (
             <span className="body-caption text-[var(--color-text-tertiary)]">{`${decided} of ${decisionCount} decided`}</span>

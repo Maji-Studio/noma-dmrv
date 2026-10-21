@@ -52,8 +52,11 @@ REST and MCP tokens are not interchangeable: the other audience gives 401
 [Grantable scopes](../src/lib/auth/oauth-scopes.ts) are the API `:read` and
 `:write` set, never `:delete`. Unknown or delete scopes give `invalid_scope`.
 Admin and Member have the same OAuth ceiling; domain guards still apply.
-The first consent offers three choices: Read only (preselected), Read and write
-(never deletes) and Choose per area. A missing authorize scope defaults to registered grantable
+Every connect except a step-up offers three choices: Read only, Read and write
+(never deletes) and Choose per area. A first connect starts at Read only; a
+reconnect starts from the stored consent: Read only when it is exactly the requested
+reads, Read and write when it is exactly every requested read and write, otherwise
+Choose per area with the stored scopes ticked. The choice replaces the stored consent. A missing authorize scope defaults to registered grantable
 scopes plus `offline_access`. Request `offline_access` to keep the connection
 through rotating refresh tokens; consent preserves it without a checkbox. Access tokens
 last one hour; 30 days without API use ends the connection. Refresh is not use.
@@ -102,8 +105,10 @@ registration is off. Results: [plan section 28](./plans/2026-10-06-data-entry-ap
 - Cowork shows "Forbidden" with no Connect card when a write is refused for
   scope (`api/cowork-step-up` in open questions). Choose Read and write, or the
   needed areas, on first consent.
-- claude.ai Disconnect does not revoke at noma; revoke in Connected apps first
-  (decision pending: [open questions](./open-questions-architecture.md#oauth-connection-follow-ups)).
+- claude.ai Disconnect does not revoke at noma. Reconnecting shows the three
+  choices again (Read only, Read and write, Choose per area), starting from the
+  stored consent (exact matches, see above); the new choice replaces it. Only a step-up, after a write was refused, keeps
+  the board with the allowed areas locked.
 - claude.ai chat gives the model only a tool result's text, so `toolText` in
   `src/lib/mcp/results.ts` joins the summary and the JSON with
   `TOOL_TEXT_SEPARATOR`. Cowork and Claude Code read `structuredContent`.

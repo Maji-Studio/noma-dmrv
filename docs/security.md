@@ -369,9 +369,9 @@ After a `reset-seed-staging` run, check by hand that the registry connection
 works, because the scheduled live checks use their own credentials and seed
 their own mapping:
 
-1. Certification → Settings shows healthy Isometric credentials.
+1. Settings, Registry says Connected.
 2. The Mafinga facility is mapped to the sandbox project and a Removal template.
-3. `/certification/removals` opens without redirecting to Settings.
+3. `/certification/removals` opens without redirecting to Settings, Registry.
 
 ## Operational Defaults
 

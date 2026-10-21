@@ -625,7 +625,10 @@ export function ProductionRunForm({
               setValueAs: nullableNumericValue,
             })}
           />
-          <MoistureSplit className="md:col-span-2" wetMassKg={watchWetMass} moisturePercent={watchMoisture} dryMassKg={previewDryMass} materialLabel="Feedstock" />
+          {/* Nothing to show until a first value arrives: the unresolved bar would only explain what will appear. */}
+          {(watchWetMass != null || watchMoisture != null) && (
+            <MoistureSplit className="md:col-span-2" wetMassKg={watchWetMass} moisturePercent={watchMoisture} materialLabel="Feedstock" />
+          )}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="feedingRateKgHr" label="Feed rate (kg/hr)" error={errors.feedingRateKgHr?.message}>

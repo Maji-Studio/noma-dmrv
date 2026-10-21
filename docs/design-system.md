@@ -33,10 +33,10 @@ Read these first. Each one fails quietly rather than loudly.
   an arbitrary value (`w-[120px]`) when a real off-scale number is intended.
   **44px is on the scale** because it is the minimum touch target; six controls
   had written `size-44` / `min-h-44` / `h-44` and were rendering at icon size.
-  Two sanctioned exceptions keep a 24px hit area (the WCAG 2.5.8 floor): the
-  inline `InfoHint` glyph, and the icon-only `IsometricLink` beside the ID it
-  opens. A 44px box on either would break label-row alignment wherever it
-  appears. The same silence hits a `var(--x)` whose property was renamed or never
+  Sanctioned exceptions keep a 24px hit area (the WCAG 2.5.8 floor): the
+  inline `InfoHint` and `ExplanationInfo` glyphs, and the icon-only
+  `IsometricLink` beside the ID it opens. A 44px box on any of them would break
+  label-row alignment wherever it appears. The same silence hits a `var(--x)` whose property was renamed or never
   defined; `pnpm check:css-vars` (CI) fails on it.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
@@ -269,11 +269,17 @@ caption.
   ⓘ. Use
   the plain `Tooltip` only for hover extras that are also available another
   way (the CERT chip's own explanation, a disabled button's reason).
+- **Tables and arithmetic go in `ExplanationInfo`,** the same ⓘ glyph on a
+  `Popover` that opens on hover and on tap. One ⓘ per block: its panel leads
+  with the definition, then the tables. Two short lines may stay inline (the dry
+  mass formula under a moisture split, the dry biochar before → after line on a
+  stock movement); see
+  [forms.md](./forms.md#explanations-behind-an-i).
 - **Certification is a CERT chip, explained once.** A field required for
   certification carries a "CERT" chip on its label row
   (`CertificationFieldTag`): neutral when no record is saved, orange with a
   warning mark when the saved record lacks it, green with a check when it has
-  it. It shows in Simple and Detailed alike. There is no sheet legend: the
+  it. There is no sheet legend: the
   chip explains itself through its tooltip and screen-reader text.
 - **Spacing, one rhythm per level:** the form `space-y-20` between sections,
   `FormSection` `space-y-16` inside one ([forms.md](./forms.md#vertical-rhythm)),
@@ -589,9 +595,7 @@ column two).
 
 The old `RadioCardGroup` is gone; `ChoiceCardGroup` replaces it. The sr-only
 input is not the touch target: the whole label is, and `SegmentedControl`
-segments are at least 44px tall. The sheet header Simple/Detailed toggle
-(`FormDetailToggle`) is sheet chrome, not a form field, and stays a separate
-component.
+segments are at least 44px tall.
 
 ### Before and after
 
@@ -685,7 +689,11 @@ The one outcome screen for auth pages (check your email, email verified, verific
   fires an unscoped query.
 - **`StepFlow`** — step rail + content slot + pinned footer. Deliberately dumb:
   **StepFlow never validates**; the parent owns the active index and gates
-  forward progress by disabling its own Next button.
+  forward progress by disabling its own Next button. Below `sm` it shows the
+  current step only (its number, its label and "Step 2 of 3" under it), in both
+  orientations; the full rail returns from `sm` up. The rail's jump back is then a
+  desktop affordance, so a flow that relies on it carries a footer Back for
+  phones (New Removal's submit step does, `sm:hidden`).
 - **`StatCard`** — the one KPI card. **Always carries a 24px Phosphor icon.**
   `value` accepts a `ReactNode`: use the default `valueLayout="headline"` for a
   single scalar or short text value, and `valueLayout="breakdown"` for a
@@ -773,19 +781,19 @@ drawn only on a complete basis; until then the block shows its unresolved state.
 - **Moisture is wet basis everywhere** — `water / wet mass`, 0–100. The
   ambiguity with dry basis is resolved once, in `MOISTURE_BASIS_HINT`, which
   `MoistureField` attaches to every moisture input.
-- **`MoistureSplit` variants:** `detail` (bar + key line + calculation table —
-  forms and read side sheets) · `compact` (figures + bar + one line) · `inline`
-  (text only — table cells, option labels). The `detail` surface carries **no
-  card, no frame and no tinted panel**: the bar sits directly under the wet-mass
-  and moisture inputs it describes and moves as they change, with one key line
-  of swatches under it ("Dry 3,200 kg", "Water 800 kg"). The bar and key line
-  show at both levels, because they are what the two inputs mean, and
-  **Detailed** adds the calculation table below them: the `CompositionLedger` plus the wet-basis arithmetic in
-  words ("Dry = wet × (1 - moisture). 4,000 kg × (1 - 20%) = 3,200 kg."). There
-  is no "Show calculation" disclosure on this surface, and `calculation={false}`
-  drops the table where the host surface owns one (the stock movement card: its
-  disclosure holds the FIFO draw, so the split contributes bar and key line
-  only). The bar names **dry solids**, not the tracked quantity: a blended
+- **`MoistureSplit` variants:** `detail` (bar + key line + (i) + formula
+  sentence; forms and read side sheets) · `compact` (figures + bar + one line) ·
+  `inline` (text only; table cells, option labels). The `detail` surface carries
+  **no card, no frame and no tinted panel**: the bar sits directly under the
+  wet-mass and moisture inputs it describes and moves as they change, with one
+  key line of swatches under it ("Dry 3,200 kg", "Water 800 kg") and an (i)
+  as its last item, so it wraps with the key. The (i) opens the `CompositionLedger` and the provenance `note`;
+  the derived wet-basis formula stays inline in one sentence ("Dry = wet × (1 -
+  moisture). 4,000 kg × (1 - 20%) = 3,200 kg."); a stored dry mass has no inline
+  line, its sentence sits in the (i) after the ledger. `calculation={false}` drops the
+  (i) and the sentence where the host surface owns the explanation (the stock
+  movement card: its (i) holds the FIFO draw, so the split contributes bar and
+  key line only). The bar names **dry solids**, not the tracked quantity: a blended
   product bin holding 84 kg of dry solids holds 70 kg of dry biochar, and both
   masses appear on the same card. Missing moisture renders
   an explicit *unresolved* state (hatched dashed bar, "Moisture not recorded"),
@@ -1005,12 +1013,12 @@ header→content `mb-32`.
 ## Forms
 
 Form behaviour is owned by [forms.md](./forms.md): react-hook-form + Zod
-resolver, `FormSection` / `DetailSection`, the section rhythm, the Simple and
-Detailed levels and derived blocks, and the `@/schemas/helpers` numeric
+resolver, `FormSection` / `DetailSection`, the section rhythm, explanations
+behind an (i) and derived blocks, and the `@/schemas/helpers` numeric
 helpers. This doc owns only the form type set, lines and spacing
 ([above](#form-type-lines-and-spacing)).
 
-Simple and Detailed differ only in explanation: see [forms.md](./forms.md#simple-and-detailed-presentation).
+Explanation opens from an (i); only the lines forms.md names stay inline: see [forms.md](./forms.md#explanations-behind-an-i).
 
 ## Naming, file structure, React rules
 
