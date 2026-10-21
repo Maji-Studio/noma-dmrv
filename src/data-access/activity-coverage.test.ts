@@ -169,6 +169,7 @@ const ACTIVITY_COVERAGE = {
     undoEmissionZeros: { status: "direct" },
   },
   "emission-entry-deletion.ts": {
+    deletedRemovalEntryFilter: { status: "exempt", reason: "Pure predicate builder; the caller records the deletion activity." },
     releaseDeletedRemovalEntries: { status: "direct" },
   },
   "certification.ts": {

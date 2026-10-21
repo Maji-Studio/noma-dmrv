@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), select: vi.fn(), batch: vi.fn(), facts: vi.fn(), contenders: vi.fn(), reservations: vi.fn(), available: vi.fn(), automatic: vi.fn(), activity: vi.fn(), context: vi.fn(), entries: vi.fn() }));
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), select: vi.fn(), batch: vi.fn(), facts: vi.fn(), contenders: vi.fn(), reservations: vi.fn(), available: vi.fn(), automatic: vi.fn(), activity: vi.fn(), context: vi.fn(), entries: vi.fn(), correctionScope: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction, select: mocks.select } }));
 vi.mock("./emission-entries", () => ({ lockedBatch: mocks.batch, listEmissionEntriesForBatches: mocks.entries }));
 vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: mocks.facts }));
@@ -9,6 +9,8 @@ vi.mock("./emission-entry-activity", () => ({ recordEmissionEntryActivity: mocks
 vi.mock("./batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: mocks.automatic }));
 vi.mock("@/fn/certification/certify-context-core", () => ({ loadRemovalSubmissionContext: mocks.context }));
 vi.mock("./certifier-removals", () => ({ getCertifierRemovalById: vi.fn(async () => ({ updatedAt: new Date("2026-01-01") })) }));
+// These drafts have no returned lineage; keep correction locking at its own tested boundary.
+vi.mock("./emission-entry-corrections", () => ({ lockEmissionCorrectionScope: mocks.correctionScope, emissionCorrectionWindow: () => undefined }));
 import { loadRemovalEmptyLines } from "@/fn/certification/removal-empty-lines-core";
 import { loadRemovalEntryContext } from "@/fn/certification/removal-entry-context";
 import { resolveRemovalTemplate } from "@/fn/certification/resolve-removal-template";
@@ -16,7 +18,7 @@ import type { BatchEmissionContext } from "@/fn/certification/batch-emission-con
 import type { FacilityCertifierFacts } from "@/fn/certification/facility-certifier-facts";
 import type { RemovalScope } from "@/fn/certification/removal-scope";
 import { entriesWithoutRemoval } from "@/lib/certification/removal-emission-contributions";
-import { recordEmissionZeros, undoEmissionZeros } from "./emission-zeros";
+import { isRemovalZeroEditable, recordEmissionZeros, undoEmissionZeros } from "./emission-zeros";
 const ctx = makeTestOrgContext();
 const removalId = "00000000-0000-4000-8000-000000000001";
 const creditBatchId = "00000000-0000-4000-8000-000000000002";
@@ -120,6 +122,8 @@ it.each(["sent-single", "omitted-production", "automatic-figure", "stale-value"]
 it("locks the Removal before its batch", async () => {
   await recordEmissionZeros(ctx, input);
   expect(mocks.batch).toHaveBeenCalledOnce();
+  expect(mocks.correctionScope).toHaveBeenCalledWith(ctx, mocks.batch.mock.calls[0][1], creditBatchId);
+  expect(mocks.correctionScope.mock.invocationCallOrder[0]).toBeLessThan(mocks.batch.mock.invocationCallOrder[0]);
   // The Removal read has already consumed the first result when the batch lock is requested.
   mocks.batch.mockImplementationOnce(async () => {
     expect(rows).toHaveLength(2);
@@ -206,4 +210,11 @@ it.each(["record", "undo"])("uses a Removal lock compatible with stamping for %s
   if (action === "record") await recordEmissionZeros(ctx, input);
   else { rows.push([]); await undoEmissionZeros(ctx, input); }
   expect(rowLock).toHaveBeenNthCalledWith(1, "no key update");
+});
+
+it.each([["correction", true], ["draft", false]] as const)("a submitted Removal is zero-editable only in its correction window (%s)", async (contenderKind, editable) => {
+  dbRows = [[{ id: removalId, updatedAt: new Date("2026-01-01"), metadata: null }], [{ status: "submitted", submittedAt: new Date("2026-01-02") }], [{ id: creditBatchId }]];
+  mocks.contenders.mockResolvedValue([{ contenderKind, removalId, creditBatchIds: [creditBatchId], createdAt: "2026-01-01", window: { start: "2026-01-01", end: "2026-02-01" } }]);
+  expect(await isRemovalZeroEditable(ctx, removalId)).toBe(editable);
+  expect(mocks.contenders).toHaveBeenCalledWith(ctx, [creditBatchId]);
 });

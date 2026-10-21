@@ -1,7 +1,7 @@
 import { ownValue } from "../semantic-binding-catalog";
 import { BOOTSTRAP_LINE_SOURCES } from "./bootstrap";
 import { automaticSourceAvailable, catalogCandidates, hasCatalogDisambiguation, type AutomaticSourceId } from "./catalog-sources";
-import { allowedEntryPolicies } from "./entry-policies";
+import { allowedEntryPolicies, isLegacyAutomaticPair } from "./entry-policies";
 import type { EntryPolicy, TemplateDefinition } from "./types";
 
 export interface LineContract {
@@ -77,7 +77,17 @@ export function isAcceptableProposal(definition: TemplateDefinition, lineSources
   return !validateLineSources(definition, accepted).some((problem) => problem.componentId === componentId && problem.code !== "unassigned");
 }
 
+export function normalizeStoredLineSources(definition: TemplateDefinition, lineSources: LineSources): LineSources {
+  const components = new Map(definition.groups.flatMap((group) => group.components.map((component) => [component.id, component] as const)));
+  return Object.fromEntries(Object.entries(lineSources).map(([id, contract]) => {
+    const component = components.get(id);
+    return [id, component && (contract.origin === "bootstrap" || contract.origin === "proposed") && isLegacyAutomaticPair(component, contract)
+      ? { ...contract, entryPolicy: "none" } : { ...contract }];
+  }));
+}
+
 export function withoutUnacceptableProposals(definition: TemplateDefinition, lineSources: LineSources): LineSources {
+  lineSources = normalizeStoredLineSources(definition, lineSources);
   // noma has no precedence rule between lines sharing a figure: none is proposed
   // it and the operator decides. Every proposal noma makes can be accepted and
   // saved as is. Check the input snapshot before applying any replacements.
@@ -95,26 +105,32 @@ export function resolveLineSources({ definition, previous }: {
   previous?: { definition: TemplateDefinition; lineSources: LineSources };
 }): LineSources {
   const previousIds = new Set(previous?.definition.groups.flatMap((group) => group.components.map((component) => component.id)));
+  const previousSources = previous && normalizeStoredLineSources(definition, previous.lineSources);
   const sources: LineSources = {};
   for (const group of definition.groups) {
     for (const component of group.components) {
-      const carried = previousIds.has(component.id) && previous && ownValue(previous.lineSources, component.id);
+      const carried = previousIds.has(component.id) && previousSources && ownValue(previousSources, component.id);
       // A pending proposal stays pending across repeated observations. Changing
       // its origin to carried would accept it on the next live read. An empty
       // proposal is not carried: a figure dropped for a clash is proposed again
       // once the clash is gone, and the final pass still filters it.
+      // Keep reviewed legacy pairs reviewed so later observations cannot normalize the decision.
       if (carried && !(carried.origin === "proposed" && carried.scope === "unassigned")) {
-        sources[component.id] = { ...carried, origin: carried.origin === "proposed" ? "proposed" : "carried" };
+        sources[component.id] = { ...carried, origin: carried.origin === "proposed" || (carried.origin === "reviewed" && isLegacyAutomaticPair(component, carried)) ? carried.origin : "carried" };
         continue;
       }
       const bootstrap = ownValue(BOOTSTRAP_LINE_SOURCES, component.id);
       if (bootstrap) {
-        sources[component.id] = { ...bootstrap, origin: "bootstrap" };
+        const automaticSingle = bootstrap.automaticSource && allowedEntryPolicies(component).includes("single") &&
+          catalogCandidates(component, group.key).includes(bootstrap.automaticSource);
+        sources[component.id] = { ...bootstrap,
+          entryPolicy: automaticSingle ? "none" : bootstrap.entryPolicy,
+          origin: "bootstrap" };
         continue;
       }
       const candidates = catalogCandidates(component, group.key);
       if (candidates.length === 1 && !hasCatalogDisambiguation(component.blueprintKey)) {
-        const entryPolicy = allowedEntryPolicies(component).find((policy) => policy !== "none") ?? "none";
+        const entryPolicy = allowedEntryPolicies(component).includes("additive") ? "additive" : "none";
         sources[component.id] = { scope: "operating", automaticSource: candidates[0], entryPolicy, origin: "proposed" };
       } else {
         sources[component.id] = { scope: "unassigned", entryPolicy: "none", origin: "proposed" };

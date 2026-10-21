@@ -40,6 +40,7 @@ export interface RemovalCertifyContext {
   /** Current template components without a saved, unambiguous decision. */
   undecidedLineIds?: readonly string[];
   emissionLinesByBatchId?: Record<string, BatchEmissionLine[]>;
+  entryCorrectionsByBatchId?: Record<string, import("@/lib/certification/removal-entry-correction").EntryCorrectionState[]>;
   emissionLines?: BatchEmissionLine[] | null;
   blueprintsForTemplate: IsometricComponentBlueprint[];
   unresolvedBlueprintKeys: string[];
