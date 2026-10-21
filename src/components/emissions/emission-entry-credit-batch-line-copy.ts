@@ -12,7 +12,7 @@ import type { EmissionBatch } from "./emission-line-display";
 
 export const EMISSION_ENTRY_CREDIT_BATCH_INFO_LABEL = "Which credit batch this entry belongs to";
 const INFO =
-  "An emissions entry belongs to the credit batch it is recorded on. Its date never moves it to another batch.";
+  "A manual entry belongs to the credit batch it is recorded on. Its date never moves it to another batch.";
 
 export function describeEmissionEntryCreditBatchLine(batch: EmissionBatch): CreditBatchLineCopy {
   return {
