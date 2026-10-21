@@ -53,7 +53,8 @@ components (UI)
   may use that property. The keyed action shape is
   `withCreate((_ctx, create) => create(op, schema.parse(input)), intent, options)`.
   `create-action-coverage.test.ts` checks the inventory, wrapper wiring, single
-  parse point and client keys. Its PENDING list tracks creates awaiting migration;
+  parse point and client keys. Creates in its PENDING table are not keyed yet (see
+  [open-questions.md](./open-questions.md));
   domain stock-posting keys and documented exceptions keep their existing paths.
   `src/lib/operations/registry.ts` is the explicit allowlist of exposed
   operations; its keys match operation ids. Feedstock, production-run, biochar-product and

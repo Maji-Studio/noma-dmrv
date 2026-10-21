@@ -30,7 +30,7 @@ const KEYED = [
   API_KEY_ACTION,
 ];
 
-// PRs B/C migrate these; wiring and client checks deliberately apply only to KEYED.
+// Creates not yet keyed; see docs/open-questions.md. Wiring and client checks apply only to KEYED.
 const PENDING = [
   "quick-add#createVehicleFn",
   "quick-add#createFeedstockTypeFn",

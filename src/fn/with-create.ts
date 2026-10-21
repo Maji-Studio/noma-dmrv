@@ -2,7 +2,7 @@
 // action modules import, not an action the browser may call.
 import type { z } from "zod";
 import type { OrgContext } from "@/lib/auth/server";
-import type { Operation, OperationEffect } from "@/lib/operations/runner";
+import { runOperationInProcess, type Operation, type OperationEffect } from "@/lib/operations/runner";
 import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
 import type { ActionResult } from "@/types/actions";
 import { withAction, type MappedFailure, type WithActionOptions } from "./with-action";
@@ -35,9 +35,6 @@ export function withCreate<T, E extends MappedFailure = never>(
         if (called) throw new Error("A create action may run only one operation.");
         called = true;
         const parsedOptions = parseIntent();
-        // Loaded on first use: api-keys.test.ts (unchanged by design) mocks no runner,
-        // and a static import would pull the database client into it.
-        const { runOperationInProcess } = await import("@/lib/operations/runner");
         return runOperationInProcess(operation, ctx, input, parsedOptions);
       },
       "key",

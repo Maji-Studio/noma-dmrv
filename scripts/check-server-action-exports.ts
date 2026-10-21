@@ -32,8 +32,9 @@
  * or aliased) is applied to a value derived from a parameter, through casts,
  * property access or a local initialised from it, inside a `"use server"`
  * module or inline server function. The one allowed shape is the first
- * parameter of the callback passed to `withAction(async (ctx) => …)`, which
- * `withAction` resolves from the session. Any other callback parameter
+ * parameter of the callback passed to `withAction(async (ctx) => …)` or
+ * `withCreate((ctx, create) => …, options)`, which both wrappers resolve from
+ * the session. Any other callback parameter
  * (`contexts.map((ctx) => requireOrgRole(ctx, …))`) may carry caller input.
  *
  * Inside those same bodies it fails on a type assertion (`as`, `<T>x`,
@@ -694,7 +695,7 @@ function main(): void {
     "\nEvery export of a \"use server\" module is a public action the browser can\n" +
       "call with any arguments. Move trusted-context code into a directive-free\n" +
       "module (conventionally src/fn/**/*-core.ts) and export only actions that\n" +
-      "resolve their own context (withAction). See docs/architecture.md.",
+      "resolve their own context (withAction or withCreate). See docs/architecture.md.",
   );
   process.exitCode = 1;
 }
