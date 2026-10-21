@@ -48,7 +48,7 @@ vi.mock("@/components/storage-locations/output-stock-preview", () => ({
 const delivery = { id: ids.delivery, facilityId: ids.facility, orderId: ids.order, storageLocationId: ids.bin,
   deliveryDate: new Date("2026-10-01T12:00:00Z"), deliveredWetMassKg: 100, moistureContentPercent: 20,
   distanceKmOverride: null, distanceSource: null } as Delivery;
-const reestimate = { moisturePercent: 50, stayWetKg: 110, stayDryKg: 55 };
+const reestimate = { moisturePercent: 50, layers: [{ layerId: ids.a, name: "P1", moisturePercent: 50, stayWetKg: 110, staySolidsKg: 55 }], stayWetKg: 110, staySolidsKg: 55, stayDryKg: 55 };
 let client: QueryClient;
 beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -68,7 +68,7 @@ it("hands the delivery's re-estimate notice an action that returns to the moistu
   const reading = await screen.findByRole("spinbutton", { name: /^P1 moisture/ }) as HTMLInputElement;
   await waitFor(() => expect(reading.value).toBe("20"));
   // A delivery drawn wetter than the bin: the preview says saving re-estimates what stays.
-  state.preview.mockResolvedValue({ success: true, data: { basisFingerprint: "basis", blockingMessage: null, reestimate } });
+  state.preview.mockResolvedValue({ success: true, data: { basisFingerprint: "basis", blockingMessage: null, beforeEstimatedWetKg: 100, afterEstimatedWetKg: 110, beforeSolidsKg: 80, afterSolidsKg: 55, removedWetKg: 50, removedDryKg: 25, binName: "Bin", reestimate } });
   fireEvent.change(reading, { target: { value: "50" } });
   const action = await screen.findByRole("button", { name: "Edit the moisture" });
   screen.getByRole("button", { name: "Update delivery" }).focus();

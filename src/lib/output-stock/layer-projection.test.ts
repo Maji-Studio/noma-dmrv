@@ -217,7 +217,7 @@ it('reconstructs exact solids after each live draw, including counts, without re
     [BigInt(3), rational(BigInt(45))], [BigInt(2), rational(BigInt(55))],
   ]);
   // Without a count reading, the later wet draw subtracts from the 110 kg re-estimate.
-  expect(estimateStock([basis], at)).toMatchObject({ wetKg: 90, solidsKg: 40, moisturePercent: 50, basis: { source: 'removal', at, kind: 'loss' } });
+  expect(estimateStock([basis], at)).toMatchObject({ wetKg: 90, solidsKg: 40, moisturePercent: 50, basis: { source: 'draw', at, kind: 'loss' } });
 });
 
 it('uses the frozen exact wet share rather than its rounded storage grams at the strict boundary', () => {
@@ -228,5 +228,5 @@ it('uses the frozen exact wet share rather than its rounded storage grams at the
     removals: [{ layerId: 'run', movementId: 'draw', wetMassKg: '40.000', wetShareKg: { numerator: '400001', denominator: '10000' },
       solidsKg: { numerator: '20', denominator: '1' }, sequence: BigInt(2), reversesAllocationId: null,
       moisturePercent: 50, occurredAt: new Date(at), kind: 'delivery' }] });
-  expect(estimateStock([basis], at)).toMatchObject({ wetKg: 120, moisturePercent: 50, basis: { source: 'removal', at, kind: 'delivery' } });
+  expect(estimateStock([basis], at)).toMatchObject({ wetKg: 120, moisturePercent: 50, basis: { source: 'draw', at, kind: 'delivery' } });
 });

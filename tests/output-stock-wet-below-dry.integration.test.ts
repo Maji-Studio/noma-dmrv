@@ -25,7 +25,7 @@ async function assertSaved(f: Awaited<ReturnType<typeof seedOutputStockParents>>
   const balance = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId, occurredAt: STOCK_TIME,
     kind: 'count', wetMassKg: 0 });
   expect(balance).toMatchObject({ beforeEstimatedWetKg: 110, beforeDryKg: 55, beforeSolidsKg: 55,
-    moistureEstimate: { moisturePercent: 50, wetKg: 110, basis: { source: 'removal', at: STOCK_TIME, kind } }, reestimate: null });
+    moistureEstimate: { moisturePercent: 50, wetKg: 110, basis: { source: 'draw', at: STOCK_TIME, kind } }, reestimate: null });
   const history = await getOutputStockHistory(f.ctx, storageLocationId);
   expect(replayStock(history).at(-1)?.after).toMatchObject({ wetKg: 110, dryKg: 55, solidsKg: 55 });
 }
@@ -88,3 +88,22 @@ it.each([{ wetMassKg: 100, wet: 200, solids: 110 }, { wetMassKg: 290, wet: 30, s
     expect(stocks.get(f.bin.id)?.estimatedWetMassKg).toBe(wet);
   },
 );
+
+
+it('keeps all mix intake in the reduced-loss correction check', async () => {
+  const f = await postedStockFixture({ stockKg: 0 });
+  organizations.push(f.ctx.organizationId);
+  await db.update(storageLocations).set({ stockMode: 'mix' }).where(and(
+    eq(storageLocations.organizationId, f.ctx.organizationId), eq(storageLocations.id, f.bin.id)));
+  await postProduct(f, { massKg: 100, moistureContentPercent: 20 });
+  const original = await postMeasurement(f, { kind: 'loss', wetMassKg: 50, moisturePercent: 50 });
+  await postProduct(f, { massKg: 200, moistureContentPercent: 60 });
+  const correction = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME,
+    kind: 'loss' as const, correctsMovementId: original.movementId, wetMassKg: 60, moisturePercent: 75 };
+  expect(await previewOutputStock(f.ctx, correction)).toMatchObject({ blockingMessage: null,
+    afterEstimatedWetKg: 240, afterSolidsKg: 145, reestimate: null });
+  await postMeasurement(f, correction);
+  const saved = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id,
+    occurredAt: STOCK_TIME, kind: 'count', wetMassKg: 0 });
+  expect(saved).toMatchObject({ beforeEstimatedWetKg: 240, beforeSolidsKg: 145 });
+});

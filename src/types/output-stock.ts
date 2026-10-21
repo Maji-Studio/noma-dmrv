@@ -39,6 +39,8 @@ export interface OutputStockPreview {
   afterDryKg: number;
   beforeSolidsKg: number;
   afterSolidsKg: number;
+  /** Exact allocation solids converted for display; older saved previews omit it. */
+  removedSolidsKg?: number;
   removedDryKg: number;
   removedWetKg: number | null;
   /** The moisture this movement's wet figures are at: the reading, or a split draw's overall 1 − solids ÷ wet. */
@@ -47,7 +49,15 @@ export interface OutputStockPreview {
   beforeEstimatedWetKg: number | null;
   afterEstimatedWetKg: number | null;
   /** New previews return null unless this draw re-estimates remaining stock. Older saved previews omit it. */
-  reestimate?: { moisturePercent: number; stayWetKg: number; stayDryKg: number } | null;
+  reestimate?: {
+    /** Shared draw reading, or null when re-estimated sub-bins have different readings. */
+    moisturePercent: number | null;
+    layers: { layerId: string; name: string; moisturePercent: number; stayWetKg: number; staySolidsKg: number }[];
+    /** Whole-bin balances after the draw. */
+    stayWetKg: number;
+    staySolidsKg: number;
+    stayDryKg: number;
+  } | null;
   /** The bin's estimate before this movement: the hint beside a moisture field. */
   moistureEstimate?: OutputMoistureEstimate | null;
   /** What a count's readings reset: the same remaining stock at its previous estimate, then at the count. Removal re-estimates use reestimate. */

@@ -6,7 +6,7 @@ import { useOutputStockBalance, useOutputStockHistory, useOutputSubBins } from "
 import { STOCK_PART_MIN_KG } from "@/config/output-stock";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
-import { moistureRemovalCaption } from "@/lib/output-stock/moisture-guidance";
+import { moistureDrawCaption } from "@/lib/output-stock/moisture-guidance";
 import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
 import { ESTIMATED_WATER_LABEL, mixPileName, WET_STOCK_DEFINITION } from "@/lib/output-stock/labels";
 import { OutputStockHistory } from "./output-stock-history";
@@ -58,12 +58,12 @@ export function mixPileBands(layers: OutputSubBin[], dryKg: number | null, wetKg
 }
 
 /**
- * The newest removal that set the bin's moisture estimate, across the bin and
+ * The newest draw that set the bin's moisture estimate, across the bin and
  * its sub-bins; null when every estimate still rests on a count or on intake.
  */
-export function removalMoistureBasis(bases: readonly (MoistureBasis | null | undefined)[]): MoistureBasis | null {
-  const removals = bases.filter((basis): basis is MoistureBasis & { source: "removal" } => basis?.source === "removal");
-  return removals.reduce<(MoistureBasis & { source: "removal" }) | null>((newest, basis) => !newest || basis.at > newest.at ? basis : newest, null);
+export function drawMoistureBasis(bases: readonly (MoistureBasis | null | undefined)[]): MoistureBasis | null {
+  const draws = bases.filter((basis): basis is MoistureBasis & { source: "draw" } => basis?.source === "draw");
+  return draws.reduce<(MoistureBasis & { source: "draw" }) | null>((newest, basis) => !newest || basis.at > newest.at ? basis : newest, null);
 }
 
 /**
@@ -85,7 +85,7 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
   const layers = subBins.data?.subBins ?? [];
   const wetKg = preview.data?.beforeEstimatedWetKg ?? null;
   const dryKg = preview.data?.beforeDryKg ?? null;
-  const basisCaption = moistureRemovalCaption(removalMoistureBasis([preview.data?.moistureEstimate?.basis, ...layers.map((layer) => layer.basis)]), clock.timeZone);
+  const basisCaption = moistureDrawCaption(drawMoistureBasis([preview.data?.moistureEstimate?.basis, ...layers.map((layer) => layer.basis)]), clock.timeZone);
   const mixMoisture = mode === "mix" ? preview.data?.moistureEstimate?.moisturePercent ?? null : null;
   const ready = !!preview.data && !subBins.isLoading;
   // Shares the history modal's query, so opening it shows the same data at once.

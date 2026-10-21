@@ -16,7 +16,7 @@ vi.mock("./sub-bin-card", async (importOriginal) => ({ ...(await importOriginal<
   DetailsTooltip: ({ trigger }: { trigger: ReactNode }) => trigger, SubBinTooltip: ({ trigger }: { trigger: ReactNode }) => trigger }));
 
 import { SecondaryFigure } from "@/components/ui/secondary-figure";
-import { mixPileBands, OutputBinBalance, removalMoistureBasis } from "./output-bin-balance";
+import { mixPileBands, OutputBinBalance, drawMoistureBasis } from "./output-bin-balance";
 
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
 
@@ -37,9 +37,9 @@ it("reads dry biochar as the secondary figure under the wet estimate", async () 
   await act(async () => renderer.unmount());
 });
 
-it("says which removal set the bin's moisture, and stays quiet for counts and intake", async () => {
+it("says which draw set the bin's moisture, and stays quiet for counts and intake", async () => {
   state.wetKg = 110;
-  state.subBins = [{ ...subBin, basis: { source: "removal", at: "2026-10-20T12:00:00.000Z", kind: "loss" } }];
+  state.subBins = [{ ...subBin, basis: { source: "draw", at: "2026-10-20T12:00:00.000Z", kind: "loss" } }];
   let renderer = await render();
   expect(JSON.stringify(renderer.toJSON())).toContain("Moisture estimated from the lost mass of Oct 20");
   await act(async () => renderer.unmount());
@@ -49,11 +49,11 @@ it("says which removal set the bin's moisture, and stays quiet for counts and in
   await act(async () => renderer.unmount());
 });
 
-it("names the newest removal among the bin and its sub-bins", () => {
-  const old = { source: "removal", at: "2026-10-18T12:00:00.000Z", kind: "loss" } as const;
-  const recent = { source: "removal", at: "2026-10-20T12:00:00.000Z", kind: "delivery" } as const;
-  expect(removalMoistureBasis([old, null, recent, { source: "reading", at: "2026-10-21T12:00:00.000Z" }])).toBe(recent);
-  expect(removalMoistureBasis([null, undefined])).toBeNull();
+it("names the newest draw among the bin and its sub-bins", () => {
+  const old = { source: "draw", at: "2026-10-18T12:00:00.000Z", kind: "loss" } as const;
+  const recent = { source: "draw", at: "2026-10-20T12:00:00.000Z", kind: "delivery" } as const;
+  expect(drawMoistureBasis([old, null, recent, { source: "reading", at: "2026-10-21T12:00:00.000Z" }])).toBe(recent);
+  expect(drawMoistureBasis([null, undefined])).toBeNull();
 });
 
 it("shows the known dry biochar, never a placeholder, if a wet figure is ever missing", async () => {

@@ -20,7 +20,7 @@ import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit
 import { FormActions, FormEntitySelect, FormField, FormSection, FormSpine, makeCertFieldStatus, MoistureField, FieldErrorRow, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
-import { focusMoistureField } from "@/components/storage-locations/reestimate-notice";
+import { focusMoistureField, moistureFieldSelectors } from "@/components/storage-locations/reestimate-notice";
 import { showsReestimate } from "@/components/storage-locations/reestimate-flow";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import { TransportRoutePreview } from "@/components/transport-legs";
@@ -56,8 +56,6 @@ const SET_VALUE_OPTS = {
   shouldValidate: true,
 } as const;
 
-/** The single moisture field, or a split load's first sub-bin reading. */
-const DELIVERY_MOISTURE_SELECTOR = "#moistureContentPercent, input[id^='delivery-moisture-']";
 const ROUTE_EMPTY = "Select an order and enter the delivered wet mass to see the route.";
 
 const isDeliveryCertifyField = (field: string) =>
@@ -390,7 +388,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             {delivery && <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />}
             {stockPreview.isFetching && <p role="status" className="body-caption text-[var(--color-text-tertiary)]">Refreshing stock preview...</p>}
             {stockPreview.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{stockPreview.error.message}</p>}
-            {stockPreview.data && <OutputStockPreview variant="movement" hideBlockingMessage={deliveredWetMassError === blockingMessage || deliveryDateError === blockingMessage} preview={stockPreview.data} entry={{ kind: "delivery", wetMassKg: wetMass }} onMeasureAgain={() => focusMoistureField(DELIVERY_MOISTURE_SELECTOR)} />}
+            {stockPreview.data && <OutputStockPreview variant="movement" hideBlockingMessage={deliveredWetMassError === blockingMessage || deliveryDateError === blockingMessage} preview={stockPreview.data} entry={{ kind: "delivery", wetMassKg: wetMass }} onMeasureAgain={(layerId) => focusMoistureField(moistureFieldSelectors("delivery", "moistureContentPercent", layerId))} />}
           </div>
         </div>
       </FormSection>

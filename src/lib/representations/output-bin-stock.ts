@@ -4,9 +4,11 @@ import { OUTPUT_DRAW_ORDERS, type OutputDrawOrder } from "@/lib/output-stock/sto
 import { UNRESOLVED_STOCK_SENTENCES } from "@/lib/output-stock/layer-projection";
 import { publishKg, publishPercent } from "@/lib/output-stock/stock-precision";
 
+import { REESTIMATE_DRAW_KINDS } from "@/lib/output-stock/moisture-estimate";
+
 const moistureBasisSchema = z.object({
-  source: z.enum(["reading", "recorded", "removal"]).describe("A count, recorded intake, or removal that re-estimated remaining stock."),
-  kind: z.string().optional().describe("For a removal basis, the underlying movement kind, including when corrected."),
+  source: z.enum(["reading", "recorded", "draw"]).describe("A count, recorded intake, or draw that re-estimated remaining stock."),
+  kind: z.enum(REESTIMATE_DRAW_KINDS).optional().describe("For a draw basis, the underlying movement kind, including when corrected."),
   at: z.iso.datetime().describe("Moisture basis instant in UTC, RFC 3339."),
 }).nullable().describe("Source and instant of the moisture estimate, or null when unavailable.");
 const figuresShape = {

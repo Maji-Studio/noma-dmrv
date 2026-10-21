@@ -56,7 +56,7 @@ const ENTRY_VERB: Record<Exclude<StockEntryKind, "count">, string> = {
  * places reads as two separate problems, so the copy closest to the field wins
  * and the preview drops its own alert.
  */
-export function OutputStockPreview({ variant = "load", preview, entry, moreInfo, onMeasureAgain, renderBlocker, hideBlockingMessage = false }: { variant?: "movement" | "load"; preview: Preview; entry?: StockEntry; moreInfo?: ReactNode; onMeasureAgain?: () => void; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode; hideBlockingMessage?: boolean }) {
+export function OutputStockPreview({ variant = "load", preview, entry, moreInfo, onMeasureAgain, renderBlocker, hideBlockingMessage = false }: { variant?: "movement" | "load"; preview: Preview; entry?: StockEntry; moreInfo?: ReactNode; onMeasureAgain?: (layerId?: string) => void; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode; hideBlockingMessage?: boolean }) {
   const blockingMessage = hideBlockingMessage ? null : preview.blockingMessage;
   const backdated = backdatedNotice(preview);
   return (

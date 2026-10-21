@@ -585,13 +585,13 @@ it("publishes all eight location writes with child-specific precondition problem
 });
 
 
-it('publishes removal moisture bases with movement kind and date', () => {
+it('publishes draw moisture bases with movement kind and date', () => {
   let bases = 0;
   visit(document.components.schemas.output_bin_stock, node => {
     const properties = node.properties as Record<string, JsonSchema> | undefined;
     if (!properties?.source || !properties.at) return;
-    expect(properties.source.enum).toEqual(['reading', 'recorded', 'removal']);
-    expect(properties.kind).toMatchObject({ type: 'string' });
+    expect(properties.source.enum).toEqual(['reading', 'recorded', 'draw']);
+    expect(properties.kind).toMatchObject({ type: 'string', enum: ['loss', 'delivery', 'production_draw', 'product_draw'] });
     expect(properties.at).toMatchObject({ type: 'string', format: 'date-time' });
     bases++;
   });

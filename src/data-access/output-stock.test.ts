@@ -73,7 +73,7 @@ describe('batched stock read', () => {
 
   it.each([null, 'NaN', 'Infinity'])('reads an unresolved bin as unavailable while another bin stays readable (%s)', async dryKg => {
     const other = { ...bin, id: 'other' };
-    const read = reader([[storageLocations, [[bin, other]]], [productionRuns, [[{ ...run, dryKg }, { ...run, id: 'other-run', binId: 'other' }], [{ id: 'other-run', wet: '125.000' }]]]]);
+    const read = reader([[storageLocations, [[bin, other]]], [productionRuns, [[{ ...run, dryKg }, { ...run, id: 'other-run', binId: 'other' }], [{ id: 'other-run', wet: '125.000', recordedAt: new Date('2026-01-01T00:00:00.000Z') }]]]]);
     const stocks = await getOutputBinStocks(ctx, ['bin', 'other'], read.executor);
     expect(stocks.get('bin')).toEqual({ allLayersDryKg: null, availableDryKg: null, estimatedWetMassKg: null, estimatedMoisturePercent: null });
     expect(stocks.get('other')).toEqual({ allLayersDryKg: 100, availableDryKg: 100, estimatedWetMassKg: 125, estimatedMoisturePercent: 20 });

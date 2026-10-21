@@ -15,14 +15,11 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { OutputStockHistory } from "./output-stock-history";
 import { OutputStockPreview } from "./output-stock-preview";
-import { focusMoistureField } from "./reestimate-notice";
+import { focusMoistureField, moistureFieldSelectors } from "./reestimate-notice";
 import { showsReestimate } from "./reestimate-flow";
 import { SubBinDrawField } from "./sub-bin-draw-field";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { Notice } from "@/components/ui/notice";
-
-/** The single moisture field, or a split draw's first sub-bin reading. */
-const LOSS_MOISTURE_SELECTOR = "#stock-moisture, input[id^='stock-moisture-']";
 
 interface Props {
   storageLocationId: string;
@@ -97,7 +94,7 @@ export function OutputStockForm({ storageLocationId, facilityId, correction, onC
         {draw.query.error && <Notice tone="error">{draw.query.error.message}</Notice>}
         {preview.isFetching && <p role="status" className="body-caption text-[var(--color-text-secondary)]">Refreshing the stock preview</p>}
         {preview.error && <Notice tone="error">{preview.error.message}</Notice>}
-        {preview.data && <OutputStockPreview variant="movement" preview={preview.data} entry={{ kind: "loss", wetMassKg: input?.wetMassKg }} onMeasureAgain={() => focusMoistureField(LOSS_MOISTURE_SELECTOR)} moreInfo={<OutputStockHistory compact triggerLabel="Stock history" storageLocationId={storageLocationId} facilityId={facilityId} />} renderBlocker={blocker => blocker.entity === "binMovement" ? <OutputStockHistory key={blocker.id} storageLocationId={storageLocationId} facilityId={facilityId} movementId={blocker.id} triggerLabel={`Open ${blocker.code}`} /> : undefined} />}
+        {preview.data && <OutputStockPreview variant="movement" preview={preview.data} entry={{ kind: "loss", wetMassKg: input?.wetMassKg }} onMeasureAgain={(layerId) => focusMoistureField(moistureFieldSelectors("stock", "stock-moisture", layerId))} moreInfo={<OutputStockHistory compact triggerLabel="Stock history" storageLocationId={storageLocationId} facilityId={facilityId} />} renderBlocker={blocker => blocker.entity === "binMovement" ? <OutputStockHistory key={blocker.id} storageLocationId={storageLocationId} facilityId={facilityId} movementId={blocker.id} triggerLabel={`Open ${blocker.code}`} /> : undefined} />}
       </FormSection>
       <FormSection title={correction ? "Why corrected" : "Reason"} fields={["reason"]}>
         <FormField id="stock-reason" label={correction ? "Why corrected" : "Reason"} required error={errors.reason?.message}>

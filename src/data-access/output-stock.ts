@@ -196,9 +196,9 @@ async function readMoistureRows(ctx: OrgContext, bins: readonly Pick<OutputBinRe
   const productBinIds = bins.filter(bin => bin.type === 'product_bin').map(bin => bin.id);
   const binIds = bins.map(bin => bin.id);
   const [runWet, productWet, readings, removals, sourceDraws, corrections, modes, modeChanges] = await Promise.all([
-    biocharBinIds.length ? reader.select({ id: productionRuns.id, wet: sql<string | null>`${productionRuns.biocharOutputKg}::text` }).from(productionRuns)
+    biocharBinIds.length ? reader.select({ id: productionRuns.id, recordedAt: productionRuns.createdAt, wet: sql<string | null>`${productionRuns.biocharOutputKg}::text` }).from(productionRuns)
       .where(and(eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.biocharStorageLocationId, biocharBinIds))) : [],
-    productBinIds.length ? reader.select({ id: biocharProducts.id, wet: sql<string | null>`(${biocharProducts.massKg} + coalesce(${biocharProducts.waterAddedKg}, 0))::text` }).from(biocharProducts)
+    productBinIds.length ? reader.select({ id: biocharProducts.id, recordedAt: biocharProducts.createdAt, wet: sql<string | null>`(${biocharProducts.massKg} + coalesce(${biocharProducts.waterAddedKg}, 0))::text` }).from(biocharProducts)
       .where(and(eq(biocharProducts.organizationId, ctx.organizationId), inArray(biocharProducts.storageLocationId, productBinIds), notInArray(biocharProducts.id, deletedProductIds(ctx, reader)))) : [],
     // Count readings reset the layer. Removal re-estimates use the allocation's own reading below.
     reader.select({ reading: outputStockMoistureReadings, sequence: binMovements.postingSequence }).from(outputStockMoistureReadings)
@@ -207,7 +207,7 @@ async function readMoistureRows(ctx: OrgContext, bins: readonly Pick<OutputBinRe
     reader.select({ allocation: { biocharProductId: outputStockAllocations.biocharProductId, productionRunId: outputStockAllocations.productionRunId, storageLocationId: outputStockAllocations.sourceStorageLocationId,
       movementId: outputStockAllocations.movementId, wetMassKg: outputStockAllocations.wetMassKg, reversesAllocationId: outputStockAllocations.reversesAllocationId,
       targetBiocharProductId: outputStockAllocations.targetBiocharProductId, basisSnapshot: outputStockAllocations.basisSnapshot },
-    sequence: binMovements.postingSequence, occurredAt: binMovements.occurredAt, kind: binMovements.outputKind, input: binMovements.inputSnapshot }).from(outputStockAllocations)
+    sequence: binMovements.postingSequence, postedAt: binMovements.createdAt, occurredAt: binMovements.occurredAt, kind: binMovements.outputKind, input: binMovements.inputSnapshot }).from(outputStockAllocations)
       .innerJoin(binMovements, and(eq(binMovements.id, outputStockAllocations.movementId), eq(binMovements.organizationId, ctx.organizationId)))
       .where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), inArray(outputStockAllocations.sourceStorageLocationId, binIds))),
     // A product draw saved before the ledger: its source row is the only record of the wet mass it took.
@@ -222,7 +222,7 @@ async function readMoistureRows(ctx: OrgContext, bins: readonly Pick<OutputBinRe
     reader.select({ binId: binMovements.storageLocationId, kind: binMovements.outputKind, at: binMovements.occurredAt, sequence: binMovements.postingSequence }).from(binMovements)
       .where(and(eq(binMovements.organizationId, ctx.organizationId), inArray(binMovements.storageLocationId, binIds), inArray(binMovements.outputKind, ['merge', 'split']))),
   ]);
-  return { modes, modeChanges, recordedWetKg: new Map([...runWet, ...productWet].map(row => [row.id, row.wet])), readings, removals, sourceDraws, corrections };
+  return { modes, modeChanges, recordedAt: new Map([...runWet, ...productWet].map(row => [row.id, row.recordedAt.toISOString()])), recordedWetKg: new Map([...runWet, ...productWet].map(row => [row.id, row.wet])), readings, removals, sourceDraws, corrections };
 }
 
 function moistureRowsFor(bin: Pick<OutputBinRef, 'id'>, rows: Awaited<ReturnType<typeof readMoistureRows>>, ignoreMovementId?: string) {
@@ -233,18 +233,18 @@ function moistureRowsFor(bin: Pick<OutputBinRef, 'id'>, rows: Awaited<ReturnType
     return reading.storageLocationId === bin.id && layerId ? [{ layerId, movementId: reading.movementId, moisturePercent: reading.moisturePercent, solidsBasisKg: reading.solidsBasisKg, occurredAt: reading.occurredAt, sequence }] : [];
   });
   const ledger = rows.removals.filter(({ allocation }) => allocation.storageLocationId === bin.id);
-  const removals: WetRemovalRow[] = ledger.flatMap(({ allocation, sequence, occurredAt, kind, input }) => {
+  const removals: WetRemovalRow[] = ledger.flatMap(({ allocation, sequence, postedAt, occurredAt, kind, input }) => {
     const layerId = allocation.biocharProductId ?? allocation.productionRunId;
     return layerId ? [{ layerId, movementId: allocation.movementId, wetMassKg: allocation.wetMassKg, reversesAllocationId: allocation.reversesAllocationId, sequence,
       solidsKg: allocation.basisSnapshot.solidsKg, wetShareKg: allocation.basisSnapshot.wetShareKg,
       moisturePercent: allocation.basisSnapshot.readingPercent == null ? null : Number(allocation.basisSnapshot.readingPercent),
-      occurredAt: occurredAt ?? undefined, kind: kind === 'replacement' && typeof input?.kind === 'string' ? input.kind : kind ?? undefined }] : [];
+      occurredAt: occurredAt ?? undefined, postedAt, kind: kind === 'replacement' && typeof input?.kind === 'string' ? input.kind : kind ?? undefined }] : [];
   });
   removals.push(...preLedgerWetRemovals(rows.sourceDraws.filter(draw => draw.binId === bin.id), ledger.map(({ allocation }) => allocation)));
   const modeChanges: StockModeChange[] = rows.modeChanges.filter(row => row.binId === bin.id)
     .map(row => ({ to: row.kind === 'merge' ? 'mix' : 'split', at: row.at!.toISOString(), sequence: row.sequence }));
   return { stockMode: rows.modes.find(row => row.id === bin.id)?.stockMode, modeChanges,
-    recordedWetKg: rows.recordedWetKg, readings, removals, reversedMovementIds };
+    recordedWetKg: rows.recordedWetKg, recordedAt: rows.recordedAt, readings, removals, reversedMovementIds };
 }
 
 /**

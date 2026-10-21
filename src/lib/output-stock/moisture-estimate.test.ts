@@ -129,7 +129,7 @@ describe('removals keep the bin moisture', () => {
     expect(estimate.solidsKg).toBeCloseTo(100, 9);
     expect(estimate.wetKg).toBe(250);
     expect(estimate.moisturePercent).toBeCloseTo(60, 9);
-    expect(estimate.basis).toEqual({ source: 'removal', at: T1, kind: 'loss' });
+    expect(estimate.basis).toEqual({ source: 'draw', at: T1, kind: 'loss' });
   });
 
   it('counts a posted removal whatever time is asked, since the remaining solids already reflect it', () => {
@@ -247,7 +247,7 @@ describe('wet below solids re-estimate', () => {
   it.each([['fifo', false], ['pro_rata', false], ['fifo', true]] as const)('re-estimates 55 kg dry at 50%% as 110 kg wet (%s, ordered %s)', (policy, split) => {
     const { bases } = draw(50, policy, split);
     expect(estimateStock(bases, NOW)).toEqual({ wetKg: 110, solidsKg: 55, moisturePercent: 50,
-      basis: { source: 'removal', at: T1, kind: 'loss' } });
+      basis: { source: 'draw', at: T1, kind: 'loss' } });
     if (policy === 'pro_rata') for (const basis of bases) expect(estimateStock([basis], NOW).wetKg).toBe(55);
   });
 
@@ -272,7 +272,7 @@ describe('wet below solids re-estimate', () => {
     const after = withMovement(bases.map(b => ({ ...b, remainingSolidsKg: next.remainingLayers[0].remainingSolidsKg! })),
       { readings: [], removals: planWetRemovals(next) }, T0, BigInt(4), 'delivery');
     after[0].removals = [...after[0].removals].reverse();
-    expect(estimateStock(after, NOW)).toEqual({ wetKg: 100, solidsKg: 47, moisturePercent: 50, basis: { source: 'removal', at: T1, kind: 'loss' } });
+    expect(estimateStock(after, NOW)).toEqual({ wetKg: 100, solidsKg: 47, moisturePercent: 50, basis: { source: 'draw', at: T1, kind: 'loss' } });
   });
 
   it('lets a later posted count override the re-estimate even when backdated', () => {
@@ -294,7 +294,7 @@ it('re-estimates only the partial sub-bin after emptying another at its own mois
   const after = withMovement(bases, { readings: [], removals: planWetRemovals(plan) }, T1, BigInt(3), 'delivery');
   expect(estimateStock([after[0]], NOW)).toMatchObject({ wetKg: 0, solidsKg: 0, basis: null });
   expect(estimateStock([after[1]], NOW)).toEqual({ wetKg: 110, solidsKg: 55, moisturePercent: 50,
-    basis: { source: 'removal', at: T1, kind: 'delivery' } });
+    basis: { source: 'draw', at: T1, kind: 'delivery' } });
 });
 
 it('compares wet with all solids in a blend, not just its dry biochar', () => {
