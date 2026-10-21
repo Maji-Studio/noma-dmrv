@@ -28,7 +28,7 @@ import { facilityTimeCue } from "@/lib/date-utils";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FlaskIcon, FireIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
@@ -111,10 +111,6 @@ export function SampleForm({
   const formId = useId();
   const isEditMode = !!sample;
   const { facilityId: contextFacilityId } = useFacilityContext();
-
-  // Set once the operator presses or types in the Credit batch select: before that, a value
-  // arriving through its auto-select is the form's default.
-  const batchPickedByUser = useRef(false);
 
   const defaultValues = {
       creditBatchId: preselectedCreditBatchId || sample?.creditBatchId || "",
@@ -215,11 +211,14 @@ export function SampleForm({
     placeholderTimeZone: contextClock.timeZone,
     cue: facilityTimeCue,
   });
+  // resetField only acts on a registered field; this one has no input of its own.
+  useEffect(() => {
+    register("durabilityOption");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     // Derived from the batch, not typed: it becomes the form's baseline, so an
     // untouched form stays clean (no discard prompt on Cancel).
-    // resetField only acts on a registered field; this one has no input of its own.
-    register("durabilityOption");
     resetField("durabilityOption", { defaultValue: batchDurabilityOption ?? null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batchDurabilityOption]);
@@ -356,27 +355,19 @@ export function SampleForm({
                   name="creditBatchId"
                   control={control}
                   render={({ field }) => (
-                    <div
-                      className="contents"
-                      onPointerDownCapture={() => { batchPickedByUser.current = true; }}
-                      onKeyDownCapture={() => { batchPickedByUser.current = true; }}
-                    >
                     <EntitySelect
                       id="creditBatchId"
                       entityType="creditBatch"
                       value={field.value}
-                      onChange={(id) => {
-                        field.onChange(id);
-                        // The select's own pick of a facility's only batch is a default, not an edit.
-                        if (!batchPickedByUser.current) resetField("creditBatchId", { defaultValue: id });
-                      }}
+                      onChange={field.onChange}
+                      // The select's own pick of a facility's only batch is a default, not an edit.
+                      onAutoSelect={(id) => resetField("creditBatchId", { defaultValue: id })}
                       placeholder={contextFacilityId ? "Select a credit batch..." : "Select a facility first"}
                       disabled={isSubmitting || !!preselectedCreditBatchId || !contextFacilityId}
                       error={!!errors.creditBatchId}
                       filterBy={{ facilityId: contextFacilityId ?? NO_FACILITY_SENTINEL }}
                       autoSelectSingle
                     />
-                    </div>
                   )}
                 />
               </FormField>

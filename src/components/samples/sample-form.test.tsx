@@ -26,9 +26,9 @@ vi.mock("@/hooks/use-facility-context", () => ({
 }));
 vi.mock("@/components/forms", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/components/forms")>(),
-  EntitySelect: ({ id, value, onChange, disabled }: { id: string; value: string; onChange: (value: string) => void; disabled: boolean }) => {
+  EntitySelect: ({ id, value, onChange, onAutoSelect, disabled }: { id: string; value: string; onChange: (value: string) => void; onAutoSelect?: (value: string) => void; disabled: boolean }) => {
     // The real select picks a facility's only batch by itself (autoSelectSingle).
-    useEffect(() => { if (autoSelect.on && !value) onChange("00000000-0000-4000-8000-000000000001"); }, [value, onChange]);
+    useEffect(() => { if (autoSelect.on && !value) (onAutoSelect ?? onChange)("00000000-0000-4000-8000-000000000001"); }, [value, onChange, onAutoSelect]);
     return (
     <select id={id} value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>
       <option value="">Choose a batch</option>
@@ -211,7 +211,6 @@ describe("SampleForm unsaved changes", () => {
     loadBatch("1000_year");
     const { states, container } = dirtyStates(<SampleForm onSubmit={vi.fn()} onCancel={vi.fn()} />);
     const select = input(container, "creditBatchId");
-    fireEvent.pointerDown(select);
     fireEvent.change(select, { target: { value: "00000000-0000-4000-8000-000000000001" } });
     await waitFor(() => expect(states.at(-1)).toBe(true));
   });
