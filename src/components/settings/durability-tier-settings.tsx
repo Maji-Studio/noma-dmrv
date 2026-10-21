@@ -26,6 +26,7 @@ import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
 import type { Facility } from "@/db/schema";
 import { useUpdateFacility } from "@/hooks/use-facilities";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { durabilityOptions, type DurabilityOption } from "@/schemas/facilities";
 
@@ -99,7 +100,8 @@ function DurabilityTierForm({
   const changed = tier !== savedTier;
   const blocked = changed && !!blockedReason;
 
-  const onSubmit = handleSubmit(async ({ durabilityOption }) => {
+  const latched = useLatchedSubmit();
+  const onSubmit = latched(handleSubmit(async ({ durabilityOption }) => {
     if (blockedReason) return;
     setServerError("");
     try {
@@ -115,7 +117,7 @@ function DurabilityTierForm({
     } catch (error) {
       setServerError(toSaveErrorMessage(error, "The durability tier was not saved. Try again."));
     }
-  });
+  }));
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-16">
