@@ -10,7 +10,7 @@ export const REMOVAL_TEMPLATE_BLOCKERS = {
   templateNotFullyRead: "Template not fully read. Try again.",
   unsupportedSequestration: "This template uses an unsupported storage component.",
   missingFixedDatapoint: "Set each value in the Isometric template editor before submitting.",
-  templateLinesNeedReview: "This Removal template has components to decide. Decide them in Removal templates.",
+  templateLinesNeedReview: "This Removal template has components to decide. Answer them in Settings, Removal template.",
 } as const;
 /**
  * Landing line for a deep link to a credit batch's template block when the
@@ -32,7 +32,7 @@ export type TemplateRoutedBlockerCode = RemovalTemplateBlockerCode | TemplateLin
 /**
  * Where an operator settles a template blocker. The one routing table:
  * - `templateSetup`: the facility template setup in Settings (Set template);
- * - `templateLineReview`: lines without a decision (Decide components);
+ * - `templateLineReview`: lines without a decision (Answer in Settings);
  * - `templateLines`: decided lines or a read problem (Open Removal templates);
  * - `templateReplacement`: a decided line only another template can fill
  *   (Set template in Settings). Set as data by the line

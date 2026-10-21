@@ -55,8 +55,8 @@ describe("SubmissionChecks", () => {
     expect(html).toContain('href="/settings/removal-templates?facility=facility-1&amp;setup=template"');
     expect(html).toContain(">Set template</a>");
     expect(html).not.toContain("Switch template");
-    expect(html).toContain('href="/settings/removal-templates?facility=facility-1"');
-    expect(html).toContain(">Decide components</a>");
+    expect(html).toContain('href="/settings/removal-templates?facility=facility-1&amp;setup=template"');
+    expect(html).toContain(">Answer in Settings</a>");
     expect(html).toContain("Template cannot be used");
     expect(html).toContain("Template components not ready");
     expect(html).not.toContain(">Open settings</a>");
@@ -285,7 +285,7 @@ it.each(["templateNotFullyRead", "forbiddenLine", "lineNeedsSetup", "lineHasNoSo
   });
   const html = renderToStaticMarkup(<SubmissionChecks checks={checks} facilityId="facility-1" />);
   expect(html).toContain(">Open Removal templates</a>");
-  expect(html).not.toContain(">Decide components</a>");
+  expect(html).not.toContain(">Answer in Settings</a>");
 });
 
 it.each([LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE])("links replacement guidance to the Set template setup in Settings: %s", (message) => {
@@ -300,7 +300,7 @@ it.each([LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE])("links re
     const html = renderToStaticMarkup(<SubmissionChecks checks={checks} facilityId="facility-1" creditBatches={creditBatches} />);
     expect(html).toContain(">Set template</a>");
     expect(html).toContain('href="/settings/removal-templates?facility=facility-1&amp;setup=template"');
-    expect(html).not.toContain(">Decide components</a>");
+    expect(html).not.toContain(">Answer in Settings</a>");
   }
 });
 

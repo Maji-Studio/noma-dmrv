@@ -99,7 +99,7 @@ export function batchHealthFixLinkFor(
     case "templateLines":
       return { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: removalTemplatesSettingsHref(facilityId) };
     case "templateLineReview":
-      return { label: DECIDE_LINES_LINK_LABEL, href: removalTemplatesSettingsHref(facilityId) };
+      return { label: DECIDE_LINES_LINK_LABEL, href: removalTemplateSetupHref(facilityId) };
     case "batchDetails":
       return {
         label: BATCH_DETAILS_FIX_LABEL,

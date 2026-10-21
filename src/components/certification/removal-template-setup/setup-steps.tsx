@@ -78,6 +78,7 @@ export function TemplateStep({ data, templateId, onChange, invalid, notOffered, 
           error={invalid && !templateId}
           options={options}
           singleColumn
+          radioIndicator
         />
       )}
     </div>
@@ -111,6 +112,7 @@ function DecisionBlock({ decision, number, value, taken, invalid, onChange }: {
         onValueChange={onChange}
         error={invalid && !value}
         stackNarrow
+        radioIndicator
         options={decision.options.map((option) => ({
           value: option.id,
           title: optionLabel(option),

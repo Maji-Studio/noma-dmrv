@@ -142,7 +142,7 @@ describe("SubmissionSummary", () => {
     expect(html).toContain("Record Sample moisture");
     expect(html.split("Set template")).toHaveLength(2);
     expect(html).not.toContain("#batch-details");
-    expect(html).not.toContain("Decide components");
+    expect(html).not.toContain("Answer in Settings");
   });
 
   it("sends a per-record blocker to the records list, not a create intent, with one member batch", () => {

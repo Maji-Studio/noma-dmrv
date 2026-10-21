@@ -149,7 +149,7 @@ it.each(["incompatible-carried", "duplicate-source"] as const)("routes %s contra
   const batchCheck = health.checks.find((check) => check.key === "templateLines" && check.fixTarget === "templateLineReview")!;
   expect(batchCheck.status).toBe("unmet");
   expect(batchHealthFixLinkFor(batchCheck, "facility-1", "batch-1")).toEqual({
-    label: "Decide components", href: removalTemplatesSettingsHref("facility-1"),
+    label: "Answer in Settings", href: removalTemplateSetupHref("facility-1"),
   });
 });
 

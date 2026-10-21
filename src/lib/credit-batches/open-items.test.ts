@@ -256,9 +256,9 @@ describe("buildCreditBatchOpenItems", () => {
       : { href: batchHealthFixLinkFor({ key: "emissions", fixTarget }, "facility", "batch").href });
   });
 
-  it("gives a member no Decide components link, only who decides the components", () => {
+  it("gives a member no Answer in Settings link, only who decides the components", () => {
     const check = { key: "templateLines" as const, label: "Components decided", requirementLabel: "Components decided", unmetLabel: "5 components to decide",
-      status: "unmet" as const, fixTarget: "templateLineReview" as const, linesToDecide: 5, detail: "Decide them in Removal templates." };
+      status: "unmet" as const, fixTarget: "templateLineReview" as const, linesToDecide: 5, detail: "Answer them in Settings, Removal template." };
     const line = {
       componentId: "diesel", displayName: "Diesel", state: "needsReview" as const, groupKey: "production", groupName: "Production", groupPosition: 0, position: 0,
       description: null, entryPolicy: "additive" as const, records: null,
@@ -269,12 +269,12 @@ describe("buildCreditBatchOpenItems", () => {
 
     const member = buildCreditBatchOpenItems({ ...input, canManage: false });
     expect(member.blocking[0]).toMatchObject({
-      title: "5 components to decide", detail: "An Admin decides them in Removal templates.", target: null,
+      title: "5 components to decide", detail: "An Admin answers them in Settings, Removal template.", target: null,
     });
-    expect(member.check[0]).toMatchObject({ detail: "An Admin decides it in Removal templates.", target: null });
+    expect(member.check[0]).toMatchObject({ detail: "An Admin answers it in Settings, Removal template.", target: null });
 
     const owner = buildCreditBatchOpenItems({ ...input, canManage: true });
-    expect(owner.blocking[0]).toMatchObject({ detail: "Decide them in Removal templates." });
+    expect(owner.blocking[0]).toMatchObject({ detail: "Answer them in Settings, Removal template." });
     expect(owner.blocking[0].target).toEqual({ href: batchHealthFixLinkFor(check, "facility", "batch").href });
     expect(owner.check[0].target).toEqual({ href: batchHealthFixLinkFor({ key: "emissions", fixTarget: "templateLineReview" }, "facility", "batch").href });
   });

@@ -52,7 +52,7 @@ describe("deriveBatchHealth", () => {
     expect(links).toEqual([
       { label: "Set template", href: "/settings/removal-templates?facility=facility-1&setup=template" },
       { label: "Open Removal templates", href: "/settings/removal-templates?facility=facility-1" },
-      { label: "Decide components", href: "/settings/removal-templates?facility=facility-1" },
+      { label: "Answer in Settings", href: "/settings/removal-templates?facility=facility-1&setup=template" },
     ]);
     expect(result.checks.filter((check) => check.key === "templateSet" || check.key === "templateLines")
       .map(certCheckLabel)).toEqual(["No Removal template chosen", "Template not fully read", "Template components not ready"]);
@@ -496,7 +496,7 @@ it("keeps an undecided check separate from a decided line it cannot fill, and co
     templateBlockers: [removalTemplateBlocker("templateLinesNeedReview"), removalTemplateBlocker("forbiddenLine")],
   })).checks.filter((check) => check.key === "templateLines");
   expect(checks.map(certCheckLabel)).toEqual(["2 components to decide", "Template components not ready"]);
-  expect(batchHealthFixLinkFor(checks[0], "facility-1", "batch-1").label).toBe("Decide components");
+  expect(batchHealthFixLinkFor(checks[0], "facility-1", "batch-1").label).toBe("Answer in Settings");
   expect(batchHealthFixLinkFor(checks[1], "facility-1", "batch-1").label).toBe("Open Removal templates");
 });
 

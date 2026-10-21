@@ -7,7 +7,7 @@
  */
 import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
 import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
-import type { RemovalTemplateSetupPlan, SetupAssignment, SetupDecision, SetupOption } from "./removal-template-setup-plan";
+import type { RemovalTemplateSetupPlan, SetupDecision, SetupOption } from "./removal-template-setup-plan";
 import { sourcesTakenElsewhere } from "./removal-template-setup-plan";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "./removal-template-blockers";
 import { SOURCE_LABELS } from "./removal-template-source-labels";
@@ -104,11 +104,6 @@ export function optionSource(option: SetupOption): AutomaticSourceId | undefined
 export function optionLabel(option: SetupOption): string {
   if (option.id === "entry") return option.label === "Entry" ? ENTRY_LABEL : "Neither, entry";
   return SOURCE_LABELS[option.label as AutomaticSourceId] ?? option.label;
-}
-
-export function assignmentFill(assignment: SetupAssignment | undefined): string {
-  if (assignment?.scope === "forbidden") return PROJECT_LABEL;
-  return assignment?.automaticSource ? sourceLabel(assignment.automaticSource) : ENTRY_LABEL;
 }
 
 export function decisionQuestion(decision: SetupDecision): string {

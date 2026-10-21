@@ -12,7 +12,7 @@ import { ArrowUpRightIcon, ClockIcon, FileIcon, PlusIcon, WarningIcon } from "@p
 import { ServerError } from "@/components/forms/server-error";
 import { Button, Notice } from "@/components/ui";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
-import { removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
+import { removalTemplateSetupHref, removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
 import { cn } from "@/lib/utils";
 import { EntryFileUpload, useEntryFiles } from "./emission-entry-files";
 import {
@@ -244,16 +244,16 @@ export function NothingYet({ line, className }: { line: EmissionLine; className?
   return <p className={cn("body-small text-[var(--color-text-tertiary)]", className)}>{text}</p>;
 }
 
-/** "Decide components" only for a line without a decision; any other template problem opens Removal templates. */
+/** "Answer in Settings" only for a line without a decision; any other template problem opens Removal templates. */
 function TemplateReviewLink({ scope, undecided }: { scope: EmissionBatchScope; undecided: boolean }) {
   return (
-    <Link href={removalTemplatesSettingsHref(scope.facilityId)} className="body-small font-medium underline underline-offset-4">
+    <Link href={undecided ? removalTemplateSetupHref(scope.facilityId) : removalTemplatesSettingsHref(scope.facilityId)} className="body-small font-medium underline underline-offset-4">
       {undecided ? DECIDE_LINES_LINK_LABEL : OPEN_REMOVAL_TEMPLATES_LINK_LABEL}
     </Link>
   );
 }
 
-/** A decided line noma cannot fill: nothing to decide, so no "Decide components". */
+/** A decided line noma cannot fill: nothing to decide, so no "Answer in Settings". */
 export function SetupNotice({ scope }: { scope: EmissionBatchScope }) {
   return <Notice tone="info" action={<TemplateReviewLink scope={scope} undecided={false} />}>{NEEDS_SETUP_COPY}</Notice>;
 }
@@ -262,7 +262,7 @@ export function ReviewNotice({ line, scope }: { line: EmissionLine; scope: Emiss
   const undecided = line.blocker?.code === "lineNeedsReview" && line.blocker.fixTarget === "templateLineReview";
   return (
     <Notice tone="warning" action={<TemplateReviewLink scope={scope} undecided={undecided} />}>
-      {line.blocker?.message ?? "This component has no decision yet. An Admin decides it in Removal templates."}
+      {line.blocker?.message ?? "This component has no decision yet. An Admin answers it in Settings, Removal template."}
     </Notice>
   );
 }

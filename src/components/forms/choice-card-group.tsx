@@ -58,6 +58,8 @@ export interface ChoiceCardGroupProps {
   stackNarrow?: boolean;
   /** One card per line at every width, for a list of long choices read top to bottom. */
   singleColumn?: boolean;
+  /** Draw a radio circle at the left of each card (empty, or filled when picked) instead of the check glyph. */
+  radioIndicator?: boolean;
 }
 
 /** Width of the group at which each column count starts. Cards keep about 176px. */
@@ -102,6 +104,7 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
       stackArt = false,
       stackNarrow = false,
       singleColumn = false,
+      radioIndicator = false,
       ...aria
     },
     ref,
@@ -162,6 +165,19 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
                       error && "border-[var(--color-signal-red)]",
                     )}
                   >
+                    {radioIndicator && (
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "flex size-16 shrink-0 items-center justify-center rounded-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)]",
+                          "group-has-[input:checked]:border-[var(--color-interaction)]",
+                          "group-has-[input:disabled]:border-[var(--color-border-secondary)] group-has-[input:disabled]:bg-[var(--color-background-medium)]",
+                          "forced-colors:group-has-[input:checked]:border-[Highlight]",
+                        )}
+                      >
+                        <span className="size-8 rounded-full bg-[var(--color-interaction)] opacity-0 group-has-[input:checked]:opacity-100 forced-colors:bg-[Highlight]" />
+                      </span>
+                    )}
                     {option.art && (
                       <span
                         aria-hidden
@@ -190,12 +206,12 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
                         </span>
                       )}
                     </span>
-                    <span
+                    {!radioIndicator && <span
                       aria-hidden
                       className="absolute right-8 top-8 flex size-16 items-center justify-center rounded-full bg-[var(--color-interaction)] opacity-0 group-has-[input:checked]:opacity-100 text-[var(--color-background-white)] forced-colors:bg-[Highlight] forced-colors:text-[HighlightText]"
                     >
                       <CheckIcon size={10} weight="bold" />
-                    </span>
+                    </span>}
                   </span>
                 </label>
               );

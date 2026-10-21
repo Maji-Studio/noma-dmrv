@@ -10,7 +10,8 @@
  * here once: its own Notice when the pin is missing, else a neutral line.
  *
  * While the pinned template has components to decide, every role sees it here with
- * the count the Components decided check uses (#1201).
+ * the count the Components decided check uses (#1201); Admins also get an
+ * "Answer in Settings" link to the setup's Check step with this template picked.
  */
 "use client";
 
@@ -23,7 +24,7 @@ import { useFacilityCertifierSummary, useIsometricProjectTemplates } from "@/hoo
 import { useCreditBatch } from "@/hooks/use-credit-batches";
 import { LOAD_FAILED, NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
 import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
-import { removalTemplateSetupHref } from "@/lib/certification/links";
+import { DECIDE_LINES_LINK_LABEL, removalTemplateSetupHref } from "@/lib/certification/links";
 import { linesDecidedByAdmin, linesToDecideLabel } from "@/lib/certification/requirement-labels";
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { RawIdentifiers } from "@/components/certification/removal-template-mapping-view";
@@ -134,7 +135,17 @@ export function CreditBatchRemovalTemplate({
         </Notice>
       )}
       {linesToDecide > 0 && pinnedId && (
-        <Notice tone="warning">
+        <Notice
+          tone="warning"
+          action={canManage ? (
+            <Link
+              href={removalTemplateSetupHref(batch.facilityId, { templateId: pinnedId, step: "check" })}
+              className="inline-flex min-h-44 items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
+            >
+              {DECIDE_LINES_LINK_LABEL}
+            </Link>
+          ) : undefined}
+        >
           {linesToDecideNoticeText(linesToDecide, canManage, inRemoval)}
         </Notice>
       )}

@@ -76,21 +76,23 @@ describe("CreditBatchRemovalTemplate", () => {
     it("tells a member who decides them, with no link", () => {
       mocks.linesToDecide = 17;
       mount(false);
-      expect(screen.getByText(`${LEAD} An Admin decides them in Removal templates.`)).toBeTruthy();
-      expect(screen.queryByRole("link", { name: "Decide components" })).toBeNull();
+      expect(screen.getByText(`${LEAD} An Admin answers them in Settings, Removal template.`)).toBeTruthy();
+      expect(screen.queryByRole("link", { name: "Answer in Settings" })).toBeNull();
     });
 
-    it("gives Admins the reason with no Decide components link", () => {
+    it("gives Admins an Answer in Settings link to the Check step with this template picked", () => {
       mocks.linesToDecide = 17;
       mount(true);
       expect(screen.getByText(LEAD)).toBeTruthy();
-      expect(screen.queryByRole("link", { name: "Decide components" })).toBeNull();
+      expect(screen.getByRole("link", { name: "Answer in Settings" }).getAttribute("href")).toBe(
+        "/settings/removal-templates?facility=facility-1&setup=check&template=rvt_new",
+      );
     });
 
     it("says another Removal once a Removal holds the batch", () => {
       mocks.linesToDecide = 1;
       mount(false, true, undefined, true);
-      expect(screen.getByText("1 component to decide, so this credit batch can't go into another Removal. An Admin decides it in Removal templates.")).toBeTruthy();
+      expect(screen.getByText("1 component to decide, so this credit batch can't go into another Removal. An Admin answers it in Settings, Removal template.")).toBeTruthy();
       cleanup();
       mocks.linesToDecide = 17;
       mount(true, false, undefined, true);
