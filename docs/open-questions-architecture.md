@@ -18,6 +18,14 @@ these areas; the entry rules and invariants live in
   attempts, tokens and assertions in one statement each, unlike the bounded
   batches of the other purge helpers. Volumes are small before production; batch
   it before connections are on in production (PR #1161 review round 2).
+- **`api/consent-subset-reauthorize`:** `src/lib/auth/oauth-hooks.ts:oauthBefore`
+  forces consent on every client connect (#1330), so a re-authorize that asks for
+  fewer scopes than are stored replaces the consent with the smaller set on Allow.
+  The provider refuses submitting scopes the request did not ask for, and the
+  authorize hook runs before the organization, so the grant, is known. claude.ai
+  requests every scope, so it does not hit this today. Options: skip forcing
+  consent when the request is a strict subset of the stored consent (needs the
+  grant at authorize entry), or accept it.
 - **`api/dpop`:** `src/lib/auth/oauth-request-policy.ts:guardOAuthTokenInput`
   refuses proofs and `src/lib/auth/oauth-context.ts:resolveOAuthContext` refuses
   sender-bound rows. Full DPoP needs proof, nonce and replay validation before
