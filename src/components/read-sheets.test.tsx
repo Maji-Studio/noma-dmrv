@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+vi.mock("@/hooks/use-emission-entries", () => ({ useBatchEmissionLines: () => ({ data: [], isLoading: false, error: null }) }));
 import { TEST_SITE_POSITION } from "../../tests/helpers/test-org";
 /**
  * Every read sheet: each read-section builder renders through the shared
@@ -154,7 +155,7 @@ describe("read sheets", () => {
   it.each([
     { name: "formulation", keys: ["name", "Blend composition by volume", "description"], first: "Formulation name", last: "Description" },
     { name: "reactor", keys: ["identifier", "Reactor configuration"], first: "Identifier", last: "Nominal throughput (tph)" },
-    { name: "credit batch", keys: ["Certification progress", "Removal template", "Batch definition", "Production runs", "notes"], first: "Feedstock type", last: "Notes" },
+    { name: "credit batch", keys: ["Certification progress", "Removal template", "Batch definition", "Production runs", "emissions", "notes"], first: "Feedstock type", last: "Notes" },
   ])("keeps $name read groups and field order without generic headings", ({ name, keys, first, last }) => {
     const { sections } = READ_SECTION_CASES.find(entry => entry.name === name)!;
     expect(sections.map(section => section.id ?? section.title)).toEqual(keys);

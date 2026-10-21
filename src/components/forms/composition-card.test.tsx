@@ -46,6 +46,16 @@ describe("CompositionCard", () => {
     expect(screen.queryByText("What the bin holds.")).toBeNull();
   });
 
+  it("returns focus to the (i) when Escape closes its panel", async () => {
+    render(<Block />);
+    const info = screen.getByRole("button", { name: "About Bin stock" });
+    fireEvent.click(info);
+    await screen.findByText("Batch ledger");
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByText("Batch ledger")).toBeNull());
+    expect(document.activeElement).toBe(info);
+  });
+
   it("opens from the keyboard", async () => {
     render(<Block />);
     const info = screen.getByRole("button", { name: "About Bin stock" });
