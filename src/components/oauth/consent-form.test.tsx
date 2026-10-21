@@ -162,25 +162,58 @@ const RECONNECT = { newlyRequestedScopes: ["feedstocks:write", "orders:read"], a
 it("shows the three choices, not the locked board, for a reconnect with a stored consent", () => {
   mocks.view.mockReturnValue(view(RECONNECT));
   render(<ConsentForm />);
-  expect((screen.getByRole("radio", { name: /^Read only/ }) as HTMLInputElement).checked).toBe(true);
+  expect(screen.getByRole("radio", { name: /^Read only/ })).toBeTruthy();
   expect(screen.getByRole("radio", { name: /^Read and write/ })).toBeTruthy();
   expect(screen.getByRole("radio", { name: /^Choose per area/ })).toBeTruthy();
-  expect(screen.queryByRole("table")).toBeNull();
   expect(screen.queryByText("New")).toBeNull();
 });
 
-it("narrows a stored read and write consent to reads when Read only is chosen", async () => {
+const STORED_ALL = { newlyRequestedScopes: [], alreadyAllowedScopes: ["feedstocks:read", "feedstocks:write", "orders:read"] };
+const radioChecked = (name: string) => (screen.getByRole("radio", { name: new RegExp(`^${name}`) }) as HTMLInputElement).checked;
+
+it("preselects Read and write when the stored consent covers every requested write", async () => {
+  mocks.view.mockReturnValue(view(STORED_ALL));
+  mocks.mutateAsync.mockResolvedValue("https://client.test/cb?code=c");
+  render(<ConsentForm />);
+  expect(radioChecked("Read and write")).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Allow" }));
+  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "feedstocks:read feedstocks:write orders:read offline_access" }));
+});
+
+it("preselects Read only when the stored consent holds only reads", async () => {
+  mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["feedstocks:write"], alreadyAllowedScopes: ["feedstocks:read", "orders:read"] }));
+  mocks.mutateAsync.mockResolvedValue("https://client.test/cb?code=c");
+  render(<ConsentForm />);
+  expect(radioChecked("Read only")).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Allow" }));
+  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "feedstocks:read orders:read offline_access" }));
+});
+
+it("opens Choose per area with exactly the stored scopes ticked for a partial stored consent", async () => {
   mocks.view.mockReturnValue(view({ newlyRequestedScopes: ["orders:read"], alreadyAllowedScopes: ["feedstocks:read", "feedstocks:write"] }));
   mocks.mutateAsync.mockResolvedValue("https://client.test/cb?code=c");
   render(<ConsentForm />);
+  expect(radioChecked("Choose per area")).toBe(true);
+  expect(box("Feedstocks, read").checked).toBe(true);
+  expect(box("Feedstocks, write").checked).toBe(true);
+  expect(box("Orders, read").checked).toBe(false);
+  expect(box("Feedstocks, write").disabled).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "Allow" }));
-  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "orders:read feedstocks:read offline_access" }));
+  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "feedstocks:read feedstocks:write offline_access" }));
+});
+
+it("narrows a stored read and write consent to reads when Read only is chosen", async () => {
+  mocks.view.mockReturnValue(view(STORED_ALL));
+  mocks.mutateAsync.mockResolvedValue("https://client.test/cb?code=c");
+  render(<ConsentForm />);
+  choose("Read only");
+  fireEvent.click(screen.getByRole("button", { name: "Allow" }));
+  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "feedstocks:read orders:read offline_access" }));
 });
 
 it("locks nothing in Choose per area when a consent is stored", () => {
   mocks.view.mockReturnValue(view(RECONNECT));
   render(<ConsentForm />);
-  choose("Choose per area");
   expect(box("Feedstocks, read").disabled).toBe(false);
   expect(box("Feedstocks, read").checked).toBe(true);
   expect(box("Feedstocks, write").checked).toBe(false);

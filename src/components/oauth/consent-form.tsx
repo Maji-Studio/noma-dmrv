@@ -9,7 +9,7 @@ import type { ApiScope } from "@/lib/auth/api-scopes";
 import { useOAuthQuery } from "@/hooks/use-oauth-query";
 import { followOAuthContinuation } from "@/lib/auth/oauth-continuation";
 import { SETTINGS_CONNECTED_APPS_HREF } from "@/lib/settings/links";
-import { buildConsentAreas, isReadScope, preselectStepUp } from "./consent-areas";
+import { buildConsentAreas, isReadScope, preselectStepUp, seedFromStored } from "./consent-areas";
 import { ConsentChoices, type ConsentPreset } from "./consent-choices";
 import { ConsentPegBoard } from "./consent-peg-board";
 import { OAuthAppIdentity, OAuthCard, OAuthRestartNotice } from "./oauth-card";
@@ -40,10 +40,12 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
   const undecidedReads = undecided.filter(isReadScope);
   const writeAreas = areas.filter((area) => area.write && undecided.includes(area.write)).length;
   // Step-up ticks only what a recent refusal asked for (plus the read it needs), since discovery may request every scope.
+  // A fresh choice starts from the stored consent, so a quick Allow never drops writes the person already gave.
+  const [seed] = useState(() => seedFromStored(areas, requested, view.alreadyAllowedScopes as ApiScope[]));
   const [ticked, setTicked] = useState<ApiScope[]>(() => stepUp
     ? preselectStepUp(areas, undecided, stepUpScopes)
-    : undecidedReads);
-  const [preset, setPreset] = useState<ConsentPreset>("read");
+    : seed.ticked);
+  const [preset, setPreset] = useState<ConsentPreset>(stepUp ? "read" : seed.preset);
   const [failed, setFailed] = useState(false);
   const decision = useOAuthConsentDecision(oauthQuery);
 

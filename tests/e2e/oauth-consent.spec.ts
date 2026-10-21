@@ -98,6 +98,8 @@ test("the same scopes re-offer the three choices, and a step-up lists the refuse
   await expect(page.getByRole("radio", { name: /^Read only/ })).toBeVisible();
   await expect(page.getByRole("radio", { name: /^Read and write/ })).toBeVisible();
   await expect(page.getByRole("radio", { name: /^Choose per area/ })).toBeVisible();
+  // The choices start from the stored Read and write consent, so a quick Allow keeps the writes.
+  await expect(page.getByRole("radio", { name: /^Read and write/ })).toBeChecked();
   await page.getByRole("radio", { name: /^Read only/ }).check({ force: true });
   await page.getByRole("button", { name: "Allow", exact: true }).click();
   await expectCallback(page, { state: "e2e-state-3" });
@@ -136,6 +138,8 @@ test("a reconnect with a stored consent shows the three choices, and Read only n
   await expect(page.getByRole("radio", { name: /^Read only/ })).toBeVisible();
   await expect(page.getByRole("radio", { name: /^Read and write/ })).toBeVisible();
   await expect(page.getByRole("radio", { name: /^Choose per area/ })).toBeVisible();
+  // The choices start from the stored Read and write consent, so a quick Allow keeps the writes.
+  await expect(page.getByRole("radio", { name: /^Read and write/ })).toBeChecked();
   await page.getByRole("radio", { name: /^Read only/ }).check({ force: true });
   await expect(page.getByRole("table")).toHaveCount(0);
   await page.getByRole("button", { name: "Allow", exact: true }).click();
