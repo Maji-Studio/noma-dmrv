@@ -95,6 +95,7 @@ const TEMPLATE_WITH_FUEL_COMPONENT = template([
 describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
   it("warns when genset diesel is recorded but the template has no fuel_usage_by_volume", () => {
     const warnings = buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
       removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [run({ dieselGensetLiters: 25 })],
@@ -107,6 +108,7 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
 
   it("warns when startup/preprocessing diesel is recorded without the component", () => {
     const warnings = buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
       removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [run({ dieselOperationLiters: 5, preprocessingFuelLiters: 3 })],
@@ -117,6 +119,7 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
 
   it("warns for genset diesel when only the startup contract is carried", () => {
     const warnings = buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
       removalTemplate: TEMPLATE_WITH_FUEL_COMPONENT,
       runs: [run({ dieselGensetLiters: 25, dieselOperationLiters: 5 })],
@@ -129,6 +132,7 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
     // INPUT_MAPPING only serves pyrolysis/fuel_usage_by_volume, so a component
     // in another group would not receive the combined litres — still warn.
     const warnings = buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
       removalTemplate: template([
         {
@@ -155,6 +159,7 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
     // resolveTemplateInputs treats fixed inputs as prebound datapoints, so the
     // run-derived litres are replaced by the constant — the advisory must fire.
     const warnings = buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
       removalTemplate: template([
         {
@@ -175,6 +180,7 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
 
   it("warns when the component declares no volume_of_fuel input at all", () => {
     const warnings = buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
       removalTemplate: template([
         {
@@ -195,6 +201,7 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
 
   it("stays silent when no diesel is recorded", () => {
     const warnings = buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
       removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [run()],
@@ -205,6 +212,7 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
 
   it("returns no diesel warning without a default template", () => {
     const warnings = buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
       removalTemplate: null,
       runs: [run({ dieselGensetLiters: 25 })],
@@ -217,6 +225,7 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
 describe("buildSubmissionWarnings — month straddle (issue #320)", () => {
   it("emits no straddle warning when production start and latest application share a UTC month", () => {
     const warnings = buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
       removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [run({ startTime: new Date("2026-01-05T00:00:00Z") })],
@@ -227,6 +236,7 @@ describe("buildSubmissionWarnings — month straddle (issue #320)", () => {
 
   it("warns when the latest application falls in a later UTC month than production start", () => {
     const warnings = buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
       removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [run({ startTime: new Date("2026-01-05T00:00:00Z") })],
@@ -244,6 +254,7 @@ describe("buildSubmissionWarnings — month straddle (issue #320)", () => {
 
   it("warns across a year boundary (December production, January application)", () => {
     const warnings = buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
       removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [run({ startTime: new Date("2025-12-20T00:00:00Z") })],
@@ -258,6 +269,7 @@ describe("buildSubmissionWarnings — month straddle (issue #320)", () => {
     // Runs start Jan + Feb; applications Feb + Feb → straddle (Jan vs Feb),
     // even though the later run and both applications share February.
     const warnings = buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
       removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [
@@ -277,6 +289,7 @@ describe("buildSubmissionWarnings — month straddle (issue #320)", () => {
   it("emits nothing without runs or lineages (nothing to compare)", () => {
     expect(
       buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
         removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
         runs: [],
@@ -285,6 +298,7 @@ describe("buildSubmissionWarnings — month straddle (issue #320)", () => {
     ).toEqual([]);
     expect(
       buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
         removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
         runs: [run({ startTime: new Date("2026-01-05T00:00:00Z") })],
@@ -295,6 +309,7 @@ describe("buildSubmissionWarnings — month straddle (issue #320)", () => {
 
   it("fires independently of the template (a straddle is a property of the dates alone)", () => {
     const warnings = buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
       removalTemplate: null,
       runs: [run({ startTime: new Date("2026-01-05T00:00:00Z") })],
@@ -308,6 +323,7 @@ describe("buildSubmissionWarnings — month straddle (issue #320)", () => {
 describe("buildSubmissionWarnings — combined advisories", () => {
   it("surfaces the unmapped-diesel advisory alongside a straddle warning", () => {
     const warnings = buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
       removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [
@@ -325,6 +341,7 @@ describe("buildSubmissionWarnings — combined advisories", () => {
 
   it("emits only the diesel advisory when the window stays within one month", () => {
     const warnings = buildSubmissionWarnings({
+      facilityTimezone: "UTC",
       lineSources: DIESEL_CONTRACTS,
       removalTemplate: TEMPLATE_WITHOUT_FUEL_COMPONENT,
       runs: [

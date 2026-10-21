@@ -262,12 +262,12 @@ uses it.
 
 ### Future-application check compares a calendar date with an instant (`isometric/application-future-facility-day`, opened 2026-10-21)
 
-- **Observed:** `assertRemovalDatesNotFuture` compares the application's UTC-midnight
+- **Observed:** `src/fn/certification/removal-reporting-window.ts:assertRemovalDatesNotFuture` compares the application's UTC-midnight
   calendar date with `now` as an instant. East of UTC a valid same-day application
   is refused until UTC midnight; west of UTC a next-day application passes while
   the facility is still on the earlier day.
 - **To resolve:** compare the application calendar day with
-  `formatFacilityDate(now, facilityTimezone)`; keep the instant comparison for
+  `src/lib/date-utils.ts:formatFacilityDate` (`now`, `facilityTimezone`); keep the instant comparison for
   production end.
 
 ### Biochar Application GHG Entry association timing (`isometric/biochar-application-ghg-entry-association`, opened 2026-08-27)

@@ -6,7 +6,7 @@ import { catalogCandidates, type AutomaticSourceId } from "@/lib/isometric/templ
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
 import type { TransportLegsByCategory } from "./shared";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
-import { formatFacilityDate, UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
+import { formatFacilityDate } from "@/lib/date-utils";
 
 // Run masses exist on every run and sequestration is required on every Removal
 // template. Warning for those would fire on nearly every template. Safety margin
@@ -59,9 +59,9 @@ function utcMonth(date: Date): string {
 function buildStraddleWarning(args: {
   runs: ProductionRunForCertification[];
   lineages: { application: { applicationDate: Date } }[];
-  facilityTimezone?: string;
+  facilityTimezone: string;
 }): string[] {
-  const { runs, lineages, facilityTimezone = UNKNOWN_FACILITY_TIMEZONE } = args;
+  const { runs, lineages, facilityTimezone } = args;
   if (runs.length === 0 || lineages.length === 0) return [];
   const earliestStart = runs.reduce(
     (earliest, run) => (run.startTime < earliest ? run.startTime : earliest),
@@ -112,7 +112,7 @@ export function buildSubmissionAdvisories(args: {
 }
 
 export function buildSubmissionWarnings(
-  args: Parameters<typeof buildSubmissionAdvisories>[0] & { facilityTimezone?: string },
+  args: Parameters<typeof buildSubmissionAdvisories>[0] & { facilityTimezone: string },
 ): string[] {
   return [...buildSubmissionAdvisories(args).map((advisory) => advisory.message), ...buildStraddleWarning(args)];
 }
