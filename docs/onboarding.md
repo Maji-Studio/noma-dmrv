@@ -16,8 +16,9 @@ Facility and reactor actions open the existing entity forms in an
 `EntitySideSheet` on the dashboard. Creating a facility selects it through
 the facility context. The create hooks invalidate onboarding status, and the
 guide advances after the refreshed records arrive. Registry setup opens the
-shared `CertifierSettingsPanel`, also used on `/certification/settings`, with
-inline project linking. A saved project link returns to the dashboard unless
+shared `CertifierSettingsPanel` (registry status line, keys, then the
+project link inline). In Settings the same parts sit on two panes: Registry
+holds the keys and Facilities the project link. A saved project link returns to the dashboard unless
 replacement keys are still unsaved, in which case the discard guard warns
 first. Supplier, feedstock, production run and credit batch
 actions retain their facility-scoped create links to their list pages.

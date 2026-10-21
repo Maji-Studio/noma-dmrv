@@ -4,7 +4,6 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RegistryConnectionDialog } from "./registry-connection-dialog";
 import { FacilityCertifierDialog } from "./facility-certifier-dialog";
-import { FacilityIsometricConnector } from "./facility-isometric-connector";
 import type { FacilityCertifierMapping } from "@/fn/certification/facility-mapping";
 
 vi.mock("@/components/ui/tooltip", () => ({
@@ -111,26 +110,6 @@ describe("Isometric project reselection", () => {
 
     await select("Isometric project", "Test project: prj_test");
     expect((screen.getByRole("textbox", { name: /^Isometric facility ID/ }) as HTMLInputElement).value).toBe("fcl_saved");
-  });
-
-  it("keeps connector confirmations on reselect and resets them for another project", async () => {
-    loaderData.isProduction = true;
-    render(<FacilityIsometricConnector facilityId={FACILITY_ID} />);
-    await click("Manage");
-    await select("Isometric project", "Test project: prj_test");
-    fireEvent.change(screen.getByRole("textbox", { name: /^Isometric facility ID/ }), { target: { value: "fcl_edited" } });
-    const acknowledgments = screen.getAllByRole("checkbox");
-    acknowledgments.forEach((checkbox) => fireEvent.click(checkbox));
-    expect(button("Connect")).toHaveProperty("disabled", false);
-
-    await select("Isometric project", "Test project: prj_test");
-    acknowledgments.forEach((checkbox) => expect(checkbox).toHaveProperty("checked", true));
-    expect(button("Connect")).toHaveProperty("disabled", false);
-    expect((screen.getByRole("textbox", { name: /^Isometric facility ID/ }) as HTMLInputElement).value).toBe("fcl_edited");
-
-    await select("Isometric project", "Other project: prj_other");
-    acknowledgments.forEach((checkbox) => expect(checkbox).toHaveProperty("checked", false));
-    expect(button("Connect")).toHaveProperty("disabled", true);
   });
 });
 

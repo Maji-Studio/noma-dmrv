@@ -2,8 +2,8 @@
  * /admin — the Platform-Admin entry point.
  *
  * This used to be a three-tile launcher, but two of its tiles were cross-links
- * to pages the sidebar already carries (`/settings/organization` and
- * `/certification/settings`) and the third — the organization directory — is
+ * to pages the sidebar already carries (now Settings, Members and
+ * Settings, Registry) and the third, the organization directory, is
  * the only surface that lives under `/admin` at all. A hub with one real
  * destination is a hop, not an index, so `/admin` goes straight there.
  *

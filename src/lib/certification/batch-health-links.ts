@@ -11,7 +11,7 @@ import {
 } from "@/lib/entity-deep-link";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
 import { creditBatchDeepLinkHref, creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
-import { certificationEmissionEstimatesHref, certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "./links";
+import { facilityCertificationSettingsHref, removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "./links";
 
 export const BATCH_DETAILS_FIX_LABEL = "Edit details";
 
@@ -92,7 +92,7 @@ export function batchHealthFixLinkFor(
     case "emissions":
       return { label: "Review emissions", href: creditBatchId ? creditBatchDeepLinkHref(creditBatchId, facilityId, { tab: "emissions" }) : `/credit-batches?${query(undefined, false)}` };
     case "certificationTemplates":
-      return { label: "Review Removal templates", href: certificationRemovalTemplatesHref(facilityId) };
+      return { label: "Review Removal templates", href: removalTemplatesSettingsHref(facilityId) };
     case "creditBatchTemplate":
       return creditBatchId
         ? { label: "Switch template", href: creditBatchRemovalTemplateHref(creditBatchId, facilityId) }
@@ -100,11 +100,11 @@ export function batchHealthFixLinkFor(
     case "templateReplacement":
       return creditBatchId
         ? { label: "Switch template", href: creditBatchRemovalTemplateHref(creditBatchId, facilityId) }
-        : { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: certificationRemovalTemplatesHref(facilityId) };
+        : { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: removalTemplatesSettingsHref(facilityId) };
     case "templateLines":
-      return { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: certificationRemovalTemplatesHref(facilityId) };
+      return { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: removalTemplatesSettingsHref(facilityId) };
     case "templateLineReview":
-      return { label: DECIDE_LINES_LINK_LABEL, href: certificationRemovalTemplatesHref(facilityId) };
+      return { label: DECIDE_LINES_LINK_LABEL, href: removalTemplatesSettingsHref(facilityId) };
     case "batchDetails":
       return {
         label: BATCH_DETAILS_FIX_LABEL,
@@ -122,8 +122,8 @@ export function batchHealthFixLinkFor(
       };
     case "certificationEmissions":
       return {
-        label: "Open emission estimates",
-        href: certificationEmissionEstimatesHref(facilityId),
+        label: "Open Settings, Facilities",
+        href: facilityCertificationSettingsHref(facilityId),
       };
     case "applications":
       // Applications auto-match by crediting period — there is no manual "link"

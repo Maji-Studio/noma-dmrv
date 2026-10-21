@@ -16,21 +16,10 @@ import {
   facilityFormSchema,
   type FacilityFormData,
 } from "@/schemas/facilities";
-import {
-  durabilityOptions,
-  type DurabilityOption,
-} from "@/schemas/credit-batches";
 import type { Facility } from "@/db/schema/facilities";
-import {
-  DurabilityTierSelect,
-  FacilityIsometricConnector,
-} from "@/components/certification";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { isValidIanaTimezone } from "@/lib/timezones";
 import { TimezoneCombobox } from "./timezone-combobox";
-
-// 1000-year is the go-forward tier (ADR 0021); new facilities default to it.
-const DEFAULT_DURABILITY_OPTION: DurabilityOption = "1000_year";
 
 /**
  * A zone the picker offers, or `undefined`. The facility column and the
@@ -41,14 +30,6 @@ const DEFAULT_DURABILITY_OPTION: DurabilityOption = "1000_year";
  */
 function resolveTimezone(zone: string | null | undefined): string | undefined {
   return isValidIanaTimezone(zone) ? zone : undefined;
-}
-
-function getDefaultDurabilityOption(
-  option: Facility["durabilityOption"] | null | undefined
-): DurabilityOption {
-  return durabilityOptions.includes(option as DurabilityOption)
-    ? (option as DurabilityOption)
-    : DEFAULT_DURABILITY_OPTION;
 }
 
 interface FacilityFormProps {
@@ -98,9 +79,6 @@ export function FacilityForm({
       contactPhone: facility?.contactPhone ?? "",
       timezone: resolveTimezone(facility?.timezone)
         ?? resolveTimezone(orgDefaults.defaultTimezone),
-      durabilityOption: getDefaultDurabilityOption(
-        facility?.durabilityOption,
-      ),
     },
   });
 
@@ -110,7 +88,6 @@ export function FacilityForm({
   const gpsLongitude = watch("gpsLongitude") as number | null | undefined;
   const timezone = watch("timezone") as string | undefined;
   const country = watch("country");
-  const durabilityOption = watch("durabilityOption") ?? DEFAULT_DURABILITY_OPTION;
   const timezoneField = register("timezone");
 
   // `latched` holds a double-click (QA: one created two facilities) until the save settles.
@@ -239,37 +216,6 @@ export function FacilityForm({
         </FormField>
       </div>
 
-      </FormSection>
-
-      <FormSection title="Certification">
-      <div className="grid grid-cols-1 gap-y-20">
-        <FormField
-          id="durabilityOption"
-          label="Durability tier"
-          error={errors.durabilityOption?.message}
-          hint="Set once for your registry program and inherited by every credit batch and Sample at this facility. The 200-year pathway opens when a 200-year client onboards."
-        >
-          <DurabilityTierSelect
-            value={durabilityOption}
-            onChange={(value) =>
-              setValue("durabilityOption", value, {
-                shouldDirty: true,
-                shouldValidate: true,
-              })
-            }
-            disabled={isSubmitting}
-            aria-label="Facility durability tier"
-          />
-        </FormField>
-      </div>
-
-      {/* Registry connection — edit-mode only (needs a facility id; the
-          post-create link dialog covers new facilities). Self-contained:
-          saves immediately via its own admin-gated action, independent of
-          this form's submit. */}
-      {isEditMode && facility && (
-        <FacilityIsometricConnector facilityId={facility.id} />
-      )}
       </FormSection>
 
       <FormActions

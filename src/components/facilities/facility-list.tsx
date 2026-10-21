@@ -40,17 +40,16 @@ import {
 } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
-import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
-import { FacilityCertifierLinkLoader } from "@/components/certification";
 import { FacilityForm } from "./facility-form";
 import { FacilityCard } from "./facility-card";
 import { ArchiveFacilityDialog } from "./archive-facility-dialog";
+import { FacilityRegistryLinkNotice } from "./facility-registry-link-notice";
 import type { FacilityFormData, FacilityFilterData } from "@/schemas/facilities";
 import type { FacilityWithRelations } from "@/data-access/facilities";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
@@ -85,13 +84,13 @@ export function FacilityList() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
-  // After creating a facility, admins are offered the optional certifier link
-  // for the new facility (skippable; editable later in Settings).
-  const [linkCertifierFacilityId, setLinkCertifierFacilityId] = useState<
-    string | null
-  >(null);
+  // After creating a facility, a viewer who may link it is pointed to the
+  // registry link in Settings, Facilities (it used to open a link dialog here).
+  const [createdFacility, setCreatedFacility] = useState<{
+    id: string;
+    code: string;
+  } | null>(null);
 
-  const isAdmin = useIsAdmin();
   const { setFacilityId } = useFacilityContext();
 
   const filters: Partial<FacilityFilterData> = {
@@ -141,12 +140,7 @@ export function FacilityList() {
       setFacilityId(facility.id);
       setSideSheet(null);
       toast.success("Facility created.");
-      // Offer the optional certifier link for the new facility. Admin-only
-      // (saving the mapping is admin-gated); non-admins create unlinked and an
-      // admin links later in Settings.
-      if (isAdmin) {
-        setLinkCertifierFacilityId(facility.id);
-      }
+      setCreatedFacility({ id: facility.id, code: facility.code });
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Facility was not created. Check the form.");
     }
@@ -207,6 +201,7 @@ export function FacilityList() {
   };
 
   const openCreate = () => {
+    setCreatedFacility(null);
     setCreateError(null);
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });
@@ -280,6 +275,10 @@ export function FacilityList() {
           </Button>
         }
       />
+
+      {createdFacility && (
+        <FacilityRegistryLinkNotice facility={createdFacility} onDismiss={() => setCreatedFacility(null)} />
+      )}
 
       <div className="grid grid-cols-1 gap-24 md:grid-cols-2 xl:grid-cols-3">
         <StatCard
@@ -465,14 +464,6 @@ export function FacilityList() {
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create facility"}
         />
       </EntitySideSheet>
-
-      {linkCertifierFacilityId && (
-        <FacilityCertifierLinkLoader
-          facilityId={linkCertifierFacilityId}
-          isOpen
-          onClose={() => setLinkCertifierFacilityId(null)}
-        />
-      )}
     </div>
   );
 }

@@ -33,7 +33,7 @@ import { useSwitchCreditBatchRemovalTemplate } from "@/hooks/use-removal-templat
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { Notice } from "@/components/ui/notice";
 import type { TemplateReadiness } from "@/components/certification/removal-template-review-model";
-import { certificationRemovalTemplatesHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL, removalTemplateSetupHref } from "@/lib/certification/links";
+import { removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL, removalTemplateSetupHref } from "@/lib/certification/links";
 import { getStaleVersionConflict, toSaveErrorMessage } from "@/lib/stale-version";
 import {
   switchRemovalTemplateFormSchema,
@@ -239,7 +239,7 @@ function SwitchTemplateForm({
                 <Link
                   href={toDecide > 0
                     ? removalTemplateSetupHref(creditBatch.facilityId, { templateId: template.id, step: "decisions", makeDefault: false })
-                    : certificationRemovalTemplatesHref(creditBatch.facilityId)}
+                    : removalTemplatesSettingsHref(creditBatch.facilityId)}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-4 body-small underline underline-offset-2"

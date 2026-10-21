@@ -76,13 +76,13 @@ test.describe("Emissions page, facility activity", () => {
     }
   });
 
-  test("Certification settings lists Emissions but no emission factors", async ({
+  test("Settings lists Certification panes but no emission factors", async ({
     adminPage: page,
     seededData,
   }) => {
-    await page.goto(`/certification/settings?facility=${seededData.facility.id}`);
-    await expect(page.getByText("Removal templates").first()).toBeVisible();
-    await expect(page.getByText("Emissions", { exact: true }).first()).toBeVisible();
+    await page.goto(`/settings/registry?facility=${seededData.facility.id}`);
+    const rail = page.getByRole("navigation", { name: "Settings categories" });
+    await expect(rail.getByRole("link", { name: "Registry" })).toBeVisible();
     await expect(page.getByText("Emission factors")).toHaveCount(0);
   });
 });

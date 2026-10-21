@@ -1,5 +1,5 @@
 /**
- * One list in Settings → Vehicles and crew: a heading with an add button, the
+ * One list on the Vehicles and crew page: a heading with an add button, the
  * records in the settings roster style with Edit and Delete, and the delete
  * confirmation. The caller owns the data, the edit dialog and the delete
  * mutation, so the three lists share one shape.

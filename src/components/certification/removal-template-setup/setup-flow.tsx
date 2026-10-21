@@ -14,7 +14,7 @@ import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { useToast } from "@/components/ui/toast";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import type { useApplyRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
-import { certificationSettingsHref } from "@/lib/certification/links";
+import { facilityCertificationSettingsHref } from "@/lib/certification/links";
 import { getStaleVersionConflict } from "@/lib/stale-version";
 import {
   type Answers,
@@ -143,7 +143,7 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
         <StepFlow steps={STEPS} current={step} furthest={furthest} onNavigate={go} footer={null} compactOnPhone className="gap-20">
           <div className="flex flex-col gap-20">
             <h3 className="sr-only">{STEP_TITLES[step]}</h3>
-            {step === 0 && <TemplateStep data={data} templateId={templateId} onChange={pickTemplate} invalid={showMissing} notOffered={notOfferedReason(data, requestedTemplate)} certifierHref={certificationSettingsHref(facilityId)} />}
+            {step === 0 && <TemplateStep data={data} templateId={templateId} onChange={pickTemplate} invalid={showMissing} notOffered={notOfferedReason(data, requestedTemplate)} facilitySettingsHref={facilityCertificationSettingsHref(facilityId)} />}
             {step === 1 && template && (
               <DecisionsStep
                 template={template}

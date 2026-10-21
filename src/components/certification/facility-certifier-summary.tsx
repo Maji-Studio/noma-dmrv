@@ -3,8 +3,8 @@
  * facility side-sheet (Stage 6 / ADR 0007). The facility sheet used to host the
  * full management UI (`FacilityCertifierSection`: link / edit / unlink project,
  * template selection, link hints). That config now lives in its primary home,
- * Certification → Settings, so the facility sheet shows only a read-only
- * summary + a "Manage in Certification → Settings" link.
+ * Settings, Facilities, so the facility sheet shows only a read-only
+ * summary + a "Manage in Settings" link. The durability tier is changed there too.
  *
  * Reads the DB-only summary (`useFacilityCertifierSummary`) — never the heavier
  * management payload (available projects, templates, link hints), which a
@@ -17,15 +17,15 @@
 import Link from "next/link";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { facilityCertificationSettingsHref } from "@/lib/certification/links";
 import { EnvBanner } from "./env-banner";
 import { Field, Section } from "./panel-layout";
 
-// Carry the viewed facility through to Settings — this summary renders in the
-// facility side-sheet, which can show a facility other than the sidebar-selected
-// one. Without `?facility=`, Settings would fall back to the localStorage
-// facility and the operator would manage the wrong link.
-const settingsHref = (facilityId: string) =>
-  `/certification/settings?facility=${encodeURIComponent(facilityId)}`;
+// The link carries the viewed facility in `?facility=`, which also makes it the
+// working facility: this summary renders in the facility side sheet, which can
+// show a facility other than the sidebar-selected one, and Settings, Facilities
+// configures the working facility.
+const settingsHref = facilityCertificationSettingsHref;
 
 export function FacilityCertifierSummary({
   facilityId,
@@ -43,7 +43,7 @@ export function FacilityCertifierSummary({
             href={settingsHref(facilityId)}
             className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
           >
-            Manage in Certification → Settings ↗
+            Manage in Settings, Facilities ↗
           </Link>
         </div>
 
@@ -87,7 +87,7 @@ function SummaryBody({
             href={settingsHref(facilityId)}
             className="underline underline-offset-2 hover:text-[var(--color-text-primary)]"
           >
-            Certification → Settings
+            Settings, Facilities
           </Link>
           .
         </p>

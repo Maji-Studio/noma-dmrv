@@ -644,7 +644,7 @@ async function lockAndVerifyMapping(
 
   if (!current) {
     throw new SafeError(
-      "Facility is no longer linked to a certifier project. Re-link in facility settings before submitting.",
+      "Facility is no longer linked to a certifier project. Link it again in Settings, Facilities before submitting.",
     );
   }
   if (current.externalProjectId !== guard.expectedExternalProjectId) {

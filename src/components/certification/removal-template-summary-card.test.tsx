@@ -53,7 +53,7 @@ describe("RemovalTemplateSummaryCard", () => {
   });
 
   it("opens the dialog from a setup link for an Admin and clears the params on close", async () => {
-    show({ fitting: [ready], defaultRemovalTemplateId: "tpl-ready" }, [], "?section=removal-templates&setup=decisions&template=tpl-ready&makeDefault=false");
+    show({ fitting: [ready], defaultRemovalTemplateId: "tpl-ready" }, [], "?facility=facility-1&setup=decisions&template=tpl-ready&makeDefault=false");
     expect(screen.getByRole("dialog").textContent).toContain("setup decisions tpl-ready no default");
     fireEvent.click(screen.getByRole("button", { name: "Close setup" }));
     await waitFor(() => expect(onUrlUpdate).toHaveBeenCalled());
@@ -62,7 +62,7 @@ describe("RemovalTemplateSummaryCard", () => {
     expect(searchParams.get("setup")).toBeNull();
     expect(searchParams.get("template")).toBeNull();
     expect(searchParams.get("makeDefault")).toBeNull();
-    expect(searchParams.get("section")).toBe("removal-templates");
+    expect(searchParams.get("facility")).toBe("facility-1");
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -131,9 +131,9 @@ describe("RemovalTemplateSummaryCard", () => {
     expect(screen.queryByText("Decided by you")).toBeNull();
   });
 
-  it("sends an unlinked facility to Certifier", () => {
+  it("sends an unlinked facility to Settings, Facilities", () => {
     state.error = new Error(SETUP_NOT_LINKED_MESSAGE);
     render(<NuqsTestingAdapter><RemovalTemplateSummaryCard facilityId={FACILITY} /></NuqsTestingAdapter>);
-    expect(screen.getByRole("link", { name: "Open Certifier" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open Settings, Facilities" }).getAttribute("href")).toContain("/settings/facilities");
   });
 });

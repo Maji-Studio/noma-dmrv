@@ -118,7 +118,7 @@ Two distinct limiters — a real trip hazard:
 
 Signup is invite-only: public signup is off in code (`disableSignUp: true` in `src/lib/auth/better-auth.ts`), with no env flag to turn it on. Users join through an organization invite or the admin bootstrap CLI.
 
-Organization Admins invite from organization settings; Better Auth enforces invitation and membership changes server-side. Re-inviting the same email cancels the stale pending invite. Email delivery is best-effort — the inviter always gets a copyable accept link. `/admin/users` redirects to `/settings/organization`.
+Organization Admins invite from organization settings; Better Auth enforces invitation and membership changes server-side. Re-inviting the same email cancels the stale pending invite. Email delivery is best-effort — the inviter always gets a copyable accept link. `/admin/users` redirects to Settings, Members (`/settings/members`).
 
 ## Better Auth schema and credential identity
 
@@ -201,7 +201,7 @@ issuance and deleted users.
 
 ### API key settings
 
-Manage credentials at `/settings/api-keys` in the settings console. Live
+Manage credentials in Settings, Developers (`/settings/developers`), which also shows whether a Platform Admin has API access on for the organization. Live
 organization Admins can create keys, edit names and permissions,
 and revoke keys. Members and Platform Admins without that membership role
 see an explanation without management controls. Creation shows the plaintext

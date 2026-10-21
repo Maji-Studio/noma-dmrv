@@ -14,7 +14,7 @@ import { ENTITY_READINESS_CHECK_DISPLAY_LIMIT, type RemovalRequirementCheck } fr
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { certCheckLabel } from "@/lib/certification/requirement-labels";
 import { transportRepairDestination } from "@/lib/isometric/semantic-binding-catalog";
-import { certificationSettingsHref } from "@/lib/certification/links";
+import { facilityCertificationSettingsHref } from "@/lib/certification/links";
 import type { RemovalBlockerCode } from "@/lib/certification/removal-blockers";
 import { templateFixTarget, type TemplateFixTarget } from "@/lib/certification/template-fix-targets";
 import { isTemplateRoutedCode } from "@/lib/certification/removal-template-blockers";
@@ -107,12 +107,12 @@ function fixLinksFor(
     }
     case "mapping":
       return [
-        { label: "Open settings", href: certificationSettingsHref(facilityId) },
+        { label: "Open settings", href: facilityCertificationSettingsHref(facilityId) },
       ];
     case "templateSet":
     case "templateLines":
       return check.key === "templateSet" && !check.templateBlockerCodes?.length
-        ? [{ label: "Open settings", href: certificationSettingsHref(facilityId) }]
+        ? [{ label: "Open settings", href: facilityCertificationSettingsHref(facilityId) }]
         : templateFixLinks(check.templateBlockerCodes ?? [], facilityId, creditBatches, check.templateFixTargets);
     case "emissions":
       return perBatchLinks({ key: "emissions" }, facilityId, creditBatches);

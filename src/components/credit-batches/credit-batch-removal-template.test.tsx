@@ -89,7 +89,7 @@ describe("CreditBatchRemovalTemplate", () => {
       mount(true);
       expect(screen.getByText(LEAD)).toBeTruthy();
       expect(screen.getByRole("link", { name: "Decide components" }).getAttribute("href")).toBe(
-        "/certification/settings?section=removal-templates&facility=facility-1&setup=decisions&template=rvt_new&makeDefault=false",
+        "/settings/removal-templates?facility=facility-1&setup=decisions&template=rvt_new&makeDefault=false",
       );
     });
 

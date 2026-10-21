@@ -120,7 +120,7 @@ describe("SubmissionSummary", () => {
     expect(html).toContain("Submission notes");
     expect(html.split(message)).toHaveLength(2);
     expect(html).toContain("Open Removal templates");
-    expect(html).toContain("/certification/settings?section=removal-templates&amp;facility=facility-1");
+    expect(html).toContain("/settings/removal-templates?facility=facility-1");
     expect(html).not.toContain('role="alert"');
   });
 

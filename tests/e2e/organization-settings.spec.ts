@@ -39,7 +39,7 @@ function sectionWithHeading(page: Page, heading: string): Locator {
 
 async function openOrganizationSettings(page: Page): Promise<void> {
   await enterDefaultOrganization(page);
-  await page.goto("/settings/organization");
+  await page.goto("/settings/members");
   // First render may hit a dev-server compile of this route; allow extra time.
   // The route is now a pane inside the settings console: `Members` is both the
   // page title and the pane heading, and the rail carries the rest.

@@ -108,7 +108,7 @@ describe("CreateGateNotice", () => {
     expect(html).toContain("linked to 2 noma facilities");
     expect(html).toContain("Link each facility to a dedicated Isometric project");
     expect(html).toContain(
-      "/certification/settings?section=certifier&amp;facility=fac%201",
+      "/settings/facilities?facility=fac%201",
     );
   });
 
@@ -139,7 +139,7 @@ describe("CreateGateNotice", () => {
 
     expect(html).toContain("Link this facility to an Isometric project in");
     expect(html).toContain(
-      '<a class="text-[var(--color-interaction)] underline underline-offset-2 hover:text-[var(--color-interaction-hover)]" href="/certification/settings?section=certifier&amp;facility=fac%201">Settings</a>',
+      '<a class="text-[var(--color-interaction)] underline underline-offset-2 hover:text-[var(--color-interaction-hover)]" href="/settings/facilities?facility=fac%201">Settings</a>',
     );
     expect(html).toContain("before creating a statement.");
     expect(html).not.toMatch(/[–—]/);

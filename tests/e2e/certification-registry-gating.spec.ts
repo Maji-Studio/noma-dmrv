@@ -3,9 +3,10 @@
  *
  * Certification is a conditional workspace (ADR 0007): its operational routes
  * (Removals, GHG Statements) only surface once the current facility
- * is linked to a registry. Settings stays reachable always — it's where the
- * link is created. These tests cover both the sidebar nav-hiding
- * (`app-sidebar.tsx`) and the route guard (`certification-registry-guard.tsx`).
+ * is linked to a registry. Without a link the sidebar shows no Certification
+ * section and the route guard sends direct visits to Settings, Registry
+ * (#1277). These tests cover both the sidebar (`sidebar-content.tsx`) and the
+ * route guard (`certification-registry-guard.tsx`).
  *
  * The summary the gate reads (`readFacilityCertifierSummary`) is DB-only — no
  * Isometric API — so the link row is seeded directly via Drizzle with a
@@ -18,15 +19,14 @@ import {
   seedCertifierMapping,
 } from "./fixtures/certification-helpers";
 
-const CERTIFICATION_SETTINGS_URL = "/certification/settings";
+const REGISTRY_SETTINGS_URL = "/settings/registry";
 const CERTIFICATION_ROOT_URL = "/certification";
 const CERTIFICATION_REMOVALS_URL = "/certification/removals";
 
 // DB-only link target; never reaches Isometric, so any string is fine.
 const FAKE_PROJECT_ID = "e2e-gating-fake-project";
 
-// Operational links hidden until a registry is linked; Settings is the lone
-// always-visible entry point.
+// Certification links hidden until a registry is linked.
 const OPERATIONAL_LINKS = ["Removals", "GHG Statements"] as const;
 
 // First navigation to a not-yet-compiled certification route can take 10-30s in
@@ -43,7 +43,7 @@ async function waitForSidebarHydration(page: Page, facilityName: string) {
 }
 
 test.describe("Certification registry gating", () => {
-  test("hides operational routes and redirects to Settings when the facility has no registry", async ({
+  test("hides the Certification section and redirects to Settings, Registry when the facility has no registry", async ({
     adminPage,
     seededData,
     cleanupTestData,
@@ -55,30 +55,29 @@ test.describe("Certification registry gating", () => {
     await deleteCertifierMapping(seededData.facility.id);
 
     const aside = adminPage.locator("aside");
-    const settingsUrl = `${CERTIFICATION_SETTINGS_URL}?facility=${seededData.facility.id}`;
+    const settingsUrl = `${REGISTRY_SETTINGS_URL}?facility=${seededData.facility.id}`;
 
-    // Settings stays reachable without a link — load it and let the sidebar hydrate.
     await adminPage.goto(settingsUrl);
     await waitForSidebarHydration(adminPage, seededData.facility.name);
 
-    // Settings link present...
+    // The only "Settings" link left is the footer gear; Certification has none.
     await expect(
       aside.getByRole("link", { name: "Settings", exact: true }),
-    ).toBeVisible();
+    ).toHaveCount(1);
+    await expect(aside.getByText("Certification", { exact: true })).toHaveCount(0);
 
-    // ...but no operational links.
     for (const label of OPERATIONAL_LINKS) {
       await expect(
         aside.getByRole("link", { name: label, exact: true }),
       ).toHaveCount(0);
     }
 
-    // Direct URL access to an operational route redirects to Settings.
+    // Direct URL access to an operational route redirects to Settings, Registry.
     await adminPage.goto(
       `${CERTIFICATION_REMOVALS_URL}?facility=${seededData.facility.id}`,
     );
     await expect(adminPage).toHaveURL(
-      new RegExp(`${CERTIFICATION_SETTINGS_URL}`),
+      new RegExp(`${REGISTRY_SETTINGS_URL}`),
       { timeout: REDIRECT_TIMEOUT_MS },
     );
 
@@ -87,7 +86,7 @@ test.describe("Certification registry gating", () => {
       `${CERTIFICATION_ROOT_URL}?facility=${seededData.facility.id}`,
     );
     await expect(adminPage).toHaveURL(
-      new RegExp(`${CERTIFICATION_SETTINGS_URL}`),
+      new RegExp(`${REGISTRY_SETTINGS_URL}`),
       { timeout: REDIRECT_TIMEOUT_MS },
     );
   });
@@ -107,7 +106,7 @@ test.describe("Certification registry gating", () => {
       const aside = adminPage.locator("aside");
 
       await adminPage.goto(
-        `${CERTIFICATION_SETTINGS_URL}?facility=${seededData.facility.id}`,
+        `${REGISTRY_SETTINGS_URL}?facility=${seededData.facility.id}`,
       );
       await waitForSidebarHydration(adminPage, seededData.facility.name);
 
@@ -128,7 +127,7 @@ test.describe("Certification registry gating", () => {
       );
       // And it did NOT bounce to Settings.
       await expect(adminPage).not.toHaveURL(
-        new RegExp(`${CERTIFICATION_SETTINGS_URL}`),
+        new RegExp(`${REGISTRY_SETTINGS_URL}`),
       );
 
       // The root entry point now lands on the first concrete route.

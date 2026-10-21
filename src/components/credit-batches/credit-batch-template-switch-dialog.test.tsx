@@ -99,7 +99,7 @@ describe("CreditBatchTemplateSwitchDialog", () => {
     expect(screen.queryByText("2 components to decide")).toBeNull();
     const link = screen.getByRole("link", { name: /^Decide components/ });
     // The Decisions step of that template with Make default off, in a new tab so the unsaved choice stays here.
-    expect(link.getAttribute("href")).toContain("/certification/settings?section=removal-templates");
+    expect(link.getAttribute("href")).toContain("/settings/removal-templates?");
     expect(link.getAttribute("href")).toContain("template=rvt_new");
     expect(link.getAttribute("href")).toContain("setup=decisions");
     expect(link.getAttribute("href")).toContain("makeDefault=false");
@@ -211,7 +211,7 @@ describe("CreditBatchTemplateSwitchDialog", () => {
     render(dialog(BATCH, new Map([["rvt_new", { ready: false, reason: "Not set up yet", toDecide: 0 }]])));
     await screen.findByRole("dialog", { name: "Switch template" });
     expect(screen.queryByRole("link", { name: /^Decide components/ })).toBeNull();
-    expect(screen.getByRole("link", { name: /^Open Removal templates/ }).getAttribute("href")).toContain("section=removal-templates");
+    expect(screen.getByRole("link", { name: /^Open Removal templates/ }).getAttribute("href")).toContain("/settings/removal-templates");
   });
 
   it("enables a non-current template only when it is known to be ready", async () => {

@@ -1,89 +1,85 @@
 import { describe, expect, it } from "vitest";
 import {
-  CERTIFICATION_SETTINGS_CERTIFIER_SECTION,
-  CERTIFICATION_SETTINGS_EMISSIONS_SECTION,
-  CERTIFICATION_SETTINGS_SECTION_PARAM,
-  CERTIFICATION_SETTINGS_SOURCES_SECTION,
-  certificationEmissionEstimatesHref,
   certificationRemovalsHref,
-  certificationSettingsHref,
+  facilityCertificationSettingsHref,
+  legacyCertificationSettingsRedirect,
   productionRunDeepLinkHref,
+  registrySettingsHref,
+  removalTemplatesSettingsHref,
   traceabilityActivityHref,
   traceabilityApplicationHref,
   traceabilityBatchHref,
 } from "./links";
 
-describe("certificationEmissionEstimatesHref", () => {
-  it("selects the emissions section for the active facility", () => {
-    expect(certificationEmissionEstimatesHref("fac abc/123")).toBe(
-      `/certification/settings?${CERTIFICATION_SETTINGS_SECTION_PARAM}=${CERTIFICATION_SETTINGS_EMISSIONS_SECTION}` +
-        `&facility=fac%20abc%2F123`,
+describe("settings link builders", () => {
+  it("sends registry fixes to Settings, Registry with the working facility", () => {
+    expect(registrySettingsHref("fac abc/123")).toBe("/settings/registry?facility=fac%20abc%2F123");
+    expect(registrySettingsHref()).toBe("/settings/registry");
+    expect(registrySettingsHref(null)).toBe("/settings/registry");
+  });
+
+  it("sends project link, tier and soil reference fixes to Settings, Facilities", () => {
+    expect(facilityCertificationSettingsHref("fac-1")).toBe("/settings/facilities?facility=fac-1");
+  });
+
+  it("sends component fixes to Settings, Removal templates, optionally narrowed to one template", () => {
+    expect(removalTemplatesSettingsHref("fac-1")).toBe("/settings/removal-templates?facility=fac-1");
+    expect(removalTemplatesSettingsHref("fac-1", "rvt new")).toBe(
+      "/settings/removal-templates?facility=fac-1&template=rvt%20new",
     );
   });
 
-  it("uses a query param, not a fragment — only the selected section mounts", () => {
-    // The settings page is a rail plus one detail pane, so `#emission-estimates`
-    // would scroll to an element that has not rendered.
-    const href = certificationEmissionEstimatesHref("fac-1");
-    expect(href).not.toContain("#");
-    const url = new URL(href, "http://localhost");
-    expect(url.searchParams.get(CERTIFICATION_SETTINGS_SECTION_PARAM)).toBe(
-      CERTIFICATION_SETTINGS_EMISSIONS_SECTION,
-    );
+  it("never links to the retired certification settings route", () => {
+    for (const href of [
+      registrySettingsHref("f"),
+      facilityCertificationSettingsHref("f"),
+      removalTemplatesSettingsHref("f", "t"),
+    ]) {
+      expect(href.startsWith("/settings/")).toBe(true);
+      expect(href).not.toContain("/certification/settings");
+    }
   });
 });
 
-describe("certificationSettingsHref", () => {
-  it("defaults to the certifier section", () => {
-    const href = certificationSettingsHref("fac-abc123");
-    expect(href).toBe(
-      "/certification/settings?section=certifier&facility=fac-abc123",
-    );
+describe("legacyCertificationSettingsRedirect", () => {
+  it.each([
+    [undefined, "/settings/registry"],
+    ["certifier", "/settings/registry"],
+    ["connection", "/settings/registry"],
+    ["credentials", "/settings/registry"],
+    ["sources", "/settings/registry"],
+    ["removal-templates", "/settings/removal-templates"],
+    ["emission-estimates", "/settings/facilities"],
+    ["diagnostics", "/settings/diagnostics"],
+    ["template-mapping", "/settings/template-mapping"],
+    ["not-a-section", "/settings/registry"],
+    ["toString", "/settings/registry"],
+    ["constructor", "/settings/registry"],
+    ["__proto__", "/settings/registry"],
+  ])("maps ?section=%s onto %s for a Platform Admin", (section, target) => {
+    expect(legacyCertificationSettingsRedirect(section ? { section } : {}, { isPlatformAdmin: true })).toBe(target);
   });
 
-  it("accepts a section override", () => {
-    const href = certificationSettingsHref(
-      "fac-abc123",
-      CERTIFICATION_SETTINGS_SOURCES_SECTION,
-    );
-    expect(href).toBe(
-      `/certification/settings?section=${CERTIFICATION_SETTINGS_SOURCES_SECTION}&facility=fac-abc123`,
-    );
+  it.each(["diagnostics", "template-mapping"])("lands anyone else on Registry for ?section=%s", (section) => {
+    expect(legacyCertificationSettingsRedirect({ section, facility: "f" })).toBe("/settings/registry?facility=f");
+    expect(legacyCertificationSettingsRedirect({ section }, { isPlatformAdmin: false })).toBe("/settings/registry");
   });
 
-  it("URL-encodes the facilityId in the facility query param", () => {
-    const href = certificationSettingsHref("fac abc/123");
-    expect(href).toContain("facility=fac%20abc%2F123");
+  it("keeps the facility and template, and drops the section", () => {
+    expect(
+      legacyCertificationSettingsRedirect({
+        section: "removal-templates",
+        facility: "fac 1",
+        template: "rvt_new",
+        other: "x",
+      }),
+    ).toBe("/settings/removal-templates?facility=fac+1&template=rvt_new");
   });
 
-  it("URL-encodes the section when it contains special characters", () => {
-    const href = certificationSettingsHref("fac-1", "my section");
-    expect(href).toContain("section=my%20section");
-  });
-
-  it("always starts with /certification/settings", () => {
-    const href = certificationSettingsHref("any-facility");
-    expect(href.startsWith("/certification/settings")).toBe(true);
-  });
-
-  it("produces a path that includes both section and facility params", () => {
-    const href = certificationSettingsHref("fac-xyz");
-    const url = new URL(href, "http://localhost");
-    expect(url.searchParams.get(CERTIFICATION_SETTINGS_SECTION_PARAM)).toBe(
-      CERTIFICATION_SETTINGS_CERTIFIER_SECTION,
-    );
-    expect(url.searchParams.get("facility")).toBe("fac-xyz");
-  });
-
-  it("certifier is the default so unmet setup checks land in the right place", () => {
-    // The submission checks and the batch-selection step both link to
-    // certificationSettingsHref(facilityId) with no override. Keys and the
-    // project link are one pane now, so either kind of gap is fixed there.
-    const href = certificationSettingsHref("facility-id");
-    const url = new URL(href, "http://localhost");
-    expect(url.searchParams.get(CERTIFICATION_SETTINGS_SECTION_PARAM)).toBe(
-      CERTIFICATION_SETTINGS_CERTIFIER_SECTION,
-    );
+  it("reads the first value of a repeated parameter", () => {
+    expect(
+      legacyCertificationSettingsRedirect({ section: ["emission-estimates", "sources"], facility: ["a", "b"] }),
+    ).toBe("/settings/facilities?facility=a");
   });
 });
 

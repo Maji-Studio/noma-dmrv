@@ -54,7 +54,7 @@ describe("SubmissionChecks", () => {
     />);
     expect(html).toContain('href="/credit-batches/batch-1?facility=facility-1&amp;focus=removal-template"');
     expect(html).toContain(">Switch template on CB-2</a>");
-    expect(html).toContain('href="/certification/settings?section=removal-templates&amp;facility=facility-1"');
+    expect(html).toContain('href="/settings/removal-templates?facility=facility-1"');
     expect(html).toContain(">Decide components</a>");
     expect(html).toContain("Template cannot be used");
     expect(html).toContain("Template components not ready");
@@ -114,7 +114,7 @@ describe("SubmissionChecks", () => {
     expect(html).not.toContain("Template set");
     expect(html).toContain("No default Removal template is selected.");
     expect(html).toContain(
-      'href="/certification/settings?section=certifier&amp;facility=facility-1"',
+      'href="/settings/facilities?facility=facility-1"',
     );
     // Passing checks are noise on a screen titled "need attention".
     expect(html).not.toContain("Facility linked to a registry project");

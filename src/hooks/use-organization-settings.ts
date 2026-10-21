@@ -1,7 +1,7 @@
 /**
  * Organization operating defaults.
  *
- * Two consumers with different needs. `/settings/defaults` edits them, so it
+ * Two consumers with different needs. Settings, General edits them, so it
  * wants the payload including `viewerCanManage`. Every create form that seeds a
  * field from them wants only the values, and wants them **synchronously** —
  * react-hook-form reads `defaultValues` exactly once at mount, so a form that

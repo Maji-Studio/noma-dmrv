@@ -634,6 +634,19 @@ export default async function globalTeardown() {
           AND credential_id LIKE $2 || 'e2e-%'
       `, [DEC_ORG_ID, APP_FORM_CREDENTIAL_PREFIX]);
 
+      // Credential and dedicated-org fixtures (tests/e2e/fixtures/dedicated-org.ts).
+      // Credentials go before their organization (no cascade). The organizations
+      // go before the users: an org's membership cascades with it, while deleting
+      // its only Admin user first is refused by the last-Admin trigger.
+      await client.query(`
+        DELETE FROM certifier_credentials
+        WHERE organization_id LIKE $1 || '%'
+      `, [E2E_CERTIFIER_ORG_ID_PREFIX]);
+      await client.query(`
+        DELETE FROM organizations
+        WHERE id LIKE $1 || '%'
+      `, [E2E_CERTIFIER_ORG_ID_PREFIX]);
+
       // Sessions for E2E users
       await client.query(`DELETE FROM session WHERE user_id LIKE 'e2e-%'`);
 
@@ -643,16 +656,6 @@ export default async function globalTeardown() {
       // Users
       await client.query(`DELETE FROM users WHERE id LIKE 'e2e-%' OR email LIKE '%@e2e.local'`);
 
-      // Self-service credential fixtures create no memberships or other children.
-      // Credentials must go before their organization (no cascade).
-      await client.query(`
-        DELETE FROM certifier_credentials
-        WHERE organization_id LIKE $1 || '%'
-      `, [E2E_CERTIFIER_ORG_ID_PREFIX]);
-      await client.query(`
-        DELETE FROM organizations
-        WHERE id LIKE $1 || '%'
-      `, [E2E_CERTIFIER_ORG_ID_PREFIX]);
 
       await client.query("COMMIT");
       console.log("[global-teardown] E2E test data cleanup complete.");

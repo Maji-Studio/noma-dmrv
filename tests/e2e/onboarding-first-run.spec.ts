@@ -84,9 +84,8 @@ test.describe("First-run onboarding", () => {
       await guide.getByRole("button", { name: "Add facility" }).click();
       const facilitySheet = page.getByRole("dialog", { name: "Create facility" });
       await expect(facilitySheet.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
-      const tierGroup = facilitySheet.getByRole("radiogroup", { name: "Durability tier" });
-      await expect(tierGroup.getByRole("radio", { name: /1000-year/i })).toHaveAttribute("aria-checked", "true");
-      await expect(tierGroup.getByRole("radio", { name: /200-year/i })).toHaveAttribute("aria-disabled", "true");
+      // Q9 (#1277): the tier lives in Settings, Facilities, not on the create form.
+      await expect(facilitySheet.getByText("Durability tier")).toHaveCount(0);
       await facilitySheet.getByRole("textbox", { name: /facility name/i }).fill(`E2E Onboarding Facility ${RUN_TAG}`);
       await facilitySheet.getByRole("textbox", { name: /^country/i }).fill("Tanzania");
       await page.locator("#gps-latitude").fill("-8.3");
@@ -111,8 +110,8 @@ test.describe("First-run onboarding", () => {
 
       await guide.getByRole("button", { name: "Connect registry" }).click();
       const registry = page.getByRole("dialog", { name: "Connect your registry", exact: true });
-      await expect(registry.getByText("Puro.earth")).toBeVisible();
-      await expect(registry.getByText("CSI")).toBeVisible();
+      // Q8 (#1277): one registry, named in a status line, not a row of cards.
+      await expect(registry.getByText("Registry: Isometric")).toBeVisible();
       await expect(registry.getByLabel("Access token")).toBeVisible();
       await expect(registry.getByLabel("Client secret")).toBeVisible();
       await registry.getByLabel("Access token").fill("e2e-unsaved-token");

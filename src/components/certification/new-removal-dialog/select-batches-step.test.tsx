@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { SelectableBatch } from "@/fn/certification";
 import { Footer } from "./index";
-import { certificationRemovalTemplatesHref } from "@/lib/certification/links";
+import { removalTemplatesSettingsHref } from "@/lib/certification/links";
 import { SelectBatchesStep, setupGapCopy } from "./select-batches-step";
 
 vi.mock("next/link", () => ({
@@ -55,7 +55,7 @@ describe("SelectBatchesStep", () => {
     expect(html).not.toContain("Ready to certify");
     expect(html).toContain("1,000-year biochar sequestration");
     expect(html).not.toContain("biochar_sequestration_1000_year");
-    expect(html).toContain(certificationRemovalTemplatesHref("facility-1").replaceAll("&", "&amp;"));
+    expect(html).toContain(removalTemplatesSettingsHref("facility-1").replaceAll("&", "&amp;"));
     expect(html).toContain("Open Removal templates");
     expect(html).not.toContain("Review certification settings");
     expect(html).not.toContain("CO₂e preview");
@@ -211,7 +211,7 @@ it("renders the unbindable component guidance and settings action", () => {
   expect(html).toContain('<ul class="list-disc pl-16">');
   for (const line of lines) expect(html).toContain(`<li>${line}</li>`);
   expect(html).not.toContain('class="whitespace-pre-line"');
-  expect(html).toContain(certificationRemovalTemplatesHref("facility-1").replaceAll("&", "&amp;"));
+  expect(html).toContain(removalTemplatesSettingsHref("facility-1").replaceAll("&", "&amp;"));
   expect(html).toContain("Decide components");
   expect(html).not.toContain("Review certification settings");
 });

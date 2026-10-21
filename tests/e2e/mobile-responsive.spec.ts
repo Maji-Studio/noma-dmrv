@@ -43,14 +43,16 @@ const ROUTES = [
   "/formulations",
   "/emissions",
   "/certification",
-  "/certification/settings",
   "/certification/removals",
   "/certification/ghg-statements",
   "/traceability",
-  // Settings is a rail plus one pane; both panes are checked because the rail
-  // and the pane stack differently below `md`.
-  "/settings/organization",
-  "/settings/defaults",
+  // Settings is a rail (a grouped select below `lg`) plus one pane; panes of
+  // each group are checked because their content stacks differently.
+  "/settings/general",
+  "/settings/members",
+  "/settings/registry",
+  "/settings/facilities",
+  "/vehicles-and-crew",
   "/admin/organizations",
 ] as const;
 
