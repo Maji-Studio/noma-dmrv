@@ -41,5 +41,4 @@ it("uses Dar today and passes the application future-date cap", async () => {
   const day = resolveApplicationDateDefault(zone, now);
   expect(day).toBe("2026-10-22");
   expect(() => assertApplicationDate(new Date(day), new Date("2026-10-21T12:00:00Z"), zone, "DL-1", now)).not.toThrow();
-  expect(resolveApplicationDateDefault(undefined, now)).toBe("2026-10-21");
 });

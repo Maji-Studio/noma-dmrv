@@ -23,7 +23,6 @@ import { formatVehicleType } from "@/schemas/vehicles";
 import { polymorphicOwnerActivityType } from "@/lib/activity-entity-type";
 import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
 import { formatCalendarDate, formatDayString, formatFacilityDateTime } from "@/lib/format-utils";
-import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 // By file, not the barrel (the forms barrel pulls in the form components).
 import { ENTITY_TYPE_LABELS } from "@/components/forms/entity-select/entity-labels";
@@ -148,14 +147,15 @@ const NOT_RECORDED: ActivityValueText = { text: MISSING_VALUE.notRecorded, tone:
 
 /**
  * An instant of a physical event reads on the record's facility clock
- * (docs/design-system.md, Date and time display), with UTC for an unknown facility.
+ * (docs/design-system.md, Date and time display); the caller
+ * supplies the view's clock when the record has no facility.
  */
-function formatInstant(text: string, timeZone: string | null): string {
-  return formatFacilityDateTime(text, timeZone ?? UNKNOWN_FACILITY_TIMEZONE);
+function formatInstant(text: string, timeZone: string): string {
+  return formatFacilityDateTime(text, timeZone);
 }
 
 /** One stored value as it reads on the line. `timeZone` is the record's facility zone. */
-export function formatActivityValue(field: string, stored: ActivityValue, timeZone: string | null, entityType: ActivityEntityType): ActivityValueText {
+export function formatActivityValue(field: string, stored: ActivityValue, timeZone: string, entityType: ActivityEntityType): ActivityValueText {
   const choice = Object.hasOwn(ENUM_FORMATTERS, field);
   if (stored === null) return choice ? NOT_SET : NOT_RECORDED;
   const text = String(stored);
@@ -244,6 +244,7 @@ function gpsLine(item: Pick<ActivityItem, "entityType">, changes: ActivityChange
 function fieldLine(
   item: Pick<ActivityItem, "entityType" | "changes" | "changeLabels" | "record">,
   field: string,
+  viewTimeZone: string,
 ): ActivityFieldLine {
   const label = activityFieldLabel(item.entityType, field);
   const changed: ActivityFieldLine = { kind: "changed", key: field, label };
@@ -260,7 +261,7 @@ function fieldLine(
     return from && to ? { kind: "value", key: field, label, from, to } : changed;
   }
   if (isRawId(change.from) || isRawId(change.to)) return changed;
-  const timeZone = item.record.facilityTimezone;
+  const timeZone = item.record.facilityTimezone ?? viewTimeZone;
   return {
     kind: "value", key: field, label,
     from: formatActivityValue(field, change.from, timeZone, item.entityType),
@@ -273,7 +274,7 @@ function fieldLine(
  * them; a coordinate pair reads as one GPS point. Creations, deletions and
  * registry status events list none.
  */
-export function activityFieldLines(item: ActivityItem): ActivityFieldLine[] {
+export function activityFieldLines(item: ActivityItem, viewTimeZone: string): ActivityFieldLine[] {
   if (item.action !== "updated") return [];
   const changes = item.changes ?? {};
   const membership = activityChangeSummary(item) !== null;
@@ -283,7 +284,7 @@ export function activityFieldLines(item: ActivityItem): ActivityFieldLine[] {
   const seen = new Set<string>();
   for (const field of fields) {
     const pair = gpsPairFor(item.entityType, field);
-    const line = pair ? gpsLine(item, changes, pair) : fieldLine(item, field);
+    const line = pair ? gpsLine(item, changes, pair) : fieldLine(item, field, viewTimeZone);
     if (seen.has(line.key)) continue;
     seen.add(line.key);
     lines.push(line);

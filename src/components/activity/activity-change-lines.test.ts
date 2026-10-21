@@ -9,6 +9,7 @@ import {
 import { activityFieldLabel, type ActivityItem } from "./activity-display";
 
 const FACILITY_TIME_ZONE = "Africa/Dar_es_Salaam";
+const VIEW_TIME_ZONE = UNKNOWN_FACILITY_TIMEZONE;
 const live = { label: "AP-001", deleted: false, facilityId: "facility-1", facilityTimezone: FACILITY_TIME_ZONE };
 const SUPPLIER_ID = "0b8f8a52-7a8c-4d71-9a3e-0d7c2f1f7e11";
 const OTHER_ID = "5c1e6f0e-2a8b-4c4f-8d0a-6f9b1d2e3a44";
@@ -37,7 +38,7 @@ describe("one line per changed field", () => {
       entityType: "feedstock",
       changedFields: ["massWetKg", "notes", "moistureContentPercent"],
       changes: { massWetKg: { from: "600", to: "650" }, moistureContentPercent: { from: null, to: "14.2" } },
-    }));
+    }), VIEW_TIME_ZONE);
     expect(lines).toEqual([
       { kind: "value", key: "massWetKg", label: "Wet mass (kg)", from: { text: "600", tone: "value" }, to: { text: "650", tone: "value" } },
       { kind: "changed", key: "notes", label: "Notes" },
@@ -46,14 +47,14 @@ describe("one line per changed field", () => {
   });
 
   it("drops bookkeeping fields and lists none for creations, deletions and registry status events", () => {
-    expect(activityFieldLines(item({ changedFields: ["version", "facilityId"] }))).toEqual([]);
+    expect(activityFieldLines(item({ changedFields: ["version", "facilityId"] }), VIEW_TIME_ZONE)).toEqual([]);
     for (const action of ["created", "deleted", "status_changed"] as const) {
-      expect(activityFieldLines(item({ action, changedFields: ["notes"], changes: { cropType: { from: "a", to: "b" } } }))).toEqual([]);
+      expect(activityFieldLines(item({ action, changedFields: ["notes"], changes: { cropType: { from: "a", to: "b" } } }), VIEW_TIME_ZONE)).toEqual([]);
     }
   });
 
   it("keeps a status as a status change, for the shared badges", () => {
-    expect(activityFieldLines(item({ changedFields: ["status"], changes: { status: { from: "delivered", to: "applied" } } })))
+    expect(activityFieldLines(item({ changedFields: ["status"], changes: { status: { from: "delivered", to: "applied" } } }), VIEW_TIME_ZONE))
       .toEqual([{ kind: "status", key: "status", label: "Status", from: "delivered", to: "applied" }]);
   });
 
@@ -62,12 +63,12 @@ describe("one line per changed field", () => {
       entityType: "production_run", reasonCode: "attached", changedFields: ["credit_batch"],
       changes: { credit_batch: { from: null, to: OTHER_ID } },
       changeLabels: { credit_batch: { from: null, to: named("CB-1", "credit_batch") } },
-    }));
+    }), VIEW_TIME_ZONE);
     expect(lines).toEqual([]);
   });
 
   it("never shows a raw id, even without a link label", () => {
-    expect(activityFieldLines(item({ entityType: "feedstock", changedFields: ["supplierId"], changes: { supplierId: { from: SUPPLIER_ID, to: OTHER_ID } } })))
+    expect(activityFieldLines(item({ entityType: "feedstock", changedFields: ["supplierId"], changes: { supplierId: { from: SUPPLIER_ID, to: OTHER_ID } } }), VIEW_TIME_ZONE))
       .toEqual([{ kind: "changed", key: "supplierId", label: "Supplier" }]);
   });
 });
@@ -77,7 +78,7 @@ describe("GPS points", () => {
     expect(activityFieldLines(item({
       changedFields: ["gpsLatitude", "gpsLongitude"],
       changes: { gpsLatitude: { from: "-8.1234", to: "-8.124" }, gpsLongitude: { from: "35.5", to: "35.51" } },
-    }))).toEqual([{
+    }), VIEW_TIME_ZONE)).toEqual([{
       kind: "value", key: "GPS point", label: "GPS point",
       from: { text: "-8.1234, 35.5", tone: "value" }, to: { text: "-8.124, 35.51", tone: "value" },
     }]);
@@ -91,7 +92,7 @@ describe("GPS points", () => {
         destinationGpsLatitude: { from: null, to: "1.5" }, destinationGpsLongitude: { from: null, to: "2.5" },
         originGpsLatitude: { from: "3", to: "4" }, originGpsLongitude: { from: "5", to: "6" },
       },
-    }));
+    }), VIEW_TIME_ZONE);
     expect(lines.map((line) => line.label)).toEqual(["Destination GPS point", "Origin GPS point"]);
     expect(lines[0]).toMatchObject({ from: { text: "Not recorded", tone: "missing" }, to: { text: "1.5, 2.5" } });
     expect(lines[1]).toMatchObject({ from: { text: "3, 5" }, to: { text: "4, 6" } });
@@ -101,16 +102,16 @@ describe("GPS points", () => {
     expect(activityFieldLines(item({
       changedFields: ["gpsLongitude"],
       changes: { gpsLatitude: { from: "-8.1234", to: "-8.1234" }, gpsLongitude: { from: "35.5", to: "35.51" } },
-    }))).toEqual([{
+    }), VIEW_TIME_ZONE)).toEqual([{
       kind: "value", key: "GPS point", label: "GPS point",
       from: { text: "-8.1234, 35.5", tone: "value" }, to: { text: "-8.1234, 35.51", tone: "value" },
     }]);
   });
 
   it("shows only the coordinate that changed on older rows without the partner", () => {
-    expect(activityFieldLines(item({ changedFields: ["gpsLatitude"], changes: { gpsLatitude: { from: "-8.1", to: "-8.2" } } })))
+    expect(activityFieldLines(item({ changedFields: ["gpsLatitude"], changes: { gpsLatitude: { from: "-8.1", to: "-8.2" } } }), VIEW_TIME_ZONE))
       .toEqual([{ kind: "value", key: "gpsLatitude", label: "GPS latitude", from: { text: "-8.1", tone: "value" }, to: { text: "-8.2", tone: "value" } }]);
-    expect(activityFieldLines(item({ changedFields: ["gpsLatitude"], changes: { gpsLatitude: { from: null, to: "-8.2" } } }))[0])
+    expect(activityFieldLines(item({ changedFields: ["gpsLatitude"], changes: { gpsLatitude: { from: null, to: "-8.2" } } }), VIEW_TIME_ZONE)[0])
       .toMatchObject({ from: { text: "Not recorded", tone: "missing" } });
   });
 
@@ -118,7 +119,7 @@ describe("GPS points", () => {
     expect(activityFieldLines(item({
       changedFields: ["gpsLatitude"],
       changes: { gpsLatitude: { from: null, to: "-8.2" }, gpsLongitude: { from: "35.5", to: "35.5" } },
-    }))[0]).toMatchObject({ from: { text: "Not recorded, 35.5" }, to: { text: "-8.2, 35.5" } });
+    }), VIEW_TIME_ZONE)[0]).toMatchObject({ from: { text: "Not recorded, 35.5" }, to: { text: "-8.2, 35.5" } });
   });
 });
 
@@ -128,7 +129,7 @@ describe("links", () => {
       entityType: "feedstock", changedFields: ["supplierId"],
       changes: { supplierId: { from: from ? SUPPLIER_ID : null, to: to ? OTHER_ID : null } },
       changeLabels: { supplierId: { from, to } },
-    }));
+    }), VIEW_TIME_ZONE);
 
   it("shows the record's current name, and Not set for no record", () => {
     expect(supplierChange(named("Acme farms"), null)).toEqual([{
@@ -177,7 +178,7 @@ describe("values", () => {
 
   it("formats days, calendar dates and instants as the app does", () => {
     expect(formatActivityValue("analysisDate", "2026-10-15", UNKNOWN_FACILITY_TIMEZONE, "application").text).toBe("Oct 15, 2026");
-    expect(formatActivityValue("applicationDate", "2026-10-15T00:00:00.000Z", null, "application").text).toBe("Oct 15, 2026");
+    expect(formatActivityValue("applicationDate", "2026-10-15T00:00:00.000Z", UNKNOWN_FACILITY_TIMEZONE, "application").text).toBe("Oct 15, 2026");
     expect(formatActivityValue("samplingTime", "2026-10-15T08:30:00.000Z", UNKNOWN_FACILITY_TIMEZONE, "application").text).toBe("Oct 15, 2026, 08:30");
   });
 
@@ -186,7 +187,7 @@ describe("values", () => {
     const [line] = activityFieldLines(item({
       entityType: "lab_sample", changedFields: ["samplingTime"],
       changes: { samplingTime: { from: "2026-10-15T08:30:00.000Z", to: "2026-10-15T21:15:00.000Z" } },
-    }));
+    }), VIEW_TIME_ZONE);
     expect(line).toMatchObject({ from: { text: "Oct 15, 2026, 11:30" }, to: { text: "Oct 16, 2026, 00:15" } });
     // Calendar days and UTC-midnight business dates do not move with the clock.
     expect(formatActivityValue("analysisDate", "2026-10-15", FACILITY_TIME_ZONE, "application").text).toBe("Oct 15, 2026");
@@ -230,12 +231,23 @@ describe("labels", () => {
   });
 });
 
+describe("a record without a facility zone", () => {
+  it("reads instants on the view's facility clock", () => {
+    const noZone = { ...live, facilityId: null, facilityTimezone: null };
+    const lines = activityFieldLines(item({
+      entityType: "delivery", record: noZone, changedFields: ["deliveryDate"],
+      changes: { deliveryDate: { from: "2026-09-22T06:00:00Z", to: "2026-09-22T07:00:00Z" } },
+    }), FACILITY_TIME_ZONE);
+    expect(lines[0]).toMatchObject({ from: { text: "Sep 22, 2026, 09:00" }, to: { text: "Sep 22, 2026, 10:00" } });
+  });
+});
+
 describe("entity-specific business dates", () => {
   it("shows delivery instants with both facility times", () => {
     expect(activityFieldLines(item({
       entityType: "delivery", changedFields: ["deliveryDate"],
       changes: { deliveryDate: { from: "2026-09-22T06:00:00Z", to: "2026-09-22T07:00:00Z" } },
-    }))).toEqual([{
+    }), VIEW_TIME_ZONE)).toEqual([{
       kind: "value", key: "deliveryDate", label: activityFieldLabel("delivery", "deliveryDate"),
       from: { text: "Sep 22, 2026, 09:00", tone: "value" },
       to: { text: "Sep 22, 2026, 10:00", tone: "value" },

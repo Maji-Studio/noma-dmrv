@@ -229,14 +229,6 @@ midnight, because `new Date("YYYY-MM-DD")` parses as **UTC** midnight, which can
 render as the adjacent day and walk a stored date on an edit/save round-trip.
 `z.iso.date()` validates a string but does not produce a `Date`.
 
-Several established application/delivery/credit-batch schemas still use
-`z.coerce.date()` while their components protect the default side with
-`formatLocalDate`. Treat those as legacy contracts: do not mass-change their
-output types, but when changing one, trace its component, action, data-access,
-and database column and migrate the round trip deliberately. The
-production-run schemas are the current reference for the local date-only
-helpers.
-
 New-record business dates use `facilityToday(timeZone)` from
 `@/lib/date-utils`, never the browser calendar. Physical event inputs keep UTC
 instants and show them through `EventTimeInput` on the facility clock. Use

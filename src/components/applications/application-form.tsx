@@ -47,6 +47,7 @@ import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-chan
 import { APPLICATION_REFUSAL_ALIASES } from "@/lib/application-operation-input";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import type { DurabilityOption } from "@/schemas/credit-batches";
+import { useFacilityDateDefaults } from "@/hooks/use-facility-date-defaults";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { ApplicationSupportingEvidencePanel } from "./application-supporting-evidence-panel";
 import { resolveApplicationDateDefault, resolveApplicationEvidenceMethodDefault } from "./application-form-defaults";
@@ -251,6 +252,15 @@ export function ApplicationForm({
     disabled: d.status !== "delivered",
   }));
   const selectedDelivery = deliveries.find((delivery) => delivery.id === selectedDeliveryId);
+  // A new application's date follows the selected delivery's facility clock,
+  // else the active facility's; it re-defaults while the date is untouched.
+  const markDateEdited = useFacilityDateDefaults({
+    timeZone: selectedDelivery?.facilityTimezone ?? timeZone,
+    isEditMode,
+    fields: ["applicationDate"] as const,
+    isPristine: (field) => !getFieldState(field).isDirty,
+    setDefault: (field, day) => resetField(field, { defaultValue: day }),
+  });
   const derivedPosition = selectedDelivery
     ? resolveApplicationPositionDefault({ delivery: selectedDelivery })
     : null;
@@ -416,7 +426,7 @@ export function ApplicationForm({
               type="date"
               disabled={isSubmitting}
               error={!!errors.applicationDate}
-              {...register("applicationDate")}
+              {...register("applicationDate", { onChange: () => markDateEdited("applicationDate") })}
             />
           </FormField>
         </div>

@@ -11,7 +11,6 @@
  */
 "use client";
 
-import { useFacilityDateDefaults } from "@/hooks/use-facility-date-defaults";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { formatUtcDate, toDateInputValue, facilityToday } from "@/lib/date-utils";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
@@ -122,8 +121,8 @@ export function CreditBatchForm({
   // lock that arrives Held can never meet an edited membership.
   const membershipLocked = isEditMode && (!lock || isCreditBatchMembershipLocked(lock));
   const { facilityId: contextFacilityId } = useFacilityContext();
-  const { timeZone: initialTimeZone } = useFacilityClock(creditBatch?.facilityId ?? contextFacilityId);
-  const today = facilityToday(initialTimeZone);
+  const { timeZone } = useFacilityClock(creditBatch?.facilityId ?? contextFacilityId);
+  const today = facilityToday(timeZone);
 
   const {
     register,
@@ -132,8 +131,6 @@ export function CreditBatchForm({
     trigger,
     formState: { errors, isSubmitted, dirtyFields },
     setValue,
-    resetField,
-    getFieldState,
   } = useForm<CreditBatchFormInput, unknown, CreditBatchFormData>({
     resolver: resolveBatch,
     defaultValues: {
@@ -159,14 +156,6 @@ export function CreditBatchForm({
   const watchedEndDate = useWatch({ control, name: "endDate" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
-  const { timeZone } = useFacilityClock(creditBatch?.facilityId ?? (watchedFacilityId || contextFacilityId));
-  const markDateEdited = useFacilityDateDefaults({
-    timeZone,
-    isEditMode,
-    fields: ["startDate", "endDate"] as const,
-    isPristine: (field) => !getFieldState(field).isDirty,
-    setDefault: (field, day) => resetField(field, { defaultValue: day }),
-  });
   const watchedSampling = useWatch({ control, name: "sampling" });
   const watchedProductionRunIds = useWatch({ control, name: "productionRunIds" });
   const effectiveFacilityId = watchedFacilityId || contextFacilityId || "";
@@ -418,7 +407,7 @@ export function CreditBatchForm({
               disabled={isSubmitting || membershipLocked}
               error={!!errors.startDate}
               {...register("startDate", {
-                onChange: () => { markDateEdited("startDate"); onClearServerError?.(); },
+                onChange: () => onClearServerError?.(),
               })}
             />
           </FormField>
@@ -435,7 +424,7 @@ export function CreditBatchForm({
               disabled={isSubmitting || membershipLocked}
               error={!!errors.endDate}
               {...register("endDate", {
-                onChange: () => { markDateEdited("endDate"); onClearServerError?.(); },
+                onChange: () => onClearServerError?.(),
               })}
             />
           </FormField>

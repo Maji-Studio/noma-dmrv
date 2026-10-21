@@ -129,7 +129,7 @@ function EntryBody({ item, showDate, timeZone }: { item: ActivityItem; showDate:
   const label = activityRecordLabel(item);
   const deleted = item.record.deleted;
   const summary = activityChangeSummary(item);
-  const lines = activityFieldLines(item);
+  const lines = activityFieldLines(item, timeZone);
   const statusChange = item.action === "status_changed";
   return (
     <>

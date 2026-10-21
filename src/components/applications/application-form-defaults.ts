@@ -1,4 +1,4 @@
-import { facilityToday, UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
+import { facilityToday } from "@/lib/date-utils";
 import {
   applicationEvidenceMethods,
   isSelectableApplicationEvidenceMethod,
@@ -30,6 +30,6 @@ export function resolveApplicationEvidenceMethodDefault(
     : DEFAULT_APPLICATION_EVIDENCE_METHOD;
 }
 
-export function resolveApplicationDateDefault(timezone?: string | null, now = new Date()): string {
-  return facilityToday(timezone ?? UNKNOWN_FACILITY_TIMEZONE, now);
+export function resolveApplicationDateDefault(timezone: string, now = new Date()): string {
+  return facilityToday(timezone, now);
 }
