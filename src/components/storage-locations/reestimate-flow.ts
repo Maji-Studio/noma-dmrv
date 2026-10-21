@@ -35,6 +35,8 @@ export interface ReestimateFigures {
   layers: ReestimatedLayer[];
   /** True when the re-estimate covers everything that stays: a mix pile, or every held sub-bin. */
   wholeBin: boolean;
+  /** True when the bin's solids are all biochar; a blend's include ingredient solids, so the copy says dry solids. */
+  allBiochar: boolean;
   binWetKg: number;
   binSolidsKg: number;
   removedWetKg: number;
@@ -48,20 +50,23 @@ const SAME_SOLIDS_KG = 0.05;
 
 /** Null unless saving this movement re-estimates what stays and every figure is known. */
 export function reestimateFigures(preview: Preview): ReestimateFigures | null {
-  const { reestimate, beforeEstimatedWetKg, afterEstimatedWetKg, beforeSolidsKg, afterSolidsKg, removedWetKg } = preview;
+  const { reestimate, beforeEstimatedWetKg, afterEstimatedWetKg, beforeSolidsKg, afterSolidsKg, removedWetKg, beforeDryKg } = preview;
   if (!reestimate || preview.blockingMessage !== null) return null;
   if (beforeEstimatedWetKg === null || afterEstimatedWetKg === null || removedWetKg === null || beforeSolidsKg === null) return null;
   const layerSolidsKg = reestimate.layers.reduce((sum, layer) => sum + layer.staySolidsKg, 0);
   return {
     moisturePercent: reestimate.moisturePercent,
     layers: reestimate.layers.map(({ layerId, name, moisturePercent, stayWetKg, staySolidsKg }) => {
+      // A layer's solids are its dry biochar scaled by the bin's solids-to-biochar ratio, so a blend's ingredient solids never read as water.
+      const solidsPerBiocharKg = beforeDryKg !== null && beforeDryKg > 0 ? beforeSolidsKg / beforeDryKg : 1;
       const before = preview.beforeAllocations?.find((allocation) => allocation.layerId === layerId);
       const beforeWetKg = before?.wetMassKg ?? null;
-      const beforeDryKg = before?.dryMassKg ?? null;
-      const beforeMoisturePercent = beforeWetKg !== null && beforeDryKg !== null ? moistureOf(beforeWetKg, beforeDryKg) : null;
+      const layerDryKg = before?.dryMassKg ?? null;
+      const beforeMoisturePercent = beforeWetKg !== null && layerDryKg !== null ? moistureOf(beforeWetKg, layerDryKg * solidsPerBiocharKg) : null;
       return { layerId, name, moisturePercent, stayWetKg, staySolidsKg, beforeWetKg, beforeMoisturePercent };
     }),
     wholeBin: preview.stockMode === "mix" || Math.abs(layerSolidsKg - reestimate.staySolidsKg) < SAME_SOLIDS_KG,
+    allBiochar: beforeDryKg !== null && Math.abs(beforeDryKg - beforeSolidsKg) < SAME_SOLIDS_KG,
     binWetKg: beforeEstimatedWetKg, binSolidsKg: beforeSolidsKg,
     removedWetKg: Math.abs(removedWetKg), removedSolidsKg: Math.abs(preview.removedSolidsKg ?? beforeSolidsKg - (afterSolidsKg ?? beforeSolidsKg)),
     stayWetKg: afterEstimatedWetKg, staySolidsKg: reestimate.staySolidsKg,

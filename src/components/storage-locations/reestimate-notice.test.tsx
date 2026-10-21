@@ -59,6 +59,23 @@ describe("ReestimateNotice", () => {
     expect(measure).toHaveBeenCalledWith("a");
   });
 
+  it("says dry solids, not biochar, for a blend, and counts ingredient solids as solids in a sub-bin's moisture", () => {
+    render(<ReestimateNotice preview={blend} kind="delivery" />);
+    fireEvent.click(screen.getByRole("button", { name: "About Why the bin goes up" }));
+    expect(screen.getByText("80 kg of the bin is dry solids. This delivery takes 25 kg of it, so 55 kg stays. Counted at 50% moisture, those 55 kg weigh 110 kg.")).toBeTruthy();
+    cleanup();
+    // A: 100 kg wet over 40 kg biochar and 40 kg ingredient solids is 20% moisture, not 60%.
+    const blendSplit: Preview = { ...blend, stockMode: "split", reestimate: { ...blend.reestimate!, layers: [{ layerId: "a", name: "P1", moisturePercent: 50, stayWetKg: 60, staySolidsKg: 30 }] }, beforeAllocations: [{ layerId: "a", code: "A", wetMassKg: 100, dryMassKg: 40, runs: [] }] };
+    render(<ReestimateNotice preview={blendSplit} kind="loss" />);
+    expect(screen.getByRole("status").textContent).toContain("Check the moisture: 50% against P1's 20%");
+  });
+
+  it("names the product as the one that takes the biochar", () => {
+    render(<ReestimateNotice preview={wetter} kind="biochar" />);
+    fireEvent.click(screen.getByRole("button", { name: "About Why the bin goes up" }));
+    expect(screen.getByText(/^80 kg of the bin is biochar\. This product takes 25 kg of it/)).toBeTruthy();
+  });
+
   it("lists several sub-bins at one reading", () => {
     const layers = [{ layerId: "a", name: "A", moisturePercent: 50, stayWetKg: 110, staySolidsKg: 55 }, { layerId: "b", name: "B", moisturePercent: 50, stayWetKg: 100, staySolidsKg: 50 }];
     const beforeAllocations = [{ layerId: "a", code: "A", wetMassKg: 100, dryMassKg: 80, runs: [] }, { layerId: "b", code: "B", wetMassKg: 90, dryMassKg: 72, runs: [] }];

@@ -15,7 +15,7 @@ const SUBJECT: Record<ReestimateKind, string> = {
   loss: "The lost mass",
   delivery: "This delivery",
   correction: "The removed mass",
-  biochar: "This biochar",
+  biochar: "This product",
 };
 
 export const MEASURE_AGAIN_LABEL = "Edit the moisture";
@@ -67,12 +67,13 @@ function noticeCopy(figures: ReestimateFigures, kind: ReestimateKind): NoticeCop
   const reading = moisturePercent === null ? null : formatMoisturePercent(moisturePercent);
   const names = listNames(layers.map((layer) => layer.name));
   const subject = SUBJECT[kind];
+  const solids = figures.allBiochar ? "biochar" : "dry solids";
   if (wholeBin && moisturePercent !== null && reading) {
     return {
       title: `Check the moisture: ${reading} against the bin's ${formatMoisturePercent(moistureOf(figures.binWetKg, figures.binSolidsKg))}`,
       body: `If ${reading} is right, saving changes the bin until it is counted again.`,
       whyTitle: "Why the bin goes up",
-      why: `${formatMassKg(figures.binSolidsKg)} of the bin is biochar. ${subject} takes ${formatMassKg(figures.removedSolidsKg)} of it, so ${formatMassKg(figures.staySolidsKg)} stays. Counted at ${reading} moisture, those ${formatMassKg(figures.staySolidsKg)} weigh ${formatMassKg(figures.stayWetKg)}.`,
+      why: `${formatMassKg(figures.binSolidsKg)} of the bin is ${solids}. ${subject} takes ${formatMassKg(figures.removedSolidsKg)} of it, so ${formatMassKg(figures.staySolidsKg)} stays. Counted at ${reading} moisture, those ${formatMassKg(figures.staySolidsKg)} weigh ${formatMassKg(figures.stayWetKg)}.`,
       pairs: [{ key: "bin", beforeLabel: "Bin now", before: massAt(figures.binWetKg, moistureOf(figures.binWetKg, figures.binSolidsKg)), after: massAt(figures.stayWetKg, moisturePercent) }],
     };
   }
@@ -90,7 +91,7 @@ function noticeCopy(figures: ReestimateFigures, kind: ReestimateKind): NoticeCop
     title,
     body: `If ${reading ?? "these readings are"}${reading ? " is" : ""} right, saving changes ${names} until the bin is counted again.`,
     whyTitle: layers.length === 1 ? `Why ${names} goes up` : `Why ${names} go up`,
-    why: `${subject} takes its biochar from the bin. The ${formatMassKg(staySolidsKg)} of biochar that stays in ${names}, counted at ${at}, weigh${layers.length === 1 ? "s" : ""} ${formatMassKg(stayWetKg)}.`,
+    why: `${subject} takes its ${solids} from the bin. The ${formatMassKg(staySolidsKg)} of ${solids} that stays in ${names}, counted at ${at}, weigh${layers.length === 1 ? "s" : ""} ${formatMassKg(stayWetKg)}.`,
     pairs,
   };
 }
