@@ -73,6 +73,7 @@ export function RemovalTemplateSummaryCard({ facilityId }: { facilityId: string 
         <RemovalTemplateSetupDialog
           isOpen={!!request.setup}
           facilityId={facilityId}
+          hasDefaultTemplate={!!query.data.defaultRemovalTemplateId}
           templateId={request.template}
           step={request.setup}
           makeDefault={request.makeDefault !== "false"}

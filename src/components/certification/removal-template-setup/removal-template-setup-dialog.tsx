@@ -22,6 +22,8 @@ const TITLE_ID = "removal-template-setup-title";
 export interface RemovalTemplateSetupDialogProps {
   isOpen: boolean;
   facilityId: string;
+  /** Whether the facility already has a default template, known by the caller so the title is right before the read lands. */
+  hasDefaultTemplate: boolean;
   /** The template a link or button starts with. */
   templateId?: string | null;
   /** The step a link or button starts on; any other value starts on Template. */
@@ -53,7 +55,7 @@ export function RemovalTemplateSetupDialog(props: RemovalTemplateSetupDialogProp
   );
 }
 
-function DialogBody({ facilityId, templateId = null, step = null, makeDefault = true, onClose, apply }: RemovalTemplateSetupDialogProps & { apply: ReturnType<typeof useApplyRemovalTemplateSetup> }) {
+function DialogBody({ facilityId, hasDefaultTemplate, templateId = null, step = null, makeDefault = true, onClose, apply }: RemovalTemplateSetupDialogProps & { apply: ReturnType<typeof useApplyRemovalTemplateSetup> }) {
   const query = useRemovalTemplateSetup(facilityId, !!facilityId);
   const [reloads, setReloads] = useState(0);
   const reload = async () => {
@@ -61,8 +63,8 @@ function DialogBody({ facilityId, templateId = null, step = null, makeDefault = 
     setReloads((count) => count + 1);
   };
 
-  // The title names the entry point, read from the link and the facility's default: nothing extra is stored.
-  const title = setupDialogTitle({ step: parseStep(step), hasDefaultTemplate: !!query.data?.defaultRemovalTemplateId });
+  // The title names the entry point, read from the link and the caller's knowledge of the default, so it is right while the read loads or fails.
+  const title = setupDialogTitle({ step: parseStep(step), hasDefaultTemplate });
 
   return (
     <div className="flex flex-col">
