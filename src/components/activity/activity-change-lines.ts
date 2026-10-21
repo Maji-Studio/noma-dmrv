@@ -36,7 +36,7 @@ import {
   type ActivityItem,
 } from "./activity-display";
 import { ACTIVITY_DELETED_RECORD_LABEL } from "./activity-copy";
-import { isActivityEntityType } from "@/db/schema/common";
+import { isActivityEntityType, type ActivityEntityType } from "@/db/schema/common";
 
 type ActivityChanges = NonNullable<ActivityItem["changes"]>;
 type ActivityValue = ActivityChanges[string]["from"];
@@ -155,7 +155,7 @@ function formatInstant(text: string, timeZone: string | null): string {
 }
 
 /** One stored value as it reads on the line. `timeZone` is the record's facility zone. */
-export function formatActivityValue(field: string, stored: ActivityValue, timeZone: string | null = null, entityType?: string): ActivityValueText {
+export function formatActivityValue(field: string, stored: ActivityValue, timeZone: string | null, entityType: ActivityEntityType): ActivityValueText {
   const choice = Object.hasOwn(ENUM_FORMATTERS, field);
   if (stored === null) return choice ? NOT_SET : NOT_RECORDED;
   const text = String(stored);

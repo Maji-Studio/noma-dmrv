@@ -374,6 +374,19 @@ the zone through `Intl`, so a viewer inside their own daylight-saving change
 still sees the facility time; do not swap in `formatInTimeZone`. Input side:
 [forms.md](./forms.md#dates).
 
+**Wherever a facility exists, use its clock.** Every time and business date a
+record shows, and every new-record default date, reads the record's facility
+(or the active facility when the record has none) through the same helpers. A
+time of day alone is `formatFacilityClockTime(value, timeZone)` (`14:30`); a
+new-record default day is `facilityToday(timeZone)`, never the browser's day.
+The browser zone is never used. When the facility cannot be resolved, pass
+`UNKNOWN_FACILITY_TIMEZONE` (UTC) explicitly; `timeZone` parameters have no
+default, so the fallback is always visible at the call site.
+
+**Exception (pending confirmation).** Account security metadata that belongs to
+no facility (API keys, connected apps: created, last used, expires) keeps the
+viewer's clock via `formatDateTime`.
+
 ---
 
 ## Missing values

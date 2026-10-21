@@ -1,3 +1,4 @@
+import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import {
   createColumnHelper,
   createTable,
@@ -27,7 +28,7 @@ function buildTable(sorting: SortingState, globalFilter = "") {
   const helper = createColumnHelper<Item>();
   const descending = (id: string) => isSortedDescending(sorting, id);
   const columns = [
-    helper.accessor((item) => submittedOnText(item.submittedOn), {
+    helper.accessor((item) => submittedOnText(item.submittedOn, UNKNOWN_FACILITY_TIMEZONE), {
       id: "submittedOn",
       sortingFn: submittedOnSortingFn<Item>(descending("submittedOn")),
     }),

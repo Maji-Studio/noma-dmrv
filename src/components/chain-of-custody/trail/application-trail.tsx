@@ -22,7 +22,7 @@ import type {
 import { useApplicationTrail } from "@/hooks/use-chain-of-custody";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { resolveChainSources } from "@/lib/chain-of-custody/sources";
-import { formatCalendarDate, formatDate, formatFacilityDay, formatFacilityDateTime, formatLegDistanceKm, formatMassKg } from "@/lib/format-utils";
+import { DATE_ONLY_PATTERN, formatCalendarDate, formatDayString, formatFacilityDay, formatFacilityDateTime, formatLegDistanceKm, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import { humanizeEnum } from "@/lib/copy-utils";
@@ -55,8 +55,8 @@ function formatKg(value: number | null): string | null {
 function formatStepDate(value: Date | string | null, timeZone: string, calendarDay = false): string {
   if (calendarDay) return formatCalendarDate(value);
   // Run and product dates are already facility calendar day strings.
-  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
-    ? formatDate(value)
+  return typeof value === "string" && DATE_ONLY_PATTERN.test(value)
+    ? formatDayString(value)
     : formatFacilityDay(value, timeZone);
 }
 

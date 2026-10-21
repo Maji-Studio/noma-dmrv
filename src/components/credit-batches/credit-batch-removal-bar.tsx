@@ -21,7 +21,6 @@ import {
   type RemovalBarSlice,
 } from "@/lib/credit-batches/removal-bar";
 import { useFacilityClock } from "@/hooks/use-facility-context";
-import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { formatCalendarDate, formatFacilityDay, formatTonnes } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
@@ -87,7 +86,7 @@ function groupAccessibleLabel(group: RemovalBarGroup): string {
 }
 
 /** An interrupted submission reads as a draft, so only a submitted Removal names its submission date. */
-export function removalDateLine(removal: Pick<RemovalBarRemoval, "phase" | "submittedAt" | "createdAt">, timeZone = UNKNOWN_FACILITY_TIMEZONE): string {
+export function removalDateLine(removal: Pick<RemovalBarRemoval, "phase" | "submittedAt" | "createdAt">, timeZone: string): string {
   return removal.phase === "submitted" && removal.submittedAt
     ? `Submitted ${formatFacilityDay(removal.submittedAt, timeZone)}`
     : `Created ${formatFacilityDay(removal.createdAt, timeZone)}`;

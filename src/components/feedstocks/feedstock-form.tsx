@@ -6,6 +6,7 @@
  */
 "use client";
 
+import { useFacilityDateDefaults } from "@/hooks/use-facility-date-defaults";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { INTAKE_MOISTURE_RANGE_HELPER } from "@/lib/mass-moisture";
 import type { ReactNode } from "react";
@@ -109,8 +110,8 @@ export function FeedstockForm({
   const [hasEditedAllocationMass, setHasEditedAllocationMass] = useState(false);
   const formId = useId();
   const { facilityId: contextFacilityId } = useFacilityContext();
-  const { timeZone } = useFacilityClock(feedstock?.facilityId ?? contextFacilityId);
-  const today = facilityToday(timeZone);
+  const { timeZone: initialTimeZone } = useFacilityClock(feedstock?.facilityId ?? contextFacilityId);
+  const today = facilityToday(initialTimeZone);
 
   // Quick-add dialogs
   const vehicleDialog = useQuickAddDialog();
@@ -152,6 +153,8 @@ export function FeedstockForm({
     control,
     trigger,
     setValue,
+    resetField,
+    getFieldState,
     getValues,
     setError,
     clearErrors,
@@ -182,6 +185,14 @@ export function FeedstockForm({
   const watchMoisture = useWatch({ control, name: "moisturePercent" });
   const watchAllocations = useWatch({ control, name: "allocations" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
+  const { timeZone } = useFacilityClock(feedstock?.facilityId ?? (watchedFacilityId || contextFacilityId));
+  const markDateEdited = useFacilityDateDefaults({
+    timeZone,
+    isEditMode,
+    fields: ["deliveryDate"] as const,
+    isPristine: (field) => !getFieldState(field).isDirty,
+    setDefault: (field, day) => resetField(field, { defaultValue: day }),
+  });
   const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
   const watchedSupplierId = useWatch({ control, name: "supplierId" });
   // The schema coerces the raw input (`optionalPositiveNumber`); the live
@@ -380,7 +391,7 @@ export function FeedstockForm({
                 type="date"
                 disabled={isSubmitting}
                 error={!!errors.deliveryDate}
-                {...register("deliveryDate")}
+                {...register("deliveryDate", { onChange: () => markDateEdited("deliveryDate") })}
               />
             </FormField>
 

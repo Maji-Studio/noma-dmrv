@@ -8,7 +8,6 @@ import type { ChainRunRollForward } from "@/data-access/chain-of-custody-roll-fo
 import { kgToTonnes, tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
-import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { formatCalendarDate, formatDate, formatFacilityDay } from "@/lib/format-utils";
 import { formatWetDryMass, splitWetMass } from "@/lib/mass-moisture";
 import dagre from "@dagrejs/dagre";
@@ -457,7 +456,7 @@ function buildDeliveryNode(delivery: Omit<ChainDeliveryLineage, "proofOfDelivery
 }
 
 /** Also feeds the Carbon Viewer's marker popups (same codes + detail rows). */
-export function buildLineageNodes(data: ChainOfCustodyData, timeZone = UNKNOWN_FACILITY_TIMEZONE): LineageGraphNode[] {
+export function buildLineageNodes(data: ChainOfCustodyData, timeZone: string): LineageGraphNode[] {
   const sources = resolveChainSources(data);
   const nodes = buildSourceNodes(sources);
 
@@ -660,7 +659,7 @@ function buildLineageEdges(data: ChainOfCustodyData): Edge[] {
  * product layers drawn from it, and the deliveries that shipped those layers.
  * Node and edge ids match the rollback builders, so merging dedupes them.
  */
-export function buildRollForwardGraph(rollForward: ChainRunRollForward, timeZone = UNKNOWN_FACILITY_TIMEZONE): {
+export function buildRollForwardGraph(rollForward: ChainRunRollForward, timeZone: string): {
   nodes: LineageGraphNode[];
   edges: Edge[];
 } {
@@ -708,7 +707,7 @@ export function buildRollForwardGraph(rollForward: ChainRunRollForward, timeZone
  * Every roll-forward card, deduped, with each product's "Drawn from runs"
  * total across member runs. Shared by the DAG merge and the map popups.
  */
-export function buildRollForwardNodes(rollForwards: ChainRunRollForward[], timeZone = UNKNOWN_FACILITY_TIMEZONE): LineageGraphNode[] {
+export function buildRollForwardNodes(rollForwards: ChainRunRollForward[], timeZone: string): LineageGraphNode[] {
   const drawnByProductNode = new Map<string, { wetKg: number; dryKg: number }>();
   for (const rollForward of rollForwards) {
     for (const { product, drawnWetMassKg, drawnDryMassKg } of rollForward.products) {
@@ -733,7 +732,7 @@ export function buildRollForwardNodes(rollForwards: ChainRunRollForward[], timeZ
 
 export interface ChainGraphOptions {
   /** Facility zone for delivery instants; other node dates are calendar days. */
-  timeZone?: string;
+  timeZone: string;
   /**
    * Split/map cross-linking: card clicks highlight the map marker instead of
    * navigating, so the cards drop their links.
@@ -809,7 +808,7 @@ function layoutGraph(
 
 export function useChainGraph(
   data: ChainOfCustodyData | undefined,
-  options: ChainGraphOptions = {}
+  options: ChainGraphOptions
 ) {
   if (!data) {
     return { nodes: [], edges: [] };
@@ -829,7 +828,7 @@ export function useChainGraph(
  */
 function buildMergedChainGraph(
   lineages: ChainOfCustodyData[] | undefined,
-  options: ChainGraphOptions = {},
+  options: ChainGraphOptions,
   rollForwards: ChainRunRollForward[] = [],
 ) {
   if ((!lineages || lineages.length === 0) && rollForwards.length === 0) {
@@ -945,7 +944,7 @@ function buildMergedChainGraph(
 export function useBatchChainGraph(
   lineages: ChainOfCustodyData[] | undefined,
   rollForwards: ChainRunRollForward[] | undefined,
-  options: ChainGraphOptions = {},
+  options: ChainGraphOptions,
 ) {
   return buildMergedChainGraph(lineages, options, rollForwards);
 }

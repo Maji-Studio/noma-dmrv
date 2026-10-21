@@ -23,7 +23,6 @@
  */
 
 import { useFacilityClock } from "@/hooks/use-facility-context";
-import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import dynamic from "next/dynamic";
 import { useState, type CSSProperties } from "react";
 import { MapTrifoldIcon } from "@phosphor-icons/react/dist/ssr";
@@ -140,14 +139,14 @@ export interface CarbonTransitPanelProps {
 
 function buildPopupContent(
   lineages: ChainOfCustodyData[] | undefined,
-  rollForwards: ChainRunRollForward[] = [],
-  batchFacility?: ChainFacility,
-  timeZone = UNKNOWN_FACILITY_TIMEZONE,
+  rollForwards: ChainRunRollForward[] | undefined,
+  batchFacility: ChainFacility | undefined,
+  timeZone: string,
 ): PopupContentByNodeId {
   const content: PopupContentByNodeId = {};
   const nodes = [
     ...(lineages ?? []).flatMap((chainData) => buildLineageNodes(chainData, timeZone)),
-    ...buildRollForwardNodes(rollForwards, timeZone),
+    ...buildRollForwardNodes(rollForwards ?? [], timeZone),
   ];
   for (const node of nodes) {
     if (content[node.id]) continue;

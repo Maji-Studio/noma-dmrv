@@ -4,23 +4,22 @@
  */
 import { ACTIVITY_RECORDING_STARTED_AT } from "@/config/activity";
 import { pluralize } from "@/lib/copy-utils";
-import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { formatFacilityDay } from "@/lib/format-utils";
 
 export const ACTIVITY_TITLE = "Activities";
 
-export function activityRecordingStartLabel(timeZone = UNKNOWN_FACILITY_TIMEZONE): string {
+export function activityRecordingStartLabel(timeZone: string): string {
   return formatFacilityDay(ACTIVITY_RECORDING_STARTED_AT, timeZone);
 }
 
 export const ACTIVITY_EMPTY_TITLE = "No activity recorded yet";
 
-export function activityEmptyDescription(timeZone = UNKNOWN_FACILITY_TIMEZONE): string {
+export function activityEmptyDescription(timeZone: string): string {
   return `Activity is recorded from ${activityRecordingStartLabel(timeZone)}. Changes to this credit batch and its records appear here.`;
 }
 
 /** Closes a complete list: nothing older exists to load. */
-export function activityHistoryStartNote(timeZone = UNKNOWN_FACILITY_TIMEZONE): string {
+export function activityHistoryStartNote(timeZone: string): string {
   return `Activity is recorded from ${activityRecordingStartLabel(timeZone)}. Earlier changes are not listed.`;
 }
 

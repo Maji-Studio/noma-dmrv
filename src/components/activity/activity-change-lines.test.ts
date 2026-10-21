@@ -1,3 +1,4 @@
+import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { describe, expect, it } from "vitest";
 import {
   activityFieldLines,
@@ -170,49 +171,49 @@ describe("values", () => {
   });
 
   it("shows codes and years as typed", () => {
-    expect(formatActivityValue("modelYear", "2019")).toEqual({ text: "2019", tone: "value" });
-    expect(formatActivityValue("fieldIdentifier", "12345")).toEqual({ text: "12345", tone: "value" });
+    expect(formatActivityValue("modelYear", "2019", UNKNOWN_FACILITY_TIMEZONE, "application")).toEqual({ text: "2019", tone: "value" });
+    expect(formatActivityValue("fieldIdentifier", "12345", UNKNOWN_FACILITY_TIMEZONE, "application")).toEqual({ text: "12345", tone: "value" });
   });
 
   it("formats days, calendar dates and instants as the app does", () => {
-    expect(formatActivityValue("analysisDate", "2026-10-15").text).toBe("Oct 15, 2026");
+    expect(formatActivityValue("analysisDate", "2026-10-15", UNKNOWN_FACILITY_TIMEZONE, "application").text).toBe("Oct 15, 2026");
     expect(formatActivityValue("applicationDate", "2026-10-15T00:00:00.000Z", null, "application").text).toBe("Oct 15, 2026");
-    expect(formatActivityValue("samplingTime", "2026-10-15T08:30:00.000Z").text).toBe("Oct 15, 2026, 08:30");
+    expect(formatActivityValue("samplingTime", "2026-10-15T08:30:00.000Z", UNKNOWN_FACILITY_TIMEZONE, "application").text).toBe("Oct 15, 2026, 08:30");
   });
 
   it("reads an instant on the record's facility clock", () => {
-    expect(formatActivityValue("samplingTime", "2026-10-15T08:30:00.000Z", FACILITY_TIME_ZONE).text).toBe("Oct 15, 2026, 11:30");
+    expect(formatActivityValue("samplingTime", "2026-10-15T08:30:00.000Z", FACILITY_TIME_ZONE, "application").text).toBe("Oct 15, 2026, 11:30");
     const [line] = activityFieldLines(item({
       entityType: "lab_sample", changedFields: ["samplingTime"],
       changes: { samplingTime: { from: "2026-10-15T08:30:00.000Z", to: "2026-10-15T21:15:00.000Z" } },
     }));
     expect(line).toMatchObject({ from: { text: "Oct 15, 2026, 11:30" }, to: { text: "Oct 16, 2026, 00:15" } });
     // Calendar days and UTC-midnight business dates do not move with the clock.
-    expect(formatActivityValue("analysisDate", "2026-10-15", FACILITY_TIME_ZONE).text).toBe("Oct 15, 2026");
+    expect(formatActivityValue("analysisDate", "2026-10-15", FACILITY_TIME_ZONE, "application").text).toBe("Oct 15, 2026");
     expect(formatActivityValue("applicationDate", "2026-10-15T00:00:00.000Z", FACILITY_TIME_ZONE, "application").text).toBe("Oct 15, 2026");
   });
 
   it("reads a missing choice as Not set and any other missing value as Not recorded", () => {
     for (const field of ["evidenceMethod", "distanceSource", "documentType", "entityType"]) {
-      expect(formatActivityValue(field, null)).toEqual({ text: "Not set", tone: "missing" });
+      expect(formatActivityValue(field, null, UNKNOWN_FACILITY_TIMEZONE, "application")).toEqual({ text: "Not set", tone: "missing" });
     }
     for (const field of ["massWetKg", "analysisDate", "samplingTime", "labName", "gpsLatitude"]) {
-      expect(formatActivityValue(field, null)).toEqual({ text: "Not recorded", tone: "missing" });
+      expect(formatActivityValue(field, null, UNKNOWN_FACILITY_TIMEZONE, "application")).toEqual({ text: "Not recorded", tone: "missing" });
     }
   });
 
   it("reads choices in the forms' words, unknown ones humanized", () => {
-    expect(formatActivityValue("evidenceMethod", "boundary").text).toBe("GIS reference");
-    expect(formatActivityValue("evidenceMethod", "future_method").text).toBe("Future method");
-    expect(formatActivityValue("applicationMethodType", "mechanical").text).toBe("Mechanical");
-    expect(formatActivityValue("distanceSource", "map_estimate").text).toBe("Route calculation");
-    expect(formatActivityValue("recordedDistanceSource", "document").text).toBe("Transport document");
-    expect(formatActivityValue("soilTemperatureSource", "global_database").text).toBe("Global Database");
-    expect(formatActivityValue("sampling", "unsampled").text).toBe("Unsampled");
-    expect(formatActivityValue("vehicleType", "truck").text).toBe("Truck");
+    expect(formatActivityValue("evidenceMethod", "boundary", UNKNOWN_FACILITY_TIMEZONE, "application").text).toBe("GIS reference");
+    expect(formatActivityValue("evidenceMethod", "future_method", UNKNOWN_FACILITY_TIMEZONE, "application").text).toBe("Future method");
+    expect(formatActivityValue("applicationMethodType", "mechanical", UNKNOWN_FACILITY_TIMEZONE, "application").text).toBe("Mechanical");
+    expect(formatActivityValue("distanceSource", "map_estimate", UNKNOWN_FACILITY_TIMEZONE, "application").text).toBe("Route calculation");
+    expect(formatActivityValue("recordedDistanceSource", "document", UNKNOWN_FACILITY_TIMEZONE, "application").text).toBe("Transport document");
+    expect(formatActivityValue("soilTemperatureSource", "global_database", UNKNOWN_FACILITY_TIMEZONE, "application").text).toBe("Global Database");
+    expect(formatActivityValue("sampling", "unsampled", UNKNOWN_FACILITY_TIMEZONE, "application").text).toBe("Unsampled");
+    expect(formatActivityValue("vehicleType", "truck", UNKNOWN_FACILITY_TIMEZONE, "application").text).toBe("Truck");
     // Owner types read as the link labels do.
-    expect(formatActivityValue("entityType", "biochar").text).toBe("Biochar product");
-    expect(formatActivityValue("entityType", "sample").text).toBe("Sample");
+    expect(formatActivityValue("entityType", "biochar", UNKNOWN_FACILITY_TIMEZONE, "application").text).toBe("Biochar product");
+    expect(formatActivityValue("entityType", "sample", UNKNOWN_FACILITY_TIMEZONE, "application").text).toBe("Sample");
   });
 });
 
@@ -240,7 +241,7 @@ describe("entity-specific business dates", () => {
       to: { text: "Sep 22, 2026, 10:00", tone: "value" },
     }]);
   });
-  it.each([["feedstock", "deliveryDate"], ["application", "applicationDate"], ["order", "orderDate"]])(
+  it.each([["feedstock", "deliveryDate"], ["application", "applicationDate"], ["order", "orderDate"]] as const)(
     "keeps %s %s on its stored date-only calendar", (entityType, field) => {
       expect(formatActivityValue(field, "2026-09-22T00:00:00Z", "America/Los_Angeles", entityType).text).toBe("Sep 22, 2026");
     },

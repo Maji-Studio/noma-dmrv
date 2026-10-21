@@ -272,12 +272,6 @@ function BatchesColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
   return <MemberBatchesCell summary={row.original} />;
 }
 
-function SubmittedOnColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
-  const { facilityId } = useFacilityContext();
-  const { timeZone } = useFacilityClock(facilityId);
-  return <SubmittedOnCell state={row.original.submittedOn} timeZone={timeZone} />;
-}
-
 function StatusColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
   const locks = useContext(RemovalLocksContext);
   return <StatusCell summary={row.original} lock={locks[row.original.removalId]} />;
@@ -315,7 +309,7 @@ const createColumns = (
     header: "Submitted on",
     accessorFn: (summary) => submittedOnText(summary.submittedOn, timeZone),
     sortingFn: submittedOnSortingFn<RemovalListRow>(submittedOnDescending),
-    cell: SubmittedOnColumnCell,
+    cell: ({ row }) => <SubmittedOnCell state={row.original.submittedOn} timeZone={timeZone} />,
   },
   {
     id: "status",
