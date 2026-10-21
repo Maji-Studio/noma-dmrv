@@ -6,7 +6,8 @@
 "use client";
 
 import { useState } from "react";
-import { ServerError } from "@/components/forms";
+import { reserveStickyFooterSpace } from "@/components/forms/form-actions";
+import { ServerError } from "@/components/forms/server-error";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
@@ -171,7 +172,7 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
         </StepFlow>
       </div>
 
-      <div className={`sticky bottom-0 z-10 flex flex-col gap-12 border-t border-[var(--color-border-secondary)] bg-[var(--color-background-white)] ${GUTTER_CLASS} py-12`}>
+      <div ref={reserveStickyFooterSpace} className={`sticky bottom-0 z-10 flex flex-col gap-12 border-t border-[var(--color-border-secondary)] bg-[var(--color-background-white)] ${GUTTER_CLASS} py-12`}>
         {allBlocked && step === 0 && (
           <Notice tone="warning">
             {data.fitting.length === 0 ? "No template can be set up yet." : data.fitting.length === 1 ? "This template cannot be set up yet." : "None of these templates can be set up yet."}

@@ -129,7 +129,11 @@ function RailItem({
         type="button"
         onClick={() => onNavigate(index)}
         aria-current={state === "active" ? "step" : undefined}
-        className="flex min-w-0 items-center text-left transition-opacity hover:opacity-70"
+        className={cn(
+          "flex min-w-0 items-center text-left transition-opacity hover:opacity-70",
+          // 44px tap target on a phone; the 24px marker stays the visual.
+          compactOnPhone && "max-sm:min-h-44 max-sm:min-w-44 max-sm:justify-center",
+        )}
       >
         {inner}
       </button>

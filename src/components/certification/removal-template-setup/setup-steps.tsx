@@ -41,6 +41,7 @@ const FILL_COLUMN_CLASS = "sm:w-[280px]";
 /* Template ----------------------------------------------------------------- */
 
 const NOT_FITTING_BADGE = "Does not fit";
+const NOT_READY_BADGE = "Not ready";
 
 export function TemplateStep({ data, templateId, onChange, invalid, notOffered, certifierHref }: {
   data: SetupData;
@@ -57,7 +58,7 @@ export function TemplateStep({ data, templateId, onChange, invalid, notOffered, 
   const project = data.projectName ?? "this project";
   // Every Removal template in the project is listed; the ones that do not fit stay disabled with their reason.
   const options = [
-    ...data.fitting.map((template) => ({ value: template.id, title: template.name, description: describe(template), disabled: !!template.blockedReason })),
+    ...data.fitting.map((template) => ({ value: template.id, title: template.name, description: describe(template), disabled: !!template.blockedReason, badge: template.blockedReason ? NOT_READY_BADGE : undefined })),
     ...data.notFitting.map((template) => ({ value: template.id, title: template.name, description: template.reason, disabled: true, badge: NOT_FITTING_BADGE })),
   ];
   return (
@@ -325,9 +326,9 @@ export function ApplyStep({ data, template, answers, overrides, makeDefault, set
         </Notice>
       )}
       <p className="body-small text-[var(--color-text-secondary)]">
-        {`${formatCount(entries, "component")} ${entries === 1 ? "takes" : "take"} an emissions entry on each credit batch.`}
+        {`${formatCount(entries, "component")} ${entries === 1 ? "takes" : "take"} an emissions entry on each credit batch. The component decisions apply to every facility that uses ${template.name}.`}
         <InfoHint label="What changes" className="ml-4">
-          {`Emissions lists them as Not recorded until someone records a value or a zero. The component decisions apply to every facility that uses ${template.name}.`}
+          Emissions lists them as Not recorded until someone records a value or a zero.
         </InfoHint>
       </p>
     </div>

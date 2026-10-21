@@ -41,7 +41,11 @@ const SETUP_PARAMS = {
   [CERTIFICATION_SETTINGS_TEMPLATE_PARAM]: parseAsString,
   [CERTIFICATION_SETTINGS_MAKE_DEFAULT_PARAM]: parseAsString,
 };
-const CLOSED_SETUP = { setup: null, template: null, makeDefault: null };
+const CLOSED_SETUP = {
+  [CERTIFICATION_SETTINGS_SETUP_PARAM]: null,
+  [CERTIFICATION_SETTINGS_TEMPLATE_PARAM]: null,
+  [CERTIFICATION_SETTINGS_MAKE_DEFAULT_PARAM]: null,
+};
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -55,7 +59,11 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 export function RemovalTemplateSummaryCard({ facilityId }: { facilityId: string }) {
   const query = useRemovalTemplateSetup(facilityId);
   const [request, setRequest] = useQueryStates(SETUP_PARAMS, { shallow: true, history: "replace" });
-  const openSetup = (step: "template" | "decisions", templateId: string | null) => void setRequest({ setup: step, template: templateId, makeDefault: null });
+  const openSetup = (step: "template" | "decisions", templateId: string | null) => void setRequest({
+    ...CLOSED_SETUP,
+    [CERTIFICATION_SETTINGS_SETUP_PARAM]: step,
+    [CERTIFICATION_SETTINGS_TEMPLATE_PARAM]: templateId,
+  });
   // The dialog sits beside the card, not inside a branch, so it survives the card changing state after Apply.
   // Members never mount it, so a setup link only shows them the card.
   return (

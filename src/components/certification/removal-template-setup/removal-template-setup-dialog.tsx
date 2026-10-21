@@ -8,7 +8,7 @@
 "use client";
 
 import { useState } from "react";
-import { ServerError } from "@/components/forms";
+import { ServerError } from "@/components/forms/server-error";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { Modal } from "@/components/ui/modal";
@@ -42,6 +42,7 @@ export function RemovalTemplateSetupDialog(props: RemovalTemplateSetupDialogProp
       onOpen={() => { if (!pending) apply.reset(); }}
       dismissible={!pending}
       ariaLabelledBy={TITLE_ID}
+      // Dense form: the Decisions step puts a 280px fill column beside each component name.
       width="lg"
       contentClassName=""
       // A stray backdrop click must not discard answers; the close button and Escape still work.

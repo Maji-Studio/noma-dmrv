@@ -1,6 +1,6 @@
 # Guided Removal template setup (#1276)
 
-Kenji's decisions (2026-10-20, on #1276): a full-page setup with a step rail and a What happens column; only fitting templates are offered (replaces #1200 decision 1); credit batches still pick only ready templates; a component added later reopens as "1 to decide" and New Removal stays blocked until answered; Owner and Admin run setup, Members see a read-only summary; answers are per organization and template, with a one-line note under Facility; no recommended template; durability is per project and never asked.
+Kenji's decisions (2026-10-20, on #1276): ~~a full-page setup with a step rail and a What happens column~~ re-picked the same day as variant A, a stepper dialog from Settings (no page, no What happens aside; What changes is one visible line plus an InfoHint); ~~only fitting templates are offered~~ re-picked as "all": every Removal template in the project is listed, those that do not fit disabled and marked Does not fit with their reason, blocked ones marked Not ready, the only pickable template preselected, and no open-on-Apply shortcut because the list must show (supersedes #1200 decision 1); credit batches still pick only ready templates; a component added later reopens as "1 to decide" and New Removal stays blocked until answered; Owner and Admin run setup, Members see a read-only summary; answers are per organization and template, with a one-line note under Facility; no recommended template; durability is per project and never asked.
 
 ## 1. Data model (no schema change)
 
@@ -38,10 +38,10 @@ Lock order: boundary lock, then observation advisory lock, then batch locks. Con
 
 - Superseded 2026-10-21 (Kenji's pick of variant A on #1276): no route. The setup is a stepper dialog opened from the Settings Removal templates card; deep links are `?section=removal-templates&setup=<step>&template=<id>&makeDefault=false` on the Settings pane, and Members only see the card.
 - Page: `PageHeader` "Set up Removal template", facility subtitle, back link to Settings. Vertical step rail:
-  - **Template**: radio cards for fitting templates only, then one line naming those not offered and why. One fit is preselected; more than one, no preselection and Continue waits for a pick.
+  - **Template**: radio cards for every Removal template in the project. Non-fitting ones are disabled with a Does not fit badge and their reason; blocked ones with Not ready. The only pickable template is preselected; with more, no preselection and Next waits for a pick.
   - **Decisions**: numbered decision blocks, then the folded "noma decided N components" list with Change on noma's defaults. Decided components are read-only: "Decided for every facility using this template".
   - **Apply**: Now → After default; "Also set it on N credit batches without a template" (codes linked); one line naming batches on other templates; What changes; button "Make default and set on N batches".
-  - Going back through the rail. One fit with 0 decisions opens on Apply (2 clicks). A sticky What happens aside at `lg`, stacked below the step on phones.
+  - Going back through the rail or Back. No open-on-Apply shortcut and no What happens aside (dropped in the dialog).
 - Settings pane: `RemovalTemplateSummaryCard` replaces `RemovalTemplateReviewPanel`: name, status (Ready, or "N to decide"), Used by (linked batches), Decided by you, Decided by noma, Entries per batch. Owner and Admin get Review decisions and Change template; Members the same card without buttons, names not IDs. Empty state "Set up template". Caption: "The template this facility's credit batches use. Component decisions apply to every facility using the template."
 - Switch dialog: "Decide components" in `credit-batch-template-switch-dialog.tsx` links to the Decisions step for that template with Make default unchecked.
 - Remove the old screen: `removal-template-review-card`, `-panel`, `removal-template-line-row`, `removal-template-line-sections` and their tests; reused labels (`SOURCE_LABELS`, `ENTRY_POLICY_LABELS`) move into a slim copy module. Update GLOSSARY (Removal template, Components to decide) and `docs/design-decisions.md`.
