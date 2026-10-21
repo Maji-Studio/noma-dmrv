@@ -640,7 +640,7 @@ are clean deferrals.
 ### Annual-test attribution for `pyrolyzer_direct` (`isometric/pyrolyzer-direct-attribution`)
 
 `pyrolyzer_direct` is already settled as a registry-owned PROJECT-scope
-Component, guarded against Removal-scope zero entries by
+Component, guarded against Removal-scope bindings by
 `PERIOD_INPUT_TUPLES`.
 
 - **Still open — needs-registry-check:** whether Isometric or a verifier accepts
