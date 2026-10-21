@@ -111,6 +111,8 @@ export function useCreateApplication() {
       if (!result.success) throwActionError(result);
       return result;
     },
+    // A refused save can mean the delivery's shares moved: re-plan the credit batch preview (#1350).
+    onError: () => { void queryClient.invalidateQueries({ queryKey: creditBatchKeys.recordPreviewPrefix() }); },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
       queryClient.invalidateQueries({
@@ -139,6 +141,7 @@ export function useUpdateApplication() {
       if (!result.success) throwActionError(result);
       return result;
     },
+    onError: () => { void queryClient.invalidateQueries({ queryKey: creditBatchKeys.recordPreviewPrefix() }); },
     onSuccess: (result) => {
       if (result.success) patchListCachesWithSavedRow(queryClient, applicationKeys.lists(), result.data);
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
