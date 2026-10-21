@@ -12,7 +12,7 @@ import { Notice } from "@/components/ui/notice";
 import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { useToast } from "@/components/ui/toast";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
-import { useApplyRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
+import type { useApplyRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
 import { certificationSettingsHref } from "@/lib/certification/links";
 import { getStaleVersionConflict } from "@/lib/stale-version";
 import {
@@ -45,18 +45,19 @@ export interface RemovalTemplateSetupFlowProps {
   makeDefault: boolean;
   /** Reads the template list again; the dialog then resets the flow. */
   onReload: () => void;
+  /** The Apply mutation, owned by the dialog so it can refuse to close while a save is pending. */
+  apply: ReturnType<typeof useApplyRemovalTemplateSetup>;
   /** Closes the dialog, after Apply or on Cancel. */
   onClose: () => void;
 }
 
 interface ApplyError { message: string; stale: boolean }
 
-export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templateId: requestedTemplate, step: requestedStep, makeDefault: initialMakeDefault, onReload, onClose }: RemovalTemplateSetupFlowProps) {
+export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templateId: requestedTemplate, step: requestedStep, makeDefault: initialMakeDefault, onReload, apply, onClose }: RemovalTemplateSetupFlowProps) {
   // The draft keeps the read it started from (fingerprints, batch versions) until an explicit reload remounts the flow.
   const [data] = useState(loadedData);
   const toast = useToast();
   const latched = useLatchedSubmit();
-  const apply = useApplyRemovalTemplateSetup();
   const start = startState({ fitting: data.fitting, templateId: requestedTemplate, step: requestedStep });
   const [templateId, setTemplateId] = useState(start.templateId);
   const [step, setStep] = useState(start.stepIndex);

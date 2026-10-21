@@ -11,9 +11,7 @@ const mutateAsync = vi.fn();
 const never = () => new Promise(() => undefined);
 const success = vi.fn();
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success }) }));
-vi.mock("@/hooks/use-removal-template-setup", () => ({
-  useApplyRemovalTemplateSetup: () => ({ mutateAsync, isPending: false }),
-}));
+const applyMutation = { mutateAsync, isPending: false } as unknown as React.ComponentProps<typeof RemovalTemplateSetupFlow>["apply"];
 
 const FACILITY = "11111111-1111-4111-8111-111111111111";
 const withDecisions = template("tpl-protocol", "Protocol default", { decisions: [electricityClash, dieselSource], defaults: [startupDefault] });
@@ -21,7 +19,7 @@ const nothingToDecide = template("tpl-ready", "Sandbox template", { defaults: [s
 
 function renderFlow(data = setupData({ fitting: [withDecisions, nothingToDecide] }), props: Partial<React.ComponentProps<typeof RemovalTemplateSetupFlow>> = {}) {
   return render(
-    <RemovalTemplateSetupFlow data={data} facilityId={FACILITY} templateId={null} step={null} makeDefault onReload={vi.fn()} onClose={onClose} {...props} />,
+    <RemovalTemplateSetupFlow data={data} facilityId={FACILITY} templateId={null} step={null} makeDefault onReload={vi.fn()} onClose={onClose} apply={applyMutation} {...props} />,
   );
 }
 
@@ -176,7 +174,7 @@ describe("RemovalTemplateSetupFlow", () => {
       fitting: [{ ...nothingToDecide, planFingerprint: "newer-plan" }],
       batchesWithoutTemplate: [{ id: "22222222-2222-4222-8222-222222222222", code: "CB-26-001", version: 9 }],
     });
-    view.rerender(<RemovalTemplateSetupFlow data={refreshed} facilityId={FACILITY} templateId={null} step={null} makeDefault onReload={vi.fn()} onClose={onClose} />);
+    view.rerender(<RemovalTemplateSetupFlow data={refreshed} facilityId={FACILITY} templateId={null} step={null} makeDefault onReload={vi.fn()} onClose={onClose} apply={applyMutation} />);
     fireEvent.click(screen.getByRole("button", { name: /Make default/ }));
     await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
     const sent = mutateAsync.mock.calls[0][0];

@@ -4,8 +4,9 @@
  * status, where it is used, how many components were decided and by whom, and
  * how many take an emissions entry. Admins get Set up template, Review
  * decisions and Change template, all opening the setup dialog; Members read the
- * same card without buttons and a setup link does not open the dialog for them. Decisions are stored per organization and template, so the
- * caption says they reach every facility using it.
+ * same card without buttons and a setup link does not open the dialog for them.
+ * Decisions are stored per organization and template, so the caption says they
+ * reach every facility using it.
  *
  * Read live from Isometric through the setup read, which stores nothing.
  */
@@ -45,8 +46,8 @@ const CLOSED_SETUP = { setup: null, template: null, makeDefault: null };
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <>
-        <dt className="body-small text-[var(--color-text-tertiary)]">{label}</dt>
-        <dd className="body-small text-[var(--color-text-primary)]">{children}</dd>
+      <dt className="body-small text-[var(--color-text-tertiary)]">{label}</dt>
+      <dd className="body-small text-[var(--color-text-primary)]">{children}</dd>
     </>
   );
 }

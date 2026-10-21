@@ -12,7 +12,7 @@ import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { Modal } from "@/components/ui/modal";
-import { useRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
+import { useApplyRemovalTemplateSetup, useRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
 import { parseStep } from "@/lib/certification/removal-template-setup-copy";
 import { RemovalTemplateSetupFlow } from "./setup-flow";
 
@@ -32,22 +32,27 @@ export interface RemovalTemplateSetupDialogProps {
 }
 
 export function RemovalTemplateSetupDialog(props: RemovalTemplateSetupDialogProps) {
+  // Owned here, above the Modal, so Escape and the close button can be held while Apply is saving.
+  const apply = useApplyRemovalTemplateSetup();
+  const pending = apply.isPending;
   return (
     <Modal
       isOpen={props.isOpen}
-      onClose={props.onClose}
+      onClose={() => { if (!pending) props.onClose(); }}
+      onOpen={() => { if (!pending) apply.reset(); }}
+      dismissible={!pending}
       ariaLabelledBy={TITLE_ID}
       width="lg"
       contentClassName=""
       // A stray backdrop click must not discard answers; the close button and Escape still work.
       dismissOnClickOutside={false}
     >
-      <DialogBody {...props} />
+      <DialogBody {...props} apply={apply} />
     </Modal>
   );
 }
 
-function DialogBody({ facilityId, templateId = null, step = null, makeDefault = true, onClose }: RemovalTemplateSetupDialogProps) {
+function DialogBody({ facilityId, templateId = null, step = null, makeDefault = true, onClose, apply }: RemovalTemplateSetupDialogProps & { apply: ReturnType<typeof useApplyRemovalTemplateSetup> }) {
   const query = useRemovalTemplateSetup(facilityId, !!facilityId);
   const [reloads, setReloads] = useState(0);
   const reload = async () => {
@@ -83,6 +88,7 @@ function DialogBody({ facilityId, templateId = null, step = null, makeDefault = 
           step={parseStep(step)}
           makeDefault={makeDefault}
           onReload={() => void reload()}
+          apply={apply}
           onClose={onClose}
         />
       )}
