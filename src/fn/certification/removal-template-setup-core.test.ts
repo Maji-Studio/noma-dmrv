@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { SafeError } from "@/lib/errors";
 import type { OrgContext } from "@/lib/auth/server";
 import type { ApplyRemovalTemplateSetupInput } from "@/schemas/removal-template-setup";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
@@ -49,6 +50,11 @@ it("refuses Member before any read", async () => {
 it("checks fit before observing", async () => {
   mocks.facility.mockResolvedValue({ durabilityOption: "200_year" });
   await expect(applyRemovalTemplateSetupCore(ctx, input)).rejects.toThrow("durability");
+  expect(mocks.facts).not.toHaveBeenCalled();
+});
+it("refuses a non-Removal template with the setup refusal, not the credit batch one", async () => {
+  mocks.templates.mockResolvedValue([{ ...fixture, credit_type: "REDUCTION" }]);
+  await expect(applyRemovalTemplateSetupCore(ctx, input)).rejects.toThrow(new SafeError("This is not a Removal template."));
   expect(mocks.facts).not.toHaveBeenCalled();
 });
 it("refuses unread templates and fingerprint drift before the apply transaction", async () => {

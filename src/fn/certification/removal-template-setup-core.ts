@@ -10,7 +10,6 @@ import { SafeError } from "@/lib/errors";
 import { listComponentBlueprints, listGhgEntryTemplates, listProjects } from "@/lib/isometric";
 import { compareTemplateObservations, fullFingerprint, normalizeTemplateDefinition, semanticFingerprint, validateLineSources } from "@/lib/isometric/template-observations";
 import { removalTemplateVerdict } from "@/lib/certification/removal-template-verdict";
-import { findListedRemovalTemplate } from "@/lib/certification/listed-removal-template";
 import { setupPlan, templateFitsFacility } from "@/lib/certification/removal-template-setup-plan";
 import { setupPlanFingerprint } from "@/lib/certification/removal-template-setup-fingerprint";
 import { reviewLineSources } from "@/lib/certification/removal-template-review-sources";
@@ -90,7 +89,9 @@ export async function loadRemovalTemplateSetupCore(ctx: OrgContext, facilityId: 
 export async function applyRemovalTemplateSetupCore(ctx: OrgContext, input: ApplyRemovalTemplateSetupInput) {
   requireOrgRole(ctx, "admin");
   const { facility, mapping, client, templates } = await setupContext(ctx, input.facilityId);
-  const template = findListedRemovalTemplate(templates, input.removalTemplateId);
+  // Setup may change only the default, so a non-Removal template gets templateFitsFacility's refusal, not the credit batch one.
+  const template = templates.find((candidate) => candidate.id === input.removalTemplateId);
+  if (!template) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFound);
   const fit = templateFitsFacility(template, facility.durabilityOption);
   if ("reason" in fit) throw new SafeError(fit.reason);
   const facts = await loadRemovalTemplateFacts(ctx, { client, template, externalProjectId: mapping.externalProjectId, blueprints: await listComponentBlueprints(client) });

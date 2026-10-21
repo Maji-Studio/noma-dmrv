@@ -13,11 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { Modal } from "@/components/ui/modal";
 import { useApplyRemovalTemplateSetup, useRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
-import { parseStep } from "@/lib/certification/removal-template-setup-copy";
+import { parseStep, setupDialogTitle } from "@/lib/certification/removal-template-setup-copy";
+import { SETUP_GUTTER_CLASS } from "./layout";
 import { RemovalTemplateSetupFlow } from "./setup-flow";
 
 const TITLE_ID = "removal-template-setup-title";
-const DIALOG_GUTTER_CLASS = "px-20";
 
 export interface RemovalTemplateSetupDialogProps {
   isOpen: boolean;
@@ -61,14 +61,17 @@ function DialogBody({ facilityId, templateId = null, step = null, makeDefault = 
     setReloads((count) => count + 1);
   };
 
+  // The title names the entry point, read from the link and the facility's default: nothing extra is stored.
+  const title = setupDialogTitle({ step: parseStep(step), hasDefaultTemplate: !!query.data?.defaultRemovalTemplateId });
+
   return (
     <div className="flex flex-col">
-      <div className={`${DIALOG_GUTTER_CLASS} flex flex-col gap-4 pb-16 pr-56 pt-20`}>
-        <h2 id={TITLE_ID} className="title-heading-3">Set up Removal template</h2>
+      <div className={`${SETUP_GUTTER_CLASS} flex flex-col gap-4 pb-16 pr-56 pt-20`}>
+        <h2 id={TITLE_ID} className="title-heading-3">{title}</h2>
         {query.data && <p className="body-small text-[var(--color-text-secondary)]">{query.data.facility.name}</p>}
       </div>
       {query.isError ? (
-        <div className={`${DIALOG_GUTTER_CLASS} flex flex-col gap-16 pb-20`}>
+        <div className={`${SETUP_GUTTER_CLASS} flex flex-col gap-16 pb-20`}>
           <ServerError
             message="The Removal templates could not be read from Isometric."
             action={<Button size="small" busy={query.isFetching} onClick={() => void query.refetch()}>Try again</Button>}
@@ -76,7 +79,7 @@ function DialogBody({ facilityId, templateId = null, step = null, makeDefault = 
           <div><Button variant="default" onClick={onClose}>Cancel</Button></div>
         </div>
       ) : !query.data ? (
-        <div className={`${DIALOG_GUTTER_CLASS} flex flex-col gap-16 pb-20`} aria-busy="true" aria-label="Loading Removal templates">
+        <div className={`${SETUP_GUTTER_CLASS} flex flex-col gap-16 pb-20`} aria-busy="true" aria-label="Loading Removal templates">
           <Skeleton className="h-160 w-full" />
           <Skeleton className="h-80 w-full" />
         </div>

@@ -36,22 +36,21 @@ Lock order: boundary lock, then observation advisory lock, then batch locks. Con
 
 ## 3. UI (PR 2, Claude)
 
-- Superseded 2026-10-21 (Kenji's pick of variant A on #1276): no route. The setup is a stepper dialog opened from the Settings Removal templates card; deep links are `?section=removal-templates&setup=<step>&template=<id>&makeDefault=false` on the Settings pane, and Members only see the card.
-- Page: `PageHeader` "Set up Removal template", facility subtitle, back link to Settings. Vertical step rail:
+- No route (Kenji's pick of variant A on #1276, 2026-10-21): the setup is a stepper dialog opened from the Settings Removal templates card. Deep links are `?section=removal-templates&setup=<step>&template=<id>&makeDefault=false` on the Settings pane; Members only see the card.
+- Dialog: compact Template, Decisions, Apply rail with Next, Back, Cancel. The title names the entry point: "Review decisions", "Change Removal template", or "Set up Removal template".
   - **Template**: radio cards for every Removal template in the project. Non-fitting ones are disabled with a Does not fit badge and their reason; blocked ones with Not ready. The only pickable template is preselected; with more, no preselection and Next waits for a pick.
   - **Decisions**: numbered decision blocks, then the folded "noma decided N components" list with Change on noma's defaults. Decided components are read-only: "Decided for every facility using this template".
-  - **Apply**: Now → After default; "Also set it on N credit batches without a template" (codes linked); one line naming batches on other templates; What changes; button "Make default and set on N batches".
-  - Going back through the rail or Back. No open-on-Apply shortcut and no What happens aside (dropped in the dialog).
-- Settings pane: `RemovalTemplateSummaryCard` replaces `RemovalTemplateReviewPanel`: name, status (Ready, or "N to decide"), Used by (linked batches), Decided by you, Decided by noma, Entries per batch. Owner and Admin get Review decisions and Change template; Members the same card without buttons, names not IDs. Empty state "Set up template". Caption: "The template this facility's credit batches use. Component decisions apply to every facility using the template."
+  - **Apply**: Now to After default; "Also set it on N credit batches without a template"; one line naming batches on other templates; What changes; button "Make default and set on N batches".
+- Settings pane: `RemovalTemplateSummaryCard` replaces `RemovalTemplateReviewPanel`: name, status, Used by, Decided by you, Decided by noma, Entries per batch. Admins get Review decisions and Change template; Members the same card without buttons.
 - Switch dialog: "Decide components" in `credit-batch-template-switch-dialog.tsx` links to the Decisions step for that template with Make default unchecked.
-- Remove the old screen: `removal-template-review-card`, `-panel`, `removal-template-line-row`, `removal-template-line-sections` and their tests; reused labels (`SOURCE_LABELS`, `ENTRY_POLICY_LABELS`) move into a slim copy module. Update GLOSSARY (Removal template, Components to decide) and `docs/design-decisions.md`.
-- Not #965: that removed a multi-entity onboarding wizard with Back and Skip that duplicated create sheets. This is one configuration task with 0 to 3 real questions, entered from the summary or a blocker, never gating first run, no Skip, storing nothing until Apply.
+- The old screen (`removal-template-review-card`, `-panel`, line rows and sections) is removed; reused labels live in a slim copy module.
+- Not #965: that removed a multi-entity onboarding wizard with Back and Skip. This is one configuration task with 0 to 3 real questions, never gating first run, no Skip, storing nothing until Apply.
 
 ## 4. PRs
 
 1. PR 1 (Codex): plan module, fit check, two actions, InTransaction splits, schemas, hooks, link builder. No UI change.
 2. PR 2 (Claude): route, page, summary card, Member read-only, switch dialog link, old screen removed, docs. After PR 1.
-3. PR 3 (Codex): delete `startRemovalTemplateSetup`, `setFacilityDefaultRemovalTemplate`, fn-level `reviewRemovalTemplateLines` and their hooks once unused; port their guard tests to the apply action. After PR 2.
+3. PR 3 (Codex), done (shared Removal template verdict, 0aa89e254): delete `startRemovalTemplateSetup`, `setFacilityDefaultRemovalTemplate`, fn-level `reviewRemovalTemplateLines` and their hooks once unused; port their guard tests to the apply action. After PR 2.
 
 ## 5. Tests
 

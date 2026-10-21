@@ -5,13 +5,13 @@ import { RemovalTemplateSetupDialog } from "./removal-template-setup-dialog";
 import { setupData } from "./test-support";
 
 const ACTIVE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const state = vi.hoisted(() => ({ pending: false, read: [] as { facilityId: string; enabled: boolean }[], error: false, loading: false, refetch: undefined as unknown as ReturnType<typeof vi.fn> }));
+const state = vi.hoisted(() => ({ pending: false, read: [] as { facilityId: string; enabled: boolean }[], error: false, loading: false, defaultId: null as string | null, refetch: undefined as unknown as ReturnType<typeof vi.fn> }));
 
 vi.mock("@/hooks/use-removal-template-setup", () => ({
   useApplyRemovalTemplateSetup: () => ({ isPending: state.pending, reset: vi.fn(), mutateAsync: vi.fn() }),
   useRemovalTemplateSetup: (facilityId: string, enabled: boolean) => {
     state.read.push({ facilityId, enabled });
-    return { data: state.error || state.loading ? undefined : setupData(), isError: state.error, isFetching: false, refetch: state.refetch };
+    return { data: state.error || state.loading ? undefined : setupData({ defaultRemovalTemplateId: state.defaultId }), isError: state.error, isFetching: false, refetch: state.refetch };
   },
 }));
 vi.mock("./setup-flow", () => ({
@@ -20,16 +20,32 @@ vi.mock("./setup-flow", () => ({
   ),
 }));
 
-afterEach(() => { cleanup(); state.read.length = 0; state.error = false; state.loading = false; state.pending = false; });
+afterEach(() => { cleanup(); state.read.length = 0; state.error = false; state.loading = false; state.defaultId = null; state.pending = false; });
 
 describe("RemovalTemplateSetupDialog", () => {
   it("reads and writes the facility it is given and hands the link's start to the flow", () => {
     state.refetch = vi.fn();
     render(<RemovalTemplateSetupDialog isOpen facilityId={ACTIVE} templateId="tpl" step="decisions" makeDefault={false} onClose={vi.fn()} />);
     expect(new Set(state.read.map((read) => read.facilityId))).toEqual(new Set([ACTIVE]));
-    expect(screen.getByRole("dialog", { name: "Set up Removal template" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Review decisions" })).toBeTruthy();
     expect(screen.getByText(`flow for ${ACTIVE} tpl decisions no default`)).toBeTruthy();
     expect(screen.getByText("Mafinga Facility")).toBeTruthy();
+  });
+
+  it("titles the dialog after its entry point", () => {
+    state.refetch = vi.fn();
+    const titleFor = (step: string | undefined, defaultId: string | null) => {
+      state.defaultId = defaultId;
+      render(<RemovalTemplateSetupDialog isOpen facilityId={ACTIVE} step={step} onClose={vi.fn()} />);
+      const title = screen.getByRole("dialog").getAttribute("aria-labelledby");
+      const text = document.getElementById(title ?? "")?.textContent;
+      cleanup();
+      return text;
+    };
+    expect(titleFor("decisions", "tpl")).toBe("Review decisions");
+    expect(titleFor("template", "tpl")).toBe("Change Removal template");
+    expect(titleFor("template", null)).toBe("Set up Removal template");
+    expect(titleFor("apply", "tpl")).toBe("Set up Removal template");
   });
 
   it("ignores a step it does not know and reads nothing while closed", () => {

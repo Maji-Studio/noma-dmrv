@@ -15,6 +15,17 @@ import { SOURCE_LABELS } from "./removal-template-source-labels";
 export type SetupStepKey = "template" | "decisions" | "apply";
 export const SETUP_STEP_KEYS: readonly SetupStepKey[] = ["template", "decisions", "apply"];
 
+/**
+ * The dialog title for its entry point. Review decisions opens on Decisions;
+ * Change template opens on Template while a default exists; everything else
+ * (Set up template, a blocker link) is a first setup.
+ */
+export function setupDialogTitle({ step, hasDefaultTemplate }: { step: SetupStepKey | null; hasDefaultTemplate: boolean }): string {
+  if (step === "decisions") return "Review decisions";
+  if (step === "template" && hasDefaultTemplate) return "Change Removal template";
+  return "Set up Removal template";
+}
+
 /** What noma keeps for each source, and whether the datapoints come as one figure or a set. */
 const SOURCE_KEEPS: Record<AutomaticSourceId, { keeps: string; unit: "figure" | "set" }> = {
   "run-genset-diesel": { keeps: "one generator diesel figure per production run", unit: "figure" },

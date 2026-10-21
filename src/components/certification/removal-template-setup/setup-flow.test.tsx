@@ -53,6 +53,14 @@ describe("RemovalTemplateSetupFlow", () => {
     expect(screen.getByRole("heading", { name: "Pick the template" })).toBeTruthy();
   });
 
+  it("disables Apply, Back and Cancel and says Applying… while the save is pending", () => {
+    const pending = { mutateAsync, isPending: true } as unknown as React.ComponentProps<typeof RemovalTemplateSetupFlow>["apply"];
+    renderFlow(setupData({ fitting: [nothingToDecide] }), { step: "apply", templateId: "tpl-ready", apply: pending });
+    expect((screen.getByRole("button", { name: "Applying…" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Back" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("lists templates that do not fit as disabled rows marked Does not fit, with their reason", () => {
     const unfit = { id: "tpl-unfit", name: "Wrong tier", reason: "The storage component does not match this facility's durability tier." };
     renderFlow(setupData({ fitting: [nothingToDecide], notFitting: [unfit] }));

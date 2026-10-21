@@ -25,9 +25,11 @@ import {
   toDecideLabel,
   type SetupStepKey,
 } from "@/lib/certification/removal-template-setup-copy";
+import { SETUP_GUTTER_CLASS } from "./layout";
 import { ApplyStep, applyLabel, DecisionsStep, TemplateStep, type SetupData } from "./setup-steps";
 
 const APPLY_BUTTON_CLASS = "h-auto min-h-[40px] whitespace-normal py-8 text-left";
+const APPLYING_LABEL = "Applying…";
 const STEP_TITLES = ["Pick the template", "Decide what noma cannot", "Apply the setup"];
 const STEPS: StepFlowStep[] = [
   { key: "template", label: "Template" },
@@ -35,8 +37,6 @@ const STEPS: StepFlowStep[] = [
   { key: "apply", label: "Apply" },
 ];
 const LAST_STEP = STEPS.length - 1;
-/** Horizontal gutter of the dialog body and its footer. */
-const GUTTER_CLASS = "px-20";
 
 export interface RemovalTemplateSetupFlowProps {
   data: SetupData;
@@ -139,7 +139,7 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
 
   return (
     <>
-      <div className={`${GUTTER_CLASS} pb-16`}>
+      <div className={`${SETUP_GUTTER_CLASS} pb-16`}>
         <StepFlow steps={STEPS} current={step} furthest={furthest} onNavigate={go} footer={null} compactOnPhone className="gap-20">
           <div className="flex flex-col gap-20">
             <h3 className="sr-only">{STEP_TITLES[step]}</h3>
@@ -172,7 +172,7 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
         </StepFlow>
       </div>
 
-      <div ref={reserveStickyFooterSpace} className={`sticky bottom-0 z-10 flex flex-col gap-12 border-t border-[var(--color-border-secondary)] bg-[var(--color-background-white)] ${GUTTER_CLASS} py-12`}>
+      <div ref={reserveStickyFooterSpace} className={`sticky bottom-0 z-10 flex flex-col gap-12 border-t border-[var(--color-border-secondary)] bg-[var(--color-background-white)] ${SETUP_GUTTER_CLASS} py-12`}>
         {allBlocked && step === 0 && (
           <Notice tone="warning">
             {data.fitting.length === 0 ? "No template can be set up yet." : data.fitting.length === 1 ? "This template cannot be set up yet." : "None of these templates can be set up yet."}
@@ -191,13 +191,13 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
           <div className="flex flex-wrap items-center gap-12">
             <Button
               variant="primary"
-              busy={apply.isPending}
-              disabled={allBlocked && step === 0}
+              // Same contract as FormActions: disabled while saving, the label says what is happening.
+              disabled={apply.isPending || (allBlocked && step === 0)}
               className={step === LAST_STEP ? APPLY_BUTTON_CLASS : undefined}
               // Only Apply writes, so only Apply is latched; the latch holds until the save settles.
               onClick={() => (step === LAST_STEP ? void applyLatched({ preventDefault: () => undefined }) : void next())}
             >
-              {apply.isPending ? "Applying…" : step === LAST_STEP ? applyLabel(effectiveMakeDefault, batchCount) : "Next"}
+              {apply.isPending ? APPLYING_LABEL : step === LAST_STEP ? applyLabel(effectiveMakeDefault, batchCount) : "Next"}
             </Button>
             {step > 0 && <Button variant="default" disabled={apply.isPending} onClick={back}>Back</Button>}
             <Button variant="default" disabled={apply.isPending} onClick={onClose}>Cancel</Button>
