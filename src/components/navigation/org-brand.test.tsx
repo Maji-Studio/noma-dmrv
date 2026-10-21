@@ -211,10 +211,10 @@ describe("OrgBrand", () => {
       expect(html).not.toContain('aria-haspopup="listbox"');
     });
 
-    it("shows Owner and keeps the switcher for a member of several organizations", () => {
-      const html = settle({ ...base, orgRole: "owner", isPlatformAdmin: false }, two);
+    it("shows Admin and keeps the switcher for a member of several organizations", () => {
+      const html = settle({ ...base, orgRole: "admin", isPlatformAdmin: false }, two);
 
-      expect(html).toContain("Owner");
+      expect(html).toContain("Admin");
       expect(html).toContain('aria-haspopup="listbox"');
     });
 

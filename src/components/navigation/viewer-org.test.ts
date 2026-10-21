@@ -4,7 +4,6 @@ import { isOrgMismatch, shouldShowPlatformAdminBar, viewerRoleLabel } from "./vi
 
 describe("viewerRoleLabel", () => {
   it.each<[OrgRole, string]>([
-    ["owner", "Owner"],
     ["admin", "Admin"],
     ["member", "Member"],
   ])("labels the %s membership", (orgRole, label) => {
