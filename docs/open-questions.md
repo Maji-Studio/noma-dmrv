@@ -267,7 +267,7 @@ companion inherits this file's schema, invariants, and resolution rules.
   actually found (feedstock and biochar transport) when the scheduled live
   workflows were repaired, so `sampling-required-for-mrv` is no longer exercised
   against the registry.
-- The legacy binding remains available with the gate off:
+- Catalog projections stay stable, but runtime sample sources are always excluded:
   `src/lib/isometric/semantic-binding-catalog.ts` declares
   `sampling-required-for-mrv / mass_distance_based_ci_emissions /
   mass_distance` (`INPUT_MAPPING`, the certify field registry tuples and the
@@ -275,7 +275,6 @@ companion inherits this file's schema, invariants, and resolution rules.
   legacy row. `src/fn/certification/certify-transport-coverage.ts:deriveRequiredTransportCategories`
   derives required categories from the live template, so a category the template
   drops is silently no longer collected or submitted.
-- **Fail closed after retirement (from #1237 review):** once `retire-sample-transport --delete` has run, switching `EMISSIONS_ENTRIES_ENABLED` back off makes a line still bound to `sample-transport` compile 0 t·km with no gap. Decide whether gate-off reads should treat missing sample legs as missing (null plus a readiness gap) once retirement has run, or whether the gate is never switched off again after deletion.
 - Two explanations are open and only a registry probe separates them: the
   re-authored template genuinely dropped sample transport, or the spec picked a
   different template — `pickTransportTemplate` falls back to the first template
@@ -287,13 +286,17 @@ companion inherits this file's schema, invariants, and resolution rules.
   as "Dark Earth Carbon Template (15 Oct)" and now has two sample shipping lines
   (EU, India), as the production template "LCA based template Cula" does. Sample
   transport is present, but one source cannot fill two lines.
-- **Resolve on activation, not merge:** [PR 4 of the template-driven emissions plan](./plans/2026-10-15-template-driven-emissions.md)
-  §4.5 makes both sample shipping lines entry-only when
-  `EMISSIONS_ENTRIES_ENABLED` is switched on in the sandbox. The legacy catalog
-  projections remain stable for `MAPPING_REVISION`; runtime reads exclude sample
-  legs with the gate on. Run the org-scoped retirement CLI in §5 to delete old
-  legs and owned evidence. Keep this question open until activation is verified
-  in the sandbox (M).
+- **Resolve after cleanup:** [PR 4 of the template-driven emissions plan](./plans/2026-10-15-template-driven-emissions.md)
+  §4.5 makes both sample shipping lines entry-only in every environment. The
+  legacy catalog projections remain stable for `MAPPING_REVISION`. Runtime
+  reads exclude sample legs. Run the org-scoped retirement CLI in §5 to delete
+  old legs and owned evidence. Keep this question open until the CLI has run
+  for the sandbox/staging organization and cleanup is verified (M).
+- **Leftover sample slots (from #1324 review):** `transportEntityTypes` in
+  `src/schemas/transport-legs.ts` still lists `sample`, so the REST/MCP
+  `record_transport_leg` input advertises a type the server always refuses.
+  `TransportLegsByCategory.sample`, `sampleIds` and `TransportCoverage.sample`
+  are still typed but always empty. Drop them in one API change (S).
 
 ### Unsampled batches with incidental Samples may still submit an H/C_org mean (`isometric/unsampled-incidental-chemistry`, opened 2026-10-13)
 

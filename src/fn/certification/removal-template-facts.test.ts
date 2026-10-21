@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
@@ -39,8 +39,7 @@ import production from "../../../tests/fixtures/isometric/production-template-20
 import { lineSourcesForObservation } from "@/lib/isometric/template-observations/line-sources-for-observation";
 import { fullFingerprint, semanticFingerprint } from "@/lib/isometric/template-observations/fingerprints";
 import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
-afterEach(() => vi.unstubAllEnvs());
-it.each(["bootstrap", "carried", "reviewed"] as const)("keeps stored production transport %s contracts usable with entries off", async (origin: LineContract["origin"]) => {
+it.each(["bootstrap", "carried", "reviewed"] as const)("asks to review stored production transport %s contracts unless bootstrapped", async (origin: LineContract["origin"]) => {
   const template = production as GhgEntryTemplate;
   const definition = normalizeTemplateDefinition(template);
   const id = "rtc_1KWKNGJZY1S0D548";
@@ -50,12 +49,11 @@ it.each(["bootstrap", "carried", "reviewed"] as const)("keeps stored production 
   const lineSources = lineSourcesForObservation({ definition, enrichment, latest: { definition, lineSources: stored,
     semanticFingerprint: semanticFingerprint(definition, enrichment), fullFingerprint: fullFingerprint(definition, enrichment) } });
   vi.mocked(observeRemovalTemplate).mockResolvedValue({ definition, enrichment, lineSources } as never);
-  for (const enabled of [false, true]) {
-    vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", String(enabled));
+  {
     const facts = await loadRemovalTemplateFacts(makeTestOrgContext(), { client: {} as never, externalProjectId: template.project_id, template, blueprints: [] });
     const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], { facilityTimezone: "UTC", templatesById: { [template.id]: facts } } as unknown as FacilityCertifierFacts);
-    expect(resolved.templateBlockers.some(blocker => blocker.code === "templateLinesNeedReview")).toBe(enabled && origin !== "bootstrap");
-    expect(resolved.undecidedLineIds.includes(id)).toBe(enabled && origin !== "bootstrap");
+    expect(resolved.templateBlockers.some(blocker => blocker.code === "templateLinesNeedReview")).toBe(origin !== "bootstrap");
+    expect(resolved.undecidedLineIds.includes(id)).toBe(origin !== "bootstrap");
 
   }
 });

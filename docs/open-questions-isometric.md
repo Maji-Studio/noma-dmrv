@@ -127,10 +127,9 @@ The remaining #893 work is to include observation identity and contracts in
 immutable submission snapshots and draft recompilation checks (plan §4.5, PR 4).
 Entry-only period-input lines now block coverage in every environment until
 entries compile. Only the datapoint-builder stub plumbing remains, to be removed
-when entries compile (plan §4.5). Sample transport legs still feed the known
-bootstrap sample lines that have an automatic source. Retire those legs and
-replace their contributions with per-line entries in the app, API and MCP
-when entries compile (plan §4.5).
+when entries compile (plan §4.5). Sample transport legs no longer feed any
+line: sample shipping lines take only per-line entries (#1324). Old legs are
+deleted per organization with the retirement CLI (plan §5).
 
 ### Fixed datapoint deprecation signal (`isometric/fixed-datapoint-deprecation`)
 
@@ -260,6 +259,18 @@ uses it.
   Production Batch and measurement-sample lists hit the client default first;
   raise `DEFAULT_MAX_PAGES` for them, since exceeding it also blocks Removal
   deletion.
+
+### Registry dates are UTC days, so west-of-UTC facilities keep the UTC refusal (`isometric/reporting-window-utc-days`, opened 2026-10-20, `needs-registry-check`)
+
+- **Observed:** `src/fn/certification/removal-reporting-window.ts:resolveRemovalReportingWindow`
+  refuses when the application day precedes the later of the production end's
+  UTC day and facility day (#1316). East of UTC the facility day binds; west of
+  UTC the UTC day binds, because `started_on` and `completed_on` are sent as UTC
+  days, so a facility-day guard there would send a completion date after the
+  application.
+- **Resolve via:** confirm with the Isometric MCP whether payload dates may be
+  facility days. If so, serialize them as facility days and compare only the
+  facility day (#1282).
 
 ### Biochar Application GHG Entry association timing (`isometric/biochar-application-ghg-entry-association`, opened 2026-08-27)
 

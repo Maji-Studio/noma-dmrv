@@ -7,7 +7,6 @@ const BATCH = "batch-1";
 const mocks = vi.hoisted(() => ({
   landing: { data: undefined as unknown, isError: false, error: null as unknown, refetch: vi.fn() },
   query: { data: undefined as unknown, isLoading: false, isError: false },
-  queryArgs: [] as unknown[][],
   load: vi.fn(),
   refresh: vi.fn(),
   create: vi.fn(),
@@ -30,10 +29,7 @@ vi.mock("@/hooks/use-certification", () => ({
 vi.mock("@/hooks/use-removal-empty-components", () => ({
   EmptyComponentsCheckError: class EmptyComponentsCheckError extends Error {},
   useRemovalLanding: () => mocks.landing,
-  useRemovalEmptyComponents: (...args: unknown[]) => {
-    mocks.queryArgs.push(args);
-    return mocks.query;
-  },
+  useRemovalEmptyComponents: () => mocks.query,
   useEmptyComponentsActions: () => ({ busy: false, pendingBatchId: null, error: null, errorBatchId: null, recordZeros: vi.fn(), undoZeros: vi.fn() }),
   useLoadRemovalEmptyComponents: () => mocks.load,
   useRefreshRemovalReview: () => mocks.refresh,
@@ -64,8 +60,8 @@ const CONFIRMED = {
   editable: true,
   batches: [{ creditBatchId: BATCH, code: "CB-26-001", lines: [], zeros: [{ id: "z", componentId: "a" }] }],
 };
-const LAND_EMPTY = { entriesEnabled: true, step: "empty" };
-const LAND_SUBMIT = { entriesEnabled: true, step: "submit" };
+const LAND_EMPTY = { step: "empty" };
+const LAND_SUBMIT = { step: "submit" };
 
 function renderDialog(resumeRemovalId: string | null) {
   return render(
@@ -77,7 +73,6 @@ afterEach(cleanup);
 beforeEach(() => {
   mocks.landing = { data: undefined, isError: false, error: null, refetch: vi.fn() };
   mocks.query = { data: undefined, isLoading: false, isError: false };
-  mocks.queryArgs = [];
   mocks.load.mockReset();
   mocks.refresh.mockReset().mockResolvedValue(undefined);
   mocks.create.mockReset();
@@ -107,15 +102,6 @@ describe("New Removal wizard with empty components", () => {
     renderDialog("removal-1");
     expect(screen.getByText("submit step")).toBeTruthy();
     expect(screen.queryByText("Empty components")).toBeNull();
-  });
-
-  it("with entries switched off looks like before: no read, no step", () => {
-    mocks.landing.data = { entriesEnabled: false, step: "submit" };
-    renderDialog("removal-1");
-    expect(screen.getByText("submit step")).toBeTruthy();
-    expect(screen.queryByText("Empty components")).toBeNull();
-    // The empty components read is never enabled, so no refused call repeats on focus.
-    expect(mocks.queryArgs.every(([, options]) => (options as { enabled: boolean }).enabled === false)).toBe(true);
   });
 
   it("does not move the operator when the data changes while they are on the step", () => {

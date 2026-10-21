@@ -1,4 +1,3 @@
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 import type { OrgContext } from "@/lib/auth/server";
 import type { IsometricClient, IsometricComponentBlueprint, IsometricGhgEntryTemplate } from "@/lib/isometric";
@@ -36,10 +35,10 @@ export async function loadRemovalTemplateFacts(ctx: OrgContext, input: {
   return {
     template: input.template, observation,
     enrichmentProblems: problems,
-    lineSourceProblems: validateLineSources(definition, lineSources, { entriesEnabled: emissionsEntriesEnabled() }),
+    lineSourceProblems: validateLineSources(definition, lineSources),
     blueprintsForTemplate: referencedKeys.flatMap((key) => blueprintByKey.get(key) ?? []),
     unresolvedBlueprintKeys: referencedKeys.filter((key) => !blueprintByKey.has(key) && !hasExplicitSequestrationBinding(key)),
-    unbindableTemplateInputs: findUnbindableTemplateInputs(input.template, { lineSources, entriesEnabled: emissionsEntriesEnabled(), enrichmentComplete: !!observation && problems.length === 0 }),
+    unbindableTemplateInputs: findUnbindableTemplateInputs(input.template, { lineSources, enrichmentComplete: !!observation && problems.length === 0 }),
     requiredTransportCategories: deriveRequiredTransportCategories(input.template),
   };
 }

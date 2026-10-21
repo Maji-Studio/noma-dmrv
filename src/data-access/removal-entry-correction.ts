@@ -3,7 +3,6 @@ import { z } from "zod";
 import { db } from "@/db";
 import { certificationSubmissions } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import type { EntryContender } from "@/lib/certification/removal-emission-contributions";
 import { deriveEntryCorrection } from "@/lib/certification/removal-entry-correction";
 import { deriveRemovalEntryInputs } from "@/lib/certification/removal-entry-inputs";
@@ -24,7 +23,6 @@ const manifestSchema = z.array(z.object({ componentId: z.string(), inputKey: z.s
 export async function loadRemovalEntryCorrection(ctx: OrgContext, removalId: string, suppliedContenders?: EntryContender[]) {
   requireOrgScope(ctx);
   const closed = deriveEntryCorrection(false, [], []);
-  if (!emissionsEntriesEnabled()) return closed;
   const [submitted] = await db.select().from(certificationSubmissions).where(and(
     eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityType, "removal"),
     eq(certificationSubmissions.submissionType, "removal"), eq(certificationSubmissions.provider, "isometric"),

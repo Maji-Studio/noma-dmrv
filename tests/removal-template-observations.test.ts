@@ -1,5 +1,5 @@
 import { legacyTransportObservation } from "./helpers/legacy-transport-observation";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, facilities, organizations, users, removalTemplateObservations } from "@/db/schema";
@@ -223,10 +223,8 @@ describe("org-scoped template observations", () => {
 });
 
 
-afterEach(() => vi.unstubAllEnvs());
-it.each([false, true])("reviews another component beside a legacy pair with entries enabled=%s", async (enabled) => {
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", String(enabled));
-  const { observation, componentId } = legacyTransportObservation();
+it("refuses to review another component beside an undecided legacy pair", async () => {
+  const { observation } = legacyTransportObservation();
   const value = template();
   value.groups[0].components[0].id = `pending-${crypto.randomUUID()}`;
   const row = await observe(value);
@@ -238,6 +236,5 @@ it.each([false, true])("reviews another component beside a legacy pair with entr
   }).where(and(eq(removalTemplateObservations.organizationId, ctx.organizationId), eq(removalTemplateObservations.id, row.id)));
   const review = reviewLineContracts(ctx, { observationId: row.id, expectedVersion: row.version,
     assignments: { [pendingId]: { scope: "operating", entryPolicy: "additive" } } });
-  if (enabled) await expect(review).rejects.toThrow("Choose valid, distinct sources");
-  else expect((await review).lineSources[componentId]).toEqual(observation.lineSources[componentId]);
+  await expect(review).rejects.toThrow("Choose valid, distinct sources");
 });

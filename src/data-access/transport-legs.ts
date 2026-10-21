@@ -1,4 +1,4 @@
-import { assertTransportEntryType } from "@/lib/certification/emissions-entry-gate";
+import { assertTransportEntryType } from "@/lib/certification/transport-entry-type";
 import { diffActivityChanges } from "@/lib/activity-changes";
 import { supplierLocationFacilityDistances } from "@/db/schema";
 import { recordScopedActivityChange, resolveWriteActivityScopes } from "./write-activity";

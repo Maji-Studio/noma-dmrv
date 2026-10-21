@@ -2,12 +2,11 @@ import { beforeEach, expect, it, vi } from "vitest";
 import type { DbTransaction } from "@/db";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), lock: vi.fn(), latest: vi.fn(), activity: vi.fn(), gate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), lock: vi.fn(), latest: vi.fn(), activity: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 vi.mock("./emission-entry-lock", () => ({ lockEmissionCommentBatch: mocks.lock }));
 vi.mock("./removal-template-observations", () => ({ getLatestTemplateObservation: mocks.latest }));
 vi.mock("./activity-events", () => ({ recordActivityChange: mocks.activity }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ requireEmissionsEntriesEnabled: mocks.gate }));
 import { setEmissionLineComment, deleteEmissionLineComment } from "./emission-line-comments";
 
 const ctx = makeTestOrgContext();
@@ -113,10 +112,7 @@ it("validates facility context and refuses a missing scoped comment", async () =
   expect(remove).not.toHaveBeenCalled();
 });
 
-it("checks org scope and the feature flag before opening a transaction", async () => {
+it("checks org scope before opening a transaction", async () => {
   await expect(setEmissionLineComment({ ...ctx, organizationId: "" }, input)).rejects.toThrow("Unauthorized");
-  mocks.gate.mockImplementation(() => { throw new Error("Disabled"); });
-  await expect(setEmissionLineComment(ctx, input)).rejects.toThrow("Disabled");
-  await expect(deleteEmissionLineComment(ctx, { id, expectedVersion: 2 })).rejects.toThrow("Disabled");
   expect(mocks.transaction).not.toHaveBeenCalled();
 });

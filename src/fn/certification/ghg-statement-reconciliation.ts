@@ -1,4 +1,5 @@
 import { ghgStatusRegistryAt } from "@/lib/isometric/utils/ghg-status-registry-at";
+import { REGISTRY_DISCOVERY_SOURCE } from "@/lib/certification/submission-source";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { z } from "zod";
 import type { OrgContext } from "@/lib/auth/server";
@@ -39,6 +40,9 @@ import {
   GHG_STATEMENT_SUBMISSION_TYPE,
   ISOMETRIC_PROVIDER,
 } from "./shared";
+import { flushStagedSyncEvents, ghgStatementSyncEvent } from "./ghg-statement-last-synced";
+import type { AppendSyncEventInput } from "@/data-access/certifier-sync-events";
+import { withStagedSyncEvents, type SyncEventStage } from "./sync-event-stage";
 
 const facilityIdSchema = z.uuid();
 const CONCURRENT_RECONCILIATION_WARNING =
@@ -118,7 +122,20 @@ export async function reconcileGhgStatementsForFacility(
       skippedCount: listedRemotes.length,
     };
   }
-  return withFacilityDurabilityLock(orgCtx, facilityId, async (tx) => {
+  // Events staged inside the lock, kept whole (inputs, not just ids). Commit
+  // events are written in one insert after the transaction committed; rollback
+  // diagnostics after it rolled back.
+  const staged: { committed: AppendSyncEventInput[]; rolledBack: AppendSyncEventInput[] } = {
+    committed: [],
+    rolledBack: [],
+  };
+  const stage: SyncEventStage = {
+    onCommit: (event) => void staged.committed.push(event),
+    onRollback: (event) => void staged.rolledBack.push(event),
+  };
+  let outcome: ReconcileRegistryGhgStatementsResult;
+  try {
+    outcome = await withFacilityDurabilityLock(orgCtx, facilityId, async (tx) => {
     const lockedOperatorCreateInFlight =
       await hasInFlightGhgStatementForFacility(orgCtx, facilityId, tx);
     if (lockedOperatorCreateInFlight) {
@@ -220,6 +237,7 @@ export async function reconcileGhgStatementsForFacility(
           remote,
         },
         tx,
+        stage,
       );
       reconciledCount += 1;
       warningCount += result.warnings.length;
@@ -231,7 +249,13 @@ export async function reconcileGhgStatementsForFacility(
       warningCount,
       skippedCount,
     };
-  });
+    });
+  } catch (error) {
+    await flushStagedSyncEvents(orgCtx, staged, "rollback");
+    throw error;
+  }
+  await flushStagedSyncEvents(orgCtx, staged, "commit");
+  return outcome;
 }
 
 // Read-only companion to `reconcileGhgStatementsForFacility`: the project's
@@ -266,6 +290,7 @@ export async function reconcileRegistryGhgStatement(
     remote: GhgStatement;
   },
   tx: DbTransaction,
+  stage: SyncEventStage,
 ): Promise<ReconciledRegistryGhgStatement> {
   const period = getGhgStatementPeriod(args.remote);
   // Facility-scoped by construction (ADR 0023): another facility's mirror of
@@ -306,7 +331,7 @@ export async function reconcileRegistryGhgStatement(
     localEntityId: statement.id,
   };
   const semanticPayload = {
-    source: "registry-discovery",
+    source: REGISTRY_DISCOVERY_SOURCE,
     externalId: args.remote.id,
     projectId: args.externalProjectId,
     endOn: period.endOn,
@@ -389,6 +414,7 @@ export async function reconcileRegistryGhgStatement(
     },
     tx,
   );
+  stage.onCommit(ghgStatementSyncEvent(statement.id));
   return {
     ghgStatementId: statement.id,
     externalId: args.remote.id,
@@ -406,7 +432,7 @@ export async function reconcileRegistryGhgStatementById(
     externalId: string;
   },
 ): Promise<ReconciledRegistryGhgStatement> {
-  return withFacilityDurabilityLock(
+  return withStagedSyncEvents(orgCtx, (stage) => withFacilityDurabilityLock(
     orgCtx,
     args.facilityId,
     async (tx) => {
@@ -419,9 +445,10 @@ export async function reconcileRegistryGhgStatementById(
           remote,
         },
         tx,
+        stage,
       );
     },
-  );
+  ));
 }
 
 function toRegistryGhgStatementView(

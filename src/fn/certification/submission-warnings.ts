@@ -1,4 +1,3 @@
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import type { RemovalAdvisory } from "@/lib/certification/removal-blockers";
 import { effectiveContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
@@ -12,6 +11,7 @@ import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 // template. Warning for those would fire on nearly every template. Safety margin
 // reuses dry biochar mass rather than an independently recorded emissions fact.
 export const DELIBERATELY_EXCLUDED_SOURCES = {
+  "sample-transport": "Sample shipping is recorded as an emissions entry. Legacy legs are retired.",
   "feedstock-dry-mass": "Run mass is recorded on every run.",
   "biochar-dry-mass": "Run mass is recorded on every run.",
   sequestration: "Every Removal template requires sequestration.",
@@ -26,7 +26,6 @@ export const RECORDED_AUTOMATIC_SOURCES = [
 export const RECORDED_TRANSPORT_SOURCES = [
   { category: "feedstock", id: "feedstock-transport", label: "Feedstock transport" },
   { category: "biochar", id: "delivery-transport", label: "Delivery transport" },
-  { category: "sample", id: "sample-transport", label: "Sample transport" },
 ] as const satisfies readonly { category: keyof TransportLegsByCategory; id: AutomaticSourceId; label: string }[];
 
 function carriedAutomaticSources(template: IsometricGhgEntryTemplate, lineSources: LineSources): Set<AutomaticSourceId> {
@@ -95,7 +94,6 @@ export function buildSubmissionAdvisories(args: {
   const droppedFacts = [
     ...RECORDED_AUTOMATIC_SOURCES.filter((source) => runs.some(source.recorded) && !carried.has(source.id)),
     ...RECORDED_TRANSPORT_SOURCES.filter((source) => {
-      if (source.category === "sample" && emissionsEntriesEnabled()) return false;
       const legs = args.transportLegs?.[source.category] ?? [];
       // Delivery legs are derived even for an unrecorded route; their mere
       // existence does not mean a transport fact was captured.

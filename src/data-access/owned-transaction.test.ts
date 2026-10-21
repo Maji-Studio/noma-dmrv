@@ -9,7 +9,10 @@ import { runOwnedTransaction } from "./owned-transaction";
 
 const { transaction, execute, guard } = vi.hoisted(() => ({ transaction: vi.fn(), execute: vi.fn(), guard: vi.fn() }));
 vi.mock("@/db", () => ({ db: {} }));
-vi.mock("@/db/schema", () => ({}));
+vi.mock("@/db/schema", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/db/schema")>();
+  return { ...actual };
+});
 vi.mock("./utils", () => ({ requireOrgScope: guard }));
 vi.mock("drizzle-orm/node-postgres", () => ({ drizzle: () => ({ transaction }) }));
 const ctx = { userId: "user-id", organizationId: "org-id", orgRole: "admin" as const, isPlatformAdmin: false };

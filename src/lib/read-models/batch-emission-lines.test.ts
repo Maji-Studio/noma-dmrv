@@ -2,7 +2,6 @@ import { legacyTransportObservation } from "../../../tests/helpers/legacy-transp
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntries: vi.fn() }));
 vi.mock("@/data-access/emission-line-comments", () => ({ listEmissionLineComments: vi.fn() }));
 vi.mock("@/db", () => ({ db: {} }));
-const gate = vi.hoisted(() => ({ enabled: true }));
 const pinOverride = vi.hoisted(() => ({ code: null as RemovalTemplateBlockerCode | null }));
 vi.mock("@/lib/certification/resolve-batch-pin", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/certification/resolve-batch-pin")>();
@@ -11,7 +10,6 @@ vi.mock("@/lib/certification/resolve-batch-pin", async (importOriginal) => {
       pinOverride.code ? { code: pinOverride.code } : actual.resolveBatchPin(batches),
   };
 });
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => gate.enabled }));
 vi.mock("@/data-access/emission-automatic-masses", () => ({ getEmissionAutomaticMasses: vi.fn() }));
 vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn(), requireOrgScope: vi.fn() }));
 import { assert, beforeEach, expect, it, vi } from "vitest";
@@ -48,7 +46,6 @@ import { withTemplateOrder } from "@/lib/isometric/template-observations/templat
 
 beforeEach(() => {
   vi.resetAllMocks();
-  gate.enabled = true;
   pinOverride.code = null;
   vi.mocked(listEmissionLineComments).mockResolvedValue([]);
   vi.mocked(getCreditBatchById).mockResolvedValue({
@@ -237,13 +234,6 @@ it("returns typed entry details and retains removed lines for re-entry", async (
     entries: [{ id: "entry", version: 2, counts: true, documentCount: 0 }],
     comment: { id: comment.id, body: comment.body, version: comment.version, updatedAt: comment.updatedAt, updatedBy: comment.updatedBy },
   });
-  // Switched off, the page shows what records hold, like the overview and readiness.
-  gate.enabled = false;
-  vi.mocked(listEmissionEntries).mockClear();
-  const [recordsOnly] = await loadReadyLines();
-  expect(listEmissionEntries).not.toHaveBeenCalled();
-  expect(recordsOnly).toMatchObject({ state: "empty", total: null, entries: [] });
-  gate.enabled = true;
   vi.mocked(getLatestTemplateObservation).mockResolvedValue({
     ...current,
     definition: { groups: [] },
@@ -325,9 +315,8 @@ it("shows re-entry for unit changes and keeps other lines healthy", async () => 
 });
 
 
-it.each([false, true])("marks a stored legacy pair for review only with entries on: %s", (enabled) => {
-  gate.enabled = enabled;
+it("marks a stored legacy pair for review", () => {
   const { observation } = legacyTransportObservation();
   const [line] = buildBatchEmissionLines(observation, [], new Map(), { automaticFigures: {} });
-  expect(line.state === "needsReview").toBe(enabled);
+  expect(line.state).toBe("needsReview");
 });

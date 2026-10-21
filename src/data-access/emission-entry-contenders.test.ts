@@ -7,7 +7,6 @@ import { emissionCorrectionBatchIds } from "./emission-entry-corrections";
 import { getCertifiedLineageForBatches } from "./certification-lineage-guards";
 
 vi.mock("@/db", () => ({ db: {} }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => true }));
 vi.mock("./emission-entry-corrections", () => ({ emissionCorrectionBatchIds: vi.fn(async () => ["a", "b"]) }));
 vi.mock("./certification-lineage-guards", () => ({ getCertifiedLineageForBatches: vi.fn() }));
 const returned: RecordLockRemoval = { id: "returned", submissions: [{ id: "attempt", status: "submitted", externalId: "remote", submittedAt: "2026-01-01" }],

@@ -33,7 +33,6 @@ import { readRemovalEntrySnapshot } from "@/lib/certification/removal-entry-snap
 import { cleanupLineageFixture, createLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
 
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => true, requireEmissionsEntriesEnabled: () => {} }));
 const correctionRemote = vi.hoisted(() => ({ status: "AWAITING_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: ["correction-original"] }));
 vi.mock("@/lib/isometric/ghg-statements", () => ({ getGhgStatement: async () => correctionRemote }));
 vi.mock("@/data-access/certifier-credentials", () => ({ resolveIsometricClient: async () => ({}) }));

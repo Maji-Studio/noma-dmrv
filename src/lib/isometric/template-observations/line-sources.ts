@@ -31,7 +31,7 @@ export function effectiveContract(contract: LineContract): LineContract {
     : { ...contract, ...(contract.automaticSource && !automaticSourceAvailable(contract.automaticSource) ? { automaticSource: undefined } : {}) };
 }
 
-export function validateLineSources(definition: TemplateDefinition, lineSources: LineSources, options: { entriesEnabled?: boolean } = {}): LineSourceProblem[] {
+export function validateLineSources(definition: TemplateDefinition, lineSources: LineSources): LineSourceProblem[] {
   const problems: LineSourceProblem[] = [];
   const sourceOwners = new Map<AutomaticSourceId, string[]>();
   for (const group of definition.groups) {
@@ -44,8 +44,7 @@ export function validateLineSources(definition: TemplateDefinition, lineSources:
       }
       if (effectiveContract(contract).scope === "unassigned") problems.push({ code: "unassigned", componentId });
       if (contract.entryPolicy === "single" && contract.automaticSource) problems.push({ code: "single-with-automatic-source", componentId });
-      if (!allowedEntryPolicies(component).includes(contract.entryPolicy) &&
-        !(options.entriesEnabled === false && isLegacyAutomaticPair(component, contract))) problems.push({ code: "disallowed-entry-policy", componentId });
+      if (!allowedEntryPolicies(component).includes(contract.entryPolicy)) problems.push({ code: "disallowed-entry-policy", componentId });
       if (contract.automaticSource && !automaticSourceAvailable(contract.automaticSource) && contract.entryPolicy === "none") {
         problems.push({ code: "retired-automatic-source", componentId });
       }

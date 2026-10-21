@@ -1,4 +1,3 @@
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -19,7 +18,8 @@ import { withTemplateOrder } from "@/lib/isometric/template-observations/templat
 const OBSERVATION_ORDER_TICK_MS = 1;
 
 /** Shared by observations and reviews, including the first observation of a template. */
-async function acquireTemplateObservationLock(ctx: OrgContext, tx: DbTransaction, provider: RemovalTemplateObservation["provider"], templateId: string) {
+export async function acquireTemplateObservationLock(ctx: OrgContext, tx: DbTransaction, provider: RemovalTemplateObservation["provider"], templateId: string) {
+  requireOrgScope(ctx);
   const key = JSON.stringify(["removal-template-observation", ctx.organizationId, provider, templateId]);
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
 }
@@ -123,45 +123,49 @@ export interface ReviewLineContractsInput {
 export async function reviewLineContracts(ctx: OrgContext, input: ReviewLineContractsInput) {
   requireOrgScope(ctx);
   requireOrgRole(ctx, "admin");
-  return db.transaction(async (tx) => {
-    // Read immutable lock coordinates before taking any row lock. Observers take
-    // the advisory lock first too, so review and upsert use the same lock order.
-    const [target] = await tx.select({ provider: observations.provider, externalTemplateId: observations.externalTemplateId }).from(observations).where(and(
-      eq(observations.organizationId, ctx.organizationId), eq(observations.id, input.observationId),
-    )).limit(1);
-    if (!target) throw new SafeError("Removal template observation not found.");
-    await acquireTemplateObservationLock(ctx, tx, target.provider, target.externalTemplateId);
-    const [row] = await tx.select().from(observations).where(and(
-      eq(observations.organizationId, ctx.organizationId), eq(observations.id, input.observationId),
-    )).for("update");
-    if (!row) throw new SafeError("Removal template observation not found.");
-    assertRowVersion({ entity: "removal_template_observation", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });
-    // Compilation reads the latest observation; a review of a superseded one would never apply.
-    const [latest] = await tx.select({ id: observations.id }).from(observations).where(and(
-      eq(observations.organizationId, ctx.organizationId), eq(observations.provider, row.provider),
-      eq(observations.externalTemplateId, row.externalTemplateId),
-    )).orderBy(desc(observations.lastObservedAt), desc(observations.id)).limit(1);
-    if (latest?.id !== row.id) throw staleRowVersion("removal_template_observation", row.id);
-    if (!isEnrichmentComplete(row.definition, row.enrichment)) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
-    const componentIds = new Set(row.definition.groups.flatMap((group) => group.components.map((component) => component.id)));
-    const currentProblems = validateLineSources(row.definition, row.lineSources, { entriesEnabled: emissionsEntriesEnabled() });
-    const lineSources = { ...row.lineSources };
-    for (const [id, assignment] of Object.entries(input.assignments)) {
-      if (!componentIds.has(id)) throw new SafeError("Template component not found.");
-      if (!lineNeedsReview(id, row.lineSources[id], currentProblems)) {
-        throw new SafeError("This template component is already decided. Only components to decide take a decision.");
-      }
-      if (assignment.scope !== "operating" && (assignment.automaticSource || assignment.entryPolicy !== "none")) {
-        throw new SafeError("Only operating components can take automatic datapoints or entries.");
-      }
-      lineSources[id] = { ...assignment, origin: "reviewed", templateOrder: lineSources[id]?.templateOrder };
+  return db.transaction((tx) => reviewLineContractsInTransaction(ctx, tx, input));
+}
+
+export async function reviewLineContractsInTransaction(ctx: OrgContext, tx: DbTransaction, input: ReviewLineContractsInput) {
+  requireOrgScope(ctx);
+  requireOrgRole(ctx, "admin");
+  // Read immutable lock coordinates before taking any row lock. Observers take
+  // the advisory lock first too, so review and upsert use the same lock order.
+  const [target] = await tx.select({ provider: observations.provider, externalTemplateId: observations.externalTemplateId }).from(observations).where(and(
+    eq(observations.organizationId, ctx.organizationId), eq(observations.id, input.observationId),
+  )).limit(1);
+  if (!target) throw new SafeError("Removal template observation not found.");
+  await acquireTemplateObservationLock(ctx, tx, target.provider, target.externalTemplateId);
+  const [row] = await tx.select().from(observations).where(and(
+    eq(observations.organizationId, ctx.organizationId), eq(observations.id, input.observationId),
+  )).for("update");
+  if (!row) throw new SafeError("Removal template observation not found.");
+  assertRowVersion({ entity: "removal_template_observation", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });
+  // Compilation reads the latest observation; a review of a superseded one would never apply.
+  const [latest] = await tx.select({ id: observations.id }).from(observations).where(and(
+    eq(observations.organizationId, ctx.organizationId), eq(observations.provider, row.provider),
+    eq(observations.externalTemplateId, row.externalTemplateId),
+  )).orderBy(desc(observations.lastObservedAt), desc(observations.id)).limit(1);
+  if (latest?.id !== row.id) throw staleRowVersion("removal_template_observation", row.id);
+  if (!isEnrichmentComplete(row.definition, row.enrichment)) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
+  const componentIds = new Set(row.definition.groups.flatMap((group) => group.components.map((component) => component.id)));
+  const currentProblems = validateLineSources(row.definition, row.lineSources);
+  const lineSources = { ...row.lineSources };
+  for (const [id, assignment] of Object.entries(input.assignments)) {
+    if (!componentIds.has(id)) throw new SafeError("Template component not found.");
+    if (!lineNeedsReview(id, row.lineSources[id], currentProblems)) {
+      throw new SafeError("This template component is already decided. Only components to decide take a decision.");
     }
-    const problems = validateLineSources(row.definition, lineSources, { entriesEnabled: emissionsEntriesEnabled() }).filter((problem) => problem.code !== "unassigned");
-    if (problems.length) throw new SafeError("Choose valid, distinct sources and entry policies for the Removal template components.");
-    const [reviewed] = await tx.update(observations).set({
-      lineSources, reviewedAt: new Date(), reviewedByUserId: ctx.userId,
-      version: nextVersion(observations.version), updatedAt: new Date(),
-    }).where(and(eq(observations.organizationId, ctx.organizationId), eq(observations.id, row.id))).returning();
-    return reviewed;
-  });
+    if (assignment.scope !== "operating" && (assignment.automaticSource || assignment.entryPolicy !== "none")) {
+      throw new SafeError("Only operating components can take automatic datapoints or entries.");
+    }
+    lineSources[id] = { ...assignment, origin: "reviewed", templateOrder: lineSources[id]?.templateOrder };
+  }
+  const problems = validateLineSources(row.definition, lineSources).filter((problem) => problem.code !== "unassigned");
+  if (problems.length) throw new SafeError("Choose valid, distinct sources and entry policies for the Removal template components.");
+  const [reviewed] = await tx.update(observations).set({
+    lineSources, reviewedAt: new Date(), reviewedByUserId: ctx.userId,
+    version: nextVersion(observations.version), updatedAt: new Date(),
+  }).where(and(eq(observations.organizationId, ctx.organizationId), eq(observations.id, row.id))).returning();
+  return reviewed;
 }

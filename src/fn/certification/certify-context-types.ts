@@ -47,8 +47,6 @@ export interface RemovalCertifyContext {
   unbindableTemplateInputs: UnbindableTemplateInput[];
   memberBatches: MemberCreditBatch[];
   emissionsLedger: RemovalLedgerPreview;
-  /** The emissions entries switch (server-side; always set on the UI payload). Off: no entries, recorded zeros or empty components. */
-  emissionsEntriesEnabled?: boolean;
   feedstockTypeMappingGaps: FeedstockTypeMappingGap[];
   transportCoverage: TransportCoverage;
   requiredTransportCategories: TransportCategory[];
@@ -154,5 +152,4 @@ export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "e
   // durability gate blocker, so the Phase-3 step can assume non-null here.
   facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature | null;
 }
-
 

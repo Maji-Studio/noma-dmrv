@@ -4,7 +4,6 @@ import { isSubmittedAttempt, isRemovalCorrectionWindowOpen } from "@/lib/record-
 import { getCertifiedLineageForBatches } from "./certification-lineage-guards";
 import { emissionCorrectionBatchIds } from "./emission-entry-corrections";
 import type { StatementReads } from "./record-lock-lineage";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -19,7 +18,6 @@ import { requireOrgScope, type Executor } from "./utils";
 export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBatchIds: string[], executor: Executor & Pick<typeof db, "selectDistinct"> = db, claimedAttempt?: { removalId: string; submissionId?: string }): Promise<EntryContender[]> {
   requireOrgScope(ctx);
   if (!creditBatchIds.length) return [];
-  const enabled = emissionsEntriesEnabled();
   const members = await executor.select({ removalId: creditBatchApplications.removalId }).from(creditBatchApplications)
     .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.creditBatchId, creditBatchIds)));
   const ids = [...new Set(members.flatMap((member) => member.removalId ? [member.removalId] : []))];
@@ -30,17 +28,7 @@ export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBa
     .innerJoin(creditBatchApplications, and(eq(creditBatchApplications.removalId, certifierRemovals.id), eq(creditBatchApplications.organizationId, ctx.organizationId)))
     .innerJoin(creditBatches, and(eq(creditBatches.id, creditBatchApplications.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId)))
     .innerJoin(applications, and(eq(applications.id, creditBatchApplications.applicationId), eq(applications.organizationId, ctx.organizationId)))
-    .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, ids), enabled ? undefined : sql`not exists (
-      select 1 from ${certificationSubmissions} where ${certificationSubmissions.organizationId} = ${ctx.organizationId}
-      and ${certificationSubmissions.localEntityId} = ${certifierRemovals.id}
-      and ${certificationSubmissions.localEntityType} = 'removal' and ${certificationSubmissions.submissionType} = 'removal'
-      and (${certificationSubmissions.submittedAt} is not null or ${certificationSubmissions.status} in ('submitted', 'accepted')))`));
-  if (!enabled) return ids.flatMap((removalId) => {
-    const group = rows.filter((row) => row.removalId === removalId && !hasFreshRemovalDeletionLease(row.metadata));
-    const window = deriveRemovalEntryWindow(group, group.map((row) => row.applicationDate));
-    return window ? [{ contenderKind: "draft" as const, removalId, createdAt: group[0].createdAt.toISOString(),
-      creditBatchIds: [...new Set(group.map((row) => row.creditBatchId))], window }] : [];
-  });
+    .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, ids)));
   let excludeSubmissionId: string | undefined;
   if (claimedAttempt && ids.includes(claimedAttempt.removalId)) {
     const [latest] = await executor.select().from(certificationSubmissions).where(and(

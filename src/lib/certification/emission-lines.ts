@@ -71,7 +71,7 @@ export function sumFigures(figures: EmissionFigure[]): EmissionFigure | null {
 
 export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
   // Revalidate as well as accepting observation problems: callers cannot hide an invalid contract.
-  const problems = [...facts.problems, ...validateLineSources(facts.definition, facts.lineSources, { entriesEnabled: facts.entriesCanSubmit ?? false })];
+  const problems = [...facts.problems, ...validateLineSources(facts.definition, facts.lineSources)];
   const fallbackGroupOffset = Math.max(-1, ...Object.values(facts.lineSources).map((source) => source.templateOrder?.groupPosition ?? -1)) + 1;
   return facts.definition.groups.flatMap((group, groupIndex) => group.components.map((component, componentIndex) => {
     const stored = ownValue(facts.lineSources, component.id);

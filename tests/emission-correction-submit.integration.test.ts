@@ -25,7 +25,6 @@ import { reviewedTemplateSources } from "./helpers/template-line-sources";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import type { RemovalScope } from "@/fn/certification/removal-scope";
 
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => true, requireEmissionsEntriesEnabled: () => {} }));
 vi.mock("@/lib/isometric/ghg-statements", () => ({ getGhgStatement: async () => ({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: ["original"] }) }));
 const userId = crypto.randomUUID();
 const org = { ...makeTestOrgContext(userId), orgRole: "owner" as const };

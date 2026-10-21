@@ -3,7 +3,6 @@ import { makeTestOrgContext } from "../../tests/helpers/test-org";
 import { loadRemovalEntryCorrection } from "./removal-entry-correction";
 import { getCreditBatchesByRemovalId } from "./certifier-removals";
 import { listEmissionEntryDraftContenders } from "./emission-entry-contenders";
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => true }));
 vi.mock("./certifier-removals", () => ({ getCreditBatchesByRemovalId: vi.fn() }));
 vi.mock("./emission-entry-contenders", () => ({ listEmissionEntryDraftContenders: vi.fn(), loadEmissionEntryReservations: vi.fn() }));
 vi.mock("@/db", () => ({ db: { select: () => {

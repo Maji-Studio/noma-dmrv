@@ -3,7 +3,6 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { applications, certificationSubmissions, creditBatchApplications, creditBatches } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { deriveRemovalEntryWindow, type RemovalEntryWindow } from "@/lib/certification/removal-emission-contributions";
 import { isRemovalCorrectionWindowOpen } from "@/lib/record-lock";
 import { CertificationLineageChangedError, getCertifiedLineage, getLockedCertifiedLineageForBatches } from "./certification-lineage-guards";
@@ -16,7 +15,6 @@ const scopeKey = (ctx: OrgContext, batchId: string) => `${ctx.organizationId}:${
 /** Before batch/entry rows: acquire the same artifact locks as statement submission. */
 export async function lockEmissionCorrectionScope(ctx: OrgContext, tx: DbTransaction, batchId: string) {
   requireOrgScope(ctx);
-  if (!emissionsEntriesEnabled()) return;
   const key = scopeKey(ctx, batchId);
   if (scopes.get(tx)?.has(key)) return;
   const batchIds = await emissionCorrectionBatchIds(ctx, tx, batchId);
@@ -58,7 +56,7 @@ export async function revalidateEmissionCorrectionScope(ctx: OrgContext, tx: DbT
 /** Only a scope acquired before the batch lock may authorize a sent-entry write. */
 export function emissionCorrectionWindow(ctx: OrgContext, tx: DbTransaction, batchId: string, removalId: string) {
   requireOrgScope(ctx);
-  return emissionsEntriesEnabled() ? scopes.get(tx)?.get(scopeKey(ctx, batchId))?.windows.get(removalId) : undefined;
+  return scopes.get(tx)?.get(scopeKey(ctx, batchId))?.windows.get(removalId);
 }
 
 /** New attempts are allowed only after the registry returned the prior submission.
@@ -67,7 +65,6 @@ export function emissionCorrectionWindow(ctx: OrgContext, tx: DbTransaction, bat
  */
 export async function lockRemovalEntryCorrectionAttempt(ctx: OrgContext, tx: DbTransaction, removalId: string, excludeSubmissionId?: string, reconcileExternalMutation = false) {
   requireOrgScope(ctx);
-  if (!emissionsEntriesEnabled()) return;
   const prior = await tx.select().from(certificationSubmissions).where(and(
     eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityType, "removal"),
     eq(certificationSubmissions.localEntityId, removalId), eq(certificationSubmissions.submissionType, "removal"),

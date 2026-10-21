@@ -3,7 +3,6 @@ import type { EntryCorrectionState } from "@/lib/certification/removal-entry-cor
 import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
 import { isLiveEntryReservation, entriesWithoutRemoval, type EntryContender } from "@/lib/certification/removal-emission-contributions";
 import type { OrgContext } from "@/lib/auth/server";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import type { loadBatchEmissionEntryFacts } from "@/data-access/emission-entry-facts";
 import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
 import { getTemplateObservationsByIds } from "@/data-access/removal-template-observations";
@@ -31,7 +30,6 @@ export async function loadBatchEmissionContext(
   claimedAttempt?: { removalId: string; submissionId?: string },
 ): Promise<BatchEmissionContext> {
   const result: BatchEmissionContext = {};
-  if (!emissionsEntriesEnabled()) return result;
   const readableBatches = batches.flatMap((batch) => {
     const observation = batch.removalTemplateId
       ? facilityFacts.templatesById[batch.removalTemplateId]?.observation : null;

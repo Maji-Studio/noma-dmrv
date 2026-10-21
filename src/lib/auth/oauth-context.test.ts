@@ -4,7 +4,10 @@ import { resolveOAuthContext } from "./oauth-context";
 import { hashOAuthAccessToken } from "./oauth-token-hash";
 
 const mocks = vi.hoisted(() => ({ enabled: true, token: vi.fn(), eligibility: vi.fn(), client: vi.fn(), consent: vi.fn(), touch: vi.fn(), revoke: vi.fn() }));
-vi.mock("@/config/env", () => ({ env: { get OAUTH_PROVIDER_ENABLED() { return mocks.enabled; } } }));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: { get OAUTH_PROVIDER_ENABLED() { return mocks.enabled; } } };
+});
 vi.mock("@/data-access/oauth-credential-auth", () => ({ findOAuthCredential: mocks.token, findOAuthGenerationEligibility: mocks.eligibility,
   findOAuthClient: mocks.client, findOAuthConsent: mocks.consent, touchOAuthGeneration: mocks.touch }));
 vi.mock("@/data-access/oauth-grant-lifecycle", () => ({ revokeGeneration: mocks.revoke }));

@@ -1,4 +1,3 @@
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { deriveRemovalEmissionLines } from "@/lib/certification/removal-emission-lines";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
@@ -46,7 +45,7 @@ export function resolveRemovalTemplate(
   }
   const definition = normalizeTemplateDefinition(facts.template);
   const sources = facts.observation?.lineSources;
-  const problems = sources ? [...facts.lineSourceProblems, ...validateLineSources(definition, sources, { entriesEnabled: emissionsEntriesEnabled() })] : [];
+  const problems = sources ? [...facts.lineSourceProblems, ...validateLineSources(definition, sources)] : [];
   // Only current template components count, never removed components kept for stale entries.
   const undecidedLineIds = sources ? [...new Set(definition.groups.flatMap((group) => group.components
     .filter((component) => lineNeedsReview(component.id, ownValue(sources, component.id), problems))

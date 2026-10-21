@@ -38,7 +38,7 @@ import { SOURCE_ICON } from "./emission-source-chips";
 export const ICON = 14;
 
 /** What the body reads off a line before laying it out. */
-export function lineBodyModel(line: EmissionLine, canWrite: boolean) {
+export function lineBodyModel(line: EmissionLine) {
   const records = lineRecords(line);
   const values = valueEntries(line);
   const stopped = stoppedEntries(line);
@@ -52,7 +52,7 @@ export function lineBodyModel(line: EmissionLine, canWrite: boolean) {
     /** No records source and no entries: the body says so in one sentence (the row's Sources cell holds Add). */
     nothingYet: !hasSomething && line.state !== "needsSetup",
     /** Add manual entry inside the body, only when the Sources cell shows chips instead of the link. */
-    canAddInBody: canWrite && hasSomething && !addEntryRefusal(line),
+    canAddInBody: hasSomething && !addEntryRefusal(line),
     /** The Total repeats the one part when only one part counts, so it shows from two parts up. */
     showTotal: recordsCount + values.length > 1 && lineTotalText(line) !== null,
     totalText: lineTotalText(line),
@@ -175,10 +175,9 @@ function AddFilePanel({ entry, scope, actions }: { entry: EmissionEntry; scope: 
  * caption line that wraps, then the upload panel. Until the file names load
  * the entry's own count stands in, so the slot never shows an empty bar.
  */
-export function EntryEvidence({ entry, scope, canWrite, actions, className }: {
+export function EntryEvidence({ entry, scope, actions, className }: {
   entry: EmissionEntry;
   scope: EmissionBatchScope;
-  canWrite: boolean;
   actions: ReturnType<typeof useEntryActions>;
   className?: string;
 }) {
@@ -211,7 +210,7 @@ export function EntryEvidence({ entry, scope, canWrite, actions, className }: {
             {countText}
           </span>
         )}
-        {missing && canWrite && !actions.addingFile && (
+        {missing && !actions.addingFile && (
           <QuietAction onClick={actions.startAddFile} className="min-h-24 body-caption">Add file</QuietAction>
         )}
         {entry.note && <span className="min-w-0">{entry.note}</span>}
