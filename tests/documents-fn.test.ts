@@ -68,7 +68,7 @@ it("floors the runner remainder at the DB reserve after slow preparation", async
 });
 
 it.each([
-  ["owner", false, true], ["admin", false, true], ["member", false, false], [null, true, true],
+  ["admin", false, true], ["member", false, false], [null, true, true],
 ] as const)("reads the visibility role floor for role=%s platformAdmin=%s", async (orgRole, isPlatformAdmin, allowed) => {
   vi.mocked(requireOrgContext).mockResolvedValue({ ...makeTestOrgContext(), orgRole, isPlatformAdmin });
   expect(await canChangeDocumentVisibility()).toEqual({ success: true, data: allowed });

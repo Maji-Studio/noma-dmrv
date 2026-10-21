@@ -671,7 +671,8 @@ it("refuses supported but different entry units at create and update", async () 
   });
 });
 
-it.each(["live", "deleted", "reserved", "sent", "confirmed"] as const)(
+
+it.each(["live", "deleted", "reserved", "sent", "confirmed", "reserved-zero", "sent-zero"] as const)(
   "deletes a batch only with unclaimed tombstones: %s", async (state) => {
   const [original] = await db.select().from(creditBatches).where(eq(creditBatches.id, lineage.batchId));
   const [batch] = await db.insert(creditBatches).values({
@@ -688,18 +689,21 @@ it.each(["live", "deleted", "reserved", "sent", "confirmed"] as const)(
     fileUrl: "https://example.test/evidence", fileName: "Evidence",
   });
   try {
-    if (state === "reserved" || state === "sent") {
-      await claim(entry.id, state);
-      await db.update(emissionEntries).set({ deletedAt: new Date() }).where(eq(emissionEntries.id, entry.id));
+    if (state === "reserved" || state === "sent" || state === "reserved-zero" || state === "sent-zero") {
+      await claim(entry.id, state === "reserved-zero" ? "reserved" : state === "sent-zero" ? "sent" : state);
+      await db.update(emissionEntries).set({ deletedAt: new Date() })
+        .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id)));
     }
-    if (state === "confirmed") {
+    if (state === "confirmed" || state === "reserved-zero" || state === "sent-zero") {
       await db.update(emissionEntries).set({
         kind: "zero", confirmedForRemovalId: lineage.removalId, deletedAt: new Date(),
-      }).where(eq(emissionEntries.id, entry.id));
+      }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id)));
     }
-    if (state === "deleted") {
-      const current = await getEmissionEntry(ctx, entry.id);
-      await deleteEmissionEntry(ctx, entry.id, current.version);
+    if (state === "deleted" || state === "confirmed") {
+      if (state === "deleted") {
+        const current = await getEmissionEntry(ctx, entry.id);
+        await deleteEmissionEntry(ctx, entry.id, current.version);
+      }
       await deleteCreditBatch(ctx, batch.id, batch.version);
       expect(await db.select().from(creditBatches).where(eq(creditBatches.id, batch.id))).toEqual([]);
       expect(await db.select().from(emissionEntries).where(eq(emissionEntries.id, entry.id))).toEqual([]);

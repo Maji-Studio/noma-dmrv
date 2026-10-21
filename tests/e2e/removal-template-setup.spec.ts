@@ -82,6 +82,6 @@ test.describe("Removal template setup", { tag: "@live" }, () => {
     await expect(page.getByText("No Removal template set")).toBeVisible({ timeout: LIVE_READ_TIMEOUT_MS });
     await expect(page.getByRole("button", { name: "Set up template" })).toHaveCount(0);
     await expect(page.getByRole("dialog", { name: "Set up Removal template" })).toHaveCount(0);
-    await expect(page.getByText("Owners and Admins can change these.")).toBeVisible();
+    await expect(page.getByText("Admins can change these.")).toBeVisible();
   });
 });

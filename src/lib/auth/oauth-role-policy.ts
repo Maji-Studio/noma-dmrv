@@ -10,7 +10,7 @@ export const OAUTH_ROLE_POLICY: OAuthRolePolicy = {
 };
 
 export function oauthRolePolicy(role: string, policy = OAUTH_ROLE_POLICY) {
-  const manager = role === "owner" || role === "admin";
+  const manager = role === "admin";
   const member = role === "member";
   return {
     connect: manager || member && policy.memberConnections,

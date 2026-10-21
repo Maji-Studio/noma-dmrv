@@ -9,9 +9,9 @@ describe("API authority", () => {
   it("does not interpret wildcards or unknown permissions", () => {
     expect(scopesFromPermissions({ "*": ["*"], feedstocks: ["*"], facilities: ["write"] })).toEqual([]);
   });
-  it.each(["owner", "admin", "member", null] as const)("intersects %s with scopes", (orgRole) => {
+  it.each(["admin", "member", null] as const)("intersects %s with scopes", (orgRole) => {
     expect(principalAllows({ principal: { kind: "api-key" }, orgRole, scopes: ["feedstocks:write"] }, "feedstocks:write"))
-      .toBe(orgRole === "owner" || orgRole === "admin");
+      .toBe(orgRole === "admin");
     expect(principalAllows({ principal: { kind: "api-key" }, orgRole, scopes: [] }, "feedstocks:write")).toBe(false);
   });
   it("does not imply read or delete from write", () => {

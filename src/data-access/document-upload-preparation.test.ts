@@ -9,7 +9,7 @@ vi.mock("@/db", () => ({ db: { transaction: (fn: (tx: unknown) => unknown) => fn
 }) } }));
 vi.mock("./document-write-scope", async (original) => ({ ...await original<typeof import("./document-write-scope")>(), readDocumentForWrite: mocks.read }));
 import { recordDocumentPromotionCandidate } from "./document-upload-preparation";
-const ctx = { organizationId: "org", userId: "user", orgRole: "owner" as const, isPlatformAdmin: false };
+const ctx = { organizationId: "org", userId: "user", orgRole: "admin" as const, isPlatformAdmin: false };
 const row = { id: "doc", uploadStatus: "pending", uploadStorageKey: "upload", storageProvider: "local-fs", storageBucket: "local", metadata: { existing: true } };
 const facts = uploadFactsFor(row as DocumentRow);
 beforeEach(() => { vi.clearAllMocks(); mocks.queued = []; mocks.read.mockResolvedValue(row); });

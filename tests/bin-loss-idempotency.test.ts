@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
   ctx: {
     userId: "",
     organizationId: "",
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   } as OrgContext,
 }));
@@ -108,7 +108,7 @@ async function seedFeedstockBin() {
   mocks.ctx = {
     userId,
     organizationId,
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   };
   return { organizationId, binId: bin.id };

@@ -10,6 +10,8 @@ vi.mock("./batch-emission-automatic-figures", () => ({ loadBatchAutomaticFigures
 vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: vi.fn() }));
 vi.mock("./removal-template-observations", () => ({ getLatestTemplateObservation: mocks.latest, getTemplateObservationById: mocks.previous }));
 vi.mock("./emission-entry-activity", () => ({ recordEmissionEntryActivity: mocks.activity }));
+// These fixtures have no returned lineage. Correction authorization is tested separately.
+vi.mock("./emission-entry-corrections", () => ({ lockEmissionCorrectionScope: vi.fn(), revalidateEmissionCorrectionScope: vi.fn(), emissionCorrectionWindow: () => undefined }));
 import { replaceEmissionEntry } from "./emission-entries";
 
 const ctx = makeTestOrgContext();

@@ -8,7 +8,7 @@ import { __setStorageProviderForTests, StorageError, type StorageProvider } from
 import { REPORT_ID, REPORT_DOCUMENT_ID, STATEMENT_ID } from "../../../tests/fixtures/isometric-ghg-statement";
 
 vi.mock("@/lib/auth/server", () => ({
-  requireOrgContext: vi.fn(async () => ({ organizationId: "org-test", userId: "user-test", orgRole: "owner" })),
+  requireOrgContext: vi.fn(async () => ({ organizationId: "org-test", userId: "user-test", orgRole: "admin" })),
   requireOrgRole: vi.fn(),
 }));
 vi.mock("@/data-access/documents", () => ({ getDocumentById: vi.fn() }));

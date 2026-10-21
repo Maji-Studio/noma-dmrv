@@ -22,7 +22,7 @@ import { createDeliveryInTransaction, updateDeliveryInTransaction } from "./deli
 
 const ID = "00000000-0000-4000-8000-000000000001";
 const PRODUCT_VERSION = 2;
-const ctx = { organizationId: "org", userId: "operator", orgRole: "owner" as const, isPlatformAdmin: false };
+const ctx = { organizationId: "org", userId: "operator", orgRole: "admin" as const, isPlatformAdmin: false };
 const input = {
   code: "DL-001", orderId: ID, facilityId: ID, storageLocationId: ID,
   deliveryDate: new Date("2026-09-14T12:00:00.000Z"), deliveredWetMassKg: 100,

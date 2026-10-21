@@ -18,7 +18,7 @@ const locks = vi.hoisted(() => ({
 }));
 const warn = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/auth/server", () => ({
-  requireOrgContext: vi.fn(async () => ({ organizationId: "org-test", userId: "user-test", orgRole: "owner" })),
+  requireOrgContext: vi.fn(async () => ({ organizationId: "org-test", userId: "user-test", orgRole: "admin" })),
   requireOrgRole: vi.fn(),
 }));
 vi.mock("@/lib/log", () => ({
@@ -96,7 +96,7 @@ const HEALTHY_ENTRY_COUNT = 100;
 const HEALTHY_ENTRY_LATENCY_MS = 3_000;
 const PREPARATION_KEY = "44444444-4444-4444-8444-444444444444";
 const REPORT_ID = "55555555-5555-4555-8555-555555555555";
-const orgCtx = { organizationId: "org-test", userId: "user-test", orgRole: "owner", isPlatformAdmin: false } as const;
+const orgCtx = { organizationId: "org-test", userId: "user-test", orgRole: "admin", isPlatformAdmin: false } as const;
 const report = {
   id: REPORT_ID,
   ghgStatementId: STATEMENT_ID,
@@ -185,7 +185,7 @@ describe("report preparation registry budget", () => {
     expect(await outcome).toEqual({
       success: false,
       code: "registry_not_configured",
-      error: "The registry connection is not configured for this Organization. Ask an Owner or Admin to add the connection credentials.",
+      error: "The registry connection is not configured for this Organization. Ask an Admin to add the connection credentials.",
     });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();

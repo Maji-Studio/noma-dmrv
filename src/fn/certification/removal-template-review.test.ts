@@ -1,3 +1,4 @@
+import { legacyTransportObservation } from "../../../tests/helpers/legacy-transport-observation";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
@@ -16,7 +17,7 @@ import { loadRemovalTemplateReview, loadRemovalTemplateReviewEntry, reviewRemova
 import { canAcceptProposal, problemMessages } from "@/components/certification/removal-template-review-model";
 import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR, UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 
-const ctx = vi.hoisted((): OrgContext => ({ userId: "review-user", organizationId: "review-org", orgRole: "owner", isPlatformAdmin: false }));
+const ctx = vi.hoisted((): OrgContext => ({ userId: "review-user", organizationId: "review-org", orgRole: "admin", isPlatformAdmin: false }));
 vi.mock("../with-action", async () => {
   const { mockWithAction } = await import("../../../tests/helpers/mock-with-action");
   return mockWithAction(ctx);
@@ -44,7 +45,7 @@ beforeEach(() => {
   vi.mocked(getLatestTemplateObservation).mockResolvedValue(null);
   vi.mocked(listPinnedRemovalTemplateIds).mockResolvedValue([]);
   vi.mocked(listComponentBlueprints).mockResolvedValue([]);
-  ctx.orgRole = "owner";
+  ctx.orgRole = "admin";
   vi.mocked(loadTemplateEnrichment).mockResolvedValue({});
   vi.mocked(requireOrgFacility).mockResolvedValue(undefined as never);
   vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id } as never);
@@ -283,7 +284,7 @@ describe("Removal template action guards", () => {
     expect(reviewLineContracts).not.toHaveBeenCalled();
     expect(getCreditBatchById).not.toHaveBeenCalled();
   });
-  it.each(["owner", "admin"] as const)("permits %s reviews with server-resolved scope", async (role) => {
+  it.each(["admin"] as const)("permits %s reviews with server-resolved scope", async (role) => {
     ctx.orgRole = role;
     vi.mocked(reviewLineContracts).mockResolvedValue({ id, lineSources: {} } as never);
     const input = { observationId: id, expectedVersion: 1, assignments: {} };
@@ -555,4 +556,17 @@ it("gates automatic sources in the saved review response", async () => {
   const result = await reviewRemovalTemplateLines({ observationId: id, expectedVersion: 1, assignments: {} });
   expect(result).toMatchObject({ success: true, data: { lineSources: { component: { automaticSource: undefined } } } });
   expect(sources.component.automaticSource).toBe("sample-transport");
+});
+
+it("refuses to switch to a reviewed legacy transport pair", async () => {
+  const { template, observation } = legacyTransportObservation();
+  const input = { creditBatchId: id, removalTemplateId: template.id, expectedVersion: 7 };
+  vi.mocked(getCreditBatchById).mockResolvedValue({ facilityId: id, removalTemplateId: "old" } as never);
+  vi.mocked(listGhgEntryTemplates).mockResolvedValue([template]);
+  vi.mocked(getLatestTemplateObservation).mockResolvedValue(observation as never);
+  vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({ template, observation, blueprintsForTemplate: [],
+    enrichmentProblems: [], lineSourceProblems: validateLineSources(observation.definition, observation.lineSources),
+  } as never);
+  expect((await switchCreditBatchRemovalTemplate(input)).success).toBe(false);
+  expect(persistSwitch).not.toHaveBeenCalled();
 });

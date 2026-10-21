@@ -18,7 +18,7 @@ it("lets a Platform Admin without membership change visibility", async () => {
 });
 it("refuses an ordinary member with plain copy before reading or writing", async () => {
   await expect(setDocumentVisibilityInTransaction({ ...ctx, orgRole: "member", isPlatformAdmin: false }, {} as DbTransaction, { documentId, expectedVersion: 1, visibility: "public" })).rejects.toMatchObject({
-    code: "forbidden", message: "Only organization owners and admins can change file visibility.",
+    code: "forbidden", message: "Only Admins can change file visibility.",
   });
   expect(mocks.read).not.toHaveBeenCalled();
 });

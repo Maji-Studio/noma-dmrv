@@ -73,12 +73,12 @@ test("Members have no API key rail entry or controls", async ({ operatorPage: pa
   await expect(rail).toBeVisible({ timeout: UI_TIMEOUT_MS });
   await expect(rail.getByRole("link", { name: "API keys", exact: true })).toHaveCount(0);
   await page.goto("/settings/api-keys");
-  await expect(page.getByText(/Only organization Owners and Admins with a membership/)).toBeVisible();
+  await expect(page.getByText(/Only organization Admins with a membership/)).toBeVisible();
   await expect(page.getByRole("button", { name: "New API key" })).toHaveCount(0);
 });
 
 test("a Platform Admin without membership sees the explanation", async ({ adminPage: page }) => {
   await page.goto("/settings/api-keys");
-  await expect(page.getByText(/Only organization Owners and Admins with a membership/)).toBeVisible({ timeout: UI_TIMEOUT_MS });
+  await expect(page.getByText(/Only organization Admins with a membership/)).toBeVisible({ timeout: UI_TIMEOUT_MS });
   await expect(page.getByRole("button", { name: "New API key" })).toHaveCount(0);
 });

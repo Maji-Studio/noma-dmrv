@@ -79,12 +79,12 @@ test.describe("Organization foundation UI", () => {
 
     const membersSection = sectionWithHeading(page, "Current members");
     const memberRows = membersSection.getByRole("listitem");
-    const ownerRoleSelect = membersSection
+    const adminRoleSelect = membersSection
       .locator('select[aria-label^="Role for "]')
-      .filter({ has: page.locator('option[value="owner"]:checked') });
+      .filter({ has: page.locator('option[value="admin"]:checked') });
 
     await expect(memberRows.first()).toBeVisible();
-    await expect(ownerRoleSelect.first()).toHaveValue("owner");
+    await expect(adminRoleSelect.first()).toHaveValue("admin");
 
     const pendingSection = sectionWithHeading(page, "Pending invitations");
     await revokeInviteIfPresent(page, pendingSection);
