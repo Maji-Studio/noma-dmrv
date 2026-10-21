@@ -714,7 +714,7 @@ describe("submitRemoval — happy path", () => {
     );
   });
 
-  it("recovers a submitted Removal against the batch pin, not the facility default", async () => {
+  it("recovers a submitted Removal against the batch pin, not the facility template", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(),
     );
@@ -745,7 +745,7 @@ describe("submitRemoval — happy path", () => {
         memberBatches: recoveryContext.memberBatches.map((batch) => ({ ...batch, removalTemplateId: null })),
         removalTemplate: null,
       }),
-    ).rejects.toThrow(/choose a removal template for this credit batch/i);
+    ).rejects.toThrow(/set a removal template in settings, removal templates/i);
     expect(removalsDA.updateRemovalDates).not.toHaveBeenCalled();
 
     await recoverWith({
