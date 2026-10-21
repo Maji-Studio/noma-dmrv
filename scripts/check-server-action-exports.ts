@@ -87,7 +87,7 @@ const TEST_FILE = /\.test\.tsx?$/;
 const USE_SERVER = "use server";
 const GUARD_NAMES = new Set(["requireOrgRole", "requireOrgScope"]);
 /** Wrappers that call their callback with a session-resolved OrgContext. */
-const SESSION_CONTEXT_WRAPPERS = new Set(["withAction"]);
+const SESSION_CONTEXT_WRAPPERS = new Set(["withAction", "withCreate"]);
 const FORWARDING_UTILITY_TYPES = new Set([
   "Parameters",
   "ConstructorParameters",
@@ -265,7 +265,7 @@ function resolvedCalleeName(
 }
 
 /**
- * True only for the first parameter of the callback handed to `withAction`,
+ * True only for the first parameter of the callback handed to a session wrapper,
  * the one parameter whose value comes from the session.
  */
 function isSessionContextParameter(

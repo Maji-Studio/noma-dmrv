@@ -44,6 +44,10 @@ export interface OrgContext {
 export function requireOrgRole(ctx: OrgContext, role: "admin"): void {
   void ctx; void role;
 }
+export async function withCreate<T>(fn: (ctx: OrgContext) => Promise<T>, options?: unknown): Promise<T> {
+  void options;
+  return withAction(fn);
+}
 export async function withAction<T>(fn: (ctx: OrgContext) => Promise<T>): Promise<T> {
   return fn({ userId: "u", organizationId: "o", orgRole: "admin", isPlatformAdmin: false });
 }
@@ -136,6 +140,13 @@ export async function mappedContexts(contexts: unknown[]) {
 }
 
 export { issueUrl } from "./report-core";
+`;
+
+const CONTEXT_CREATE_EXPORT = `"use server";
+import { withCreate, type OrgContext } from "./auth";
+import { issueUrl } from "./report-core";
+export async function fn(ctx: OrgContext) { return issueUrl(ctx, "r"); }
+export async function createAction(options: unknown) { return withCreate(fn, options); }
 `;
 
 const PASSING_ACTIONS = `"use server";
@@ -513,6 +524,7 @@ const REVIEW_BYPASSES = [
 ] as const;
 
 const SAFE_REVIEW_CASES = [
+  ["withCreate callback resolves session context", "const options = undefined; const core = (ctx: OrgContext) => issueUrl(ctx, \"r\"); return withCreate((ctx) => core(ctx), options);"],
   ["union incompatible member preserves signature", "const run = (f: typeof issueUrl | ((a: number, b: string) => Promise<string>)) => 1; return run(issueUrl);"],
   ["construct returns any", "const Make: new (ctx: OrgContext) => any = input; return withAction(async ctx => new Make(ctx));"],
   ["immediate nested bind with session context", "return withAction(async ctx => Function.prototype.bind.call(issueUrl, undefined)(ctx, \"r\"));"],
@@ -549,6 +561,7 @@ const SAFE_REVIEW_CASES = [
 ] as const;
 
 const DELIBERATE_REJECTIONS = [
+  ["withCreate callback in argument 1 is not session context", "return withCreate(input, async (ctx: OrgContext) => issueUrl(ctx, \"r\"));", "async (ctx: OrgContext) => issueUrl(ctx, \"r\")"],
   ["F3 untyped lib called with session ctx-callback (deliberate fail-closed)", "const lib: any = globalThis; return withAction(async (ctx) => lib.register(async (c: OrgContext) => issueUrl(c, \"r\")));", "async (c: OrgContext) => issueUrl(c, \"r\")"],
   ["F4 untyped logger gets core fn ref (deliberate fail-closed)", "const log: any = console.log; log(issueUrl);", "issueUrl"],
   ["F5 untyped call receives Core class (deliberate fail-closed)", "const reg: any = globalThis; reg.registerClass(Core);", "Core"],
@@ -566,7 +579,7 @@ function writeFixture(dir: string, actions: string): string[] {
 
 function reviewSource(body: string): string {
   return `"use server";
-import { withAction, type OrgContext } from "./auth";
+import { withAction, withCreate, type OrgContext } from "./auth";
 import { issueUrl, coreObj, Core } from "./report-core";
 export async function action(input: any) { ${body} }
 `;
@@ -588,7 +601,7 @@ describe("check-server-action-exports", () => {
   beforeAll(() => {
     fixtureDir = mkdtempSync(join(tmpdir(), "server-action-exports-"));
     const sources = [
-      FAILING_ACTIONS, PASSING_ACTIONS, BYPASS_ACTIONS, INLINE_ACTIONS,
+      FAILING_ACTIONS, PASSING_ACTIONS, BYPASS_ACTIONS, INLINE_ACTIONS, CONTEXT_CREATE_EXPORT,
       ...[...REVIEW_BYPASSES, ...DELIBERATE_REJECTIONS, ...SAFE_REVIEW_CASES]
         .map(([, body]) => reviewSource(body)),
       ...EXOTIC_BYPASSES.map(([, body]) => exoticSource(body)),
@@ -626,6 +639,12 @@ describe("check-server-action-exports", () => {
     if (!violations) throw new Error("Fixture was not included in the shared program");
     return violations;
   }
+
+  it("rejects a context-taking export passed as withCreate's callback", () => {
+    expect(checkFixture(CONTEXT_CREATE_EXPORT)).toContainEqual(
+      expect.objectContaining({ name: "fn", reason: expect.stringMatching(/organization context/) }),
+    );
+  });
 
   it("matches the shared finding through the CLI wrapper", () => {
     const [, body, target] = EXOTIC_BYPASSES[0];

@@ -1,6 +1,7 @@
 "use server";
 
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 
 /**
  * Suppliers Server Actions
@@ -30,7 +31,7 @@ import {
 } from "@/schemas/suppliers";
 import { supplierVersionInput } from "@/schemas/supplier-input";
 import type { ActionResult } from "@/types/actions";
-import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 
 const LOG_MESSAGE = "supplier action failed";
 const supplierIdSchema = z.string().uuid("Invalid supplier ID");
@@ -82,10 +83,10 @@ export async function createSupplierWithLocationsFn(
   data: z.infer<typeof createSupplierWithLocationsSchema>,
   options?: CreateIntentOptions
 ): Promise<ActionResult<Supplier>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const validated = createSupplierWithLocationsSchema.parse(data);
 
-      const result = await runOperationInProcess(createSupplier, ctx, {
+      const result = await create(createSupplier, {
         name: validated.supplier.name,
         location: validated.supplier.location || null,
         address: validated.supplier.address || null,
@@ -104,9 +105,9 @@ export async function createSupplierWithLocationsFn(
           facilityDistances: location.facilityDistances,
           isDefault: location.isDefault,
         })),
-      }, createIntentOptionsSchema.parse(options));
+      });
       return result.supplier;
-  }, {
+  }, options, {
     fallbackMessage: "Failed to create supplier",
     log: { message: LOG_MESSAGE, context: { op: "supplier:create-with-locations" } },
   });
@@ -189,10 +190,10 @@ export async function createSupplierLocationFn(
   data: z.infer<typeof createSupplierLocationSchema>,
   options?: CreateIntentOptions
 ): Promise<ActionResult<SupplierLocation>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const validated = createSupplierLocationSchema.parse(data);
 
-    const location = await runOperationInProcess(addSupplierLocation, ctx, {
+    const location = await create(addSupplierLocation, {
       supplierId: validated.supplierId,
       name: validated.name || null,
       country: validated.country,
@@ -203,10 +204,10 @@ export async function createSupplierLocationFn(
       address: validated.address || null,
       facilityDistances: validated.facilityDistances,
       isDefault: validated.isDefault,
-    }, createIntentOptionsSchema.parse(options));
+    });
 
     return location;
-  }, {
+  }, options, {
     fallbackMessage: "Failed to create supplier location",
     log: { message: LOG_MESSAGE, context: { op: "supplier-location:create" } },
   });

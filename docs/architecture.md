@@ -24,14 +24,20 @@ components (UI)
   `OrgContext`) live in directive-free modules. Migrated writes use
   `src/lib/operations/`; legacy cores remain under fn/**/*-core.ts.
   A `"use server"` file exports only actions that resolve their own context
-  from the session (`withAction`); CI enforces this with
+  from the session (`withAction`, or `withCreate` for keyed creates); CI enforces this with
   `pnpm check:server-action-exports`.
 - `src/lib/operations/` defines each operation as an `id`, an `input` Zod
   schema and an `execute` function. `runOperation` serves transports with
   JSON-normalized results, idempotency and dry run. `runOperationInProcess`
   serves Server Actions with native types. Keyless calls preserve `Date` and
-  `undefined` directly. Create actions may pass an optional UUID `intentKey`:
-  the runner reuses the idempotency store under an app user namespace, scoped
+  `undefined` directly. Keyed create actions accept an optional UUID `intentKey`
+  through `withCreate(callback, intent, options)` in `src/fn/with-create.ts`.
+  This directive-free helper composes `withAction` and gives the callback
+  `(ctx, create)`. Validate the payload first, then call `create(operation, input)`
+  once. The helper parses the retry options lazily and forwards them to the runner;
+  auth, rate limits, error mapping and logging still come from `withAction`.
+  Keep post-save projections and follow-up work inside the callback.
+  With a key, the runner reuses the idempotency store under an app user namespace, scoped
   to the Organization, and revives tagged Dates on both the first result and
   replay. Other keyed values follow JSON semantics. Create hooks use `useIntentMutation` to keep one key
   per draft. Their `mutationFn(variables, intentKey)` passes `{ intentKey }` to
@@ -42,8 +48,13 @@ components (UI)
   retention period. Quick-add dialogs that submit through `useQuickAddSubmit`
   (formulation, driver, operator) hold the same draft key with
   `useCreateIntentKey` directly. API key creation is the one keyed create outside the runner: a retry
-  replaces the unseen key instead of replaying it (docs/auth.md).
-  The action shape is `withAction((ctx) => runOperationInProcess(op, ctx, input))`.
+  replaces the unseen key instead of replaying it ([auth.md](./auth.md)).
+  It reads the same lazily parsed key through `create.key`; only this adapter
+  may use that property. The keyed action shape is
+  `withCreate((_ctx, create) => create(op, schema.parse(input)), intent, options)`.
+  `create-action-coverage.test.ts` checks the inventory, wrapper wiring, single
+  parse point and client keys. Its PENDING list tracks creates awaiting migration;
+  domain stock-posting keys and documented exceptions keep their existing paths.
   `src/lib/operations/registry.ts` is the explicit allowlist of exposed
   operations; its keys match operation ids. Feedstock, production-run, biochar-product and
   output-stock movement, lab sample and order writes use this layer (`make_biochar_product`,
@@ -109,7 +120,8 @@ components (UI)
 `src/fn/with-action.ts` is canonical. It calls `requireOrgContext()`, injects
 `ctx`, converts distinct `ZodError` issues into readable sentences, and formats
 `ActionResult`.
-Every server action uses `withAction`; do not hand-roll
+Every server action uses `withAction` (keyed creates compose it through
+`withCreate`); do not hand-roll
 `try { requireOrgContext() } catch` in new or existing actions. Pass the entity's
 log message and `op` via `log`, the operator-facing fallback via
 `fallbackMessage`, and a Zod prefix via `zodErrorPrefix`. Use `mapError` for

@@ -31,7 +31,8 @@ import { customerLocationVersionInput } from "@/schemas/customer-location-input"
 import { customerVersionInput, deleteCustomerInput } from "@/schemas/customer-input";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
-import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
+import { withCreate } from "./with-create";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 
 const LOG_MESSAGE = "customer action failed";
 
@@ -118,11 +119,11 @@ export async function createCustomerWithLocationsFn(
   data: z.infer<typeof createCustomerWithLocationsSchema>,
   options?: CreateIntentOptions
 ): Promise<ActionResult<CreatedCustomerWithLocations>> {
-  return withAction(
-    async (ctx) => {
+  return withCreate(
+    async (_ctx, create) => {
       const validated = createCustomerWithLocationsSchema.parse(data);
 
-      const result = await runOperationInProcess(createCustomer, ctx, {
+      const result = await create(createCustomer, {
         name: validated.customer.name,
         cropType: validated.customer.cropType || null,
         address: validated.customer.address || null,
@@ -140,9 +141,9 @@ export async function createCustomerWithLocationsFn(
           isDefault: location.isDefault,
           defaultSoilTemperatureC: location.defaultSoilTemperatureC,
         })),
-      }, createIntentOptionsSchema.parse(options));
+      });
       return result;
-    },
+    }, options,
     {
       fallbackMessage:
         "The customer and its locations were not created. Try again.",
@@ -223,10 +224,10 @@ export async function createCustomerLocationFn(
   data: z.infer<typeof createCustomerLocationSchema>,
   options?: CreateIntentOptions
 ): Promise<ActionResult<CustomerLocation & { warnings: string[] }>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const validated = createCustomerLocationSchema.parse(data);
 
-    const location = await runOperationInProcess(addCustomerLocation, ctx, {
+    const location = await create(addCustomerLocation, {
       customerId: validated.customerId,
       name: validated.name,
       country: validated.country,
@@ -239,10 +240,10 @@ export async function createCustomerLocationFn(
       facilityDistances: validated.facilityDistances,
       defaultSoilTemperatureC: validated.defaultSoilTemperatureC,
       isDefault: validated.isDefault,
-    }, createIntentOptionsSchema.parse(options));
+    });
 
     return location;
-  }, {
+  }, options, {
     fallbackMessage: "Failed to create customer location",
     log: { message: LOG_MESSAGE, context: { op: "customer-location:create" } },
   });

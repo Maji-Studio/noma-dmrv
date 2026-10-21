@@ -1,6 +1,7 @@
 "use server";
 
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 
 /**
  * Formulations Server Actions
@@ -23,7 +24,7 @@ import {
   formulationFilterSchema,
 } from "@/schemas/formulations";
 import type { ActionResult } from "@/types/actions";
-import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 
 const LOG_MESSAGE = "formulation action failed";
 
@@ -77,18 +78,18 @@ export async function createFormulationFn(
   data: z.infer<typeof createFormulationSchema>,
   options?: CreateIntentOptions
 ): Promise<ActionResult<FormulationWithIngredients>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const validated = createFormulationSchema.parse(data);
 
-    const formulation = await runOperationInProcess(createFormulation, ctx, {
+    const formulation = await create(createFormulation, {
       name: validated.name,
       biocharRatio: validated.biocharRatio ?? null,
       description: validated.description || null,
       lines: validated.ingredients?.map(({ feedstockTypeId, ratio }) => ({ feedstockTypeId, ratio: ratio ?? null })),
-    }, createIntentOptionsSchema.parse(options));
+    });
 
     return formulation;
-  }, {
+  }, options, {
     fallbackMessage: "Failed to create formulation",
     log: { message: LOG_MESSAGE, context: { op: "formulation:create" } },
   });
