@@ -329,13 +329,20 @@ Body.displayName = "SlideOverPanel.Body";
 interface SlideOverPanelFooterProps {
   children: React.ReactNode;
   className?: string;
+  /**
+   * One quiet line above the buttons, such as the credit batch line (#1059
+   * section 2). Same place `FormActions` gives its `preview`.
+   */
+  preview?: React.ReactNode;
 }
 
-function Footer({ children, className }: SlideOverPanelFooterProps) {
+const FOOTER_ACTIONS = "flex flex-wrap items-center justify-start gap-12";
+
+function Footer({ children, className, preview }: SlideOverPanelFooterProps) {
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center justify-start gap-12",
+        preview ? "flex flex-col gap-16" : FOOTER_ACTIONS,
         "px-24 py-16",
         "border-t border-[var(--color-border-secondary)]",
         "bg-[var(--color-background-white)]",
@@ -343,7 +350,14 @@ function Footer({ children, className }: SlideOverPanelFooterProps) {
         className
       )}
     >
-      {children}
+      {preview ? (
+        <>
+          {preview}
+          <div className={FOOTER_ACTIONS}>{children}</div>
+        </>
+      ) : (
+        children
+      )}
     </div>
   );
 }
