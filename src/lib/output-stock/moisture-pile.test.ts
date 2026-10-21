@@ -90,9 +90,9 @@ it('lets a later posted count replace the whole pile re-estimate, even when back
 
 it('checks unallocated intake in a reduced-loss correction of a mix pile', () => {
   const bases: LayerMoistureBasis[] = [
-    { layerId: 'a', placedAt: PLACED, recordedAt: PLACED, remainingSolidsKg: decimal(65),
+    { layerId: 'a', placedAt: PLACED, remainingSolidsKg: decimal(65),
       recorded: { wetKg: decimal(100), solidsKg: decimal(80) }, readings: [], removals: [] },
-    { layerId: 'b', placedAt: PLACED, recordedAt: MERGE, remainingSolidsKg: decimal(80),
+    { layerId: 'b', placedAt: PLACED, remainingSolidsKg: decimal(80),
       recorded: { wetKg: decimal(200), solidsKg: decimal(80) }, readings: [], removals: [] },
   ];
   // The original 50 kg / 50% loss is reversed. Its correction keeps only A.
@@ -122,13 +122,12 @@ it('reports only the split layer re-estimated at this posting and its own readin
   ]);
 });
 
-it('does not include an intake posted after a historical mix draw', () => {
+it('includes older physical intake regardless of when it was recorded', () => {
   const [bases] = fixture(50, 'split');
-  const mixed = bases.map(b => ({ ...b, recordedAt: b.layerId === 'b' ? SPLIT : PLACED,
-    removals: b.removals.map(r => ({ ...r, stockMode: 'mix' as const, postedAt: DRAW })) }));
-  expect(movementReestimatedLayers(mixed, DRAW, SEQUENCE)).toEqual([
-    { layerId: 'a', moisturePercent: 50, stayWetKg: 110, staySolidsKg: 55 },
-  ]);
+  const mixed = bases.map(b => ({ ...b,
+    removals: b.removals.map(r => ({ ...r, stockMode: 'mix' as const })) }));
+  expect(movementReestimatedLayers(mixed, DRAW, SEQUENCE)).toEqual([]);
+  expect(estimateStockExact(mixed, DRAW).wetKg).toEqual(decimal(250));
 });
 
 
@@ -142,5 +141,33 @@ it('retains distinct readings when several split sub-bins re-estimate together',
   expect(movementReestimatedLayers(after, DRAW, SEQUENCE)).toEqual([
     { layerId: 'a', moisturePercent: 50, stayWetKg: 110, staySolidsKg: 55 },
     { layerId: 'b', moisturePercent: 75, stayWetKg: 260, staySolidsKg: 65 },
+  ]);
+});
+
+
+it.each(['loss', 'count'] as const)('excludes a layer emptied by %s before refill and merge', kind => {
+  const stocks: OutputStockLayer[] = ['a', 'b'].map(id => ({ id, placedAt: id === 'a' ? PLACED : MERGE,
+    postingSequence: BigInt(1), establishedDryBiocharKg: '80', ingredientDrySolidsKg: '0',
+    remainingDryBiocharKg: id === 'a' ? '0' : '55', remainingSolidsKg: decimal(id === 'a' ? 0 : 55), runs: [] }));
+  const rows = { stockMode: 'mix' as const, modeChanges: [{ to: 'mix' as const, at: MERGE, sequence: BigInt(3) }],
+    recordedWetKg: new Map([['a', '100'], ['b', '100']]), readings: [], reversedMovementIds: new Set<string>(),
+    removals: [
+      { layerId: 'a', movementId: 'empty', sequence: BigInt(2), wetMassKg: kind === 'count' ? null : '80',
+        solidsKg: storeRational(decimal(80)), moisturePercent: 0, occurredAt: new Date(PLACED), kind, reversesAllocationId: null },
+      { layerId: 'b', movementId: 'draw', sequence: SEQUENCE, wetMassKg: '50',
+        solidsKg: storeRational(decimal(25)), moisturePercent: 50, occurredAt: new Date(DRAW), kind: 'loss', reversesAllocationId: null },
+    ] };
+  const persisted = projectMoistureBases(stocks, rows);
+  const beforeDraw = projectMoistureBases(stocks.map(layer => layer.id === 'b'
+    ? { ...layer, remainingDryBiocharKg: '80', remainingSolidsKg: decimal(80) } : layer),
+  { ...rows, removals: rows.removals.slice(0, 1) });
+  const preview = withMovement(beforeDraw.map(layer => layer.layerId === 'b'
+    ? { ...layer, remainingSolidsKg: decimal(55) } : layer),
+  { readings: [], removals: [{ layerId: 'b', wetKg: decimal(50), solidsKg: decimal(55), moisturePercent: 50 }] },
+  DRAW, SEQUENCE, 'loss', 'mix');
+  expect(estimateStockExact(preview, DRAW)).toEqual(estimateStockExact(persisted, DRAW));
+  expect(estimateStockExact(persisted, DRAW).wetKg).toEqual(decimal(110));
+  expect(movementReestimatedLayers(persisted, DRAW, SEQUENCE)).toEqual([
+    { layerId: 'b', moisturePercent: 50, stayWetKg: 110, staySolidsKg: 55 },
   ]);
 });

@@ -210,12 +210,13 @@ it('reconstructs exact solids after each live draw, including counts, without re
     sequence: BigInt(sequence), solidsKg: { numerator: solids, denominator: '1' }, wetMassKg, reversesAllocationId: null,
     moisturePercent: 50, occurredAt: new Date(at), kind: 'loss' });
   const [basis] = projectMoistureBases([layer], { recordedWetKg: new Map([['run', '100']]), readings: [],
-    removals: [row('next', 3, '10', '20'), row('loss', 2, '25', '50'), row('count', 4, '5', null),
+    removals: [row('next', 3, '10', '20'), row('loss', 2, '25', '50'), { ...row('count', 4, '5', null), kind: 'count' },
       row('corrected', 1, '8', '10'), { ...row('reversal', 5, '-8', '-10'), reversesAllocationId: 'old-allocation' }],
     reversedMovementIds: new Set(['corrected']) });
   expect(basis.removals.map(r => [r.sequence, r.solidsKg])).toEqual([
-    [BigInt(3), rational(BigInt(45))], [BigInt(2), rational(BigInt(55))],
+    [BigInt(4), rational(BigInt(40))], [BigInt(3), rational(BigInt(45))], [BigInt(2), rational(BigInt(55))],
   ]);
+  expect(basis.removals[0].wetKg).toEqual(rational(BigInt(0)));
   // Without a count reading, the later wet draw subtracts from the 110 kg re-estimate.
   expect(estimateStock([basis], at)).toMatchObject({ wetKg: 90, solidsKg: 40, moisturePercent: 50, basis: { source: 'draw', at, kind: 'loss' } });
 });

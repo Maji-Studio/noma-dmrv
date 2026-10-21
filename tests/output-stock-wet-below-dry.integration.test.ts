@@ -1,7 +1,7 @@
 /** Real write-path contracts for #1252. Requires the isolated test database. */
 import { afterAll, expect, it } from 'vitest';
 import { db } from '@/db';
-import { storageLocations } from '@/db/schema';
+import { binMovements, productionRuns, storageLocations } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { getOutputBinStocks } from '@/data-access/output-stock';
 import { previewOutputStock } from '@/data-access/output-stock-operations';
@@ -106,4 +106,38 @@ it('keeps all mix intake in the reduced-loss correction check', async () => {
   const saved = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id,
     occurredAt: STOCK_TIME, kind: 'count', wetMassKg: 0 });
   expect(saved).toMatchObject({ beforeEstimatedWetKg: 240, beforeSolidsKg: 145 });
+});
+
+
+it.each(['before', 'after'] as const)('uses physical placement when a run created %s the draw is completed later', async recorded => {
+  const f = await seedOutputStockParents(db);
+  organizations.push(f.ctx.organizationId);
+  const drawTime = '2026-09-15T12:00:00.000Z';
+  const placedAt = new Date('2026-09-14T12:00:00.000Z');
+  const createdAt = new Date(recorded === 'before' ? '2026-09-13T12:00:00.000Z' : '2026-09-16T12:00:00.000Z');
+  await db.update(storageLocations).set({ stockMode: 'mix' }).where(and(
+    eq(storageLocations.organizationId, f.ctx.organizationId), eq(storageLocations.id, f.source.id)));
+  await db.update(productionRuns).set({ biocharOutputKg: 100, biocharDryMassKg: 80, biocharMoisturePercent: 20,
+    endTime: placedAt }).where(and(eq(productionRuns.organizationId, f.ctx.organizationId), eq(productionRuns.id, f.runs[0].id)));
+  await db.update(productionRuns).set({ status: 'running', createdAt, endTime: null,
+    biocharOutputKg: null, biocharDryMassKg: null }).where(and(
+    eq(productionRuns.organizationId, f.ctx.organizationId), eq(productionRuns.id, f.runs[1].id)));
+  const loss = { facilityId: f.facility.id, storageLocationId: f.source.id, occurredAt: drawTime,
+    kind: 'loss' as const, wetMassKg: 50, moisturePercent: 50 };
+  expect(await previewOutputStock(f.ctx, loss)).toMatchObject({ afterEstimatedWetKg: 110 });
+  const posted = await postMeasurement(f, loss);
+  await db.update(binMovements).set({ createdAt: new Date(drawTime) }).where(and(
+    eq(binMovements.organizationId, f.ctx.organizationId), eq(binMovements.id, posted.movementId)));
+  await db.update(productionRuns).set({ status: 'complete', endTime: placedAt,
+    updatedAt: new Date('2026-09-17T12:00:00.000Z'), biocharOutputKg: 200, biocharDryMassKg: 80, biocharMoisturePercent: 60 })
+    .where(and(eq(productionRuns.organizationId, f.ctx.organizationId), eq(productionRuns.id, f.runs[1].id)));
+  // Once completed, the older physical intake participates in replay of the saved draw.
+  expect(await previewOutputStock(f.ctx, { ...loss, kind: 'count', wetMassKg: 0 })).toMatchObject({
+    beforeEstimatedWetKg: 250, beforeSolidsKg: 135,
+  });
+  expect((await getOutputBinStocks(f.ctx, [f.source.id])).get(f.source.id)?.estimatedWetMassKg).toBe(250);
+  // A correction preview sees that same physical pile, including its unallocated intake.
+  expect(await previewOutputStock(f.ctx, { ...loss, correctsMovementId: posted.movementId })).toMatchObject({
+    afterEstimatedWetKg: 250, afterSolidsKg: 135, reestimate: null,
+  });
 });

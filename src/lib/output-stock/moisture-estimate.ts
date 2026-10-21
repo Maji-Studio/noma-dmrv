@@ -29,7 +29,6 @@ export interface WetRemoval {
   solidsKg: Rational;
   moisturePercent?: number | null;
   occurredAt?: string;
-  postedAt?: string;
   kind?: string;
   /**
    * Posting order of the removal's movement. The dry layers reflect every
@@ -42,8 +41,6 @@ export interface WetRemoval {
 /** What one layer holds and what its wet mass and moisture are known from. */
 export interface LayerMoistureBasis {
   layerId: string;
-  /** Intake recording time; absent only in legacy or synthetic bases. */
-  recordedAt?: string;
   /** Canonical ISO instant the layer entered the bin. */
   placedAt: string;
   remainingSolidsKg: Rational;
@@ -110,9 +107,9 @@ function layerWetStates(layers: readonly LayerMoistureBasis[]): Map<string, WetS
     }
     const draw = removals[0]?.removal;
     // Corrections can retain an allocation subset. The physical pile still
-    // includes every intake posted by now and placed by the draw's time.
+    // includes layers placed by the draw time that still hold solids at this posting.
     const pile = draw?.stockMode === 'mix' ? layers.filter(layer =>
-      (!draw.postedAt || !layer.recordedAt || layer.recordedAt <= draw.postedAt) && (!draw.occurredAt || layer.placedAt <= draw.occurredAt)
+      compare(solidsByLayer.get(layer.layerId)!, ZERO) > BigInt(0) && (!draw.occurredAt || layer.placedAt <= draw.occurredAt)
     ).map(layer => ({ id: layer.layerId, removal: { ...draw, solidsKg: solidsByLayer.get(layer.layerId)! } })) : [];
     const groups = draw?.stockMode === 'mix' ? [pile] : removals.map(removal => [removal]);
     for (const group of groups) {
