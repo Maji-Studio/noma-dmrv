@@ -1,6 +1,6 @@
 /**
  * OrganizationsAdmin — Platform Admin directory of all Organizations.
- * Enter any org (sets the session's active org), and create organizations.
+ * Open any org (sets the session's active org), and create organizations.
  */
 "use client";
 
@@ -22,6 +22,7 @@ import {
   useEnterOrganization,
 } from "@/hooks/use-organizations";
 import { createOrganizationSchema } from "@/schemas/organizations";
+import { useViewerOrg } from "@/components/navigation";
 import { OrganizationAdminRow } from "./organization-admin-row";
 import { OrganizationRosterList } from "./organization-roster-list";
 
@@ -35,6 +36,7 @@ export function OrganizationsAdmin() {
   const createOrg = useCreateOrganization();
   const enterOrganization = useEnterOrganization();
   const [enteringId, setEnteringId] = useState<string | null>(null);
+  const activeOrganizationId = useViewerOrg()?.organizationId ?? null;
 
   const {
     control,
@@ -56,10 +58,10 @@ export function OrganizationsAdmin() {
     }
   }
 
-  async function enterOrg(organizationId: string) {
+  async function enterOrg(organizationId: string, organizationName: string) {
     setEnteringId(organizationId);
     try {
-      const result = await enterOrganization(organizationId);
+      const result = await enterOrganization(organizationId, organizationName);
       if (!result.success) {
         toast.error(result.error);
         return;
@@ -99,7 +101,8 @@ export function OrganizationsAdmin() {
                 org={org}
                 apiAccessEnabled={apiAccessByOrg.get(org.id)}
                 entering={enteringId === org.id}
-                onEnter={() => enterOrg(org.id)}
+                current={org.id === activeOrganizationId}
+                onEnter={() => enterOrg(org.id, org.name)}
               />
             ))}
           </OrganizationRosterList>

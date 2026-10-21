@@ -20,6 +20,7 @@ import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
 import { unwrap } from "@/hooks/types";
 import { NO_ORGANIZATION_MESSAGE } from "@/lib/errors";
 import { stashPendingWarning } from "@/lib/pending-warning";
+import { stashOrgSwitchNotice, type OrgSwitchTarget } from "@/lib/org-switch-notice";
 
 // How many times the active-organization read is re-attempted after a
 // transport or server fault before the sidebar settles on an error. A
@@ -56,18 +57,21 @@ export function useResetAfterOrgSwitch() {
   /**
    * `warning` is a non-fatal outcome of the switch itself (the "remember my
    * organization" preference was not saved). The reload below discards any
-   * toast raised here, so it is handed to the page the operator lands on.
+   * toast raised here, so it is handed to the page the operator lands on. The
+   * "Now working in <org>" confirmation travels the same way; the name is
+   * optional because an accepted invitation does not know it.
    */
-  return function resetAfterOrgSwitch(warning?: string) {
+  return function resetAfterOrgSwitch(warning?: string, target?: OrgSwitchTarget) {
     if (typeof window === "undefined") {
       return;
     }
     stashPendingWarning(warning);
+    stashOrgSwitchNotice(target);
     try {
       window.localStorage.removeItem(FACILITY_STORAGE_KEY);
     } finally {
       // localStorage can throw when storage is blocked; the switch already
-      // succeeded server-side, so always land in the new workspace. A hard
+      // succeeded server-side, so always land in the new organization. A hard
       // load makes every server component, Better Auth store, and client
       // cache re-read the new context.
       window.location.assign("/dashboard");
@@ -78,7 +82,7 @@ export function useResetAfterOrgSwitch() {
 export function useEnterOrganization() {
   const resetAfterOrgSwitch = useResetAfterOrgSwitch();
 
-  return async function enterOrganization(organizationId: string) {
+  return async function enterOrganization(organizationId: string, organizationName?: string) {
     const result = await setActiveOrganizationAction({ organizationId });
     // Success means the server session moved, whether or not the "remember my
     // organization" preference was saved with it. Always reset, or the client
@@ -86,7 +90,7 @@ export function useEnterOrganization() {
     // (issue #769). A `warning` on the result is the preference, not the
     // switch.
     if (result.success) {
-      resetAfterOrgSwitch(result.warning);
+      resetAfterOrgSwitch(result.warning, { organizationId, organizationName });
     }
     return result;
   };
