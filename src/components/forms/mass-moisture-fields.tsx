@@ -83,6 +83,8 @@ interface MassMoistureInputProps {
 interface MoistureReadingProps {
   estimate?: MoistureFieldEstimate | null;
   reading?: unknown;
+  /** Drop the far-from-estimate advisory, where the surface already says what to do about it (the re-estimate notice). */
+  hideDeviationWarning?: boolean;
 }
 
 /**
@@ -109,6 +111,7 @@ export function MoistureField({
   step = STORED_PERCENT_INPUT_STEP,
   estimate,
   reading,
+  hideDeviationWarning,
   unit,
 }: MassMoistureInputProps & MoistureReadingProps & { materialLabel?: string; unit?: string }) {
   const guidance = estimate === undefined ? null : moistureReadingGuidance(estimate, parseWatchedNumber(reading));
@@ -118,7 +121,7 @@ export function MoistureField({
       label={label ?? qualifyMassLabel(MOISTURE_FIELD_LABEL, materialLabel)}
       unit={unit}
       error={error}
-      warning={guidance?.warning ?? warning}
+      warning={(hideDeviationWarning ? undefined : guidance?.warning) ?? warning}
       // The 0 to 100% range sits behind the ⓘ with the basis (Kenji, cue review 2026-09-30).
       helperText={[rangeHelperText, helperText].filter(Boolean).join(" ")}
       cue={guidance?.cue ?? cue}

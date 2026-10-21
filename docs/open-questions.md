@@ -228,20 +228,6 @@ Pure starter residue; org scoping came later via ADR 0010.
 - **To resolve:** stakeholder call; if yes, add columns via the `percent`
   numeric family and re-add the fields end-to-end (reseed, not migrate).
 
-### Mix pile wet stock floors each batch at zero on its own (`output-stock/wet-stock-mix-floor`, opened 2026-10-05)
-
-- **Context:** `layerWet` in `src/lib/output-stock/moisture-estimate.ts` floors
-  each batch's wet stock at zero before `estimateStock` sums the pile. A mix
-  removal takes wet shares pro rata to solids, so a removal wetter than a dry
-  batch can take more wet mass from that batch than it holds. Its negative
-  remainder is dropped, not netted against the other batches.
-- **Example:** batches of 100 kg wet with 60 kg and 90 kg solids; a 175 kg
-  removal at 60% takes 70 kg and 105 kg wet. The pile shows 30 kg wet, while
-  wet in less wet out is 25 kg. Split bins are unaffected: their batches are
-  separate sub-bins.
-- **To resolve:** decide whether a mix pile floors its total once instead of
-  each batch, and whether a batch's wet stock can then read negative.
-
 ## Architecture
 
 See [Architecture open questions](./open-questions-architecture.md) for the deferred decisions in this area.

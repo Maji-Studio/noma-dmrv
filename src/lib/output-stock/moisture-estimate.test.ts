@@ -43,7 +43,7 @@ describe('estimateStock', () => {
     const primes: number[] = [];
     for (let n = 1009; primes.length < 120; n += 2) if (primes.every(p => n % p !== 0) && [3, 5, 7, 11, 13, 17, 19, 23, 29, 31].every(p => n % p !== 0)) primes.push(n);
     const layers = primes.map((p, i) => layer(`L${i}`, '1500', '997', T0, { remainingSolidsKg: { numerator: BigInt(p * 500 + 1), denominator: BigInt(p) },
-      removals: [{ wetKg: { numerator: BigInt(p * 750 - 1), denominator: BigInt(p) }, sequence: BigInt(i + 1) }] }));
+      removals: [{ solidsKg: { numerator: BigInt(p * 500 + 1), denominator: BigInt(p) }, wetKg: { numerator: BigInt(p * 750 - 1), denominator: BigInt(p) }, sequence: BigInt(i + 1) }] }));
     const estimate = estimateStock(layers, NOW);
     expect(estimate.wetKg).toBeCloseTo(120 * 750, 0);
     expect(estimate.moisturePercent).toBeCloseTo((1 - 997 / 1500) * 100, 6);
@@ -100,7 +100,7 @@ describe('removals keep the bin moisture', () => {
   const after = (request: { kind: 'wet'; wetKg: number; moisturePercent: number }, layers = bin(), bases = binBasis(), sequence = 2) => {
     const plan = planOutputStock(layers, T1, request);
     const drawn = bases.map(b => ({ ...b, remainingSolidsKg: plan.remainingLayers.find(l => l.id === b.layerId)!.remainingSolidsKg! }));
-    return { plan, bases: withMovement(drawn, { readings: planReadings(request, plan, T1), removals: planWetRemovals(plan) }, T1, BigInt(sequence)) };
+    return { plan, bases: withMovement(drawn, { readings: planReadings(request, plan, T1), removals: planWetRemovals(plan) }, T1, BigInt(sequence), 'loss') };
   };
 
   it('removing 300 kg at another moisture leaves 200 kg wet at 40%', () => {
@@ -123,12 +123,13 @@ describe('removals keep the bin moisture', () => {
     expect(estimateStock(rest.bases, NOW)).toMatchObject({ wetKg: 0, solidsKg: 0, moisturePercent: null });
   });
 
-  it('shows no wet stock when wetter removals took it all and dry biochar is left', () => {
+  it('re-estimates remaining dry biochar when a wetter removal takes all recorded wet stock', () => {
     const { bases } = after({ kind: 'wet', wetKg: 500, moisturePercent: 60 });
     const estimate = estimateStock(bases, NOW);
     expect(estimate.solidsKg).toBeCloseTo(100, 9);
-    expect(estimate.wetKg).toBe(0);
-    expect(estimate.moisturePercent).toBeCloseTo(40, 9);
+    expect(estimate.wetKg).toBe(250);
+    expect(estimate.moisturePercent).toBeCloseTo(60, 9);
+    expect(estimate.basis).toEqual({ source: 'draw', at: T1, kind: 'loss' });
   });
 
   it('counts a posted removal whatever time is asked, since the remaining solids already reflect it', () => {
@@ -143,7 +144,7 @@ describe('removals keep the bin moisture', () => {
     expect(planReadings(request, plan, T1)).toEqual([]);
     const before = [layer('B-0412', '1240', '843.2'), layer('B-0419', '980', '637')];
     const drawn = before.map(l => ({ ...l, remainingSolidsKg: plan.remainingLayers.find(r => r.id === l.layerId)!.remainingSolidsKg! }));
-    const estimate = estimateStock(withMovement(drawn, { readings: [], removals: planWetRemovals(plan) }, T1, BigInt(3)), NOW);
+    const estimate = estimateStock(withMovement(drawn, { readings: [], removals: planWetRemovals(plan) }, T1, BigInt(3), 'loss'), NOW);
     // B-0412 emptied at 1,204.6 kg; B-0419 gave the other 295.4 kg of 980 kg.
     expect(estimate.wetKg).toBeCloseTo(980 - (1500 - 843.2 / 0.7), 6);
     expect(estimate.moisturePercent).toBeCloseTo(35, 9);
@@ -161,7 +162,7 @@ describe('planReadings', () => {
     expect(readings.map(r => [r.layerId, r.moisturePercent])).toEqual([['B-0412', 30], ['B-0419', 30]]);
     const bases = [layer('B-0412', '1240', '843.2'), layer('B-0419', '980', '637')]
       .map(l => ({ ...l, remainingSolidsKg: plan.remainingLayers.find(r => r.id === l.layerId)!.remainingSolidsKg ?? l.remainingSolidsKg }));
-    const counted = estimateStock(withMovement(bases, { readings, removals: planWetRemovals(plan) }, T1, BigInt(4)), T1);
+    const counted = estimateStock(withMovement(bases, { readings, removals: planWetRemovals(plan) }, T1, BigInt(4), 'loss'), T1);
     expect(counted.wetKg).toBeCloseTo(2100, 6);
     expect(counted.moisturePercent).toBeCloseTo(30, 9);
     expect(counted.basis).toEqual({ source: 'reading', at: T1 });
@@ -178,11 +179,11 @@ describe('planReadings', () => {
     const count = { kind: 'count' as const, wetKg: 400, moisturePercent: 25 };
     const layers = [stockLayer('B-0500', '300', 1)];
     const counted = planOutputStock(layers, T1, count);
-    const bases = withMovement([{ ...layer('B-0500', '500', '300'), remainingSolidsKg: counted.remainingLayers[0].remainingSolidsKg! }], { readings: planReadings(count, counted, T1), removals: [] }, T1, BigInt(2));
+    const bases = withMovement([{ ...layer('B-0500', '500', '300'), remainingSolidsKg: counted.remainingLayers[0].remainingSolidsKg! }], { readings: planReadings(count, counted, T1), removals: [] }, T1, BigInt(2), 'loss');
     const removal = { kind: 'wet' as const, wetKg: 100, moisturePercent: 10 };
     const plan = planOutputStock(counted.remainingLayers, NOW, removal);
     const drawn = bases.map(b => ({ ...b, remainingSolidsKg: plan.remainingLayers[0].remainingSolidsKg! }));
-    const estimate = estimateStock(withMovement(drawn, { readings: [], removals: planWetRemovals(plan) }, NOW, BigInt(3)), NOW);
+    const estimate = estimateStock(withMovement(drawn, { readings: [], removals: planWetRemovals(plan) }, NOW, BigInt(3), 'loss'), NOW);
     expect(estimate.wetKg).toBeCloseTo(300, 9);
     expect(estimate.moisturePercent).toBeCloseTo(25, 9);
   });
@@ -190,7 +191,7 @@ describe('planReadings', () => {
 
 describe('wet stock follows the draws the dry layers reflect', () => {
   // 500 kg wet at 40%: 300 kg solids. A removal timed after T1, posted as sequence 2, took 100 kg wet and 60 kg solids.
-  const drawn = () => layer('B-0500', '500', '300', T0, { remainingSolidsKg: decimal('240'), removals: [{ wetKg: decimal('100'), sequence: BigInt(2) }] });
+  const drawn = () => layer('B-0500', '500', '300', T0, { remainingSolidsKg: decimal('240'), removals: [{ wetKg: decimal('100'), solidsKg: decimal('240'), sequence: BigInt(2) }] });
 
   it('a preview timed before a posted removal subtracts it, as the dry stock does', () => {
     const estimate = estimateStock([drawn()], T1);
@@ -203,7 +204,7 @@ describe('wet stock follows the draws the dry layers reflect', () => {
     const counted = { ...drawn(), readings: [{ moisturePercent: 40, solidsKg: decimal('240'), occurredAt: T1, sequence: BigInt(3) }] };
     expect(estimateStock([counted], NOW).wetKg).toBeCloseTo(400, 9);
     // A removal posted after the count subtracts, even when timed before it.
-    const later = { ...counted, remainingSolidsKg: decimal('180'), removals: [...counted.removals, { wetKg: decimal('100'), sequence: BigInt(4) }] };
+    const later = { ...counted, remainingSolidsKg: decimal('180'), removals: [...counted.removals, { wetKg: decimal('100'), solidsKg: decimal('180'), sequence: BigInt(4) }] };
     expect(estimateStock([later], NOW).wetKg).toBeCloseTo(300, 9);
   });
 
@@ -224,9 +225,83 @@ describe('wet stock follows the draws the dry layers reflect', () => {
   });
 
   it('a product draw saved before the ledger counts from the recorded wet mass, never after a count', () => {
-    const legacy = layer('B-0500', '500', '300', T0, { remainingSolidsKg: decimal('240'), removals: [{ wetKg: decimal('100'), sequence: BEFORE_LEDGER_SEQUENCE }] });
+    const legacy = layer('B-0500', '500', '300', T0, { remainingSolidsKg: decimal('240'), removals: [{ wetKg: decimal('100'), solidsKg: decimal('240'), sequence: BEFORE_LEDGER_SEQUENCE }] });
     expect(estimateStock([legacy], NOW).wetKg).toBeCloseTo(400, 9);
     const counted = { ...legacy, readings: [{ moisturePercent: 25, solidsKg: decimal('240'), occurredAt: T1, sequence: BigInt(1) }] };
     expect(estimateStock([counted], NOW).wetKg).toBeCloseTo(320, 9);
   });
+});
+
+
+describe('wet below solids re-estimate', () => {
+  function draw(wetKg = 50, policy: 'fifo' | 'pro_rata' = 'fifo', split = false) {
+    const stocks = policy === 'pro_rata' ? [stockLayer('a', '40', 1), stockLayer('b', '40', 2)] : [stockLayer('a', '80', 1)];
+    const bases = stocks.map(s => layer(s.id, policy === 'pro_rata' ? '50' : '100', String(s.establishedDryBiocharKg)));
+    const request = split ? { kind: 'ordered' as const, wetKg, sources: [{ layerId: 'a', moisturePercent: 50 }] }
+      : { kind: 'wet' as const, wetKg, moisturePercent: 50 };
+    const plan = planOutputStock(stocks, T1, request, policy);
+    const after = bases.map(b => ({ ...b, remainingSolidsKg: plan.remainingLayers.find(s => s.id === b.layerId)!.remainingSolidsKg! }));
+    return { plan, bases: withMovement(after, { readings: [], removals: planWetRemovals(plan) }, T1, BigInt(3), 'loss') };
+  }
+
+  it.each([['fifo', false], ['pro_rata', false], ['fifo', true]] as const)('re-estimates 55 kg dry at 50%% as 110 kg wet (%s, ordered %s)', (policy, split) => {
+    const { bases } = draw(50, policy, split);
+    expect(estimateStock(bases, NOW)).toEqual({ wetKg: 110, solidsKg: 55, moisturePercent: 50,
+      basis: { source: 'draw', at: T1, kind: 'loss' } });
+    if (policy === 'pro_rata') for (const basis of bases) expect(estimateStock([basis], NOW).wetKg).toBe(55);
+  });
+
+  it('does not re-estimate equality, or an ordinary wetter draw', () => {
+    for (const wet of [30, 40]) {
+      const estimate = estimateStock(draw(wet).bases, NOW);
+      expect(estimate.wetKg).toBe(100 - wet);
+      expect(estimate.moisturePercent).toBe(20);
+      expect(estimate.basis).toEqual({ source: 'recorded', at: T0 });
+    }
+  });
+
+  it('clamps at remaining solids without inventing a moisture for an unmeasured removal', () => {
+    const { bases } = draw();
+    const unmeasured = bases.map(b => ({ ...b, removals: b.removals.map(r => ({ ...r, moisturePercent: null })) }));
+    expect(estimateStock(unmeasured, NOW)).toEqual({ wetKg: 55, solidsKg: 55, moisturePercent: 20, basis: { source: 'recorded', at: T0 } });
+  });
+
+  it('subtracts later draws from the re-estimate in posting order, regardless of input or physical order', () => {
+    const { bases, plan } = draw();
+    const next = planOutputStock(plan.remainingLayers, T0, { kind: 'wet', wetKg: 10, moisturePercent: 20 });
+    const after = withMovement(bases.map(b => ({ ...b, remainingSolidsKg: next.remainingLayers[0].remainingSolidsKg! })),
+      { readings: [], removals: planWetRemovals(next) }, T0, BigInt(4), 'delivery');
+    after[0].removals = [...after[0].removals].reverse();
+    expect(estimateStock(after, NOW)).toEqual({ wetKg: 100, solidsKg: 47, moisturePercent: 50, basis: { source: 'draw', at: T1, kind: 'loss' } });
+  });
+
+  it('lets a later posted count override the re-estimate even when backdated', () => {
+    const { bases, plan } = draw();
+    const request = { kind: 'count' as const, wetKg: 60, moisturePercent: 25 };
+    const count = planOutputStock(plan.remainingLayers, T0, request);
+    const after = withMovement(bases.map(b => ({ ...b, remainingSolidsKg: count.remainingLayers[0].remainingSolidsKg! })),
+      { readings: planReadings(request, count, T0), removals: [] }, T0, BigInt(4), 'count');
+    expect(estimateStock(after, NOW)).toEqual({ wetKg: 60, solidsKg: 45, moisturePercent: 25, basis: { source: 'reading', at: T0 } });
+  });
+});
+
+
+it('re-estimates only the partial sub-bin after emptying another at its own moisture', () => {
+  const plan = planOutputStock([stockLayer('first', '20', 1), stockLayer('last', '80', 2)], T1,
+    { kind: 'ordered', wetKg: 75, sources: [{ layerId: 'first', moisturePercent: 20 }, { layerId: 'last', moisturePercent: 50 }] });
+  const bases = [layer('first', '25', '20'), layer('last', '100', '80')]
+    .map(b => ({ ...b, remainingSolidsKg: plan.remainingLayers.find(l => l.id === b.layerId)!.remainingSolidsKg! }));
+  const after = withMovement(bases, { readings: [], removals: planWetRemovals(plan) }, T1, BigInt(3), 'delivery');
+  expect(estimateStock([after[0]], NOW)).toMatchObject({ wetKg: 0, solidsKg: 0, basis: null });
+  expect(estimateStock([after[1]], NOW)).toEqual({ wetKg: 110, solidsKg: 55, moisturePercent: 50,
+    basis: { source: 'draw', at: T1, kind: 'delivery' } });
+});
+
+it('compares wet with all solids in a blend, not just its dry biochar', () => {
+  const stock = { ...stockLayer('blend', '40', 1), ingredientDrySolidsKg: '40' };
+  const plan = planOutputStock([stock], T1, { kind: 'wet', wetKg: 50, moisturePercent: 50 });
+  const after = withMovement([layer('blend', '100', '80', T0, { remainingSolidsKg: plan.remainingLayers[0].remainingSolidsKg! })],
+    { readings: [], removals: planWetRemovals(plan) }, T1, BigInt(2), 'delivery');
+  expect(plan.remainingLayers[0].remainingDryBiocharKg).toBe('27.500');
+  expect(estimateStock(after, NOW)).toMatchObject({ wetKg: 110, solidsKg: 55, moisturePercent: 50 });
 });

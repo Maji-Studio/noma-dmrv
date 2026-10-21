@@ -181,8 +181,9 @@ proportion to its remaining solids.
 
 **Departure moisture**:
 The water fraction measured in material leaving a storage bin. It sets that
-draw's dry mass only. It never changes the **estimated moisture** or **wet
-stock** of what stays in the bin.
+draw's dry mass. It changes the **estimated moisture** of what stays only if
+subtracting the draw would leave less **wet stock** than dry solids: what stays
+is then re-estimated at that draw's moisture until the next count.
 
 **Wet stock** (output bin):
 The wet mass a sub-bin or mix pile holds by the records: wet mass added less
@@ -192,7 +193,8 @@ has none left. A layer with no dry biochar left holds no wet stock.
 
 **Estimated moisture**:
 A sub-bin's or mix pile's water fraction by the records: what it was added
-with, or the latest count. Removals leave it unchanged. A hint beside moisture
+with, or the latest count. Draws leave it unchanged unless wet stock would fall
+below dry solids, in which case the draw's measured moisture re-estimates what stays. A hint beside moisture
 fields, never a prefilled value.
 
 **Biochar share of solids**:

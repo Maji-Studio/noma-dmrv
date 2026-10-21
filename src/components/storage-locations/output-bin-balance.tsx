@@ -6,6 +6,7 @@ import { useOutputStockBalance, useOutputStockHistory, useOutputSubBins } from "
 import { STOCK_PART_MIN_KG } from "@/config/output-stock";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
+import { moistureDrawCaption } from "@/lib/output-stock/moisture-guidance";
 import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
 import { ESTIMATED_WATER_LABEL, mixPileName, WET_STOCK_DEFINITION } from "@/lib/output-stock/labels";
 import { OutputStockHistory } from "./output-stock-history";
@@ -16,6 +17,7 @@ import { outputStockFigure } from "./stock-preview-shared";
 import { MixPileBay, SubBinBays, type PileBand } from "./sub-bin-bays";
 import { contentsRows, ingredientSolidsParts } from "./sub-bin-card";
 import type { OutputSubBin } from "@/types/output-stock";
+import type { MoistureBasis } from "@/lib/output-stock/moisture-estimate";
 import { formatFacilityDateTime } from "@/lib/format-utils";
 
 const SPLIT_CAPTION = `Each bay is a sub-bin, drawn by wet mass with its water hatched on top, in the order draws take them.`;
@@ -56,6 +58,15 @@ export function mixPileBands(layers: OutputSubBin[], dryKg: number | null, wetKg
 }
 
 /**
+ * The newest draw that set the bin's moisture estimate, across the bin and
+ * its sub-bins; null when every estimate still rests on a count or on intake.
+ */
+export function drawMoistureBasis(bases: readonly (MoistureBasis | null | undefined)[]): MoistureBasis | null {
+  const draws = bases.filter((basis): basis is MoistureBasis & { source: "draw" } => basis?.source === "draw");
+  return draws.reduce<(MoistureBasis & { source: "draw" }) | null>((newest, basis) => !newest || basis.at > newest.at ? basis : newest, null);
+}
+
+/**
  * An output bin's stock card: the wet estimate operators plan loads by, the
  * tracked dry biochar under it, a split bin's sub-bins as bays or a mix bin
  * as one pile, then the stock action and the history.
@@ -74,6 +85,7 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
   const layers = subBins.data?.subBins ?? [];
   const wetKg = preview.data?.beforeEstimatedWetKg ?? null;
   const dryKg = preview.data?.beforeDryKg ?? null;
+  const basisCaption = moistureDrawCaption(drawMoistureBasis([preview.data?.moistureEstimate?.basis, ...layers.map((layer) => layer.basis)]), clock.timeZone);
   const mixMoisture = mode === "mix" ? preview.data?.moistureEstimate?.moisturePercent ?? null : null;
   const ready = !!preview.data && !subBins.isLoading;
   // Shares the history modal's query, so opening it shows the same data at once.
@@ -93,7 +105,10 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
         {outputStockFigure(wetKg, dryKg ?? 0)}
         {capacityKg != null && <span className="body-small text-[var(--color-text-tertiary)]"> of {formatMassKg(capacityKg)}</span>}
       </>}
-      caption={ready && wetKg !== null && dryKg !== null && <SecondaryFigure label={DRY_BIOCHAR_LABEL} value={formatMassKg(dryKg)} />}
+      caption={ready && wetKg !== null && dryKg !== null && <>
+        <SecondaryFigure label={DRY_BIOCHAR_LABEL} value={formatMassKg(dryKg)} />
+        {basisCaption && <span className="block">{basisCaption}</span>}
+      </>}
       onAdjust={onAdjust}
     >
       {ready && layers.length === 0 && <EmptyState icon={null} title="No stock in this bin" padding="sm" />}

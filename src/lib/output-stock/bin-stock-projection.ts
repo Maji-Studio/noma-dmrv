@@ -118,14 +118,14 @@ export function projectOutputBinStock(input: OutputBinStockInput): ResolvedOutpu
   const layerKind: OutputBinStockLayerKind = input.bin.type === 'product_bin' ? 'biochar_product' : 'production_run';
   const subBins = held.map((layer): OutputSubBinStock<string | null> => {
     const basis = input.stockMode === 'split' ? basisOf.get(layer.id) : undefined;
-    const estimate = basis ? estimateStockExact([basis], input.at) : null;
+    const estimate = basis ? estimateStockExact(input.bases, input.at, new Set([basis.layerId])) : null;
     return { layerId: layer.id, layerKind, code: input.codes.get(layer.id) ?? null, placedAt: layer.placedAt,
       dryBiocharKg: exactKg(layer.remainingDryBiocharKg), solidsKg: layer.remainingSolidsKg!,
       estimatedWetKg: estimate?.wetKg ?? null, estimatedMoisturePercent: estimate?.moisturePercent ?? null, moistureBasis: estimate?.basis ?? null };
   });
   // A held layer without a moisture basis leaves the bin's wet mass unknown, as a basis without wet mass does.
   // An empty bin holds 0 kg wet with no moisture, as the bins list shows it.
-  const pile = heldBases.length === held.length ? estimateStockExact(heldBases, input.at) : null;
+  const pile = heldBases.length === held.length ? estimateStockExact(input.bases, input.at) : null;
   const totals: OutputBinStockTotals = {
     dryBiocharKg: subBins.reduce((sum, subBin) => add(sum, subBin.dryBiocharKg), ZERO),
     solidsKg: subBins.reduce((sum, subBin) => add(sum, subBin.solidsKg), ZERO),
