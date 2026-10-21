@@ -81,6 +81,7 @@ describe("CustomerList summary cards", () => {
     const { container } = render(<CustomerList />);
     expect(container.textContent).not.toMatch(/on this page/i);
     expect(screen.getByText("Locations of all customers that are not archived")).toBeTruthy();
+    expect(screen.getByText("In this organization")).toBeTruthy();
     expect(screen.queryByText("All customers that are not archived")).toBeNull();
   });
 
