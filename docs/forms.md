@@ -512,8 +512,7 @@ stock actions.
 
 Supported types are storage bins, formulations, suppliers, customers, feedstock
 types, reactors, orders, vehicles, operators and drivers. Feedstock-type Edit
-requires the server-resolved management permission (Owner, Admin or Platform
-Admin). Facility and Credit batch pickers deliberately have no Edit row. Driver
+requires the server-resolved management permission (Admin or Platform Admin). Facility and Credit batch pickers deliberately have no Edit row. Driver
 is supported by the shared dialog but currently has no form picker.
 The order form's Customer location picker uses `onEditSelected` to open
 `CustomerLocationDialog` for the selected location.

@@ -22,7 +22,7 @@ credential and denial contracts.
 
 ### OAuth for API callers
 
-Use an OAuth connection for an app acting as a member, or an Owner/Admin API key
+Use an OAuth connection for an app acting as a member, or an Admin API key
 for scripts and internal agents. Send one `Authorization: Bearer <credential>`;
 cookies and `x-api-key` never authenticate. [Auth](./auth.md#oauth-connections)
 owns generation checks and denial precedence; [security](./security.md#oauth-provider-and-client-controls)
@@ -51,7 +51,7 @@ REST and MCP tokens are not interchangeable: the other audience gives 401
 
 [Grantable scopes](../src/lib/auth/oauth-scopes.ts) are the API `:read` and
 `:write` set, never `:delete`. Unknown or delete scopes give `invalid_scope`.
-Owner, Admin and Member have the same OAuth ceiling; domain guards still apply.
+Admin and Member have the same OAuth ceiling; domain guards still apply.
 The first consent offers three choices: Read only (preselected), Read and write
 (never deletes) and Choose per area. A missing authorize scope defaults to registered grantable
 scopes plus `offline_access`. Request `offline_access` to keep the connection
@@ -83,7 +83,7 @@ tier stays until real connector traffic exists (see
 #### Connected apps
 
 At `/settings/connected-apps`, each member sees and disconnects their own
-connections in the active organization. Owners and Admins also have All members
+connections in the active organization. Admins also have All members
 and may disconnect anyone's connection. A Platform Admin needs real membership.
 Disconnect ends the generation immediately; records it saved stay. Reconnecting
 creates a new generation and idempotency namespace. The picker chooses the

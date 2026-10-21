@@ -16,24 +16,24 @@ vi.mock("@/lib/auth/server", () => ({
   requirePlatformAdmin: mockRequirePlatformAdmin,
 }));
 
-import { createOrganizationWithOwner } from "@/data-access/organizations";
+import { createOrganizationWithAdmin } from "@/data-access/organizations";
 
-describe("createOrganizationWithOwner authorization", () => {
+describe("createOrganizationWithAdmin authorization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("does not start creation when the Platform Admin guard rejects an Owner", async () => {
+  it("does not start creation when the Platform Admin guard rejects an Admin", async () => {
     const authorizationError = new SafeError(
       "Admin access is required for this action.",
     );
     mockRequirePlatformAdmin.mockRejectedValue(authorizationError);
 
     await expect(
-      createOrganizationWithOwner({
+      createOrganizationWithAdmin({
         name: "Example Organization",
         slug: "example-organization",
-        ownerUserId: "owner-user-123",
+        adminUserId: "admin-user-123",
       }),
     ).rejects.toBe(authorizationError);
 

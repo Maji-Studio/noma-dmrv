@@ -1,3 +1,4 @@
+import { retainFixtureAdmin } from "./helpers/retained-admin";
 /** Real REST routes, credentials, Postgres and local storage. Needs the supervisor. */
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -301,6 +302,7 @@ describe("document REST writes", { timeout: READ_TIMEOUT_MS }, () => {
   });
 
   it("refuses a credential whose owner became a member before resolving any path", async () => {
+    await retainFixtureAdmin(a.ctx.organizationId);
     await db.update(members).set({ role: "member" }).where(and(eq(members.organizationId, a.ctx.organizationId), eq(members.userId, a.ctx.userId)));
     // Credential revocation is the established auth contract and precedes scope admission.
     await problem(await request({ id: UNKNOWN_READ_ID }), 401, "credential_owner_removed");

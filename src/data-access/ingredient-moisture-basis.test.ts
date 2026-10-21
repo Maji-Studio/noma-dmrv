@@ -13,7 +13,7 @@ vi.mock('./feedstock-wet-stock', () => ({ assertFeedstockWetDrawWithinStock: vi.
 import { getIngredientMoistureBasis } from './ingredient-moisture-basis';
 import { resolveCompositionIngredientMassBasis } from './biochar-product-composition';
 
-const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'owner', isPlatformAdmin: false };
+const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'admin', isPlatformAdmin: false };
 function reader(intakes: unknown[], products: unknown[] = [], draws: unknown[] = [], movements: unknown[] = [], conditions: SQL[] = []) {
   const results = new Map<unknown, unknown[]>([[feedstocks, intakes], [biocharProducts, products], [productionRunFeedstockDraws, draws], [binMovements, movements]]);
   return { select: vi.fn(() => {

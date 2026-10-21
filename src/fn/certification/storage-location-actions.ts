@@ -134,7 +134,6 @@ async function loadApplicationStorageLocationSyncForOrg(
   }
   const viewerCanManage =
     orgCtx.isPlatformAdmin ||
-    orgCtx.orgRole === "owner" ||
     orgCtx.orgRole === "admin";
   if (!input.customerLocationId) {
     return {

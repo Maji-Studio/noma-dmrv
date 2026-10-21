@@ -30,7 +30,7 @@ import {
 const ORG_CTX = {
   userId: "user-1",
   organizationId: "org-1",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 } as OrgContext;
 const ROW = { id: "sub-1", payloadHash: "hash-claimed" } as CertificationSubmissionRow;

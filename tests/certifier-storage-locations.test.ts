@@ -38,7 +38,7 @@ const FOREIGN_ORG_ID = "org_storage_location_foreign";
 const FOREIGN_CONTEXT: OrgContext = {
   organizationId: FOREIGN_ORG_ID,
   userId: "user-storage-location-foreign",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 };
 

@@ -11,7 +11,7 @@ vi.mock("@/db", () => ({ db: {
 } }));
 vi.mock("@/lib/auth/server", () => ({ requireOrgRole: vi.fn() }));
 
-const ctx: OrgContext = { organizationId: "review-org", userId: "review-user", orgRole: "owner", isPlatformAdmin: false };
+const ctx: OrgContext = { organizationId: "review-org", userId: "review-user", orgRole: "admin", isPlatformAdmin: false };
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
 
 it("only reopens the settled sample line for an additive assignment after retirement", async () => {

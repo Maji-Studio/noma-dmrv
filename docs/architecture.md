@@ -288,9 +288,9 @@ runtime.
 - `src/app/(app)/layout.tsx` enforces auth and mounts `FacilityProvider`.
 - **Three configuration surfaces, deliberately not one.** `/settings`
   (`Members` · `Defaults` · `Vehicles and crew` · `API keys`) is org configuration. Every member can view the
-  Members roster; only Owners/Admins (and Platform Admins) can mutate membership
+  Members roster; only Admins (and Platform Admins) can mutate membership
   or open Defaults. Every member can edit and delete vehicles, drivers and
-  operators in Vehicles and crew, as every member can create them from a picker. API keys require a verified Owner/Admin membership; a
+  operators in Vehicles and crew, as every member can create them from a picker. API keys require a verified Admin membership; a
   Platform Admin without that membership cannot manage keys.
   `/certification/settings` is registry configuration and
   stays there by ADR
@@ -672,7 +672,7 @@ operational `/certification/*` routes on the facility having a registry link;
 Settings stays open. It is mounted in the certification layout. **New
 operational certification routes must sit inside that guard.**
 
-**Generated GHG Statement report:** an Owner/Admin prepares a versioned PDF from
+**Generated GHG Statement report:** an Admin prepares a versioned PDF from
 live Isometric statement and GHG Entry facts, reviews it through the normal
 org-scoped document route, then approves it. Submission rotates a random
 per-report verifier token, stores only its SHA-256 digest, and sends Isometric

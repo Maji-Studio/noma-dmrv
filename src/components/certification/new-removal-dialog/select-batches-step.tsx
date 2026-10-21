@@ -61,7 +61,7 @@ export function setupGapCopy(gap: FacilitySetupGap): {
     case "credentials":
       return {
         message:
-          "The organization's registry connection credentials are not set, so the registry cannot be reached. Ask an Owner or Admin to add them before linking this facility.",
+          "The organization's registry connection credentials are not set, so the registry cannot be reached. Ask an Admin to add them before linking this facility.",
         action: null,
       };
     case "default_template":

@@ -15,7 +15,7 @@ import { mcpRequestRequiredScopes, serveMcp } from "./server";
 import { writeTools } from "./tools/write-tools";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 let providerEnabled: boolean;
-const oauth = (orgRole: "owner" | "admin" | "member" = "member") => ({
+const oauth = (orgRole: "admin" | "member" = "member") => ({
   ...apiKeyContext({ orgRole, scopes: ["feedstocks:read"] }),
   principal: { kind: "oauth" as const, credentialId: "grant", userId: "user", oauthClientId: "client" },
 });
@@ -50,7 +50,7 @@ it.each(["find_documents", "get_document_download_url"].flatMap(name =>
     code: "invalid_query", issues: [expect.objectContaining({ pointer: "/ownerType" })],
   } });
 });
-it.each(["owner", "admin", "member"] as const)("lists reads and writes within the %s ceiling and hides deletes", async role => {
+it.each(["admin", "member"] as const)("lists reads and writes within the %s ceiling and hides deletes", async role => {
   mocks.resolve.mockResolvedValue({ ok: true, ctx: oauth(role) });
   const body = await rpcBody(await POST(rpc("synthetic", "tools/list")));
   const names = body.result.tools.map((tool: { name: string }) => tool.name);
@@ -72,7 +72,7 @@ it.each([
   expect(serveMcp).not.toHaveBeenCalled();
   expect(mocks.record).toHaveBeenCalledWith({ userId: oauth().userId, clientId: "client", organizationId: oauth().organizationId }, [scope]);
 });
-const writeStepUps = (["owner", "admin", "member"] as const).flatMap(role => {
+const writeStepUps = (["admin", "member"] as const).flatMap(role => {
   const ceiling = { ...oauth(role), scopes: [...oauthRoleCeiling(role)] };
   return writeTools.filter(tool => tool.visible ? tool.visible(ceiling)
     : tool.requiredScopes({}).every(scope => principalAllows(ceiling, scope)))

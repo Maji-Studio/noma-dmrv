@@ -47,7 +47,7 @@ const SAMPLE_CREATE_FAILURE = "In-process measurement was not created. Check the
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.auth.mockResolvedValue({ organizationId: ID, userId: ID, orgRole: "owner", isPlatformAdmin: false });
+  mocks.auth.mockResolvedValue({ organizationId: ID, userId: ID, orgRole: "admin", isPlatformAdmin: false });
 });
 
 describe("operations action operator copy", () => {

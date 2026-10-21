@@ -7,7 +7,7 @@ vi.mock('@/db', () => ({ db: {} }));
 vi.mock('./certification-lineage-guards', () => ({ assertCanMutateCertifiedLineage: mocks.assert }));
 import { assertOutputLayersMutable, changedOutputLayerIds, type PlannedOutputChange } from './output-stock-lineage';
 
-const ctx = { organizationId: 'org', userId: 'operator', orgRole: 'owner' as const, isPlatformAdmin: false };
+const ctx = { organizationId: 'org', userId: 'operator', orgRole: 'admin' as const, isPlatformAdmin: false };
 const tx = { select: () => ({ from: () => ({ where: mocks.readings }) }) } as unknown as DbTransaction;
 const layers = ['oldest', 'middle', 'newest'].map(id => ({ id }));
 const change = (overrides: Partial<PlannedOutputChange>): PlannedOutputChange => ({ lane: 'biochar', layers, plan: { allocations: [] }, readings: [], correction: null, ...overrides });

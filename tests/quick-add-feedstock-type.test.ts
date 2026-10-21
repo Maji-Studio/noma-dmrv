@@ -27,7 +27,7 @@ describe("feedstock type quick-add canonical policy", () => {
     expect(await db.select().from(feedstockTypes).where(eq(feedstockTypes.code, data.code))).toEqual([]);
   });
 
-  it.each(["admin", "owner"] as const)("allows %s and persists registry selection with EntityOption", async (orgRole) => {
+  it.each(["admin"] as const)("allows %s and persists registry selection with EntityOption", async (orgRole) => {
     const data = input();
     const ctx = { ...makeTestOrgContext(), orgRole };
     const spy = vi.spyOn(canonical, "createFeedstockType");

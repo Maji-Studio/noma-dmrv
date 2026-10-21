@@ -54,9 +54,9 @@ const TRANSPORT_LEDGER_DOCUMENT_ENTITY_TYPE = "credit_batch";
 const TRANSPORT_LEDGER_DOCUMENT_TYPE = "pdf";
 
 export const DOCUMENT_REGISTRY_ROLE_ERROR =
-  "Only Owners and Admins can delete a document that has a Source on Isometric. Ask an Owner or Admin to delete it.";
+  "Only Admins can delete a document that has a Source on Isometric. Ask an Admin to delete it.";
 export const PARENT_DOCUMENT_REGISTRY_ROLE_ERROR =
-  "Only Owners and Admins can delete this record while one of its documents has a Source on Isometric. Ask an Owner or Admin to delete it.";
+  "Only Admins can delete this record while one of its documents has a Source on Isometric. Ask an Admin to delete it.";
 
 export type DocumentRow = typeof documents.$inferSelect;
 export type NewDocumentRow = typeof documents.$inferInsert;

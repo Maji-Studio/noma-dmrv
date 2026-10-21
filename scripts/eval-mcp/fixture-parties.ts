@@ -27,7 +27,7 @@ export async function seedPartyFixture(caseId: PartyCaseId): Promise<PartyEvalFi
   const { ctx } = fixture;
   try {
     await db.insert(users).values({ id: ctx.userId, email: `${ctx.userId}@example.test`, name: "MCP evaluation", emailVerified: true });
-    await db.insert(members).values({ id: randomUUID(), organizationId: ctx.organizationId, userId: ctx.userId, role: "owner" });
+    await db.insert(members).values({ id: randomUUID(), organizationId: ctx.organizationId, userId: ctx.userId, role: "admin" });
     const [facility] = await db.select().from(facilities).where(eq(facilities.organizationId, ctx.organizationId));
     const locations = [{ name: "Existing pickup", country: "Tanzania", gpsLatitude: PARTY_PICKUP.gpsLatitude, gpsLongitude: PARTY_PICKUP.gpsLongitude }];
     let partyId = "";

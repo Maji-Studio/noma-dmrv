@@ -26,7 +26,7 @@ async function event(overrides: Partial<typeof activityEvents.$inferInsert> = {}
   return row;
 }
 beforeEach(async () => {
-  ctx = { organizationId: `activity_read_${crypto.randomUUID()}`, userId: crypto.randomUUID(), orgRole: "owner", isPlatformAdmin: false };
+  ctx = { organizationId: `activity_read_${crypto.randomUUID()}`, userId: crypto.randomUUID(), orgRole: "admin", isPlatformAdmin: false };
   fixture = await createActivityWriteFixture(ctx);
   __setStorageProviderForTests(new RetirementStorageProvider());
   foreignOrg = `activity_foreign_${crypto.randomUUID()}`;
