@@ -256,3 +256,18 @@ it("accepts a clamped future batch start only as a server-defaulted date", () =>
   expect(() => validateEntryDate(date)).toThrow("future");
   expect(() => validateEntryDate({ ...date, occurredOn: "2026-10-21", dateDefaulted: true })).toThrow("future");
 });
+
+it("refuses an existing additive mass/distance contract and a second single paired entry", () => {
+  const input = args();
+  const component = input.observation.definition.groups[0].components[0];
+  component.blueprintKey = "transport";
+  component.inputs = [{ key: "mass", type: "monitored", quantityKind: "mass" }, { key: "distance", type: "monitored", quantityKind: "distance" }];
+  input.observation.enrichment.line = { mass: { unit: "tonne" }, distance: { unit: "km" } };
+  input.values = [{ inputKey: "mass", quantityKind: "mass", magnitude: "10", unit: "tonne" }, { inputKey: "distance", quantityKind: "distance", magnitude: "100", unit: "km" }];
+  input.activeValueCount = 1;
+  expect(() => validateEmissionEntry(input)).toThrow("Review its setup");
+  input.observation.lineSources.line.entryPolicy = "single";
+  expect(() => validateEmissionEntry(input)).toThrow("already has an entry");
+  input.activeValueCount = 0;
+  expect(validateEmissionEntry(input).lineRule).toBe("single");
+});

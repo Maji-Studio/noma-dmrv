@@ -1,3 +1,4 @@
+import { lockEmissionCorrectionScope, emissionCorrectionWindow } from "./emission-entry-corrections";
 import { deriveRemovalEntryInputs } from "@/lib/certification/removal-entry-inputs";
 import { isEnrichmentComplete } from "@/lib/isometric/template-observations/enrichment";
 import { deriveRemovalEmissionLines, omittedProductionSources } from "@/lib/certification/removal-emission-lines";
@@ -10,6 +11,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { entryLine } from "@/lib/certification/emission-entry-rules";
 import { entriesWithoutRemoval, isLiveEntryReservation } from "@/lib/certification/removal-emission-contributions";
 import { validateLineSources } from "@/lib/isometric/template-observations/line-sources";
+import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
 import { recordEmissionZerosSchema, undoEmissionZerosSchema } from "@/schemas/emission-zeros";
 import { lockedBatch } from "./emission-entries";
@@ -36,16 +38,32 @@ export async function isRemovalZeroEditable(ctx: OrgContext, removalId: string):
     eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityId, removalId),
     eq(certificationSubmissions.localEntityType, "removal"), eq(certificationSubmissions.submissionType, "removal"),
   ));
-  return !submissionsLockZeros(submissions);
+  if (!submissionsLockZeros(submissions)) return true;
+  // A returned Removal with an open correction window may change its zeros, as `lockZeroDraft` allows.
+  const members = await db.select({ id: creditBatchApplications.creditBatchId }).from(creditBatchApplications).where(and(
+    eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.removalId, removalId),
+  ));
+  const contenders = await listEmissionEntryDraftContenders(ctx, [...new Set(members.map((row) => row.id))]);
+  return contenders.some((row) => row.removalId === removalId && row.contenderKind === "correction");
 }
 
 async function lockZeroDraft(ctx: OrgContext, tx: DbTransaction, data: z.infer<typeof undoEmissionZerosSchema>, expectedVersion?: number) {
   requireOrgScope(ctx);
+  await lockEmissionCorrectionScope(ctx, tx, data.creditBatchId);
   // Stamping holds batch locks before its sentByRemovalId FK takes KEY SHARE here.
   // NO KEY UPDATE serializes zero writers without closing that batch/Removal cycle.
   const [removal] = await tx.select().from(certifierRemovals).where(and(
     eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, data.removalId),
-  )).for("no key update");
+  )).for("no key update", { skipLocked: true });
+  // Deletion takes the Removal row before its artifact. Never wait on that
+  // inverse order while holding lineage artifacts.
+  if (!removal) {
+    const [existing] = await tx.select({ id: certifierRemovals.id }).from(certifierRemovals).where(and(
+      eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, data.removalId),
+    ));
+    if (existing) throw new DomainError("conflict", "This Removal is being updated. Refresh and retry.", { retryable: true });
+    throw new SafeError("This credit batch is not on an editable Removal.");
+  }
   const context = await lockedBatch(ctx, tx, data.creditBatchId);
   const members = await tx.select({ batch: creditBatches }).from(creditBatchApplications)
     .innerJoin(creditBatches, and(eq(creditBatches.id, creditBatchApplications.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId))).where(and(
@@ -57,7 +75,8 @@ async function lockZeroDraft(ctx: OrgContext, tx: DbTransaction, data: z.infer<t
     eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityId, data.removalId),
     eq(certificationSubmissions.localEntityType, "removal"), eq(certificationSubmissions.submissionType, "removal"),
   ));
-  if (submissionsLockZeros(submissions)) {
+  const correction = emissionCorrectionWindow(ctx, tx, data.creditBatchId, data.removalId);
+  if (!correction && submissionsLockZeros(submissions)) {
     throw new SafeError("Recorded zeros can only be changed on an unsubmitted, idle Removal.");
   }
   // Removals have no integer row version; use the persisted updatedAt millisecond token returned by the empty-lines read.
@@ -129,7 +148,7 @@ export async function undoEmissionZeros(ctx: OrgContext, input: z.input<typeof u
     const rows = await tx.select().from(emissionEntries).where(and(eq(emissionEntries.organizationId, ctx.organizationId),
       eq(emissionEntries.creditBatchId, data.creditBatchId), eq(emissionEntries.confirmedForRemovalId, data.removalId), isNull(emissionEntries.deletedAt),
     )).orderBy(emissionEntries.id).for("update");
-    if (rows.some((entry) => entry.sentByRemovalId || entry.sendReservedBySubmissionId)) throw new SafeError("These recorded zeros are reserved or sent. They cannot be changed.");
+    if (rows.some((entry) => entry.sendReservedBySubmissionId || (entry.sentByRemovalId && !emissionCorrectionWindow(ctx, tx, entry.creditBatchId, entry.sentByRemovalId)))) throw new SafeError("These recorded zeros are reserved or sent. They cannot be changed.");
     for (const row of rows) {
       const [saved] = await tx.update(emissionEntries).set({ deletedAt: sql`now()`, updatedAt: sql`now()`,
         version: nextVersion(emissionEntries.version), contentRevision: nextVersion(emissionEntries.contentRevision),

@@ -5,14 +5,15 @@ import type { OrgContext } from "@/lib/auth/server";
 import { getMetadataValue } from "@/lib/certification/submission-metadata";
 import { getTransactionDeadline } from "@/lib/db/transaction-deadline";
 import { getGhgStatement, type GhgStatement } from "@/lib/isometric/ghg-statements";
-import { isLockedInFlight } from "@/lib/isometric/utils/lock";
+import { decideSubmissionClaim } from "@/lib/isometric/utils/submission-claim";
+import { LOCK_TTL_MS, isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { REMOVAL_SCOPED_SUBMISSION_TYPES } from "@/lib/isometric/utils/constants";
 import { isSentRemoval, isTerminalAttemptStatus, submissionHasRemoteEffect, type RecordLockRemoval, type RecordLockStatement } from "@/lib/record-lock";
 import { requireOrgScope } from "./utils";
 
 const STATEMENT_REFRESH_TIMEOUT_MS = 1_000;
 const TRANSACTION_FINISH_RESERVE_MS = 100;
-type StatementReads = Map<string, Promise<GhgStatement>>;
+export type StatementReads = Map<string, Promise<GhgStatement>>;
 // Transaction objects are short lived. Never retain fresh facts on the shared DB reader.
 const transactionStatementReads = new WeakMap<object, StatementReads>();
 
@@ -20,7 +21,7 @@ type Removal = { removalId: string; ghgStatementId: string | null };
 type Submission = typeof certificationSubmissions.$inferSelect;
 
 /** Include historical statement membership, not just the Removal's current FK. */
-export async function readRecordLockLineage(ctx: OrgContext, tx: Pick<DbTransaction, "select">, removals: readonly Removal[], fresh = false): Promise<RecordLockRemoval[]> {
+export async function readRecordLockLineage(ctx: OrgContext, tx: Pick<DbTransaction, "select">, removals: readonly Removal[], fresh = false, options: { statementReads?: StatementReads; excludeSubmissionId?: string } = {}): Promise<RecordLockRemoval[]> {
   requireOrgScope(ctx);
   const ids = [...new Set(removals.map(row => row.removalId))];
   if (!ids.length) return [];
@@ -31,6 +32,18 @@ export async function readRecordLockLineage(ctx: OrgContext, tx: Pick<DbTransact
     inArray(certificationSubmissions.localEntityId, ids),
     inArray(certificationSubmissions.submissionType, REMOVAL_SCOPED_SUBMISSION_TYPES),
   ));
+  const excludedIds = new Set(options.excludeSubmissionId ? [options.excludeSubmissionId] : []);
+  const current = removalRows.find((row) => row.id === options.excludeSubmissionId && row.status === "draft");
+  const predecessorId = getMetadataValue(current?.metadata, "supersedePreviousId");
+  const predecessor = current && removalRows.find((row) => row.id === predecessorId &&
+    row.localEntityId === current.localEntityId && row.version + 1 === current.version);
+  if (predecessor) {
+    const recovery = decideSubmissionClaim({ latest: predecessor, payloadHash: predecessor.payloadHash ?? "",
+      now: Date.now(), lockTtlMs: LOCK_TTL_MS, policy: { onSubmittedHashChanged: "supersede", allowEvidenceRefresh: true } });
+    // A validated evidence-refresh predecessor remains a draft until finalization.
+    // Only its exact successor's own read may omit it, never ordinary write checks.
+    if (recovery.kind === "create-new-version" && recovery.reason === "evidence-refresh") excludedIds.add(predecessor.id);
+  }
   const statementRows = await tx.select().from(certificationSubmissions).where(and(
     inArray(certificationSubmissions.localEntityId, tx.select({ id: certifierGhgStatements.id }).from(certifierGhgStatements).where(and(
       eq(certifierGhgStatements.organizationId, ctx.organizationId),
@@ -46,11 +59,11 @@ export async function readRecordLockLineage(ctx: OrgContext, tx: Pick<DbTransact
   const labels = await tx.select({ id: certifierRemovals.id, startedOn: certifierRemovals.startedOn, completedOn: certifierRemovals.completedOn })
     .from(certifierRemovals).where(and(eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, ids)));
   const labelsById = new Map(labels.map(row => [row.id, row.startedOn && row.completedOn ? `${row.startedOn} to ${row.completedOn}` : undefined]));
-  const reads = (tx !== db && transactionStatementReads.get(tx)) || new Map<string, Promise<GhgStatement>>();
+  const reads = (tx !== db && transactionStatementReads.get(tx)) || options.statementReads || new Map<string, Promise<GhgStatement>>();
   if (tx !== db) transactionStatementReads.set(tx, reads);
   const busyStatements = new Set(statementRows.filter(row => isLockedInFlight(row) || !isTerminalAttemptStatus(row.status)).map(row => row.localEntityId));
   return Promise.all(ids.map(async id => {
-    const submissions = removalRows.filter(row => row.localEntityId === id);
+    const submissions = removalRows.filter(row => row.localEntityId === id && !excludedIds.has(row.id));
     const externalIds = new Set(submissions.map(row => row.externalId).filter(Boolean));
     const currentIds = new Set(removals.filter(row => row.removalId === id).map(row => row.ghgStatementId));
     const covering = statementRows.filter(row => {
@@ -75,8 +88,7 @@ async function readStatement(ctx: OrgContext, tx: Pick<DbTransaction, "select">,
     removalExternalIds: Array.isArray(getMetadataValue(row.metadata, "removalIds")) ? getMetadataValue(row.metadata, "removalIds") as string[] : [],
     inFlight: isLockedInFlight(row) || !isTerminalAttemptStatus(row.status),
   };
-  const canReopen = savedStatus === "FAILED_VERIFICATION" || (savedStatus === "DRAFT" && fact.submittedToVerifier);
-  if (!fresh || !row.externalId || fact.inFlight || !canReopen) return fact;
+  if (!fresh || !row.externalId || fact.inFlight || !["DRAFT", "FAILED_VERIFICATION"].includes(fact.status ?? "")) return fact;
   try {
     const { resolveIsometricClient } = await import("./certifier-credentials");
     const key = `${ctx.organizationId}:${row.externalId}`;

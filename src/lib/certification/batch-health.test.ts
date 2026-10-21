@@ -500,3 +500,12 @@ it("keeps an undecided check separate from a decided line it cannot fill, and co
   expect(batchHealthFixLinkFor(checks[1], "facility-1", "batch-1").label).toBe("Open Removal templates");
 });
 
+
+it("keeps returned Removal corrections advisory and routes them to that Removal", () => {
+  const health = deriveBatchHealth(facts({ emissionLines: [], entryCorrections: [{ removalId: "returned", windowOpen: true,
+    correctionNeeded: true, changedComponentIds: ["component"], message: "Correction needed" }] }));
+  expect(health.state).toBe("ready");
+  expect(health.issueCount).toBe(0);
+  expect(checkFor(health, "emissions").status).toBe("met");
+  expect(health.advisories).toEqual([{ message: "Correction needed", fixTarget: "removal", removalId: "returned" }]);
+});

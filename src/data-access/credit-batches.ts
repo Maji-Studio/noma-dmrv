@@ -1,3 +1,4 @@
+import { recordEmissionEntryActivity } from "./emission-entry-activity";
 import type { ActivityEventInput } from "./activity-events";
 import { readRecordDependents } from './record-lock-dependents';
 import { assertRecordLockFields } from '@/lib/record-lock-fields';
@@ -778,12 +779,18 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
     const entries = await tx.select().from(emissionEntries)
       .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.creditBatchId, id)))
       .for("update");
-    if (entries.some(entry => !entry.deletedAt || entry.sendReservedBySubmissionId ||
-      entry.sentByRemovalId || entry.confirmedForRemovalId)) {
+    if (entries.some(entry => entry.sendReservedBySubmissionId || entry.sentByRemovalId ||
+      (entry.kind !== "zero" && (!entry.deletedAt || entry.confirmedForRemovalId)))) {
       throw new ActionConflictError(
         "Delete this credit batch's emissions entries before deleting it.",
         { entity: "credit_batch", id, code: conflictCode(batch.code) },
       );
+    }
+    for (const entry of entries.filter((row) => row.kind === "zero" && !row.deletedAt)) {
+      const [tombstone] = await tx.update(emissionEntries).set({ deletedAt: new Date(), updatedAt: new Date(),
+        version: nextVersion(emissionEntries.version), contentRevision: nextVersion(emissionEntries.contentRevision),
+      }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id))).returning();
+      await recordEmissionEntryActivity(ctx, tx, "deleted", { ...entry, values: [] }, { ...tombstone, values: [] });
     }
     const entryIds = entries.map(entry => entry.id);
     if (entryIds.length) {

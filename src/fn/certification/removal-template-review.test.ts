@@ -1,3 +1,4 @@
+import { legacyTransportObservation } from "../../../tests/helpers/legacy-transport-observation";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
@@ -555,4 +556,17 @@ it("gates automatic sources in the saved review response", async () => {
   const result = await reviewRemovalTemplateLines({ observationId: id, expectedVersion: 1, assignments: {} });
   expect(result).toMatchObject({ success: true, data: { lineSources: { component: { automaticSource: undefined } } } });
   expect(sources.component.automaticSource).toBe("sample-transport");
+});
+
+it("refuses to switch to a reviewed legacy transport pair", async () => {
+  const { template, observation } = legacyTransportObservation();
+  const input = { creditBatchId: id, removalTemplateId: template.id, expectedVersion: 7 };
+  vi.mocked(getCreditBatchById).mockResolvedValue({ facilityId: id, removalTemplateId: "old" } as never);
+  vi.mocked(listGhgEntryTemplates).mockResolvedValue([template]);
+  vi.mocked(getLatestTemplateObservation).mockResolvedValue(observation as never);
+  vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({ template, observation, blueprintsForTemplate: [],
+    enrichmentProblems: [], lineSourceProblems: validateLineSources(observation.definition, observation.lineSources),
+  } as never);
+  expect((await switchCreditBatchRemovalTemplate(input)).success).toBe(false);
+  expect(persistSwitch).not.toHaveBeenCalled();
 });

@@ -37,13 +37,24 @@ it("reads org-scoped entry documents and binds only IDs in the manifest on every
 });
 it("fails closed when a manifest file is absent or not uploaded", async () => {
   mocks.documents.mockResolvedValue([]);
-  await expect(collect()).rejects.toThrow(EMISSION_ENTRY_FILE_UNAVAILABLE);
+  await expect(collect()).rejects.toThrow(EMISSION_ENTRY_FILE_UNAVAILABLE("the emissions entry"));
   mocks.documents.mockResolvedValue([{ id: "frozen-file", entityId: "entry", uploadStatus: "pending" }]);
-  await expect(collect()).rejects.toThrow(EMISSION_ENTRY_FILE_UNAVAILABLE);
+  await expect(collect()).rejects.toThrow(EMISSION_ENTRY_FILE_UNAVAILABLE("the emissions entry"));
 });
 it("does not walk entries absent from the contribution manifest", async () => {
   expect(await collect({ ...contributions, manifest: [], entrySet: [] })).toEqual([]);
   expect(mocks.documents).not.toHaveBeenCalled();
+});
+
+it("formats unavailable-file messages from the manifest's component, date and batch code", async () => {
+  const named = structuredClone(contributions);
+  named.manifest[0].componentDisplayName = "Diesel for machinery";
+  named.manifest[0].entries[0].occurredOn = "2026-03-14";
+  named.manifest[0].entries[0].creditBatchCode = "CB-26-001";
+  mocks.documents.mockResolvedValue([]);
+  await expect(collect(named)).rejects.toThrow(
+    "A file on the Diesel for machinery entry of 2026-03-14 (CB-26-001) is unavailable. Refresh the Removal and submit again.",
+  );
 });
 
 it("exposes the same manifest-bound file to the Source mirroring authorization path", async () => {
@@ -68,7 +79,7 @@ it("loads multiple entries in one manifest-id query", async () => {
 });
 it("refuses a document belonging to a different manifest entry and logs only identifiers", async () => {
   mocks.documents.mockResolvedValue([{ id: "frozen-file", entityId: "different-entry", uploadStatus: "uploaded" }]);
-  await expect(collect()).rejects.toThrow(EMISSION_ENTRY_FILE_UNAVAILABLE);
+  await expect(collect()).rejects.toThrow(EMISSION_ENTRY_FILE_UNAVAILABLE("the emissions entry"));
   expect(mocks.warn).toHaveBeenCalledWith({ removalId: "removal", documentId: "frozen-file", entryId: "entry",
     targets: [{ componentId: "component", inputKey: "energy" }],
   }, expect.any(String));
@@ -80,7 +91,7 @@ it("logs ids at the fn boundary before rethrowing changed-entry and duplicate-fi
   const duplicate = structuredClone(contributions);
   duplicate.manifest[0].entries.push({ ...duplicate.manifest[0].entries[0], entryId: "other-entry" });
   duplicate.entrySet.push({ entryId: "other-entry", contentRevision: 3 });
-  await expect(collect(duplicate)).rejects.toThrow(EMISSION_ENTRY_FILE_DUPLICATE);
+  await expect(collect(duplicate)).rejects.toThrow(EMISSION_ENTRY_FILE_DUPLICATE("the emissions entry"));
   expect(mocks.warn).toHaveBeenLastCalledWith({ removalId: "removal", documentId: "frozen-file", entryId: "other-entry", otherEntryId: "entry" }, expect.any(String));
   expect(mocks.documents).not.toHaveBeenCalled();
 });

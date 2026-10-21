@@ -41,3 +41,16 @@ describe("lineSourcesForObservation", () => {
     });
   });
 });
+
+
+it.each(["bootstrap", "proposed", "reviewed", "carried"] as const)("preserves admin decisions on unchanged observations: %s", (origin) => {
+  const definition: TemplateDefinition = { groups: [{ id: "g", key: "biomass-feedstock-transport", displayName: "Transport", description: "",
+    components: [{ id: "transport", blueprintKey: "transport", displayName: "Transport", description: null, inputs: [
+      { key: "mass", type: "monitored", quantityKind: "mass" }, { key: "distance", type: "monitored", quantityKind: "distance" },
+    ] }] }] };
+  const enrichment = {};
+  const lineSources: LineSources = { transport: { scope: "operating", automaticSource: "feedstock-transport", entryPolicy: "additive", origin } };
+  const latest = { definition, lineSources, semanticFingerprint: semanticFingerprint(definition, enrichment), fullFingerprint: fullFingerprint(definition, enrichment) };
+  expect(lineSourcesForObservation({ definition, enrichment, latest }).transport.entryPolicy).toBe(origin === "bootstrap" || origin === "proposed" ? "none" : "additive");
+  expect(latest.lineSources.transport.entryPolicy).toBe("additive");
+});

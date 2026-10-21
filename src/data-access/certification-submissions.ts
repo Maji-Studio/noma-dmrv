@@ -1,3 +1,5 @@
+import { submissionHasRemoteEffect } from "@/lib/record-lock";
+import { lockRemovalEntryCorrectionAttempt } from "./emission-entry-corrections";
 import { isRemovalDeletionLeased } from "./removal-deletion-lease";
 /**
  * Submission ledger — claim choreography.
@@ -325,6 +327,12 @@ async function resumeDraft<H>(
 ): Promise<ClaimOutcome> {
   const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
     await lockAndVerifyMapping(ctx, tx, args.guard);
+    if (args.key.localEntityType === "removal" && args.key.submissionType === "removal") {
+      const candidate = await getLatestSubmissionWithExecutor(ctx, tx, args.key);
+      // Keep the lineage artifact locks, but remote effects must always be reconcilable.
+      const reconcile = !!candidate && submissionHasRemoteEffect(candidate);
+      await lockRemovalEntryCorrectionAttempt(ctx, tx, args.key.localEntityId, candidate?.id, reconcile);
+    }
     await lockSubmissionArtifact(tx, args.key);
     if (await isRemovalDeletionLeased(ctx, args.key, tx)) return { kind: "blocked", reason: "in-flight" };
 
@@ -387,6 +395,14 @@ async function createDraft<H>(
   try {
     const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
       await lockAndVerifyMapping(ctx, tx, args.guard);
+      if (args.key.localEntityType === "removal" && args.key.submissionType === "removal") {
+        const candidate = await getLatestSubmissionWithExecutor(ctx, tx, args.key);
+        const recovery = decideSubmissionClaim({ latest: candidate, payloadHash: args.hashOf(args.tentativeInputs),
+          now: Date.now(), lockTtlMs: LOCK_TTL_MS, policy: args.policy });
+        const predecessorId = recovery.kind === "create-new-version" && recovery.reason === "evidence-refresh"
+          ? recovery.supersedePreviousId ?? undefined : undefined;
+        await lockRemovalEntryCorrectionAttempt(ctx, tx, args.key.localEntityId, predecessorId);
+      }
       await lockSubmissionArtifact(tx, args.key);
       if (await isRemovalDeletionLeased(ctx, args.key, tx)) return { kind: "blocked", reason: "in-flight" };
       // Recovery may delete a purely local Removal after the optimistic

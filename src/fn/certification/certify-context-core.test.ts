@@ -1,3 +1,4 @@
+vi.mock("@/data-access/removal-entry-correction", () => ({ loadRemovalEntryCorrection: vi.fn(async () => ({ windowOpen: false, correctionNeeded: false, changedComponentIds: [], message: null })) }));
 import { beforeEach, expect, it, vi } from "vitest";
 import { collectFutureDatedMeasurements } from "./future-dated-measurements";
 
@@ -141,4 +142,14 @@ it("carries the facility zone when there are no applications", async () => {
   const result = await buildRemovalContext(ctx, emptyScope, { ...facts(fixture as GhgEntryTemplate), facilityTimezone: timezone });
   expect(result.facilityTimezone).toBe(timezone);
   expect(collectFutureDatedMeasurements).not.toHaveBeenCalled();
+});
+
+
+it.each([undefined, "claimed-draft"])("forwards the submission read scope for correction recovery: %s", async (claimedSubmissionId) => {
+  vi.mocked(resolveScopeForRemoval).mockResolvedValue(scope);
+  const facilityFacts = facts(fixture as GhgEntryTemplate);
+  vi.mocked(loadFacilityCertifierFacts).mockResolvedValue(facilityFacts);
+  await loadRemovalSubmissionContext(ctx, "removal-1", { claimedSubmissionId });
+  expect(loadBatchEmissionContext).toHaveBeenCalledWith(ctx, scope.facilityId, scope.memberBatches, facilityFacts,
+    { removalId: "removal-1", submissionId: claimedSubmissionId });
 });

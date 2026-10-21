@@ -1,4 +1,9 @@
 import { insertRemovalFixture } from "./helpers/removal-fixture";
+import {
+  cleanupLineageFixture,
+  createLineageFixture,
+  type LineageFixture,
+} from "./helpers/certification-lineage-fixture";
 import { reviewedTemplateSources } from "./helpers/template-line-sources";
 import { TEST_SITE_POSITION,
   ensureTestOrg,
@@ -61,6 +66,12 @@ vi.mock("@/lib/isometric/client", async (importOriginal) => {
   return createFakeClientModule(actual);
 });
 vi.mock("@/fn/certification/certify-context-core");
+// Pass-through unless a test sets a remote GHG Statement (correction window).
+vi.mock("@/lib/isometric/ghg-statements", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/isometric/ghg-statements")>();
+  return { ...actual, getGhgStatement: vi.fn(actual.getGhgStatement) };
+});
 vi.mock(
   "@/fn/certification/biochar-application-intents",
   async (importOriginal) => ({
@@ -98,15 +109,17 @@ vi.mock("@/fn/certification/sources-mirror-core", () => ({
 import { db } from "@/db";
 import {
   certificationSubmissions,
+  certifierGhgStatements,
   certifierProjects,
   certifierRemovals,
   certifierSyncEvents,
 } from "@/db/schema/certification";
-import { creditBatches } from "@/db/schema/credits";
+import { creditBatchApplications, creditBatches } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionProcesses } from "@/db/schema/production-processes";
 import type { CertifierProjectRow } from "@/data-access/certification";
+import { getGhgStatement } from "@/lib/isometric/ghg-statements";
 import { discardLocalRemovalDraft } from "@/data-access/certifier-removals";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as sources from "@/fn/certification/source-candidates";
@@ -149,8 +162,12 @@ const createdFacilityIds: string[] = [];
 const createdRemovalIds: string[] = [];
 const createdBatchIds: string[] = [];
 const createdFeedstockTypeIds: string[] = [];
+const createdStatementIds: string[] = [];
+const lineageFixtures: LineageFixture[] = [];
 
 afterAll(async () => {
+  // Lineage rows hold the Removal's batch slice; drop them before the Removal.
+  for (const lineage of lineageFixtures) await cleanupLineageFixture(lineage);
   if (createdBatchIds.length > 0) {
     await db
       .delete(creditBatches)
@@ -159,13 +176,23 @@ afterAll(async () => {
   if (createdRemovalIds.length > 0) {
     await db
       .delete(certificationSubmissions)
-      .where(inArray(certificationSubmissions.localEntityId, createdRemovalIds));
+      .where(
+        inArray(certificationSubmissions.localEntityId, [
+          ...createdRemovalIds,
+          ...createdStatementIds,
+        ]),
+      );
     await db
       .delete(certifierSyncEvents)
       .where(inArray(certifierSyncEvents.entityId, createdRemovalIds));
     await db
       .delete(certifierRemovals)
       .where(inArray(certifierRemovals.id, createdRemovalIds));
+  }
+  if (createdStatementIds.length > 0) {
+    await db
+      .delete(certifierGhgStatements)
+      .where(inArray(certifierGhgStatements.id, createdStatementIds));
   }
   if (createdFacilityIds.length > 0) {
     await db
@@ -931,7 +958,78 @@ describe("submitRemoval boundary — definitive Removal refusal (test 4)", () =>
   });
 });
 
+/**
+ * A sent Removal is only corrected once Isometric returns its GHG Statement.
+ * Gives the fixture's Removal a batch slice (the correction lineage) and a
+ * statement Isometric sent back after `sentExternalId` was sent.
+ */
+async function sendBackStatement(
+  fixture: Fixture,
+  sentExternalId: string,
+): Promise<void> {
+  const lineage = await createLineageFixture("none");
+  lineageFixtures.push(lineage);
+  await db
+    .update(creditBatchApplications)
+    .set({ removalId: fixture.removalId })
+    .where(eq(creditBatchApplications.creditBatchId, lineage.batchId));
+  const [statement] = await db
+    .insert(certifierGhgStatements)
+    .values({
+      organizationId: TEST_ORG_ID,
+      facilityId: fixture.facilityId,
+      reportingPeriodEndOn: "2026-06-30",
+    })
+    .returning({ id: certifierGhgStatements.id });
+  createdStatementIds.push(statement.id);
+  await db
+    .update(certifierRemovals)
+    .set({ ghgStatementId: statement.id })
+    .where(eq(certifierRemovals.id, fixture.removalId));
+  await db.insert(certificationSubmissions).values({
+    organizationId: TEST_ORG_ID,
+    provider: "isometric",
+    localEntityType: "ghgStatement",
+    localEntityId: statement.id,
+    submissionType: "ghg_statement",
+    status: "submitted",
+    version: 1,
+    externalId: `ghgs_boundary_${statement.id.slice(0, FIXTURE_UUID_SUFFIX_LENGTH)}`,
+    submittedAt: new Date(),
+    metadata: {
+      remoteStatus: "FAILED_VERIFICATION",
+      removalIds: [sentExternalId],
+    },
+  });
+  vi.mocked(getGhgStatement).mockResolvedValue({
+    status: "FAILED_VERIFICATION",
+    submitted_at: "2099-01-01T00:00:00Z",
+    ghg_entry_ids: [sentExternalId],
+  } as Awaited<ReturnType<typeof getGhgStatement>>);
+}
+
 describe("submitRemoval boundary — hash supersede (test 5)", () => {
+  it("a sent Removal with a changed payload is refused until Isometric returns its statement", async () => {
+    const fixture = await createFixture();
+    setContext(fixture, ORIGINAL_BIOCHAR_MASS_KG);
+    await submitRemoval({
+      orgCtx: makeTestOrgContext(USER_ID),
+      removalId: fixture.removalId,
+    });
+
+    setContext(fixture, CHANGED_BIOCHAR_MASS_KG);
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: fixture.removalId,
+      }),
+    ).rejects.toThrowError(
+      "This Removal is sent. If Isometric sends the GHG Statement back, refresh its status to correct it.",
+    );
+    expect(registry.ghgEntries).toHaveLength(1);
+    expect(await listRows(fixture.removalId)).toHaveLength(1);
+  });
+
   it("a payload change mints v2 with version-distinct supplier refs and supersedes v1", async () => {
     const fixture = await createFixture();
     setContext(fixture, ORIGINAL_BIOCHAR_MASS_KG);
@@ -942,6 +1040,9 @@ describe("submitRemoval boundary — hash supersede (test 5)", () => {
     });
     expect(first.version).toBe(1);
 
+    // v1 is sent, so a new attempt needs Isometric to have returned its
+    // GHG Statement (the correction window).
+    await sendBackStatement(fixture, first.externalId!);
     setContext(fixture, CHANGED_BIOCHAR_MASS_KG);
     const second = await submitRemoval({
       orgCtx: makeTestOrgContext(USER_ID),

@@ -24,7 +24,7 @@ it("binds the Safety margin line through its reviewed automatic source", () => {
   })).toBeUndefined();
 });
 
-// Reviewed operating contracts may combine an additive entry policy with an automatic source.
+// Paired transport uses a single manual entry or an automatic source.
 it.each([false, true])("checks unmapped inputs when an automatic source is present (%s)", (automatic) => {
   const decision = emissionLineBindingDecision({
     component: { ...safetyMargin, blueprintKey: "transport", inputs: [
@@ -32,7 +32,7 @@ it.each([false, true])("checks unmapped inputs when an automatic source is prese
       { key: "distance", type: "monitored", quantityKind: "distance" },
     ] },
     groupKey: "biomass-feedstock-transport", problems: [], enrichmentComplete: true, entriesCanSubmit: true,
-    contract: { scope: "operating", entryPolicy: "additive", origin: "reviewed",
+    contract: { scope: "operating", entryPolicy: automatic ? "none" : "single", origin: "reviewed",
       ...(automatic ? { automaticSource: "feedstock-transport" as const } : {}) },
   });
   if (automatic) expect(decision).toMatchObject({ state: "needsSetup", inputKeys: ["mass"], blocker: { code: "lineNeedsSetup" } });
@@ -45,6 +45,9 @@ it("allows the paired transport automatic contract through source validation", (
     { key: "distance", type: "monitored", quantityKind: "distance" },
   ] };
   expect(validateLineSources({ groups: [{ id: "transport", key: "biomass-feedstock-transport", displayName: "Transport", description: "", components: [component] }] }, {
-    [component.id]: { scope: "operating", entryPolicy: "additive", origin: "reviewed", automaticSource: "feedstock-transport" },
+    [component.id]: { scope: "operating", entryPolicy: "none", origin: "reviewed", automaticSource: "feedstock-transport" },
   })).toEqual([]);
+  expect(validateLineSources({ groups: [{ id: "transport", key: "biomass-feedstock-transport", displayName: "Transport", description: "", components: [component] }] }, {
+    [component.id]: { scope: "operating", entryPolicy: "additive", origin: "reviewed", automaticSource: "feedstock-transport" },
+  })).toEqual([{ code: "disallowed-entry-policy", componentId: component.id }]);
 });

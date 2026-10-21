@@ -1,5 +1,6 @@
+import { isInFrozenEntrySet } from "./removal-entry-snapshot";
 import { EmissionEntryEvidenceError } from "./emission-entry-evidence-error";
-import { EMISSION_ENTRIES_CHANGED, EMISSION_ENTRY_FILE_DUPLICATE } from "./emission-entry-messages";
+import { EMISSION_ENTRIES_CHANGED, EMISSION_ENTRY_FILE_DUPLICATE, formatEmissionEntryMessageLabel } from "./emission-entry-messages";
 import type { RemovalEntryContributions } from "./removal-emission-contributions";
 import {
   SOURCE_BINDING_MAPPING_REVISION,
@@ -15,16 +16,18 @@ export function emissionEntrySourceCandidates(
   for (const input of contributions?.manifest ?? []) {
     for (const entry of input.entries) {
       if (entry.kind === "zero") continue;
-      if (!contributions?.entrySet.some((frozen) => frozen.entryId === entry.entryId &&
-        frozen.contentRevision === entry.contentRevision)) {
+      if (!isInFrozenEntrySet(entry, contributions?.entrySet)) {
         throw new EmissionEntryEvidenceError(EMISSION_ENTRIES_CHANGED, { entryId: entry.entryId, componentId: input.componentId, inputKey: input.inputKey });
       }
+      const label = ["Emissions entry", input.componentDisplayName, entry.occurredOn, entry.creditBatchCode].filter(Boolean).join(", ");
       const target: RemovalSourceIntendedTarget = { kind: "explicit", componentId: input.componentId, inputKey: input.inputKey };
       for (const documentId of entry.evidenceDocumentIds) {
         const existing = candidates.get(documentId);
         if (existing) {
           if (existing.binding.lineage.entityId !== entry.entryId) {
-            throw new EmissionEntryEvidenceError(EMISSION_ENTRY_FILE_DUPLICATE, { documentId, entryId: entry.entryId, otherEntryId: existing.binding.lineage.entityId });
+            const messageLabel = formatEmissionEntryMessageLabel({ componentDisplayName: input.componentDisplayName,
+              occurredOn: entry.occurredOn, creditBatchCode: entry.creditBatchCode });
+            throw new EmissionEntryEvidenceError(EMISSION_ENTRY_FILE_DUPLICATE(messageLabel), { documentId, entryId: entry.entryId, otherEntryId: existing.binding.lineage.entityId });
           }
           const targets = [existing.binding.intendedTarget, ...(existing.binding.additionalIntendedTargets ?? [])];
           if (!targets.some((item) => item.kind === "explicit" && item.componentId === target.componentId && item.inputKey === target.inputKey)) {
@@ -33,7 +36,7 @@ export function emissionEntrySourceCandidates(
         } else {
           candidates.set(documentId, { documentId, binding: {
             nomaRole: "emission_entry", nomaRoleLabel: "Emissions entry",
-            lineage: { entityType: "emission_entry", entityId: entry.entryId, entityLabel: ["Emissions entry", input.componentDisplayName, entry.occurredOn, entry.creditBatchCode].filter(Boolean).join(", ") },
+            lineage: { entityType: "emission_entry", entityId: entry.entryId, entityLabel: label },
             intendedTarget: target, mappingRevision: SOURCE_BINDING_MAPPING_REVISION,
           } });
         }

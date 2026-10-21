@@ -33,3 +33,27 @@ it.each(["missing observation", "incomplete enrichment"])("defers coverage to te
     expect(resolved.templateBlockers[0]).toEqual({ code: "templateNotFullyRead", message: REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead });
   } finally { warn.mockRestore(); }
 });
+
+
+import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
+import { lineSourcesForObservation } from "@/lib/isometric/template-observations/line-sources-for-observation";
+import { fullFingerprint, semanticFingerprint } from "@/lib/isometric/template-observations/fingerprints";
+import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
+it.each(["bootstrap", "carried", "reviewed"] as const)("asks to review stored production transport %s contracts unless bootstrapped", async (origin: LineContract["origin"]) => {
+  const template = production as GhgEntryTemplate;
+  const definition = normalizeTemplateDefinition(template);
+  const id = "rtc_1KWKNGJZY1S0D548";
+  const stored = resolveLineSources({ definition });
+  stored[id] = { ...stored[id], entryPolicy: "additive", origin };
+  const enrichment = {};
+  const lineSources = lineSourcesForObservation({ definition, enrichment, latest: { definition, lineSources: stored,
+    semanticFingerprint: semanticFingerprint(definition, enrichment), fullFingerprint: fullFingerprint(definition, enrichment) } });
+  vi.mocked(observeRemovalTemplate).mockResolvedValue({ definition, enrichment, lineSources } as never);
+  {
+    const facts = await loadRemovalTemplateFacts(makeTestOrgContext(), { client: {} as never, externalProjectId: template.project_id, template, blueprints: [] });
+    const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], { facilityTimezone: "UTC", templatesById: { [template.id]: facts } } as unknown as FacilityCertifierFacts);
+    expect(resolved.templateBlockers.some(blocker => blocker.code === "templateLinesNeedReview")).toBe(origin !== "bootstrap");
+    expect(resolved.undecidedLineIds.includes(id)).toBe(origin !== "bootstrap");
+
+  }
+});

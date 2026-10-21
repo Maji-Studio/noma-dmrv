@@ -1,3 +1,4 @@
+import { legacyTransportObservation } from "../../../tests/helpers/legacy-transport-observation";
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntries: vi.fn() }));
 vi.mock("@/data-access/emission-line-comments", () => ({ listEmissionLineComments: vi.fn() }));
 vi.mock("@/db", () => ({ db: {} }));
@@ -36,7 +37,7 @@ import { listEmissionLineComments } from "@/data-access/emission-line-comments";
 import { getEmissionAutomaticMasses } from "@/data-access/emission-automatic-masses";
 import { getTemplateObservationById } from "@/data-access/removal-template-observations";
 import { getLatestTemplateObservation } from "@/data-access/removal-template-observations";
-import { loadBatchEmissionLines } from "./batch-emission-lines";
+import { buildBatchEmissionLines, loadBatchEmissionLines } from "./batch-emission-lines";
 import { REMOVAL_TEMPLATE_BLOCKERS, removalTemplateBlocker, type RemovalTemplateBlockerCode } from "@/lib/certification/removal-template-blockers";
 import { SafeError } from "@/lib/errors";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
@@ -311,4 +312,11 @@ it("shows re-entry for unit changes and keeps other lines healthy", async () => 
   expect(withComments[0].comment).toBeNull();
   expect(withComments[1].comment).toMatchObject({ id: "comment", body: "Context" });
   expect(withComments.map((line) => ({ ...line, comment: null }))).toEqual(lines);
+});
+
+
+it("marks a stored legacy pair for review", () => {
+  const { observation } = legacyTransportObservation();
+  const [line] = buildBatchEmissionLines(observation, [], new Map(), { automaticFigures: {} });
+  expect(line.state).toBe("needsReview");
 });
