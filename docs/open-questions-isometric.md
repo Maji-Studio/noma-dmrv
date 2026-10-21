@@ -260,17 +260,15 @@ uses it.
   raise `DEFAULT_MAX_PAGES` for them, since exceeding it also blocks Removal
   deletion.
 
-### Registry dates are UTC days, so west-of-UTC facilities keep the UTC refusal (`isometric/reporting-window-utc-days`, opened 2026-10-20, `needs-registry-check`)
+### Future-application check compares a calendar date with an instant (`isometric/application-future-facility-day`, opened 2026-10-21)
 
-- **Observed:** `src/fn/certification/removal-reporting-window.ts:resolveRemovalReportingWindow`
-  refuses when the application day precedes the later of the production end's
-  UTC day and facility day (#1316). East of UTC the facility day binds; west of
-  UTC the UTC day binds, because `started_on` and `completed_on` are sent as UTC
-  days, so a facility-day guard there would send a completion date after the
-  application.
-- **Resolve via:** confirm with the Isometric MCP whether payload dates may be
-  facility days. If so, serialize them as facility days and compare only the
-  facility day (#1282).
+- **Observed:** `assertRemovalDatesNotFuture` compares the application's UTC-midnight
+  calendar date with `now` as an instant. East of UTC a valid same-day application
+  is refused until UTC midnight; west of UTC a next-day application passes while
+  the facility is still on the earlier day.
+- **To resolve:** compare the application calendar day with
+  `formatFacilityDate(now, facilityTimezone)`; keep the instant comparison for
+  production end.
 
 ### Biochar Application GHG Entry association timing (`isometric/biochar-application-ghg-entry-association`, opened 2026-08-27)
 

@@ -344,3 +344,23 @@ const DIESEL_CONTRACTS: LineSources = {
   "rtc-0-0": { scope: "operating", automaticSource: "run-genset-diesel", entryPolicy: "additive", origin: "reviewed" },
   "rtc-0-1": { scope: "operating", automaticSource: "run-startup-diesel", entryPolicy: "additive", origin: "reviewed" },
 };
+
+describe("buildSubmissionWarnings: month straddle uses the facility day of production start (issue #1282)", () => {
+  const straddle = (start: string, application: string, facilityTimezone: string) =>
+    buildSubmissionWarnings({
+      lineSources: DIESEL_CONTRACTS,
+      removalTemplate: null,
+      runs: [run({ startTime: new Date(start) })],
+      lineages: [{ application: { applicationDate: new Date(`${application}T00:00:00Z`) } }],
+      facilityTimezone,
+    });
+
+  it("warns for a Bogota run starting 30 Sep 21:30 local applied on 1 Oct", () => {
+    const warnings = straddle("2026-10-01T02:30:00Z", "2026-10-01", "America/Bogota");
+    expect(warnings.join("\n")).toMatch(/production started 2026-09, latest application 2026-10/);
+  });
+
+  it("does not warn when a Dar es Salaam run starting 1 Oct 01:30 local is applied on 1 Oct", () => {
+    expect(straddle("2026-09-30T22:30:00Z", "2026-10-01", "Africa/Dar_es_Salaam")).toEqual([]);
+  });
+});
