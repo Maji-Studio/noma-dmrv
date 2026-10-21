@@ -263,11 +263,16 @@ Removal template.
 
 ### PROJECT-scope emissions
 
-Staff travel, direct pyrolyzer gases, storage fuel, lab electricity, sampling
-consumables, and other period/LCA overhead are authored as PROJECT-scope
-components in Isometric where applicable. noma keeps no project-emissions
-journal. The transformer guard prevents these tuples from being silently
-submitted as Removal-scope zeroes.
+Establishment and end-of-life components remain project-level in Isometric.
+Operating components, including staff travel, direct gases, lab electricity and
+sampling consumables, use their reviewed template contracts and emissions
+entries under [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
+
+Period inputs are never stubbed, independently of the
+emissions-entry activation gate. A missing operating input blocks submission
+until records, entries or a Removal-confirmed zero supply it. Operators confirm
+zeros on Empty components. Forbidden project-level inputs still fail closed.
+See [plan §4.5, Guard](../plans/2026-10-15-template-driven-emissions.md#45-submission-snapshots-and-claims-pr-4).
 
 ## Durability paths
 

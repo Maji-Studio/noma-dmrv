@@ -14,7 +14,6 @@ import { listEmissionEntries, listEmissionEntriesForBatches } from "@/data-acces
 import { getTemplateObservationById, getTemplateObservationsByIds } from "@/data-access/removal-template-observations";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import { requireOrgFacility } from "@/data-access/utils";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib/certification/readiness";
 import { resolveTemplateInputs } from "./removal-template-inputs";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
@@ -25,7 +24,6 @@ vi.mock("@/data-access/removal-template-observations", () => ({ getTemplateObser
 vi.mock("@/data-access/batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: vi.fn() }));
 vi.mock("@/data-access/credit-batch-accounting", () => ({ loadCreditBatchRollups: vi.fn() }));
 vi.mock("@/data-access/utils", () => ({ requireOrgScope: vi.fn(), requireOrgFacility: vi.fn() }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: vi.fn(() => true) }));
 const template = {
   id: "template", display_name: "Template", groups: [{ id: "g", key: "pyrolysis", components: [{
     id: "line", display_name: "Lab electricity EU", blueprint_key: "grid_electricity_use",
@@ -48,7 +46,6 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(listEmissionEntryAvailableApplications).mockResolvedValue([]);
   vi.mocked(loadEmissionEntryReservations).mockResolvedValue([]);
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(true);
   vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([{ contenderKind: "draft", removalId: "removal", createdAt: "2026-01-01",
     creditBatchIds: ["one", "two", "three", "readable", "missing", "zero"], window: { start: "2026-01-01", end: "2026-02-01" } }]);
   vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([]);
@@ -192,15 +189,6 @@ it("uses batch-wide automatic figures instead of empty placeholders", async () =
   const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facts);
   expect(resolveRemovalTemplate(batches, facts, loaded).emissionLinesByBatchId.one[0]).toMatchObject({ state: "filled", total: { magnitude: "3", unit: "kWh" } });
 });
-it("does not query entries or automatic facts with the gate off", async () => {
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(false);
-  expect(await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts)).toEqual({});
-  expect(listEmissionEntriesForBatches).not.toHaveBeenCalled();
-  expect(getTemplateObservationsByIds).not.toHaveBeenCalled();
-  expect(loadBatchesEmissionAutomaticFacts).not.toHaveBeenCalled();
-  expect(loadCreditBatchRollups).not.toHaveBeenCalled();
-  expect(requireOrgFacility).not.toHaveBeenCalled();
-});
 
 it("keeps batch emissions unmet until a compatible changed entry is confirmed", async () => {
   const facts = structuredClone(facilityFacts);
@@ -252,7 +240,7 @@ it.each([false, true])("keeps removed-entry blockers in Removal readiness (group
   expect(resolveTemplateInputs({ template: resolved.removalTemplate!, lineSources: resolved.lineSources,
     emissionLines: resolved.emissionLines, blueprintsByKey: new Map(),
     agg: {} as Parameters<typeof resolveTemplateInputs>[0]["agg"], externalProjectId: "project",
-    sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: true, omitProductionComponents: false,
+    sourceIds: [], sourceBindingPlan: [], omitProductionComponents: false,
   })).toMatchObject({ monitored: [], fixed: [], datapointBodyByKey: new Map() });
   expect(live.template.groups).toEqual([]);
   expect(live.observation.definition.groups).toEqual([]);

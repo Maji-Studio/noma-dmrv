@@ -1,5 +1,5 @@
 import { insertRemovalFixture } from "./helpers/removal-fixture";
-import { assert, afterAll, beforeAll, expect, it, vi } from "vitest";
+import { assert, afterAll, beforeAll, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -14,7 +14,6 @@ import {
   organizations,
   removalTemplateObservations,
   storageObjectDeletions,
-  transportLegs,
   users,
 } from "@/db/schema";
 import {
@@ -45,12 +44,6 @@ import {
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
 
-// The gate reads process.env, so the switch is the real variable.
-const flag = {
-  get enabled() { return process.env.EMISSIONS_ENTRIES_ENABLED === "true"; },
-  set enabled(value: boolean) { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", value ? "true" : "false"); },
-};
-flag.enabled = true;
 const userId = `emission-entry-user-${crypto.randomUUID()}`;
 const ctx = makeTestOrgContext(userId);
 const otherOrg = `emission-entry-org-${crypto.randomUUID()}`;
@@ -356,7 +349,7 @@ it("tombstones unsubmitted draft zeros on value creation", async () => {
   const [saved] = await db.select().from(emissionEntries).where(eq(emissionEntries.id, zero.id));
   expect(saved.deletedAt).not.toBeNull();
 });
-it("loads persisted entries with the flag off while refusing writes", async () => {
+it("loads persisted entries and rejects a foreign facility", async () => {
   const entry = await create();
   const linesResult = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
   assert(linesResult.status === "ready");
@@ -367,20 +360,11 @@ it("loads persisted entries with the flag off while refusing writes", async () =
       ?.entries.some((candidate) => candidate.id === entry.id && candidate.counts),
   ).toBe(true);
   await expect(loadBatchEmissionLines(ctx, crypto.randomUUID(), lineage.batchId)).rejects.toThrow();
-  flag.enabled = false;
-  try {
-    expect(
-      (await listEmissionEntries(ctx, lineage.batchId)).some((candidate) => candidate.id === entry.id),
-    ).toBe(true);
-    await expect(
-      updateEmissionEntry(ctx, { id: entry.id, expectedVersion: entry.version, note: "blocked" }),
-    ).rejects.toThrow("not available");
-    await expect(create()).rejects.toThrow("not available");
-  } finally {
-    flag.enabled = true;
-  }
+  expect(
+    (await listEmissionEntries(ctx, lineage.batchId)).some((candidate) => candidate.id === entry.id),
+  ).toBe(true);
 });
-it("refuses sample legs with the flag on before touching the sample", async () => {
+it("refuses sample legs before touching the sample", async () => {
   await expect(
     createTransportLeg(ctx, {
       entityType: "sample",
@@ -462,27 +446,6 @@ it("confirms uploaded evidence inside the entry revision transaction", async () 
     version: 2,
     documentCount: 1,
   });
-});
-it("retains sample-leg creation when the flag is off", async () => {
-  // The shared fixture's batch has submissions from earlier cases, which lock its sample.
-  // Use a separate lineage with no submission so only the flag decides the outcome.
-  const unlocked = await createLineageFixture("none");
-  flag.enabled = false;
-  try {
-    const leg = await createTransportLeg(ctx, {
-      entityType: "sample",
-      entityId: unlocked.sampleId,
-      distanceKm: 1,
-      loadMassKg: 1,
-      transportMethodType: "road",
-      calculationMethodType: "distance_based",
-    });
-    expect(leg.entityType).toBe("sample");
-    await db.delete(transportLegs).where(eq(transportLegs.id, leg.id));
-  } finally {
-    flag.enabled = true;
-    await cleanupLineageFixture(unlocked);
-  }
 });
 
 it("enforces organization consistency independently for observation and claim references", async () => {
@@ -709,7 +672,7 @@ it("refuses supported but different entry units at create and update", async () 
 });
 
 
-it.each(["live", "deleted", "reserved", "sent", "confirmed"] as const)(
+it.each(["live", "deleted", "reserved", "sent", "confirmed", "reserved-zero", "sent-zero"] as const)(
   "deletes a batch only with unclaimed tombstones: %s", async (state) => {
   const [original] = await db.select().from(creditBatches).where(eq(creditBatches.id, lineage.batchId));
   const [batch] = await db.insert(creditBatches).values({
@@ -726,18 +689,21 @@ it.each(["live", "deleted", "reserved", "sent", "confirmed"] as const)(
     fileUrl: "https://example.test/evidence", fileName: "Evidence",
   });
   try {
-    if (state === "reserved" || state === "sent") {
-      await claim(entry.id, state);
-      await db.update(emissionEntries).set({ deletedAt: new Date() }).where(eq(emissionEntries.id, entry.id));
+    if (state === "reserved" || state === "sent" || state === "reserved-zero" || state === "sent-zero") {
+      await claim(entry.id, state === "reserved-zero" ? "reserved" : state === "sent-zero" ? "sent" : state);
+      await db.update(emissionEntries).set({ deletedAt: new Date() })
+        .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id)));
     }
-    if (state === "confirmed") {
+    if (state === "confirmed" || state === "reserved-zero" || state === "sent-zero") {
       await db.update(emissionEntries).set({
         kind: "zero", confirmedForRemovalId: lineage.removalId, deletedAt: new Date(),
-      }).where(eq(emissionEntries.id, entry.id));
+      }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id)));
     }
-    if (state === "deleted") {
-      const current = await getEmissionEntry(ctx, entry.id);
-      await deleteEmissionEntry(ctx, entry.id, current.version);
+    if (state === "deleted" || state === "confirmed") {
+      if (state === "deleted") {
+        const current = await getEmissionEntry(ctx, entry.id);
+        await deleteEmissionEntry(ctx, entry.id, current.version);
+      }
       await deleteCreditBatch(ctx, batch.id, batch.version);
       expect(await db.select().from(creditBatches).where(eq(creditBatches.id, batch.id))).toEqual([]);
       expect(await db.select().from(emissionEntries).where(eq(emissionEntries.id, entry.id))).toEqual([]);
@@ -777,16 +743,11 @@ it("refuses document lists for unknown, tombstoned and other-organization entrie
   }
 });
 
-it("allows document lists for claimed entries while writes are disabled", async () => {
+it("allows document lists for claimed entries", async () => {
   const entry = await create();
   await claim(entry.id, "sent");
-  flag.enabled = false;
-  try {
-    await expect(listDocumentsForEntity(ctx, "emission_entry", entry.id)).resolves.toEqual([]);
-    await expect(listDocumentsForEntityIds(ctx, "emission_entry", [entry.id])).resolves.toEqual([]);
-  } finally {
-    flag.enabled = true;
-  }
+  await expect(listDocumentsForEntity(ctx, "emission_entry", entry.id)).resolves.toEqual([]);
+  await expect(listDocumentsForEntityIds(ctx, "emission_entry", [entry.id])).resolves.toEqual([]);
 });
 
 it("uses the read model blocker for an unpinned batch", async () => {
@@ -838,7 +799,7 @@ it("defaults additive dates to an ended batch and fixes single-line dates throug
   }
 });
 
-it("scopes the facility overview, excludes archived batches and ignores entries when disabled", async () => {
+it("scopes the facility overview and excludes archived batches", async () => {
   const [original] = await db.select().from(creditBatches).where(eq(creditBatches.id, lineage.batchId));
   const [batch] = await db.insert(creditBatches).values({
     ...original, id: crypto.randomUUID(), code: `CB-OVERVIEW-${crypto.randomUUID()}`,
@@ -856,15 +817,9 @@ it("scopes the facility overview, excludes archived batches and ignores entries 
       lineCounts: { total: 2, open: 2, fileMissing: 1, notRecorded: 1 },
     });
     await expect(loadFacilityEmissionsOverview({ ...ctx, organizationId: otherOrg }, lineage.facilityId)).rejects.toThrow();
-    flag.enabled = false;
-    const disabled = await loadFacilityEmissionsOverview(ctx, lineage.facilityId);
-    expect(disabled.batches.find((row) => row.creditBatchId === batch.id)).toMatchObject({
-      entriesThisMonth: 0, lastEntryOn: null, lineCounts: { fileMissing: 0, notRecorded: 2 },
-    });
     await db.update(creditBatches).set({ archivedAt: new Date() }).where(eq(creditBatches.id, batch.id));
     expect((await loadFacilityEmissionsOverview(ctx, lineage.facilityId)).batches.some((row) => row.creditBatchId === batch.id)).toBe(false);
   } finally {
-    flag.enabled = true;
     if (entryId) {
       await db.delete(emissionEntryValues).where(eq(emissionEntryValues.entryId, entryId));
       await db.delete(emissionEntries).where(eq(emissionEntries.id, entryId));

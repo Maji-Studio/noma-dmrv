@@ -7,8 +7,7 @@ import { toDeleteErrorMessage } from "@/lib/stale-version";
  * Main sample listing with CRUD operations, stat cards, filters, and DataTable
  */
 
-import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FlaskIcon, LeafIcon, PlusIcon, XIcon, FireIcon, CertificateIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
@@ -29,7 +28,6 @@ import {
 } from "@/hooks/use-list-pagination";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
-import { useCreateTransportLeg } from "@/hooks/use-transport-legs";
 import { LOAD_FAILED, MISSING_VALUE } from "@/lib/copy-utils";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
@@ -49,7 +47,6 @@ import { formatDateRange } from "@/lib/format-utils";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
-  parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
 import { SampleForm } from "./sample-form";
 import {
@@ -59,7 +56,6 @@ import {
 } from "@/schemas/samples";
 import type { SampleWithRelations } from "@/data-access/samples";
 import { formatSamplingTime, sampleSheetSections } from "./sample-read-sections";
-import type { TransportLegFormData } from "@/schemas/transport-legs";
 import {
   leaveSampleCreateIntent,
   resolveSampleCreateCreditBatchId,
@@ -210,12 +206,9 @@ type SideSheetState =
 export function SampleList({
   initialCreate = false,
   initialCreditBatchId,
-  hideTransport = false,
 }: {
   initialCreate?: boolean;
   initialCreditBatchId?: string;
-  /** Server flag EMISSIONS_ENTRIES_ENABLED: sample shipping is an emissions entry. */
-  hideTransport?: boolean;
 }) {
   const { facilityId: contextFacilityId } = useFacilityContext();
   const createIntent = useOpenCreateIntent({
@@ -231,7 +224,7 @@ export function SampleList({
     ENTITY_DEEP_LINK_MODE_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
-  const [deepLinkFocus, setDeepLinkFocus] = useQueryState(
+  const [, setDeepLinkFocus] = useQueryState(
     ENTITY_DEEP_LINK_FOCUS_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
@@ -284,18 +277,6 @@ export function SampleList({
   const updateSample = useUpdateSample();
   const deleteSample = useDeleteSample();
   const toast = useToast();
-  const createTransportLeg = useCreateTransportLeg();
-  const [deferredLegs, setDeferredLegs] = useState<TransportLegFormData[]>([]);
-  // One intent key per pending leg, kept while a failed leg waits for a retry,
-  // so a lost response never saves that leg twice. Read only in handlers.
-  const legIntentKeys = useRef(new WeakMap<TransportLegFormData, string>());
-  const legIntentKey = (leg: TransportLegFormData) => {
-    const keys = legIntentKeys.current;
-    const key = keys.get(leg) ?? crypto.randomUUID();
-    keys.set(leg, key);
-    return key;
-  };
-
   const samples = samplesData?.items ?? [];
   const totalPages = samplesData?.totalPages ?? 0;
   useReconcileListPage({
@@ -335,9 +316,6 @@ export function SampleList({
   // A lock that arrives as Sent keeps an open draft, read-only, with the way
   // back (`submitBlock`).
   const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("sample", displaySideSheet?.entity?.id);
-  const activeFocusTarget = displaySideSheet?.entity?.id === focusedSampleId
-    ? parseEntityFocusTarget(deepLinkFocus)
-    : null;
 
   const createWithEvidence = useCreateWithEvidence({
     entityType: "sample",
@@ -351,36 +329,16 @@ export function SampleList({
     getCreateErrorMessage: (error) =>
       error instanceof Error ? error.message : "Sample was not created. Check the form.",
     unresolvedUpdateMessage:
-      "Resolve or remove the failed attachments and transport legs before saving this Sample.",
+      "Resolve or remove the failed attachments before saving this Sample.",
     openEditOnFailure: (sample) =>
       leaveSampleCreateIntent(createIntent.clear, () =>
         setSideSheet({ mode: "edit", entity: sample }),
       ),
     closeOnSuccess: () =>
       leaveSampleCreateIntent(createIntent.clear, () => setSideSheet(null)),
-    onAfterFlush: async ({ created, flushResult }) => {
-      const sample = created.result;
-      const failedLegs: TransportLegFormData[] = [];
-      for (const leg of deferredLegs) {
-        try {
-          await createTransportLeg.mutateAsync({
-            ...leg,
-            intentKey: legIntentKey(leg),
-            entityType: "sample",
-            entityId: sample.id,
-          });
-        } catch {
-          failedLegs.push(leg);
-        }
-      }
-      setDeferredLegs(failedLegs);
-
-      const failedCount = flushResult.failed.length + failedLegs.length;
-      if (failedCount === 0) return;
-      return {
-        failureMessage: buildAttachmentFailureBanner(failedCount) ?? undefined,
-      };
-    },
+    onAfterFlush: ({ flushResult }) => ({
+      failureMessage: buildAttachmentFailureBanner(flushResult.failed.length) ?? undefined,
+    }),
     onSuccess: () =>
       toast.success("Sample created."),
   });
@@ -390,12 +348,11 @@ export function SampleList({
 
   // Keep the post-create "failed to save" banner in sync when the user retries
   // or removes individual failures inline: recompute it from the remaining
-  // failed attachments and transport legs so a fully-resolved queue clears it.
+  // failed attachments so a fully-resolved queue clears it.
   const setCreateFailureBanner = (
     failedAttachments: number,
-    failedLegs: number,
   ) => {
-    setFormError(buildAttachmentFailureBanner(failedAttachments + failedLegs));
+    setFormError(buildAttachmentFailureBanner(failedAttachments));
   };
 
   const handleRetryDeferredAttachments = async (key?: string) => {
@@ -416,7 +373,6 @@ export function SampleList({
           ).length;
     setCreateFailureBanner(
       untouchedFailed + result.failed.length,
-      deferredLegs.length,
     );
   };
 
@@ -426,44 +382,7 @@ export function SampleList({
     const remainingFailed = deferredAttachments.attachments.filter(
       (attachment) => attachment.status === "failed" && attachment.key !== key,
     ).length;
-    setCreateFailureBanner(remainingFailed, deferredLegs.length);
-  };
-
-  const handleDeferredLegsChange = (legs: TransportLegFormData[]) => {
-    setDeferredLegs(legs);
-    // Removing a failed leg from the post-create failure list must reconcile
-    // the banner too (adding legs only happens pre-create, where mode !== edit
-    // short-circuits and there is no banner yet).
-    if (sideSheet?.mode !== "edit") return;
-    const failedAttachments = deferredAttachments.attachments.filter(
-      (attachment) => attachment.status === "failed",
-    ).length;
-    setCreateFailureBanner(failedAttachments, legs.length);
-  };
-
-  const retryDeferredLegs = async () => {
-    if (sideSheet?.mode !== "edit" || deferredLegs.length === 0) return;
-    await createWithEvidence.runWhileFlushing(async () => {
-      const failedLegs: TransportLegFormData[] = [];
-      for (const leg of deferredLegs) {
-        try {
-          await createTransportLeg.mutateAsync({
-            ...leg,
-            intentKey: legIntentKey(leg),
-            entityType: "sample",
-            entityId: sideSheet.entity.id,
-          });
-        } catch {
-          failedLegs.push(leg);
-        }
-      }
-      setDeferredLegs(failedLegs);
-      setFormError(
-        failedLegs.length > 0
-          ? `Sample was saved, but ${failedLegs.length} transport ${failedLegs.length === 1 ? "leg" : "legs"} still failed to save.`
-          : null,
-      );
-    });
+    setCreateFailureBanner(remainingFailed);
   };
 
   const handleUpdate = async (data: SampleFormData) => {
@@ -471,7 +390,7 @@ export function SampleList({
     // state, so the target comes from the displayed sheet, not `sideSheet`.
     if (displaySideSheet?.mode !== "edit") return;
     setFormError(null);
-    if (createWithEvidence.guardUpdate(deferredLegs.length > 0)) return;
+    if (createWithEvidence.guardUpdate()) return;
     try {
       await updateSample.mutateAsync({
         sampleId: displaySideSheet.entity.id,
@@ -511,7 +430,6 @@ export function SampleList({
     setDeepLinkFocus(null);
     setFormError(null);
     createWithEvidence.reset();
-    setDeferredLegs([]);
     setSideSheet({ mode: "create", entity: null });
   };
   const openView = (sample: SampleWithRelations) => {
@@ -538,13 +456,11 @@ export function SampleList({
     setSideSheet(null);
     setFormError(null);
     createWithEvidence.reset();
-    setDeferredLegs([]);
   };
 
   const confirmCreateClose = () =>
     createWithEvidence.confirmClose(
       displaySideSheet?.mode === "create",
-      deferredLegs.length,
     );
   const attemptCloseSideSheet = () => {
     if (confirmCreateClose()) closeSideSheet();
@@ -563,7 +479,6 @@ export function SampleList({
   const clearFilters = () => { setSearchQuery(""); setCreditBatchFilter(null); setCurrentPage(1); };
   const hasActiveFilters = searchQuery || creditBatchFilter;
 
-  const sampleTransport = useTransportLegsForEntity("sample", displaySideSheet?.entity?.id ?? "", { enabled: displaySideSheet?.mode === "view" });
   const editingEntity =
     displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
   const preselectedCreditBatchId = resolveSampleCreateCreditBatchId(
@@ -712,7 +627,7 @@ export function SampleList({
       />
 
       <EntitySideSheet
-        detailToggle={sampleTransport.data?.length ? "view" : false}
+        detailToggle={false}
         detailScope={displaySideSheet?.entity?.id ?? "create"}
         numberedSections
         open={!!displaySideSheet}
@@ -725,7 +640,7 @@ export function SampleList({
         {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit Sample"
-        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity, { hideTransport }) : undefined}
+        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity) : undefined}
       >
         {isResolvingCreateContext ? (
           <div
@@ -751,13 +666,6 @@ export function SampleList({
             deferredAttachments={deferredAttachments}
             onRetryDeferredAttachments={handleRetryDeferredAttachments}
             onRemoveDeferredAttachment={handleRemoveDeferredAttachment}
-            deferredLegs={deferredLegs}
-            onDeferredLegsChange={handleDeferredLegsChange}
-            onRetryDeferredLegs={retryDeferredLegs}
-            hideTransport={hideTransport}
-            focusTarget={
-              displaySideSheet?.mode === "edit" ? activeFocusTarget : null
-            }
           />
         )}
       </EntitySideSheet>

@@ -119,6 +119,7 @@ export function getRemovalPreflightRefetchInterval(
 export const certificationKeys = {
   removalEmptyLines: (removalId: string) => ["certification", "removal-empty-lines", removalId] as const,
   removalTemplateReviewEntry: (facilityId: string, templateId: string) => ["certification", "removal-template-review-entry", facilityId, templateId] as const,
+  removalTemplateSetup: (facilityId: string) => ["certification", "removal-template-setup", facilityId] as const,
   removalTemplateReview: (facilityId: string) => ["certification", "removal-template-review", facilityId] as const,
   all: ["certification"] as const,
   /** Whether a submitted Removal or GHG statement freezes the record's files. */
@@ -562,19 +563,26 @@ export function useCreditBatchHealthSummaries(
 // credit-batch variant it refetches while a submission is locked in flight.
 // It also polls while a clock-derived future-date blocker exists so an open
 // dialog becomes ready when that timestamp passes, without broad idle polling.
+/** One definition of the Removal context read, shared by the hook and any prefetch. */
+export function removalCertifyContextQueryOptions(
+  facilityId: string,
+  removalId: string,
+) {
+  return {
+    queryKey: certificationKeys.certifyContextForRemoval(facilityId, removalId),
+    queryFn: async () => unwrap(await loadRemovalCertifyContext(facilityId, removalId)),
+    staleTime: DEFAULT_STALE_MS,
+  };
+}
+
 export function useRemovalCertifyContext(
   facilityId: string,
   removalId: string,
   enabled = true,
 ) {
   return useQuery({
-    queryKey: certificationKeys.certifyContextForRemoval(
-      facilityId,
-      removalId,
-    ),
-    queryFn: async () => unwrap(await loadRemovalCertifyContext(facilityId, removalId)),
+    ...removalCertifyContextQueryOptions(facilityId, removalId),
     enabled: enabled && !!facilityId && !!removalId,
-    staleTime: DEFAULT_STALE_MS,
     refetchInterval: (query) =>
       getRemovalCertifyRefetchInterval(query.state.data),
   });

@@ -453,11 +453,12 @@ Flow: change schema → `pnpm db:generate` → review the emitted SQL → run ta
 
 ### Your migration number is taken after merging staging
 
-1. Merge `origin/staging`, then replace your metadata with its: `rm -rf drizzle/meta && git checkout origin/staging -- drizzle/meta`. A plain checkout keeps your branch-only snapshots, and `db:generate` would diff against them.
-2. Delete your own `NNNN_*.sql`, then rerun `pnpm db:generate --name <same name>`.
-3. Re-apply any hand-written SQL you added to the generated file.
-4. Reset your worktree DBs, then migrate. A plain migrate skips staging's migration when its `when` is older than the one you already applied. Before pushing, `git status --short drizzle/` should show only your new migration files and metadata changes.
-5. Never rename the file and edit the journal by hand: Drizzle skips migrations whose `when` is older than the last applied one. `pnpm check:migrations` catches this.
+1. Fetch and merge `origin/staging`, including its schema code. Commit or stash changes under `drizzle/` before renumbering.
+2. Preview with `pnpm db:renumber --dry-run`, then run `pnpm db:renumber`. It backs up branch-only SQL and metadata under `node_modules/.cache/db-renumber/<timestamp>/`, replaces all metadata with staging's snapshots, and regenerates offline with a fresh journal timestamp. Multiple branch-only migrations collapse into one named after the last migration. The command never connects to a database.
+3. Review the generated SQL and re-apply hand-written SQL from the backups, especially if the command reports differences.
+4. Reset both worktree DBs with the commands the script prints (it prints them only for a worktree's own local `noma_dmrv_wt_*` DBs, never with credentials). A plain migrate would skip staging's migration when its `when` is older than the one you already applied. Before pushing, `git status --short drizzle/` should show only your new migration files and metadata changes.
+
+Never rename the file and edit the journal by hand: Drizzle skips migrations whose `when` is older than the last applied one. Applied shared migrations remain immutable (see below). `pnpm check:migrations` checks journal consistency and compares branch-only migration prefixes with `origin/staging`. If that ref is unavailable, it warns and skips only the staging comparison; fetch it with `git fetch origin staging` to enable the check.
 
 ### Migration files are immutable once applied
 
@@ -585,8 +586,15 @@ by a database trigger. See [ADR 0022](./adr/0022-method-b-is-computed-eligibilit
 `emission_entries` binds one batch entry to a template observation and component.
 All domain references include `organization_id`. `version` changes on every write;
 `content_revision` changes for values, dates, template confirmation and uploaded
-evidence. Notes change only the version. Membership writers lock the batch before
-the entry; evidence writers lock the entry. Reserved or sent entries refuse edits.
+evidence. Notes change only the version. Membership and evidence writers lock lineage artifacts, then the facility, batch
+and entry. Reserved entries refuse edits. Sent entries reopen only with
+fresh returned-statement facts under the shared
+certification lineage locks. Unknown or stale statuses and in-flight lineage
+submissions keep the correction window closed. The window also controls date
+edits and sent-zero replacement; dates must stay within the Removal's entry window.
+Correction state compares the last submitted contribution manifest with the
+current contribution and is never stored. A new attempt reserves the current set
+and supersedes the prior attempt without transferring its entry claims.
 Ordinary entry deletion tombstones the entry and keeps its values and evidence.
 Removal draft deletion first records an activity tombstone, then hard-deletes
 its never-sent recorded zeros, including already tombstoned zeros. The zero-owner

@@ -165,3 +165,15 @@ export function traceabilityActivityHref(
   });
   return `/traceability?${params.toString()}`;
 }
+
+export function removalTemplateSetupHref(
+  facilityId: string,
+  { templateId, step, makeDefault }: { templateId?: string; step?: "template" | "decisions" | "apply"; makeDefault?: boolean } = {},
+): string {
+  const params = new URLSearchParams({ facility: facilityId });
+  if (templateId) params.set("template", templateId);
+  if (step) params.set("step", step);
+  // Absent means Make default is on; the batch dialog sends "false" so decisions can be made first.
+  if (makeDefault === false) params.set("makeDefault", "false");
+  return `/certification/settings/removal-template-setup?${params.toString()}`;
+}

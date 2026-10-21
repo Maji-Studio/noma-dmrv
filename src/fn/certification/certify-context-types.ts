@@ -40,6 +40,7 @@ export interface RemovalCertifyContext {
   /** Current template components without a saved, unambiguous decision. */
   undecidedLineIds?: readonly string[];
   emissionLinesByBatchId?: Record<string, BatchEmissionLine[]>;
+  entryCorrectionsByBatchId?: Record<string, import("@/lib/certification/removal-entry-correction").EntryCorrectionState[]>;
   emissionLines?: BatchEmissionLine[] | null;
   blueprintsForTemplate: IsometricComponentBlueprint[];
   unresolvedBlueprintKeys: string[];
@@ -106,6 +107,8 @@ export interface RemovalCertifyContext {
 // Kept server-internal so the cached UI payload stays lean.
 export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "emissionsLedger"> {
   facilityTimezone: string;
+  /** Datapoints fixed in the template, for the compiled review's value column. */
+  fixedInputValues?: readonly { componentId: string; inputKey: string; magnitude: number; unit: string }[];
   removalEntryContext?: Omit<NonNullable<Awaited<ReturnType<typeof loadRemovalEntryContext>>>, "batchFacts">;
   lineages: ChainOfCustodyData[];
   runs: ProductionRunForCertification[];
@@ -149,5 +152,4 @@ export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "e
   // durability gate blocker, so the Phase-3 step can assume non-null here.
   facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature | null;
 }
-
 

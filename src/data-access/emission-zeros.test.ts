@@ -1,15 +1,16 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), batch: vi.fn(), facts: vi.fn(), contenders: vi.fn(), reservations: vi.fn(), available: vi.fn(), automatic: vi.fn(), activity: vi.fn(), context: vi.fn(), entries: vi.fn() }));
-vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), select: vi.fn(), batch: vi.fn(), facts: vi.fn(), contenders: vi.fn(), reservations: vi.fn(), available: vi.fn(), automatic: vi.fn(), activity: vi.fn(), context: vi.fn(), entries: vi.fn(), correctionScope: vi.fn() }));
+vi.mock("@/db", () => ({ db: { transaction: mocks.transaction, select: mocks.select } }));
 vi.mock("./emission-entries", () => ({ lockedBatch: mocks.batch, listEmissionEntriesForBatches: mocks.entries }));
 vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: mocks.facts }));
 vi.mock("./emission-entry-contenders", () => ({ listEmissionEntryAvailableApplications: mocks.available, listEmissionEntryDraftContenders: mocks.contenders, loadEmissionEntryReservations: mocks.reservations }));
 vi.mock("./emission-entry-activity", () => ({ recordEmissionEntryActivity: mocks.activity }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ requireEmissionsEntriesEnabled: vi.fn(), emissionsEntriesEnabled: () => true }));
 vi.mock("./batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: mocks.automatic }));
 vi.mock("@/fn/certification/certify-context-core", () => ({ loadRemovalSubmissionContext: mocks.context }));
 vi.mock("./certifier-removals", () => ({ getCertifierRemovalById: vi.fn(async () => ({ updatedAt: new Date("2026-01-01") })) }));
+// These drafts have no returned lineage; keep correction locking at its own tested boundary.
+vi.mock("./emission-entry-corrections", () => ({ lockEmissionCorrectionScope: mocks.correctionScope, emissionCorrectionWindow: () => undefined }));
 import { loadRemovalEmptyLines } from "@/fn/certification/removal-empty-lines-core";
 import { loadRemovalEntryContext } from "@/fn/certification/removal-entry-context";
 import { resolveRemovalTemplate } from "@/fn/certification/resolve-removal-template";
@@ -17,7 +18,7 @@ import type { BatchEmissionContext } from "@/fn/certification/batch-emission-con
 import type { FacilityCertifierFacts } from "@/fn/certification/facility-certifier-facts";
 import type { RemovalScope } from "@/fn/certification/removal-scope";
 import { entriesWithoutRemoval } from "@/lib/certification/removal-emission-contributions";
-import { recordEmissionZeros, undoEmissionZeros } from "./emission-zeros";
+import { isRemovalZeroEditable, recordEmissionZeros, undoEmissionZeros } from "./emission-zeros";
 const ctx = makeTestOrgContext();
 const removalId = "00000000-0000-4000-8000-000000000001";
 const creditBatchId = "00000000-0000-4000-8000-000000000002";
@@ -28,6 +29,8 @@ const observation = { id: "observation", externalTemplateId: "template", definit
 ] }] }, enrichment: { line: { electricity_use: { unit: "kWh" } } },
 lineSources: { line: { scope: "operating", origin: "reviewed", entryPolicy: "additive" } } };
 let rows: unknown[][];
+// The editable check of the empty-lines read: the Removal row, then its submissions.
+let dbRows: unknown[][];
 const insert = vi.fn();
 const update = vi.fn();
 const rowLock = vi.fn();
@@ -42,6 +45,8 @@ beforeEach(() => {
   const tx = { select: () => query(rows.shift()!), insert: () => ({ values: insert }), update: () => ({ set: update }) };
   insert.mockImplementation((values) => query([{ ...values, id: "zero" }]));
   update.mockImplementation((values) => query([{ ...values, id: "zero", creditBatchId, kind: "zero", confirmedForRemovalId: removalId }]));
+  dbRows = [[{ id: removalId, updatedAt: new Date("2026-01-01"), metadata: null }], []];
+  mocks.select.mockImplementation(() => query(dbRows.shift()!));
   mocks.transaction.mockImplementation((fn) => fn(tx));
   mocks.batch.mockResolvedValue({ batch: { id: creditBatchId, startDate: "2026-01-01" }, observation: structuredClone(observation) });
   mocks.facts.mockResolvedValue({ entries: [] });
@@ -117,6 +122,8 @@ it.each(["sent-single", "omitted-production", "automatic-figure", "stale-value"]
 it("locks the Removal before its batch", async () => {
   await recordEmissionZeros(ctx, input);
   expect(mocks.batch).toHaveBeenCalledOnce();
+  expect(mocks.correctionScope).toHaveBeenCalledWith(ctx, mocks.batch.mock.calls[0][1], creditBatchId);
+  expect(mocks.correctionScope.mock.invocationCallOrder[0]).toBeLessThan(mocks.batch.mock.invocationCallOrder[0]);
   // The Removal read has already consumed the first result when the batch lock is requested.
   mocks.batch.mockImplementationOnce(async () => {
     expect(rows).toHaveLength(2);
@@ -139,7 +146,6 @@ it("refuses undo with a stale Removal review token", async () => {
   await expect(undoEmissionZeros(ctx, { removalId, creditBatchId, expectedRemovalVersion: 1 })).rejects.toMatchObject({ code: "stale_version" });
   expect(update).not.toHaveBeenCalled();
 });
-
 
 it.each(["empty", "future-application", "orphan", "sent-single", "automatic", "omitted-production", "stale", "other-batch-single"])(
   "read and transactional writer agree on empty components: %s", async (scenario) => {
@@ -181,6 +187,7 @@ it.each(["empty", "future-application", "orphan", "sent-single", "automatic", "o
     mocks.context.mockResolvedValue({ ...resolved, memberBatches: members });
     mocks.entries.mockResolvedValue(entries);
     const read = await loadRemovalEmptyLines(ctx, removalId);
+    expect(read.editable).toBe(true);
     const emptyIds = read.batches.find((batch) => batch.creditBatchId === creditBatchId)!.lines.map((line) => line.componentId);
     expect(emptyIds).toEqual(["empty", "future-application", "other-batch-single"].includes(scenario) ? ["line"] : []);
 
@@ -203,4 +210,11 @@ it.each(["record", "undo"])("uses a Removal lock compatible with stamping for %s
   if (action === "record") await recordEmissionZeros(ctx, input);
   else { rows.push([]); await undoEmissionZeros(ctx, input); }
   expect(rowLock).toHaveBeenNthCalledWith(1, "no key update");
+});
+
+it.each([["correction", true], ["draft", false]] as const)("a submitted Removal is zero-editable only in its correction window (%s)", async (contenderKind, editable) => {
+  dbRows = [[{ id: removalId, updatedAt: new Date("2026-01-01"), metadata: null }], [{ status: "submitted", submittedAt: new Date("2026-01-02") }], [{ id: creditBatchId }]];
+  mocks.contenders.mockResolvedValue([{ contenderKind, removalId, creditBatchIds: [creditBatchId], createdAt: "2026-01-01", window: { start: "2026-01-01", end: "2026-02-01" } }]);
+  expect(await isRemovalZeroEditable(ctx, removalId)).toBe(editable);
+  expect(mocks.contenders).toHaveBeenCalledWith(ctx, [creditBatchId]);
 });

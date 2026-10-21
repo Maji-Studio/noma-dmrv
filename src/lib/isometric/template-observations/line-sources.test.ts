@@ -1,6 +1,4 @@
-beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
-afterEach(() => { vi.unstubAllEnvs(); });
-import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import sandbox from "../../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import cula from "../../../../tests/fixtures/isometric/cula-template-2026-10-15.json";
 import production from "../../../../tests/fixtures/isometric/production-template-2026-07-03.json";
@@ -70,7 +68,7 @@ describe("line contracts", () => {
     const sources = resolveLineSources({ definition });
     sources[GENSET].entryPolicy = "single";
     sources[STARTUP].automaticSource = "run-genset-diesel";
-    sources.rtc_1KVFZ1MY9SBXFWVN.automaticSource = "sample-transport";
+    sources.rtc_1KVFZ1MY9SBXFWVN.automaticSource = "feedstock-dry-mass";
     const problems = validateLineSources(definition, sources);
     expect(problems).toContainEqual({ code: "single-with-automatic-source", componentId: GENSET });
     expect(problems).toContainEqual({ code: "disallowed-entry-policy", componentId: GENSET });
@@ -107,7 +105,6 @@ describe("line contracts", () => {
     expect(previous.lineSources[GENSET].origin).toBe("bootstrap");
   });
 
-
   it("lists stable IDs only for sources present in the catalog", () => {
     expect(AUTOMATIC_SOURCE_IDS).toEqual([
       "biochar-dry-mass", "delivery-transport", "feedstock-dry-mass", "feedstock-transport",
@@ -143,7 +140,7 @@ describe("acceptable proposals", () => {
   ];
   const shared = { groups: [{ ...group, components: trucks }] };
   const lone = { groups: [{ ...group, components: [trucks[0]] }] };
-  const proposal: LineContract = { scope: "operating", automaticSource: "feedstock-transport", entryPolicy: "additive", origin: "proposed" };
+  const proposal: LineContract = { scope: "operating", automaticSource: "feedstock-transport", entryPolicy: "none", origin: "proposed" };
   const unassigned: LineContract = { scope: "unassigned", entryPolicy: "none", origin: "proposed" };
 
   it("proposes a dropped figure again once the clash is gone", () => {
@@ -302,17 +299,16 @@ describe("lineNeedsReview", () => {
   });
 });
 
-it.each([false, true])("makes legacy sample contracts entry-only without changing stored sources (gate: %s)", (enabled) => {
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
+it("makes legacy sample contracts entry-only without changing stored sources", () => {
   const legacy = definitions[2];
   const sources = resolveLineSources({ definition: legacy });
   const stored = sources.rtc_1KWKNGJZY1S0HNRT;
   expect(stored.automaticSource).toBe("sample-transport");
-  expect(effectiveContract(stored).automaticSource).toBe(enabled ? undefined : "sample-transport");
+  expect(effectiveContract(stored).automaticSource).toBe(undefined);
   expect(effectiveContract(stored).entryPolicy).toBe("additive");
   const group = legacy.groups.find((group) => group.components.some((component) => component.id === "rtc_1KWKNGJZY1S0HNRT"))!;
   const line = group.components.find((component) => component.id === "rtc_1KWKNGJZY1S0HNRT")!;
-  expect(catalogCandidates(line, group.key).includes("sample-transport")).toBe(!enabled);
+  expect(catalogCandidates(line, group.key).includes("sample-transport")).toBe(false);
   expect(validateLineSources(legacy, sources)).toEqual([]);
 });
 
@@ -321,11 +317,34 @@ it.each(["bootstrap", "carried", "reviewed"] as const)("reopens a settled %s sam
   const sources = resolveLineSources({ definition: legacy });
   const id = "rtc_1KWKNGJZY1S0HNRT";
   sources[id] = { ...sources[id], entryPolicy: "none", origin };
-  expect(lineNeedsReview(id, sources[id], validateLineSources(legacy, sources))).toBe(false);
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
   const problems = validateLineSources(legacy, sources);
   expect(problems).toContainEqual({ componentId: id, code: "retired-automatic-source" });
   expect(lineNeedsReview(id, sources[id], problems)).toBe(true);
   const reassigned: LineSources = { ...sources, [id]: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } };
   expect(validateLineSources(legacy, reassigned)).toEqual([]);
+});
+
+it("keeps separate mass and distance inputs single and flags stored additive contracts", () => {
+  const pair = adHoc("transport", [{ key: "mass", type: "monitored", quantityKind: "mass" }, { key: "distance", type: "monitored", quantityKind: "distance" }]);
+  expect(allowedEntryPolicies(pair)).toEqual(["none", "single"]);
+  expect(validateLineSources({ groups: [{ ...definition.groups[0], components: [pair] }] }, {
+    [pair.id]: { scope: "operating", origin: "reviewed", entryPolicy: "additive" },
+  })).toContainEqual({ code: "disallowed-entry-policy", componentId: pair.id });
+});
+
+
+it.each([1, 2])("normalizes stored automatic transport pairs for fixture %s, preserving reviewed decisions", (index) => {
+  const definition = definitions[index];
+  const id = index === 1 ? "rtc_1M2QJGQS21S0XCMB" : "rtc_1KWKNGJZY1S0D548";
+  for (const origin of ["bootstrap", "carried", "proposed", "reviewed"] as const) {
+    const lineSources = resolveLineSources({ definition });
+    lineSources[id] = { ...lineSources[id], automaticSource: "feedstock-transport", entryPolicy: "additive", origin };
+    const resolved = resolveLineSources({ definition, previous: { definition, lineSources } });
+    expect(resolved[id].entryPolicy).toBe((origin === "reviewed" || origin === "carried") ? "additive" : "none");
+    const problems = validateLineSources(definition, resolved);
+    expect(problems).toEqual((origin === "reviewed" || origin === "carried") ? [{ code: "disallowed-entry-policy", componentId: id }] : origin === "proposed" ? [{ code: "unassigned", componentId: id }] : []);
+    expect(lineNeedsReview(id, resolved[id], problems)).toBe((origin === "reviewed" || origin === "carried") || origin === "proposed");
+    // A second observation must never silently normalize an admin's decision.
+    expect(resolveLineSources({ definition, previous: { definition, lineSources: resolved } })[id].entryPolicy).toBe(resolved[id].entryPolicy);
+  }
 });

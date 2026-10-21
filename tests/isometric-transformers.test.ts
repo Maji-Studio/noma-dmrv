@@ -1,7 +1,5 @@
-beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
-afterEach(() => { vi.unstubAllEnvs(); });
 import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
-import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { components } from "@/lib/isometric/generated/certify";
 import {
   buildCreateDatapointRequest,
@@ -615,8 +613,7 @@ describe("buildCreateDatapointRequest", () => {
     ).toThrowError(/has no calculated value/);
   });
 
-  it.each([false, true])("INPUT_MAPPING covers active demo-template tuples (gate: %s)", (enabled) => {
-    vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
+  it("INPUT_MAPPING covers active demo-template tuples", () => {
     // Sanity: any deletion here is a real schema change, not a refactor.
     // Anchors the contract with the noma-mvp tailored template authored in
     // `docs/isometric/sandbox-template-authoring.md`. The seven previously-
@@ -651,7 +648,7 @@ describe("buildCreateDatapointRequest", () => {
     for (const [groupKey, blueprintKey, inputKey] of expected) {
       expect(
         lookupInputMapping(groupKey, blueprintKey, inputKey) !== undefined,
-      ).toBe(groupKey !== "sampling-required-for-mrv" || !enabled);
+      ).toBe(groupKey !== "sampling-required-for-mrv");
     }
   });
 });

@@ -62,8 +62,9 @@ _Avoid_: activity (reserved for the history log).
 **Recorded zero**:
 A confirmation that one component had no emissions for a specific Removal.
 It is an emissions entry owned by that Removal, contributes 0, and needs no file.
-It is never pooled into another Removal. Distinct from the sandbox zero stub,
-which is a temporary compilation exception and is not an operator confirmation.
+It is never pooled into another Removal. Distinct from the sandbox zero stub
+(removed), which was a temporary compilation exception and never an operator
+confirmation. On screen it is a component recorded as zero.
 
 **Component comment**:
 One editable comment on a credit batch's Removal-template component, identified by
@@ -521,17 +522,21 @@ An Isometric removal-template input bound in the registry to a
 policy-level value (an emission factor, a global-warming potential) —
 the same for every submission. Contrast **monitored input**.
 
-**Zero stub**:
-A placeholder mapping that emits `0` for a **monitored input** noma
-cannot yet source. A template carrying any zero stub must not be used
-against a production registry project.
+**Zero stub** (removed):
+A placeholder mapping that emitted `0` for a **monitored input** noma
+could not yet source, on the sandbox only. Removed in PR 4 of epic #1058:
+operators now confirm empty components as a **Recorded zero** instead.
 
 **Removal template**:
 The Isometric template (credit type REMOVAL) a **Removal** is built from. It
 lists the components Isometric expects, in groups. Each facility has one
 default Removal template; a new **credit batch** starts on it, and an Owner or
-Admin can switch a batch to another. A template is set up in Settings, Removal
-templates, where its components are decided.
+Admin can switch a batch to another. Only templates that fit the facility are
+offered. A template is set up on the Removal template setup page (Settings,
+Removal templates, "Set up template"): pick the template, decide what noma
+cannot, apply. Owners and Admins are one level here; Members read the summary
+card. Component decisions are stored per organization and template, so they
+apply to every facility using it.
 _Avoid_: GHG entry template (the registry's API name), template pin, active
 template.
 
@@ -549,9 +554,13 @@ _Avoid_: line, emission line, template line, template input.
 **Components to decide**:
 The components without a saved decision, always shown with their count
 ("3 components to decide"). A Removal template with components to decide
-blocks the Removals of every credit batch on it. The link to settle them always
-reads "Decide components" and opens Removal templates; a decided component noma
-cannot fill links "Open Removal templates" instead. In the New Removal checks
+blocks the Removals of every credit batch on it. A component added to a template
+after setup reopens as "1 to decide". The link to settle them reads "Decide
+components": it opens the Decisions step of Removal template setup for that
+template where the page knows it (the credit batch page and the switch dialog),
+and Removal templates in Settings otherwise. A decided component noma cannot
+fill links "Open Removal templates" (the Settings pane) instead.
+noma decides what it can; the setup page asks only the rest. In the New Removal checks
 this is the **Components decided** check; the batch's own template choice is
 the **Template set** check.
 _Avoid_: lines to decide, needs review, unresolved, template review.

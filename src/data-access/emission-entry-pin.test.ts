@@ -13,9 +13,6 @@ vi.mock("./emission-entry-lock", () => ({ lockEmissionEntryBatch: mocks.lock }))
 vi.mock("./removal-template-observations", () => ({
   getLatestTemplateObservation: mocks.latest, getTemplateObservationById: mocks.byId,
 }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({
-  requireEmissionsEntriesEnabled: vi.fn(),
-}));
 const ctx = makeTestOrgContext();
 const input = {
   creditBatchId: "00000000-0000-4000-8000-000000000001",

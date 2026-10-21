@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, max, notInArray } from "drizzle-orm";
 import { db } from "@/db";
 import { certifierSyncEvents } from "@/db/schema/certification";
 import type { OrgContext } from "@/lib/auth/server";
@@ -41,9 +41,38 @@ export async function appendSyncEvent(
   });
 }
 
+/** One multi-row insert for N events of the same kind (a registry sync of many statements). */
+export async function appendSyncEvents(
+  ctx: OrgContext,
+  inputs: AppendSyncEventInput[],
+): Promise<void> {
+  requireOrgScope(ctx);
+  if (inputs.length === 0) return;
+  await db.insert(certifierSyncEvents).values(
+    inputs.map((input) => ({
+      organizationId: ctx.organizationId,
+      provider: input.provider,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      operation: input.operation,
+      status: input.status,
+      requestPayload: (input.requestPayload ?? null) as Record<string, unknown>,
+      responsePayload: (input.responsePayload ?? null) as Record<string, unknown>,
+      errorMessage: input.errorMessage ?? null,
+      attemptedAt: input.attemptedAt,
+    })),
+  );
+}
+
 export async function listRecentSyncEvents(
   ctx: OrgContext,
-  args: { entityType: string; entityId: string; limit: number },
+  args: {
+    entityType: string;
+    entityId: string;
+    limit: number;
+    /** Operations left out, e.g. high-volume bookkeeping that would crowd the history. */
+    excludeOperations?: string[];
+  },
 ): Promise<CertifierSyncEventRow[]> {
   requireOrgScope(ctx);
   return db
@@ -54,8 +83,46 @@ export async function listRecentSyncEvents(
         eq(certifierSyncEvents.entityType, args.entityType),
         eq(certifierSyncEvents.entityId, args.entityId),
         eq(certifierSyncEvents.organizationId, ctx.organizationId),
+        args.excludeOperations?.length
+          ? notInArray(certifierSyncEvents.operation, args.excludeOperations)
+          : undefined,
       ),
     )
     .orderBy(desc(certifierSyncEvents.attemptedAt))
     .limit(args.limit);
+}
+
+/** Latest successful sync for all requested entities in one org-scoped query. */
+export async function getLastSyncedAtForEntities(
+  ctx: OrgContext,
+  args: {
+    provider: CertifierProvider;
+    entityType: string;
+    operation: string;
+    entityIds: string[];
+  },
+): Promise<Map<string, Date>> {
+  requireOrgScope(ctx);
+  if (args.entityIds.length === 0) return new Map();
+
+  const rows = await db
+    .select({
+      entityId: certifierSyncEvents.entityId,
+      lastSyncedAt: max(certifierSyncEvents.attemptedAt)
+        .mapWith(certifierSyncEvents.attemptedAt),
+    })
+    .from(certifierSyncEvents)
+    .where(and(
+      eq(certifierSyncEvents.organizationId, ctx.organizationId),
+      eq(certifierSyncEvents.provider, args.provider),
+      eq(certifierSyncEvents.entityType, args.entityType),
+      eq(certifierSyncEvents.operation, args.operation),
+      eq(certifierSyncEvents.status, "succeeded"),
+      inArray(certifierSyncEvents.entityId, args.entityIds),
+    ))
+    .groupBy(certifierSyncEvents.entityId);
+
+  return new Map(rows.flatMap((row) =>
+    row.lastSyncedAt ? [[row.entityId, row.lastSyncedAt] as const] : [],
+  ));
 }

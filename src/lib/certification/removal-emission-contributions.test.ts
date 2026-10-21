@@ -128,3 +128,13 @@ it("retains owned stale entries on removed template lines for review", () => {
   expect(result.ownedEntryIds).toEqual(["e1"]);
   expect(result.entrySet).toEqual([]);
 });
+
+it.each(["additive", "single"] as const)("never sums separate transport inputs with a %s contract", (entryPolicy) => {
+  const entries = [entry({ values: [{ inputKey: "mass", magnitude: "10", unit: "t" }, { inputKey: "distance", magnitude: "100", unit: "km" }] }),
+    entry({ id: "e2", values: [{ inputKey: "mass", magnitude: "20", unit: "t" }, { inputKey: "distance", magnitude: "50", unit: "km" }] })];
+  const result = derive(entries, { lineSources: { c1: { scope: "operating", origin: "reviewed", entryPolicy } },
+    monitoredInputs: [{ componentId: "c1", inputKey: "mass", unit: "t" }, { componentId: "c1", inputKey: "distance", unit: "km" }] });
+  expect(result.inputs).toEqual([]);
+  expect(result.selectedEntryIds).toEqual([]);
+  expect(result.blockers.map((row) => row.code)).toContain(entryPolicy === "additive" ? "lineNeedsReview" : "singleLineMultipleEntries");
+});

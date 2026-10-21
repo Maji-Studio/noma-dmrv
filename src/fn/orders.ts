@@ -1,5 +1,7 @@
 "use server";
 
+import { getOrderStats as getOrderStatsData, type OrderStats } from "@/data-access/order-stats";
+
 /**
  * Orders Server Actions
  * Server-side functions for order CRUD operations
@@ -47,6 +49,26 @@ export async function getOrdersFn(
     }
     return getOrdersData(ctx, validatedFilters);
   }, { zodErrorPrefix: "Invalid filter parameters", fallbackMessage: "Failed to load orders" });
+}
+
+const orderStatsFilterSchema = z.object({
+  facilityId: z.string().uuid().optional(),
+}).optional();
+
+export async function getOrderStatsFn(
+  filters?: { facilityId?: string },
+): Promise<ActionResult<OrderStats>> {
+  return withAction(async (ctx) => {
+    const validatedFilters = orderStatsFilterSchema.parse(filters);
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
+    return getOrderStatsData(ctx, validatedFilters);
+  }, {
+    fallbackMessage: "Failed to load order stats",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: "order action failed", context: { op: "order:stats" } },
+  });
 }
 
 const facilityIdSchema = z.string().uuid("Invalid facility ID");

@@ -82,6 +82,7 @@ export function toBatchHealthFacts(
   return {
     templateBlockers: ctx.templateBlockers ?? [],
     undecidedLineIds: ctx.undecidedLineIds,
+    entryCorrections: ctx.entryCorrectionsByBatchId?.[batchId],
     emissionLines: ctx.emissionLinesByBatchId?.[batchId] ?? ctx.emissionLines,
     warnings: batch ? sampleDocumentWarnings({ ...batch, creditBatchCode: batch.code }) : [],
     documentWarnings: batch ? sampleDocumentWarningKeys({ ...batch, creditBatchCode: batch.code }) : [],

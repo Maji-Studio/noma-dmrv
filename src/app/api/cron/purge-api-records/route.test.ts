@@ -4,7 +4,10 @@ const mocks = vi.hoisted(() => ({
   env: { CRON_SECRET: undefined as string | undefined },
   records: vi.fn(), buckets: vi.fn(), log: vi.fn(), attempts: vi.fn(), pending: vi.fn(), tokens: vi.fn(), assertions: vi.fn(), hints: vi.fn(),
 }));
-vi.mock("@/config/env", () => ({ env: mocks.env }));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: mocks.env };
+});
 vi.mock("@/data-access/api-idempotency-records", () => ({ purgeExpiredIdempotencyRecords: mocks.records }));
 vi.mock("@/data-access/api-rate-limits", () => ({ purgeIdleRateLimitBuckets: mocks.buckets }));
 vi.mock("@/data-access/oauth-purge", () => ({

@@ -144,6 +144,40 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       // ── Continue = deferred-create; advance to the confirm/submit step ───
       await dialog.getByRole("button", { name: "Continue", exact: true }).click();
 
+      // ── Empty components: confirm them before submitting ────────────────
+      // A component with nothing recorded for this Removal blocks submission
+      // until it has an entry or a recorded zero. The step appears only then.
+      // The rail marks no step current until the landing resolves, so waiting
+      // for either one is unambiguous.
+      const emptyComponentsHeading = dialog.getByRole("heading", {
+        name: "Empty components",
+        level: 3,
+      });
+      const confirmStepItem = dialog
+        .locator('[aria-current="step"]')
+        .filter({ hasText: "Confirm & submit" });
+      await expect(emptyComponentsHeading.or(confirmStepItem)).toBeVisible({
+        timeout: COLD_COMPILE_TIMEOUT_MS,
+      });
+      const confirmedEmptyComponents = await emptyComponentsHeading.isVisible();
+      if (confirmedEmptyComponents) {
+        const recordButton = dialog.getByRole("button", {
+          name: /^Record \d+ components? as zero$/,
+        });
+        // One card per credit batch; each is confirmed with a single action.
+        while ((await recordButton.count()) > 0) {
+          const before = await recordButton.count();
+          await recordButton.first().click();
+          await expect(recordButton).toHaveCount(before - 1, {
+            timeout: COLD_COMPILE_TIMEOUT_MS,
+          });
+        }
+        await expect(dialog.getByText(/recorded as zero$/).first()).toBeVisible();
+        await dialog
+          .getByRole("button", { name: "Continue", exact: true })
+          .click();
+      }
+
       // The step rail's active item flips to the final confirmation step...
       await expect(dialog.locator('[aria-current="step"]')).toContainText(
         "Confirm & submit",
@@ -154,6 +188,15 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       await expect(dialog.getByText("You are sending")).toBeVisible({
         timeout: COLD_COMPILE_TIMEOUT_MS,
       });
+
+      // The submit step lists every component with its source. A component
+      // confirmed above reads as a recorded zero.
+      if (confirmedEmptyComponents) {
+        await expect(
+          dialog.getByRole("region", { name: "Components sent" }),
+        ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+        await expect(dialog.getByText("Recorded zero").first()).toBeVisible();
+      }
 
       // Every facility-level check met ⇒ the submit button is enabled.
       // This is the canonical "removal is ready to submit" signal (it gates on

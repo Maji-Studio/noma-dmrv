@@ -1,3 +1,4 @@
+import { isInFrozenEntrySet } from "./removal-entry-snapshot";
 import { EmissionEntryEvidenceError } from "./emission-entry-evidence-error";
 import { EMISSION_ENTRY_FILE_MISMATCH } from "./emission-entry-messages";
 import type { RemovalEntryContributions } from "./removal-emission-contributions";
@@ -452,8 +453,7 @@ export function buildRemovalSourceBindingPlan(args: {
           const entries = contribution?.entries.filter((entry) =>
             entry.entryId === binding.lineage.entityId && entry.kind === "value" &&
             entry.evidenceDocumentIds.includes(documentId) &&
-            args.entryContributions?.entrySet.some((frozen) =>
-              frozen.entryId === entry.entryId && frozen.contentRevision === entry.contentRevision)) ?? [];
+            isInFrozenEntrySet(entry, args.entryContributions?.entrySet)) ?? [];
           if (binding.nomaRole !== "emission_entry" || binding.lineage.entityType !== "emission_entry" ||
             matches.length !== 1 || entries.length !== 1) {
             throw new EmissionEntryEvidenceError(EMISSION_ENTRY_FILE_MISMATCH, {

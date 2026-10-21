@@ -3,7 +3,6 @@ import { db, type DbTransaction } from "@/db";
 import { emissionLineComments } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
-import { requireEmissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import {
@@ -11,7 +10,7 @@ import {
   type SetEmissionLineCommentInput, type DeleteEmissionLineCommentInput,
 } from "@/schemas/emission-line-comments";
 import { requireOrgScope, type Executor } from "./utils";
-import { lockEmissionEntryBatch } from "./emission-entry-lock";
+import { lockEmissionCommentBatch } from "./emission-entry-lock";
 import { getLatestTemplateObservation } from "./removal-template-observations";
 import { assertRowVersion, nextVersion, staleRowVersion } from "./row-version";
 import { recordActivityChange } from "./activity-events";
@@ -42,7 +41,7 @@ export async function getEmissionLineComment(ctx: OrgContext, id: string, execut
 /** Serialize creates and template switches on the batch, without a record-lock gate. */
 async function lockCommentBatch(ctx: OrgContext, tx: DbTransaction, creditBatchId: string, facilityId?: string) {
   requireOrgScope(ctx);
-  const { batch, facility } = await lockEmissionEntryBatch(ctx, tx, creditBatchId);
+  const { batch, facility } = await lockEmissionCommentBatch(ctx, tx, creditBatchId);
   if (batch.archivedAt || facility.archivedAt || (facilityId !== undefined && batch.facilityId !== facilityId))
     throw new DomainError("not_found", "Credit batch was not found.");
   return batch;
@@ -50,7 +49,6 @@ async function lockCommentBatch(ctx: OrgContext, tx: DbTransaction, creditBatchI
 
 export async function setEmissionLineComment(ctx: OrgContext, input: SetEmissionLineCommentInput) {
   requireOrgScope(ctx);
-  requireEmissionsEntriesEnabled();
   const data = setEmissionLineCommentSchema.parse(input);
   return db.transaction(async (tx) => {
     const batch = await lockCommentBatch(ctx, tx, data.creditBatchId, data.facilityId);
@@ -96,7 +94,6 @@ export async function setEmissionLineComment(ctx: OrgContext, input: SetEmission
 
 export async function deleteEmissionLineComment(ctx: OrgContext, input: DeleteEmissionLineCommentInput) {
   requireOrgScope(ctx);
-  requireEmissionsEntriesEnabled();
   const data = deleteEmissionLineCommentSchema.parse(input);
   return db.transaction(async (tx) => {
     const initial = await getEmissionLineComment(ctx, data.id, tx);
