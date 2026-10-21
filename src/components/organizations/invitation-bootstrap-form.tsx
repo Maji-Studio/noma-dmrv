@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { FormField, FormInput, ServerError } from "@/components/forms";
 import { bootstrapInvitationAccountAction } from "@/fn/invitation-bootstrap";
 import { stashPendingWarning } from "@/lib/pending-warning";
+import { stashOrgSwitchNotice } from "@/lib/org-switch-notice";
 import {
   invitationBootstrapSchema,
   type InvitationBootstrapInput,
@@ -40,6 +41,7 @@ export function InvitationBootstrapForm({
     // that the organization was not remembered as the default, so it is handed
     // to the dashboard rather than lost to this reload.
     stashPendingWarning(result.warning);
+    stashOrgSwitchNotice();
     window.location.assign("/dashboard");
   }
 

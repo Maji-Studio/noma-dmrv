@@ -826,10 +826,10 @@ export function TraceabilityPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] text-[var(--color-text-primary)]">
+    <div className="min-h-[calc(100vh-var(--platform-admin-bar-height))] bg-[var(--bg)] text-[var(--color-text-primary)]">
       {/* Not a <main>: the app shell already provides the #main-content
           landmark, and a document must expose only one. */}
-      <div className="flex flex-col h-screen">
+      <div className="flex flex-col h-[calc(100vh-var(--platform-admin-bar-height))]">
         {/* Horizontal rhythm matches the app shell (container-max); only the
             canvas below is full-bleed. */}
         <header className="shrink-0 border-b border-[var(--color-border-secondary)]">

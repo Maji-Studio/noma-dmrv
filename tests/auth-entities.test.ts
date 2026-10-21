@@ -13,7 +13,7 @@ import { SafeError } from "@/lib/errors";
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi
     .fn()
-    .mockRejectedValue(new SafeError("Select an Organization to continue.")),
+    .mockRejectedValue(new SafeError("Select an organization to continue.")),
 }));
 
 // ============================================
@@ -112,7 +112,7 @@ describe("fn/entities: auth enforcement", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Select an Organization to continue.",
+      error: "Select an organization to continue.",
     });
   });
 
@@ -122,7 +122,7 @@ describe("fn/entities: auth enforcement", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Select an Organization to continue.",
+      error: "Select an organization to continue.",
     });
   });
 });

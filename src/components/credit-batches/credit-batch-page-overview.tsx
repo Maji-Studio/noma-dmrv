@@ -243,7 +243,7 @@ export function CreditBatchOverview() {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-24 lg:grid-cols-[360px_minmax(0,1fr)]">
       {/* Sticky beside the work on desktop (main is the scrollport); it scrolls on its own when taller than the window. */}
-      <div className="order-last min-w-0 lg:sticky lg:top-24 lg:order-first lg:max-h-[calc(100vh-48px)] lg:overflow-y-auto">
+      <div className="order-last min-w-0 lg:sticky lg:top-24 lg:order-first lg:max-h-[calc(100vh-48px-var(--platform-admin-bar-height))] lg:overflow-y-auto">
         <DetailsPanel />
       </div>
       <div className="flex min-w-0 flex-col gap-24">

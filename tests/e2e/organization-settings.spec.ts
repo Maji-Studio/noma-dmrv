@@ -151,8 +151,24 @@ test.describe("Organization foundation UI", () => {
       createSection.getByRole("button", { name: "Create organization" }),
     ).toBeEnabled();
 
-    await organization.getByRole("button", { name: "Enter" }).click();
-    await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
+    // Opens it, or recognizes it as current when an earlier test already did.
+    await enterDefaultOrganization(page);
+
+    // A Platform Admin without a membership works under the Platform Admin bar.
+    const bar = page.getByRole("region", { name: "Platform Admin" });
+    await expect(bar).toContainText(`Platform Admin in ${ORGANIZATION_NAME}`);
+    await expect(bar.getByRole("link", { name: "Back to Platform" })).toHaveAttribute(
+      "href",
+      "/admin/organizations",
+    );
+
+    // The organization the admin is in carries "Current" and no Open button.
+    await page.goto("/admin/organizations");
+    const current = sectionWithHeading(page, "Organizations")
+      .getByRole("listitem")
+      .filter({ hasText: ORGANIZATION_NAME });
+    await expect(current).toContainText("Current");
+    await expect(current.getByRole("button", { name: "Open" })).toHaveCount(0);
   });
 
   test("single-organization sidebar renders the active organization as a dashboard link", async ({

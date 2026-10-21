@@ -72,7 +72,7 @@ export function SettingsRail({
       // Sticky against `main`, which is the app shell's scrollport on desktop
       // (src/app/(app)/layout.tsx). Capped and scrollable so a long menu can
       // never push its own last row out of reach.
-      className="border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)] lg:sticky lg:top-24 lg:max-h-[calc(100vh-48px)] lg:overflow-y-auto"
+      className="border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)] lg:sticky lg:top-24 lg:max-h-[calc(100vh-48px-var(--platform-admin-bar-height))] lg:overflow-y-auto"
     >
       {TIER_ORDER.map((tier) => {
         const tierSections = sections.filter((s) => s.tier === tier);

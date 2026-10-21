@@ -43,14 +43,14 @@ const TEST_CTX = makeTestOrgContext(mockUser.id);
 describe("withAction", () => {
   it("returns the org-context guard error when no organization is active", async () => {
     vi.mocked(requireOrgContext).mockRejectedValue(
-      new SafeError("Select an Organization to continue."),
+      new SafeError("Select an organization to continue."),
     );
 
     const result = await withAction(async () => "data");
 
     expect(result).toEqual({
       success: false,
-      error: "Select an Organization to continue.",
+      error: "Select an organization to continue.",
     });
   });
 

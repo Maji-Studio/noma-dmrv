@@ -42,8 +42,8 @@ function text(node: ReactTestInstance): string {
 function button(label: string, root = tree.root) {
   return root.findAllByType("button").find((node) => (node.props["aria-label"] ?? text(node)) === label)!;
 }
-async function render(enabled: boolean | undefined) {
-  const node: ReactNode = <OrganizationAdminRow org={org} apiAccessEnabled={enabled} entering={false} onEnter={vi.fn()} />;
+async function render(enabled: boolean | undefined, current = false) {
+  const node: ReactNode = <OrganizationAdminRow org={org} apiAccessEnabled={enabled} entering={false} current={current} onEnter={vi.fn()} />;
   await act(async () => { tree = create(node); });
 }
 async function click(label: string, root = tree.root) {
@@ -115,5 +115,19 @@ describe("OrganizationAdminRow API access", () => {
     state.pending = true;
     await render(false);
     expect(button("Turn API access on").props.disabled).toBe(true);
+  });
+});
+
+describe("open and current", () => {
+  it("offers Open on an organization the viewer is not in", async () => {
+    await render(true);
+    expect(tree.root.findAllByType("button").some((node) => text(node) === "Open")).toBe(true);
+    expect(text(tree.root)).not.toContain("Current");
+  });
+
+  it("marks the current organization instead of offering Open", async () => {
+    await render(true, true);
+    expect(tree.root.findAllByType("button").some((node) => text(node) === "Open")).toBe(false);
+    expect(text(tree.root)).toContain("Current");
   });
 });
