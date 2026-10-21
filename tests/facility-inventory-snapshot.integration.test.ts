@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { biocharProducts, storageLocations } from "@/db/schema";
+import { biocharProducts, productionRuns, storageLocations } from "@/db/schema";
 import { findApiOutputBinStock } from "@/data-access/api-output-bin-stock";
 import { archiveFacility, getFacilities } from "@/data-access/facilities";
 import { getFacilityOutputStock } from "@/data-access/facility-output-stock";
@@ -91,7 +91,7 @@ describe("facility inventory snapshot", { timeout: TIMEOUT_MS }, () => {
     expect((await getFacilities(f.ctx)).items[0].inventorySummary).toEqual(feedstockBefore);
 
     const other = await fixture();
-    await expect(getFacilityOutputStock(other.ctx, f.facility.id)).rejects.toThrow("Facility was not found.");
+    await expect(getFacilityOutputStock(other.ctx, f.facility.id)).rejects.toThrow("Facility was not found in this Organization.");
     await expect(findApiOutputBinStock(other.ctx, { identifier: { id: f.bin.id } })).rejects.toMatchObject({ code: "not_found" });
     const own = await getFacilities(other.ctx);
     expect(own.items.map(row => row.id)).toEqual([other.facility.id]);
@@ -151,6 +151,23 @@ describe("facility inventory snapshot", { timeout: TIMEOUT_MS }, () => {
     expect(counted.biochar!.dryBiocharKg).toBeLessThan(lost.biochar!.dryBiocharKg);
     expect(counted.biochar).toEqual(await binStock(f, f.source.id));
     expect(counted.product).toEqual(before.product);
+  });
+
+  it("counts only stock placed by now, as the bin cards do", async () => {
+    const f = await fixture();
+    const before = await inventory(f);
+    const FUTURE_MS = 365 * 24 * 60 * 60 * 1000;
+    const start = new Date(Date.now() + FUTURE_MS);
+    await db.insert(productionRuns).values({
+      organizationId: f.ctx.organizationId, facilityId: f.facility.id, reactorId: f.runs[0].reactorId,
+      code: `E2E-SNAPSHOT-FUTURE-${f.tag}`, status: "complete", startTime: start, endTime: new Date(start.getTime() + 4 * 60 * 60 * 1000),
+      biocharStorageLocationId: f.source.id, biocharOutputKg: SECOND_BIN_WET_KG, biocharMoisturePercent: MOISTURE_PERCENT,
+      biocharDryMassKg: SECOND_BIN_DRY_BIOCHAR_KG,
+    });
+    const after = await inventory(f);
+    expect(after.biochar).toEqual(before.biochar);
+    expect(after.biochar).toEqual(await binStock(f, f.source.id));
+    expect(after.product).toEqual(before.product);
   });
 
   it("keeps another facility's bins in the same organization out of the figures", async () => {

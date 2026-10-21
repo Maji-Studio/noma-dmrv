@@ -1,13 +1,13 @@
 /** Facility side-sheet view mode: the sections config for EntitySideSheet. */
 import { formatCount, LOAD_FAILED } from "@/lib/copy-utils";
-import { formatMass } from "@/lib/format-utils";
+import { formatMassKg } from "@/lib/format-utils";
 import { FacilityCertifierSummary } from "@/components/certification";
 import { formatTimezoneLabel } from "@/lib/date-utils";
 import { formatDurabilityOption } from "@/schemas/credit-batches";
 import type { DetailPanelField, DetailPanelSection } from "@/components/ui/detail-panel";
 import type { FacilityWithRelations } from "@/data-access/facilities";
 import type { FacilityOutputStock, FacilityOutputStockGroup } from "@/data-access/facility-output-stock";
-import { facilityStockFigure } from "@/components/storage-locations/stock-preview-shared";
+import { outputStockFigure } from "@/components/storage-locations/stock-preview-shared";
 
 /** The facility's output-bin stock query, as the sheet needs it. */
 export interface FacilityStockState {
@@ -16,23 +16,25 @@ export interface FacilityStockState {
   isError: boolean;
 }
 
-const WET_ESTIMATE_HINT = "Estimated: the wet mass is computed at each batch's moisture. A bin without a wet estimate shows its dry biochar instead.";
 
 /**
  * One output-bin row. A row is left out once the read settled without a
  * derivable figure; while there is no data it loads or says why it failed.
  */
 function stockRow(label: string, scope: string, group: FacilityOutputStockGroup | null | undefined, state: FacilityStockState | undefined): DetailPanelField[] {
-  const hint = `${WET_ESTIMATE_HINT} Sum of this facility's ${scope}, archived bins included.`;
+  const hint = (wet: boolean) => wet
+    ? `Estimated wet mass at each batch's moisture. Sum of this facility's ${scope}, archived bins included.`
+    : `A bin here has no wet estimate, so this is the dry biochar sum of this facility's ${scope}, archived bins included.`;
   if (group) {
     return [{
-      label, hint, value: facilityStockFigure(group.wetKg, group.dryBiocharKg),
-      secondary: group.wetKg === null ? undefined : { label: "Dry biochar", value: formatMass(group.dryBiocharKg) },
+      label, hint: hint(group.wetKg !== null), value: outputStockFigure(group.wetKg, group.dryBiocharKg),
+      secondary: group.wetKg === null ? undefined : { label: "Dry biochar", value: formatMassKg(group.dryBiocharKg) },
     }];
   }
+  const loadingHint = hint(true);
   if (group === null) return [];
-  if (state?.isError) return [{ label, hint, value: LOAD_FAILED, valuePresent: false }];
-  return [{ label, hint, value: null, pending: true }];
+  if (state?.isError) return [{ label, hint: loadingHint, value: LOAD_FAILED, valuePresent: false }];
+  return [{ label, hint: loadingHint, value: null, pending: true }];
 }
 
 export function facilitySheetSections(facility: FacilityWithRelations, stock?: FacilityStockState): DetailPanelSection[] {
@@ -89,7 +91,7 @@ export function facilitySheetSections(facility: FacilityWithRelations, stock?: F
       fields: [
         {
           label: "Feedstock in bins",
-          value: `${formatMass(facility.inventorySummary.feedstockWetKg)} wet mass`,
+          value: `${formatMassKg(facility.inventorySummary.feedstockWetKg)} wet mass`,
         },
         ...biochar,
         ...product,

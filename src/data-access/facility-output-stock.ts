@@ -1,10 +1,9 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { facilities, storageLocations } from "@/db/schema";
+import { storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { SafeError } from "@/lib/errors";
 import { withStockSnapshot } from "./output-bin-stock";
 import { getOutputBinStocks } from "./output-stock";
-import { requireOrgScope } from "./utils";
+import { requireOrgFacility, requireOrgScope } from "./utils";
 
 export interface FacilityOutputStockGroup {
   wetKg: number | null;
@@ -23,11 +22,7 @@ export async function getFacilityOutputStock(
 ): Promise<FacilityOutputStock> {
   requireOrgScope(ctx);
   return withStockSnapshot(async tx => {
-    const [facility] = await tx.select({ id: facilities.id }).from(facilities).where(and(
-      eq(facilities.id, facilityId),
-      eq(facilities.organizationId, ctx.organizationId),
-    ));
-    if (!facility) throw new SafeError("Facility not found");
+    await requireOrgFacility(ctx, facilityId, tx);
 
     const bins = await tx.select({ id: storageLocations.id, type: storageLocations.type }).from(storageLocations).where(and(
       eq(storageLocations.organizationId, ctx.organizationId),
@@ -44,12 +39,12 @@ export async function getFacilityOutputStock(
       const field = bin.type === "biochar_bin" ? "biochar" : "product";
       const group = total[field];
       if (group === null) continue;
-      if (stock?.allLayersDryKg == null) {
+      if (stock?.availableDryKg == null) {
         total[field] = null;
         continue;
       }
-      // Lane summaries conserve every layer, including receipts placed later.
-      group.dryBiocharKg += stock.allLayersDryKg;
+      // Only layers placed by now, as the bin cards and the wet estimate count them.
+      group.dryBiocharKg += stock.availableDryKg;
       group.wetKg = group.wetKg === null || stock.estimatedWetMassKg === null
         ? null
         : group.wetKg + stock.estimatedWetMassKg;
