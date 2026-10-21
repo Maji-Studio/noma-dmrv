@@ -31,12 +31,26 @@ import {
   withAutoCode,
 } from "@/data-access/code-generator";
 import { facilities as facilitiesTable } from "@/db/schema";
+import { getFacilityOutputStock, type FacilityOutputStock } from "@/data-access/facility-output-stock";
 
 const LOG_MESSAGE = "facility action failed";
+const facilityOutputStockSchema = z.object({ facilityId: z.uuid() });
 
 // ============================================
 // List/Query Operations
 // ============================================
+
+export async function getFacilityOutputStockFn(
+  input: z.infer<typeof facilityOutputStockSchema>,
+): Promise<ActionResult<FacilityOutputStock>> {
+  return withAction(async (ctx) => {
+    const { facilityId } = facilityOutputStockSchema.parse(input);
+    return getFacilityOutputStock(ctx, facilityId);
+  }, {
+    fallbackMessage: "Could not load facility stock",
+    log: { message: LOG_MESSAGE, context: { op: "facility:output-stock" } },
+  });
+}
 
 /**
  * Get unique countries for the facility filter — active facilities by

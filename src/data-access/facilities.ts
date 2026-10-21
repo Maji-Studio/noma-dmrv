@@ -27,7 +27,6 @@ import {
 } from "@/db/schema";
 import { hasBlockingFacilitySubmission } from "./certification";
 import type { FacilityFilterData } from "@/schemas/facilities";
-import { getFacilityOutputStock, type FacilityOutputStock } from "./facility-output-stock";
 import { deriveLaneStock } from "./lane-stock-derivation";
 import { assertRowVersion, nextVersion } from "./row-version";
 
@@ -55,7 +54,7 @@ export interface FacilityWithRelations extends Facility {
     biocharBinCount: number;
     productBinCount: number;
   };
-  inventorySummary: FacilityOutputStock & {
+  inventorySummary: {
     feedstockWetKg: number;
   };
 }
@@ -181,7 +180,6 @@ export async function getFacilities(
     reactorPreviewRows,
     storageCountsByType,
     feedstockBinRows,
-    outputStockByFacility,
   ] = facilityIds.length > 0
     ? await Promise.all([
         db
@@ -215,9 +213,8 @@ export async function getFacilities(
             eq(storageLocations.type, "feedstock_bin"),
             eq(storageLocations.organizationId, ctx.organizationId),
           )),
-        getFacilityOutputStock(ctx, facilityIds),
       ])
-    : [[], [], [], new Map<string, FacilityOutputStock>()];
+    : [[], [], []];
 
   const feedstockLaneStocks = await deriveLaneStock(ctx, db, {
     storageLocationIds: feedstockBinRows.map((bin) => bin.id),
@@ -295,7 +292,6 @@ export async function getFacilities(
     },
     inventorySummary: {
       feedstockWetKg: feedstockWetStockByFacility.get(f.id) ?? 0,
-      ...outputStockByFacility.get(f.id)!,
     },
   }));
 

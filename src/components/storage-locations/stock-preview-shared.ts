@@ -4,7 +4,7 @@
  */
 import { formatCompositionMass, type MassSegment } from "@/components/forms/composition-ledger";
 import { batchAccentFill } from "@/components/ui/segment-bar";
-import { formatMassKg } from "@/lib/format-utils";
+import { formatMass, formatMassKg } from "@/lib/format-utils";
 import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/types/output-stock";
 
 /**
@@ -61,6 +61,11 @@ export function formatWetEstimate(kg: number): string {
  */
 export function outputStockFigure(wetKg: number | null, dryKg: number): string {
   return wetKg !== null ? `${formatWetEstimate(wetKg)} kg wet mass` : `${formatMassKg(dryKg)} dry biochar`;
+}
+
+/** Facility roll-ups follow the same wet-first rule, with automatic tonnes. */
+export function facilityStockFigure(wetKg: number | null, dryKg: number): string {
+  return wetKg !== null ? `${formatMass(wetKg)} wet mass` : `${formatMass(dryKg)} dry biochar`;
 }
 
 /**

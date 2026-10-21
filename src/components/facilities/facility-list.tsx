@@ -20,6 +20,7 @@ import {
   useCreateFacility,
   useFacilities,
   useFacilityCountries,
+  useFacilityOutputStock,
   useRestoreFacility,
   useUpdateFacility,
 } from "@/hooks/use-facilities";
@@ -104,6 +105,9 @@ export function FacilityList() {
   };
 
   const { data: facilitiesData, isLoading, error: fetchError } = useFacilities(filters);
+  const inventory = useFacilityOutputStock(
+    sideSheet?.mode === "view" ? sideSheet.entity?.id ?? null : null,
+  );
   // Country options follow the visible collection — the archived view offers
   // archived facilities' countries, not the active set's.
   const { data: countries } = useFacilityCountries(showArchived);
@@ -260,7 +264,7 @@ export function FacilityList() {
     sideSheetMode === "create" ? undefined : sideSheetEntity?.name;
 
   const sideSheetSections = sideSheetEntity
-    ? facilitySheetSections(sideSheetEntity)
+    ? facilitySheetSections(sideSheetEntity, inventory.isFetching || inventory.isError ? undefined : inventory.data)
     : undefined;
 
   return (

@@ -1,15 +1,16 @@
 /** Facility side-sheet view mode: the sections config for EntitySideSheet. */
-import { formatMass } from "@/lib/format-utils";
 import { formatCount } from "@/lib/copy-utils";
 import { FacilityCertifierSummary } from "@/components/certification";
 import { formatTimezoneLabel } from "@/lib/date-utils";
 import { formatDurabilityOption } from "@/schemas/credit-batches";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { FacilityWithRelations } from "@/data-access/facilities";
-import { outputStockFigure } from "@/components/storage-locations/stock-preview-shared";
+import type { FacilityOutputStock } from "@/data-access/facility-output-stock";
+import { facilityStockFigure } from "@/components/storage-locations/stock-preview-shared";
 
-export function facilitySheetSections(facility: FacilityWithRelations): DetailPanelSection[] {
-  const { biochar, product } = facility.inventorySummary;
+export function facilitySheetSections(facility: FacilityWithRelations, inventory?: FacilityOutputStock): DetailPanelSection[] {
+  const biochar = inventory?.biochar;
+  const product = inventory?.product;
   return [
     {
       title: "Facility information",
@@ -60,17 +61,11 @@ export function facilitySheetSections(facility: FacilityWithRelations): DetailPa
       title: "Inventory snapshot",
       fields: [
         {
-          label: "Feedstock on hand (wet)",
-          value: formatMass(facility.inventorySummary.feedstockWetKg),
+          label: "Feedstock in bins",
+          value: facilityStockFigure(facility.inventorySummary.feedstockWetKg, 0),
         },
-        {
-          label: "Biochar bins on hand",
-          value: biochar === null ? "Not recorded" : outputStockFigure(biochar.wetKg, biochar.dryBiocharKg),
-        },
-        {
-          label: "Product bins on hand",
-          value: product === null ? "Not recorded" : outputStockFigure(product.wetKg, product.dryBiocharKg),
-        },
+        ...(biochar ? [{ label: "Biochar in bins", value: facilityStockFigure(biochar.wetKg, biochar.dryBiocharKg) }] : []),
+        ...(product ? [{ label: "Products in bins", value: facilityStockFigure(product.wetKg, product.dryBiocharKg) }] : []),
       ],
     },
     {

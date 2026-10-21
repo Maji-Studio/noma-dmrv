@@ -11,6 +11,7 @@ import type { PaginatedFacilities, FacilityWithRelations } from "@/data-access/f
 import {
   getFacilityCountriesFn,
   getFacilityArchiveImpactFn,
+  getFacilityOutputStockFn,
   createFacilityFn,
   updateFacilityFn,
   archiveFacilityFn,
@@ -21,6 +22,7 @@ import { missingRecordMessage } from "@/lib/errors";
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { unwrap } from "./types";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
@@ -52,6 +54,8 @@ export const facilityKeys = {
     [...facilityKeys.all, "codeCheck", code, excludeId] as const,
   archiveImpact: (id: string) =>
     [...facilityKeys.all, "archiveImpact", id] as const,
+  outputStock: (id: string) =>
+    [...facilityKeys.all, "outputStock", id] as const,
 };
 
 // Exact message thrown by the facility data-access reads
@@ -63,6 +67,16 @@ const FACILITY_LOOKUP_MAX_RETRIES = 2;
 // ============================================
 // Query Hooks
 // ============================================
+
+/** Load stock only for the facility whose read sheet is open. */
+export function useFacilityOutputStock(facilityId: string | null) {
+  return useQuery({
+    queryKey: facilityKeys.outputStock(facilityId ?? ""),
+    queryFn: async () => unwrap(await getFacilityOutputStockFn({ facilityId: facilityId! })),
+    enabled: !!facilityId,
+    staleTime: 0,
+  });
+}
 
 /**
  * Hook to fetch paginated list of facilities with filtering
