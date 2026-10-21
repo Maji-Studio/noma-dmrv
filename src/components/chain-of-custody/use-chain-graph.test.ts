@@ -181,6 +181,25 @@ describe("biochar mass labels", () => {
     );
   });
 
+  it("uses recorded product mass on the legacy single-source edge with null allocations", () => {
+    const data = lineage();
+    data.biocharProduct = {
+      id: "product-1", code: "BP-1", status: "ready", productionDate: "2026-05-18",
+      massKg: 850, moistureContentPercent: 2, formulationName: null,
+      linkedProductionRunId: "run-1", href: "/biochar-products",
+    };
+    data.sources = [{
+      productionRun: data.productionRun!, reactor: null, feedstocks: [],
+      allocatedWetMassKg: null, allocatedDryMassKg: null,
+    }];
+
+    const { edges } = useChainGraph(data);
+    expect(edges.find(graphEdge => graphEdge.id === "production-run:run-1->biochar-product:product-1")?.data)
+      .toMatchObject({ mass: 833, wetKg: 850, unit: "kg", kgLabel: "Wet: 850 kg · Dry: 833 kg" });
+    expect(buildLineageNodes(data).find(node => node.kind === "biocharProduct")?.details)
+      .toContainEqual({ label: "Applied from batch", value: "Wet: Not recorded · Dry: Not recorded" });
+  });
+
   it("renders every mass-weighted source run with its allocated wet and dry mass", () => {
     const data = lineage();
     data.productionRun = null;
