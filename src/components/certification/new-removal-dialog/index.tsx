@@ -307,6 +307,8 @@ function WizardBody({
           !submitMutation.isSuccess
         }
         footer={null}
+        // The rail is the only way back to Empty components (to undo a recorded zero).
+        phoneBack
         className="gap-16"
       >
         {step === "select" && (

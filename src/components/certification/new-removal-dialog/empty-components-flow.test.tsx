@@ -96,6 +96,21 @@ describe("New Removal wizard with empty components", () => {
     expect(screen.getByRole("button", { name: /Empty components/ })).toBeTruthy();
   });
 
+  it("keeps the way back to Empty components from the submit step on a phone, where the rail shows one step", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    try {
+      mocks.landing.data = LAND_SUBMIT;
+      mocks.query.data = CONFIRMED;
+      renderDialog("removal-1");
+      const back = screen.getByText("Back to Empty components");
+      expect(back.tagName).toBe("BUTTON");
+      fireEvent.click(back);
+      expect(screen.getByText("empty components step")).toBeTruthy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("skips the step entirely when no selected batch has empty components", () => {
     mocks.landing.data = LAND_SUBMIT;
     mocks.query.data = { removalVersion: 1, editable: true, batches: [{ creditBatchId: BATCH, code: "CB-26-001", lines: [], zeros: [] }] };

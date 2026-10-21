@@ -151,6 +151,18 @@ test.describe("Returned Removal screens", () => {
         await shoot(page, "resubmit-wizard", size);
       }
 
+      if (CHECK_COPY) {
+        // On a phone the rail shows one step, so the submit step keeps a way back to Empty components.
+        await page.setViewportSize(WIDTHS.phone);
+        await page.goto(`/certification/removals?facility=${facilityId}&resume=${changed.removalId}`);
+        await page.getByRole("button", { name: /Record 2 components as zero/i }).click();
+        await page.getByRole("button", { name: "Continue" }).click();
+        const back = page.getByRole("button", { name: "Back to Empty components" });
+        await expect(back).toBeVisible({ timeout: 30_000 });
+        expect((await back.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+        await shoot(page, "new-removal-submit-back", "phone");
+      }
+
       await page.setViewportSize(WIDTHS.phone);
       await page.goto(`/certification/removals?facility=${facilityId}&create=true`);
       await expect(page.getByRole("dialog").getByText("New Removal")).toBeVisible();

@@ -1,6 +1,6 @@
 // Preload for the dev server behind tests/e2e/removal-correction-screen.spec.ts. Start the server with
 //   RETURNED_STATEMENT_STUB=1 DISABLE_RATE_LIMIT=true NODE_OPTIONS="--require ./tests/e2e/helpers/returned-removal-registry-stub.cjs" pnpm exec next dev -p <port>
-// and run the spec with RETURNED_STATEMENT_STUB=1. It answers the few
+// (NODE_OPTIONS splits on spaces: use a path without any, e.g. copy this file.) and run the spec with RETURNED_STATEMENT_STUB=1. It answers the few
 // registry reads the Removals screens make, with the template the seed describes. Every other
 // registry call gets a quick 404, so nothing leaves this machine with the fake E2E credentials.
 const realFetch = globalThis.fetch;
