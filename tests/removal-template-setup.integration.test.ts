@@ -253,15 +253,20 @@ it("a credit batch created while Set template holds the project row waits and en
   const creating = createCreditBatch(ctx, { code: `CB-RACE-${randomUUID()}`, facilityId, feedstockTypeId,
     startDate: new Date("2026-02-01T00:00:00.000Z"), endDate: new Date("2026-02-28T00:00:00.000Z"), productionRunIds: [] });
   let waiting = false;
-  for (let attempt = 0; attempt < 100 && !waiting; attempt++) {
-    const rows = await db.execute<{ n: number }>(sql`select count(*)::int as n from pg_stat_activity
-      where wait_event_type = 'Lock' and query ilike '%certifier_projects%' and datname = current_database()`);
-    waiting = Number((rows as unknown as { rows?: { n: number }[] }).rows?.[0]?.n ?? (rows as unknown as { n: number }[])[0]?.n) > 0;
-    if (!waiting) await new Promise((resolve) => setTimeout(resolve, 20));
+  try {
+    for (let attempt = 0; attempt < 100 && !waiting; attempt++) {
+      const rows = await db.execute<{ n: number }>(sql`select count(*)::int as n from pg_stat_activity
+        where wait_event_type = 'Lock' and query ilike '%certifier_projects%' and datname = current_database()`);
+      waiting = Number((rows as unknown as { rows?: { n: number }[] }).rows?.[0]?.n ?? (rows as unknown as { n: number }[])[0]?.n) > 0;
+      if (!waiting) await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  } finally {
+    // Release on every exit so a failed assertion never leaves the held transaction open for teardown.
+    release();
   }
+  const [setupResult, createResult] = await Promise.allSettled([setup, creating]);
   expect(waiting).toBe(true);
-  release();
-  await setup;
-  const created = await creating;
-  expect(created.removalTemplateId).toBe(template.id);
+  expect(setupResult.status).toBe("fulfilled");
+  if (createResult.status === "rejected") throw createResult.reason;
+  expect(createResult.value.removalTemplateId).toBe(template.id);
 });
