@@ -9,7 +9,7 @@
  */
 import Link from "next/link";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
-import { formatDateTime, formatTime } from "@/lib/format-utils";
+import { formatFacilityDateTime, formatFacilityClockTime } from "@/lib/format-utils";
 import { activityRecordTypeIcon } from "./activity-icons";
 import { cn } from "@/lib/utils";
 import {
@@ -107,7 +107,7 @@ function FieldChange({ line }: { line: ActivityFieldLine }) {
 }
 
 /** Who and when, on the line under the title: "Ada Operator via API · 18:50". */
-function EntryMeta({ item, showDate }: { item: ActivityItem; showDate: boolean }) {
+function EntryMeta({ item, showDate, timeZone }: { item: ActivityItem; showDate: boolean; timeZone: string }) {
   const actor = activityActorDisplay(item);
   return (
     <span className="flex flex-wrap items-baseline gap-x-6 body-caption text-[var(--color-text-tertiary)]">
@@ -117,14 +117,14 @@ function EntryMeta({ item, showDate }: { item: ActivityItem; showDate: boolean }
       </span>{" "}
       {/* The spaces keep the line readable as one phrase; the flex gap does the visual spacing. */}
       <span aria-hidden>{META_SEPARATOR}</span>{" "}
-      <time dateTime={item.occurredAt.toISOString()} title={formatDateTime(item.occurredAt)} className="tabular-nums">
-        {showDate ? formatDateTime(item.occurredAt) : formatTime(item.occurredAt)}
+      <time dateTime={item.occurredAt.toISOString()} title={formatFacilityDateTime(item.occurredAt, timeZone)} className="tabular-nums">
+        {showDate ? formatFacilityDateTime(item.occurredAt, timeZone) : formatFacilityClockTime(item.occurredAt, timeZone)}
       </time>
     </span>
   );
 }
 
-function EntryBody({ item, showDate }: { item: ActivityItem; showDate: boolean }) {
+function EntryBody({ item, showDate, timeZone }: { item: ActivityItem; showDate: boolean; timeZone: string }) {
   const typeLabel = activityRecordTypeLabel(item.entityType);
   const label = activityRecordLabel(item);
   const deleted = item.record.deleted;
@@ -155,7 +155,7 @@ function EntryBody({ item, showDate }: { item: ActivityItem; showDate: boolean }
             <span className={TOMBSTONE_TAG_CLASS} data-testid="activity-tombstone">{ACTIVITY_DELETED_RECORD_LABEL}</span>
           ) : null}
         </span>
-        <EntryMeta item={item} showDate={showDate} />
+        <EntryMeta item={item} showDate={showDate} timeZone={timeZone} />
         {summary || lines.length > 0 || statusChange ? (
           <span className="mt-6 flex min-w-0 flex-col gap-4">
             {summary ? <span className="body-caption text-[var(--color-text-secondary)]">{summary}</span> : null}
@@ -187,11 +187,13 @@ const RAIL_CLASS = "pointer-events-none absolute top-0 bottom-0 left-16 w-px -tr
 export function ActivityEntry({
   item,
   creditBatchId,
+  timeZone,
   focusRef,
   showDate = false,
 }: {
   item: ActivityItem;
   creditBatchId: string;
+  timeZone: string;
   /** Receives the row's focusable element, so "Show older activity" can move focus to the first new row. */
   focusRef?: (node: HTMLElement | null) => void;
   /** Show the full date with the time, for a list with no day headings above it. */
@@ -203,7 +205,7 @@ export function ActivityEntry({
       <span aria-hidden className={RAIL_CLASS} />
       {href ? (
         <Link ref={focusRef} href={href} className={cn(ROW_CLASS, "group")}>
-          <EntryBody item={item} showDate={showDate} />
+          <EntryBody item={item} showDate={showDate} timeZone={timeZone} />
         </Link>
       ) : (
         <div
@@ -213,7 +215,7 @@ export function ActivityEntry({
           tabIndex={-1}
           className={ROW_CLASS}
         >
-          <EntryBody item={item} showDate={showDate} />
+          <EntryBody item={item} showDate={showDate} timeZone={timeZone} />
         </div>
       )}
     </li>

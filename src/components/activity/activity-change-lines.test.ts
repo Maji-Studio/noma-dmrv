@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { formatDateTime } from "@/lib/format-utils";
 import {
   activityFieldLines,
   activityLinkRecordNoun,
@@ -177,8 +176,8 @@ describe("values", () => {
 
   it("formats days, calendar dates and instants as the app does", () => {
     expect(formatActivityValue("analysisDate", "2026-10-15").text).toBe("Oct 15, 2026");
-    expect(formatActivityValue("applicationDate", "2026-10-15T00:00:00.000Z").text).toBe("Oct 15, 2026");
-    expect(formatActivityValue("samplingTime", "2026-10-15T08:30:00.000Z").text).toBe(formatDateTime("2026-10-15T08:30:00.000Z"));
+    expect(formatActivityValue("applicationDate", "2026-10-15T00:00:00.000Z", null, "application").text).toBe("Oct 15, 2026");
+    expect(formatActivityValue("samplingTime", "2026-10-15T08:30:00.000Z").text).toBe("Oct 15, 2026, 08:30");
   });
 
   it("reads an instant on the record's facility clock", () => {
@@ -190,7 +189,7 @@ describe("values", () => {
     expect(line).toMatchObject({ from: { text: "Oct 15, 2026, 11:30" }, to: { text: "Oct 16, 2026, 00:15" } });
     // Calendar days and UTC-midnight business dates do not move with the clock.
     expect(formatActivityValue("analysisDate", "2026-10-15", FACILITY_TIME_ZONE).text).toBe("Oct 15, 2026");
-    expect(formatActivityValue("applicationDate", "2026-10-15T00:00:00.000Z", FACILITY_TIME_ZONE).text).toBe("Oct 15, 2026");
+    expect(formatActivityValue("applicationDate", "2026-10-15T00:00:00.000Z", FACILITY_TIME_ZONE, "application").text).toBe("Oct 15, 2026");
   });
 
   it("reads a missing choice as Not set and any other missing value as Not recorded", () => {
@@ -228,4 +227,22 @@ describe("labels", () => {
     expect(activityFieldLabel("lab_sample", "saltContentGPerKg")).toBe("Salt content (g/kg)");
     expect(activityFieldLabel("production_run", "feedingRateKgHr")).toBe("Feeding rate (kg/h)");
   });
+});
+
+describe("entity-specific business dates", () => {
+  it("shows delivery instants with both facility times", () => {
+    expect(activityFieldLines(item({
+      entityType: "delivery", changedFields: ["deliveryDate"],
+      changes: { deliveryDate: { from: "2026-09-22T06:00:00Z", to: "2026-09-22T07:00:00Z" } },
+    }))).toEqual([{
+      kind: "value", key: "deliveryDate", label: activityFieldLabel("delivery", "deliveryDate"),
+      from: { text: "Sep 22, 2026, 09:00", tone: "value" },
+      to: { text: "Sep 22, 2026, 10:00", tone: "value" },
+    }]);
+  });
+  it.each([["feedstock", "deliveryDate"], ["application", "applicationDate"], ["order", "orderDate"]])(
+    "keeps %s %s on its stored date-only calendar", (entityType, field) => {
+      expect(formatActivityValue(field, "2026-09-22T00:00:00Z", "America/Los_Angeles", entityType).text).toBe("Sep 22, 2026");
+    },
+  );
 });

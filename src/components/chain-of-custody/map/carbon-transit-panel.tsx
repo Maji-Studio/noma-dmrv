@@ -22,6 +22,8 @@
  * arcs (route geometries resolve to null).
  */
 
+import { useFacilityClock } from "@/hooks/use-facility-context";
+import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import dynamic from "next/dynamic";
 import { useState, type CSSProperties } from "react";
 import { MapTrifoldIcon } from "@phosphor-icons/react/dist/ssr";
@@ -140,11 +142,12 @@ function buildPopupContent(
   lineages: ChainOfCustodyData[] | undefined,
   rollForwards: ChainRunRollForward[] = [],
   batchFacility?: ChainFacility,
+  timeZone = UNKNOWN_FACILITY_TIMEZONE,
 ): PopupContentByNodeId {
   const content: PopupContentByNodeId = {};
   const nodes = [
-    ...(lineages ?? []).flatMap((chainData) => buildLineageNodes(chainData)),
-    ...buildRollForwardNodes(rollForwards),
+    ...(lineages ?? []).flatMap((chainData) => buildLineageNodes(chainData, timeZone)),
+    ...buildRollForwardNodes(rollForwards, timeZone),
   ];
   for (const node of nodes) {
     if (content[node.id]) continue;
@@ -184,6 +187,7 @@ export function CarbonTransitPanel({
   onDetailClose,
   onDetailTrace,
 }: CarbonTransitPanelProps) {
+  const { timeZone } = useFacilityClock(lineages?.[0]?.facility.id ?? facility?.id);
   // Transient hover isolation, shared between the map (line hover) and the rail
   // (dropdown-row hover): whichever sets it, both surfaces ghost back the rest.
   const [hoverLegId, setHoverLegId] = useState<string | null>(null);
@@ -258,7 +262,7 @@ export function CarbonTransitPanel({
     geo.nodes.some(
       (node) => node.positionSource === "own" || node.positionSource === "leg_origin"
     );
-  const popupContent = buildPopupContent(lineages, rollForwards, facility);
+  const popupContent = buildPopupContent(lineages, rollForwards, facility, timeZone);
 
   // A leg belongs to the focus when its chain-side anchor node sits in the
   // reachable sub-chain. Single-app view dims the sibling inbound legs (they

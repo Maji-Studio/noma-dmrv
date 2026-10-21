@@ -16,8 +16,8 @@ import { CalendarIcon, MapPinIcon, NoteIcon, PlantIcon, PlusIcon, StackIcon } fr
 import { numericValue } from "@/lib/form-utils";
 import { toNumberOrNull } from "@/schemas/helpers";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
-import { toDateInputValue } from "@/lib/date-utils";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { toDateInputValue, facilityToday } from "@/lib/date-utils";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import { FormError, FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
@@ -109,6 +109,8 @@ export function FeedstockForm({
   const [hasEditedAllocationMass, setHasEditedAllocationMass] = useState(false);
   const formId = useId();
   const { facilityId: contextFacilityId } = useFacilityContext();
+  const { timeZone } = useFacilityClock(feedstock?.facilityId ?? contextFacilityId);
+  const today = facilityToday(timeZone);
 
   // Quick-add dialogs
   const vehicleDialog = useQuickAddDialog();
@@ -119,7 +121,7 @@ export function FeedstockForm({
 
   const defaultValues = {
     facilityId: feedstock?.facilityId ?? contextFacilityId ?? "",
-    deliveryDate: toDateInputValue(feedstock?.deliveryDate ?? null),
+    deliveryDate: toDateInputValue(feedstock?.deliveryDate ?? null, today),
     supplierId: feedstock?.supplierId ?? "",
     vehicleId: feedstock?.vehicleId ?? "",
     distanceNote: feedstock?.distanceNote ?? "",

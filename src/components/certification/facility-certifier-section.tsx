@@ -24,7 +24,8 @@ import {
 } from "@/hooks/use-certification";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { removalTemplatesSettingsHref } from "@/lib/certification/links";
-import { formatDate } from "@/lib/format-utils";
+import { useFacilityClock } from "@/hooks/use-facility-context";
+import { formatFacilityDay } from "@/lib/format-utils";
 import { MISSING_VALUE, NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
 import type { CertifierProjectRow } from "@/data-access/certification";
 import {
@@ -149,6 +150,7 @@ function CertifierMappingFields({
   projectName?: string | null;
   templateName?: string | null;
 }) {
+  const { timeZone } = useFacilityClock(facilityId);
   const resolvesNames = projectName !== undefined;
 
   return (
@@ -218,7 +220,7 @@ function CertifierMappingFields({
       </Field>
       <Field label="Linked at">
         <span className="body-small">
-          {formatDate(mapping.createdAt)}
+          {formatFacilityDay(mapping.createdAt, timeZone)}
         </span>
       </Field>
       <Field label="Isometric facility">

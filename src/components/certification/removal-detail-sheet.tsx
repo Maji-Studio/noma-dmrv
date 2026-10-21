@@ -11,6 +11,7 @@
  */
 "use client";
 
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { MultilineDetail } from "./multiline-detail";
 import Link from "next/link";
 import { useState } from "react";
@@ -167,6 +168,7 @@ export function RemovalDetailSheet({
   onClose,
   lock,
 }: RemovalDetailSheetProps) {
+  const { timeZone } = useFacilityClock(facilityId);
   const { data: certifierSummary } = useFacilityCertifierSummary(
     facilityId,
     open,
@@ -339,6 +341,7 @@ export function RemovalDetailSheet({
             {summary.recentSyncEvents.length > 0 && (
               <SyncEventLog
                 events={summary.recentSyncEvents}
+                timeZone={timeZone}
                 label={`Submission history (${summary.recentSyncEvents.length})`}
               />
             )}

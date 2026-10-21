@@ -7,6 +7,7 @@
  */
 "use client";
 
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState, Notice, StatusBadge } from "@/components/ui";
 import { useSubmissionStatusHistory } from "@/hooks/use-certification";
@@ -14,7 +15,7 @@ import type {
   StatusHistoryEntityType,
   SubmissionStatusHistoryEntry,
 } from "@/lib/certification/status-history";
-import { formatDate, formatDateTime } from "@/lib/format-utils";
+import { formatFacilityDay, formatFacilityDateTime } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { describeStatusChangeActor } from "./status-change-actor";
 
@@ -33,6 +34,8 @@ export function SubmissionStatusHistory({
   entityId: string;
 }) {
   const query = useSubmissionStatusHistory(entityType, entityId);
+  const { facilityId } = useFacilityContext();
+  const { timeZone } = useFacilityClock(facilityId);
 
   if (query.isPending) {
     return (
@@ -74,11 +77,11 @@ export function SubmissionStatusHistory({
           description={`Status changes appear here once this ${RECORD_NAME[entityType]} is submitted.`}
         />
       ) : (
-        <StatusHistoryList entries={entries} />
+        <StatusHistoryList entries={entries} timeZone={timeZone} />
       )}
       {recordingBeganAt && (
         <Notice tone="info">
-          Recording began on {formatDate(recordingBeganAt)}. Earlier entries do
+          Recording began on {formatFacilityDay(recordingBeganAt, timeZone)}. Earlier entries do
           not show who made the change.
         </Notice>
       )}
@@ -86,7 +89,7 @@ export function SubmissionStatusHistory({
   );
 }
 
-function StatusHistoryList({ entries }: { entries: SubmissionStatusHistoryEntry[] }) {
+function StatusHistoryList({ entries, timeZone }: { entries: SubmissionStatusHistoryEntry[]; timeZone: string }) {
   return (
     <ol
       aria-label="Status changes, newest first"
@@ -124,7 +127,7 @@ function StatusHistoryList({ entries }: { entries: SubmissionStatusHistoryEntry[
                   dateTime={new Date(entry.occurredAt).toISOString()}
                   className="text-[var(--color-text-tertiary)]"
                 >
-                  {formatDateTime(entry.occurredAt)}
+                  {formatFacilityDateTime(entry.occurredAt, timeZone)}
                 </time>
               ) : (
                 // Changed before recording began, at a time nothing marks.

@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import { buildTrailSteps } from "./application-trail";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createElement } from "react";
+import { ApplicationTrail, buildTrailSteps } from "./application-trail";
 
 function lineage(): ChainOfCustodyData {
   return {
@@ -120,4 +122,16 @@ describe("buildTrailSteps", () => {
         .map((step) => step.nodeId),
     ).toEqual(["production-run:run-1", "production-run:run-2"]);
   });
+});
+
+vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }) }));
+vi.mock("@/hooks/use-chain-of-custody", () => ({ useApplicationTrail: () => ({
+  isLoading: false, isError: false,
+  data: { totalCount: 1, byNodeId: { "production-run:run-1": {
+    documents: [], transportLegs: [], samples: [{ id: "measurement-1", timestamp: new Date("2026-10-21T21:30:00Z") }],
+  } } },
+}) }));
+
+it("shows trail measurements on the facility clock", () => {
+  expect(renderToStaticMarkup(createElement(ApplicationTrail, { applicationId: "application-1", chainData: lineage() }))).toContain("Oct 22, 2026, 00:30");
 });

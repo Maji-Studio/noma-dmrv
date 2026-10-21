@@ -22,7 +22,8 @@ import {
 import { formatVehicleType } from "@/schemas/vehicles";
 import { polymorphicOwnerActivityType } from "@/lib/activity-entity-type";
 import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
-import { formatCalendarDate, formatDateTime, formatDayString, formatFacilityDateTime } from "@/lib/format-utils";
+import { formatCalendarDate, formatDayString, formatFacilityDateTime } from "@/lib/format-utils";
+import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 // By file, not the barrel (the forms barrel pulls in the form components).
 import { ENTITY_TYPE_LABELS } from "@/components/forms/entity-select/entity-labels";
@@ -93,7 +94,7 @@ const VERBATIM_FIELDS = new Set([
 ]);
 
 /** Business dates still stored as UTC-midnight timestamps: they read as a day. */
-const CALENDAR_DATE_FIELDS = new Set(["applicationDate", "deliveryDate", "orderDate"]);
+const CALENDAR_DATE_FIELDS = new Set(["application.applicationDate", "feedstock.deliveryDate", "order.orderDate"]);
 
 function knownLabel<T extends string>(values: readonly T[], format: (value: T) => string) {
   return (value: string) => ((values as readonly string[]).includes(value) ? format(value as T) : humanizeEnum(value));
@@ -147,22 +148,21 @@ const NOT_RECORDED: ActivityValueText = { text: MISSING_VALUE.notRecorded, tone:
 
 /**
  * An instant of a physical event reads on the record's facility clock
- * (docs/design-system.md, Date and time display); the viewer's clock only
- * when the facility is unknown.
+ * (docs/design-system.md, Date and time display), with UTC for an unknown facility.
  */
 function formatInstant(text: string, timeZone: string | null): string {
-  return timeZone ? formatFacilityDateTime(text, timeZone) : formatDateTime(text);
+  return formatFacilityDateTime(text, timeZone ?? UNKNOWN_FACILITY_TIMEZONE);
 }
 
 /** One stored value as it reads on the line. `timeZone` is the record's facility zone. */
-export function formatActivityValue(field: string, stored: ActivityValue, timeZone: string | null = null): ActivityValueText {
+export function formatActivityValue(field: string, stored: ActivityValue, timeZone: string | null = null, entityType?: string): ActivityValueText {
   const choice = Object.hasOwn(ENUM_FORMATTERS, field);
   if (stored === null) return choice ? NOT_SET : NOT_RECORDED;
   const text = String(stored);
   if (choice) return value(ENUM_FORMATTERS[field](text));
   if (VERBATIM_FIELDS.has(field)) return value(text);
   if (DAY_PATTERN.test(text)) return value(formatDayString(text));
-  if (INSTANT_PATTERN.test(text)) return value(CALENDAR_DATE_FIELDS.has(field) ? formatCalendarDate(text) : formatInstant(text, timeZone));
+  if (INSTANT_PATTERN.test(text)) return value(CALENDAR_DATE_FIELDS.has(`${entityType}.${field}`) ? formatCalendarDate(text) : formatInstant(text, timeZone));
   if (DECIMAL_PATTERN.test(text)) return value(formatStoredDecimal(text));
   return value(text);
 }
@@ -263,8 +263,8 @@ function fieldLine(
   const timeZone = item.record.facilityTimezone;
   return {
     kind: "value", key: field, label,
-    from: formatActivityValue(field, change.from, timeZone),
-    to: formatActivityValue(field, change.to, timeZone),
+    from: formatActivityValue(field, change.from, timeZone, item.entityType),
+    to: formatActivityValue(field, change.to, timeZone, item.entityType),
   };
 }
 

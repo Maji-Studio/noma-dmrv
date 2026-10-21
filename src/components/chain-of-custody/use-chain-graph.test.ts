@@ -682,3 +682,10 @@ it("keeps both products sharing a run and one physical application in the graph"
   expect(graph.edges.filter(e => e.source.startsWith("biochar-product:")).map(e => e.data?.mass)).toEqual([0.45, 0.125]);
   expect(graph.edges.find(e => e.source === `delivery:${base.delivery.id}`)?.data?.kgLabel).toBe("Wet: 1,000 kg · Dry: 575 kg");
 });
+
+it("dates delivery graph nodes on the facility calendar", () => {
+  const data = lineage();
+  data.delivery.deliveryDate = new Date("2026-10-21T21:30:00Z");
+  const node = buildLineageNodes(data, "Africa/Dar_es_Salaam").find(node => node.kind === "delivery");
+  expect(node?.date).toBe("Oct 22, 2026");
+});

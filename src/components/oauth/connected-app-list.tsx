@@ -3,6 +3,7 @@
 import { OrganizationRosterDetails, OrganizationRosterList, OrganizationRosterRow } from "@/components/organizations/organization-roster-list";
 import { Button } from "@/components/ui";
 import type { OAuthGrantListItem } from "@/hooks/use-oauth-grants";
+// Account/organization security metadata has no facility clock.
 import { formatDateTime } from "@/lib/format-utils";
 import { oauthAppName, oauthAppNameStart } from "./oauth-labels";
 import { clientIdHost, connectionPermissionSummary } from "./connected-app-permissions";

@@ -31,7 +31,7 @@ function buildTable(sorting: SortingState, globalFilter = "") {
       id: "submittedOn",
       sortingFn: submittedOnSortingFn<Item>(descending("submittedOn")),
     }),
-    helper.accessor((item) => lastSyncedText(item.lastSyncedAt), {
+    helper.accessor((item) => lastSyncedText(item.lastSyncedAt, "UTC"), {
       id: "lastSynced",
       sortingFn: lastSyncedSortingFn<Item>(descending("lastSynced")),
     }),

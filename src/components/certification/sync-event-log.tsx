@@ -7,13 +7,14 @@
  * Terminal events only (no `pending` rows are written).
  */
 import type { CertifierSyncEventRow } from "@/data-access/certification";
-import { formatDateTime } from "@/lib/format-utils";
+import { formatFacilityDateTime } from "@/lib/format-utils";
 import { DisclosureSummary } from "./disclosure-summary";
 
 const DEFAULT_LIMIT = 5;
 
 interface SyncEventLogProps {
   events: CertifierSyncEventRow[];
+  timeZone: string;
   /** Cap rows. */
   limit?: number;
   /** Override the disclosure label. */
@@ -22,6 +23,7 @@ interface SyncEventLogProps {
 
 export function SyncEventLog({
   events,
+  timeZone,
   limit,
   label,
 }: SyncEventLogProps) {
@@ -40,7 +42,7 @@ export function SyncEventLog({
     <details className="group">
       <DisclosureSummary>{triggerLabel}</DisclosureSummary>
       <div className="mt-8">
-        <SyncEventList events={visible} />
+        <SyncEventList events={visible} timeZone={timeZone} />
       </div>
     </details>
   );
@@ -51,7 +53,7 @@ export function SyncEventLog({
  * disclosure (the GHG statement sheet's history accordion). `SyncEventLog`
  * wraps this in a `<details>`.
  */
-export function SyncEventList({ events }: { events: CertifierSyncEventRow[] }) {
+export function SyncEventList({ events, timeZone }: { events: CertifierSyncEventRow[]; timeZone: string }) {
   return (
     <ol className="flex flex-col gap-6 border-l border-[var(--color-border-secondary)] pl-12">
       {events.map((event) => (
@@ -72,7 +74,7 @@ export function SyncEventList({ events }: { events: CertifierSyncEventRow[] }) {
               {event.operation}
             </span>
             <span className="text-[var(--color-text-tertiary)]">
-              {formatDateTime(event.attemptedAt)}
+              {formatFacilityDateTime(event.attemptedAt, timeZone)}
             </span>
           </div>
           {event.errorMessage && (

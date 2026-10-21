@@ -41,7 +41,8 @@ function FeedstockSelect({ control }: { control: Control<SelectFields> }) {
   );
 }
 
-vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: "facility" }) }));
+vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }),
+  useFacilityContext: () => ({ facilityId: "facility" }) }));
 vi.mock("@/hooks/use-certification", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-certification")>(),
   useFacilityCertifierSummary: mocks.certifierSummary,

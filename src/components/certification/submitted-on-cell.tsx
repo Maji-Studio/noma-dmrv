@@ -3,14 +3,15 @@ import {
   REGISTRY_SUBMITTED_LABEL,
   type SubmittedOnState,
 } from "@/lib/certification/submitted-on";
-import { formatDate } from "@/lib/format-utils";
+import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
+import { formatFacilityDay } from "@/lib/format-utils";
 import { undatedLastSortingFn } from "./undated-last-sort";
 
 /** One line: the date, or why there is none. */
-export function submittedOnText(state: SubmittedOnState): string {
+export function submittedOnText(state: SubmittedOnState, timeZone = UNKNOWN_FACILITY_TIMEZONE): string {
   switch (state.kind) {
     case "submitted":
-      return formatDate(state.at);
+      return formatFacilityDay(state.at, timeZone);
     case "registryDiscovered":
       return REGISTRY_SUBMITTED_LABEL;
     case "never":
@@ -29,7 +30,7 @@ export function submittedOnSortingFn<T extends { submittedOn: SubmittedOnState }
   return undatedLastSortingFn<T>((item) => timestamp(item.submittedOn), descending);
 }
 
-export function SubmittedOnCell({ state }: { state: SubmittedOnState }) {
+export function SubmittedOnCell({ state, timeZone = UNKNOWN_FACILITY_TIMEZONE }: { state: SubmittedOnState; timeZone?: string }) {
   const dated = state.kind === "submitted";
   return (
     <span
@@ -40,7 +41,7 @@ export function SubmittedOnCell({ state }: { state: SubmittedOnState }) {
           : "body-small text-[var(--color-text-tertiary)] whitespace-nowrap"
       }
     >
-      {submittedOnText(state)}
+      {submittedOnText(state, timeZone)}
     </span>
   );
 }

@@ -134,3 +134,8 @@ describe("ApplicationForm server refusals", () => {
     expect(screen.queryByText(/Not saved\./)).toBeNull();
   });
 });
+
+vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityContext: () => ({ facilityId: "facility-1" }),
+  useFacilityClock: () => ({ timeZone: "UTC", hint: "" }),
+}));

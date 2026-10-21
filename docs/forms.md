@@ -216,8 +216,12 @@ Use `calendarDateSchema` from `@/schemas/helpers` for business dates persisted
 as **UTC-midnight date-only values**, such as the feedstock delivery date. It
 accepts strict `YYYY-MM-DD` strings and real calendar days only, decodes them to
 a UTC-midnight `Date`, and publishes as `format: date`. Server re-validation
-accepts a `Date` only at UTC midnight. Use `toDateInputValue` for defaults of
-these persisted UTC date-only values.
+accepts a `Date` only at UTC midnight. Use
+`toDateInputValue(value, facilityToday(timeZone))` for defaults of these
+persisted UTC date-only values. Resolve `timeZone` with
+`useFacilityClock(record?.facilityId ?? activeFacilityId)` so empty or invalid
+values default to the facility calendar day. Unknown facilities use the shared
+UTC fallback.
 
 Use `requiredDateOnlySchema(<required message>)` / `optionalDateOnly` where a date is combined with a
 facility time, as in production runs. They parse `"YYYY-MM-DD"` at **local**
@@ -233,14 +237,12 @@ and database column and migrate the round trip deliberately. The
 production-run schemas are the current reference for the local date-only
 helpers.
 
-For local date and time defaults, **never use `toISOString()`**. Use `@/lib/date-utils`:
-
-```typescript
-date: formatLocalDate(new Date()),          // "2026-03-03"  → <input type="date">
-startTime: formatLocalDateTime(new Date()), // "2026-03-03T14:30" → datetime-local
-```
-
-`toDateInputValue`, `parseLocalDateString`, and the facility-timezone display helpers (`formatFacilityTime`, `formatFacilityDate`, `formatTimezoneLabel` — all timestamps are stored UTC) also live in `src/lib/date-utils.ts`.
+New-record business dates use `facilityToday(timeZone)` from
+`@/lib/date-utils`, never the browser calendar. Physical event inputs keep UTC
+instants and show them through `EventTimeInput` on the facility clock. Use
+`formatFacilityWallClock` when a facility-local datetime input value is needed.
+`toDateInputValue` preserves the stored UTC calendar of date-only records;
+its required second argument supplies the facility day for empty/invalid values.
 
 Timezone fields use `requiredTimezoneSchema()` / `optionalTimezoneSchema()` / `ianaTimezoneSchema()` from `@/schemas/timezone` (the one valid-IANA-zone check, backed by the `@vvo/tzdb` catalogue in `@/lib/timezones`) and the `TimezoneCombobox`, never a hand-listed enum. No timezone has a default: facility fields start empty and required, and the organization default may stay unset.
 

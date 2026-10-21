@@ -13,3 +13,8 @@ describe("removalDateLine", () => {
     expect(removalDateLine({ phase: "draft", submittedAt, createdAt })).toBe("Created Oct 1, 2026");
   });
 });
+
+it("dates a Removal on the facility calendar", () => {
+  const createdAt = new Date("2026-10-21T21:30:00Z");
+  expect(removalDateLine({ phase: "draft", submittedAt: null, createdAt }, "Africa/Dar_es_Salaam")).toBe("Created Oct 22, 2026");
+});

@@ -107,6 +107,13 @@ export function formatTime(value: DateValue): string {
   return date ? format(date, TIME_FORMAT) : UNREADABLE_TIME;
 }
 
+/** Time of day on the facility clock, using the app's 24-hour format. */
+export function formatFacilityClockTime(value: DateValue, timeZone: string): string {
+  if (!value) return MISSING_VALUE.notRecorded;
+  const date = typeof value === "string" ? new Date(value) : value;
+  return isValid(date) ? formatFacilityTime(date, timeZone, TIME_FORMAT) : UNREADABLE_TIME;
+}
+
 /**
  * Format an instant in house style ("Sep 15, 2026, 14:30") on a facility's
  * wall clock. Output stock event times always read on the facility clock.

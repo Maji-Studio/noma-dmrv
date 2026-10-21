@@ -20,7 +20,9 @@ import {
   type RemovalBarSegment,
   type RemovalBarSlice,
 } from "@/lib/credit-batches/removal-bar";
-import { formatDate, formatTonnes } from "@/lib/format-utils";
+import { useFacilityClock } from "@/hooks/use-facility-context";
+import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
+import { formatCalendarDate, formatFacilityDay, formatTonnes } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
 import { FOCUS_RING, MUTED_TEXT } from "./credit-batch-page-parts";
@@ -58,7 +60,7 @@ export function sliceLabel(slice: RemovalBarSlice): string {
 }
 
 export function sliceMeta(slice: RemovalBarSlice): string {
-  return `${slice.applicationCode}, applied ${formatDate(slice.applicationDate)}`;
+  return `${slice.applicationCode}, applied ${formatCalendarDate(slice.applicationDate)}`;
 }
 
 export function SegmentSwatch({ segment, className }: { segment: RemovalBarSegment; className?: string }) {
@@ -85,13 +87,14 @@ function groupAccessibleLabel(group: RemovalBarGroup): string {
 }
 
 /** An interrupted submission reads as a draft, so only a submitted Removal names its submission date. */
-export function removalDateLine(removal: Pick<RemovalBarRemoval, "phase" | "submittedAt" | "createdAt">): string {
+export function removalDateLine(removal: Pick<RemovalBarRemoval, "phase" | "submittedAt" | "createdAt">, timeZone = UNKNOWN_FACILITY_TIMEZONE): string {
   return removal.phase === "submitted" && removal.submittedAt
-    ? `Submitted ${formatDate(removal.submittedAt)}`
-    : `Created ${formatDate(removal.createdAt)}`;
+    ? `Submitted ${formatFacilityDay(removal.submittedAt, timeZone)}`
+    : `Created ${formatFacilityDay(removal.createdAt, timeZone)}`;
 }
 
-function RemovalCardBody({ group }: { group: RemovalBarGroup }) {
+function RemovalCardBody({ group, facilityId }: { group: RemovalBarGroup; facilityId: string }) {
+  const { timeZone } = useFacilityClock(facilityId);
   const removal = group.removal;
   if (!removal) return null;
   return (
@@ -100,7 +103,7 @@ function RemovalCardBody({ group }: { group: RemovalBarGroup }) {
         <span className="body-medium font-medium tabular-nums">{removal.code}</span>
         <RemovalStatus removal={removal} />
       </div>
-      <span className={cn("body-small", MUTED_TEXT)}>{removalDateLine(removal)}</span>
+      <span className={cn("body-small", MUTED_TEXT)}>{removalDateLine(removal, timeZone)}</span>
       <span className="body-medium tabular-nums">
         {tonnesFromKg(group.dryKg)} <span className={cn("body-small", MUTED_TEXT)}>from this credit batch</span>
       </span>
@@ -119,7 +122,7 @@ function RemovalCardBody({ group }: { group: RemovalBarGroup }) {
 }
 
 /** A link to the Removal that opens a facts-only hover card on hover or focus. */
-function RemovalHoverLink({ group, href, className, style, children }: { group: RemovalBarGroup; href: string; className?: string; style?: CSSProperties; children: ReactNode }) {
+function RemovalHoverLink({ group, facilityId, href, className, style, children }: { group: RemovalBarGroup; facilityId: string; href: string; className?: string; style?: CSSProperties; children: ReactNode }) {
   return (
     <PreviewCard.Root>
       <PreviewCard.Trigger
@@ -132,7 +135,7 @@ function RemovalHoverLink({ group, href, className, style, children }: { group: 
       <PreviewCard.Portal>
         <PreviewCard.Positioner side="top" sideOffset={CARD_OFFSET_PX} className="z-[var(--z-layer-popover)]">
           <PreviewCard.Popup className="border border-[var(--ink)] bg-[var(--paper)] transition-opacity duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0">
-            <RemovalCardBody group={group} />
+            <RemovalCardBody group={group} facilityId={facilityId} />
           </PreviewCard.Popup>
         </PreviewCard.Positioner>
       </PreviewCard.Portal>
@@ -165,7 +168,7 @@ export function CompactRemovalBar({ groups, facilityId }: { groups: RemovalBarGr
         {groups.map((group) => (
           <li key={group.id}>
             {group.removal ? (
-              <RemovalHoverLink group={group} href={removalHref(facilityId, group.removal.id)} className="group inline-flex min-h-44 items-center gap-6">
+              <RemovalHoverLink facilityId={facilityId} group={group} href={removalHref(facilityId, group.removal.id)} className="group inline-flex min-h-44 items-center gap-6">
                 <SegmentSwatch segment={group.segment} />
                 <span className="underline-offset-2 group-hover:underline">{compactLabel(group)}</span>
               </RemovalHoverLink>

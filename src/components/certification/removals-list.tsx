@@ -29,7 +29,7 @@ import {
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import {
   useFacilityCertifierSummary,
@@ -273,7 +273,9 @@ function BatchesColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
 }
 
 function SubmittedOnColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
-  return <SubmittedOnCell state={row.original.submittedOn} />;
+  const { facilityId } = useFacilityContext();
+  const { timeZone } = useFacilityClock(facilityId);
+  return <SubmittedOnCell state={row.original.submittedOn} timeZone={timeZone} />;
 }
 
 function StatusColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
@@ -285,6 +287,7 @@ const createColumns = (
   submittedOnDescending: boolean,
   locks: RecordLockViews,
   registryHref: (externalId: string) => string | null,
+  timeZone: string,
 ): ColumnDef<RemovalListRow>[] => [
   {
     id: "removal",
@@ -310,7 +313,7 @@ const createColumns = (
   {
     id: "submittedOn",
     header: "Submitted on",
-    accessorFn: (summary) => submittedOnText(summary.submittedOn),
+    accessorFn: (summary) => submittedOnText(summary.submittedOn, timeZone),
     sortingFn: submittedOnSortingFn<RemovalListRow>(submittedOnDescending),
     cell: SubmittedOnColumnCell,
   },
@@ -340,6 +343,7 @@ function ListBody({
   facilityId: string;
   onNewRemoval: () => void;
 }) {
+  const { timeZone } = useFacilityClock(facilityId);
   const identities = useRemovalsForFacility(facilityId);
   const [searchQuery, setSearchQuery] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -380,6 +384,7 @@ function ListBody({
       externalProjectId,
       isProduction,
     }),
+    timeZone,
   );
   const selected = removalId
     ? rows.find((r) => r.removalId === removalId)

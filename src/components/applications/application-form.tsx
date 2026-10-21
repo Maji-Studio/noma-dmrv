@@ -16,7 +16,8 @@ import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
 import { recordInUseFreeFields } from "@/lib/record-lock";
 import { FACILITY_REFERENCE_TEMPERATURE_NOTICE } from "@/lib/application-guidance";
 import { nullableNumericValue, numericValue } from "@/lib/form-utils";
-import { toDateInputValue } from "@/lib/date-utils";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
+import { toDateInputValue, UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useEffect, useId, useState } from "react";
@@ -168,6 +169,10 @@ export function ApplicationForm({
 }: ApplicationFormProps) {
   const latched = useLatchedSubmit();
   const formId = useId();
+  const { facilityId } = useFacilityContext();
+  const initialDelivery = deliveries.find(delivery => delivery.id === application?.deliveryId);
+  const { timeZone } = useFacilityClock(facilityId);
+  const today = resolveApplicationDateDefault(initialDelivery?.facilityTimezone ?? (application ? UNKNOWN_FACILITY_TIMEZONE : timeZone));
   const isEditMode = !!application;
   // A Removal slice refuses delivery and applied mass changes (`assertMutableSlices`).
   // Fail closed: until the lock answers, fields an In use application holds stay disabled.
@@ -179,8 +184,8 @@ export function ApplicationForm({
 
   const defaultValues = {
     applicationDate: application?.applicationDate
-      ? toDateInputValue(application.applicationDate)
-      : resolveApplicationDateDefault(),
+      ? toDateInputValue(application.applicationDate, today)
+      : today,
     deliveryId: application?.deliveryId ?? "",
     biocharAppliedKg: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
     fieldSizeHa: application?.fieldSizeHa ?? "",
@@ -437,7 +442,7 @@ export function ApplicationForm({
                 deliveryField.onChange(id);
                 if (!isEditMode && !getFieldState("applicationDate").isDirty) {
                   setValue("applicationDate", resolveApplicationDateDefault(
-                    deliveries.find(delivery => delivery.id === id)?.facilityTimezone,
+                    deliveries.find(delivery => delivery.id === id)?.facilityTimezone ?? timeZone,
                   ));
                 }
               }}

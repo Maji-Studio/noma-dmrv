@@ -12,6 +12,7 @@
  * by the shared DAG node-id convention.
  */
 
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { ChainStatusBadge } from "../chain-status-badge";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type {
@@ -21,7 +22,7 @@ import type {
 import { useApplicationTrail } from "@/hooks/use-chain-of-custody";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { resolveChainSources } from "@/lib/chain-of-custody/sources";
-import { formatCalendarDate, formatDate, formatDateTime, formatLegDistanceKm, formatMassKg } from "@/lib/format-utils";
+import { formatCalendarDate, formatDate, formatFacilityDay, formatFacilityDateTime, formatLegDistanceKm, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import { humanizeEnum } from "@/lib/copy-utils";
@@ -51,8 +52,12 @@ function formatKg(value: number | null): string | null {
   return value == null ? null : formatMassKg(value);
 }
 
-function formatStepDate(value: Date | string | null, calendarDay = false): string {
-  return calendarDay ? formatCalendarDate(value) : formatDate(value);
+function formatStepDate(value: Date | string | null, timeZone: string, calendarDay = false): string {
+  if (calendarDay) return formatCalendarDate(value);
+  // Run and product dates are already facility calendar day strings.
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? formatDate(value)
+    : formatFacilityDay(value, timeZone);
 }
 
 /** Custody order, upstream to soil: feedstocks → run → lot → order → delivery → application. */
@@ -201,7 +206,7 @@ function TransportLegEvidence({ leg }: { leg: TrailTransportLeg }) {
   );
 }
 
-function StepEvidence({ evidence }: { evidence: TrailNodeEvidence | undefined }) {
+function StepEvidence({ evidence, timeZone }: { evidence: TrailNodeEvidence | undefined; timeZone: string }) {
   if (
     !evidence ||
     (evidence.documents.length === 0 &&
@@ -252,7 +257,7 @@ function StepEvidence({ evidence }: { evidence: TrailNodeEvidence | undefined })
               In-process measurement
             </p>
             <p className="body-caption text-[var(--color-text-tertiary)]">
-              {formatDateTime(sample.timestamp)}
+              {formatFacilityDateTime(sample.timestamp, timeZone)}
             </p>
           </div>
         </li>
@@ -270,6 +275,7 @@ export interface ApplicationTrailProps {
 }
 
 export function ApplicationTrail({ applicationId, chainData }: ApplicationTrailProps) {
+  const { timeZone } = useFacilityClock(chainData?.facility.id);
   const { data: evidence, isLoading, isError, error } =
     useApplicationTrail(applicationId);
 
@@ -350,7 +356,7 @@ export function ApplicationTrail({ applicationId, chainData }: ApplicationTrailP
                       <ChainStatusBadge status={step.status} />
                     </div>
                     <span className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                      {formatStepDate(step.date, step.calendarDay)}
+                      {formatStepDate(step.date, timeZone, step.calendarDay)}
                     </span>
                   </div>
 
@@ -362,7 +368,7 @@ export function ApplicationTrail({ applicationId, chainData }: ApplicationTrailP
                           .join(" · ")}
                       </p>
                     ) : null}
-                    <StepEvidence evidence={evidence?.byNodeId[step.nodeId]} />
+                    <StepEvidence evidence={evidence?.byNodeId[step.nodeId]} timeZone={timeZone} />
                   </div>
                 </div>
               </li>
