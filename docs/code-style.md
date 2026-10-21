@@ -86,6 +86,11 @@ such methods, fails closed even for harmless uses and has no waiver.
   unless profiling demands it.
 - **Avoid `useEffect`** — prefer React Query, server actions, or derived state. Reach for it
   only for external-system sync, subscriptions, or imperative DOM work.
+- **Readers of a mutable third-party instance start with `"use no memo"`** — a component
+  that reads one from context or props (e.g. the TanStack `table` from `useReactTable`, which
+  the compiler skips as an incompatible library) must opt out, and the context value carrying
+  it must not be memoized, or the compiled reader caches first-render reads (#1280,
+  `src/components/ui/data-table/index.tsx`).
 
 ## Adding a feature
 
