@@ -45,7 +45,7 @@ const CTX = { organizationId: "stats-org", userId: "stats-user", orgRole: "admin
 const ORDER_STATS = { totalOrders: 0, totalDeliveries: 0, totalQuantityKg: 0 };
 const PRODUCT_STATS = { totalProducts: 0, totalWetMassKg: null, totalDryBiocharMassKg: null };
 
-const FACILITY_STATS = { totalFacilities: 0, totalReactors: 0, totalStorageBins: 0 };
+const FACILITY_STATS = { totalFacilities: 0, totalReactors: 0, totalStorageBins: 0, totalFeedstockWetKg: 0 };
 const REACTOR_STATS = { totalReactors: 0, totalNominalThroughputTph: null };
 const SUPPLIER_STATS = { totalSuppliers: 0 };
 const FORMULATION_STATS = { totalFormulations: 0 };

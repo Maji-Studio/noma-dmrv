@@ -3,6 +3,7 @@ import { facilities, reactors, storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { and, count, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { requireOrgScope } from "./utils";
+import { getFacilityFeedstockWetStock } from "./facility-feedstock-stock";
 
 const STORAGE_BIN_TYPES = ["feedstock_bin", "biochar_bin", "product_bin"] as const;
 
@@ -10,6 +11,7 @@ export interface FacilityStats {
   totalFacilities: number;
   totalReactors: number;
   totalStorageBins: number;
+  totalFeedstockWetKg: number;
 }
 
 export interface FacilityStatsFilters {
@@ -24,8 +26,8 @@ export async function getFacilityStats(
   const facilityArchiveFilter = filters?.archived
     ? isNotNull(facilities.archivedAt)
     : isNull(facilities.archivedAt);
-  const [[facilityStats], [reactorStats], [storageStats]] = await Promise.all([
-    db.select({ totalFacilities: count() })
+  const [facilityRows, [reactorStats], [storageStats]] = await Promise.all([
+    db.select({ id: facilities.id })
       .from(facilities)
       .where(and(eq(facilities.organizationId, ctx.organizationId), facilityArchiveFilter)),
     db.select({ totalReactors: count() })
@@ -52,9 +54,14 @@ export async function getFacilityStats(
         facilityArchiveFilter,
       )),
   ]);
+  const feedstockWetStockByFacility = await getFacilityFeedstockWetStock(
+    ctx,
+    facilityRows.map((facility) => facility.id),
+  );
   return {
-    totalFacilities: Number(facilityStats.totalFacilities),
+    totalFacilities: facilityRows.length,
     totalReactors: Number(reactorStats.totalReactors),
     totalStorageBins: Number(storageStats.totalStorageBins),
+    totalFeedstockWetKg: [...feedstockWetStockByFacility.values()].reduce((sum, stock) => sum + stock, 0),
   };
 }

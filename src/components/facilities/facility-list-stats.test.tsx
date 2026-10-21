@@ -62,25 +62,26 @@ afterEach(() => {
 
 describe("FacilityList summary cards", () => {
   it("shows whole-list totals for the archived toggle, never page wording", () => {
-    state.stats = { data: { totalFacilities: 25, totalReactors: 40, totalStorageBins: 90 }, isLoading: false, isError: false };
+    state.stats = { data: { totalFacilities: 25, totalReactors: 40, totalStorageBins: 90, totalFeedstockWetKg: 800 }, isLoading: false, isError: false };
     render(<FacilityList />);
 
     expect(screen.getByLabelText("Active facilities").textContent).toContain("25");
     expect(screen.getByLabelText("Total reactors").textContent).toContain("40");
     expect(screen.getByLabelText("Total reactors").textContent).toContain("Across all active facilities");
-    expect(screen.getByLabelText("Total storage bins").textContent).toContain("90");
+    expect(screen.getByLabelText("Wet feedstock on hand").textContent).toContain("800 kg");
+    expect(screen.getByLabelText("Wet feedstock on hand").textContent).toContain("90 storage bins across all active facilities");
     expect(document.body.textContent).not.toContain("on this page");
     expect(state.archivedArgs.at(-1)).toBe(false);
   });
 
   it("asks for the archived totals when the toggle is on", () => {
-    state.stats = { data: { totalFacilities: 2, totalReactors: 3, totalStorageBins: 4 }, isLoading: false, isError: false };
+    state.stats = { data: { totalFacilities: 2, totalReactors: 3, totalStorageBins: 4, totalFeedstockWetKg: 5 }, isLoading: false, isError: false };
     render(<FacilityList />);
     fireEvent.click(screen.getByRole("button", { name: /Archived/ }));
 
     expect(state.archivedArgs.at(-1)).toBe(true);
     expect(screen.getByLabelText("Archived facilities").textContent).toContain("2");
-    expect(screen.getByLabelText("Total storage bins").textContent).toContain("Across all archived facilities");
+    expect(screen.getByLabelText("Wet feedstock on hand").textContent).toContain("4 storage bins across all archived facilities");
   });
 
   it("shows the failure, not zeros, when the totals could not load", () => {

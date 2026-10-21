@@ -37,6 +37,8 @@ import {
   ListPagination,
   PageHeader,
 } from "@/components/ui";
+import { formatMass } from "@/lib/format-utils";
+import { formatCount } from "@/lib/copy-utils";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -288,10 +290,10 @@ export function FacilityList() {
           isError={statsError}
         />
         <StatCard
-          title="Total storage bins"
-          value={statsData?.totalStorageBins ?? 0}
+          title="Wet feedstock on hand"
+          value={formatMass(statsData?.totalFeedstockWetKg ?? 0)}
           icon={<PackageIcon size={24} weight="bold" />}
-          description={showArchived ? "Across all archived facilities" : "Across all active facilities"}
+          description={`${formatCount(statsData?.totalStorageBins ?? 0, "storage bin")} across all ${showArchived ? "archived" : "active"} facilities`}
           isLoading={statsLoading}
           isError={statsError}
         />
