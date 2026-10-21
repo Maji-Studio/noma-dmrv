@@ -324,7 +324,6 @@ export function FormulationList() {
         <StatCard
           title={showArchived ? "Archived formulations" : "Active formulations"}
           value={statsData?.totalFormulations ?? 0}
-          description={showArchived ? "All archived formulations" : "All active formulations"}
           icon={<ListChecksIcon size={24} weight="bold" />}
           isLoading={statsLoading}
           isError={statsError}

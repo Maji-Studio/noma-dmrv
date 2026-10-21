@@ -79,13 +79,12 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("FormulationList summary card", () => {
-  it("shows the server total with a whole-list description, never page wording", () => {
+  it("shows the server total without page wording", () => {
     state.stats = { data: { totalFormulations: 42 }, isLoading: false, isError: false };
     render(<FormulationList />);
 
     const card = screen.getByLabelText("Active formulations");
     expect(card.textContent).toContain("42");
-    expect(card.textContent).toContain("All active formulations");
     expect(document.body.textContent).not.toContain("on this page");
   });
 
@@ -96,7 +95,6 @@ describe("FormulationList summary card", () => {
 
     const card = screen.getByLabelText("Archived formulations");
     expect(card.textContent).toContain("3");
-    expect(card.textContent).toContain("All archived formulations");
   });
 
   it("shows the failure, not zero, when the total could not load", () => {

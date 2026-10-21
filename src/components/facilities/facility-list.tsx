@@ -277,7 +277,6 @@ export function FacilityList() {
           title={showArchived ? "Archived facilities" : "Active facilities"}
           value={statsData?.totalFacilities ?? 0}
           icon={<FactoryIcon size={24} weight="bold" />}
-          description={showArchived ? "All archived facilities" : "All active facilities"}
           isLoading={statsLoading}
           isError={statsError}
         />
@@ -291,7 +290,7 @@ export function FacilityList() {
         />
         <StatCard
           title="Wet feedstock on hand"
-          value={formatMass(statsData?.totalFeedstockWetKg ?? 0)}
+          value={formatMass(statsData?.totalFeedstockWetKg)}
           icon={<PackageIcon size={24} weight="bold" />}
           description={`${formatCount(statsData?.totalStorageBins ?? 0, "storage bin")} across all ${showArchived ? "archived" : "active"} facilities`}
           isLoading={statsLoading}

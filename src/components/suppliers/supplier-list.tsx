@@ -416,7 +416,6 @@ export function SupplierList() {
         <StatCard
           title={showArchived ? "Archived suppliers" : "Active suppliers"}
           value={statsData?.totalSuppliers ?? 0}
-          description={showArchived ? "All archived suppliers" : "All active suppliers"}
           icon={<UsersIcon size={24} weight="bold" />}
           isLoading={statsLoading}
           isError={statsError}

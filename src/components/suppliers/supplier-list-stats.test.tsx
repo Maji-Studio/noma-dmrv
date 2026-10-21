@@ -105,13 +105,12 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("SupplierList summary card", () => {
-  it("shows the server total with a whole-list description, never page wording", () => {
+  it("shows the server total without page wording", () => {
     state.stats = { data: { totalSuppliers: 42 }, isLoading: false, isError: false };
     render(<SupplierList />);
 
     const card = screen.getByLabelText("Active suppliers");
     expect(card.textContent).toContain("42");
-    expect(card.textContent).toContain("All active suppliers");
     expect(document.body.textContent).not.toContain("on this page");
   });
 
@@ -122,7 +121,6 @@ describe("SupplierList summary card", () => {
 
     const card = screen.getByLabelText("Archived suppliers");
     expect(card.textContent).toContain("3");
-    expect(card.textContent).toContain("All archived suppliers");
   });
 
   it("shows the failure, not zero, when the total could not load", () => {
