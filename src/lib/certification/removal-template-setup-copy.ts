@@ -1,5 +1,5 @@
 /**
- * Operator words for the Removal template setup page. The server offers
+ * Operator words for the Removal template setup dialog. The server offers
  * options by stable id (a source id, a component id, or `entry`) and a
  * raw label; this module turns each into the sentence an operator reads, and
  * derives the pure facts (open decisions, entry counts, the start step) the
@@ -7,7 +7,6 @@
  */
 import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
 import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
-import { formatCount } from "@/lib/copy-utils";
 import type { RemovalTemplateSetupPlan, SetupAssignment, SetupDecision, SetupOption } from "./removal-template-setup-plan";
 import { sourcesTakenElsewhere } from "./removal-template-setup-plan";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "./removal-template-blockers";
@@ -40,7 +39,7 @@ const SOURCE_NOUNS: Record<AutomaticSourceId, string> = {
   "feedstock-dry-mass": "feedstock dry mass",
   "biochar-dry-mass": "biochar dry mass",
   sequestration: "applications and lab results",
-  "safety-margin": "the safety margin on biochar dry mass",
+  "safety-margin": "the safety margin, which uses biochar dry mass",
 };
 
 const BLOCKED_COPY: Record<string, { reason: string; fix: string }> = {
@@ -124,14 +123,6 @@ export function optionDescription(decision: SetupDecision, option: SetupOption):
   return "From noma records.";
 }
 
-/** One line for What happens and the summary. */
-export function answerSummary(decision: SetupDecision, option: SetupOption): string {
-  const first = decision.components[0].component.displayName;
-  if (decision.kind === "clash") return `${sourceNoun(decision.id.replace("clash:", "")).replace(/^./, (c) => c.toUpperCase())} fills ${option.label}`;
-  if (option.id === "entry") return `${first} takes ${ENTRY_EACH_BATCH}`;
-  return `${optionLabel(option)} fills ${first}`;
-}
-
 export type Answers = Record<string, string>;
 
 export function openDecisions(plan: RemovalTemplateSetupPlan, answers: Answers): SetupDecision[] {
@@ -180,29 +171,25 @@ interface StartInput {
   step: SetupStepKey | null;
 }
 
-/** Where the page opens: the requested step, else Apply for the one fit with nothing to decide. */
+/** Where the dialog opens: the requested step, else the template list with the one template that can be picked preselected. */
 export function startState({ fitting: all, templateId, step }: StartInput): { templateId: string | null; stepIndex: number } {
   const fitting = all.filter((template) => !template.blockedReason);
   // A template that was asked for but is not offered never falls back to another one.
   const requested = templateId
     ? fitting.find((template) => template.id === templateId) ?? null
-    : (all.length === 1 ? fitting[0] ?? null : null);
+    : (fitting.length === 1 ? fitting[0] : null);
   if (!requested) return { templateId: null, stepIndex: 0 };
   const requestedIndex = step ? SETUP_STEP_KEYS.indexOf(step) : -1;
-  if (requestedIndex >= 0) return { templateId: requested.id, stepIndex: requestedIndex };
-  const zeroPath = all.length === 1 && requested.plan.decisions.length === 0;
-  return { templateId: requested.id, stepIndex: zeroPath ? 2 : 0 };
+  return { templateId: requested.id, stepIndex: requestedIndex >= 0 ? requestedIndex : 0 };
 }
 
-/** Why the template a link named is not offered, or null when it is. */
+/** Why the template a link named is missing from the list, or null when the list already shows it. */
 export function notOfferedReason(
-  data: { fitting: readonly { id: string; name: string; blockedReason?: string | null }[]; notFitting: readonly { id: string; name: string; reason: string }[] },
+  data: { fitting: readonly { id: string }[]; notFitting: readonly { id: string }[] },
   templateId: string | null,
 ): string | null {
   if (!templateId) return null;
-  const fit = data.fitting.find((template) => template.id === templateId);
-  if (fit) return fit.blockedReason ? `${fit.name} cannot be set up yet. ${blockedCopy(fit.blockedReason)}` : null;
-  const unfit = data.notFitting.find((template) => template.id === templateId);
-  if (unfit) return `${unfit.name} is not offered for this facility. ${unfit.reason}`;
-  return "The template you opened is not in this Isometric project, so it is not offered. Pick another one.";
+  // A template that fits, is blocked, or does not fit is a row with its own reason.
+  if (data.fitting.some((template) => template.id === templateId) || data.notFitting.some((template) => template.id === templateId)) return null;
+  return "The template you opened is not in this Isometric project. Pick another one.";
 }

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { NuqsTestingAdapter } from "nuqs/adapters/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SETUP_NOT_LINKED_MESSAGE } from "@/lib/certification/removal-template-blockers";
 import { RemovalTemplateSummaryCard } from "./removal-template-summary-card";
@@ -10,35 +11,72 @@ const state = vi.hoisted(() => ({ data: undefined as unknown, batches: [] as unk
 vi.mock("@/hooks/use-removal-template-setup", () => ({
   useRemovalTemplateSetup: () => ({ data: state.error ? undefined : state.data, error: state.error, isError: !!state.error, isFetching: false, refetch: vi.fn() }),
 }));
+vi.mock("./removal-template-setup/removal-template-setup-dialog", () => ({
+  RemovalTemplateSetupDialog: ({ isOpen, step, templateId, makeDefault, onClose }: { isOpen: boolean; step?: string | null; templateId?: string | null; makeDefault?: boolean; onClose: () => void }) => (
+    isOpen ? <div role="dialog">{`setup ${step} ${templateId ?? "no template"} ${makeDefault ? "default" : "no default"}`}<button onClick={onClose}>Close setup</button></div> : null
+  ),
+}));
 vi.mock("@/hooks/use-credit-batches", () => ({ useCreditBatches: () => ({ data: state.batches }) }));
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); onUrlUpdate.mockClear(); });
 
 const ready = template("tpl-ready", "Protocol default", { defaults: [startupDefault] });
 const open = template("tpl-open", "Protocol default", { decisions: [dieselSource], defaults: [startupDefault] });
 
-function show(overrides: Parameters<typeof setupData>[0], batches: unknown[] = []) {
+const onUrlUpdate = vi.fn();
+
+function show(overrides: Parameters<typeof setupData>[0], batches: unknown[] = [], params = "") {
   state.data = setupData(overrides);
   state.batches = batches;
   state.error = null;
-  render(<RemovalTemplateSummaryCard facilityId={FACILITY} />);
+  render(
+    <NuqsTestingAdapter hasMemory searchParams={params} onUrlUpdate={onUrlUpdate}>
+      <RemovalTemplateSummaryCard facilityId={FACILITY} />
+    </NuqsTestingAdapter>,
+  );
 }
 
 describe("RemovalTemplateSummaryCard", () => {
-  it("shows Ready with both buttons for an Owner or Admin", () => {
+  it("shows Ready with both buttons for an Admin", () => {
     show({ fitting: [ready], defaultRemovalTemplateId: "tpl-ready" }, [{ id: "b1", code: "CB-26-001", removalTemplateId: "tpl-ready" }]);
     expect(screen.getByText("Ready")).toBeTruthy();
     expect(screen.getByRole("link", { name: "CB-26-001" }).getAttribute("href")).toContain("/credit-batches/b1");
-    expect(screen.getByRole("link", { name: "Review decisions" }).getAttribute("href")).toContain("step=decisions");
-    expect(screen.getByRole("link", { name: "Change template" }).getAttribute("href")).toContain("step=template");
-    expect(screen.getByRole("link", { name: "Change template" }).getAttribute("href")).not.toContain("template=tpl-ready");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Review decisions" }));
+    expect(screen.getByRole("dialog").textContent).toContain("setup decisions tpl-ready default");
+  });
+
+  it("Change template opens the dialog on the template list with nothing picked", () => {
+    show({ fitting: [ready], defaultRemovalTemplateId: "tpl-ready" });
+    fireEvent.click(screen.getByRole("button", { name: "Change template" }));
+    expect(screen.getByRole("dialog").textContent).toContain("setup template no template default");
+  });
+
+  it("opens the dialog from a setup link for an Admin and clears the params on close", async () => {
+    show({ fitting: [ready], defaultRemovalTemplateId: "tpl-ready" }, [], "?section=removal-templates&setup=decisions&template=tpl-ready&makeDefault=false");
+    expect(screen.getByRole("dialog").textContent).toContain("setup decisions tpl-ready no default");
+    fireEvent.click(screen.getByRole("button", { name: "Close setup" }));
+    await waitFor(() => expect(onUrlUpdate).toHaveBeenCalled());
+    const { searchParams, options } = onUrlUpdate.mock.lastCall![0];
+    expect(options.history).toBe("replace");
+    expect(searchParams.get("setup")).toBeNull();
+    expect(searchParams.get("template")).toBeNull();
+    expect(searchParams.get("makeDefault")).toBeNull();
+    expect(searchParams.get("section")).toBe("removal-templates");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("does not open the dialog for a Member with a setup link", () => {
+    show({ fitting: [ready], defaultRemovalTemplateId: "tpl-ready", viewerCanManage: false }, [], "?setup=decisions&template=tpl-ready");
+    expect(screen.getByRole("heading", { name: "Protocol default" })).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("shows the same card to a Member without buttons or raw ids", () => {
     show({ fitting: [ready], defaultRemovalTemplateId: "tpl-ready", viewerCanManage: false });
     expect(screen.getByRole("heading", { name: "Protocol default" })).toBeTruthy();
-    expect(screen.queryByRole("link", { name: "Review decisions" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "Change template" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review decisions" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Change template" })).toBeNull();
     expect(screen.queryByText("tpl-ready")).toBeNull();
   });
 
@@ -48,13 +86,14 @@ describe("RemovalTemplateSummaryCard", () => {
     expect(screen.queryByText("Ready")).toBeNull();
   });
 
-  it("offers Set up template when there is no default, to Owners and Admins only", () => {
+  it("offers Set up template when there is no default, to Admins only", () => {
     show({ fitting: [ready] });
     expect(screen.getByText("No Removal template set")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Set up template" }).getAttribute("href")).toContain("/certification/settings/removal-template-setup");
+    fireEvent.click(screen.getByRole("button", { name: "Set up template" }));
+    expect(screen.getByRole("dialog").textContent).toContain("setup template no template default");
     cleanup();
     show({ fitting: [ready], viewerCanManage: false });
-    expect(screen.queryByRole("link", { name: "Set up template" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Set up template" })).toBeNull();
   });
 
   it("reads a default that is blocked or unfit as a problem with its reason, never as Ready", () => {
@@ -63,7 +102,7 @@ describe("RemovalTemplateSummaryCard", () => {
     expect(screen.getByText("Not ready")).toBeTruthy();
     expect(screen.queryByText("Ready")).toBeNull();
     expect(screen.getByText(/Isometric has fixed values without a datapoint/)).toBeTruthy();
-    expect(screen.queryByRole("link", { name: "Review decisions" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review decisions" })).toBeNull();
     cleanup();
     show({ fitting: [], notFitting: [{ id: "tpl-x", name: "Old template", reason: "This template has no storage component." }], defaultRemovalTemplateId: "tpl-x" });
     expect(screen.getByText("Does not fit")).toBeTruthy();
@@ -94,7 +133,7 @@ describe("RemovalTemplateSummaryCard", () => {
 
   it("sends an unlinked facility to Certifier", () => {
     state.error = new Error(SETUP_NOT_LINKED_MESSAGE);
-    render(<RemovalTemplateSummaryCard facilityId={FACILITY} />);
+    render(<NuqsTestingAdapter><RemovalTemplateSummaryCard facilityId={FACILITY} /></NuqsTestingAdapter>);
     expect(screen.getByRole("link", { name: "Open Certifier" })).toBeTruthy();
   });
 });
