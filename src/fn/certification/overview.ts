@@ -1,6 +1,7 @@
 "use server";
 
 
+import { correctionForRemoval } from "@/lib/certification/removal-entry-correction";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { buildDurabilityBatchSummaries } from "@/lib/certification/durability-batch-summary";
 import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
@@ -108,6 +109,7 @@ export interface CreditBatchHealthSummary {
 // submission identity, and the readiness verdict (the same one the table hint
 // and wizard submit step render).
 export interface RemovalPreflightSummary {
+  correction?: import("@/lib/certification/removal-entry-correction").RemovalCorrection;
   removalId: string;
   code: string;
   startedOn: string | null;
@@ -174,8 +176,11 @@ async function buildRemovalPreflightSummary(
       startedOn,
       completedOn,
     });
+  // The batch context already evaluated correction windows from the loaded lineage.
+  const correction = correctionForRemoval(removalId, Object.values(ctx.entryCorrectionsByBatchId ?? {}).flat());
   return {
     removalId,
+    correction,
     code: scope.removal.code,
     startedOn,
     completedOn,

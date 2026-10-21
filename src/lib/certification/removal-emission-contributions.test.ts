@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveRemovalEntryContributions, deriveRemovalEntryWindow, isLiveEntryReservation, removalEntryOwner, type EntryContender, type RemovalEntryFact } from "./removal-emission-contributions";
+import { deriveRemovalEntryContributions, deriveRemovalEntryWindow, entriesWithoutRemoval, isLiveEntryReservation, removalEntryOwner, type EntryContender, type RemovalEntryFact } from "./removal-emission-contributions";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import { reviewPayloadHash } from "./removal-review-hash";
 
@@ -137,4 +137,17 @@ it.each(["additive", "single"] as const)("never sums separate transport inputs w
   expect(result.inputs).toEqual([]);
   expect(result.selectedEntryIds).toEqual([]);
   expect(result.blockers.map((row) => row.code)).toContain(entryPolicy === "additive" ? "lineNeedsReview" : "singleLineMultipleEntries");
+});
+
+it("holds an unsent replacement before drafts, including after the window closes", () => {
+  const held = entry({ heldForRemovalId: "r2" });
+  expect(removalEntryOwner(held, [first])).toBe("r2");
+  expect(removalEntryOwner(held, [])).toBe("r2");
+  expect(derive([held]).selectedEntryIds).toEqual([]);
+  expect(derive([held], { removalId: "r2", contenders: [] }).entrySet).toEqual([{ entryId: held.id, contentRevision: 1 }]);
+  expect(entriesWithoutRemoval([held], [], new Set(), [])).toEqual([]);
+  expect(removalEntryOwner({ ...held, deletedAt: new Date() }, [])).toBeNull();
+  expect(removalEntryOwner({ ...held, sentByRemovalId: "sent" }, [])).toBe("sent");
+  expect(removalEntryOwner({ ...held, reservedByRemovalId: "reserved" }, [])).toBe("reserved");
+  expect(removalEntryOwner({ ...held, sendReservedBySubmissionId: "unknown" }, [])).toBeNull();
 });

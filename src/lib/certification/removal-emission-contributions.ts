@@ -20,6 +20,7 @@ export function deriveRemovalEntryWindow(
 }
 export interface EntryContender {
   contenderKind: "draft" | "correction";
+  returnedStatement?: { id: string; status: "FAILED_VERIFICATION" | "DRAFT" };
   removalId: string;
   createdAt: string;
   creditBatchIds: readonly string[];
@@ -33,6 +34,7 @@ export interface RemovalEntryFact {
   id: string; creditBatchId: string; componentId: string; contentRevision: number;
   kind: "value" | "zero"; lineRule: "single" | "additive"; occurredOn: string;
   deletedAt: Date | string | null; sentByRemovalId: string | null;
+  heldForRemovalId?: string | null;
   confirmedForRemovalId: string | null;
   sendReservedBySubmissionId: string | null;
   /** Resolved only for a live reservation ledger row. */
@@ -81,6 +83,7 @@ export function removalEntryOwner(entry: RemovalEntryFact, contenders: readonly 
   if (entry.sentByRemovalId) return entry.sentByRemovalId;
   if (entry.reservedByRemovalId) return entry.reservedByRemovalId;
   if (entry.sendReservedBySubmissionId && !entry.reservationKnownInactive) return null;
+  if (entry.heldForRemovalId) return entry.heldForRemovalId;
   return contenders.filter((draft) => draft.creditBatchIds.includes(entry.creditBatchId) && inWindow(entry, draft.window) &&
     (entry.kind !== "zero" || entry.confirmedForRemovalId === draft.removalId))
     .sort((a, b) => Number(b.contenderKind === "correction") - Number(a.contenderKind === "correction") || a.window.end.localeCompare(b.window.end) || a.createdAt.localeCompare(b.createdAt) || a.removalId.localeCompare(b.removalId))[0]?.removalId ?? null;
@@ -91,7 +94,7 @@ export function entriesWithoutRemoval(
   entries: readonly RemovalEntryFact[], contenders: readonly EntryContender[], liveReservationIds: ReadonlySet<string>,
   applications: readonly { creditBatchId: string; applicationDate: Date }[],
 ): string[] {
-  return entries.filter((entry) => entry.kind === "value" && !entry.sentByRemovalId &&
+  return entries.filter((entry) => entry.kind === "value" && !entry.sentByRemovalId && !entry.heldForRemovalId &&
     !liveReservationIds.has(entry.sendReservedBySubmissionId ?? "") &&
     !removalEntryOwner({ ...entry, reservationKnownInactive: true }, contenders) &&
     !applications.some((application) => application.creditBatchId === entry.creditBatchId &&

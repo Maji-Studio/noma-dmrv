@@ -1,3 +1,4 @@
+import { loadEmissionEntryHolds } from "./emission-entry-holds";
 import { releaseSubmissionReservations } from "./submission-reservation-release";
 import { EMISSION_ENTRIES_CHANGED } from "@/lib/certification/emission-entry-messages";
 import { emissionEntryCanBeReserved } from "@/lib/certification/emission-entry-reservation";
@@ -112,6 +113,7 @@ export async function reserveProductionEmissionsClaims(
     const entries = entryIds.length ? await tx.select().from(emissionEntries).where(and(
       eq(emissionEntries.organizationId, ctx.organizationId), inArray(emissionEntries.id, entryIds),
     )).orderBy(emissionEntries.id).for("update") : [];
+    const holds = await loadEmissionEntryHolds(ctx, entries, tx);
     const entryChanged = () => new DomainError("conflict", EMISSION_ENTRIES_CHANGED, { retryable: true });
     if (new Set(entryIds).size !== entryIds.length || entries.length !== frozen.length) throw entryChanged();
     const submissionIds = [
@@ -182,7 +184,7 @@ export async function reserveProductionEmissionsClaims(
       ));
     for (const entry of entries) {
       const owner = entry.sendReservedBySubmissionId ? ownerById.get(entry.sendReservedBySubmissionId) : undefined;
-      if (!emissionEntryCanBeReserved({ entry, expectedRevision: frozen.find((item) => item.entryId === entry.id)?.contentRevision,
+      if (!emissionEntryCanBeReserved({ entry: { ...entry, heldForRemovalId: holds.get(entry.id) }, expectedRevision: frozen.find((item) => item.entryId === entry.id)?.contentRevision,
         memberBatchIds: members.map((member) => member.creditBatchId).filter((id) => entryClaim!.memberBatchIds.includes(id)),
         removalId: args.removalId, submissionId: args.submissionId,
         priorReservationTransferable: canTransferReservation(owner, nowMs) || isReviewedEvidencePredecessor(owner),

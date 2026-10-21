@@ -21,7 +21,7 @@ const entry: typeof emissionEntries.$inferSelect = {
   id, organizationId: ctx.organizationId, creditBatchId: "batch", removalTemplateId: "template",
   componentId: "line", inputShape: shape, lineRule: "additive", observationId: "observation",
   kind: "value", confirmedForRemovalId: null, occurredOn: "2026-01-01", note: "private note", createdBy: ctx.userId,
-  version: 2, contentRevision: 2, deletedAt: new Date("2026-01-02"), sentByRemovalId: null,
+  version: 2, contentRevision: 2, deletedAt: new Date("2026-01-02"), sentByRemovalId: null, replacesEntryId: null,
   sendReservedBySubmissionId: null, createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-02"),
 };
 const saved = { ...entry, deletedAt: null, version: 3, contentRevision: 3 };

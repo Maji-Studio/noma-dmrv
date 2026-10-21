@@ -520,17 +520,70 @@ it("keeps a replaced sent entry claimed by its original Removal even after the w
   });
   const replacement = await replaceEmissionEntry(ctx, { id: entry.id, expectedVersion: entry.version,
     occurredOn: entry.occurredOn, values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "2000", unit: "Wh" }] });
-  expect(replacement.sentByRemovalId).toBe(fixture.removalId);
-  expect(replacement.version).toBe(2);
+  expect(replacement).toMatchObject({ sentByRemovalId: null, replacesEntryId: entry.id, heldForRemovalId: fixture.removalId });
+  expect(replacement.version).toBe(1);
   const activity = await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId),
     eq(activityEvents.entityId, replacement.id), eq(activityEvents.action, "updated")));
-  expect(activity).toHaveLength(1);
+  expect(activity).toHaveLength(0);
   const [original] = await db.select().from(emissionEntries).where(eq(emissionEntries.id, entry.id));
   expect(original.deletedAt).not.toBeNull();
   expect(original.sentByRemovalId).toBe(fixture.removalId);
   correctionRemote.status = "AWAITING_VERIFICATION";
-  expect(removalEntryOwner({ ...replacement, counts: true, evidenceDocumentIds: [] }, [] )).toBe(fixture.removalId);
+  expect(removalEntryOwner({ ...await getEmissionEntry(ctx, replacement.id), counts: true, evidenceDocumentIds: [] }, [])).toBe(fixture.removalId);
   await expect(updateEmissionEntry(ctx, { id: replacement.id, expectedVersion: replacement.version, note: "closed" })).rejects.toThrow("reserved or sent");
+  await expect(deleteEmissionEntry(ctx, replacement.id, replacement.version)).rejects.toThrow("reserved or sent");
+  await expect(assertEmissionEntryDocumentWritable(ctx, replacement.id)).rejects.toThrow("reserved or sent");
+});
+
+it("reserves and stamps a held replacement only when its corrected Removal is submitted", async () => {
+  const { entry, original } = await sentCorrectionEntry();
+  correctionRemote.status = "FAILED_VERIFICATION";
+  const [current] = await db.insert(removalTemplateObservations).values({ ...observation, id: undefined,
+    semanticFingerprint: "held-submit", fullFingerprint: "held-submit", lastObservedAt: new Date("2099-01-01"),
+    enrichment: { ...observation.enrichment, line: { electricity_use: { unit: "Wh" } } },
+  }).returning();
+  const replacement = await replaceEmissionEntry(ctx, { id: entry.id, expectedVersion: entry.version,
+    occurredOn: entry.occurredOn, values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "2000", unit: "Wh" }] });
+  const { entries } = await loadBatchEmissionEntryFacts(ctx, fixture.batchId, current);
+  const contributions = deriveRemovalEntryContributions({ removalId: fixture.removalId,
+    memberBatchIds: [fixture.batchId], window: { start: "2026-06-01", end: "2026-06-16" },
+    contenders: [], entries, lineSources: current.lineSources,
+    monitoredInputs: [{ componentId: "line", inputKey: "electricity_use", unit: "Wh" }],
+  });
+  expect(contributions.entrySet).toEqual([{ entryId: replacement.id, contentRevision: replacement.contentRevision }]);
+  const next = await draft(contributions.entrySet, fixture.removalId, 2);
+  await reserve(next);
+  expect(await getEmissionEntry(ctx, replacement.id)).toMatchObject({ sentByRemovalId: null,
+    replacesEntryId: entry.id, heldForRemovalId: fixture.removalId, sendReservedBySubmissionId: next.id });
+  await markSubmissionSubmitted(ctx, next.id, { externalId: "held-correction-next", supersedePreviousId: original.id,
+    expectedLockedAt: next.lockedAt!, productionEmissionsClaim: { removalId: fixture.removalId, creditBatchIds: [fixture.batchId] } });
+  expect(await getEmissionEntry(ctx, replacement.id)).toMatchObject({ sentByRemovalId: fixture.removalId,
+    replacesEntryId: entry.id, sendReservedBySubmissionId: null });
+  const [prior] = await db.select().from(certificationSubmissions).where(and(
+    eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.id, original.id)));
+  expect(prior.status).toBe("superseded");
+});
+
+it("carries a second replacement's hold to the same sent original and refuses another draft's claim", async () => {
+  const { entry } = await sentCorrectionEntry();
+  correctionRemote.status = "FAILED_VERIFICATION";
+  let replacement = entry;
+  for (const [unit, observedAt] of [["Wh", "2099-01-01"], ["MJ", "2099-01-02"]]) {
+    await db.insert(removalTemplateObservations).values({ ...observation, id: undefined,
+      semanticFingerprint: unit, fullFingerprint: unit, lastObservedAt: new Date(observedAt),
+      enrichment: { ...observation.enrichment, line: { electricity_use: { unit } } },
+    });
+    replacement = await replaceEmissionEntry(ctx, { id: replacement.id, expectedVersion: replacement.version,
+      occurredOn: replacement.occurredOn, values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "2", unit }] });
+    expect(replacement).toMatchObject({ sentByRemovalId: null, replacesEntryId: entry.id, heldForRemovalId: fixture.removalId });
+  }
+  await expect(updateEmissionEntry(ctx, { id: replacement.id, expectedVersion: replacement.version, occurredOn: "2026-06-20" }))
+    .rejects.toThrow("Keep the entry date within this Removal's period.");
+  second = await createLineageFixture("none");
+  await db.update(creditBatchApplications).set({ creditBatchId: fixture.batchId }).where(and(
+    eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.removalId, second.removalId)));
+  const other = await draft([{ entryId: replacement.id, contentRevision: replacement.contentRevision }], second.removalId);
+  await expect(reserve(other, false)).rejects.toThrow("Emissions entries changed");
 });
 
 it.each([false, true])("records and undoes zeros inside an open window, already sent=%s", async (sent) => {

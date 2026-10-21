@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { deriveEntryCorrection } from "./removal-entry-correction";
+import { deriveEntryCorrection, buildRemovalCorrection } from "./removal-entry-correction";
 import { entryInputManifestSchema, type EntryInputManifest } from "./removal-emission-contributions";
 const manifest: EntryInputManifest[] = [{ componentId: "diesel", inputKey: "fuel", entries: [{ entryId: "entry", creditBatchId: "batch", contentRevision: 1, kind: "value", value: { magnitude: "2", unit: "L" }, evidenceDocumentIds: ["file"] }] }];
 it("requires an open window, including when the sent entry was deleted", () => {
@@ -14,7 +14,7 @@ it.each(["revision", "files", "value"])("detects %s changes", (change) => {
   if (change === "revision") current[0].entries[0].contentRevision++;
   if (change === "files") current[0].entries[0].evidenceDocumentIds = ["other"];
   if (change === "value") current[0].entries[0].value.magnitude = "3";
-  expect(deriveEntryCorrection(true, manifest, current).message).toBe("Correction needed: 1 component changed since this Removal was sent.");
+  expect(deriveEntryCorrection(true, manifest, current).message).toBe("Resubmit needed: 1 component changed since this Removal was sent.");
 });
 it("ignores display labels and unchanged contributions", () => {
   expect(deriveEntryCorrection(true, manifest, [{ ...manifest[0], componentDisplayName: "Renamed" }]).correctionNeeded).toBe(false);
@@ -54,4 +54,26 @@ it("ignores figure key order after snapshot parsing but detects changed transpor
       correctionNeeded: true, changedComponentIds: ["shipping"], changedBatchIds: ["batch"],
     });
   }
+});
+
+it.each([false, true])("builds Returned and Resubmit needed with exact component/batch pairs (changed=%s)", (changed) => {
+  const previous = [manifest[0], { ...manifest[0], componentId: "power",
+    entries: [{ ...manifest[0].entries[0], entryId: "power-entry", creditBatchId: "other" }] }];
+  const current = structuredClone(previous);
+  if (changed) {
+    current[0].entries[0].contentRevision++;
+    current[1].entries[0].contentRevision++;
+  }
+  const result = buildRemovalCorrection({ removalId: "removal", removalCode: "RM-001",
+    state: deriveEntryCorrection(true, previous, current),
+    statement: { id: "statement", status: "FAILED_VERIFICATION", reportingPeriodStartOn: "2026-01-01", reportingPeriodEndOn: "2026-03-31" },
+    batches: [{ id: "batch", code: "CB-001" }, { id: "other", code: "CB-002" }],
+    components: [{ id: "diesel", displayName: "Diesel" }, { id: "power", displayName: "Electricity" }],
+  });
+  expect(result).toMatchObject({ removalId: "removal", removalCode: "RM-001", windowOpen: true, resubmitNeeded: changed });
+  expect(result.changed).toEqual(changed ? [
+    { componentId: "diesel", componentName: "Diesel", batchId: "batch", batchCode: "CB-001" },
+    { componentId: "power", componentName: "Electricity", batchId: "other", batchCode: "CB-002" },
+  ] : []);
+  expect(result.batches).toHaveLength(2);
 });

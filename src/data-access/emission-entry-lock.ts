@@ -1,3 +1,4 @@
+import { loadEmissionEntryHolds } from "./emission-entry-holds";
 import { lockEmissionCorrectionScope, revalidateEmissionCorrectionScope, emissionCorrectionWindow } from "./emission-entry-corrections";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -26,12 +27,15 @@ export async function lockEmissionEntry(ctx: OrgContext, tx: DbTransaction, id: 
 export async function lockWritableEmissionEntry(ctx: OrgContext, tx: DbTransaction, id: string, options: { includeDeleted?: boolean } = {}) {
   requireOrgScope(ctx);
   const entry = await lockEmissionEntry(ctx, tx, id, options);
-  if ((entry.sentByRemovalId && !emissionCorrectionWindow(ctx, tx, entry.creditBatchId, entry.sentByRemovalId)) || entry.sendReservedBySubmissionId)
+  const holds = await loadEmissionEntryHolds(ctx, [entry], tx);
+  const heldForRemovalId = holds.get(entry.id) ?? null;
+  const removalId = entry.sentByRemovalId ?? heldForRemovalId;
+  if ((removalId && !emissionCorrectionWindow(ctx, tx, entry.creditBatchId, removalId)) || entry.sendReservedBySubmissionId)
     throw new DomainError(
       "certification_locked",
       "This emissions entry is reserved or sent. It cannot be changed.",
     );
-  return entry;
+  return { ...entry, heldForRemovalId };
 }
 /** Discover unlocked, then lock facility before batch, matching facility archive. */
 export async function lockEmissionEntryBatch(ctx: OrgContext, tx: DbTransaction, creditBatchId: string) {

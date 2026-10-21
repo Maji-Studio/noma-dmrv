@@ -64,10 +64,13 @@ export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBa
       return !!shared && isRemovalCorrectionWindowOpen(fact, shared);
     });
     const correction = eligibleBatchIds.length > 0;
+    const statement = correction ? fact.statements.find((item) => item.status === "FAILED_VERIFICATION" || item.status === "DRAFT") : undefined;
+    const returnedStatement: EntryContender["returnedStatement"] = statement && (statement.status === "FAILED_VERIFICATION" || statement.status === "DRAFT")
+      ? { id: statement.id, status: statement.status } : undefined;
     const submitted = fact.submissions.some(isSubmittedAttempt);
     if (submitted && !correction) return [];
     const window = deriveRemovalEntryWindow(group, group.map((row) => row.applicationDate));
-    return window ? [{ contenderKind: correction ? "correction" as const : "draft" as const, removalId, createdAt: group[0].createdAt.toISOString(),
+    return window ? [{ contenderKind: correction ? "correction" as const : "draft" as const, removalId, returnedStatement, createdAt: group[0].createdAt.toISOString(),
       creditBatchIds: [...new Set(correction ? eligibleBatchIds : group.map((row) => row.creditBatchId))], window }] : [];
   });
 }
