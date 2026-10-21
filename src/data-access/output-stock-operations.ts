@@ -116,7 +116,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const readings = plan ? planReadings(request, { remainingLayers: afterLayers }, input.occurredAt) : [];
   const drawnBases = plan ? bases.map(basis => ({ ...basis, remainingSolidsKg: plan!.remainingLayers.find(l => l.id === basis.layerId)?.remainingSolidsKg ?? basis.remainingSolidsKg })) : bases;
   const nextSequence = (events.at(-1)?.sequence ?? BigInt(0)) + BigInt(1);
-  const afterBases = withMovement(drawnBases, { readings, removals: plan ? planWetRemovals(plan) : [] }, input.occurredAt, nextSequence, input.kind);
+  const afterBases = withMovement(drawnBases, { readings, removals: plan ? planWetRemovals(plan) : [] }, input.occurredAt, nextSequence, input.kind, stockMode);
   const estimateBefore = estimateStock(bases, input.occurredAt);
   const estimateAfter = estimateStock(afterBases, input.occurredAt);
   // A count of a mix bin describes the whole pile, so the change names the pile, not each batch.
@@ -204,7 +204,7 @@ function laterMixRemovals(events: readonly { id: string; kind: string | null; oc
 /** One layer's wet stock, wet in minus wet out, or null when its wet mass is unknown. */
 function layerWetKg(bases: readonly LayerMoistureBasis[], layer: OutputStockLayer, at: string): number | null {
   const basis = bases.find(b => b.layerId === layer.id);
-  return basis ? estimateStock([basis], at).wetKg : null;
+  return basis ? estimateStock(bases, at, new Set([basis.layerId])).wetKg : null;
 }
 
 /**
@@ -216,8 +216,8 @@ function layerWetKg(bases: readonly LayerMoistureBasis[], layer: OutputStockLaye
 function resetChange(drawn: readonly LayerMoistureBasis[], after: readonly LayerMoistureBasis[], readings: readonly PlannedReading[], at: string, codes: Map<string, string>, pileName: string | null): OutputStockPreview['moistureReset'] {
   const ids = new Set(readings.map(reading => reading.layerId));
   if (!ids.size) return null;
-  const previous = estimateStock(drawn.filter(b => ids.has(b.layerId)), at);
-  const next = estimateStock(after.filter(b => ids.has(b.layerId)), at);
+  const previous = estimateStock(drawn, at, ids);
+  const next = estimateStock(after, at, ids);
   if (previous.moisturePercent !== null && formatMoisturePercent(previous.moisturePercent) === formatMoisturePercent(next.moisturePercent)) return null;
   return {
     layerCodes: pileName ? [pileName] : [...ids].map(id => codes.get(id) ?? id),

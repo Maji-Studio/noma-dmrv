@@ -1,6 +1,9 @@
 /** Real write-path contracts for #1252. Requires the isolated test database. */
 import { afterAll, expect, it } from 'vitest';
 import { db } from '@/db';
+import { storageLocations } from '@/db/schema';
+import { and, eq } from 'drizzle-orm';
+import { getOutputBinStocks } from '@/data-access/output-stock';
 import { previewOutputStock } from '@/data-access/output-stock-operations';
 import { getOutputStockHistory } from '@/data-access/output-stock-history';
 import { replayStock } from '@/lib/output-stock/stock-replay';
@@ -63,3 +66,25 @@ it('re-estimates a biochar draw through the product writer', async () => {
   await postProduct(f, { placedAt: STOCK_TIME, massKg: 50, moistureContentPercent: 50 });
   await assertSaved(f, f.source.id, 'production_draw');
 });
+
+
+it.each([{ wetMassKg: 100, wet: 200, solids: 110 }, { wetMassKg: 290, wet: 30, solids: 15 }])(
+  'uses the whole mix pile for a $wetMassKg kg real delivery', async ({ wetMassKg, wet, solids }) => {
+    const f = await postedStockFixture({ stockKg: 0 });
+    organizations.push(f.ctx.organizationId);
+    await db.update(storageLocations).set({ stockMode: 'mix' }).where(and(
+      eq(storageLocations.organizationId, f.ctx.organizationId), eq(storageLocations.id, f.bin.id)));
+    await postProduct(f, { massKg: 100, moistureContentPercent: 20 });
+    await postProduct(f, { massKg: 200, moistureContentPercent: 60 });
+    const preview = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id,
+      occurredAt: STOCK_TIME, kind: 'delivery', wetMassKg, moisturePercent: 50 });
+    expect(preview).toMatchObject({ blockingMessage: null, beforeEstimatedWetKg: 300, afterEstimatedWetKg: wet, afterSolidsKg: solids });
+    expect(preview.reestimate === null).toBe(wetMassKg === 100);
+    await postDelivery(f, wetMassKg, 50);
+    const saved = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id,
+      occurredAt: STOCK_TIME, kind: 'count', wetMassKg: 0 });
+    expect(saved).toMatchObject({ beforeEstimatedWetKg: wet, beforeSolidsKg: solids });
+    const stocks = await getOutputBinStocks(f.ctx, [f.bin.id]);
+    expect(stocks.get(f.bin.id)?.estimatedWetMassKg).toBe(wet);
+  },
+);

@@ -1,3 +1,4 @@
+import { stockModeAt, type OutputStockMode, type StockModeChange } from './stock-mode';
 /**
  * Output-bin layers from saved rows, with no database access. Readers fetch
  * rows and call these; every rule about which saved row reduces a layer lives
@@ -185,7 +186,7 @@ const WET_KG_PATTERN = /^\d+(\.\d+)?$/;
  * removal took. A corrected movement and its reversal both drop out, so the
  * replacement alone counts.
  */
-export function projectMoistureBases(layers: readonly OutputStockLayer[], rows: { recordedWetKg: ReadonlyMap<string, string | null>; readings: readonly MoistureReadingRow[]; removals: readonly WetRemovalRow[]; reversedMovementIds: ReadonlySet<string> }): LayerMoistureBasis[] {
+export function projectMoistureBases(layers: readonly OutputStockLayer[], rows: { stockMode?: OutputStockMode; modeChanges?: readonly StockModeChange[]; recordedWetKg: ReadonlyMap<string, string | null>; readings: readonly MoistureReadingRow[]; removals: readonly WetRemovalRow[]; reversedMovementIds: ReadonlySet<string> }): LayerMoistureBasis[] {
   return layers.map(layer => {
     const wet = rows.recordedWetKg.get(layer.id);
     const recordedWetKg: Rational | null = wet == null || !WET_KG_PATTERN.test(wet) ? null : decimal(wet as Decimal);
@@ -198,6 +199,7 @@ export function projectMoistureBases(layers: readonly OutputStockLayer[], rows: 
     for (const removal of live) {
       if (removal.wetMassKg != null) removals.push({
         wetKg: removal.wetShareKg == null ? decimal(removal.wetMassKg as Decimal) : readRational(removal.wetShareKg),
+        stockMode: removal.occurredAt ? stockModeAt(rows.stockMode ?? 'split', rows.modeChanges ?? [], removal.occurredAt.toISOString()) : 'split',
         solidsKg: solids, moisturePercent: removal.moisturePercent, occurredAt: removal.occurredAt?.toISOString(), kind: removal.kind, sequence: removal.sequence,
       });
       if (removal.solidsKg != null) solids = add(solids, readRational(removal.solidsKg));

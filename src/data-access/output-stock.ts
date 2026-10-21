@@ -1,3 +1,4 @@
+import type { StockModeChange } from '@/lib/output-stock/stock-mode';
 import { deletedProductIds } from './output-stock-active-movements';
 import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, biocharProductSourceAllocations, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations, productIngredientSnapshots, productionRuns, storageLocations } from '@/db/schema';
@@ -194,7 +195,7 @@ async function readMoistureRows(ctx: OrgContext, bins: readonly Pick<OutputBinRe
   const biocharBinIds = bins.filter(bin => bin.type === 'biochar_bin').map(bin => bin.id);
   const productBinIds = bins.filter(bin => bin.type === 'product_bin').map(bin => bin.id);
   const binIds = bins.map(bin => bin.id);
-  const [runWet, productWet, readings, removals, sourceDraws, corrections] = await Promise.all([
+  const [runWet, productWet, readings, removals, sourceDraws, corrections, modes, modeChanges] = await Promise.all([
     biocharBinIds.length ? reader.select({ id: productionRuns.id, wet: sql<string | null>`${productionRuns.biocharOutputKg}::text` }).from(productionRuns)
       .where(and(eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.biocharStorageLocationId, biocharBinIds))) : [],
     productBinIds.length ? reader.select({ id: biocharProducts.id, wet: sql<string | null>`(${biocharProducts.massKg} + coalesce(${biocharProducts.waterAddedKg}, 0))::text` }).from(biocharProducts)
@@ -216,8 +217,12 @@ async function readMoistureRows(ctx: OrgContext, bins: readonly Pick<OutputBinRe
       .where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), inArray(biocharProductSourceAllocations.sourceStorageLocationId, biocharBinIds))) : [],
     reader.select({ binId: binMovements.storageLocationId, correctsMovementId: binMovements.correctsMovementId }).from(binMovements)
       .where(and(eq(binMovements.organizationId, ctx.organizationId), inArray(binMovements.storageLocationId, binIds), isNotNull(binMovements.correctsMovementId))),
+    reader.select({ id: storageLocations.id, stockMode: storageLocations.stockMode }).from(storageLocations)
+      .where(and(eq(storageLocations.organizationId, ctx.organizationId), inArray(storageLocations.id, binIds))),
+    reader.select({ binId: binMovements.storageLocationId, kind: binMovements.outputKind, at: binMovements.occurredAt, sequence: binMovements.postingSequence }).from(binMovements)
+      .where(and(eq(binMovements.organizationId, ctx.organizationId), inArray(binMovements.storageLocationId, binIds), inArray(binMovements.outputKind, ['merge', 'split']))),
   ]);
-  return { recordedWetKg: new Map([...runWet, ...productWet].map(row => [row.id, row.wet])), readings, removals, sourceDraws, corrections };
+  return { modes, modeChanges, recordedWetKg: new Map([...runWet, ...productWet].map(row => [row.id, row.wet])), readings, removals, sourceDraws, corrections };
 }
 
 function moistureRowsFor(bin: Pick<OutputBinRef, 'id'>, rows: Awaited<ReturnType<typeof readMoistureRows>>, ignoreMovementId?: string) {
@@ -236,7 +241,10 @@ function moistureRowsFor(bin: Pick<OutputBinRef, 'id'>, rows: Awaited<ReturnType
       occurredAt: occurredAt ?? undefined, kind: kind === 'replacement' && typeof input?.kind === 'string' ? input.kind : kind ?? undefined }] : [];
   });
   removals.push(...preLedgerWetRemovals(rows.sourceDraws.filter(draw => draw.binId === bin.id), ledger.map(({ allocation }) => allocation)));
-  return { recordedWetKg: rows.recordedWetKg, readings, removals, reversedMovementIds };
+  const modeChanges: StockModeChange[] = rows.modeChanges.filter(row => row.binId === bin.id)
+    .map(row => ({ to: row.kind === 'merge' ? 'mix' : 'split', at: row.at!.toISOString(), sequence: row.sequence }));
+  return { stockMode: rows.modes.find(row => row.id === bin.id)?.stockMode, modeChanges,
+    recordedWetKg: rows.recordedWetKg, readings, removals, reversedMovementIds };
 }
 
 /**
