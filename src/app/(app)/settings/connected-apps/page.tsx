@@ -1,6 +1,6 @@
 /**
  * Settings → Connected apps. Every member sees their own connections;
- * Owners and Admins also see every member's and can disconnect any.
+ * Admins also see every member's and can disconnect any.
  */
 import { redirect } from "next/navigation";
 import { ConnectedApps } from "@/components/oauth";
@@ -21,7 +21,7 @@ export default async function ConnectedAppsPage() {
     <SettingsConsole
       title="Connected apps"
       caption="Apps you have allowed to act for you in this organization."
-      access="You and organization Owners and Admins"
+      access="You and organization Admins"
       canManageDefaults={ctx.isPlatformAdmin || canManage}
       canManageApiKeys={canManage}
       isPlatformAdmin={ctx.isPlatformAdmin}

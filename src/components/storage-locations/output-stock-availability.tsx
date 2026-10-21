@@ -3,7 +3,6 @@
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
 import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
 import { SegmentBar, SegmentKey } from "@/components/ui/segment-bar";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { WET_STOCK_DEFINITION } from "@/lib/output-stock/labels";
 import { formatMassKg } from "@/lib/format-utils";
 import type { OutputStockAllocationView } from "@/types/output-stock";
@@ -69,7 +68,8 @@ export function OutputStockAvailability({ binName, dryKg, wetEstimate = null, al
   // A spent batch holds nothing to order against, so it stays off the block.
   const held = allocations.filter(allocation => allocation.dryMassKg > 0);
   const segments = batchSegments(held);
-  const dry = dryKg == null ? MISSING_VALUE.notAvailable : `${formatMassKg(dryKg)} dry biochar`;
+  // Dry stock is a balance, so without one the headline is left out.
+  const dry = dryKg == null ? null : `${formatMassKg(dryKg)} dry biochar`;
   return (
     <CompositionCard
       title={binName}

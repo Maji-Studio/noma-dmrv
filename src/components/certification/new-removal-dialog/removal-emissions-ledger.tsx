@@ -13,7 +13,6 @@ import {
 } from "@/lib/certification/links";
 import { SectionLabel } from "@/components/forms/section-label";
 import { DetailField } from "@/components/ui/detail-panel";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatTonnes } from "@/lib/format-utils";
 
 const LINK_ICON_SIZE = 12;
@@ -21,10 +20,17 @@ const LINK_ICON_SIZE = 12;
 const LEDGER_NOTE =
   "Estimated before project emissions and registry verification. Isometric calculates the final net value.";
 
-function inputValue(input: RemovalLedgerPreview["inputs"][number]): string {
-  return input.magnitude == null
-    ? MISSING_VALUE.notAvailable
-    : `${input.magnitude.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${input.unit}`.trim();
+type LedgerInput = RemovalLedgerPreview["inputs"][number];
+
+/**
+ * The input's sum, or why a required input has none. A required input never
+ * drops out of the table: its row stays and names the gap.
+ */
+function InputValue({ input }: { input: LedgerInput }) {
+  if (input.magnitude == null) {
+    return <span className="font-sans text-[var(--color-text-tertiary)]">{input.missingReason}</span>;
+  }
+  return <>{`${input.magnitude.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${input.unit}`.trim()}</>;
 }
 
 function LedgerLink({ href, children }: { href: string; children: ReactNode }) {
@@ -75,6 +81,7 @@ export function RemovalEmissionsLedger({
     claims.length > 1 &&
     productionAndDeliveryCount > 0 &&
     deliveryOnlyCount > 0;
+  const inputs = ledger.inputsUnavailable ? [] : ledger.inputs;
   const creditBatchCodeById = new Map(
     ledger.creditBatches.map((batch) => [batch.id, batch.code]),
   );
@@ -126,10 +133,9 @@ export function RemovalEmissionsLedger({
         <p className="body-small font-medium text-[var(--color-text-primary)]">
           Inputs included
         </p>
-        {ledger.inputsUnavailable || ledger.inputs.length === 0 ? (
+        {inputs.length === 0 ? (
           <p className="body-small text-[var(--color-text-tertiary)]">
-            {MISSING_VALUE.notAvailable}. Complete the source data checks to
-            calculate these inputs.
+            Complete the source data checks to calculate these inputs.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -142,7 +148,7 @@ export function RemovalEmissionsLedger({
                 </tr>
               </thead>
               <tbody>
-                {ledger.inputs.map((input) => (
+                {inputs.map((input) => (
                   <tr key={input.id}>
                     <td className="py-4 pr-12 text-[var(--color-text-secondary)]">
                       {input.component}
@@ -151,7 +157,7 @@ export function RemovalEmissionsLedger({
                       {input.input}
                     </td>
                     <td className="py-4 pl-12 text-right font-mono tabular-nums text-[var(--color-text-primary)]">
-                      {inputValue(input)}
+                      <InputValue input={input} />
                     </td>
                   </tr>
                 ))}
@@ -221,7 +227,7 @@ export function RemovalEmissionsLedger({
               <span>{application.deliveryCode} · application</span>
               <span className="flex flex-wrap justify-end gap-x-8 gap-y-4">
                 {application.creditBatchIds.length === 0
-                  ? MISSING_VALUE.notAvailable
+                  ? "No credit batch"
                   : application.creditBatchIds.map((creditBatchId) => (
                       <LedgerLink
                         key={creditBatchId}

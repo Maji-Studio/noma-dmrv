@@ -4,9 +4,10 @@ const mockEnv = vi.hoisted(() => ({
   CREDENTIALS_ENCRYPTION_KEY: "a".repeat(64) as string | undefined,
 }));
 
-vi.mock("@/config/env", () => ({
-  env: mockEnv,
-}));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: mockEnv };
+});
 
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn(),

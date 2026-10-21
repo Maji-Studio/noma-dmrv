@@ -9,7 +9,7 @@ vi.mock('./api-output-stock-movements', () => ({ requireApiOutputBin: mocks.bin 
 vi.mock('./output-bin-stock', () => ({ readOutputBinStockAt: mocks.read, withStockSnapshot: mocks.snapshot }));
 vi.mock('@/db', () => ({ db: {} }));
 
-const ctx = { organizationId: 'org', userId: 'operator', orgRole: 'owner' as const, isPlatformAdmin: false };
+const ctx = { organizationId: 'org', userId: 'operator', orgRole: 'admin' as const, isPlatformAdmin: false };
 const tx = {} as DbTransaction;
 const AT = '2026-10-01T08:00:00.000Z';
 const bin = { id: 'bin', code: 'OB-2', type: 'biochar_bin', facilityId: 'facility', archivedAt: null, formulationId: null };

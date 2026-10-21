@@ -25,7 +25,7 @@ const SWATCH = "inline-block h-12 w-12 shrink-0 border border-[var(--color-borde
  * Masses are the default; a blend of volume shares passes its own percent
  * formatter so the spoken bar says "60%" rather than "60 kg".
  */
-export type SegmentFormat = (mass: number | null) => string;
+export type SegmentFormat = (mass: number) => string;
 
 /**
  * Fills for a partition whose parts are peer batches rather than different
@@ -60,7 +60,7 @@ export function segmentWidths(segments: readonly MassSegment[]): number[] {
 
 function describe(segments: readonly MassSegment[], format: SegmentFormat): string {
   return segments
-    .filter((segment) => (segment.mass ?? 0) > 0)
+    .filter((segment): segment is MassSegment & { mass: number } => (segment.mass ?? 0) > 0)
     .map((segment) => `${segment.label} ${format(segment.mass)}`)
     .join(", ");
 }
@@ -94,7 +94,11 @@ export function SegmentBar({ segments, label, format = formatCompositionMass, cl
   );
 }
 
-/** The line under the bar: a swatch and "Label N kg" per segment, in bar order. Zero parts stay listed so an empty part is a fact, not an omission. */
+/**
+ * The line under the bar: a swatch and "Label N kg" per segment, in bar order.
+ * Zero parts stay listed so an empty part is a fact, not an omission. A part
+ * whose mass cannot be derived keeps its label and shows no figure.
+ */
 export function SegmentKey({ segments, format = formatCompositionMass, className = "" }: {
   segments: readonly MassSegment[];
   /** Quantity formatter per part. Defaults to kilograms. */
@@ -106,7 +110,7 @@ export function SegmentKey({ segments, format = formatCompositionMass, className
       {segments.map((segment) => (
         <span key={segment.label} className="inline-flex items-center gap-6">
           <span aria-hidden="true" className={`${SWATCH} ${segment.fill ? "" : MASS_CATEGORY_FILLS[segment.category]}`} style={segment.fill ? { background: segment.fill } : undefined} />
-          {segment.label} {format(segment.mass)}
+          {segment.mass === null ? segment.label : `${segment.label} ${format(segment.mass)}`}
         </span>
       ))}
     </p>

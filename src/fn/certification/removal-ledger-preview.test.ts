@@ -1,6 +1,4 @@
-beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
-afterEach(() => { vi.unstubAllEnvs(); });
-import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   aggregateProductionRuns,
   enrichWithTransportLegs,
@@ -8,7 +6,7 @@ import {
 } from "@/lib/isometric";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type { RemovalRunSummary } from "@/lib/certification/mass-accounting";
-import { buildRemovalLedgerPreview } from "./removal-ledger-preview";
+import { buildRemovalLedgerPreview, LEGS_CANNOT_BE_SUMMED, NO_LEGS_RECORDED } from "./removal-ledger-preview";
 
 vi.mock("@/lib/isometric", () => ({
   aggregateProductionRuns: vi.fn(),
@@ -56,8 +54,7 @@ describe("buildRemovalLedgerPreview", () => {
     vi.mocked(enrichWithTransportLegs).mockReturnValue(AGGREGATE as never);
   });
 
-  it.each([false, true])("projects mixed production claims, transport inputs, and batch-aware links (gate: %s)", (enabled) => {
-    vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
+  it("projects mixed production claims, transport inputs, and batch-aware links", () => {
     const preview = buildRemovalLedgerPreview({
       removalId: "removal-current",
       memberBatchClaims: [
@@ -110,7 +107,6 @@ describe("buildRemovalLedgerPreview", () => {
       "grid-electricity",
       "feedstock-transport",
       "biochar-transport",
-      ...(!enabled ? ["sample-transport"] : []),
     ]);
     expect(preview.applications).toEqual([
       expect.objectContaining({
@@ -147,6 +143,40 @@ describe("buildRemovalLedgerPreview", () => {
       "biochar-dry-mass",
       "biochar-transport",
     ]);
+  });
+
+  it("keeps a required transport input it cannot sum and says why", () => {
+    vi.mocked(enrichWithTransportLegs).mockReturnValue({
+      ...AGGREGATE,
+      feedstockTransportMassDistanceTonneKm: null,
+      biocharTransportMassDistanceTonneKm: null,
+    } as never);
+
+    const preview = buildRemovalLedgerPreview({
+      removalId: "removal-1",
+      memberBatchClaims: [{
+        creditBatchId: "batch-1",
+        code: "CB-1",
+        claimedByRemovalId: null,
+        productionRunIds: ["run-1"],
+        applicationIds: ["application-1"],
+      }],
+      runs: [run("run-1")],
+      lineages: [lineage("application-1", "AP-1")],
+      transportLegs: { feedstock: [], biochar: [{} as never], sample: [] },
+      attributionByRunId: new Map(),
+      runSummary: RUN_SUMMARY,
+      requiredTransportCategories: ["feedstock", "biochar"],
+    });
+
+    const byId = new Map(preview.inputs.map((entry) => [entry.id, entry]));
+    expect(byId.get("feedstock-transport")).toEqual(
+      expect.objectContaining({ magnitude: null, missingReason: NO_LEGS_RECORDED }),
+    );
+    expect(byId.get("biochar-transport")).toEqual(
+      expect.objectContaining({ magnitude: null, missingReason: LEGS_CANNOT_BE_SUMMED }),
+    );
+    expect(byId.get("diesel")?.missingReason).toBeNull();
   });
 
   it("keeps claims and source records when numeric aggregation fails", () => {

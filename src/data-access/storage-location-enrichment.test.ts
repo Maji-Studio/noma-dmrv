@@ -59,7 +59,7 @@ describe("last-applied calendar day decoding", () => {
     const [bin] = await enrichStorageLocationRows({
       organizationId: row.organizationId,
       userId: "calendar-day-user",
-      orgRole: "owner",
+      orgRole: "admin",
       isPlatformAdmin: false,
     }, [row]);
 

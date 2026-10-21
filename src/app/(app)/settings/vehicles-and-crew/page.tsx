@@ -13,7 +13,7 @@ export default async function VehiclesAndCrewSettingsPage() {
   if (!ctx) redirect("/dashboard");
 
   const canManageDefaults =
-    ctx.isPlatformAdmin || ctx.orgRole === "owner" || ctx.orgRole === "admin";
+    ctx.isPlatformAdmin || ctx.orgRole === "admin";
 
   return (
     <SettingsConsole

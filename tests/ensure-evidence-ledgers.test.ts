@@ -16,7 +16,7 @@ import { EvidenceLedgerRetirementError } from "@/fn/certification/evidence-ledge
 import { SafeError } from "@/lib/errors";
 
 const orgCtx = makeTestOrgContext("user-1");
-const ctx = {} as RemovalSubmissionContext;
+const ctx = { facilityTimezone: "UTC" } as RemovalSubmissionContext;
 const log = { info: vi.fn(), warn: vi.fn() };
 
 beforeEach(() => {

@@ -286,7 +286,6 @@ describe("submitRemoval — Source binding gate", () => {
           ]),
         ),
         externalProjectId: ctx.mapping!.externalProjectId,
-        allowPeriodInputStub: false,
         hasDurabilityComponents: false,
       },
     });
@@ -498,7 +497,6 @@ describe("submitRemoval — Source binding gate", () => {
           ]),
         ),
         externalProjectId: ctx.mapping!.externalProjectId,
-        allowPeriodInputStub: false,
         hasDurabilityComponents: false,
       },
       allowPendingSources: true,

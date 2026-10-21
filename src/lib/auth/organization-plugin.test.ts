@@ -1,0 +1,165 @@
+/** Exercise the installed plugin through HTTP with the application's real config. */
+import { createHmac } from "node:crypto";
+import { beforeEach, expect, it, vi } from "vitest";
+import { LAST_ADMIN_MESSAGE } from "./organization-role-policy";
+const databaseFailure = vi.hoisted(() => ({ enabled: false }));
+const memory = vi.hoisted(() => Object.fromEntries(
+  ["user", "organization", "member", "session", "invitation"].map(key => [key, [] as Record<string, unknown>[]]),
+));
+vi.mock("@/db", () => ({ db: {} }));
+vi.mock("@/db/org-defaults", () => ({ seedOrgDefaults: vi.fn() }));
+vi.mock("@/data-access/api-credential-auth", () => ({ disableOwnerApiKeys: vi.fn() }));
+vi.mock("@/data-access/oauth-grant-lifecycle", () => ({
+  revokeMemberOAuthGrants: vi.fn(), revokeDeletedMemberOAuthGrants: vi.fn(),
+}));
+vi.mock("better-auth/adapters/drizzle", async () => {
+  const { memoryAdapter } = await import("better-auth/adapters/memory");
+  return { drizzleAdapter: () => {
+    const factory = memoryAdapter(memory);
+    return (options: Parameters<typeof factory>[0]) => {
+      const adapter = factory(options);
+      const update = adapter.update.bind(adapter);
+      adapter.update = async args => {
+        if (databaseFailure.enabled && args.model === "member") {
+          throw new Error("Query failed", { cause: Object.assign(new Error("Last Admin"), {
+            code: "23514", constraint: "members_last_admin",
+          }) });
+        }
+        return update(args);
+      };
+      return adapter;
+    };
+  } };
+});
+import { auth } from "./better-auth";
+vi.mock("next/headers", () => ({ headers: () => sessionHeaders(), cookies: () => ({ getAll: () => [] }) }));
+vi.mock("@/data-access/organizations", () => ({}));
+vi.mock("@/lib/auth/server", () => ({
+  requireOrgContext: async () => ({ userId: "actor", organizationId: "org", orgRole: "admin", isPlatformAdmin: false }),
+  requireOrgRole: vi.fn(),
+}));
+import { changeMemberRoleAction } from "@/fn/organizations";
+const ORIGIN = "http://localhost:3100";
+const SESSION_LIFETIME_MS = 60_000;
+beforeEach(() => {
+  databaseFailure.enabled = false;
+  Object.values(memory).forEach(rows => rows.splice(0));
+  for (const id of ["actor", "other"]) {
+    memory.user.push({ id, email: `${id}@example.test`, name: "Test", emailVerified: true, role: "user", createdAt: new Date(), updatedAt: new Date() });
+  }
+  memory.organization.push({ id: "org", name: "Test", slug: "test", createdAt: new Date() });
+  memory.member.push({ id: "actor-member", userId: "actor", organizationId: "org", role: "admin", createdAt: new Date() });
+  memory.session.push({ id: "session", token: "test-token", userId: "actor", activeOrganizationId: "org", expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS), createdAt: new Date(), updatedAt: new Date() });
+});
+async function sessionHeaders() {
+  const ctx = await auth.$context;
+  const signature = createHmac("sha256", ctx.secret).update("test-token").digest("base64");
+  return new Headers({ origin: ORIGIN, "content-type": "application/json", cookie: `${ctx.authCookies.sessionToken.name}=${encodeURIComponent(`test-token.${signature}`)}` });
+}
+async function post(path: string, body: Record<string, unknown>) {
+  return auth.handler(new Request(`${ORIGIN}/api/auth/organization/${path}`, {
+    method: "POST",
+    headers: await sessionHeaders(),
+    body: JSON.stringify({ organizationId: "org", ...body }),
+  }));
+}
+it("gives a trusted organization creator the Admin role", async () => {
+  const org = await auth.api.createOrganization({ body: { name: "New org", slug: "new-org", userId: "other" } });
+  expect(memory.member.find(row => row.organizationId === org!.id)).toMatchObject({ userId: "other", role: "admin" });
+});
+it.each([
+  ["update-member-role", { memberId: "actor-member", role: "member" }],
+  ["remove-member", { memberIdOrEmail: "actor-member" }],
+  ["leave", {}],
+] as const)("refuses the last Admin's %s with actionable copy", async (path, body) => {
+  const response = await post(path, body);
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ message: LAST_ADMIN_MESSAGE });
+  expect(memory.member).toMatchObject([{ id: "actor-member", role: "admin" }]);
+});
+it.each([
+  ["update-member-role", { memberId: "actor-member", role: "member" }],
+  ["remove-member", { memberIdOrEmail: "actor-member" }],
+  ["leave", {}],
+] as const)("allows %s when another Admin remains", async (path, body) => {
+  memory.member.push({ id: "other-member", userId: "other", organizationId: "org", role: "admin", createdAt: new Date() });
+  expect((await post(path, body)).status).toBe(200);
+  expect(memory.member.find(row => row.id === "other-member")?.role).toBe("admin");
+});
+it.each([{ role: "owner" }, { role: "admin,member" }, { role: ["admin", "member"] }])("rejects unsupported role $role on direct plugin writes", async ({ role }) => {
+  for (const path of ["invite-member", "update-member-role"]) {
+    const response = await post(path, { role, memberId: "actor-member", userId: "other", email: "invite@example.test" });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ message: "Choose Admin or Member." });
+  }
+});
+it("refuses Admin organization deletion without clearing the active organization", async () => {
+  const response = await post("delete", {});
+  expect(response.status).toBe(404);
+  expect(await response.json()).toMatchObject({ code: "ORGANIZATION_DELETION_DISABLED" });
+  expect(memory.organization).toHaveLength(1);
+  expect(memory.session[0].activeOrganizationId).toBe("org");
+});
+it("lets an Admin promote another Member", async () => {
+  memory.member.push({ id: "other-member", userId: "other", organizationId: "org", role: "member", createdAt: new Date() });
+  expect((await post("update-member-role", { memberId: "other-member", role: "admin" })).status).toBe(200);
+  expect(memory.member.find(row => row.id === "other-member")?.role).toBe("admin");
+});
+it.each(["admin", "member"])("lets an Admin invite a %s", async role => {
+  expect((await post("invite-member", { role, email: "invite@example.test" })).status).toBe(200);
+  expect(memory.invitation[0]).toMatchObject({ role, status: "pending" });
+});
+it.each([
+  ["delete", 404, "ORGANIZATION_DELETION_DISABLED"],
+  ["update-member-role", 403, "YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER"],
+  ["remove-member", 401, "YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER"],
+  ["invite-member", 403, "YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION"],
+] as const)("refuses Member management via %s", async (path, status, code) => {
+  memory.member[0].role = "member";
+  const response = await post(path, { memberId: "actor-member", memberIdOrEmail: "actor-member", role: "admin", email: "invite@example.test" });
+  expect(response.status).toBe(status);
+  expect(await response.json()).toMatchObject({ code });
+});
+
+it("rejects the obsolete role through the server-only add-member endpoint", async () => {
+  // @ts-expect-error Exercise callers that bypass TypeScript.
+  await expect(auth.api.addMember({ body: { userId: "other", organizationId: "org", role: "owner" } })).rejects.toThrow("Choose Admin or Member.");
+});
+
+it("refuses a Member removing an Admin as a permission failure", async () => {
+  memory.member[0].role = "member";
+  memory.member.push({ id: "other-member", userId: "other", organizationId: "org", role: "admin", createdAt: new Date() });
+  const response = await post("remove-member", { memberIdOrEmail: "other-member" });
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ code: "YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER", message: "You are not allowed to remove this member." });
+});
+
+it("refuses acceptance of a pending legacy Owner invitation", async () => {
+  memory.member.splice(0);
+  memory.invitation.push({ id: "legacy-invite", organizationId: "org", inviterId: "other", email: "actor@example.test",
+    role: "owner", status: "pending", expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS) });
+  const response = await post("accept-invitation", { invitationId: "legacy-invite" });
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ message: "Choose Admin or Member." });
+  expect(memory.member).toHaveLength(0);
+  expect(memory.invitation[0].status).toBe("pending");
+});
+
+it("returns the real plugin last-Admin refusal in ActionResult.error", async () => {
+  expect(await changeMemberRoleAction({ memberId: "actor-member", role: "member" })).toEqual({
+    success: false, error: LAST_ADMIN_MESSAGE,
+  });
+});
+
+it("maps the database invariant through the real plugin and server action", async () => {
+  // The plugin's precheck saw two Admins; simulate the trigger refusing the
+  // write after a concurrent transaction removed the other Admin.
+  memory.member.push({ id: "other-member", userId: "other", organizationId: "org", role: "admin", createdAt: new Date() });
+  databaseFailure.enabled = true;
+  const response = await post("update-member-role", { memberId: "actor-member", role: "member" });
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ code: "LAST_ADMIN", message: LAST_ADMIN_MESSAGE });
+  expect(await changeMemberRoleAction({ memberId: "actor-member", role: "member" })).toEqual({
+    success: false, error: LAST_ADMIN_MESSAGE,
+  });
+});

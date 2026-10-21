@@ -5,7 +5,7 @@ vi.mock("./record-lock-dependents", () => ({ readRecordDependents: async () => [
 vi.mock('./certification-lineage-guards', () => ({ assertCanMutateCertifiedLineage: vi.fn() }));
 vi.mock('./transport-legs', () => ({ lockBiocharTransportRouteTopology: vi.fn() }));
 import { updateOrderInTransaction } from './orders';
-const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'owner', isPlatformAdmin: false };
+const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'admin', isPlatformAdmin: false };
 
 describe('order transaction customer-location validation', () => {
   it.each(['customer', 'wrong-customer', null])('uses the held transaction and enforces ownership: %s', async customerId => {

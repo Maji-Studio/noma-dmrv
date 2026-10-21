@@ -6,14 +6,20 @@ import { SafeError } from "@/lib/errors";
 import { requireOrgScope } from "./utils";
 import { nextVersion } from "./row-version";
 import { recordEmissionEntryActivity } from "./emission-entry-activity";
+import { lockBatchesThenEntries } from "./emission-entry-release-locks";
 
-/** Only after registry cleanup and the finalizer's ledger/batch locks. */
-export async function releaseDeletedRemovalEntries(ctx: OrgContext, tx: DbTransaction, removalId: string, submissionIds: string[]) {
+export function deletedRemovalEntryFilter(removalId: string, submissionIds: string[]) {
+  return or(eq(emissionEntries.confirmedForRemovalId, removalId), eq(emissionEntries.sentByRemovalId, removalId),
+    submissionIds.length ? inArray(emissionEntries.sendReservedBySubmissionId, submissionIds) : undefined)!;
+}
+
+/** Caller fences Removal deletion; acquire all affected batches before entry locks. */
+export async function releaseDeletedRemovalEntries(ctx: OrgContext, tx: DbTransaction, removalId: string, submissionIds: string[], batchesLocked = false) {
   requireOrgScope(ctx);
-  const rows = await tx.select().from(emissionEntries).where(and(eq(emissionEntries.organizationId, ctx.organizationId), or(
-    eq(emissionEntries.confirmedForRemovalId, removalId), eq(emissionEntries.sentByRemovalId, removalId),
-    submissionIds.length ? inArray(emissionEntries.sendReservedBySubmissionId, submissionIds) : undefined,
-  ))).orderBy(emissionEntries.id).for("update");
+  const matched = deletedRemovalEntryFilter(removalId, submissionIds);
+  const rows = batchesLocked
+    ? await tx.select().from(emissionEntries).where(and(eq(emissionEntries.organizationId, ctx.organizationId), matched)).orderBy(emissionEntries.id).for("update")
+    : await lockBatchesThenEntries(ctx, tx, { removalId, entryFilter: matched });
   // Finalized Removals cannot reach this finalizer. Preserve sent zero history even if that invariant is violated.
   if (rows.some((row) => row.kind === "zero" && row.sentByRemovalId)) throw new SafeError("A Removal with sent recorded zeros cannot be deleted.");
   for (const row of rows) {

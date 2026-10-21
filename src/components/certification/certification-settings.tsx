@@ -72,7 +72,6 @@ import {
   CERTIFICATION_SETTINGS_SECTION_PARAM,
   CERTIFICATION_SETTINGS_SOURCES_SECTION,
   CERTIFICATION_SETTINGS_TEMPLATE_MAPPING_SECTION,
-  CERTIFICATION_SETTINGS_TEMPLATE_PARAM,
 } from "@/lib/certification/links";
 import { CertificationHealthPanel } from "./certification-health-panel";
 import { CertifierSettingsPanel } from "./certifier-settings-panel";
@@ -81,7 +80,7 @@ import { ProtocolsInUse } from "./protocols-in-use";
 import { RegistrySourceVisibilitySettings } from "./registry-source-visibility-settings";
 import { SettingsRail, type SettingsSectionMeta } from "@/components/ui";
 import { RemovalTemplateDiagnosticPanel } from "./removal-template-diagnostic-panel";
-import { RemovalTemplateReviewPanel } from "./removal-template-review-panel";
+import { RemovalTemplateSummaryCard } from "./removal-template-summary-card";
 import { useUnsavedPaneGuard } from "./use-unsaved-pane-guard";
 
 const SECTION_CERTIFIER = CERTIFICATION_SETTINGS_CERTIFIER_SECTION;
@@ -170,7 +169,6 @@ export function CertificationSettings() {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 
-  const [requestedTemplate] = useQueryState(CERTIFICATION_SETTINGS_TEMPLATE_PARAM);
   // Panes with drafts report their dirty state through `guard.actions`; a rail
   // click on another section asks before the pane unmounts and drops them.
   const guard = useUnsavedPaneGuard();
@@ -190,7 +188,7 @@ export function CertificationSettings() {
     icon: PlugsIcon,
     caption:
       "Your registry, its organization-wide keys, and the project this facility submits to.",
-    access: "Owners and Admins",
+    access: "Admins",
     // Either half missing blocks every submission from this facility, and both
     // are fixed here, so one marker covers them. `summary` is undefined while
     // loading — wait rather than flash a marker that then disappears.
@@ -218,26 +216,24 @@ export function CertificationSettings() {
     icon: GlobeIcon,
     caption:
       "Whether new Isometric Sources start private to verifiers or public on the registry.",
-    access: "Owners and Admins",
+    access: "Admins",
     content: <RegistrySourceVisibilitySettings />,
   });
 
   // Listed for every viewer: Removal readiness blockers link here, and members
-  // read which lines block a Removal. Only Owners and Admins assign lines.
+  // read which lines block a Removal. Only Admins assign lines.
   sections.push({
     key: CERTIFICATION_SETTINGS_REMOVAL_TEMPLATES_SECTION,
     tier: "facility",
     label: "Removal templates",
     icon: ListChecksIcon,
     caption:
-      "Choose the facility default and decide each component. Components to decide block Removals.",
-    access: "Owners and Admins",
+      "The template this facility's credit batches use. Component decisions apply to every facility using the template.",
+    access: "Admins",
     content: facilityId ? (
-      <RemovalTemplateReviewPanel
-        key={`removal-template-review-${facilityId}`}
+      <RemovalTemplateSummaryCard
+        key={`removal-template-summary-${facilityId}`}
         facilityId={facilityId}
-        canManage={viewerCanManage}
-        templateId={requestedTemplate}
       />
     ) : null,
   });
@@ -251,7 +247,7 @@ export function CertificationSettings() {
       caption: soilTierActive
         ? "Reference soil temperature for this facility's 200-year durability model."
         : "Soil reference values, used only by the 200-year durability model.",
-      access: "Owners and Admins",
+      access: "Admins",
       content: !soilTierActive ? (
         // ADR 0021: the tier is declared once per facility and 1000-year is the
         // available one, so on a default deployment this is the state everyone
@@ -314,7 +310,7 @@ export function CertificationSettings() {
   }
 
   // Resolve the selection against what this viewer can actually see: a deep
-  // link built for an Owner must not leave a member staring at an empty pane,
+  // link built for an Admin must not leave a member staring at an empty pane,
   // and an unknown `?section=` must not blank the console either. Retired keys
   // resolve to the pane that absorbed them before anything else is tried.
   const resolvedKey = requestedSection

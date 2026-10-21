@@ -3,8 +3,10 @@ import production from "../../../tests/fixtures/isometric/production-template-20
 import type { components as RegistryComponents } from "@/lib/isometric/generated/certify";
 import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
 import { findUnbindableTemplateInputs as findCoverage, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RemovalSubmissionContext } from "./certify-context-core";
+
+afterEach(() => { vi.unstubAllEnvs(); });
 
 const flags = vi.hoisted(() => ({ durabilityEnabled: true }));
 vi.mock("./durability-measurement-samples", () => ({
@@ -74,9 +76,7 @@ describe("prepareRemovalSubmission", () => {
   });
 
   it("returns the bundle every build and compile takes", () => {
-    const { prepared, blockers } = prepareRemovalSubmission(context(), {
-      isometricEnvironment: "production",
-    });
+    const { prepared, blockers } = prepareRemovalSubmission(context());
 
     expect(blockers).toEqual([]);
     expect(prepared?.removalTemplate.id).toBe("rvt-1");
@@ -84,15 +84,7 @@ describe("prepareRemovalSubmission", () => {
     expect(prepared?.blueprintsByKey.get("electricity_grid")).toEqual({
       key: "electricity_grid",
     });
-    expect(prepared?.allowPeriodInputStub).toBe(false);
     expect(prepared?.hasDurabilityComponents).toBe(false);
-  });
-
-  it("stubs period inputs only in the sandbox registry", () => {
-    const { prepared } = prepareRemovalSubmission(context(), {
-      isometricEnvironment: "sandbox",
-    });
-    expect(prepared?.allowPeriodInputStub).toBe(true);
   });
 
   it("stops at the first missing dependency with no bundle", () => {
@@ -186,17 +178,17 @@ describe("requirePreparedRemovalSubmission", () => {
 });
 
 it.each([unsupportedTemplate(), production as RegistryComponents["schemas"]["GhgEntryTemplate"]])("blocks preparation with component names and repair guidance", (removalTemplate) => {
-  expect(prepareRemovalSubmission(context({ removalTemplate }), { isometricEnvironment: "production" }).blockers).toContainEqual({
+  expect(prepareRemovalSubmission(context({ removalTemplate })).blockers).toContainEqual({
     code: "templateUnbindable", message: formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(removalTemplate)),
   });
 });
 
-it("blocks all entry-only lines in sandbox as well as production", () => {
+// No environment input exists anymore: entry-only components are blocked the same way everywhere.
+it("blocks entry-only components", () => {
   const removalTemplate = production as RegistryComponents["schemas"]["GhgEntryTemplate"];
-  const result = prepareRemovalSubmission(context({ removalTemplate }), { isometricEnvironment: "sandbox" });
+  const result = prepareRemovalSubmission(context({ removalTemplate }));
   const findings = findUnbindableTemplateInputs(removalTemplate);
-  expect(findings).toHaveLength(13);
-  expect(result.prepared?.allowPeriodInputStub).toBe(true);
+  expect(findings).toHaveLength(14);
   expect(result.blockers).toContainEqual({ code: "templateUnbindable", message: formatUnbindableTemplateInputsText(findings) });
   expect(result.blockers.some((blocker) => blocker.message.includes("project level"))).toBe(false);
 });

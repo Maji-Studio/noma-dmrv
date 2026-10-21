@@ -16,7 +16,7 @@ vi.mock("./credit-batch-certification-lock", () => ({
 vi.mock("./facility-certification-boundary-lock", () => ({ acquireFacilityCertificationBoundaryLock: vi.fn() }));
 
 import { observeTemplate, reviewLineContracts } from "./removal-template-observations";
-import { switchCreditBatchRemovalTemplate } from "./credit-batch-removal-template";
+import { switchCreditBatchRemovalTemplate, switchCreditBatchRemovalTemplateInTransaction } from "./credit-batch-removal-template";
 
 const ctx: OrgContext = { organizationId: "org-1", userId: "user-1", orgRole: "admin", isPlatformAdmin: false };
 const template = templateFixture as GhgEntryTemplate;
@@ -118,4 +118,15 @@ it("serializes first observations and reviews by the same org/provider/template 
   mocks.select.mockReturnValueOnce(query([])).mockReturnValueOnce(query([]));
   await observeTemplate(ctx, { provider: "isometric", externalProjectId: "project-1", template: { ...template, id: "other-template" }, enrichment: row.enrichment });
   expect(new PgDialect().sqlToQuery(mocks.execute.mock.calls[3][0]).params).not.toEqual(firstLock.params);
+});
+
+
+it("refuses a setup batch pinned meanwhile under its row lock, even with an unchanged version", async () => {
+  const batch = { id: "batch-1", facilityId: "facility-1", version: 1, removalTemplateId: "another-template" };
+  mocks.select.mockReturnValueOnce(query([{ facilityId: batch.facilityId }])).mockReturnValueOnce(query([batch]));
+  await expect(switchCreditBatchRemovalTemplateInTransaction(ctx, executor as never,
+    { creditBatchId: batch.id, expectedVersion: batch.version, removalTemplateId: "next" },
+    { facilityId: batch.facilityId, requireUnpinned: true },
+  )).rejects.toMatchObject({ code: "stale_version" });
+  expect(mocks.update).not.toHaveBeenCalled();
 });

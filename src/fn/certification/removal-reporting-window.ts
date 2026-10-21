@@ -11,7 +11,7 @@
  * out of a submission snapshot for the resume path.
  */
 import type { CertificationSubmissionRow } from "@/data-access/certification";
-import { formatUtcDate } from "@/lib/date-utils";
+import { formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { z } from "zod";
 
@@ -62,18 +62,25 @@ export function resolveRemovalReportingWindow(args: {
   earliestProductionStartTime: Date;
   latestProductionEndTime: Date;
   latestApplicationTime: Date;
+  facilityTimezone: string;
 }): { startedOn: Date; completedOn: Date } {
   const {
     earliestProductionStartTime,
     latestProductionEndTime,
     latestApplicationTime,
+    facilityTimezone,
   } = args;
   const applicationDate = formatUtcDate(latestApplicationTime);
   const latestProductionEndDate = formatUtcDate(latestProductionEndTime);
-  if (applicationDate < latestProductionEndDate) {
+  const facilityProductionEndDate = formatFacilityDate(latestProductionEndTime, facilityTimezone);
+  // The later UTC or facility day binds while registry payload dates use UTC days.
+  const bindingDay = facilityProductionEndDate > latestProductionEndDate
+    ? facilityProductionEndDate
+    : latestProductionEndDate;
+  if (applicationDate < bindingDay) {
     throw new SafeError(
       `Latest application date ${applicationDate} precedes latest production end date ` +
-        `${latestProductionEndDate}. Correct the application date before submitting.`,
+        `${bindingDay}. Correct the application date before submitting.`,
     );
   }
   const completedOn =
@@ -121,26 +128,23 @@ export function assertRemovalDatesNotFuture(args: {
   }
 }
 
-// Guards the window inversion BEFORE any registry POST — the local stamp's
-// `startedOn <= completedOn` DB check happens later during finalization, so a
-// back-dated application must fail before posting an inverted window to
-// Isometric. Compares each lineage
-// against ITS OWN production run's start, not the removal-wide earliest:
-// biochar cannot be applied before the run that produced it started, and in a
-// mixed removal an earlier sibling run would otherwise mask a lineage whose
-// application predates its own run (PR #336 second-pass review). Fails closed
-// on a lineage whose run start cannot be resolved. Compares at DATE
-// granularity (what gets POSTed and stamped): form-entered application dates
-// are UTC midnight, so a millisecond comparison would wrongly block a
-// same-UTC-day application against a mid-day run start (issue #320 caveat 4).
+// Reject each application dated before its own production run before any
+// registry POST; an earlier sibling run must not mask invalid lineage.
+// The application date is a stored facility business date, represented as UTC
+// midnight of that day. Convert the run start instant to its facility day for
+// this comparison so a same-day application can follow a mid-day run start.
+// resolveRemovalReportingWindow requires the later UTC or facility production-end
+// day and floors completion at production end only on the same UTC day.
+// Fail closed when the lineage's production run start cannot be resolved.
 export function assertReportingWindowNotInverted(args: {
   lineages: {
     application: { applicationDate: Date; code: string };
     productionRun: { id: string; code: string } | null;
   }[];
   runStartTimeByRunId: ReadonlyMap<string, Date>;
+  facilityTimezone: string;
 }): void {
-  const { lineages, runStartTimeByRunId } = args;
+  const { lineages, runStartTimeByRunId, facilityTimezone } = args;
   for (const lineage of lineages) {
     const run = lineage.productionRun;
     const runStartTime = run ? runStartTimeByRunId.get(run.id) : undefined;
@@ -151,7 +155,7 @@ export function assertReportingWindowNotInverted(args: {
       );
     }
     const applicationDate = formatUtcDate(lineage.application.applicationDate);
-    const runStartDate = formatUtcDate(runStartTime);
+    const runStartDate = formatFacilityDate(runStartTime, facilityTimezone);
     if (applicationDate < runStartDate) {
       throw new SafeError(
         `Application ${lineage.application.code} is dated ${applicationDate}, ` +

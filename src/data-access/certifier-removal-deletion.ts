@@ -1,4 +1,5 @@
-import { releaseDeletedRemovalEntries } from "./emission-entry-deletion";
+import { lockReleaseBatches } from "./emission-entry-release-locks";
+import { deletedRemovalEntryFilter, releaseDeletedRemovalEntries } from "./emission-entry-deletion";
 import { recordActivityChange } from "./activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { withCertificationStatusActivity } from "./certification-status-activity";
@@ -6,7 +7,7 @@ import { nextVersion } from "./row-version";
 import { REMOVAL_DELETION_LEASE_KEY, hasFreshRemovalDeletionLease, removalDeletionLeaseTimestamp } from "@/lib/certification/removal-deletion-lease";
 import { removalOwnedMeasurements, type RemovalOwnedMeasurement } from "@/lib/certification/removal-deletion-artifacts";
 import { removalProductionBatchTargets, clearDeletedRemovalProductionBatches, type RemovalProductionBatch, type ProductionBatchDeletionOutcome } from "./removal-production-batch-deletion";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { db, withDedicatedLockConnection } from "@/db";
 import {
   certificationSubmissions,
@@ -69,8 +70,7 @@ import { requireOrgScope } from "./utils";
  * it too.
  *
  * Members may delete Removals that never touched the registry. Once the
- * boundary opened, the floor in removal-deletion-role.ts requires an Owner
- * or Admin; Platform Admins always pass.
+ * boundary opened, the floor in removal-deletion-role.ts requires an Admin; Platform Admins always pass.
  */
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -98,7 +98,7 @@ const REMOVAL_DELETE_MISSING_ERROR =
 export const REMOVAL_DELETE_CHANGED_ERROR =
   "This Removal changed while it was being deleted. Refresh the page and review its status.";
 export const REMOVAL_DELETE_ROLE_ERROR =
-  "Only Owners and Admins can delete a Removal that may have records on Isometric. Ask an Owner or Admin to delete it.";
+  "Only Admins can delete a Removal that may have records on Isometric. Ask an Admin to delete it.";
 
 /** Whether the loaded deletion facts indicate possible registry records. */
 export function removalDeletionOpensRegistryBoundary(facts: {
@@ -601,12 +601,15 @@ export async function finalizeRemovalDeletion(
     ]);
 
     const productionBatchIds = (claim.productionBatches ?? []).map((batch) => batch.creditBatchId);
-    if (productionBatchIds.length) {
-      // Serialize finalizers of different Removals before checking surviving owners.
-      await tx.select({ id: creditBatches.id }).from(creditBatches)
-        .where(and(inArray(creditBatches.id, productionBatchIds), eq(creditBatches.organizationId, ctx.organizationId)))
-        .orderBy(creditBatches.id).for("update");
-    }
+    await lockReleaseBatches(ctx, tx, {
+      removalId: claim.removalId,
+      entryFilter: deletedRemovalEntryFilter(claim.removalId, claim.submissionIds),
+      extraBatchFilter: or(
+        productionBatchIds.length ? inArray(creditBatches.id, productionBatchIds) : undefined,
+        eq(creditBatches.productionEmissionsClaimedByRemovalId, claim.removalId),
+        claim.submissionIds.length ? inArray(creditBatches.productionEmissionsClaimReservedBySubmissionId, claim.submissionIds) : undefined,
+      ),
+    });
 
     await assertLedgerUnchangedSinceClaim(ctx, tx, claim);
 
@@ -690,7 +693,7 @@ export async function finalizeRemovalDeletion(
         previousActivityBatches.push(...await tx.select().from(creditBatches).where(and(
           eq(creditBatches.organizationId, ctx.organizationId),
           inArray(creditBatches.productionEmissionsClaimReservedBySubmissionId, claim.submissionIds),
-        )).orderBy(creditBatches.id).for("update"));
+        )).orderBy(creditBatches.id));
         releasedReservations = await tx
           .update(creditBatches)
           .set({ version: nextVersion(creditBatches.version),
@@ -716,7 +719,7 @@ export async function finalizeRemovalDeletion(
     const previousClaimedBatches = await tx.select().from(creditBatches).where(and(
       eq(creditBatches.organizationId, ctx.organizationId),
       eq(creditBatches.productionEmissionsClaimedByRemovalId, claim.removalId),
-    )).orderBy(creditBatches.id).for("update");
+    )).orderBy(creditBatches.id);
     previousActivityBatches.push(...previousClaimedBatches.filter(row => !previousActivityBatches.some(previous => previous.id === row.id)));
     const releasedClaims = await tx
       .update(creditBatches)
@@ -732,6 +735,7 @@ export async function finalizeRemovalDeletion(
       )
       .returning({ id: creditBatches.id });
 
+    await releaseDeletedRemovalEntries(ctx, tx, claim.removalId, claim.submissionIds, true);
     const released = await tx
       .update(creditBatchApplications)
       .set({ removalId: null })
@@ -743,7 +747,6 @@ export async function finalizeRemovalDeletion(
       )
       .returning({ id: creditBatchApplications.id, creditBatchId: creditBatchApplications.creditBatchId, removalId: creditBatchApplications.removalId });
 
-    await releaseDeletedRemovalEntries(ctx, tx, claim.removalId, claim.submissionIds);
     const [deleted] = await tx
       .delete(certifierRemovals)
       .where(

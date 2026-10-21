@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import { useOrgCertifierCredentialsStatus } from "@/hooks/use-certifier-credentials";
 import { useSetOrganizationApiAccess } from "@/hooks/use-organizations";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { LOAD_FAILED } from "@/lib/copy-utils";
 import { OrganizationCertifierCredentials } from "./organization-certifier-credentials";
 import { OrganizationRosterRow } from "./organization-roster-list";
 
@@ -58,7 +58,7 @@ export function OrganizationAdminRow({ org, apiAccessEnabled, entering, current 
           <>
             <StatusBadge
               status={apiAccessEnabled ? "ready" : "draft"}
-              label={apiAccessEnabled === undefined ? `API access: ${MISSING_VALUE.notAvailable}` : `API access ${apiAccessEnabled ? "on" : "off"}`}
+              label={apiAccessEnabled === undefined ? `API access: ${LOAD_FAILED}` : `API access ${apiAccessEnabled ? "on" : "off"}`}
             />
             <Button
               type="button"

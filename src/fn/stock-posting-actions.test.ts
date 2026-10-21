@@ -16,8 +16,12 @@ vi.mock("@/lib/operations/biochar-products", () => ({ makeBiocharProduct: { id: 
 vi.mock("@/data-access/deliveries", () => ({}));
 vi.mock("@/lib/operations/deliveries", () => ({ recordDeliveryForUi: { id: "record_posted_delivery" }, updateDelivery: mocks.update }));
 vi.mock("@/data-access/delivery-stats", () => ({}));
+vi.mock("@/data-access/biochar-product-stats", () => ({}));
 vi.mock("@/data-access/utils", () => ({}));
-vi.mock("@/db/schema", () => ({ biocharProducts: { code: "code" }, deliveries: { code: "code" } }));
+vi.mock("@/db/schema", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/db/schema")>();
+  return { ...actual, biocharProducts: { code: "code" }, deliveries: { code: "code" } };
+});
 vi.mock("@/data-access/code-generator", () => ({ withAutoCode: mocks.autoCode, CODE_CONFLICT_MESSAGES: { biocharProduct: "Product code conflict", delivery: "Delivery code conflict" } }));
 import { createBiocharProductFn } from "./biochar-products";
 import { createDeliveryFn, updateDeliveryFn } from "./deliveries";

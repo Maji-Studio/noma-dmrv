@@ -1,20 +1,19 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import { loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { frozenEntriesForAttempt, loadRemovalEntryContext } from "./removal-entry-context";
 import type { BatchEmissionContext } from "./batch-emission-context";
 import type { RemovalScope } from "./removal-scope";
 import type { FacilityCertifierFacts } from "./facility-certifier-facts";
 
 vi.mock("@/data-access/emission-entry-contenders", () => ({ loadEmissionEntryReservations: vi.fn(async () => []) }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: vi.fn(() => true) }));
-beforeEach(() => { vi.clearAllMocks(); vi.mocked(emissionsEntriesEnabled).mockReturnValue(true); });
+
+beforeEach(() => { vi.clearAllMocks(); });
 const scope = { removalId: "r1", memberBatches: [
   { id: "b1", startDate: "2026-01-01", removalTemplateId: "t1", productionEmissionsClaimedByRemovalId: "earlier" },
   { id: "b2", startDate: "2026-01-01", removalTemplateId: "t1", productionEmissionsClaimedByRemovalId: null },
 ], lineages: [{ application: { applicationDate: new Date("2026-02-01T00:00:00Z") } }] } as RemovalScope;
-const facility = { templatesById: { t1: { observation: { id: "observation", semanticFingerprint: "fingerprint",
+const facility = { facilityTimezone: "UTC", templatesById: { t1: { observation: { id: "observation", semanticFingerprint: "fingerprint",
   lineSources: { electricity: { scope: "operating", origin: "reviewed", entryPolicy: "additive", automaticSource: "run-electricity" } },
   definition: { groups: [{ components: [{ id: "electricity", inputs: [{ key: "electricity_use", type: "monitored", quantityKind: "energy" }] }] }] },
   enrichment: { electricity: { electricity_use: { unit: "kWh" } } },
@@ -28,11 +27,6 @@ function facts(): BatchEmissionContext {
       counts: true, hasEvidence: true, evidenceDocumentIds: [`doc-${id}`], values: [{ inputKey: "electricity_use", magnitude: "2", unit: "kWh" }] }],
   }])) as unknown as BatchEmissionContext;
 }
-it("does no entry work with the gate off", async () => {
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(false);
-  expect(await loadRemovalEntryContext(makeTestOrgContext(), scope, facts(), facility)).toBeUndefined();
-  expect(loadEmissionEntryReservations).not.toHaveBeenCalled();
-});
 it("keeps both batches' entries while excluding only the earlier production claim's automatic figure", async () => {
   const loaded = facts();
   const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, loaded, facility);
@@ -115,4 +109,15 @@ it("uses new entries after a crashed unreserved attempt acquires a fresh lock", 
   expect(frozen).toBeUndefined();
   const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, loaded, facility, frozen);
   expect(result?.contributions.entrySet).toHaveLength(2);
+});
+
+it.each([false, true])("preserves an empty snapshot only after reservation (%s)", async (reserved) => {
+  const loaded = facts(); // Entries added after the empty snapshot was built.
+  loaded.b1.productionReservationSubmissionId = reserved ? "attempt" : null;
+  const submission = { id: "attempt", status: "draft", metadata: null,
+    payloadSnapshot: { frozenEntrySet: [] } } as Parameters<typeof frozenEntriesForAttempt>[0];
+  const frozen = frozenEntriesForAttempt(submission, loaded);
+  expect(frozen).toEqual(reserved ? [] : undefined);
+  const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, loaded, facility, frozen);
+  expect(result?.contributions.entrySet).toHaveLength(reserved ? 0 : 2);
 });

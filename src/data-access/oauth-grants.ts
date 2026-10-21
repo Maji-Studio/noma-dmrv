@@ -21,7 +21,7 @@ async function requireManager(ctx: OrgContext, executor: typeof db | DbTransacti
 async function listGrants(ctx: OrgContext, all: boolean) {
   requireOrgScope(ctx);
   const policy = await requireManager(ctx);
-  if (all && !policy.manageAll) throw new DomainError("forbidden", "An organization Owner or Admin is required.");
+  if (all && !policy.manageAll) throw new DomainError("forbidden", "An organization Admin is required.");
   return db.select({ id: oauthGrants.id, userId: oauthGrants.userId, clientId: oauthGrants.clientId,
     name: oauthClients.name, memberName: users.name, resource: oauthGrants.resource, scopes: oauthConsents.scopes,
     createdAt: oauthGrants.createdAt, lastUsedAt: oauthGrants.lastUsedAt, version: oauthGrants.version })

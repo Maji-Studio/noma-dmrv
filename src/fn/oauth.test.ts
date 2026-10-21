@@ -5,7 +5,10 @@ const mocks = vi.hoisted(() => ({ verify: vi.fn(), session: vi.fn(), selection: 
 vi.mock("@better-auth/oauth-provider", () => ({ verifyOAuthQueryParams: mocks.verify, getOAuthProviderState: vi.fn() }));
 vi.mock("@/lib/auth/better-auth", () => ({ auth: { $context: Promise.resolve({ secret: "unit-test-secret" }) } }));
 vi.mock("@/lib/auth/providers/better-auth-server", () => ({ getBetterAuthSession: mocks.session }));
-vi.mock("@/config/env", () => ({ env: { OAUTH_PROVIDER_ENABLED: true, NEXT_PUBLIC_APP_URL: "https://noma.test", BETTER_AUTH_SECRET: "unit-oauth-secret-at-least-32-characters" } }));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: { OAUTH_PROVIDER_ENABLED: true, NEXT_PUBLIC_APP_URL: "https://noma.test", BETTER_AUTH_SECRET: "unit-oauth-secret-at-least-32-characters" } };
+});
 vi.mock("@/data-access/oauth-grant-lifecycle", () => ({ getOAuthOrganizationSelection: mocks.selection, selectOAuthOrganization: vi.fn(), resolveAttemptGrant: mocks.resolve }));
 vi.mock("@/data-access/oauth-credential-auth", () => ({ findOAuthClient: mocks.client }));
 vi.mock("@/data-access/oauth-provider", () => ({ findOAuthClientResources: vi.fn(), findOAuthAttempt: vi.fn(), getOAuthAttemptConsent: vi.fn(), isPlatformAdminUser: mocks.isAdmin }));
@@ -73,7 +76,7 @@ it("reads consent organization and allowed scopes from the bound generation", as
   } });
 });
 
-it.each(["member", "admin", "owner"] as const)("lists grants for the authenticated %s role", async role => {
+it.each(["member", "admin"] as const)("lists grants for the authenticated %s role", async role => {
   const { listOAuthGrantsFn } = await import("./oauth");
   const { requireOrgContext } = await import("@/lib/auth/server");
   const { listOwnOAuthGrants, listAllOAuthGrants } = await import("@/data-access/oauth-grants");

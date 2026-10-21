@@ -1,6 +1,4 @@
-beforeEach(() => { vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "false"); });
-afterEach(() => { vi.unstubAllEnvs(); });
-import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import sandboxFixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import culaFixture from "../../../tests/fixtures/isometric/cula-template-2026-10-15.json";
 import enrichment from "../../../tests/fixtures/isometric/sandbox-enrichment-2026-10-15.json";
@@ -54,6 +52,7 @@ function supportedAutomaticTemplate(template: GhgEntryTemplate) {
 
 function facilityFacts(template: GhgEntryTemplate, lineSources: LineSources): FacilityCertifierFacts {
   return {
+    facilityTimezone: "UTC",
     hasOrgCredentials: true, mapping: { externalProjectId: template.project_id },
     defaultTemplate: { ...template, id: "different-default" },
     templatesById: { [template.id]: {
@@ -70,7 +69,7 @@ function prepare(template: GhgEntryTemplate, lineSources = sources(template), fa
   const facts = facilityFacts(template, lineSources);
   const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], facts);
   const context = { ...resolved, facilityId, mapping: facts.mapping, hasOrgCredentials: true };
-  return { resolved, ...prepareRemovalSubmission(context, { isometricEnvironment: "sandbox" }) };
+  return { resolved, ...prepareRemovalSubmission(context) };
 }
 
 function compile(template: GhgEntryTemplate, lineSources = sources(template), facilityId?: string) {
@@ -80,7 +79,7 @@ function compile(template: GhgEntryTemplate, lineSources = sources(template), fa
   return { ...result, inputs: resolveTemplateInputs({
     template: result.prepared!.removalTemplate, lineSources: result.prepared!.lineSources,
     blueprintsByKey: result.prepared!.blueprintsByKey, externalProjectId: result.prepared!.externalProjectId,
-    agg, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: true, omitProductionComponents: false,
+    agg, sourceIds: [], sourceBindingPlan: [], omitProductionComponents: false,
   }) };
 }
 
@@ -175,11 +174,10 @@ describe("pinned-template compilation drift matrix", () => {
   });
 });
 
-it.each([false, true])("stops warning about retired sample transport facts on activation (gate: %s)", (enabled) => {
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", enabled ? "true" : "false");
+it("stops warning about retired sample transport facts", () => {
   const template = supportedAutomaticTemplate(sandbox);
   const warnings = buildSubmissionWarnings({ removalTemplate: template, lineSources: sources(template), runs: [], lineages: [],
     transportLegs: { feedstock: [], biochar: [], sample: [{ id: "legacy-sample-leg", distanceKm: 20 } as TransportLegsByCategory["sample"][number]] },
   });
-  expect(warnings).toEqual(enabled ? [] : [expect.stringContaining("Sample transport is recorded")]);
+  expect(warnings).toEqual([]);
 });

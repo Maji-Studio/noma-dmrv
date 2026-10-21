@@ -1,5 +1,4 @@
 /** Sample side-sheet view mode: the sections config for EntitySideSheet. */
-import { TransportLegsSummary } from "@/components/transport-legs";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { formatDate, formatDateTime, formatFacilityDateTime, formatPercent } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL, PERCENT_SCALE } from "@/lib/mass-moisture";
@@ -28,7 +27,6 @@ export function formatSamplingTime(sample: Pick<SampleWithRelations, "samplingTi
 
 export function sampleSheetSections(
   sample: SampleWithRelations,
-  options: { hideTransport?: boolean } = {},
 ): DetailPanelSection[] {
   const certificationContext = { sampling: sample.sampling, durabilityOption: sample.durabilityOption };
   return [
@@ -111,13 +109,5 @@ export function sampleSheetSections(
       fields: [],
       content: <SampleDocumentsPanel sampleId={sample.id} readOnly />,
     },
-    // Sample shipping is an emissions entry on the credit batch once the gate is on.
-    ...(options.hideTransport
-      ? []
-      : [{
-          title: "Transport",
-          fields: [],
-          content: <TransportLegsSummary entityType="sample" entityId={sample.id} />,
-        }]),
   ];
 }

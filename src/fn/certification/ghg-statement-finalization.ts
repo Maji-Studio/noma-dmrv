@@ -20,6 +20,8 @@ import type {
   CreateGhgStatementResult,
   GhgStatementCreateOutcome,
 } from "./ghg-statements";
+import { ghgStatementSyncEvent } from "./ghg-statement-last-synced";
+import { withStagedSyncEvents } from "./sync-event-stage";
 
 /**
  * Shared tail for fresh and reconciled creates. The external id, fallback
@@ -38,7 +40,7 @@ export async function finalizeGhgStatement(args: {
   const { client, orgCtx, statement, row, externalId, expected, outcome } =
     args;
 
-  return withFacilityDurabilityLock(
+  return withStagedSyncEvents(orgCtx, (stage) => withFacilityDurabilityLock(
     orgCtx,
     statement.facilityId,
     async (tx) => {
@@ -81,6 +83,7 @@ export async function finalizeGhgStatement(args: {
         },
         tx,
       );
+      stage.onCommit(ghgStatementSyncEvent(statement.id));
       return {
         outcome,
         ghgStatementId: statement.id,
@@ -95,5 +98,5 @@ export async function finalizeGhgStatement(args: {
         ],
       };
     },
-  );
+  ));
 }

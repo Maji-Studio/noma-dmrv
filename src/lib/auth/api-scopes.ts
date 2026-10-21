@@ -34,8 +34,8 @@ export function hasScope(context: { scopes: readonly ApiScope[] }, scope: ApiSco
   return context.scopes.includes(scope);
 }
 
-export function canOwnApiKey(role: string | null | undefined): role is "owner" | "admin" {
-  return role === "owner" || role === "admin";
+export function canOwnApiKey(role: string | null | undefined): role is "admin" {
+  return role === "admin";
 }
 
 /** Operation-specific domain permissions must still be checked by the runner. */

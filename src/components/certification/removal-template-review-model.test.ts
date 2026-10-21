@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { NOT_SET_UP_TITLE, templateReadiness, TEMPLATE_NOT_FULLY_READ_TITLE, type RemovalTemplateReviewEntry } from "./removal-template-review-model";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import {
+  inputUnitLabel,
+  MISSING_TEMPLATE_NAME,
+  NOT_SET_UP_TITLE,
+  templateName,
+  templateReadiness,
+  TEMPLATE_NOT_FULLY_READ_TITLE,
+  type RemovalTemplateReviewEntry,
+} from "./removal-template-review-model";
 
 const DECIDED = { scope: "operating", origin: "reviewed", entryPolicy: "additive" } as const;
 const PROPOSED = { scope: "operating", origin: "proposed", entryPolicy: "additive" } as const;
@@ -8,7 +17,7 @@ const PROPOSED = { scope: "operating", origin: "proposed", entryPolicy: "additiv
 function entry(overrides: Record<string, unknown> = {}): RemovalTemplateReviewEntry {
   return {
     availability: "listed",
-    template: { id: "rvt_1", display_name: "Template", credit_type: "REMOVAL" },
+    template: { id: "rvt_1", display_name: "Template", credit_type: "REMOVAL", groups: [] },
     observation: {},
     enrichmentProblems: [],
     lineSourceProblems: [],
@@ -20,6 +29,12 @@ function entry(overrides: Record<string, unknown> = {}): RemovalTemplateReviewEn
 describe("templateReadiness", () => {
   it("marks a template read in full with every line decided as ready", () => {
     expect(templateReadiness(entry())).toEqual({ ready: true });
+  });
+
+  it("gives the switch dialog the batch health reason for a fixed input without a datapoint", () => {
+    expect(templateReadiness(entry({
+      template: { credit_type: "REMOVAL", groups: [{ components: [{ inputs: [{ type: "fixed" }] }] }] },
+    }))).toEqual({ ready: false, reason: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint });
   });
 
   it("counts the lines still to decide", () => {
@@ -40,5 +55,35 @@ describe("templateReadiness", () => {
   it("calls a preview with no stored read not set up yet", () => {
     expect(templateReadiness(entry({ observation: null, preview: true, lines: [] })))
       .toEqual({ ready: false, reason: NOT_SET_UP_TITLE });
+  });
+});
+
+describe("templateName", () => {
+  it("uses the template's display name", () => {
+    expect(templateName(entry())).toBe("Template");
+  });
+
+  it("names a template Isometric no longer lists, keeping Isometric capitalised", () => {
+    expect(templateName(entry({ availability: "missing", template: null }))).toBe(MISSING_TEMPLATE_NAME);
+    expect(MISSING_TEMPLATE_NAME).toBe("Template not found on Isometric");
+  });
+});
+
+describe("inputUnitLabel", () => {
+  it("shows the unit Isometric gave", () => {
+    expect(inputUnitLabel({ volume_of_fuel: { unit: "L" } }, "volume_of_fuel")).toBe("L");
+  });
+
+  it("says the unit was not read when there is no enrichment", () => {
+    expect(inputUnitLabel(undefined, "volume_of_fuel")).toBe("Unit not read");
+    expect(inputUnitLabel({}, "volume_of_fuel")).toBe("Unit not read");
+  });
+
+  it("says the unit was not read when the input's read failed", () => {
+    expect(inputUnitLabel({ volume_of_fuel: { status: "unknown" } }, "volume_of_fuel")).toBe("Unit not read");
+  });
+
+  it("says Isometric gives no unit only for an entry it read with an empty unit", () => {
+    expect(inputUnitLabel({ volume_of_fuel: { unit: "" } }, "volume_of_fuel")).toBe("Isometric gives no unit");
   });
 });

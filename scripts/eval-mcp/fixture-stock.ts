@@ -24,7 +24,7 @@ export async function seedStockFixture(caseId: string): Promise<StockEvalFixture
   const org = fixture.ctx.organizationId;
   try {
     await db.insert(users).values({ id: fixture.ctx.userId, email: `${fixture.ctx.userId}@example.test`, name: "MCP evaluation", emailVerified: true });
-    await db.insert(members).values({ id: randomUUID(), organizationId: org, userId: fixture.ctx.userId, role: "owner" });
+    await db.insert(members).values({ id: randomUUID(), organizationId: org, userId: fixture.ctx.userId, role: "admin" });
     await db.update(facilities).set({ timezone: FACILITY_TIME_ZONE, archivedAt: null })
       .where(and(eq(facilities.organizationId, org), eq(facilities.id, fixture.facilityId)));
     const [bin] = await db.insert(storageLocations).values({ organizationId: org, facilityId: fixture.facilityId,

@@ -18,7 +18,7 @@ export function deriveRemovalEntryWindow(
   return { start: starts[0], end: ends[ends.length - 1] };
 }
 export interface EntryContender {
-  contenderKind: "draft";
+  contenderKind: "draft" | "correction";
   removalId: string;
   createdAt: string;
   creditBatchIds: readonly string[];
@@ -41,8 +41,8 @@ export interface RemovalEntryFact {
   values: readonly RemovalEntryValue[]; evidenceDocumentIds: readonly string[];
 }
 export interface EntryInputManifest {
-  componentId: string; inputKey: string;
-  entries: { entryId: string; creditBatchId: string; contentRevision: number; kind: "value" | "zero";
+  componentId: string; inputKey: string; componentDisplayName?: string;
+  entries: { entryId: string; creditBatchId: string; creditBatchCode?: string; occurredOn?: string; contentRevision: number; kind: "value" | "zero";
     value: EmissionFigure; massDistanceDetail?: RemovalEntryValue["massDistanceDetail"];
     evidenceDocumentIds: string[] }[];
 }
@@ -66,7 +66,7 @@ export function isLiveEntryReservation(row: {
   if (row.status !== "draft") return true;
   return nowMs - (row.lockedAt?.getTime() ?? 0) < LOCK_TTL_MS;
 }
-function inWindow(entry: RemovalEntryFact, window: RemovalEntryWindow) {
+export function inWindow(entry: { occurredOn: string }, window: RemovalEntryWindow) {
   return entry.occurredOn >= window.start && entry.occurredOn <= window.end;
 }
 export function removalEntryOwner(entry: RemovalEntryFact, contenders: readonly EntryContender[]): string | null {
@@ -76,7 +76,7 @@ export function removalEntryOwner(entry: RemovalEntryFact, contenders: readonly 
   if (entry.sendReservedBySubmissionId && !entry.reservationKnownInactive) return null;
   return contenders.filter((draft) => draft.creditBatchIds.includes(entry.creditBatchId) && inWindow(entry, draft.window) &&
     (entry.kind !== "zero" || entry.confirmedForRemovalId === draft.removalId))
-    .sort((a, b) => a.window.end.localeCompare(b.window.end) || a.createdAt.localeCompare(b.createdAt) || a.removalId.localeCompare(b.removalId))[0]?.removalId ?? null;
+    .sort((a, b) => Number(b.contenderKind === "correction") - Number(a.contenderKind === "correction") || a.window.end.localeCompare(b.window.end) || a.createdAt.localeCompare(b.createdAt) || a.removalId.localeCompare(b.removalId))[0]?.removalId ?? null;
 }
 
 /** Shared by batch reads and the transactional zero writer. */
@@ -96,7 +96,8 @@ export function deriveRemovalEntryContributions(args: {
   removalId: string; memberBatchIds: readonly string[]; window: RemovalEntryWindow | null;
   contenders: readonly EntryContender[]; entries: readonly RemovalEntryFact[]; lineSources: LineSources;
   entriesWithoutRemoval?: readonly string[];
-  monitoredInputs: readonly { componentId: string; inputKey: string; unit: string }[];
+  creditBatchCodes?: Readonly<Record<string, string>>;
+  monitoredInputs: readonly { componentId: string; inputKey: string; unit: string; componentDisplayName?: string }[];
 }): RemovalEntryContributions {
   const result: RemovalEntryContributions = { manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], ownedEntryIds: [], sentSingleComponentIds: [], blockers: [] };
   const relevant = args.entries.filter((entry) => !entry.deletedAt && args.memberBatchIds.includes(entry.creditBatchId));
@@ -129,21 +130,28 @@ export function deriveRemovalEntryContributions(args: {
   for (const componentId of components) {
     const entries = selected.filter((entry) => entry.componentId === componentId).sort((a, b) => a.id.localeCompare(b.id));
     const values = entries.filter((entry) => entry.kind === "value");
-    if (args.lineSources[componentId].entryPolicy === "single" && values.length > 1) {
+    const inputs = args.monitoredInputs.filter((input) => input.componentId === componentId);
+    if (inputs.length > 1 && effectiveContract(args.lineSources[componentId]).entryPolicy === "additive") {
+      result.blockers.push({ code: "lineNeedsReview", message: "Review this component's entry policy. Paired inputs require a single entry.", fixTarget: "emissions", creditBatchId: entries[0].creditBatchId, lineRef: { componentId, displayName: componentId } });
+      continue;
+    }
+    if ((inputs.length > 1 || effectiveContract(args.lineSources[componentId]).entryPolicy === "single") && values.length > 1) {
       result.blockers.push({ code: "singleLineMultipleEntries", message: "This component has values on more than one credit batch. Create separate Removals for these batches.", fixTarget: "emissions", creditBatchId: values[0].creditBatchId, lineRef: { componentId, displayName: componentId } });
       continue;
     }
     // A value supersedes that batch's zero, even if a caller supplied stale facts.
     const counting = entries.filter((entry) => entry.kind === "value" || !values.some((value) => value.creditBatchId === entry.creditBatchId));
     for (const input of args.monitoredInputs.filter((input) => input.componentId === componentId).sort((a, b) => a.inputKey.localeCompare(b.inputKey))) {
-      const manifest: EntryInputManifest = { componentId, inputKey: input.inputKey, entries: [] };
+      const manifest: EntryInputManifest = { componentId, inputKey: input.inputKey,
+        ...(input.componentDisplayName ? { componentDisplayName: input.componentDisplayName } : {}), entries: [] };
       for (const entry of counting) {
         const value = entry.kind === "zero" ? { magnitude: "0", unit: input.unit } : entry.values.find((value) => value.inputKey === input.inputKey);
         if (!value || value.unit !== input.unit || canonicalDecimal(value.magnitude) === undefined) {
           result.blockers.push({ code: "lineNeedsReview", message: "Enter the values again for the current component.", fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: { componentId: entry.componentId, displayName: entry.componentId } });
           continue;
         }
-        manifest.entries.push({ entryId: entry.id, creditBatchId: entry.creditBatchId, contentRevision: entry.contentRevision, kind: entry.kind,
+        manifest.entries.push({ entryId: entry.id, creditBatchId: entry.creditBatchId, occurredOn: entry.occurredOn,
+          ...(args.creditBatchCodes?.[entry.creditBatchId] ? { creditBatchCode: args.creditBatchCodes[entry.creditBatchId] } : {}), contentRevision: entry.contentRevision, kind: entry.kind,
           value: { magnitude: canonicalDecimal(value.magnitude)!, unit: value.unit },
           ...("massDistanceDetail" in value && value.massDistanceDetail ? { massDistanceDetail: value.massDistanceDetail } : {}),
           evidenceDocumentIds: entry.kind === "zero" ? [] : [...entry.evidenceDocumentIds].sort() });

@@ -28,7 +28,7 @@ async function createContext(): Promise<OrgContext> {
   const organizationId = `org_activity_${crypto.randomUUID()}`;
   await db.insert(organizations).values({ id: organizationId, name: "Activity fixture", slug: organizationId });
   organizationIds.push(organizationId);
-  return { organizationId, userId: `activity_user_${crypto.randomUUID()}`, orgRole: "owner", isPlatformAdmin: false };
+  return { organizationId, userId: `activity_user_${crypto.randomUUID()}`, orgRole: "admin", isPlatformAdmin: false };
 }
 
 async function createFacility(context: OrgContext, archivedAt?: Date): Promise<string> {

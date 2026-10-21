@@ -134,13 +134,10 @@ export function CreditBatchList({
   canManage = false,
   initialCreate = false,
   initialView = "timeline",
-  emissionsEntriesEnabled = false,
 }: {
   canManage?: boolean;
   initialCreate?: boolean;
   initialView?: CreditBatchListView;
-  /** Server flag EMISSIONS_ENTRIES_ENABLED; mounts the Emissions panel. */
-  emissionsEntriesEnabled?: boolean;
 }) {
   const [view, setView] = useState<CreditBatchListView>(initialView);
   const [createDefaults, setCreateDefaults] = useState<NewBatchRequest | null>(null);
@@ -384,6 +381,7 @@ export function CreditBatchList({
     return { startDate: window.start, endDate: window.end };
   };
   const openCreate = (request?: NewBatchRequest) => {
+    createCreditBatch.startDraft();
     createIntent.clear();
     setCreateDefaults(request ?? null);
     void setFocusedBatchId(null);
@@ -402,6 +400,8 @@ export function CreditBatchList({
     setSideSheet({ entity: batch, mode: "edit" });
   };
   const closeSideSheet = () => {
+    // A deep-linked create skips openCreate, so closing ends the draft and its key.
+    createCreditBatch.startDraft();
     createIntent.clear();
     void setFocusedBatchId(null);
     void setDeepLinkFocus(null);
@@ -826,7 +826,6 @@ export function CreditBatchList({
                   : batchHealthSummaries[sideSheetEntity.id],
                 isHealthLoading: healthLoading && !healthError,
                 canManage,
-                emissionsEntriesEnabled,
                 locked: sideSheetLocked,
                 inRemoval: membershipLocked,
                 activeFocusTarget:

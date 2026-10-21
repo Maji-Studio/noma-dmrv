@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({ transaction: vi.fn(), activity: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 vi.mock("./activity-events", () => ({ recordActivityChange: mocks.activity }));
 vi.mock("./submission-rejection", () => ({ rejectDraftSubmission: vi.fn() }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => true }));
 import { reserveProductionEmissionsClaims, rejectSubmissionAndReleaseProductionClaims } from "./production-claim-reservations";
 
 it("captures the entry claim link on reserve and release without changing content", async () => {

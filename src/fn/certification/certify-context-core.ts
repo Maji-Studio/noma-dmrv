@@ -1,14 +1,12 @@
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { frozenEntriesForAttempt, loadRemovalEntryContext } from "./removal-entry-context";
 import { loadBatchEmissionContext } from "./batch-emission-context";
 import { getRemovalCodes } from "@/data-access/removal-codes";
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 import { getTransportDistanceFixLinks } from "@/data-access/transport-distance-fix-links";
-import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
 import { TRANSPORT_CATEGORIES } from "@/lib/isometric/semantic-binding-catalog";
 import { resolveScopeForCreditBatch, resolveSingleBatchScope, resolveScopeForRemoval, type RemovalScope } from "./removal-scope";
 import { loadFacilityCertifierFacts, type FacilityCertifierFacts } from "./facility-certifier-facts";
-import { buildSubmissionLineageBlockers, collectFeedstockCodes } from "./certify-lineage-blockers";
+import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
 import { hasDurabilityMeasurementComponents, durabilityConfigurationBlockers } from "@/lib/certification/submission-readiness";
 import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
@@ -96,6 +94,8 @@ export async function buildRemovalContext(
   orgCtx: OrgContext,
   scope: RemovalScope,
   facilityFacts: FacilityCertifierFacts,
+  claimedSubmissionId?: string,
+  submissionRead = false,
 ): Promise<RemovalSubmissionContext> {
   // Load removal-owned facts up-front so every short-circuit carries them.
   const [latestSubmission, hasFinalized, linkedGhgStatement] =
@@ -118,8 +118,9 @@ export async function buildRemovalContext(
         : Promise.resolve(false),
       loadLinkedGhgStatementStatus(orgCtx, scope.removal),
     ]);
-  const batchEmissionFacts = await loadBatchEmissionContext(orgCtx, scope.facilityId, scope.memberBatches, facilityFacts);
-  const frozenEntrySet = emissionsEntriesEnabled() ? frozenEntriesForAttempt(latestSubmission, batchEmissionFacts) : undefined;
+  const batchEmissionFacts = await loadBatchEmissionContext(orgCtx, scope.facilityId, scope.memberBatches, facilityFacts,
+    (claimedSubmissionId || submissionRead) && scope.removalId ? { removalId: scope.removalId, submissionId: claimedSubmissionId } : undefined);
+  const frozenEntrySet = frozenEntriesForAttempt(latestSubmission, batchEmissionFacts);
   const loadedRemovalEntries = await loadRemovalEntryContext(orgCtx, scope, batchEmissionFacts, facilityFacts, frozenEntrySet);
   const removalEntryContext = loadedRemovalEntries && { contributions: loadedRemovalEntries.contributions,
     observationId: loadedRemovalEntries.observationId, semanticFingerprint: loadedRemovalEntries.semanticFingerprint };
@@ -246,6 +247,7 @@ export async function buildRemovalContext(
   if (applicationIds.length === 0) {
     return {
       facilityId: scope.facilityId,
+      facilityTimezone: facilityFacts.facilityTimezone,
       removalId: scope.removalId,
       reportingWindowStartedOn: scope.removal?.startedOn ?? null,
       reportingWindowCompletedOn: scope.removal?.completedOn ?? null,
@@ -316,7 +318,6 @@ export async function buildRemovalContext(
     removalId: scope.removalId,
     memberBatches: scope.memberBatches,
     lineages,
-    batchesWithSamples,
   });
   const requiredTransportCategories = collectProductionClaimAwareRequiredTransportCategories({
     removalId: scope.removalId,
@@ -379,6 +380,7 @@ export async function buildRemovalContext(
 
   return {
     facilityId: scope.facilityId,
+    facilityTimezone: facilityFacts.facilityTimezone,
     removalId: scope.removalId,
     reportingWindowStartedOn: scope.removal?.startedOn ?? null,
     reportingWindowCompletedOn: scope.removal?.completedOn ?? null,
@@ -387,6 +389,7 @@ export async function buildRemovalContext(
     project: facilityFacts.project,
     ...templateFacts,
     removalEntryContext,
+    entryCorrectionsByBatchId: Object.fromEntries(Object.entries(batchEmissionFacts).map(([id, batch]) => [id, batch.corrections ?? []])),
     requiredTransportCategories,
     memberBatches: memberBatchesWithSubmissionGates,
     feedstockTypeMappingGaps,
@@ -400,6 +403,7 @@ export async function buildRemovalContext(
     durabilityConfigurationBlockers: durabilityConfigBlockers,
     templateTierBlocker,
     futureDatedMeasurements: collectFutureDatedMeasurements({
+      facilityTimezone: facilityFacts.facilityTimezone,
       runs,
       samples: batchesWithSamples.flatMap((batch) => batch.samples),
       lineages,
@@ -431,7 +435,7 @@ export async function buildRemovalContext(
 export async function loadRemovalSubmissionContext(
   orgCtx: OrgContext,
   removalId: string,
-  options: { refreshEnrichment?: boolean } = {},
+  options: { refreshEnrichment?: boolean; claimedSubmissionId?: string } = {},
 ): Promise<RemovalSubmissionContext> {
   const scope = await resolveScopeForRemoval(orgCtx, removalId);
   const facilityFacts = await loadFacilityCertifierFacts(
@@ -439,7 +443,7 @@ export async function loadRemovalSubmissionContext(
     scope.facilityId,
     options,
   );
-  return buildRemovalContext(orgCtx, scope, facilityFacts);
+  return buildRemovalContext(orgCtx, scope, facilityFacts, options.claimedSubmissionId, true);
 }
 
 function projectUiContext(
@@ -457,6 +461,7 @@ function projectUiContext(
     lineSources: ctx.lineSources,
     templateBlockers: ctx.templateBlockers,
     undecidedLineIds: ctx.undecidedLineIds,
+    entryCorrectionsByBatchId: ctx.entryCorrectionsByBatchId,
     emissionLines: ctx.emissionLines,
     emissionLinesByBatchId: ctx.emissionLinesByBatchId,
     blueprintsForTemplate: ctx.blueprintsForTemplate,

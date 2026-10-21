@@ -43,7 +43,6 @@ export default async function AppLayout({
         defaults: await getOrganizationDefaults(orgContext),
         viewerCanManage:
           orgContext.isPlatformAdmin ||
-          orgContext.orgRole === "owner" ||
           orgContext.orgRole === "admin",
       }
     : undefined;

@@ -23,7 +23,7 @@ async function requireCredentialManager(ctx: OrgContext) {
   requireOrgScope(ctx);
   const member = await findApiCredentialMember(ctx.organizationId, ctx.userId);
   if (!member || !canOwnApiKey(member.role) || !member.emailVerified) {
-    throw new DomainError("forbidden", "A verified organization Owner or Admin is required.");
+    throw new DomainError("forbidden", "A verified organization Admin is required.");
   }
   return member;
 }

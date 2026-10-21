@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { MassPair } from "@/components/ui/mass-pair";
-import { StatCard } from "./index";
+import { STAT_CARD_ERROR_DESCRIPTION, STAT_CARD_ERROR_VALUE, StatCard } from "./index";
 
 describe("StatCard", () => {
   it("gives a structured breakdown the full card width without headline typography", () => {
@@ -26,5 +26,16 @@ describe("StatCard", () => {
     );
 
     expect(html).toContain("title-heading-3");
+  });
+
+  it("shows the failure instead of the value when the figure could not load", () => {
+    const html = renderToStaticMarkup(
+      <StatCard title="Total orders" value={0} description="All orders" isError />,
+    );
+
+    expect(html).toContain(STAT_CARD_ERROR_VALUE);
+    expect(html).toContain(STAT_CARD_ERROR_DESCRIPTION);
+    expect(html).not.toContain("All orders");
+    expect(html).not.toMatch(/>0</);
   });
 });

@@ -62,6 +62,8 @@ vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: () => null,
 }));
 
+vi.mock("./components-sent", () => ({ ComponentsSent: () => null }));
+
 vi.mock("@/components/forms", () => ({
   ServerError: ({ message }: { message: string }) => <div>{message}</div>,
 }));
@@ -396,7 +398,7 @@ describe("SubmitStep", () => {
       ["a ledger row", REGISTRY_CONTEXT, false],
       ["the external mutation marker", MARKER_CONTEXT, false],
       ["a registered Production Batch", CONTEXT, true],
-    ] as const)("offers deletion to an Owner or Admin once %s opened the boundary", async (_label, ctx, registeredBatch) => {
+    ] as const)("offers deletion to an Admin once %s opened the boundary", async (_label, ctx, registeredBatch) => {
       state.deleteAccess = { viewerCanDeleteRegistryRemovals: true, hasRegisteredProductionBatches: registeredBatch };
       const renderer = await renderStep(ctx);
       expect(findButton(renderer, "Delete Removal")).toBeDefined();

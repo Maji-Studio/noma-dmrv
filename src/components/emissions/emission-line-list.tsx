@@ -82,14 +82,12 @@ interface EmissionLineListProps {
   expanded: ReadonlySet<string>;
   editingCommentId: string | null;
   undo: RowUndo | null;
-  /** False while manual entries are switched off: rows only expand. */
-  canWrite: boolean;
   /** Label of the active state chip, for the filtered empty state. */
   filterLabel: string | null;
   onClearFilter: () => void;
 }
 
-export function EmissionLineList({ lines, grouped, scope, actions, expanded, editingCommentId, undo, canWrite, filterLabel, onClearFilter }: EmissionLineListProps) {
+export function EmissionLineList({ lines, grouped, scope, actions, expanded, editingCommentId, undo, filterLabel, onClearFilter }: EmissionLineListProps) {
   if (!lines.length) {
     return (
       <div className="bg-[var(--paper)] p-16 [border:var(--panel-border)]">
@@ -110,7 +108,6 @@ export function EmissionLineList({ lines, grouped, scope, actions, expanded, edi
       showGroup={showGroup}
       scope={scope}
       actions={actions}
-      canWrite={canWrite}
       expanded={expanded.has(line.componentId)}
       editingComment={editingCommentId === line.componentId}
       undoBar={undo?.componentId === line.componentId ? undo.bar : null}
@@ -146,13 +143,12 @@ interface LineRowProps {
   showGroup: boolean;
   scope: EmissionBatchScope;
   actions: LineActions;
-  canWrite: boolean;
   expanded: boolean;
   editingComment: boolean;
   undoBar: ReactNode;
 }
 
-function LineRow({ line, showGroup, scope, actions, canWrite, expanded, editingComment, undoBar }: LineRowProps) {
+function LineRow({ line, showGroup, scope, actions, expanded, editingComment, undoBar }: LineRowProps) {
   const total = lineTotalText(line);
   const quietTotal = isTotalMissing(line);
   const bodyId = `line-body-${line.componentId}`;
@@ -226,7 +222,7 @@ function LineRow({ line, showGroup, scope, actions, canWrite, expanded, editingC
                 line={line}
                 ids={scope}
                 onEntries={() => !expanded && actions.toggle(line)}
-                emptyAction={canWrite && !addEntryRefusal(line) ? <AddEntryLink line={line} onAdd={() => actions.form(line, { kind: "add" })} /> : undefined}
+                emptyAction={!addEntryRefusal(line) ? <AddEntryLink line={line} onAdd={() => actions.form(line, { kind: "add" })} /> : undefined}
               />
             )}
           </div>
@@ -243,7 +239,7 @@ function LineRow({ line, showGroup, scope, actions, canWrite, expanded, editingC
           </div>
         </div>
         <div className="contents md:col-start-5 md:flex md:items-center md:justify-end" onClick={(event) => event.stopPropagation()}>
-          <RowMenu line={line} scope={scope} actions={actions} canWrite={canWrite} />
+          <RowMenu line={line} scope={scope} actions={actions} />
         </div>
       </div>
       {undoBar}
@@ -252,7 +248,6 @@ function LineRow({ line, showGroup, scope, actions, canWrite, expanded, editingC
           id={bodyId}
           line={line}
           scope={scope}
-          canWrite={canWrite}
           editingComment={editingComment}
           onEditingComment={(editing) => actions.editingComment(line, editing)}
           onForm={(mode) => actions.form(line, mode)}
@@ -264,9 +259,9 @@ function LineRow({ line, showGroup, scope, actions, canWrite, expanded, editingC
 }
 
 /** The row menu: Add (or Edit) manual entry, the records page, Open Removal templates, the comment. */
-function RowMenu({ line, scope, actions, canWrite }: { line: EmissionLine; scope: EmissionBatchScope; actions: LineActions; canWrite: boolean }) {
+function RowMenu({ line, scope, actions }: { line: EmissionLine; scope: EmissionBatchScope; actions: LineActions }) {
   const records = lineRecords(line);
-  const entry = canWrite ? entryMenuItem(line, actions.form) : null;
+  const entry = entryMenuItem(line, actions.form);
   const upstream = records ? (
     <DropdownMenu.Item key="open" render={<Link href={recordsHref(records, scope)} />}>
       {openSourceLabel(records.source)}
@@ -277,7 +272,7 @@ function RowMenu({ line, scope, actions, canWrite }: { line: EmissionLine; scope
       {OPEN_REMOVAL_TEMPLATES_LINK_LABEL}
     </DropdownMenu.Item>
   ) : null;
-  const comment = canWrite && line.state !== "needsSetup" && !line.removedFromTemplate ? (
+  const comment = line.state !== "needsSetup" && !line.removedFromTemplate ? (
     <DropdownMenu.Item key="comment" onClick={() => actions.comment(line)}>
       {line.comment ? "Edit comment" : "Add comment"}
     </DropdownMenu.Item>

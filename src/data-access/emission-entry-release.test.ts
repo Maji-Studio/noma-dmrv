@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({ transaction: vi.fn(), reject: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 vi.mock("./submission-rejection", () => ({ rejectDraftSubmission: mocks.reject }));
 vi.mock("./activity-events", () => ({ recordActivityChange: vi.fn() }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => true }));
 import { rejectSubmissionAndReleaseProductionClaims } from "./production-claim-reservations";
 import { emissionEntries } from "@/db/schema";
 const lockedAt = new Date("2026-01-01");
@@ -14,7 +13,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   metadata = null;
   const query = (result: unknown[]) => {
-    const q = { from: () => q, where: () => q, for: () => q, returning: () => q,
+    const q = { from: () => q, where: () => q, orderBy: () => q, for: () => q, returning: () => q,
       then: (resolve: (rows: unknown[]) => unknown) => Promise.resolve(result).then(resolve) };
     return q;
   };

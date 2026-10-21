@@ -26,18 +26,17 @@ interface AccordionBodyProps {
   id: string;
   line: EmissionLine;
   scope: EmissionBatchScope;
-  canWrite: boolean;
   editingComment: boolean;
   onEditingComment: (editing: boolean) => void;
   onForm: (mode: EntryFormMode) => void;
   onDeleteEntry: (line: EmissionLine, entry: EmissionEntry) => void;
 }
 
-export function EmissionLineAccordionBody({ id, line, scope, canWrite, editingComment, onEditingComment, onForm, onDeleteEntry }: AccordionBodyProps) {
-  const model = lineBodyModel(line, canWrite);
+export function EmissionLineAccordionBody({ id, line, scope, editingComment, onEditingComment, onForm, onDeleteEntry }: AccordionBodyProps) {
+  const model = lineBodyModel(line);
   const setup = line.state === "needsSetup";
   // A line removed from the template takes no comment; the server refuses one.
-  const addComment = canWrite && !setup && !line.removedFromTemplate && !line.comment && !editingComment;
+  const addComment = !setup && !line.removedFromTemplate && !line.comment && !editingComment;
   return (
     <div id={id} role="region" aria-label={`${line.displayName} details`} className="flex flex-col pb-10">
       {(setup || model.reviewWithoutEntries) && (
@@ -50,9 +49,9 @@ export function EmissionLineAccordionBody({ id, line, scope, canWrite, editingCo
           <NothingYet line={line} className={TEXT_CELL} />
         </div>
       ) : (
-        <SourcesTable line={line} scope={scope} canWrite={canWrite} model={model} onForm={onForm} onDeleteEntry={onDeleteEntry} />
+        <SourcesTable line={line} scope={scope} model={model} onForm={onForm} onDeleteEntry={onDeleteEntry} />
       ))}
-      {!setup && <LineComment line={line} scope={scope} canWrite={canWrite} editing={editingComment} onEditingChange={onEditingComment} />}
+      {!setup && <LineComment line={line} scope={scope} editing={editingComment} onEditingChange={onEditingComment} />}
       {(model.canAddInBody || addComment) && (
         <div className={cn(TABLE_ROW, "pt-10")}>
           <div className={cn(TEXT_CELL, "flex flex-wrap items-center gap-x-24 gap-y-4")}>

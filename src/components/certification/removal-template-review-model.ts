@@ -16,12 +16,16 @@ import {
   type LineSources,
 } from "@/lib/isometric/template-observations/line-sources";
 import type { ComponentEnrichment, EntryPolicy, QuantityKind } from "@/lib/isometric/template-observations/types";
-import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
+import { humanizeEnum, ISOMETRIC_GIVES_NO_UNIT, MISSING_VALUE, UNIT_NOT_READ } from "@/lib/copy-utils";
 import { isTemplateReady, linesToDecideCount } from "@/lib/certification/removal-template-readiness";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import { hasMissingFixedDatapoint } from "@/lib/certification/template-fixed-datapoints";
 import { sectionTemplateLines, type TemplateLineSection } from "@/lib/isometric/template-observations/template-sections";
 import { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE } from "@/lib/certification/requirement-labels";
+import { SOURCE_LABELS } from "@/lib/certification/removal-template-source-labels";
 
 export { linesToDecideLabel, TEMPLATE_NOT_FULLY_READ_TITLE };
+export { SOURCE_LABELS };
 /** Section grouping, lines still to decide and readiness, under the names the review uses. */
 export { isTemplateReady, linesToDecideCount, sectionTemplateLines };
 
@@ -38,26 +42,13 @@ export const SCOPE_LABELS: Record<LineScope, string> = {
   unassigned: MISSING_VALUE.notSet,
 };
 
-/** The scopes an Owner or Admin can assign. Unassigned is the absence of one. */
+/** The scopes an Admin can assign. Unassigned is the absence of one. */
 export const ASSIGNABLE_SCOPES = ["operating", "forbidden"] as const satisfies readonly LineScope[];
 
 export const ENTRY_POLICY_LABELS: Record<EntryPolicy, string> = {
   none: "No entries",
   additive: "Entries add to the total",
   single: "One entry per batch",
-};
-
-export const SOURCE_LABELS: Record<AutomaticSourceId, string> = {
-  "run-genset-diesel": "Generator diesel from production runs",
-  "run-startup-diesel": "Startup diesel from production runs",
-  "run-electricity": "Electricity from production runs",
-  "feedstock-transport": "Feedstock transport legs",
-  "delivery-transport": "Delivery transport legs",
-  "sample-transport": "Sample transport legs",
-  "feedstock-dry-mass": "Feedstock dry mass",
-  "biochar-dry-mass": "Biochar dry mass",
-  sequestration: "Applications and lab results",
-  "safety-margin": "Safety margin on biochar dry mass",
 };
 
 export const ORIGIN_LABELS: Record<LineContract["origin"], string> = {
@@ -88,6 +79,8 @@ const PROBLEM_COPY: Partial<Record<LineSourceProblem["code"], string>> = {
 /** The badge on a line without a saved decision. */
 export const TO_DECIDE_LABEL = "To decide";
 export const DEPRECATED_FACTORS_LABEL = "Deprecated factors";
+/** The card name of a template Isometric no longer lists. Isometric keeps its capital. */
+export const MISSING_TEMPLATE_NAME = "Template not found on Isometric";
 
 export function sourceLabel(source: AutomaticSourceId | undefined): string {
   return source ? SOURCE_LABELS[source] : MISSING_VALUE.none;
@@ -112,10 +105,15 @@ export function quantityKindLabel(kind: QuantityKind): string {
   return humanizeEnum(kind);
 }
 
-/** The unit Isometric gave this input, or the not-available token when it gave none. */
+/**
+ * The unit Isometric gave this input. Without an enrichment, or with an entry
+ * whose read failed, the unit was not read; only an entry read successfully
+ * with an empty unit is Isometric giving none.
+ */
 export function inputUnitLabel(enrichment: ComponentEnrichment | undefined, inputKey: string): string {
   const input = enrichment?.[inputKey];
-  return input && "unit" in input && input.unit ? input.unit : MISSING_VALUE.notAvailable;
+  if (!input || !("unit" in input)) return UNIT_NOT_READ;
+  return input.unit || ISOMETRIC_GIVES_NO_UNIT;
 }
 
 /**
@@ -163,7 +161,8 @@ export function isNotFullyRead(entry: RemovalTemplateReviewEntry): boolean {
 }
 
 export function templateName(entry: RemovalTemplateReviewEntry): string {
-  return entry.template?.display_name ?? MISSING_VALUE.notAvailable;
+  // Only a template Isometric no longer lists comes without a template.
+  return entry.template?.display_name ?? MISSING_TEMPLATE_NAME;
 }
 
 /** Fixed factors Isometric reports as deprecated, or null when it reports none. */
@@ -224,6 +223,9 @@ export interface TemplateReadiness {
 /** Why a template cannot be chosen yet, in the words Removal templates uses. */
 export function templateReadiness(entry: RemovalTemplateReviewEntry): TemplateReadiness {
   if (isTemplateReady(entry)) return { ready: true };
+  if (entry.template && hasMissingFixedDatapoint(entry.template)) {
+    return { ready: false, reason: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint };
+  }
   const toDecide = linesToDecideCount(entry);
   if (toDecide > 0) return { ready: false, reason: linesToDecideLabel(toDecide), toDecide };
   if (entry.enrichmentProblems.length > 0) return { ready: false, reason: TEMPLATE_NOT_FULLY_READ_TITLE };

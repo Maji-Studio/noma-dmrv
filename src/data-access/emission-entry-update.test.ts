@@ -4,13 +4,14 @@ import { emissionEntries } from "@/db/schema";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), latest: vi.fn(), previous: vi.fn(), activity: vi.fn(), gate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), latest: vi.fn(), previous: vi.fn(), activity: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 vi.mock("./batch-emission-automatic-figures", () => ({ loadBatchAutomaticFigures: vi.fn() }));
 vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: vi.fn() }));
 vi.mock("./removal-template-observations", () => ({ getLatestTemplateObservation: mocks.latest, getTemplateObservationById: mocks.previous }));
 vi.mock("./emission-entry-activity", () => ({ recordEmissionEntryActivity: mocks.activity }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ requireEmissionsEntriesEnabled: mocks.gate }));
+// These fixtures have no returned lineage. Correction authorization is tested separately.
+vi.mock("./emission-entry-corrections", () => ({ lockEmissionCorrectionScope: vi.fn(), revalidateEmissionCorrectionScope: vi.fn(), emissionCorrectionWindow: () => undefined }));
 import { updateEmissionEntry, confirmEmissionEntry } from "./emission-entries";
 
 const ctx = makeTestOrgContext();
@@ -44,7 +45,6 @@ const select = vi.fn();
 const update = vi.fn();
 const insert = vi.fn();
 
-
 function query(result: () => unknown[]) {
   const builder = { from: () => builder, where: () => builder, orderBy: () => builder,
     for: (mode: string) => { locks.push(mode); return builder; }, returning: () => builder,
@@ -73,7 +73,6 @@ beforeEach(() => {
   mocks.latest.mockImplementation(async () => current);
   mocks.previous.mockResolvedValue(previous);
 });
-
 
 it.each([false, true])("preserves other drafts' zeros for a note edit, including unchanged submitted values (%s)", async (includeValues) => {
   await updateEmissionEntry(ctx, { id, expectedVersion: original.version, note: "revised note",

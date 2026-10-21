@@ -1,5 +1,5 @@
 /**
- * OrganizationSettings — member-management surface for org Owners/Admins
+ * OrganizationSettings — member-management surface for org Admins
  * (and Platform Admins). Invite by email, manage roles, remove members, and
  * revoke pending invitations. Read-only members see the roster without controls.
  *
@@ -44,7 +44,6 @@ import { Notice } from "@/components/ui/notice";
 import { ILLUSTRATION_SIZE, EnvelopeArt, MembersArt } from "@/components/ui/illustrations";
 
 const ROLE_OPTIONS = [
-  { value: "owner", label: "Owner" },
   { value: "admin", label: "Admin" },
   { value: "member", label: "Member" },
 ] as const;

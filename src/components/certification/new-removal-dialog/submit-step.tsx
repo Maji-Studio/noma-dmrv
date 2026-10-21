@@ -55,6 +55,7 @@ import { isRemovalCompilationReady } from "./submission-facts";
 import { SubmissionSummary } from "./submission-summary";
 import { allowsRemovalSubmission } from "./resume-state";
 import { RemovalEmissionsLedger } from "./removal-emissions-ledger";
+import { ComponentsSent } from "./components-sent";
 import { Notice } from "@/components/ui/notice";
 
 const REJECTED_IN_ISOMETRIC_MSG =
@@ -376,6 +377,13 @@ export function SubmitStep({
         rejectionMessage={
           rejectedWithExternal ? REJECTED_IN_ISOMETRIC_MSG : null
         }
+      />
+
+      <ComponentsSent
+        ctx={ctx}
+        facilityId={facilityId}
+        review={compilationQuery.data?.review ?? null}
+        isLoading={compilationQuery.isLoading}
       />
 
       <RemovalEmissionsLedger

@@ -1,4 +1,3 @@
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { readRemovalEntrySnapshot } from "./removal-snapshot-readers";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import type { OrgContext } from "@/lib/auth/server";
@@ -507,7 +506,7 @@ async function submitRemovalCore(
           removalId,
           submissionId: claimed.row.id,
           creditBatchIds: productionClaimBatchIds,
-          ...(emissionsEntriesEnabled() ? { entryClaim: { memberBatchIds: ctx.memberBatches.map((batch) => batch.id), frozenEntrySet: readRemovalEntrySnapshot(claimed.row).frozenEntrySet } } : {}),
+          entryClaim: { memberBatchIds: ctx.memberBatches.map((batch) => batch.id), frozenEntrySet: readRemovalEntrySnapshot(claimed.row).frozenEntrySet },
         });
         if (claimed.reason === "rejected-hash-changed") {
           log.warn(

@@ -26,6 +26,12 @@ vi.mock("@/data-access/production-incidents", () => ({
   getProductionIncidents: mocks.listIncidents,
   createProductionIncident: mocks.createIncident,
 }));
+vi.mock("@/lib/operations/production-samples", () => ({ recordProductionSample: { id: "record_production_sample" } }));
+vi.mock("@/lib/operations/production-incidents", () => ({ recordProductionIncident: { id: "record_production_incident" } }));
+vi.mock("@/lib/operations/runner", () => ({
+  runOperationInProcess: (operation: { id: string }, ctx: unknown, input: unknown) =>
+    operation.id === "record_production_incident" ? mocks.createIncident(ctx, input) : mocks.create(ctx, input),
+}));
 vi.mock("@/db", () => ({
   db: { select: () => ({ from: () => ({ where: async () => [{ maxSuffix: 0 }] }) }) },
 }));
@@ -41,7 +47,7 @@ const SAMPLE_CREATE_FAILURE = "In-process measurement was not created. Check the
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.auth.mockResolvedValue({ organizationId: ID, userId: ID, orgRole: "owner", isPlatformAdmin: false });
+  mocks.auth.mockResolvedValue({ organizationId: ID, userId: ID, orgRole: "admin", isPlatformAdmin: false });
 });
 
 describe("operations action operator copy", () => {

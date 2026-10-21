@@ -99,7 +99,7 @@ async function listProjectsWithConfiguration(
   }
 }
 
-// Org Owner/Admin-only: this action rewires which Isometric project every
+// Org Admin-only: this action rewires which Isometric project every
 // future Removal / GHG-statement submission for the facility targets.
 // Platform admins also pass through requireOrgRole.
 export async function saveFacilityCertifierMapping(
@@ -147,7 +147,7 @@ export async function saveFacilityCertifierMapping(
   });
 }
 
-// Org Owner/Admin-only: unlinking strands every in-flight submission's audit
+// Org Admin-only: unlinking strands every in-flight submission's audit
 // trail against an external project the operator can no longer reach.
 export async function deleteFacilityCertifierMapping(
   facilityId: string,
@@ -167,7 +167,7 @@ export async function loadIsometricProjectTemplates(
   });
 }
 
-// Org Owner/Admin-only: this per-facility emission-estimate config feeds the
+// Org Admin-only: this per-facility emission-estimate config feeds the
 // reference soil temperature submitted with every 200-year removal.
 export async function saveFacilityEmissionConfig(
   input: FacilityEmissionConfigFormData,
