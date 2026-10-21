@@ -80,6 +80,8 @@ const MAX_LOADING_ROWS = 5;
 /*  Data Table Props                                                    */
 /* ------------------------------------------------------------------ */
 
+const NO_HIDDEN_COLUMNS: VisibilityState = {};
+
 export interface DataTableProps<TData, TValue> extends VariantProps<typeof tableVariants> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
@@ -105,6 +107,8 @@ export interface DataTableProps<TData, TValue> extends VariantProps<typeof table
   enableMultiRowSelection?: boolean;
   // Column visibility
   columnVisibility?: VisibilityState;
+  /** Columns that start hidden (`{ id: false }`); "Reset columns" restores this state. */
+  defaultColumnVisibility?: VisibilityState;
   onColumnVisibilityChange?: (visibility: VisibilityState) => void;
   // Row options
   striped?: boolean;
@@ -174,6 +178,7 @@ function DataTableRoot<TData, TValue>({
   enableMultiRowSelection = true,
   // Column visibility
   columnVisibility: externalColumnVisibility,
+  defaultColumnVisibility = NO_HIDDEN_COLUMNS,
   onColumnVisibilityChange,
   // Row options
   striped = false,
@@ -201,7 +206,7 @@ function DataTableRoot<TData, TValue>({
   const [sorting, setSorting] = React.useState<SortingState>(defaultSorting);
   const [globalFilter, setGlobalFilter] = React.useState("");
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(defaultColumnVisibility);
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
   const [pagination, setPagination] = React.useState<PaginationState>({
     pageIndex: externalPageIndex ?? 0,
@@ -290,6 +295,7 @@ function DataTableRoot<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
+    initialState: { columnVisibility: defaultColumnVisibility },
     state: {
       sorting,
       globalFilter: effectiveGlobalFilter,
@@ -724,7 +730,10 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
         !column.columnDef.meta?.recordLink &&
         columnLabel(column),
     );
-  const hasVisibilityChanges = hideableColumns.some((column) => !column.getIsVisible());
+  const defaultVisibility = table.initialState.columnVisibility;
+  const hasVisibilityChanges = hideableColumns.some(
+    (column) => column.getIsVisible() !== (defaultVisibility[column.id] !== false),
+  );
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

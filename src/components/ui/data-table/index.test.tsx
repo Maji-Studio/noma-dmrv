@@ -133,3 +133,49 @@ describe("DataTable row identity", () => {
     expect(recordRowId({ id: 42 }, 0)).toBe("42");
   });
 });
+
+describe("DataTable default column visibility", () => {
+  const withFacility: ColumnDef<TestRow>[] = [
+    ...columns,
+    { id: "facility", header: "Facility", accessorFn: () => "Mafinga" },
+  ];
+
+  it("starts with the declared columns hidden but still offered in the menu", () => {
+    let table: TanStackTable<TestRow> | undefined;
+    const html = renderToStaticMarkup(
+      <DataTable columns={withFacility} data={data} defaultColumnVisibility={{ facility: false }}>
+        <TableProbe capture={(next) => { table = next; }} />
+      </DataTable>,
+    );
+
+    expect(table?.getColumn("facility")?.getIsVisible()).toBe(false);
+    expect(table?.getColumn("facility")?.getCanHide()).toBe(true);
+    expect(table?.getColumn("name")?.getIsVisible()).toBe(true);
+    expect(html).not.toContain("Mafinga");
+  });
+
+  it("resets to the declared starting state, not to everything visible", () => {
+    let table: TanStackTable<TestRow> | undefined;
+    renderToStaticMarkup(
+      <DataTable columns={withFacility} data={data} defaultColumnVisibility={{ facility: false }}>
+        <TableProbe capture={(next) => { table = next; }} />
+      </DataTable>,
+    );
+
+    expect(table?.initialState.columnVisibility).toEqual({ facility: false });
+    const onChange = vi.fn();
+    renderToStaticMarkup(
+      <DataTable
+        columns={withFacility}
+        data={data}
+        defaultColumnVisibility={{ facility: false }}
+        columnVisibility={{ facility: true }}
+        onColumnVisibilityChange={onChange}
+      >
+        <TableProbe capture={(next) => { table = next; }} />
+      </DataTable>,
+    );
+    table?.resetColumnVisibility();
+    expect(onChange).toHaveBeenCalledWith({ facility: false });
+  });
+});

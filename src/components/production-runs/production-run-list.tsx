@@ -33,6 +33,7 @@ import {
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
+import { FACILITY_COLUMN_HIDDEN_BY_DEFAULT } from "@/components/ui/data-table/data-table-helpers";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -507,6 +508,7 @@ export function ProductionRunList() {
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={FACILITY_COLUMN_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={runs}
         enableSorting={false}
