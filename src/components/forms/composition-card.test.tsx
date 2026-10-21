@@ -68,7 +68,7 @@ describe("CompositionCard", () => {
   it("keeps the plain definition hint when there is no explanation", () => {
     const { container } = render(<Block explanation={null} />);
     expect(container.querySelector("[data-explanation-info]")).toBeNull();
-    expect(screen.getByRole("button", { name: "About bin stock" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "About Bin stock" })).toBeTruthy();
   });
 
   it("never submits or dirties the form when the (i) is pressed", async () => {

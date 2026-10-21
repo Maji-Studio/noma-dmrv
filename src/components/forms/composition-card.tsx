@@ -55,7 +55,7 @@ export function CompositionCard({
         <span>{title}</span>
         {hasExplanation
           ? <ExplanationInfo title={title} hint={hint}>{explanation}</ExplanationInfo>
-          : hint && <InfoHint label={`About ${title.toLowerCase()}`}>{hint}</InfoHint>}
+          : hint && <InfoHint label={`About ${title}`}>{hint}</InfoHint>}
       </h3>
       {headline}
       {children != null && children !== false && (

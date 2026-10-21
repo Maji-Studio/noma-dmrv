@@ -357,8 +357,8 @@ function DetailSecondaryLine({
  * -----------------------------------------------------------------------------------------------*/
 
 /**
- * One read field. There is no per-field explanation flag; explanation goes in
- * the section's `explanation`.
+ * One read field. Explanation behind one figure goes in the field's
+ * `explanation`; explanation for the whole section goes in the section's.
  */
 export interface DetailPanelField {
   label: string;
