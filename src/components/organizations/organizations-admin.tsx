@@ -60,6 +60,7 @@ export function OrganizationsAdmin() {
   }
 
   async function enterOrg(organizationId: string, organizationName: string) {
+    if (entering.held) return;
     entering.hold(organizationId);
     try {
       const result = await enterOrganization(organizationId, organizationName);
@@ -67,9 +68,9 @@ export function OrganizationsAdmin() {
         entering.release();
         toast.error(result.error);
       }
-    } catch (error) {
+    } catch {
       entering.release();
-      throw error;
+      toast.error("The organization did not open. Try again.");
     }
   }
 
@@ -103,6 +104,7 @@ export function OrganizationsAdmin() {
                 org={org}
                 apiAccessEnabled={apiAccessByOrg.get(org.id)}
                 entering={entering.held === org.id}
+                enterDisabled={entering.held !== null}
                 current={org.id === activeOrganizationId}
                 onEnter={() => enterOrg(org.id, org.name)}
               />

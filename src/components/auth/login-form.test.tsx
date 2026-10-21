@@ -83,10 +83,19 @@ it("stays busy after the OAuth continuation starts, until the page leaves", asyn
   expect(signInButton().disabled).toBe(true);
 });
 
-it("clears busy when the sign-in fails or the continuation is refused", async () => {
+it("clears busy when the sign-in fails", async () => {
   mocks.signIn.mockResolvedValue({ success: false, error: "Wrong password." });
   await submit();
   await screen.findByText("Wrong password.");
+  expect(signInButton().getAttribute("aria-busy")).toBeNull();
+  expect(signInButton().disabled).toBe(false);
+});
+
+it("clears busy when the continuation is refused", async () => {
+  mocks.search = new URLSearchParams({ sig: "test", ba_param: "redirect_uri", redirect_uri: "https://client.test/callback" });
+  mocks.signIn.mockResolvedValue({ success: true, redirectUrl: "https://evil.test" });
+  await submit();
+  await screen.findByText("Start again from the app.");
   expect(signInButton().getAttribute("aria-busy")).toBeNull();
   expect(signInButton().disabled).toBe(false);
 });

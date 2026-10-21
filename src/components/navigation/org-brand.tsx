@@ -15,6 +15,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { CaretDownIcon, CheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { authClient } from "@/lib/auth/client";
+import { useToast } from "@/components/ui/toast";
 import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import {
@@ -25,6 +26,8 @@ import {
 import { shouldShowOrganizationSwitcher } from "./org-brand-switching";
 import { useViewerOrg } from "./viewer-org";
 import { FALLBACK_ORG_NAME, viewerRoleLabel } from "./viewer-org-rules";
+
+const SWITCH_FAILED_MESSAGE = "The organization did not open. Try again.";
 
 type SwitchableOrg = { id: string; name: string };
 
@@ -81,6 +84,7 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
   const listboxId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const toast = useToast();
   const switching = useBusyUntilUnload();
   const isSwitching = !!switching.held;
 
@@ -138,6 +142,7 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
       : memberOrgsQuery.isPending && !memberOrgsQuery.error);
 
   async function handleSelect(organizationId: string, organizationName: string) {
+    if (switching.held) return;
     if (organizationId === activeOrganizationId) {
       setIsOpen(false);
       return;
@@ -151,9 +156,9 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
         return;
       }
       setIsOpen(false);
-    } catch (error) {
+    } catch {
       switching.release();
-      throw error;
+      toast.error(SWITCH_FAILED_MESSAGE);
     }
   }
 
@@ -229,6 +234,7 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
                     role="option"
                     aria-selected={isSelected}
                     onClick={() => handleSelect(org.id, org.name)}
+                    disabled={isSwitching}
                     className={`w-full h-40 px-16 flex items-center justify-between gap-8 body-caption text-left transition-colors duration-150 ${
                       isSelected
                         ? "text-white bg-[var(--color-white-100)]/[0.08]"

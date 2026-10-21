@@ -59,6 +59,10 @@ vi.mock("@/lib/auth/client", () => ({
   },
 }));
 
+vi.mock("@/components/ui/toast", () => ({
+  useToast: () => ({ error: vi.fn() }),
+}));
+
 vi.mock("@/hooks/use-is-admin", () => ({
   useIsAdmin: () => state.isAdmin,
 }));

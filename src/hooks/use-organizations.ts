@@ -69,13 +69,14 @@ export function useResetAfterOrgSwitch() {
     stashOrgSwitchNotice(target);
     try {
       window.localStorage.removeItem(FACILITY_STORAGE_KEY);
-    } finally {
+    } catch {
       // localStorage can throw when storage is blocked; the switch already
-      // succeeded server-side, so always land in the new organization. A hard
-      // load makes every server component, Better Auth store, and client
-      // cache re-read the new context.
-      window.location.assign("/dashboard");
+      // succeeded server-side, so swallow it and still land in the new
+      // organization.
     }
+    // A hard load makes every server component, Better Auth store, and client
+    // cache re-read the new context.
+    window.location.assign("/dashboard");
   };
 }
 

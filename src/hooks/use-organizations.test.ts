@@ -1,0 +1,24 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { useResetAfterOrgSwitch } from "./use-organizations";
+
+const mocks = vi.hoisted(() => ({ assign: vi.fn() }));
+vi.mock("@/fn/organizations", () => ({}));
+vi.mock("@/fn/organization-api-access", () => ({}));
+vi.mock("@/lib/read-api/client", () => ({}));
+
+beforeEach(() => {
+  vi.stubGlobal("location", { assign: mocks.assign });
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.clearAllMocks();
+});
+
+it("still lands in the new organization when storage is blocked, without throwing", () => {
+  vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+    throw new Error("storage blocked");
+  });
+  expect(() => useResetAfterOrgSwitch()()).not.toThrow();
+  expect(mocks.assign).toHaveBeenCalledWith("/dashboard");
+});

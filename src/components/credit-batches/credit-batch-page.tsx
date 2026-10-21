@@ -10,7 +10,7 @@
  * ⋯. The route has already org-scoped the batch and matched its facility.
  */
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
@@ -171,6 +171,8 @@ export function CreditBatchPage({
 }) {
   const router = useRouter();
   const toast = useToast();
+  // The delete stays busy until the list has rendered.
+  const [navigatingAfterDelete, startNavigation] = useTransition();
   const tabListRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useQueryState(
     CREDIT_BATCH_TAB_PARAM,
@@ -275,9 +277,9 @@ export function CreditBatchPage({
     if (!deleting) return;
     try {
       await deleteCreditBatch.mutateAsync({ creditBatchId: deleting.id, expectedVersion: deleting.version });
-      setDeleting(null);
       toast.success("Credit batch deleted.");
-      router.push(creditBatchListHref(batch.facilityId));
+      // The dialog stays open, busy, until the list renders.
+      startNavigation(() => router.push(creditBatchListHref(batch.facilityId)));
     } catch (error) {
       setDeleting(null);
       if (error instanceof ConflictError) setDeleteConflict(error);
@@ -354,7 +356,7 @@ export function CreditBatchPage({
         onCancel={() => setDeleting(null)}
         title="Delete credit batch"
         message={CREDIT_BATCH_DELETE_MESSAGE}
-        isPending={deleteCreditBatch.isPending}
+        isPending={deleteCreditBatch.isPending || navigatingAfterDelete}
       />
       {deleteConflict && (
         <InUseDeleteDialog label={batch.code} onClose={() => setDeleteConflict(null)}>
