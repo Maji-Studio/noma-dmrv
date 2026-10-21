@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { NOTICE_ACTION_LINK_CLASS } from "./removal-resubmit-notice";
-import { OPEN_GHG_STATEMENT_LABEL, returnedStatementPhrase } from "@/lib/removal-correction-copy";
+import { OPEN_GHG_STATEMENT_LABEL, returnedStatementPhrase, CORRECTION_NEEDED_STATUS_LABEL } from "@/lib/removal-correction-copy";
 import { recordLockLinkHref, recordLockLinkText } from "@/components/record-locks/record-lock-labels";
 import { Notice } from "@/components/ui/notice";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -12,7 +12,7 @@ import type { RecordLockView } from "@/lib/record-lock-view";
  * point 2, option A). Resubmission happens on that GHG Statement, so the
  * action opens it there.
  */
-export const CORRECTION_NEEDED_LABEL = "Correction needed";
+export const CORRECTION_NEEDED_LABEL = CORRECTION_NEEDED_STATUS_LABEL;
 
 function firstReturn(lock: RecordLockView | undefined) {
   return lock && lock.level !== "sent" ? lock.returnedBy[0] : undefined;

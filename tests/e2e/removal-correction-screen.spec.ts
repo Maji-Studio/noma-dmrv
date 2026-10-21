@@ -77,7 +77,7 @@ test.describe("Returned Removal screens", () => {
         await expect(seen(open.removalCode)).toBeVisible();
         if (CHECK_COPY) {
           await expect(seen("Resubmit needed", changed.removalCode)).toBeVisible({ timeout: 30_000 });
-          await expect(seen("Returned", open.removalCode)).toBeVisible();
+          await expect(seen("Correction needed", open.removalCode)).toBeVisible();
           await expect(page.getByText("Correction needed")).toHaveCount(0);
         } else {
           await expect(seen("Correction needed", changed.removalCode)).toBeVisible({ timeout: 30_000 });

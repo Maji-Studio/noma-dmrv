@@ -11,8 +11,8 @@ import { formatDate, formatDateRange } from "@/lib/format-utils";
  * (`RemovalCorrection`); this only words it.
  */
 
-/** The status while nothing sent has changed since the return. */
-export const RETURNED_STATUS_LABEL = "Returned";
+/** The status while nothing sent has changed since the return; the same words as #1134's lock-based label. */
+export const CORRECTION_NEEDED_STATUS_LABEL = "Correction needed";
 /** The status once a sent fact changed: the Removal must go out again. */
 export const RESUBMIT_NEEDED_LABEL = "Resubmit needed";
 export const RESUBMIT_REMOVAL_LABEL = "Resubmit Removal";
@@ -25,7 +25,7 @@ export function returnedStatementPhrase(status: string | null): string {
 
 /** The badge a returned Removal shows in place of its own status. */
 export function correctionStatus(correction: RemovalCorrection): { value: "pending"; label: string } {
-  return { value: "pending", label: correction.resubmitNeeded ? RESUBMIT_NEEDED_LABEL : RETURNED_STATUS_LABEL };
+  return { value: "pending", label: correction.resubmitNeeded ? RESUBMIT_NEEDED_LABEL : CORRECTION_NEEDED_STATUS_LABEL };
 }
 
 /** "GHG Statement Jul 1 to Sep 30, 2026", or "GHG Statement ending Sep 30, 2026" before the server knows the start. */

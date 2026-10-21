@@ -19,7 +19,7 @@ const correction = (overrides: Partial<RemovalCorrection> = {}): RemovalCorrecti
 
 describe("removal correction copy", () => {
   it("names the status by whether a sent fact changed", () => {
-    expect(correctionStatus(correction())).toEqual({ value: "pending", label: "Returned" });
+    expect(correctionStatus(correction())).toEqual({ value: "pending", label: "Correction needed" });
     expect(correctionStatus(correction({ resubmitNeeded: true }))).toEqual({ value: "pending", label: "Resubmit needed" });
   });
 

@@ -39,12 +39,12 @@ describe("Removal list status for a returned Removal", () => {
     batches: [], changed: [],
   }) as RemovalListRow["correction"];
 
-  it.each([[false, "Returned"], [true, "Resubmit needed"]])("names the state on one line, with nothing under it, when resubmitNeeded is %s", (resubmitNeeded, label) => {
+  it.each([[false, "Correction needed"], [true, "Resubmit needed"]])("names the state on one line, with nothing under it, when resubmitNeeded is %s", (resubmitNeeded, label) => {
     const html = renderToStaticMarkup(<StatusCell summary={{ removalId: "rem-1", correction: correction(resubmitNeeded) } as RemovalListRow} lock={lock} />);
     expect(html).toContain(`>${label}<`);
     expect(html).toContain('data-status="pending"');
-    // One Removal never shows both #1134's lock-based state and this one.
-    expect(html).not.toContain("Correction needed");
+    // One Removal never shows both #1134's lock-based state and this one: one badge, none of #1134's action or sentence.
+    expect(html.split(`>${label}<`)).toHaveLength(2);
     expect(html).not.toContain("Open GHG Statement");
     expect(html).not.toContain("Correct this Removal");
   });
