@@ -36,6 +36,7 @@ vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null, Tooltip: ({ ch
 
 import { ProductionRunForm } from "./production-run-form";
 import { ActionError } from "@/lib/action-error";
+import { ProductionRunConflictError } from "@/lib/production-runs/overlap-conflict";
 import { OPEN_LOCK } from "../../../tests/helpers/record-lock-mocks";
 
 const savedRun = {
@@ -156,15 +157,43 @@ describe("ProductionRunForm refused saves", () => {
   });
 
   it("brings the saved value back into a field that became locked", async () => {
-    const field = () => document.querySelector<HTMLInputElement>('input[name="feedstockMoisturePercent"]')!;
+    const field = () => document.querySelector<HTMLInputElement>('input[name="biocharOutputKg"]')!;
+    let saved = "";
     const { onSubmit, footers } = submitRefused(
-      refusalOf("certification_locked", "feedstockMoisturePercent", LOCK_REASON),
-      () => fireEvent.change(field(), { target: { value: "35" } }),
+      refusalOf("certification_locked", "biocharOutputKg", LOCK_REASON),
+      () => { saved = field().value; fireEvent.change(field(), { target: { value: "35" } }); },
     );
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
-    expect(onSubmit.mock.calls[0][0]).toMatchObject({ feedstockMoisturePercent: 35 });
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ biocharOutputKg: 35 });
     await screen.findByText("Locked. Your change was not saved.");
-    expect(field().value).toBe("20");
+    expect(field().value).toBe(saved);
     expect(footers).toEqual([LOCK_REASON]);
+  });
+
+  it("brings the saved start date back when only the date changed and the start is locked", async () => {
+    const date = () => document.querySelector<HTMLInputElement>('input[name="startDate"]')!;
+    let saved = "";
+    const { onSubmit, footers } = submitRefused(
+      refusalOf("certification_locked", "startTime", LOCK_REASON),
+      () => { saved = date().value; fireEvent.change(date(), { target: { value: "2026-07-10" } }); },
+    );
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(await screen.findAllByText("Locked. Your change was not saved.")).toHaveLength(2);
+    expect(date().value).toBe(saved);
+    expect(footers).toEqual([LOCK_REASON]);
+  });
+
+  it("files an overlap conflict at the start time without calling the refusal handler", async () => {
+    const onRefusal = vi.fn();
+    const onSubmit = vi.fn(async () => {
+      throw new ProductionRunConflictError("Overlaps another run on this reactor", {
+        conflictingRunId: "run_2", conflictingRunNumber: "PR-2", startTime: new Date(), endTime: null,
+      } as never);
+    });
+    render(<ProductionRunForm productionRun={{ ...savedRun, status: "complete" } as ProductionRunWithRelations} onSubmit={onSubmit} lock={OPEN_LOCK} />);
+    fireEvent.click(screen.getByRole("button", { name: "Update production run" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    await screen.findAllByText(/Overlaps another run on this reactor/);
+    expect(onRefusal).not.toHaveBeenCalled();
   });
 });

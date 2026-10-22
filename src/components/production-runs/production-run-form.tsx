@@ -87,6 +87,12 @@ const EMPTY_FEEDSTOCK_DRAW = { storageLocationId: "", wetMassKg: undefined };
 // Component
 // ============================================
 
+/** The server reports each run time as one instant; the form edits it as a date and a time. */
+const RUN_SPLIT_FIELDS = {
+  startTime: ["startDate", "startTime"],
+  endTime: ["endDate", "endTime"],
+} as const;
+
 export type ProductionRunSubmitData = Omit<ProductionRunFormData, "endTime"> & {
   endTime?: ProductionRunFormData["endTime"] | null;
   expectedVersion?: number;
@@ -95,7 +101,7 @@ export type ProductionRunSubmitData = Omit<ProductionRunFormData, "endTime"> & {
 interface ProductionRunFormProps {
   /** Existing production run data for editing (undefined for create mode) */
   productionRun?: ProductionRunWithRelations;
-  /** Form submission handler; an edit hands `onRefusal` on so a refused save shows at its fields (#1298). */
+  /** Form submission handler; the form hands `onRefusal` on, for create and edit, so a refused save shows at its fields (#1298); create does too. */
   onSubmit: (data: ProductionRunSubmitData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
@@ -324,7 +330,7 @@ export function ProductionRunForm({
 
   const defaultSubmitLabel = isEditMode ? "Update production run" : "Create production run";
 
-  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, splitFields: RUN_SPLIT_FIELDS });
 
   const handleFormSubmit = latched(handleSubmit(async (data) => {
     // A touched value or newly entered physical outcome submits that Date;

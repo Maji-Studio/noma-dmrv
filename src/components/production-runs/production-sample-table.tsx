@@ -71,14 +71,14 @@ export function ProductionSampleTable({
   const createWithEvidence = useCreateWithEvidence({
     entityType: "production_sample",
     entityNoun: "In-process measurement",
-    executeCreate: async (data: ProductionSampleFormData) => {
+    executeCreate: async ({ data }: { data: ProductionSampleFormData; onRefusal: SaveRefusalHandler }) => {
       const sample = await createSample.mutateAsync(data);
       return { entities: [sample], result: sample };
     },
     setError: setFormError,
     setUpdateError: setFormError,
-    getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "In-process measurement was not saved. Try again.",
+    getCreateErrorMessage: (error, { onRefusal }) =>
+      onRefusal(error, error instanceof Error ? error.message : "In-process measurement was not saved. Try again."),
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this in-process measurement.",
     openEditOnFailure: (sample) =>
@@ -134,10 +134,10 @@ export function ProductionSampleTable({
     if (failedBefore === 1) setFormError(null);
   };
 
-  const handleSubmit = async (data: ProductionSampleFormData, onRefusal?: SaveRefusalHandler) => {
+  const handleSubmit = async (data: ProductionSampleFormData, onRefusal: SaveRefusalHandler) => {
     setFormError(null);
     if (!formDialog.open || !formDialog.sample) {
-      await createWithEvidence.handleCreate(data);
+      await createWithEvidence.handleCreate({ data, onRefusal });
       return;
     }
     try {
@@ -151,7 +151,7 @@ export function ProductionSampleTable({
       closeForm();
     } catch (err) {
       const fallback = err instanceof Error ? err.message : "In-process measurement was not saved. Try again.";
-      setFormError(onRefusal ? onRefusal(err, fallback) : fallback);
+      setFormError(onRefusal(err, fallback));
     }
   };
 
