@@ -369,12 +369,12 @@ describe("entries recorded after the Removal was sent", () => {
     entries: [{ id: "e1", componentId: "diesel", kind: "value", occurredOn: "2026-09-14", hasEvidence: true, total: null, counts: true,
       recordedAfter: { removalId: "rm-9", removalCode: "RM-26-009" }, carry, ...extra }],
   }) as never;
-  const waiting = (waitingReason: string) => ({ receiver: null, waitingReason });
+  const waiting = (waitingReason: string) => ({ receiver: null, waitingReason, waitingFor: { removalId: "rm-11", removalCode: "RM-26-011" } });
 
   it.each([
     ["noDraft", "No later draft is available at this facility.", "/certification/removals?facility=facility&create=true"],
     ["incompatibleTemplate", "The next draft's template cannot take this component.", "/settings/removal-templates?facility=facility"],
-    ["templateUnknown", "noma has not read the next draft's template yet. Open the Removal to load it.", "/certification/removals?facility=facility"],
+    ["templateUnknown", "noma has not read the next draft's template yet. Open the Removal to load it.", "/certification/removals?facility=facility&removal=rm-11"],
   ])("blocks on a waiting entry: %s", (reason, text, href) => {
     const { blocking } = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line(waiting(reason))] });
     expect(blocking).toEqual([{
@@ -391,7 +391,19 @@ describe("entries recorded after the Removal was sent", () => {
     expect(buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line({ receiver: null, waitingReason: null }, { reportedIn: receiver })] }).blocking).toEqual([]);
   });
 
-  it("ignores a waiting entry that was not recorded after its Removal was sent", () => {
-    expect(buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line(waiting("noDraft"), { recordedAfter: null })] }).blocking).toEqual([]);
+  it("blocks on a waiting entry that has no earlier sent Removal, without the lead line", () => {
+    const { blocking } = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line(waiting("noDraft"), { recordedAfter: null })] });
+    expect(blocking).toEqual([{
+      id: "late-entry:e1",
+      title: "Diesel use of Sep 14, 2026 is waiting for a Removal",
+      detail: "No later draft is available at this facility.",
+      target: { href: "/certification/removals?facility=facility&create=true" },
+    }]);
+  });
+
+  it("gives a member the template text and no link", () => {
+    const { blocking } = buildCreditBatchOpenItems({ ...batchContext, canManage: false, emissionLines: [line(waiting("incompatibleTemplate"))] });
+    expect(blocking[0].detail).toBe("Recorded after RM-26-009 was sent. The next draft's template cannot take this component. An Admin changes it in Settings, Removal templates.");
+    expect(blocking[0].target).toBeNull();
   });
 });

@@ -63,7 +63,7 @@ test.describe("Late emissions entry on screen", () => {
         await openElectricity(page);
         const note = page.locator("[data-late-entry]").locator("visible=true").first();
         await expect(note).toContainText(`Recorded after ${seeded.origin.removalCode} was sent.`, { timeout: 30_000 });
-        await expect(note).toContainText(`Goes into ${seeded.receiver.removalCode} (credit batch ${seeded.receiver.creditBatchCode}).`);
+        await expect(note).toContainText(`Goes into ${seeded.receiver.removalCode} of credit batch ${seeded.receiver.creditBatchCode}.`);
         await shoot(page, "entry-row-draft", size, page.getByRole("table", { name: /Sources of Electricity use/ }));
 
         await page.goto(batchUrl);

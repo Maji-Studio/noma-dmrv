@@ -7,9 +7,26 @@ const AFTER = { removalId: "rm-9", removalCode: "RM-26-009" };
 const DEST = { removalId: "rm-10", removalCode: "RM-26-010", creditBatchCodes: ["CB-26-010"], creditBatchIds: ["cb-10"], anotherCreditBatch: true };
 
 describe("lateEntryView", () => {
-  it("is null for an entry that was not recorded after its Removal was sent", () => {
+  it("is null for an entry with no carry and nothing reporting it", () => {
     expect(lateEntryView({}, "f1")).toBeNull();
-    expect(lateEntryView({ carry: { receiver: DEST, waitingReason: null } }, "f1")).toBeNull();
+  });
+
+  it("has a receiver without a Removal it was recorded after", () => {
+    const view = lateEntryView({ carry: { receiver: DEST, waitingReason: null } }, "f1");
+    expect(view?.recordedAfter).toBeNull();
+    expect(view?.destination.kind).toBe("draft");
+  });
+
+  it("waits without a Removal it was recorded after", () => {
+    const view = lateEntryView({ carry: { receiver: null, waitingReason: "noDraft" } }, "f1", { canManage: true });
+    expect(view?.recordedAfter).toBeNull();
+    expect(view?.destination).toMatchObject({ kind: "waiting", reason: "noDraft" });
+  });
+
+  it("is null for an entry a Removal of its own batch sent, in a later Removal or after a return", () => {
+    const own = { ...DEST, anotherCreditBatch: false };
+    expect(lateEntryView({ recordedAfter: AFTER, reportedIn: own, carry: { receiver: null, waitingReason: null } }, "f1")).toBeNull();
+    expect(lateEntryView({ reportedIn: own }, "f1")).toBeNull();
   });
 
   it("is null when no Removal has it and nothing waits", () => {
@@ -32,9 +49,23 @@ describe("lateEntryView", () => {
     ["incompatibleTemplate", "Open Removal templates", "/settings/removal-templates?facility=f1"],
     ["templateUnknown", "Open Removals", "/certification/removals?facility=f1"],
   ] as const)("waits for %s with the server text and one action", (reason, label, href) => {
-    const view = lateEntryView({ recordedAfter: AFTER, carry: { receiver: null, waitingReason: reason } }, "f1");
+    const view = lateEntryView({ recordedAfter: AFTER, carry: { receiver: null, waitingReason: reason } }, "f1", { canManage: true });
     expect(view?.destination).toEqual({ kind: "waiting", reason, text: CARRY_WAITING_REASONS[reason], action: { label, href } });
     expect(waitingAction(reason, "f1")).toEqual({ label, href });
+  });
+
+  it("opens the draft whose template is not read yet", () => {
+    const carry = { receiver: null, waitingReason: "templateUnknown" as const, waitingFor: { removalId: "rm-11", removalCode: "RM-26-011" } };
+    expect(lateEntryView({ carry }, "f1")?.destination).toMatchObject({ action: { label: "Open Removal", href: "/certification/removals?facility=f1&removal=rm-11" } });
+  });
+
+  it("gives a member the template text without the templates action", () => {
+    const carry = { receiver: null, waitingReason: "incompatibleTemplate" as const };
+    const destination = lateEntryView({ recordedAfter: AFTER, carry }, "f1", { canManage: false })?.destination;
+    expect(destination).toMatchObject({ kind: "waiting", action: null });
+    expect(destination?.kind === "waiting" && destination.text).toContain("An Admin changes it in Settings, Removal templates.");
+    expect(waitingDetail("incompatibleTemplate", false)).toContain("An Admin changes it");
+    expect(waitingDetail("incompatibleTemplate", true)).not.toContain("An Admin");
   });
 
   it("drops the lead sentence for the to-do detail", () => {

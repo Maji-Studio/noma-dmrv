@@ -26,6 +26,8 @@ export interface EntryCarryDestination {
 export interface EntryCarryDisposition {
   receiver: EntryCarryDestination | null;
   waitingReason: CarryWaitingReason | null;
+  /** The draft whose template is not read yet (`templateUnknown`), so the wait can open it. */
+  waitingFor?: { removalId: string; removalCode: string } | null;
 }
 
 /** The skip-incompatible policy lives here so a later blocking policy changes one seam. */
@@ -58,7 +60,8 @@ export function removalEntryCarryOwner(args: {
       emissionEntryCounts(args.observation, candidate.observation, entry.componentId).counts;
   });
   return receiver ? { receiver: { removalId: receiver.removalId, removalCode: receiver.code, creditBatchCodes: receiver.creditBatchCodes, creditBatchIds: [...receiver.creditBatchIds], anotherCreditBatch: true }, waitingReason: null }
-    : { receiver: null, waitingReason: candidates.length ? candidates[0].observation ? "incompatibleTemplate" : "templateUnknown" : "noDraft" };
+    : { receiver: null, waitingReason: candidates.length ? candidates[0].observation ? "incompatibleTemplate" : "templateUnknown" : "noDraft",
+      waitingFor: candidates.length && !candidates[0].observation ? { removalId: candidates[0].removalId, removalCode: candidates[0].code } : null };
 }
 
 /** The sent Removal of the entry's own batch, when the entry was recorded after it was sent. */

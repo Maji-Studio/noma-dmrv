@@ -70,6 +70,7 @@ describe("late manual entry ownership", () => {
   it("distinguishes an unread template from an incompatible one and still selects a later compatible draft", () => {
     const unread = { ...draft, observation: null };
     expect(decide({ contenders: [unread] }).waitingReason).toBe("templateUnknown");
+    expect(decide({ contenders: [unread] }).waitingFor).toEqual({ removalId: draft.removalId, removalCode: draft.code });
     expect(decide({ contenders: [unread, { ...draft, removalId: "later", window: { ...draft.window, end: "2026-11-01" } }] }).receiver?.removalId).toBe("later");
   });
   it("refuses paired receiving components", () => {

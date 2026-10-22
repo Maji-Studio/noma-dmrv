@@ -177,16 +177,17 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     });
   }
 
-  // An entry recorded after its Removal was sent that no Removal will report yet.
+  // An entry that no Removal will report yet.
   for (const line of input.emissionLines ?? []) {
     for (const entry of line.entries) {
-      const view = lateEntryView(entry, input.facilityId);
+      const view = lateEntryView(entry, input.facilityId, { canManage });
       if (view?.destination.kind !== "waiting" || !entry.occurredOn) continue;
+      const reason = waitingDetail(view.destination.reason, canManage);
       blocking.push({
         id: `late-entry:${entry.id ?? `${line.componentId}:${entry.occurredOn}`}`,
         title: waitingEntryTitle(line.displayName, entry.occurredOn),
-        detail: `Recorded after ${view.recordedAfter.removalCode} was sent. ${waitingDetail(view.destination.reason)}`,
-        target: { href: view.destination.action.href },
+        detail: view.recordedAfter ? `Recorded after ${view.recordedAfter.removalCode} was sent. ${reason}` : reason,
+        target: view.destination.action ? { href: view.destination.action.href } : null,
       });
     }
   }
