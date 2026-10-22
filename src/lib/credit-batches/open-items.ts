@@ -134,7 +134,7 @@ function removalCorrectionItem(
   return {
     id: `correction:${correction.removalId}`,
     title: `${code}: ${RETURNED_BY_ISOMETRIC_LABEL}`,
-    detail: `${correctionStatementLabel(correction.statement)} ${returnedStatementPhrase(correction.statement.status)}. You can correct the sent entries on the Emissions tab.`,
+    detail: `${correctionStatementLabel(correction.statement)} ${returnedStatementPhrase(correction.statement.status)}. You can correct this batch's records, and its emissions entries on the Emissions tab.`,
     target: { tab: "emissions" },
   };
 }

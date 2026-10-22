@@ -1,3 +1,4 @@
+import { isReturnedStatement } from "@/lib/record-lock";
 import { assertStatementRemovalsCurrent } from "./statement-removal-correction-core";
 import { withGhgVerifierSubmissionLock } from "@/data-access/ghg-verifier-submission-lock";
 import { ghgStatusRegistryAt } from "@/lib/isometric/utils/ghg-status-registry-at";
@@ -334,11 +335,18 @@ export async function submitGhgStatementToVerifierCore(args: {
           "Approve the latest generated report before submitting.",
         );
       }
-      let remoteBefore = await getGhgStatement(
+      let remoteBefore: GhgStatement | null = await getGhgStatement(
         client,
         initialExternalId,
-      ).catch(() => null);
-      await assertStatementRemovalsCurrent(orgCtx, ghgStatementId, remoteBefore?.ghg_entry_ids);
+      ).catch(() => {
+        throw new SafeError("Isometric did not answer when noma read this GHG Statement. Try again in a moment.");
+      });
+      const savedSubmitted = getMetadataValue(submission.metadata, "submittedToVerifierAt");
+      const returned = isReturnedStatement({ id: ghgStatementId, status: remoteBefore.status, fresh: true,
+        submittedToVerifier: (typeof savedSubmitted === "string" && Number.isFinite(Date.parse(savedSubmitted))) ||
+          Boolean(remoteBefore.submitted_at && Number.isFinite(Date.parse(remoteBefore.submitted_at))),
+      });
+      await assertStatementRemovalsCurrent(orgCtx, ghgStatementId, remoteBefore.ghg_entry_ids, returned);
       let recoveredAppliedReport = false;
 
       if (generatedReport?.pendingVerifierTokenHash) {

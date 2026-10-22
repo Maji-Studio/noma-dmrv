@@ -97,7 +97,7 @@ describe("credit batch deletion preserves Isometric's Removal membership", () =>
       ));
       await expect(deleteCreditBatch(ctx, batch.id, batch.version)).rejects.toMatchObject({
         code: "certification_locked",
-        message: `Credit batch ${batch.code} belongs to Removal ${removal.code}, which Isometric holds. Correct its records and resubmit instead of deleting it.`,
+        message: `Credit batch ${batch.code} is in Removal ${removal.code}, which was sent to Isometric. Correct its records, then resubmit Removal ${removal.code}.`,
       });
       await expectMembershipRetained(fixture);
     }, "none");

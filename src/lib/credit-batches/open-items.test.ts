@@ -130,7 +130,7 @@ describe("buildCreditBatchOpenItems", () => {
     expect(check).toEqual([{
       id: "correction:removal-1",
       title: "RM-26-003: Returned by Isometric",
-      detail: `${phrase} You can correct the sent entries on the Emissions tab.`,
+      detail: `${phrase} You can correct this batch's records, and its emissions entries on the Emissions tab.`,
       target: { tab: "emissions" },
     }]);
   });

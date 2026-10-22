@@ -74,7 +74,7 @@ export function RemovalResubmitNotice({ correction, facilityId }: { correction: 
       data-removal-correction="returned"
       action={<Link href={correctionStatementHref(correction, facilityId)} className={NOTICE_ACTION_LINK_CLASS}>{OPEN_GHG_STATEMENT_LABEL}</Link>}
     >
-      {statement} {returnedStatementPhrase(correction.statement.status)}. Correct the sent entries on{" "}
+      {statement} {returnedStatementPhrase(correction.statement.status)}. Correct the records or emissions entries on{" "}
       <JoinedParts parts={correction.batches.map((batch) => ({
         key: batch.id,
         node: <BatchLink batch={batch} facilityId={facilityId} />,

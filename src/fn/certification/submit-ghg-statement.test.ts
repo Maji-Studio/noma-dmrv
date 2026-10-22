@@ -287,14 +287,40 @@ describe("stored report verification before registry submission", () => {
 
 
 it("refuses changed member Removals inside the statement lock after reading remote membership and before provider mutation", async () => {
-  vi.mocked(getGhgStatement).mockResolvedValue(makeRemoteStatement());
+  vi.mocked(getGhgStatement).mockResolvedValue(makeRemoteStatement({ status: "FAILED_VERIFICATION" }));
   vi.mocked(assertStatementRemovalsCurrent).mockRejectedValue(new SafeError("Resubmit Removal R-12 first. Its records changed since it was sent."));
   await expect(submitGhgStatementToVerifierCore({ orgCtx, ghgStatementId: STATEMENT_ID,
     input: { reportId: REPORT_ID, confirmProduction: true } })).rejects.toThrow("Resubmit Removal R-12 first.");
   expect(withGhgVerifierSubmissionLock).toHaveBeenCalled();
-  expect(assertStatementRemovalsCurrent).toHaveBeenCalledWith(orgCtx, STATEMENT_ID, expect.any(Array));
+  expect(assertStatementRemovalsCurrent).toHaveBeenCalledWith(orgCtx, STATEMENT_ID, expect.any(Array), true);
   expect(getGhgStatement).toHaveBeenCalled();
   expect(vi.mocked(getGhgStatement).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(assertStatementRemovalsCurrent).mock.invocationCallOrder[0]);
   expect(submitGhgStatement).not.toHaveBeenCalled();
   expect(resubmitGhgStatement).not.toHaveBeenCalled();
+});
+
+it("refuses a failed read of an existing remote statement before provider mutation", async () => {
+  vi.mocked(getGhgStatement).mockRejectedValue(new Error("Timed out"));
+  await expect(submitGhgStatementToVerifierCore({ orgCtx, ghgStatementId: STATEMENT_ID,
+    input: { reportId: REPORT_ID, confirmProduction: true } })).rejects.toThrow(
+    "Isometric did not answer when noma read this GHG Statement. Try again in a moment.");
+  expect(assertStatementRemovalsCurrent).not.toHaveBeenCalled();
+  expect(submitGhgStatement).not.toHaveBeenCalled();
+  expect(resubmitGhgStatement).not.toHaveBeenCalled();
+  expect(issueVerifierReportUrl).not.toHaveBeenCalled();
+});
+it.each([
+  { status: "DRAFT" as const, remoteSubmitted: null, savedSubmitted: undefined, compare: false },
+  { status: "DRAFT" as const, remoteSubmitted: "2026-01-01T00:00:00Z", savedSubmitted: undefined, compare: true },
+  { status: "DRAFT" as const, remoteSubmitted: null, savedSubmitted: "2026-01-01T00:00:00Z", compare: true },
+  { status: "FAILED_VERIFICATION" as const, remoteSubmitted: null, savedSubmitted: undefined, compare: true },
+])("passes returned-statement semantics to the member guard: $status $remoteSubmitted $savedSubmitted", async ({ status, remoteSubmitted, savedSubmitted, compare }) => {
+  submission.metadata = { remoteStatus: status, submittedToVerifierAt: savedSubmitted };
+  vi.mocked(getGhgStatement).mockResolvedValue(makeRemoteStatement({ status, submitted_at: remoteSubmitted }));
+  const after = makeRemoteStatement({ status: "AWAITING_VERIFICATION", ghg_statement_report_url: GENERATED_REPORT_URL });
+  vi.mocked(submitGhgStatement).mockResolvedValue(after);
+  vi.mocked(resubmitGhgStatement).mockResolvedValue(after);
+  await submitGhgStatementToVerifierCore({ orgCtx, ghgStatementId: STATEMENT_ID,
+    input: { reportId: REPORT_ID, summaryOfChanges: "Corrected records.", confirmProduction: true } });
+  expect(assertStatementRemovalsCurrent).toHaveBeenCalledWith(orgCtx, STATEMENT_ID, expect.any(Array), compare);
 });

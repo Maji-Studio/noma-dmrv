@@ -171,7 +171,7 @@ export async function assertNoRemoteRemovalHoldsCreditBatch(
 
   throw new DomainError(
     "certification_locked",
-    `Credit batch ${batch.code} belongs to Removal ${holder.code}, which Isometric holds. Correct its records and resubmit instead of deleting it.`,
+    `Credit batch ${batch.code} is in Removal ${holder.code}, which was sent to Isometric. Correct its records, then resubmit Removal ${holder.code}.`,
   );
 }
 
