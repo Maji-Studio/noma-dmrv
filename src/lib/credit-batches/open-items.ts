@@ -127,7 +127,7 @@ function removalCorrectionItem(
       title: `${code}: ${RESUBMIT_NEEDED_LABEL}`,
       detail: names.length
         ? `${joinWithAnd(names)} changed here since ${code} was sent. Resubmit the Removal to send ${names.length === 1 ? "it" : "them"}.`
-        : `Entries changed on another credit batch since ${code} was sent. Resubmit the Removal to send them.`,
+        : `Records or files changed since ${code} was sent. Resubmit the Removal to send the changes.`,
       target: { href: removalSheetHref(correction.removalId, facilityId) },
     };
   }

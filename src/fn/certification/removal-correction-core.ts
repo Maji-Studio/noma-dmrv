@@ -1,3 +1,4 @@
+import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 import { z } from "zod";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
@@ -9,7 +10,7 @@ import { getFacilityById } from "@/data-access/facilities";
 import { getCertifierProjectByFacility } from "@/data-access/certification";
 import { entryInputManifestSchema, type EntryContender } from "@/lib/certification/removal-emission-contributions";
 import { deriveEntryCorrection, buildRemovalCorrection, type EntryCorrectionState } from "@/lib/certification/removal-entry-correction";
-import { deriveRemovalSemanticCorrection, REMOVAL_CONTENT_COMPONENT_ID } from "@/lib/certification/removal-semantic-correction";
+import { deriveRemovalSemanticCorrection } from "@/lib/certification/removal-semantic-correction";
 import { deriveRemovalEntryInputs } from "@/lib/certification/removal-entry-inputs";
 import { resolveScopeForRemoval } from "./removal-scope";
 import { buildRemovalContext } from "./certify-context-core";
@@ -40,7 +41,7 @@ export async function loadRemovalEntryCorrection(orgCtx: OrgContext, removalId: 
         statement: { ...correction.returnedStatement!, reportingPeriodStartOn: identity.reportingPeriodStartOn,
           reportingPeriodEndOn: identity.reportingPeriodEndOn },
         batches: batches.map(({ id, code }) => ({ id, code })),
-        components: [{ id: REMOVAL_CONTENT_COMPONENT_ID, displayName: "Removal content" }] }),
+        components: [] }),
     };
   }
   const facts = await Promise.all(ids.map(id => loadBatchEmissionEntryFacts(orgCtx, id, observation)));
@@ -53,24 +54,7 @@ export async function loadRemovalEntryCorrection(orgCtx: OrgContext, removalId: 
   const previousEntries = entriesSchema.safeParse(previous.entryContributions);
   let current: Record<string, unknown> | null = null;
   try {
-    const scope = await resolveScopeForRemoval(orgCtx, removalId);
-    const [facility, mapping] = await Promise.all([
-      getFacilityById(orgCtx, scope.facilityId),
-      getCertifierProjectByFacility(orgCtx, scope.facilityId, "isometric"),
-    ]);
-    const templateFacts = storedRemovalTemplateFacts(observation);
-    const facilityFacts: FacilityCertifierFacts = {
-      facilityTimezone: facility.timezone, mapping, hasOrgCredentials: true, project: null,
-      currentTemplate: templateFacts.template, missingCurrentTemplateId: null,
-      templatesById: { [observation.externalTemplateId]: templateFacts },
-      blueprintsForTemplate: templateFacts.blueprintsForTemplate, unresolvedBlueprintKeys: [],
-      unbindableTemplateInputs: [], requiredTransportCategories: templateFacts.requiredTransportCategories,
-    };
-    // Suppress correction projections and storage summaries only. Keep all
-    // compilation validation; invalid current records cannot equal sent content.
-    const context = await buildRemovalContext(orgCtx, scope, facilityFacts, undefined, false, true);
-    const { prepared } = prepareRemovalSubmission(context);
-    if (prepared) current = (await buildRemovalSubmissionBuild({ orgCtx, removalId, ctx: context, prepared })).semanticPayload;
+    current = await compileRemovalCorrectionContent(orgCtx, removalId, observation);
   } catch (error) {
     if (!(error instanceof SafeError)) throw error;
     // An invalidated submission needs correction too. Never swallow infrastructure
@@ -91,4 +75,30 @@ export async function loadRemovalEntryCorrection(orgCtx: OrgContext, removalId: 
         reportingPeriodEndOn: identity.reportingPeriodEndOn },
       batches: batches.map(({ id, code }) => ({ id, code })), components }),
   };
+}
+
+/** Content comparison only; never authorizes a Removal mutation. */
+export async function compileRemovalCorrectionContent(orgCtx: OrgContext, removalId: string, observation: RemovalTemplateObservation, useCurrentEvidence = false): Promise<Record<string, unknown> | null> {
+  const scope = await resolveScopeForRemoval(orgCtx, removalId);
+  const [facility, mapping] = await Promise.all([
+    getFacilityById(orgCtx, scope.facilityId),
+    getCertifierProjectByFacility(orgCtx, scope.facilityId, "isometric"),
+  ]);
+  const templateFacts = storedRemovalTemplateFacts(observation);
+  const facilityFacts: FacilityCertifierFacts = {
+    facilityTimezone: facility.timezone, mapping, hasOrgCredentials: true, project: null,
+    currentTemplate: templateFacts.template, missingCurrentTemplateId: null,
+    templatesById: { [observation.externalTemplateId]: templateFacts },
+    blueprintsForTemplate: templateFacts.blueprintsForTemplate, unresolvedBlueprintKeys: [],
+    unbindableTemplateInputs: [], requiredTransportCategories: templateFacts.requiredTransportCategories,
+  };
+  // Suppress correction projections and storage summaries only. Keep all
+  // compilation validation; invalid current records cannot equal sent content.
+  const context = await buildRemovalContext(orgCtx, scope, facilityFacts, undefined, false, true);
+  const { prepared, blockers } = prepareRemovalSubmission(context);
+  if (useCurrentEvidence && (blockers.length || context.removalEntryContext?.contributions.blockers.length)) return null;
+  // The statement guard compares live attachments even when an eligibility read
+  // failed or the last Removal resubmit has already closed the correction window.
+  if (useCurrentEvidence) context.correctionWindowOpen = true;
+  return prepared ? (await buildRemovalSubmissionBuild({ orgCtx, removalId, ctx: context, prepared })).semanticPayload : null;
 }

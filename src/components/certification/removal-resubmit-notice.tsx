@@ -61,7 +61,7 @@ export function RemovalResubmitNotice({ correction, facilityId }: { correction: 
             }))} /> changed since this Removal was sent.
           </>
         ) : (
-          "Entries changed since this Removal was sent."
+          "Records or files changed since this Removal was sent."
         )}{" "}
         Resubmit it, then resubmit {statement}.
       </Notice>

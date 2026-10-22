@@ -323,7 +323,6 @@ export async function submitGhgStatementToVerifierCore(args: {
       };
 
       let submission = await readCurrentSubmission();
-      await assertStatementRemovalsCurrent(orgCtx, ghgStatementId);
       const generatedReport = parsed.reportId
         ? await getApprovedGhgStatementReport(orgCtx, {
             ghgStatementId,
@@ -339,6 +338,7 @@ export async function submitGhgStatementToVerifierCore(args: {
         client,
         initialExternalId,
       ).catch(() => null);
+      await assertStatementRemovalsCurrent(orgCtx, ghgStatementId, remoteBefore?.ghg_entry_ids);
       let recoveredAppliedReport = false;
 
       if (generatedReport?.pendingVerifierTokenHash) {

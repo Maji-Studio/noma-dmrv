@@ -3,8 +3,6 @@ import type { EntryInputManifest } from "./removal-emission-contributions";
 
 // These are descriptive fields in compiler snapshots, not submitted quantities
 // or evidence identities. Normalize old snapshots as well as current builds.
-export const REMOVAL_CONTENT_COMPONENT_ID = "removal-content";
-
 const DISPLAY_FIELDS = new Set(["entityLabel", "applicationCode", "label", "displayName", "display_name", "name", "description", "notes", "code"]);
 
 function canonical(value: unknown): string {
@@ -40,9 +38,7 @@ function sharedEvidence(semantic: Record<string, unknown>) {
   };
 }
 
-/** Same state as entry corrections. Shared Removal facts affect every component
- * using the reporting window/evidence set, so count actual component IDs once.
- */
+/** Shared changes need resubmission without inventing component attribution. */
 export function deriveRemovalSemanticCorrection(args: {
   windowOpen: boolean;
   previous: Record<string, unknown>;
@@ -55,28 +51,27 @@ export function deriveRemovalSemanticCorrection(args: {
   const state = deriveEntryCorrection(args.windowOpen, args.previousEntries, args.currentEntries);
   if (!args.windowOpen) return state;
   const ids = [...new Set([...args.componentIds, ...components(args.previous), ...components(args.current ?? {})])].sort();
-  if (!ids.length) ids.push(REMOVAL_CONTENT_COMPONENT_ID);
-  const changed = new Set(state.changedComponentIds);
+  const changed = new Set(args.current ? state.changedComponentIds : []);
   const lineageChanged = new Set<string>();
   const previous = args.previous;
   const current = args.current;
   const sharedKeys = ["startedOn", "completedOn", "sourceProductionRunIds", "biocharApplicationIntents", "templateId", "externalProjectId"];
   const sharedChanged = !current || (sharedKeys.some(key => canonical(previous[key]) !== canonical(current[key])) || canonical(sharedEvidence(previous)) !== canonical(sharedEvidence(current)));
-  for (const id of ids) {
+  for (const id of current ? ids : []) {
     const inputs = (semantic: Record<string, unknown>) => rows(semantic.inputs).filter(input => input.rtcId === id);
     const storage = (semantic: Record<string, unknown>) => rows(semantic.sequestrationTemplate).filter(input => input.rtcId === id);
     const sources = (semantic: Record<string, unknown>) => rows(semantic.sourceBindingPlan).filter(input => !!input.intendedTarget && typeof input.intendedTarget === "object" && "componentId" in input.intendedTarget && input.intendedTarget.componentId === id);
     const omitted = (semantic: Record<string, unknown>) => Array.isArray(semantic.omittedTemplateComponentIds) && semantic.omittedTemplateComponentIds.includes(id);
-    if (sharedChanged || !current || canonical(inputs(previous)) !== canonical(inputs(current)) ||
+    if (current && (canonical(inputs(previous)) !== canonical(inputs(current)) ||
       canonical(sources(previous)) !== canonical(sources(current)) || omitted(previous) !== omitted(current) ||
       canonical(storage(previous)) !== canonical(storage(current)) ||
-      ((storage(previous).length || storage(current).length) && canonical(previous.durabilityMeasurementSamples) !== canonical(current.durabilityMeasurementSamples))) {
+      ((storage(previous).length || storage(current).length) && canonical(previous.durabilityMeasurementSamples) !== canonical(current.durabilityMeasurementSamples)))) {
       changed.add(id);
-      if (sharedChanged || !state.changedComponentIds.includes(id)) lineageChanged.add(id);
+      lineageChanged.add(id);
     }
   }
   const changedComponentIds = [...changed].sort();
-  const pairs = new Map((state.changedPairs ?? []).map(pair => [JSON.stringify(pair), pair]));
+  const pairs = new Map((current ? state.changedPairs ?? [] : []).map(pair => [JSON.stringify(pair), pair]));
   for (const componentId of changedComponentIds) {
     // Entry-only changes retain exact batch attribution. Compiled lineage values
     // aggregate the member batches, so their affected scope is the full membership.
@@ -90,6 +85,6 @@ export function deriveRemovalSemanticCorrection(args: {
   const changedPairs = [...pairs.values()];
   const count = changedComponentIds.length;
   return { ...state, changedComponentIds, changedPairs,
-    changedBatchIds: [...new Set(changedPairs.map(pair => pair.batchId))], correctionNeeded: count > 0,
-    message: count ? `Resubmit needed: ${count} ${count === 1 ? "component" : "components"} changed since this Removal was sent.` : null };
+    changedBatchIds: sharedChanged ? args.batchIds : [...new Set(changedPairs.map(pair => pair.batchId))], correctionNeeded: sharedChanged || count > 0,
+    message: count ? `Resubmit needed: ${count} ${count === 1 ? "component" : "components"} changed since this Removal was sent.` : sharedChanged ? "Resubmit needed: records or files changed since this Removal was sent." : null };
 }

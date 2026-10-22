@@ -110,13 +110,13 @@ describe("buildCreditBatchOpenItems", () => {
     expect(item.detail).toBe("Diesel use changed here since RM-26-003 was sent. Resubmit the Removal to send it.");
   });
 
-  it("says the Removal changed on another batch when nothing changed on this one", () => {
+  it("uses records or files copy when no changed component is attributed here", () => {
     const [item] = buildCreditBatchOpenItems({ ...batchContext, health: returnedHealth({
       removalId: "removal-1", removalCode: "RM-26-003", windowOpen: true, resubmitNeeded: true, statement: STATEMENT,
       batches: [{ id: "batch", code: "CB-1" }, { id: "other", code: "CB-2" }], changed: [],
     }) }).check;
     expect(item.title).toBe("RM-26-003: Resubmit needed");
-    expect(item.detail).toBe("Entries changed on another credit batch since RM-26-003 was sent. Resubmit the Removal to send them.");
+    expect(item.detail).toBe("Records or files changed since RM-26-003 was sent. Resubmit the Removal to send the changes.");
   });
 
   it.each([

@@ -1,6 +1,6 @@
 import type { EntryContender } from "@/lib/certification/removal-emission-contributions";
 import { getEffectiveReportingPeriodEndOn } from "./certifier-ghg-statements";
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { certificationSubmissions, certifierRemovals, certifierGhgStatements } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -12,11 +12,7 @@ import { getCreditBatchesByRemovalId } from "./certifier-removals";
 /** Advisory state only. Mutation authorization comes from the locked lineage loader. */
 export async function loadRemovalCorrectionFacts(ctx: OrgContext, removalId: string, suppliedContenders?: EntryContender[]) {
   requireOrgScope(ctx);
-  const [submitted] = await db.select().from(certificationSubmissions).where(and(
-    eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityType, "removal"),
-    eq(certificationSubmissions.submissionType, "removal"), eq(certificationSubmissions.provider, "isometric"),
-    eq(certificationSubmissions.localEntityId, removalId), isNotNull(certificationSubmissions.submittedAt),
-  )).orderBy(desc(certificationSubmissions.version)).limit(1);
+  const submitted = await getSentRemovalForComparison(ctx, removalId);
   if (!submitted) return null;
   const batches = await getCreditBatchesByRemovalId(ctx, removalId);
   const ids = batches.map((batch) => batch.id);
@@ -53,4 +49,30 @@ export async function listStatementRemovalIdentities(ctx: OrgContext, statementI
   return db.select({ id: certifierRemovals.id, code: certifierRemovals.code }).from(certifierRemovals).where(and(
     eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.ghgStatementId, statementId),
   ));
+}
+
+/** Latest sent content, independent of whether lineage currently offers correction. */
+export async function getSentRemovalForComparison(ctx: OrgContext, removalId: string): Promise<typeof certificationSubmissions.$inferSelect | null> {
+  requireOrgScope(ctx);
+  const [submitted] = await db.select().from(certificationSubmissions).where(and(
+    eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityType, "removal"),
+    eq(certificationSubmissions.submissionType, "removal"), eq(certificationSubmissions.provider, "isometric"),
+    eq(certificationSubmissions.localEntityId, removalId), isNotNull(certificationSubmissions.submittedAt),
+  )).orderBy(desc(certificationSubmissions.version)).limit(1);
+  return submitted ?? null;
+}
+
+/** Use the same ledger identities and statuses as reconcileStatementRemovals. */
+export async function listStatementRemovalExternalIds(ctx: OrgContext, statementId: string) {
+  requireOrgScope(ctx);
+  return db.select({ externalId: certificationSubmissions.externalId }).from(certificationSubmissions)
+    .innerJoin(certifierRemovals, and(eq(certifierRemovals.organizationId, ctx.organizationId),
+      eq(certifierRemovals.id, certificationSubmissions.localEntityId)))
+    .innerJoin(certifierGhgStatements, and(eq(certifierGhgStatements.organizationId, ctx.organizationId),
+      eq(certifierGhgStatements.id, statementId), eq(certifierGhgStatements.facilityId, certifierRemovals.facilityId)))
+    .where(and(eq(certificationSubmissions.organizationId, ctx.organizationId),
+      eq(certificationSubmissions.provider, "isometric"), eq(certificationSubmissions.submissionType, "removal"),
+      eq(certificationSubmissions.localEntityType, "removal"),
+      inArray(certificationSubmissions.status, ["submitted", "accepted", "superseded"]),
+      eq(certifierRemovals.ghgStatementId, statementId)));
 }

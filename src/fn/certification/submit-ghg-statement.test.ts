@@ -286,13 +286,15 @@ describe("stored report verification before registry submission", () => {
 });
 
 
-it("refuses changed member Removals inside the statement lock before provider I/O", async () => {
+it("refuses changed member Removals inside the statement lock after reading remote membership and before provider mutation", async () => {
+  vi.mocked(getGhgStatement).mockResolvedValue(makeRemoteStatement());
   vi.mocked(assertStatementRemovalsCurrent).mockRejectedValue(new SafeError("Resubmit Removal R-12 first. Its records changed since it was sent."));
   await expect(submitGhgStatementToVerifierCore({ orgCtx, ghgStatementId: STATEMENT_ID,
     input: { reportId: REPORT_ID, confirmProduction: true } })).rejects.toThrow("Resubmit Removal R-12 first.");
   expect(withGhgVerifierSubmissionLock).toHaveBeenCalled();
-  expect(assertStatementRemovalsCurrent).toHaveBeenCalledWith(orgCtx, STATEMENT_ID);
-  expect(getGhgStatement).not.toHaveBeenCalled();
+  expect(assertStatementRemovalsCurrent).toHaveBeenCalledWith(orgCtx, STATEMENT_ID, expect.any(Array));
+  expect(getGhgStatement).toHaveBeenCalled();
+  expect(vi.mocked(getGhgStatement).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(assertStatementRemovalsCurrent).mock.invocationCallOrder[0]);
   expect(submitGhgStatement).not.toHaveBeenCalled();
   expect(resubmitGhgStatement).not.toHaveBeenCalled();
 });

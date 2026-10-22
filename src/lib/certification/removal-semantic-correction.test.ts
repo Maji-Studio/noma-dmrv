@@ -29,13 +29,13 @@ describe("Removal semantic corrections", () => {
       durabilityMeasurementSamples: [{ ...sent.durabilityMeasurementSamples[0], label: "Sample S-2" }],
     }).correctionNeeded).toBe(false);
   });
-  it("counts shared evidence additions against the actual components once", () => {
+  it("reports shared evidence additions without inflating component counts", () => {
     expect(derive({ ...sent, candidateSources: [...sent.candidateSources, { documentId: "added", binding: null }] }))
-      .toMatchObject({ correctionNeeded: true, changedComponentIds: ["energy", "storage"],
-        message: "Resubmit needed: 2 components changed since this Removal was sent." });
+      .toMatchObject({ correctionNeeded: true, changedComponentIds: [],
+        message: "Resubmit needed: records or files changed since this Removal was sent." });
   });
   it("counts the reporting window as a shared fact", () => {
-    expect(derive({ ...sent, completedOn: "2026-07-01T00:00:00Z" }).changedComponentIds).toEqual(["energy", "storage"]);
+    expect(derive({ ...sent, completedOn: "2026-07-01T00:00:00Z" })).toMatchObject({ correctionNeeded: true, changedComponentIds: [] });
   });
   it("attributes changed chemistry to sequestration", () => {
     expect(derive({ ...sent, durabilityMeasurementSamples: [{ ...sent.durabilityMeasurementSamples[0], body: { values: [81] } }] }))
@@ -47,7 +47,8 @@ describe("Removal semantic corrections", () => {
       previousEntries: [], currentEntries: [], componentIds: ["energy", "storage"], batchIds: ["batch"] }).changedComponentIds).toEqual(["energy"]);
   });
   it("treats invalid current compilation as needing correction", () => {
-    expect(derive(null).correctionNeeded).toBe(true);
+    expect(derive(null)).toMatchObject({ correctionNeeded: true, changedComponentIds: [],
+      message: "Resubmit needed: records or files changed since this Removal was sent." });
   });
   it("does nothing outside an open correction window", () => {
     expect(derive(null, false)).toMatchObject({ windowOpen: false, correctionNeeded: false, changedComponentIds: [], message: null });
@@ -57,12 +58,12 @@ describe("Removal semantic corrections", () => {
   });
 });
 
-it("retains exact entry component and batch attribution when compiled quantities and entry files change", () => {
+it("attributes aggregate changes to all batches even when an entry also changes", () => {
   const entry = { entryId: "entry", creditBatchId: "changed-batch", contentRevision: 1, kind: "value" as const,
     value: { magnitude: "2", unit: "kWh" }, evidenceDocumentIds: [] as string[] };
   const state = deriveRemovalSemanticCorrection({ windowOpen: true,
-    previous: sent,
-    current: { ...sent, inputs: [{ ...sent.inputs[0], value: 11 }], sourceIds: [...sent.sourceIds, "entry-source"],
+    previous: { ...sent, inputs: [{ ...sent.inputs[0], value: 12 }] },
+    current: { ...sent, inputs: [{ ...sent.inputs[0], value: 23 }], sourceIds: [...sent.sourceIds, "entry-source"],
       candidateSources: [...sent.candidateSources, { documentId: "entry-file", binding: { nomaRole: "emission_entry" } }],
       sourceBindingPlan: [{ documentId: "entry-file", sourceId: "entry-source", nomaRole: "emission_entry", intendedTarget: { componentId: "energy", inputKey: "electricity_use" } }],
     },
@@ -72,5 +73,11 @@ it("retains exact entry component and batch attribution when compiled quantities
     componentIds: ["energy", "storage"], batchIds: ["changed-batch", "unchanged-batch"],
   });
   expect(state.changedComponentIds).toEqual(["energy"]);
-  expect(state.changedPairs).toEqual([{ componentId: "energy", batchId: "changed-batch" }]);
+  expect(state.changedPairs).toEqual([{ componentId: "energy", batchId: "changed-batch" }, { componentId: "energy", batchId: "unchanged-batch" }]);
+});
+
+it("keeps the component count when shared and component-specific content both change", () => {
+  expect(derive({ ...sent, completedOn: "2026-07-01T00:00:00Z", inputs: [{ ...sent.inputs[0], value: 23 }] }))
+    .toMatchObject({ correctionNeeded: true, changedComponentIds: ["energy"],
+      message: "Resubmit needed: 1 component changed since this Removal was sent." });
 });
