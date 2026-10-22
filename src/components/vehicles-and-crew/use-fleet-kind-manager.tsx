@@ -103,7 +103,8 @@ export function useFleetKindManager<K extends FleetKind>(
 
   // A link to a record that is gone (deleted, other organization) says so once.
   const handledMissingRef = useRef<string | null>(null);
-  const listLoaded = !query.isLoading && !query.error && query.data !== undefined;
+  // A cached list that is still refetching may lack a just-created record.
+  const listLoaded = !query.isLoading && !query.isFetching && !query.error && query.data !== undefined;
   useEffect(() => {
     if (!linkedId) {
       handledMissingRef.current = null;

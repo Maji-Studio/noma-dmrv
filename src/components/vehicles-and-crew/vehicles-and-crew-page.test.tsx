@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
   query: {} as Record<string, string | null>,
   lists: {} as Record<string, unknown[]>,
   loading: {} as Record<string, boolean>,
+  fetching: {} as Record<string, boolean>,
   removeVehicle: vi.fn(),
   removeDriver: vi.fn(),
   removeOperator: vi.fn(),
@@ -49,6 +50,7 @@ vi.mock("@/hooks/use-fleet", () => ({
   useFleetList: (kind: string) => ({
     data: state.lists[kind],
     isLoading: state.loading[kind] ?? false,
+    isFetching: state.fetching[kind] ?? false,
     error: null,
     refetch: vi.fn(),
   }),
@@ -72,6 +74,7 @@ beforeEach(() => {
   state.query = {};
   state.lists = { vehicle: [vehicle], driver: [driver], operator: [operator] };
   state.loading = {};
+  state.fetching = {};
   state.toastSuccess.mockReset();
   state.toastError.mockReset();
   state.removeVehicle.mockReset().mockResolvedValue(undefined);
@@ -197,6 +200,20 @@ describe("VehiclesAndCrewPage", () => {
     expect(state.query.driver).toBeNull();
     expect(state.query.mode).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("waits for a refetching list before calling a linked record gone", () => {
+    state.query = { driver: "drv-new" };
+    state.fetching.driver = true;
+    const { rerender } = render(<VehiclesAndCrewPage />);
+    expect(state.toastError).not.toHaveBeenCalled();
+    expect(state.query.driver).toBe("drv-new");
+
+    state.fetching.driver = false;
+    state.lists.driver = [driver, { ...driver, id: "drv-new", name: "New driver" }];
+    rerender(<VehiclesAndCrewPage />);
+    expect(state.toastError).not.toHaveBeenCalled();
+    expect(within(screen.getByRole("dialog")).getByText("New driver")).toBeTruthy();
   });
 
   it("deletes through the row menu and confirmation", async () => {
