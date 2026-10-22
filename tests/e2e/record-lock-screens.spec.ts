@@ -198,6 +198,11 @@ test.describe("Record locks on screen", () => {
       // The header arrow and the footer both go back to the view.
       await expect(sheet.getByRole("button", { name: "Back to view" })).toHaveCount(2);
       await expect(wetMass).toBeDisabled();
+      // Typed values go back to the saved ones, and nothing still shows the typed value.
+      const typed = String(Number(original) + 10);
+      await expect(wetMass).toHaveValue(original);
+      await expect(sheet.getByText(new RegExp(`Load: ${typed}\\s*kg`))).toHaveCount(0);
+      await expect(sheet.getByText(new RegExp(`Load: ${original}\\s*kg`)).first()).toBeVisible();
       // Above the lock line, not at the end of the form.
       const lockLine = sheet.getByText(/Nothing can be changed, because this was sent to Isometric/);
       await expect(lockLine).toBeVisible();
