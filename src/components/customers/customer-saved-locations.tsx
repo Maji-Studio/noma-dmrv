@@ -275,7 +275,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                           variant="noOutline"
                           size="icon"
                           width="square"
-                    className={ICON_BUTTON_HIT_AREA}
+                          className={ICON_BUTTON_HIT_AREA}
                           onClick={() => handleRestore(loc)}
                           disabled={restoreLocation.isPending}
                           aria-label={`Restore ${loc.name || loc.country}`}
@@ -286,7 +286,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                           variant="destructive"
                           size="icon"
                           width="square"
-                    className={ICON_BUTTON_HIT_AREA}
+                          className={ICON_BUTTON_HIT_AREA}
                           onClick={() => setDeletingLocation(loc)}
                           aria-label={`Delete ${loc.name || loc.country}`}
                         >
