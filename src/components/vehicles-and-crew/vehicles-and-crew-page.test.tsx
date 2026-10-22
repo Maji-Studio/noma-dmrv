@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ActionError } from "@/lib/action-error";
+import { inUseDeleteRefusal } from "@/lib/delete-refusal";
 import {
   StaleVersionError,
   STALE_VERSION_CONFLICT_CODE,
@@ -154,7 +156,9 @@ describe("VehiclesAndCrewPage", () => {
     render(<VehiclesAndCrewPage />);
     fireEvent.click(screen.getAllByRole("link", { name: "Amina Okoye" })[0]!);
     const sheet = screen.getByRole("dialog");
-    expect(within(sheet).getByText("DRV-001")).toBeTruthy();
+    // Code first, name as the subtitle.
+    expect(within(sheet).getByRole("heading").textContent).toBe("DRV-001");
+    expect(within(sheet).getByText("Amina Okoye")).toBeTruthy();
     expect(within(sheet).getByText("L-1")).toBeTruthy();
     fireEvent.click(within(sheet).getByRole("button", { name: "Edit driver" }));
     expect(screen.getByRole("form", { name: "driver form" }).textContent).toBe("editing Amina Okoye");
@@ -237,6 +241,26 @@ describe("VehiclesAndCrewPage", () => {
     fireEvent.click(tab(/^Drivers/));
     expect(screen.getByText("No drivers yet")).toBeTruthy();
     expect(screen.getByText("Drivers are named on deliveries.")).toBeTruthy();
+    // The empty-state action is not a copy of the header button.
+    expect(screen.getByRole("button", { name: "Create your first driver" })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "New driver" })).toHaveLength(1);
+  });
+
+  it("gives way to the in-use dialog when the server refuses the delete", async () => {
+    const message = "Vehicle VEH-001 was not deleted because 2 feedstock intakes use it.";
+    state.removeVehicle.mockRejectedValueOnce(new ActionError({ error: message, ...inUseDeleteRefusal(message, ["vehicleId"]) }));
+    render(<VehiclesAndCrewPage />);
+    rowMenu("Actions for Feedstock truck", "Delete");
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
+    });
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Vehicle VEH-001 is in use")).toBeTruthy();
+    expect(within(dialog).queryByRole("button", { name: /Archive instead/ })).toBeNull();
+    expect(within(dialog).getAllByRole("button", { name: "Close" }).length).toBeGreaterThan(0);
+    expect(state.toastError).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getAllByRole("button", { name: "Close" })[0]!);
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("retries a stale delete with the version the list refreshed to", async () => {

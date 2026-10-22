@@ -7,11 +7,26 @@
  * E2E- teardown sweep).
  */
 import { test, expect, waitForSideSheet, waitForSideSheetClose } from "./fixtures";
+import { like } from "drizzle-orm";
 import { clickRowMenuItem } from "./fixtures/page-helpers";
+import { createDbConnection } from "./fixtures/db";
+import * as schema from "../../src/db/schema";
+
+const NAME_PREFIX = "E2E Driver";
 
 test.describe("Vehicles and crew", () => {
+  // The UI delete step is the happy path; this sweeps what a failed run leaves.
+  test.afterAll(async () => {
+    const connection = createDbConnection();
+    try {
+      await connection.db.delete(schema.drivers).where(like(schema.drivers.name, `${NAME_PREFIX}%`));
+    } finally {
+      await connection.pool.end();
+    }
+  });
+
   test("admin can create, edit and delete a driver", async ({ adminPage: page }) => {
-    const name = `E2E Driver ${Date.now()}`;
+    const name = `${NAME_PREFIX} ${Date.now()}`;
     const editedName = `${name} Edited`;
     const row = (text: string) => page.locator("table tbody tr", { hasText: text });
 
@@ -20,7 +35,7 @@ test.describe("Vehicles and crew", () => {
     await expect(page.getByRole("tab", { name: /^Drivers/ })).toHaveAttribute("aria-selected", "true");
 
     // Create
-    await page.getByRole("button", { name: "New driver" }).first().click();
+    await page.getByRole("button", { name: "New driver" }).click();
     await waitForSideSheet(page);
     await page.getByLabel("Name").first().fill(name);
     await page.getByRole("dialog").getByRole("button", { name: /^Create driver$/ }).click();

@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
@@ -19,6 +20,7 @@ import {
 } from "@/hooks/use-fleet";
 import type { FleetKind } from "@/lib/fleet/messages";
 import { ENTITY_DEEP_LINK_EDIT_MODE } from "@/lib/entity-deep-link";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 import { FLEET_KIND_COPY, fleetRecordCode, fleetRecordLabel, fleetSheetSections } from "./fleet-kinds";
 import { FleetSheetForm } from "./fleet-sheet-forms";
@@ -85,7 +87,10 @@ export function useFleetKindManager<K extends FleetKind>(
   // rebinds the confirmation to the row's new version for the next attempt.
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState("");
+  // A delete the server refused as in use; shown in its own dialog, not inline.
+  const [inUseId, setInUseId] = useState<string | null>(null);
   const deleting = records.find((record) => record.id === deletingId) ?? null;
+  const inUse = records.find((record) => record.id === inUseId) ?? null;
 
   // View mode reads the latest row; edit keeps the record it opened with.
   const sheetRecord = sheet?.record ?? null;
@@ -140,6 +145,11 @@ export function useFleetKindManager<K extends FleetKind>(
       setDeletingId(null);
       if (sheet?.record?.id === deleting.id) closeSheet();
     } catch (error) {
+      if (isInUseDeleteRefusal(error)) {
+        setDeletingId(null);
+        setInUseId(deleting.id);
+        return;
+      }
       setDeleteError(toDeleteErrorMessage(error, label, `${label} was not deleted. Try again.`));
     }
   };
@@ -152,8 +162,8 @@ export function useFleetKindManager<K extends FleetKind>(
         onOpenChange={(open) => !open && closeSheet()}
         mode={mode}
         onModeChange={(next) => setSheet((current) => (current ? { record: liveRecord, mode: next } : null))}
-        title={mode === "create" ? `Create ${copy.noun}` : shownRecord?.name ?? ""}
-        subtitle={mode === "create" || !shownRecord ? undefined : fleetRecordCode(shownRecord)}
+        title={mode === "create" ? `Create ${copy.noun}` : shownRecord ? fleetRecordCode(shownRecord) ?? shownRecord.name : ""}
+        subtitle={mode === "create" || !shownRecord || !fleetRecordCode(shownRecord) ? undefined : shownRecord.name}
         editLabel={`Edit ${copy.noun}`}
         editNotice={
           kind === "vehicle" && mode === "edit" ? (
@@ -163,7 +173,6 @@ export function useFleetKindManager<K extends FleetKind>(
           ) : undefined
         }
         sections={shownRecord && mode === "view" ? fleetSheetSections(kind, shownRecord) : undefined}
-        size="default"
       >
         <FleetSheetForm
           key={sheetRecord?.id ?? "create"}
@@ -176,6 +185,8 @@ export function useFleetKindManager<K extends FleetKind>(
           onCancel={closeSheet}
         />
       </EntitySideSheet>
+
+      {inUse && <InUseDeleteDialog label={fleetRecordLabel(kind, inUse)} onClose={() => setInUseId(null)} />}
 
       <DeleteConfirmDialog
         isOpen={deleting !== null}

@@ -69,7 +69,7 @@ export function FleetKindTable<K extends FleetKind>({ manager, getRowHref }: Fle
             hasSearch ? undefined : (
               <Button variant="primary" onClick={manager.openCreate}>
                 <PlusIcon size={18} weight="bold" />
-                New {copy.noun}
+                Create your first {copy.noun}
               </Button>
             )
           }

@@ -1,8 +1,7 @@
 /**
  * Vehicle Quick Add Dialog
  * Inline dialog for adding a vehicle from the EntitySelect dropdown, and for
- * editing one when `vehicle` is passed (the picker's edit action and the
- * settings list). Embeds the full VehicleForm inside QuickAddDialogShell.
+ * editing one when `vehicle` is passed (the picker's edit action). Embeds the full VehicleForm inside QuickAddDialogShell.
  */
 "use client";
 

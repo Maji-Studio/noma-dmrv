@@ -1,8 +1,7 @@
 /**
  * Driver Quick Add Dialog
  * Inline dialog for adding a driver from the EntitySelect dropdown, and for
- * editing one when `driver` is passed (the picker's edit action and the
- * settings list). Embeds the full DriverForm inside QuickAddDialogShell.
+ * editing one when `driver` is passed (the picker's edit action). Embeds the full DriverForm inside QuickAddDialogShell.
  */
 "use client";
 

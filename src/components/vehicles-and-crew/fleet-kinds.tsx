@@ -202,21 +202,20 @@ export function fleetColumns<K extends FleetKind>(
   return build(actions);
 }
 
+/** One untitled section in the order of the vehicle form. */
 function vehicleSections(vehicle: Vehicle): DetailPanelSection[] {
+  const electric = vehicle.fuelType === "Electric";
   return [
     {
-      id: "identifier",
-      fields: [{ label: "Identifier / plate", value: vehicle.identifier }],
-    },
-    {
-      title: "Transport evidence",
+      id: "vehicle",
       fields: [
+        { label: "Identifier / plate", value: vehicle.identifier },
         { label: "Vehicle type", value: formatVehicleType(vehicle.vehicleType) },
         { label: "Fuel type", value: vehicle.fuelType },
         {
           label: "Fuel consumption (L/100 km)",
-          value: vehicle.fuelType === "Electric" ? null : vehicle.fuelConsumptionLPerKm == null ? null : fuelConsumptionText(vehicle),
-          emptySituation: vehicle.fuelType === "Electric" ? "notApplicable" : "notRecorded",
+          value: electric || vehicle.fuelConsumptionLPerKm == null ? null : fuelConsumptionText(vehicle),
+          emptySituation: electric ? "notApplicable" : "notRecorded",
         },
         { label: "Model year", value: vehicle.modelYear },
       ],
@@ -258,7 +257,7 @@ export function fleetSheetSections<K extends FleetKind>(kind: K, record: FleetRe
   return (SECTION_BUILDERS[kind] as (row: FleetRecords[K]) => DetailPanelSection[])(record);
 }
 
-/** The code shown under the name in the sheet header; operators have none. */
+/** The sheet header title (code first); operators have no code. */
 export function fleetRecordCode(record: FleetRecords[FleetKind]): string | undefined {
   return "code" in record ? record.code : undefined;
 }

@@ -1,8 +1,7 @@
 /**
  * Operator Quick Add Dialog
  * Inline dialog for adding an operator from the EntitySelect dropdown, and for
- * editing one when `operator` is passed (the picker's edit action and the
- * settings list). Embeds the full OperatorForm inside QuickAddDialogShell.
+ * editing one when `operator` is passed (the picker's edit action). Embeds the full OperatorForm inside QuickAddDialogShell.
  */
 "use client";
 
