@@ -35,6 +35,8 @@ vi.mock("./production-readings-field", () => ({ ProductionReadingsField: () => n
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null, Tooltip: ({ children }: { children: ReactNode }) => children }));
 
 import { ProductionRunForm } from "./production-run-form";
+import { footerForRefusedSave } from "./production-run-refusal";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { ActionError } from "@/lib/action-error";
 import { ProductionRunConflictError } from "@/lib/production-runs/overlap-conflict";
 import { OPEN_LOCK } from "../../../tests/helpers/record-lock-mocks";
@@ -183,17 +185,37 @@ describe("ProductionRunForm refused saves", () => {
     expect(footers).toEqual([LOCK_REASON]);
   });
 
-  it("files an overlap conflict at the start time without calling the refusal handler", async () => {
-    const onRefusal = vi.fn();
-    const onSubmit = vi.fn(async () => {
-      throw new ProductionRunConflictError("Overlaps another run on this reactor", {
+  it("files an overlap conflict at the start time, not in the footer, when the parent hands on the refusal", async () => {
+    const onRefusal = vi.fn(() => "footer");
+    const onSubmit = vi.fn(async (_data: unknown, handler: SaveRefusalHandler) => {
+      const error = new ProductionRunConflictError("Overlaps another run on this reactor", {
         conflictingRunId: "run_2", conflictingRunNumber: "PR-2", startTime: new Date(), endTime: null,
       } as never);
+      try { throw error; } catch (caught) {
+        // The parents' catch: the overlap is rethrown before the handler can take it.
+        footerForRefusedSave(caught, "fallback", (e, f) => { onRefusal(); return handler(e, f); });
+      }
     });
     render(<ProductionRunForm productionRun={{ ...savedRun, status: "complete" } as ProductionRunWithRelations} onSubmit={onSubmit} lock={OPEN_LOCK} />);
     fireEvent.click(screen.getByRole("button", { name: "Update production run" }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
     await screen.findAllByText(/Overlaps another run on this reactor/);
     expect(onRefusal).not.toHaveBeenCalled();
+  });
+});
+
+describe("footerForRefusedSave", () => {
+  const conflict = new ProductionRunConflictError("Overlaps", {} as never);
+
+  it("rethrows an overlap before the refusal handler sees it", () => {
+    const onRefusal = vi.fn(() => "footer");
+    expect(() => footerForRefusedSave(conflict, "fallback", onRefusal)).toThrow(conflict);
+    expect(onRefusal).not.toHaveBeenCalled();
+  });
+
+  it("hands any other error to the refusal handler", () => {
+    const onRefusal = vi.fn(() => "footer");
+    expect(footerForRefusedSave(new Error("x"), "fallback", onRefusal)).toBe("footer");
+    expect(onRefusal).toHaveBeenCalledWith(expect.any(Error), "fallback");
   });
 });

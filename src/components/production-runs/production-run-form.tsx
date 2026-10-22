@@ -101,7 +101,7 @@ export type ProductionRunSubmitData = Omit<ProductionRunFormData, "endTime"> & {
 interface ProductionRunFormProps {
   /** Existing production run data for editing (undefined for create mode) */
   productionRun?: ProductionRunWithRelations;
-  /** Form submission handler; the form hands `onRefusal` on, for create and edit, so a refused save shows at its fields (#1298); create does too. */
+  /** Form submission handler; the form hands `onRefusal` on, in create and edit, so a refused save shows at its fields (#1298). */
   onSubmit: (data: ProductionRunSubmitData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
