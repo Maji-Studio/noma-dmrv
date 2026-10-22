@@ -22,7 +22,7 @@ import {
   reconcileRemovalMembership,
 } from "@/data-access/certifier-ghg-statements";
 import { reconcileGhgStatementRemoteState } from "@/data-access/certifier-ghg-remote-state";
-import { withFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
+import { withFacilityCertificationLocks } from "@/data-access/facility-durability-lock";
 import { requireOrgFacility } from "@/data-access/utils";
 import type { DbTransaction } from "@/db";
 import { SafeError } from "@/lib/errors";
@@ -135,7 +135,7 @@ export async function reconcileGhgStatementsForFacility(
   };
   let outcome: ReconcileRegistryGhgStatementsResult;
   try {
-    outcome = await withFacilityDurabilityLock(orgCtx, facilityId, async (tx) => {
+    outcome = await withFacilityCertificationLocks(orgCtx, facilityId, async (tx) => {
     const lockedOperatorCreateInFlight =
       await hasInFlightGhgStatementForFacility(orgCtx, facilityId, tx);
     if (lockedOperatorCreateInFlight) {
@@ -235,6 +235,7 @@ export async function reconcileGhgStatementsForFacility(
           facilityId,
           externalProjectId: project.externalProjectId,
           remote,
+          boundaryLockHeld: true,
         },
         tx,
         stage,
@@ -282,12 +283,14 @@ export async function listRegistryGhgStatementsForFacility(
   return remotes.map(toRegistryGhgStatementView);
 }
 
-export async function reconcileRegistryGhgStatement(
+async function reconcileRegistryGhgStatement(
   orgCtx: OrgContext,
   args: {
     facilityId: string;
     externalProjectId: string;
     remote: GhgStatement;
+    // Held by this transaction or the create caller's outer session.
+    boundaryLockHeld: true;
   },
   tx: DbTransaction,
   stage: SyncEventStage,
@@ -346,6 +349,7 @@ export async function reconcileRegistryGhgStatement(
           facilityId: args.facilityId,
           provider: ISOMETRIC_PROVIDER,
           expectedExternalProjectId: args.externalProjectId,
+          facilityCertificationBoundaryLockHeldBySession: args.boundaryLockHeld,
         },
         policy: { onSubmittedHashChanged: "invalid-changed-hash" },
         tentativeInputs: semanticPayload,
@@ -430,9 +434,10 @@ export async function reconcileRegistryGhgStatementById(
     facilityId: string;
     externalProjectId: string;
     externalId: string;
+    boundaryLockHeldBySession?: true;
   },
 ): Promise<ReconciledRegistryGhgStatement> {
-  return withStagedSyncEvents(orgCtx, (stage) => withFacilityDurabilityLock(
+  return withStagedSyncEvents(orgCtx, (stage) => withFacilityCertificationLocks(
     orgCtx,
     args.facilityId,
     async (tx) => {
@@ -443,11 +448,13 @@ export async function reconcileRegistryGhgStatementById(
           facilityId: args.facilityId,
           externalProjectId: args.externalProjectId,
           remote,
+          boundaryLockHeld: true,
         },
         tx,
         stage,
       );
     },
+    { boundaryLockHeldBySession: args.boundaryLockHeldBySession },
   ));
 }
 

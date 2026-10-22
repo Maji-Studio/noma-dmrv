@@ -6,6 +6,7 @@ import {
 } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
+import { acquireFacilityCertificationBoundaryLock } from "./facility-certification-boundary-lock";
 
 const FACILITY_DURABILITY_LOCK_SCOPE = "facility-durability-tier";
 
@@ -62,6 +63,24 @@ export async function withFacilityDurabilityLock<T>(
 ): Promise<T> {
   requireOrgScope(ctx);
   return withDedicatedLockConnection(async (tx) => {
+    await acquireFacilityDurabilityLock(ctx, tx, facilityId);
+    return fn(tx);
+  });
+}
+
+/** Acquire boundary before durability on the same dedicated transaction. */
+export async function withFacilityCertificationLocks<T>(
+  ctx: OrgContext,
+  facilityId: string,
+  fn: (tx: DbTransaction) => Promise<T>,
+  options: { boundaryLockHeldBySession?: true } = {},
+): Promise<T> {
+  requireOrgScope(ctx);
+  return withDedicatedLockConnection(async (tx) => {
+    // A session lock on another connection must not be requested again here.
+    if (!options.boundaryLockHeldBySession) {
+      await acquireFacilityCertificationBoundaryLock(ctx, tx, facilityId);
+    }
     await acquireFacilityDurabilityLock(ctx, tx, facilityId);
     return fn(tx);
   });

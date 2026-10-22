@@ -292,6 +292,7 @@ async function createGhgStatementDraftLocked(
             facilityId: parsed.facilityId,
             externalProjectId: project.externalProjectId,
             externalId: singleMatch.id,
+            boundaryLockHeldBySession: true,
           });
           return { outcome: "existing" as const, ...reconciled };
         }
