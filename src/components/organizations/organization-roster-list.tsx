@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { ROW_ACTION_HIT_AREA } from "@/components/ui/touch-target";
 
 interface OrganizationRosterListProps {
   children: ReactNode;
@@ -60,7 +61,8 @@ export function OrganizationRosterRow({
             </span>
           )}
         </div>
-        {actions && <div className="flex max-w-full flex-wrap items-center gap-8">{actions}</div>}
+        {/* gap-y-12 keeps a wrapped line clear of the 44px hit area of the line above. */}
+        {actions && <div className={cn("flex max-w-full flex-wrap items-center gap-x-8 gap-y-12", ROW_ACTION_HIT_AREA)}>{actions}</div>}
       </div>
       {details}
     </li>

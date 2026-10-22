@@ -38,6 +38,14 @@ Read these first. Each one fails quietly rather than loudly.
   `IsometricLink` beside the ID it opens. A 44px box on any of them would break
   label-row alignment wherever it appears. The same silence hits a `var(--x)` whose property was renamed or never
   defined; `pnpm check:css-vars` (CI) fails on it.
+- **Row action buttons reach 44px without growing.** `OrganizationRosterRow`
+  applies `ROW_ACTION_HIT_AREA` (`src/components/ui/touch-target.ts`) to its
+  actions slot: each button gets an invisible `::after` of at least 44px in both
+  axes, so the 32px and 40px look is unchanged. Every surface using the slot
+  gets it: members, pending invitations, vehicles, drivers and operators,
+  connected apps, API keys and the platform-admin organization rows. Text
+  buttons need nothing extra; two 32px icon buttons side by side need a 12px
+  gap or their hit areas overlap.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
   the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),

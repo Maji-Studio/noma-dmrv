@@ -4,6 +4,7 @@ import {
   OrganizationRosterList,
   OrganizationRosterRow,
 } from "./organization-roster-list";
+import { ROW_ACTION_HIT_AREA } from "@/components/ui/touch-target";
 
 describe("OrganizationRosterList", () => {
   it("preserves semantic rows, accessible actions, and nested details", () => {
@@ -28,5 +29,17 @@ describe("OrganizationRosterList", () => {
     expect(html).toContain('aria-label="Role for member@example.com"');
     expect(html).toContain("Credential settings");
     expect(html).toContain(">Enter</button>");
+  });
+
+  it("gives row action buttons a 44px hit area without resizing them", () => {
+    const html = renderToStaticMarkup(
+      <OrganizationRosterRow primary="Member" actions={<button type="button">Remove</button>} />,
+    );
+    const classes = html.match(/class="([^"]*\[&amp;_button\][^"]*)"/)?.[1] ?? "";
+
+    for (const cls of ROW_ACTION_HIT_AREA.split(" ")) {
+      expect(classes).toContain(cls.replaceAll("&", "&amp;").replaceAll("'", "&#x27;"));
+    }
+    expect(classes).toContain("gap-y-12");
   });
 });
