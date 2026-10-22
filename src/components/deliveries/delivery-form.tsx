@@ -40,7 +40,7 @@ import { useSubBinDraw } from "@/hooks/use-sub-bin-draw";
 import { SubBinDrawField } from "@/components/storage-locations/sub-bin-draw-field";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import { STRICT_FORMULATION_MATCH } from "@/schemas/biochar-products";
-import { deliveryFormSchema, type DeliveryFormData } from "@/schemas/deliveries";
+import { DELIVERY_REFUSAL_ALIASES, deliveryFormSchema, type DeliveryFormData } from "@/schemas/deliveries";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, MapPinIcon, ScalesIcon } from "@phosphor-icons/react/dist/ssr";
@@ -70,14 +70,11 @@ const isDeliveryCertifyField = (field: string) =>
 // Component
 // ============================================
 
-/** Server issue paths the form names differently: a source row refusal sits on the load mass. */
-const DELIVERY_REFUSAL_ALIASES = { sources: "deliveredWetMassKg" } as const;
-
 interface DeliveryFormProps {
   /** Existing delivery data for editing (undefined for create mode) */
   delivery?: Delivery;
   /** Form submission handler */
-  onSubmit: (data: DeliveryFormData, onError: SaveRefusalHandler, expectedVersion?: number) => Promise<void> | void;
+  onSubmit: (data: DeliveryFormData, onRefusal: SaveRefusalHandler, expectedVersion?: number) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */

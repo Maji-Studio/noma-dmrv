@@ -7,9 +7,8 @@
  * callback ends, and the error summary shows only after an unsuccessful
  * submit, so a server error set any later would never be listed or focused.
  * The function files each issue on its field with `setError` and returns the
- * text for the footer, or null when the form has nothing to add (not a
- * refusal with issues, or a stale-version or conflict refusal), so the caller
- * keeps its own message for those.
+ * plan's footer (including null when every issue sits at a field), or the
+ * caller's fallback when there is no plan.
  */
 import { get, useFormState, type Control, type FieldValues, type Path, type UseFormSetError } from "react-hook-form";
 import { planSaveRefusal } from "@/lib/save-refusal";
@@ -19,12 +18,7 @@ import { locateInDirectory, readFieldDirectory } from "./form-error-summary-dom"
 /** `setError` type of a refused save's field error. */
 export const SERVER_ERROR_TYPE = "server";
 
-export interface SaveRefusalOutcome {
-  /** What the footer says, or null when every issue sits at a field. */
-  footer: string | null;
-}
-
-export type SaveRefusalHandler = (error: unknown) => SaveRefusalOutcome | null;
+export type SaveRefusalHandler = (error: unknown, fallback: string) => string | null;
 
 interface UseSaveRefusalOptions<TFieldValues extends FieldValues, TContext, TTransformed> {
   control: Control<TFieldValues, TContext, TTransformed>;
@@ -56,17 +50,17 @@ export function useSaveRefusal<TFieldValues extends FieldValues, TContext, TTran
   isEnabled,
 }: UseSaveRefusalOptions<TFieldValues, TContext, TTransformed>): SaveRefusalHandler {
   const { dirtyFields } = useFormState({ control });
-  return (error) => {
+  return (error, fallback) => {
     const form = document.getElementById(formId);
     const plan = planSaveRefusal(error, {
       aliases,
       isShown: (field) => isRendered(form, field) && (isEnabled?.(field) ?? true),
       isChanged: (field) => Boolean(get(dirtyFields, field)),
     });
-    if (!plan) return null;
+    if (!plan) return fallback;
     for (const { field, message, locked } of plan.fieldErrors) {
       setError(field as Path<TFieldValues>, { type: locked ? LOCKED_ERROR_TYPE : SERVER_ERROR_TYPE, message });
     }
-    return { footer: plan.footer };
+    return plan.footer;
   };
 }

@@ -7,13 +7,16 @@ import { DeliveryList } from "./delivery-list";
 const DELIVERY_ID = "6f1c4d3a-0f2b-4d6a-9f1e-0a1b2c3d4e5f";
 const FACILITY_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
 
-type SubmitHandler = (data: Record<string, unknown>, onError: (error: unknown) => boolean) => Promise<void>;
+type RefusalHandler = (error: unknown, fallback: string) => string | null;
+type CreateErrorMessage = (error: unknown, input: { onRefusal: RefusalHandler }) => string | null;
+type SubmitHandler = (data: Record<string, unknown>, onRefusal: RefusalHandler) => Promise<void>;
 type ModeChange = (mode: "view" | "edit" | "create") => void;
 
 const harness = vi.hoisted(() => ({
   query: {} as Record<string, string | null>,
   delivery: null as Record<string, unknown> | null,
   update: vi.fn(),
+  createErrorMessage: null as CreateErrorMessage | null,
   onSubmit: null as SubmitHandler | null,
   onModeChange: null as ModeChange | null,
   sheet: { open: false, mode: "view" as string },
@@ -58,15 +61,18 @@ vi.mock("@/hooks/use-list-pagination", () => ({
   useReconcileListPage: () => undefined,
 }));
 vi.mock("@/hooks/use-create-with-evidence", () => ({
-  useCreateWithEvidence: () => ({
-    guardUpdate: () => false,
-    reset: vi.fn(),
-    confirmClose: () => true,
-    runWhileFlushing: vi.fn(),
-    handleCreate: vi.fn(),
-    isFlushing: false,
-    deferredAttachments: { attachments: [], retry: vi.fn(), remove: vi.fn() },
-  }),
+  useCreateWithEvidence: ({ getCreateErrorMessage }: { getCreateErrorMessage: CreateErrorMessage }) => {
+    harness.createErrorMessage = getCreateErrorMessage;
+    return {
+      guardUpdate: () => false,
+      reset: vi.fn(),
+      confirmClose: () => true,
+      runWhileFlushing: vi.fn(),
+      handleCreate: vi.fn(),
+      isFlushing: false,
+      deferredAttachments: { attachments: [], retry: vi.fn(), remove: vi.fn() },
+    };
+  },
 }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 vi.mock("@phosphor-icons/react/dist/ssr", () => ({
@@ -143,7 +149,7 @@ describe("DeliveryList deep-linked sheet", () => {
     expect(harness.sheet).toEqual({ open: true, mode: "edit" });
 
     await act(async () => {
-      await harness.onSubmit?.({ distanceNote: "Updated" }, () => false);
+      await harness.onSubmit?.({ distanceNote: "Updated" }, (_error, fallback) => fallback);
     });
     await act(async () => {
       renderer?.update(<DeliveryList />);
@@ -169,7 +175,7 @@ describe("DeliveryList deep-linked sheet", () => {
     expect(harness.sheet.mode).toBe("edit");
 
     await act(async () => {
-      await harness.onSubmit?.({ distanceNote: "Updated" }, () => false);
+      await harness.onSubmit?.({ distanceNote: "Updated" }, (_error, fallback) => fallback);
     });
     await act(async () => {
       renderer?.update(<DeliveryList />);
@@ -191,15 +197,40 @@ describe("DeliveryList deep-linked sheet", () => {
     harness.delivery = { ...DELIVERY, version: DELIVERY.version + 1 };
     await act(async () => { renderer?.update(<DeliveryList />); });
     const draft = { distanceNote: "Unsaved draft" };
-    await act(async () => { await harness.onSubmit?.(draft, () => false); });
+    await act(async () => { await harness.onSubmit?.(draft, (_error, fallback) => fallback); });
     expect(harness.update).toHaveBeenCalledWith(expect.objectContaining({ ...draft, deliveryId: DELIVERY_ID, expectedVersion: DELIVERY.version }));
     expect(harness.sheet).toEqual({ open: true, mode: "edit" });
     expect(harness.query.delivery).toBe(DELIVERY_ID);
     expect(harness.formError).toBe(STALE_VERSION_MESSAGE);
     expect(harness.formDelivery?.version).toBe(DELIVERY.version);
     // A retry must retain the same precondition too.
-    await act(async () => { await harness.onSubmit?.(draft, () => false); });
+    await act(async () => { await harness.onSubmit?.(draft, (_error, fallback) => fallback); });
     expect(harness.update).toHaveBeenLastCalledWith(expect.objectContaining({ expectedVersion: DELIVERY.version }));
+    renderer?.unmount();
+  });
+
+  it.each([null, "The field is locked."])("uses the update handler's footer (%s) without a second fallback", async (footer) => {
+    harness.query = { delivery: DELIVERY_ID, mode: "edit" };
+    const error = new Error("Delivery was refused.");
+    harness.update.mockRejectedValue(error);
+    await act(async () => { renderer = create(<DeliveryList />); });
+    const onRefusal = vi.fn(() => footer);
+    await act(async () => { await harness.onSubmit?.({}, onRefusal); });
+    expect(onRefusal).toHaveBeenCalledWith(error, error.message);
+    expect(harness.formError).toBe(footer ?? undefined);
+    expect(harness.sheet.open).toBe(true);
+    renderer?.unmount();
+  });
+
+  it("hands create errors and their existing fallback to the form's handler", async () => {
+    harness.query = { delivery: DELIVERY_ID, mode: "edit" };
+    await act(async () => { renderer = create(<DeliveryList />); });
+    const error = new Error("Delivery was refused.");
+    const onRefusal = vi.fn<RefusalHandler>(() => null);
+    expect(harness.createErrorMessage?.(error, { onRefusal })).toBeNull();
+    expect(onRefusal).toHaveBeenLastCalledWith(error, error.message);
+    onRefusal.mockImplementation((_error, fallback) => fallback);
+    expect(harness.createErrorMessage?.("unknown error", { onRefusal })).toBe("Delivery was not created. Check the form.");
     renderer?.unmount();
   });
 
@@ -226,7 +257,7 @@ describe("DeliveryList deep-linked sheet", () => {
     });
     expect(harness.formDelivery?.version).toBe(refreshed.version);
 
-    await act(async () => { await harness.onSubmit?.({ distanceNote: "Updated" }, () => false); });
+    await act(async () => { await harness.onSubmit?.({ distanceNote: "Updated" }, (_error, fallback) => fallback); });
     expect(harness.update).toHaveBeenCalledWith(expect.objectContaining({ deliveryId: DELIVERY_ID, expectedVersion: refreshed.version }));
     renderer?.unmount();
   });

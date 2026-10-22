@@ -336,7 +336,7 @@ export function DeliveryList() {
   const createWithEvidence = useCreateWithEvidence({
     entityType: "delivery",
     entityNoun: "Delivery",
-    executeCreate: async ({ data }: { data: DeliveryFormData; onError: SaveRefusalHandler }) => {
+    executeCreate: async ({ data }: { data: DeliveryFormData; onRefusal: SaveRefusalHandler }) => {
       if (!contextFacilityId) {
         throw new Error("No facility selected. Select a facility and try again.");
       }
@@ -366,10 +366,8 @@ export function DeliveryList() {
     },
     setError: setFormError,
     setUpdateError: setFormError,
-    getCreateErrorMessage: (error, { onError }) => {
-      const shown = onError(error);
-      if (shown) return shown.footer;
-      return error instanceof Error ? error.message : "Delivery was not created. Check the form.";
+    getCreateErrorMessage: (error, { onRefusal }) => {
+      return onRefusal(error, error instanceof Error ? error.message : "Delivery was not created. Check the form.");
     },
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this delivery.",
@@ -453,11 +451,11 @@ export function DeliveryList() {
   ]);
 
   // Handlers
-  const handleCreate = async (data: DeliveryFormData, onError: SaveRefusalHandler) => {
-    await createWithEvidence.handleCreate({ data, onError });
+  const handleCreate = async (data: DeliveryFormData, onRefusal: SaveRefusalHandler) => {
+    await createWithEvidence.handleCreate({ data, onRefusal });
   };
 
-  const handleUpdate = async (data: DeliveryFormData, onError: SaveRefusalHandler, expectedVersion?: number) => {
+  const handleUpdate = async (data: DeliveryFormData, onRefusal: SaveRefusalHandler, expectedVersion?: number) => {
     if (!displaySideSheet?.entity) return;
     setFormError(null);
     if (createWithEvidence.guardUpdate()) return;
@@ -470,8 +468,7 @@ export function DeliveryList() {
       closeSideSheet();
       toast.success("Delivery updated.");
     } catch (error) {
-      const shown = onError(error);
-      setFormError(shown ? shown.footer : error instanceof Error ? error.message : "Delivery was not saved. Try again.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Delivery was not saved. Try again."));
     }
   };
 

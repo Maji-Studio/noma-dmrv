@@ -34,7 +34,7 @@ function Harness({ edited }: { edited: boolean }) {
       code: "validation_failed",
       issues: [{ path: ["massWetKg"], code: "validation_failed", message: OVERDRAW }],
     });
-    refuse(refusal);
+    expect(refuse(refusal, OVERDRAW)).toBeNull();
     setBlockers("Drawing on this bin: PR-014, BP-003");
   });
   return (
