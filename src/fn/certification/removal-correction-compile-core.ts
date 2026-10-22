@@ -11,7 +11,7 @@ import { buildRemovalSubmissionBuild } from "./removal-submission-build";
 import { prepareRemovalSubmission } from "./removal-submission-prepare";
 
 /** Content comparison only; never authorizes a Removal mutation. */
-export async function compileRemovalCorrectionContent(orgCtx: OrgContext, removalId: string, observation: RemovalTemplateObservation, useCurrentEvidence = false): Promise<Record<string, unknown> | null> {
+export async function compileRemovalCorrectionContent(orgCtx: OrgContext, removalId: string, observation: RemovalTemplateObservation): Promise<Record<string, unknown> | null> {
   const scope = await resolveScopeForRemoval(orgCtx, removalId);
   const [facility, mapping] = await Promise.all([
     getFacilityById(orgCtx, scope.facilityId),
@@ -30,11 +30,11 @@ export async function compileRemovalCorrectionContent(orgCtx: OrgContext, remova
   const context = await buildRemovalContext(orgCtx, scope, facilityFacts, undefined, false, true);
   const { prepared, blockers } = prepareRemovalSubmission(context);
   const comparisonBlockers = [...blockers, ...(context.removalEntryContext?.contributions.blockers ?? [])];
-  if (useCurrentEvidence && comparisonBlockers.length) {
+  if (comparisonBlockers.length) {
     throw new RemovalComparisonBlockedError(comparisonBlockers.map(blocker => blocker.message));
   }
   // The statement guard compares live attachments even when an eligibility read
   // failed or the last Removal resubmit has already closed the correction window.
-  if (useCurrentEvidence) context.correctionWindowOpen = true;
+  context.correctionWindowOpen = true;
   return prepared ? (await buildRemovalSubmissionBuild({ orgCtx, removalId, ctx: context, prepared })).semanticPayload : null;
 }

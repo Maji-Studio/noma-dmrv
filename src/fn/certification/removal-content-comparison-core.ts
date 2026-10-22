@@ -10,6 +10,7 @@ import type { EntryCorrectionState, RemovalComparisonReason } from "@/lib/certif
 import { deriveRemovalSemanticCorrection } from "@/lib/certification/removal-semantic-correction";
 import { RemovalComparisonBlockedError } from "./removal-comparison-blocked-error";
 import { compileRemovalCorrectionContent } from "./removal-correction-compile-core";
+import { RESUBMIT_NEEDED_LABEL, comparisonUnavailableClause } from "@/lib/removal-correction-copy";
 
 const snapshotSchema = z.object({ semantic: z.record(z.string(), z.unknown()), templateObservationId: z.string().optional() });
 const entriesSchema = z.array(entryInputManifestSchema);
@@ -39,7 +40,7 @@ export async function compareRemovalCurrentContent(ctx: OrgContext, removalId: s
     state: { ...deriveRemovalSemanticCorrection({ windowOpen: true, previous, current: null,
       previousEntries: [], currentEntries: [], componentIds, batchIds }),
       comparison: "unavailable", unavailableReason: reason, unavailableMessages,
-      message: "Resubmit needed: noma could not compare this Removal with what it sent.",
+      message: `${RESUBMIT_NEEDED_LABEL}: ${comparisonUnavailableClause("this Removal")}.`,
     },
   });
   const sent = facts ? facts.submitted : await getSentRemovalForComparison(ctx, removalId);
@@ -58,7 +59,7 @@ export async function compareRemovalCurrentContent(ctx: OrgContext, removalId: s
   componentIds = components.map(component => component.id);
   let current: Record<string, unknown> | null;
   try {
-    current = await compileRemovalCorrectionContent(ctx, removalId, observation, true);
+    current = await compileRemovalCorrectionContent(ctx, removalId, observation);
   } catch (error) {
     if (error instanceof RemovalComparisonBlockedError) return unavailable("compile_refused", error.messages);
     if (error instanceof SafeError) return unavailable("compile_refused", [error.message]);

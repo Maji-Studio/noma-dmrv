@@ -128,7 +128,7 @@ beforeEach(async () => {
   await db.update(emissionEntries).set({ sentByRemovalId: f.removalId }).where(and(eq(emissionEntries.organizationId, org.organizationId), eq(emissionEntries.id, sent.id)));
 
   // Honest baseline: what the real compile produces for the sent entries is what was sent.
-  const baseline = await compileRemovalCorrectionContent(org, f.removalId, observation, true);
+  const baseline = await compileRemovalCorrectionContent(org, f.removalId, observation);
   expect(baseline).toMatchObject({ entryContributions: [expect.objectContaining({ componentId: "line" })] });
   await db.insert(certificationSubmissions).values({ organizationId: org.organizationId, provider: "isometric", localEntityType: "removal",
     localEntityId: f.removalId, submissionType: "removal", status: "submitted", version: 1, submittedAt: new Date("2026-06-17"),

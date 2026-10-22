@@ -34,7 +34,7 @@ it("compares sent content independently of a missing or failed correction conten
   vi.mocked(compileRemovalCorrectionContent).mockResolvedValue({ inputs: [{ rtcId: "energy", value: 23 }] });
   await expect(assertStatementRemovalsCurrent(ctx, "statement")).rejects.toEqual(
     new SafeError("Resubmit Removal R-12 first. Its records changed since it was sent."));
-  expect(compileRemovalCorrectionContent).toHaveBeenCalledWith(ctx, "removal", expect.any(Object), true);
+  expect(compileRemovalCorrectionContent).toHaveBeenCalledWith(ctx, "removal", expect.any(Object));
 });
 it("allows unchanged content after resubmission even when the window is closed", async () => {
   vi.mocked(loadBatchEmissionEntryFacts).mockRejectedValue(new SafeError("Presentation facts unavailable"));

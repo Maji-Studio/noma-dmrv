@@ -31,6 +31,7 @@ import {
   joinWithAnd,
   removalSheetHref,
   returnedStatementPhrase,
+  comparisonUnavailableClause,
 } from "@/lib/removal-correction-copy";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
 
@@ -128,7 +129,7 @@ function removalCorrectionItem(
       detail: names.length
         ? `${joinWithAnd(names)} changed here since ${code} was sent. Resubmit the Removal to send ${names.length === 1 ? "it" : "them"}.`
         : correction.comparison === "unavailable"
-          ? `noma could not compare ${code} with what it sent. Open the Removal to see why.`
+          ? `${comparisonUnavailableClause(code)}. Open the Removal to see why.`
           : `Records or files changed since ${code} was sent. Resubmit the Removal to send the changes.`,
       target: { href: removalSheetHref(correction.removalId, facilityId) },
     };

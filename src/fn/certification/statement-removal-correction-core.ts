@@ -3,6 +3,7 @@ import { listNomaSentRemovalsForRemoteEntries, listStatementRemovalIdentities } 
 import { logger } from "@/lib/log";
 import { SafeError } from "@/lib/errors";
 import { compareRemovalCurrentContent } from "./removal-content-comparison-core";
+import { comparisonUnavailableClause } from "@/lib/removal-correction-copy";
 
 /** Must run inside withGhgVerifierSubmissionLock. Lineage/evidence writers share
  * that artifact fence, so the checked facts remain stable through provider I/O.
@@ -40,7 +41,7 @@ export async function assertStatementRemovalsCurrent(ctx: OrgContext, statementI
   if (unavailable.length) {
     const codes = unavailable.sort().join(", ");
     const subject = unavailable.length === 1 ? `Removal ${codes}` : `Removals ${codes}`;
-    throw new SafeError(`noma could not compare ${subject} with what it sent, so the GHG Statement was not sent. Open ${subject}, then try again.`);
+    throw new SafeError(`${comparisonUnavailableClause(subject)}, so the GHG Statement was not sent. Open ${subject}, then try again.`);
   }
   if (changed.length) throw new SafeError(changed.length === 1
     ? `Resubmit Removal ${changed[0]} first. Its records changed since it was sent.`

@@ -26,7 +26,7 @@ it.each([
 ])("preserves preparation and contribution messages on refusal: %j", async ({ preparation, contributions }) => {
   vi.mocked(buildRemovalContext).mockResolvedValue({ removalEntryContext: { contributions: { blockers: contributions } } } as never);
   vi.mocked(prepareRemovalSubmission).mockReturnValue({ prepared: null, blockers: preparation } as never);
-  const result = compileRemovalCorrectionContent(makeTestOrgContext(), "removal", { externalTemplateId: "template" } as never, true);
+  const result = compileRemovalCorrectionContent(makeTestOrgContext(), "removal", { externalTemplateId: "template" } as never);
   await expect(result).rejects.toBeInstanceOf(RemovalComparisonBlockedError);
   await expect(result).rejects.toMatchObject({ messages: [...preparation, ...contributions].map(blocker => blocker.message) });
   expect(buildRemovalSubmissionBuild).not.toHaveBeenCalled();

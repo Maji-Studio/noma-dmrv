@@ -14,6 +14,7 @@ import {
   correctionStatementLabel,
   removalResubmitHref,
   returnedStatementPhrase,
+  comparisonUnavailableClause,
 } from "@/lib/removal-correction-copy";
 
 const LINK_CLASS = "underline underline-offset-4 text-[var(--color-text-primary)]";
@@ -54,7 +55,7 @@ export function RemovalResubmitNotice({ correction, facilityId }: { correction: 
       // No title: the Status badge above already says "Resubmit needed".
       <Notice tone="warning" data-removal-correction="resubmit">
         {correction.comparison === "unavailable" ? (
-          <>noma could not compare this Removal with what it sent.{correction.unavailableMessages?.[0] ? <> {correction.unavailableMessages[0]}</> : null}</>
+          <>{comparisonUnavailableClause("this Removal")}.{correction.unavailableMessages?.[0] ? <> {correction.unavailableMessages[0]}</> : null}</>
         ) : correction.changed.length > 0 ? (
           <>
             <JoinedParts parts={correction.changed.map((change) => ({
