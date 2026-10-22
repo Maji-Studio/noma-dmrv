@@ -13,6 +13,7 @@ import {
 } from "@tanstack/react-query";
 import {
   getApplicationsFn,
+  getApplicationStatsFn,
   getApplicationDeliveryOptionsFn,
   createApplicationFn,
   updateApplicationFn,
@@ -35,11 +36,23 @@ export const applicationKeys = {
   lists: () => [...applicationKeys.all, "list"] as const,
   list: (filters?: ApplicationListOptions) =>
     [...applicationKeys.lists(), filters] as const,
+  stats: (filters?: { facilityId?: string }) =>
+    [...applicationKeys.all, "stats", filters] as const,
+  statsPrefix: () => [...applicationKeys.all, "stats"] as const,
   deliveryOptions: (facilityId?: string) =>
     [...applicationKeys.all, "deliveryOptions", facilityId] as const,
   details: () => [...applicationKeys.all, "detail"] as const,
   detail: (id: string) => [...applicationKeys.details(), id] as const,
 };
+
+export function useApplicationStats(facilityId?: string, options?: { enabled?: boolean }) {
+  const filters = { facilityId };
+  return useQuery({
+    queryKey: applicationKeys.stats(filters),
+    queryFn: async () => unwrap(await getApplicationStatsFn(filters)),
+    enabled: options?.enabled,
+  });
+}
 
 /**
  * Query hook for fetching applications with pagination
@@ -113,6 +126,7 @@ export function useCreateApplication() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: applicationKeys.statsPrefix() });
       queryClient.invalidateQueries({
         queryKey: [...applicationKeys.all, "deliveryOptions"],
       });
@@ -142,6 +156,7 @@ export function useUpdateApplication() {
     onSuccess: (result) => {
       if (result.success) patchListCachesWithSavedRow(queryClient, applicationKeys.lists(), result.data);
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: applicationKeys.statsPrefix() });
       queryClient.invalidateQueries({
         queryKey: [...applicationKeys.all, "deliveryOptions"],
       });
@@ -179,11 +194,13 @@ export function useDeleteApplication() {
     onError: (error, variables) => {
       if (error instanceof StaleVersionError) {
         queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: applicationKeys.statsPrefix() });
         queryClient.invalidateQueries({ queryKey: applicationKeys.detail(variables.applicationId) });
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: applicationKeys.statsPrefix() });
       queryClient.invalidateQueries({
         queryKey: [...applicationKeys.all, "deliveryOptions"],
       });

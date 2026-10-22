@@ -16,6 +16,7 @@ vi.mock("@/hooks/use-applications", () => ({
     isLoading: false,
     error: null,
   }),
+  useApplicationStats: () => ({ data: undefined, isLoading: false, isError: false }),
   useApplicationDeliveryOptions: () => ({ data: [] }),
   useCreateApplication: () => ({ startDraft: vi.fn(), isPending: false, mutateAsync: vi.fn() }),
   useUpdateApplication: () => ({ isPending: false, mutateAsync: vi.fn() }),

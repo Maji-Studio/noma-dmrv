@@ -40,6 +40,7 @@ vi.mock("@/hooks/use-customers", () => {
       const items = state.items.filter((item) => Boolean((item as CustomerWithRelations).archivedAt) === Boolean(filters.archived));
       return { data: { items, total: items.length, totalPages: 1 }, isLoading: false, error: null };
     },
+    useCustomerStats: () => ({ data: undefined, isLoading: false, isError: false }),
     useCustomerWithRelations: () => ({ data: state.linked, isLoading: false, isFetching: false, isPending: false, isSuccess: true, isError: false }),
     useCustomerLocations: () => ({ data: [], isLoading: false }),
     useCreateCustomerWithLocations: mutation,

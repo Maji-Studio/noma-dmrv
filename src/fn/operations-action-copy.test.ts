@@ -18,6 +18,7 @@ vi.mock("@/lib/log", () => {
 });
 vi.mock("@/data-access/utils", () => ({ requireOrgScope: vi.fn(), requireOrgFacility: vi.fn() }));
 vi.mock("@/data-access/applications", () => ({ getApplications: mocks.list }));
+vi.mock("@/data-access/application-stats", () => ({}));
 vi.mock("@/data-access/production-samples", () => ({
   createProductionSample: mocks.create,
   getProductionSamples: mocks.listSamples,

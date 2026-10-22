@@ -29,6 +29,7 @@ vi.mock("@/lib/operations/customer-locations", () => ({
 }));
 vi.mock("@/lib/operations/customers", () => ({}));
 vi.mock("@/data-access/customers", () => ({}));
+vi.mock("@/data-access/customer-stats", () => ({}));
 vi.mock("@/lib/operations/runner", () => ({
   runOperationInProcess: (operation: { id: string }, ctx: unknown, input: Record<string, unknown>) =>
     operation.id === "add_customer_location"
