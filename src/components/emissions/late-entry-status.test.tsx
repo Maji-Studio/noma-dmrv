@@ -5,7 +5,7 @@ import { CARRY_WAITING_REASONS } from "@/lib/certification/emission-entry-carry"
 import { LateEntryStatus } from "./late-entry-status";
 
 const AFTER = { removalId: "rm-9", removalCode: "RM-26-009" };
-const DEST = { removalId: "rm-10", removalCode: "RM-26-010", creditBatchCodes: ["CB-26-010"], anotherCreditBatch: true };
+const DEST = { removalId: "rm-10", removalCode: "RM-26-010", creditBatchCodes: ["CB-26-010"], creditBatchIds: ["cb-10"], anotherCreditBatch: true };
 
 describe("LateEntryStatus", () => {
   it("renders nothing for an entry with no carry", () => {
@@ -18,6 +18,7 @@ describe("LateEntryStatus", () => {
     expect(container.textContent).toContain("Recorded after RM-26-009 was sent.");
     expect(container.textContent).toContain("Goes into RM-26-010 (credit batch CB-26-010).");
     expect(screen.getByRole("link", { name: "RM-26-010" }).getAttribute("href")).toBe("/certification/removals?facility=f1&removal=rm-10");
+    expect(screen.getByRole("link", { name: "CB-26-010" }).getAttribute("href")).toBe("/credit-batches/cb-10?facility=f1");
     expect(screen.queryByText(/Waiting/)).toBeNull();
   });
 

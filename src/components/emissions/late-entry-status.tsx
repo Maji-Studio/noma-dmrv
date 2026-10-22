@@ -7,6 +7,7 @@
  */
 "use client";
 
+import { Fragment } from "react";
 import Link from "next/link";
 import { ArrowBendDownRightIcon, CheckIcon, ClockIcon } from "@phosphor-icons/react/dist/ssr";
 import { lateEntryView, type LateEntryDestination, type LateEntryFacts } from "@/lib/certification/late-entry-view";
@@ -32,9 +33,18 @@ function placedText(destination: Extract<LateEntryDestination, { kind: "draft" |
   if (destination.kind === "reported") {
     return <>Reported in {removal}{destination.anotherCreditBatch ? " (another credit batch)" : ""}.</>;
   }
-  const codes = destination.creditBatchCodes.join(", ");
-  const batches = destination.creditBatchCodes.length === 1 ? "credit batch" : "credit batches";
-  return <>Goes into {removal}{destination.anotherCreditBatch && codes ? ` (${batches} ${codes})` : ""}.</>;
+  const { creditBatches } = destination;
+  const label = creditBatches.length === 1 ? "credit batch" : "credit batches";
+  return (
+    <>
+      Goes into {removal}
+      {destination.anotherCreditBatch && creditBatches.length > 0 && (
+        <> ({label} {creditBatches.map((batch, index) => (
+          <Fragment key={batch.href}>{index > 0 && ", "}<CodeLink href={batch.href}>{batch.code}</CodeLink></Fragment>
+        ))})</>
+      )}.
+    </>
+  );
 }
 
 export function LateEntryDestinationLine({ destination, className, withAction = true }: {

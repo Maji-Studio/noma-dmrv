@@ -4,7 +4,7 @@ import { lateEntryView, waitingAction, waitingDetail, waitingEntryTitle, type La
 import { lateEntryRows } from "./late-entry-list";
 
 const AFTER = { removalId: "rm-9", removalCode: "RM-26-009" };
-const DEST = { removalId: "rm-10", removalCode: "RM-26-010", creditBatchCodes: ["CB-26-010"], anotherCreditBatch: true };
+const DEST = { removalId: "rm-10", removalCode: "RM-26-010", creditBatchCodes: ["CB-26-010"], creditBatchIds: ["cb-10"], anotherCreditBatch: true };
 
 describe("lateEntryView", () => {
   it("is null for an entry that was not recorded after its Removal was sent", () => {
@@ -19,7 +19,7 @@ describe("lateEntryView", () => {
   it("links the origin Removal and a draft receiver", () => {
     const view = lateEntryView({ recordedAfter: AFTER, carry: { receiver: DEST, waitingReason: null } }, "f1");
     expect(view?.recordedAfter).toEqual({ removalCode: "RM-26-009", removalHref: "/certification/removals?facility=f1&removal=rm-9" });
-    expect(view?.destination).toEqual({ kind: "draft", removalCode: "RM-26-010", removalHref: "/certification/removals?facility=f1&removal=rm-10", creditBatchCodes: ["CB-26-010"], anotherCreditBatch: true });
+    expect(view?.destination).toEqual({ kind: "draft", removalCode: "RM-26-010", removalHref: "/certification/removals?facility=f1&removal=rm-10", creditBatches: [{ code: "CB-26-010", href: "/credit-batches/cb-10?facility=f1" }], anotherCreditBatch: true });
   });
 
   it("reports a sent destination before any receiver", () => {

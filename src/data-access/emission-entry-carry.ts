@@ -56,7 +56,7 @@ export async function loadFacilityEmissionEntryCarry(
   const nowMs = Date.now();
   const contenders: CarryContender[] = [...new Set(draftMembers.map(row => row.removal.id))].flatMap(id => {
     const rows = draftMembers.filter(row => row.removal.id === id);
-    const members = [...new Map(rows.map(row => [row.batch.id, row.batch])).values()];
+    const members = [...new Map(rows.map(row => [row.batch.id, row.batch])).values()].sort((a, b) => a.code < b.code ? -1 : a.code > b.code ? 1 : 0);
     const removal = rows[0].removal;
     const pins = new Set(members.map(batch => batch.removalTemplateId));
     const blocked = attempts.some(attempt => attempt.localEntityId === id && attempt.id !== claimedAttempt?.submissionId && isLiveEntryReservation(attempt, nowMs));
@@ -64,7 +64,7 @@ export async function loadFacilityEmissionEntryCarry(
     if (blocked || !window || hasFreshRemovalDeletionLease(removal.metadata) || pins.size !== 1 || members.some(batch => batch.facilityId !== facilityId)) return [];
     return [{ contenderKind: "draft" as const, removalId: id, createdAt: removal.createdAt.toISOString(), window,
       creditBatchIds: members.map(batch => batch.id), organizationId: ctx.organizationId, facilityId, code: removal.code,
-      creditBatchCodes: members.map(batch => batch.code).sort(),
+      creditBatchCodes: members.map(batch => batch.code),
       observation: observations.find(observation => observation.externalTemplateId === members[0].removalTemplateId) ?? null }];
   });
   // Persisted lineage cannot authorize corrections (that requires a fresh registry
@@ -100,8 +100,9 @@ export async function loadFacilityEmissionEntryCarry(
       ownContenders, contenders, observation });
     const holdingId = entry.sentByRemovalId ?? (retained ? reservation.removalId : null);
     const holding = removals.find(removal => removal.id === holdingId);
-    const heldMembers = memberships.filter(member => member.removalId === holdingId).map(member => member.batch);
-    const destination = holding ? { removalId: holding.id, removalCode: holding.code, creditBatchCodes: [...new Set(heldMembers.map(member => member.code))].sort(),
+    const heldMembers = [...new Map(memberships.filter(member => member.removalId === holdingId).map(member => [member.batch.id, member.batch])).values()]
+      .sort((a, b) => a.code < b.code ? -1 : a.code > b.code ? 1 : 0);
+    const destination = holding ? { removalId: holding.id, removalCode: holding.code, creditBatchCodes: heldMembers.map(member => member.code), creditBatchIds: heldMembers.map(member => member.id),
       anotherCreditBatch: !heldMembers.some(member => member.id === entry.creditBatchId) } : null;
     if (retained && destination?.anotherCreditBatch) carry.receiver = destination;
     const earlier = attempts.filter(attempt => attempt.submittedAt && attempt.submittedAt <= entry.createdAt && slices.some(slice => slice.creditBatchId === entry.creditBatchId && slice.removalId === attempt.localEntityId))

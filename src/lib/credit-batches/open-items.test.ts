@@ -386,7 +386,7 @@ describe("entries recorded after the Removal was sent", () => {
   });
 
   it("is not open once a Removal has it or reported it", () => {
-    const receiver = { removalId: "rm-10", removalCode: "RM-26-010", creditBatchCodes: ["CB-26-010"], anotherCreditBatch: true };
+    const receiver = { removalId: "rm-10", removalCode: "RM-26-010", creditBatchCodes: ["CB-26-010"], creditBatchIds: ["cb-10"], anotherCreditBatch: true };
     expect(buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line({ receiver, waitingReason: null })] }).blocking).toEqual([]);
     expect(buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line({ receiver: null, waitingReason: null }, { reportedIn: receiver })] }).blocking).toEqual([]);
   });

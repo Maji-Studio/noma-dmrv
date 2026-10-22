@@ -4,6 +4,7 @@
  * so the entry row, the credit batch Overview and the to-do builder say the
  * same words.
  */
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { createIntentHref } from "@/lib/create-intent";
 import { removalTemplatesSettingsHref } from "@/lib/certification/links";
 import { formatDayString } from "@/lib/format-utils";
@@ -26,13 +27,22 @@ export interface LateEntryFacts {
 
 export interface LateEntryAction { label: string; href: string }
 
+export interface LateEntryBatch { code: string; href: string }
+
 export type LateEntryDestination =
-  | { kind: "draft" | "reported"; removalCode: string; removalHref: string; creditBatchCodes: string[]; anotherCreditBatch: boolean }
+  | { kind: "draft" | "reported"; removalCode: string; removalHref: string; creditBatches: LateEntryBatch[]; anotherCreditBatch: boolean }
   | { kind: "waiting"; reason: CarryWaitingReason; text: string; action: LateEntryAction };
 
 export interface LateEntryView {
   recordedAfter: { removalCode: string; removalHref: string };
   destination: LateEntryDestination;
+}
+
+function destinationBatches(destination: EntryCarryDestination, facilityId: string): LateEntryBatch[] {
+  return destination.creditBatchCodes.map((code, index) => ({
+    code,
+    href: creditBatchDeepLinkHref(destination.creditBatchIds[index] ?? "", facilityId),
+  })).filter((_, index) => destination.creditBatchIds[index]);
 }
 
 export function waitingAction(reason: CarryWaitingReason, facilityId: string): LateEntryAction {
@@ -55,10 +65,10 @@ export function lateEntryView(entry: LateEntryFacts, facilityId: string): LateEn
   const reason = entry.carry?.waitingReason;
   const recordedAfter = { removalCode: after.removalCode, removalHref: removalSheetHref(after.removalId, facilityId) };
   if (sent) {
-    return { recordedAfter, destination: { kind: "reported", removalCode: sent.removalCode, removalHref: removalSheetHref(sent.removalId, facilityId), creditBatchCodes: sent.creditBatchCodes, anotherCreditBatch: sent.anotherCreditBatch } };
+    return { recordedAfter, destination: { kind: "reported", removalCode: sent.removalCode, removalHref: removalSheetHref(sent.removalId, facilityId), creditBatches: destinationBatches(sent, facilityId), anotherCreditBatch: sent.anotherCreditBatch } };
   }
   if (receiver) {
-    return { recordedAfter, destination: { kind: "draft", removalCode: receiver.removalCode, removalHref: removalSheetHref(receiver.removalId, facilityId), creditBatchCodes: receiver.creditBatchCodes, anotherCreditBatch: receiver.anotherCreditBatch } };
+    return { recordedAfter, destination: { kind: "draft", removalCode: receiver.removalCode, removalHref: removalSheetHref(receiver.removalId, facilityId), creditBatches: destinationBatches(receiver, facilityId), anotherCreditBatch: receiver.anotherCreditBatch } };
   }
   if (reason) {
     return { recordedAfter, destination: { kind: "waiting", reason, text: CARRY_WAITING_REASONS[reason], action: waitingAction(reason, facilityId) } };

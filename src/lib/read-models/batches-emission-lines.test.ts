@@ -123,7 +123,7 @@ it("avoids all reads for an empty set", async () => {
 });
 
 it("exposes carry destinations, waiting reasons and actual senders on the existing batch lines", async () => {
-  const destination = { removalId: "receiver", removalCode: "RM-010", creditBatchCodes: ["CB-010"], anotherCreditBatch: true };
+  const destination = { removalId: "receiver", removalCode: "RM-010", creditBatchCodes: ["CB-010"], creditBatchIds: ["cb-010"], anotherCreditBatch: true };
   const carry = { receiver: destination, waitingReason: null };
   const entry = { id: "carry-entry", creditBatchId: "ready", observationId: observation.id, componentId: "electricity", kind: "value",
     values: [{ inputKey: "electricity_use", magnitude: "120", unit: "kWh" }], documentCount: 1 };

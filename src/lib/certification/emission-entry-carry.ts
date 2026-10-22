@@ -6,6 +6,7 @@ export interface CarryContender extends EntryContender {
   facilityId: string;
   code: string;
   creditBatchCodes: string[];
+  /** `creditBatchIds` (from EntryContender) lines up with these codes, so each can link to its batch. */
   observation: EntryObservation | null;
 }
 export const CARRY_WAITING_REASONS = {
@@ -18,6 +19,8 @@ export interface EntryCarryDestination {
   removalId: string;
   removalCode: string;
   creditBatchCodes: string[];
+  /** Aligned with `creditBatchCodes`. */
+  creditBatchIds: string[];
   anotherCreditBatch: boolean;
 }
 export interface EntryCarryDisposition {
@@ -54,7 +57,7 @@ export function removalEntryCarryOwner(args: {
       line.component.inputs.filter(input => input.type === "monitored").length === 1 &&
       emissionEntryCounts(args.observation, candidate.observation, entry.componentId).counts;
   });
-  return receiver ? { receiver: { removalId: receiver.removalId, removalCode: receiver.code, creditBatchCodes: receiver.creditBatchCodes, anotherCreditBatch: true }, waitingReason: null }
+  return receiver ? { receiver: { removalId: receiver.removalId, removalCode: receiver.code, creditBatchCodes: receiver.creditBatchCodes, creditBatchIds: [...receiver.creditBatchIds], anotherCreditBatch: true }, waitingReason: null }
     : { receiver: null, waitingReason: candidates.length ? candidates[0].observation ? "incompatibleTemplate" : "templateUnknown" : "noDraft" };
 }
 
