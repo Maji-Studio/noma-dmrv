@@ -159,6 +159,6 @@ it("keeps Continue enabled when every organization is unavailable and says why n
   render(<OrganizationPicker />);
   expect(continueButton().disabled).toBe(false);
   fireEvent.click(continueButton());
-  expect(screen.getByRole("alert").textContent).toBe("No organization is available. Each one above says why.");
+  expect(screen.getByRole("alert").textContent).toBe("None of these organizations can connect apps. Each one says why.");
   expect(mocks.mutateAsync).not.toHaveBeenCalled();
 });

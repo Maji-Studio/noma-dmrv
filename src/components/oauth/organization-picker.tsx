@@ -17,7 +17,7 @@ const TITLE = "Choose an organization";
 const EMPTY_TITLE = "No organizations yet";
 const EMPTY_DESCRIPTION = "Ask an Admin to invite you.";
 const CHOOSE_ERROR = "Choose an organization.";
-const NONE_AVAILABLE_ERROR = "No organization is available. Each one above says why.";
+const NONE_AVAILABLE_ERROR = "None of these organizations can connect apps. Each one says why.";
 const EMPTY_ADMIN_TITLE = "Join an organization first";
 const EMPTY_ADMIN_DESCRIPTION = "Apps connect as a member of an organization. Platform Admins are not members, so invite yourself to one in Settings, then connect again.";
 

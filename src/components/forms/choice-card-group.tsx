@@ -156,13 +156,14 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
                       "flex w-full items-center gap-12 border px-12 py-10 text-left transition-colors duration-300",
                       STACK_CLASSES[columns],
                       stackArt && "flex-col items-start",
-                      "border-[var(--color-border-secondary)] bg-[var(--color-background-white)]",
-                      "hover:border-[var(--color-border-primary)]",
+                      "bg-[var(--color-background-white)]",
+                      // One border colour per state: two arbitrary border-color classes tie, so the error colour is chosen here, not layered on top.
+                      error
+                        ? "border-[var(--color-signal-red)]"
+                        : "border-[var(--color-border-secondary)] hover:border-[var(--color-border-primary)] peer-disabled:hover:border-[var(--color-border-secondary)]",
                       "peer-checked:border-[var(--color-interaction)] peer-checked:bg-[var(--color-background-interaction-light)] peer-checked:shadow-[inset_0_0_0_1px_var(--color-interaction)]",
                       "forced-colors:peer-checked:border-[Highlight] forced-colors:peer-checked:border-2",
                       "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--color-interaction)]",
-                      "peer-disabled:hover:border-[var(--color-border-secondary)]",
-                      error && "border-[var(--color-signal-red)]",
                     )}
                   >
                     {radioIndicator && (
