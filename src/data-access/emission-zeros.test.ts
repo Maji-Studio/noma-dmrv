@@ -1,8 +1,9 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), select: vi.fn(), batch: vi.fn(), facts: vi.fn(), contenders: vi.fn(), reservations: vi.fn(), available: vi.fn(), automatic: vi.fn(), activity: vi.fn(), context: vi.fn(), entries: vi.fn(), correctionScope: vi.fn() }));
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), select: vi.fn(), batch: vi.fn(), facts: vi.fn(), contenders: vi.fn(), reservations: vi.fn(), available: vi.fn(), automatic: vi.fn(), activity: vi.fn(), context: vi.fn(), entries: vi.fn(), correctionScope: vi.fn(), carry: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction, select: mocks.select } }));
 vi.mock("./emission-entries", () => ({ lockedBatch: mocks.batch, listEmissionEntriesForBatches: mocks.entries }));
+vi.mock("./emission-entry-carry", () => ({ loadFacilityEmissionEntryCarry: mocks.carry }));
 vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: mocks.facts }));
 vi.mock("./emission-entry-contenders", () => ({ listEmissionEntryAvailableApplications: mocks.available, listEmissionEntryDraftContenders: mocks.contenders, loadEmissionEntryReservations: mocks.reservations }));
 vi.mock("./emission-entry-activity", () => ({ recordEmissionEntryActivity: mocks.activity }));
@@ -54,12 +55,18 @@ beforeEach(() => {
   mocks.reservations.mockResolvedValue([]);
   mocks.available.mockResolvedValue([]);
   mocks.automatic.mockResolvedValue({ [creditBatchId]: { automaticFigures: {} } });
+  mocks.carry.mockResolvedValue({ entries: [] });
 });
 it("records a zero with the pinned binding and trimmed note, capturing the persisted row", async () => {
   expect(await recordEmissionZeros(ctx, input)).toEqual({ entryIds: ["zero"] });
   expect(insert).toHaveBeenCalledWith(expect.objectContaining({ organizationId: ctx.organizationId, confirmedForRemovalId: removalId,
     observationId: "observation", occurredOn: "2026-01-01", inputShape: shape, lineRule: "additive", note: "no emissions" }));
   expect(mocks.activity).toHaveBeenCalledWith(ctx, expect.anything(), "created", null, expect.objectContaining({ id: "zero", values: [] }));
+});
+it("scopes the carry read to the entries on the member batches", async () => {
+  mocks.facts.mockResolvedValue({ entries: [{ id: "held", componentId: "line", kind: "value", counts: true, creditBatchId, occurredOn: "2026-01-02", values: [], evidenceDocumentIds: [] }] });
+  await expect(recordEmissionZeros(ctx, input)).rejects.toThrow("Only empty components");
+  expect(mocks.carry).toHaveBeenCalledWith(ctx, undefined, mocks.batch.mock.calls[0][1], undefined, { entryIds: ["held"] });
 });
 it("refuses a nonmember batch", async () => {
   rows[1] = [];

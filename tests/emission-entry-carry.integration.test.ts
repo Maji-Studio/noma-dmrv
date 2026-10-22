@@ -192,9 +192,9 @@ it.each([true, false])("records a zero for an empty own draft when its late entr
 
 it("requires the origin period to end before the facility's local today", async () => {
   const [facility] = await db.select().from(facilities).where(eq(facilities.id, origin.facilityId));
-  await db.update(creditBatches).set({ endDate: facilityToday(facility.timezone) }).where(eq(creditBatches.id, origin.batchId));
+  await db.update(creditBatches).set({ startDate: facilityToday(facility.timezone), endDate: facilityToday(facility.timezone) }).where(eq(creditBatches.id, origin.batchId));
   expect((await loadFacilityEmissionEntryCarry(ctx, origin.facilityId)).entries).toEqual([]);
-  await db.update(creditBatches).set({ endDate: "2026-06-30" }).where(eq(creditBatches.id, origin.batchId));
+  await db.update(creditBatches).set({ startDate: "2026-06-01", endDate: "2026-06-30" }).where(eq(creditBatches.id, origin.batchId));
   expect((await loadFacilityEmissionEntryCarry(ctx, origin.facilityId)).entries.some(item => item.id === entry.id)).toBe(true);
 });
 

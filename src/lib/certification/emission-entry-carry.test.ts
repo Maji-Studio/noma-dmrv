@@ -56,10 +56,11 @@ describe("late manual entry ownership", () => {
   });
   it("carries a single mass-distance input including its entered detail, but refuses a paired origin", () => {
     const transport = structuredClone(observation);
-    transport.definition.groups[0].components[0].inputs = [{ key: "transport", type: "monitored", quantityKind: "mass_distance" }];
-    transport.enrichment = { line: { transport: { unit: "t * km" } } };
-    const value = { inputKey: "transport", magnitude: "6", unit: "t * km", massDistanceDetail: {
-      mass: { magnitude: "2", unit: "t" }, distance: { magnitude: "3", unit: "km" },
+    Object.assign(transport.definition.groups[0].components[0], { blueprintKey: "mass_distance_based_ci_emissions",
+      inputs: [{ key: "mass_distance", type: "monitored", quantityKind: "mass_distance" }] });
+    transport.enrichment = { line: { mass_distance: { unit: "tonne * km" } } };
+    const value = { inputKey: "mass_distance", magnitude: "6", unit: "km * tonne", massDistanceDetail: {
+      mass: { magnitude: "2", unit: "tonne" }, distance: { magnitude: "3", unit: "km" },
     } };
     expect(decide({ entry: { ...entry, values: [value] }, observation: transport,
       contenders: [{ ...draft, observation: transport }] }).receiver?.removalId).toBe(draft.removalId);
