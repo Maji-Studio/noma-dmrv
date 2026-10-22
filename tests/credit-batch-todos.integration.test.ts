@@ -202,7 +202,8 @@ it("counts the review line for a stored entry on a retired template component", 
   await db.insert(emissionEntryValues).values({ organizationId: ctx.organizationId,
     entryId: entry.id, inputKey: "electricity_use", magnitude: "2", unit: "kWh" });
   const { todos, summaries } = await parity([batch], [{
-    blocking: [REVIEW_BLOCKER, ...DATA_BLOCKERS], check: [...MIXED_CHECKS, `emission:${retiredComponentId}`],
+    // The retired component's non-counting entry also triggers the existing emissions health blocker.
+    blocking: [REVIEW_BLOCKER, ...DATA_BLOCKERS, "health:emissions:emissions"], check: [...MIXED_CHECKS, `emission:${retiredComponentId}`],
   }]);
   const display = await loadBatchEmissionLines(ctx, facilityId, batch.id);
   assert(display.status === "ready");
@@ -210,9 +211,9 @@ it("counts the review line for a stored entry on a retired template component", 
   expect(display.lines.find(line => line.componentId === retiredComponentId)).toMatchObject({
     removedFromTemplate: true, state: "needsReview", entries: [{ id: entry.id, counts: false }],
   });
-  expect(todos.get(batch.id)?.blocking).toHaveLength(3);
+  expect(todos.get(batch.id)?.blocking).toHaveLength(4);
   expect(todos.get(batch.id)?.check).toHaveLength(6);
-  expect(summaries[batch.id]).toMatchObject({ issueCount: 3, checkCount: 6 });
+  expect(summaries[batch.id]).toMatchObject({ issueCount: 4, checkCount: 6 });
 });
 
 it("counts an unpinned batch without emission Check items", async () => {
