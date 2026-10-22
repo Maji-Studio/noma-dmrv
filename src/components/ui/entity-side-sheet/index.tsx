@@ -281,7 +281,7 @@ function EntitySideSheet({
                   <div className="flex flex-col gap-12 pb-20">{editNotice}</div>
                 ) : null}
                 {/* Always mounted, so turning read-only never remounts the form. */}
-                <fieldset disabled={!!editBlock?.readOnly} className="contents" data-submit-block-fieldset>{children}</fieldset>
+                <fieldset disabled={!!editBlock?.readOnly} className="contents min-w-0" data-submit-block-fieldset>{children}</fieldset>
               </SubmitBlockContext.Provider>
             </SideSheetActionsContext.Provider>
           )}

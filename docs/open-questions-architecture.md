@@ -62,9 +62,6 @@ these areas; the entry rules and invariants live in
   `ICON_BUTTON_HIT_AREA` (`touch-target.ts`) on the row menu trigger and the customer
   location actions only. Fix at the source (drop `w-auto` from the `width` default) and
   check the 51 sites, then drop `w-32 shrink-0` from `ICON_BUTTON_HIT_AREA`.
-- Archived customer locations keep `gap-12` and a 44px row, but the sheet body still
-  scrolls sideways on a phone (`SlideOverPanel` `fillHeight` makes the form wider than the
-  sheet); the Edit, Archive and Delete buttons sit past the right edge until it is scrolled.
 
 ### Party write adapters per kind (`api/party-write-adapters`, opened 2026-10-17)
 
