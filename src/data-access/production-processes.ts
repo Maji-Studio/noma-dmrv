@@ -98,14 +98,6 @@ export async function findOrCreateProductionProcess(
   return created;
 }
 
-export async function startNewProductionProcess(
-  ctx: OrgContext,
-  input: Parameters<typeof startNewProductionProcessInTransaction>[2],
-): Promise<ProductionProcess> {
-  requireOrgScope(ctx);
-  return db.transaction((tx) => startNewProductionProcessInTransaction(ctx, tx, input));
-}
-
 export async function startNewProductionProcessInTransaction(
   ctx: OrgContext,
   tx: DbTransaction,

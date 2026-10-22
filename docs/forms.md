@@ -408,8 +408,9 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 
 Facility, reactor, storage-bin sheet, feedstock-type settings and production-process
 creates use the same intent hook. List create handlers and the process confirmation
-start a new draft on open. Onboarding and storage-bin sheets synchronize draft
-rotation with their prop-driven opening; mutation rerenders and failed saves do
+start a new draft on open. The onboarding sheet mounts fresh per open, so its
+key is already new; the storage-bin sheet stays mounted and synchronizes draft
+rotation with its prop-driven opening. Mutation rerenders and failed saves do
 not rotate the key. Their form error handling is unchanged.
 
 All six quick-add dialogs use the key owned by `useQuickAddSubmit`: its `serverFn(data, intentKey)` forwards the key, and the hook rotates it after success. Dialogs call `startDraft()` on open; formulation calls it on close. Failed saves keep the key and existing error behaviour. A create that saves several records in a loop, such as pending Sample transport legs, passes one key per record instead of the draft key.

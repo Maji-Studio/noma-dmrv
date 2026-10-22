@@ -236,17 +236,6 @@ export async function getReactorById(
 // Create Operations
 // ============================================
 
-/**
- * Create a new reactor
- */
-export async function createReactor(
-  ctx: OrgContext,
-  data: Parameters<typeof createReactorInTransaction>[2],
-): Promise<Reactor> {
-  requireOrgScope(ctx);
-  return db.transaction((tx) => createReactorInTransaction(ctx, tx, data));
-}
-
 export async function createReactorInTransaction(
   ctx: OrgContext,
   tx: DbTransaction,

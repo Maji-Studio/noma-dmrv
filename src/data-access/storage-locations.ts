@@ -323,17 +323,6 @@ export async function getStorageLocationWithFacility(
 // Create Operations
 // ============================================
 
-/**
- * Create a new storage bin
- */
-export async function createStorageLocation(
-  ctx: OrgContext,
-  data: Parameters<typeof createStorageLocationInTransaction>[2],
-): Promise<StorageLocation> {
-  requireOrgScope(ctx);
-  return db.transaction((tx) => createStorageLocationInTransaction(ctx, tx, data));
-}
-
 export async function createStorageLocationInTransaction(
   ctx: OrgContext,
   tx: DbTransaction,

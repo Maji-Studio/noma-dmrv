@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useState } from "react";
+import { useState } from "react";
 import { FacilityForm } from "@/components/facilities/facility-form";
 import { ReactorForm } from "@/components/reactors/reactor-form";
 import { EntitySideSheet } from "@/components/ui/entity-side-sheet";
@@ -25,11 +25,6 @@ export function SetupCreateSheet({
   const toast = useToast();
   const [error, setError] = useState<string>();
   const busy = createFacility.isPending || createReactor.isPending;
-  const startDraft = useEffectEvent(() => {
-    if (entity === "facility") createFacility.startDraft();
-    else createReactor.startDraft();
-  });
-  useEffect(() => { startDraft(); }, [entity]);
 
   async function saveFacility(data: FacilityFormData) {
     setError(undefined);

@@ -283,8 +283,8 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
   };
 
   const openCreate = () => {
-    createFeedstockType.startDraft();
     if (!canManage) return;
+    createFeedstockType.startDraft();
     void setFocusedFeedstockTypeId(null);
     void setDeepLinkMode(null);
     setFormError(null);
