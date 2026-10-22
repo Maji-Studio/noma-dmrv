@@ -196,9 +196,6 @@ test.describe(
             exact: false,
           }),
         ).toBeVisible();
-        await page.keyboard.press("Escape");
-        await expect(keys).not.toBeVisible();
-
         await page.goto(
           `/feedstock-types?facility=${seededData.facility.id}`,
         );

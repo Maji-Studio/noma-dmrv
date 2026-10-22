@@ -4,7 +4,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { Operation } from "@/lib/operations/runner";
 import { SafeError } from "@/lib/errors";
 import { createIntentOptionsSchema } from "@/schemas/create-intent";
-import { withCreate } from "./with-create";
+import { parseCreateIntentKey, withCreate } from "./with-create";
 
 const { auth, run, log, rateLimit } = vi.hoisted(() => ({
   auth: vi.fn(), run: vi.fn(), log: vi.fn(), rateLimit: vi.fn(),
@@ -130,4 +130,13 @@ it("forwards zodErrorPrefix to withAction", async () => {
     zodErrorPrefix: "Invalid create",
   });
   expect(result).toMatchObject({ success: false, error: expect.stringContaining("Invalid create") });
+});
+
+it("parses a create key outside an organization through the same parser", () => {
+  const parse = vi.spyOn(createIntentOptionsSchema, "parse");
+  expect(parseCreateIntentKey({ intentKey: ID })).toBe(ID);
+  expect(parseCreateIntentKey(undefined)).toBeUndefined();
+  expect(() => parseCreateIntentKey({ intentKey: "invalid" })).toThrow();
+  expect(parse).toHaveBeenCalledTimes(3);
+  parse.mockRestore();
 });

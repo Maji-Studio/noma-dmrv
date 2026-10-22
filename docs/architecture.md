@@ -306,9 +306,10 @@ runtime.
 - **One settings console** (`/settings`, #1277). `SettingsConsole` renders a
   rail grouped by whose setting it is, one route per pane, listed in
   `src/lib/settings/panes.ts`: **You** (Profile, Connected apps), **Organization**
-  (General, Members, Developers), **Certification** (Registry, Removal
-  templates, Facilities) and **Platform** (Organizations, Diagnostics,
-  Template mapping; Platform Admins only). Each route loads the viewer with
+  (General, Members, Developers) and **Certification** (Registry, Removal
+  templates, Facilities). Platform pages are not settings: Organizations (the
+  Platform home), Diagnostics and Template mapping live under `/admin` in the
+  sidebar's Platform section (#1373). Each route loads the viewer with
   `loadSettingsViewer()` and calls `assertSettingsPaneVisible()`: a pane
   outside the viewer's audience is a 404, and Removal templates and Facilities
   answer with Registry while the organization has no registry keys saved.
