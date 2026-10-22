@@ -157,8 +157,8 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
                       STACK_CLASSES[columns],
                       stackArt && "flex-col items-start",
                       "bg-[var(--color-background-white)]",
-                      // The hover variants (hover:, peer-disabled:hover:) outrank a base error colour, so the hover colours are left off while in error.
-                      error
+                      // The hover variants (hover:, peer-disabled:hover:) outrank a base error colour, so the hover colours are left off while in error. A disabled card cannot be the fix, so it stays grey.
+                      error && !optionDisabled
                         ? "border-[var(--color-signal-red)]"
                         : "border-[var(--color-border-secondary)] hover:border-[var(--color-border-primary)] peer-disabled:hover:border-[var(--color-border-secondary)]",
                       "peer-checked:border-[var(--color-interaction)] peer-checked:bg-[var(--color-background-interaction-light)] peer-checked:shadow-[inset_0_0_0_1px_var(--color-interaction)]",

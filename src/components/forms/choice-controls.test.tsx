@@ -160,4 +160,13 @@ describe("ChoiceCardGroup error border", () => {
       expect(cls).not.toContain("border-[var(--color-signal-red)]");
     }
   });
+
+  it("keeps a disabled card grey in error and colours only the enabled ones", () => {
+    const html = renderToStaticMarkup(<ChoiceCardGroup legend="Evidence method" value="" error options={[{ value: "a", title: "A" }, { value: "b", title: "B", disabled: true }]} />);
+    const cards = [...html.matchAll(/class="([^"]*peer-checked:[^"]*)"/g)].map((m) => m[1]);
+    expect(cards).toHaveLength(2);
+    expect(cards[0]).toContain("border-[var(--color-signal-red)]");
+    expect(cards[1]).toContain("border-[var(--color-border-secondary)]");
+    expect(cards[1]).not.toContain("border-[var(--color-signal-red)]");
+  });
 });
