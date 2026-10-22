@@ -2,6 +2,8 @@
 
 import { LOST_MASS_LABEL } from "@/lib/output-stock/labels";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
+import { SHEET_FORM_FILL } from "@/components/ui/entity-side-sheet/sheet-form-fill";
+import { cn } from "@/lib/utils";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { binCurrentMassKg } from "./bin-display";
 import { OutputStockForm } from "./output-stock-form";
@@ -44,11 +46,11 @@ export function BinReconcileSheet({
         </SlideOverPanel.Header>
 
         {/* Single child: fillHeight only makes the body a flex column; the
-            wrapper's own flex-1 fills it, so the context and form live in
-            one flex column here. */}
+            wrapper fills it and every element down to the form's sticky
+            footer fills too (SHEET_FORM_FILL), so the footer pins. */}
         <SlideOverPanel.Body noPaddingBottom fillHeight>
           {storageLocation && (
-            <div className="flex flex-1 flex-col gap-20">
+            <div className={cn(SHEET_FORM_FILL, "gap-20")}>
               {storageLocation.type === "feedstock_bin" ? <>
               {/* Keyed so switching bins resets the form's state. */}
               <FeedstockLossForm

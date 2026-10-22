@@ -12,6 +12,8 @@ const TALL_DESKTOP = { width: 1440, height: 1200 };
 const PHONE = { width: 390, height: 844 };
 /** Pixels of tolerance for sub-pixel layout rounding. */
 const EDGE_TOLERANCE_PX = 1;
+/** The form's own space between the error box and the footer row. */
+const ERROR_GAP_PX = 24;
 
 async function expectFooterOnSheetBottom(page: Page) {
   const sheet = page.getByRole("dialog");
@@ -73,5 +75,40 @@ test.describe("Side sheet footer pinning", () => {
         return fieldBox && footerBox ? footerBox.y - (fieldBox.y + fieldBox.height) : -Infinity;
       })
       .toBeGreaterThanOrEqual(0);
+  });
+
+  test("the Lost mass sheet pins its actions for a feedstock bin and a biochar bin", async ({ adminPage: page, seededData }) => {
+    await page.setViewportSize(TALL_DESKTOP);
+    for (const bin of [seededData.feedstockStorageLocation, seededData.biocharStorageLocation]) {
+      await openList(page, "storage-locations", seededData.facility.id);
+      await page.getByPlaceholder("Search by code or name…").fill(bin.code);
+      await page.getByText(bin.name, { exact: true }).first().click();
+      await waitForSideSheet(page);
+      await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
+      await expect(page.getByRole("dialog").locator("[data-sheet-footer]")).toBeVisible();
+      await expectFooterOnSheetBottom(page);
+    }
+  });
+
+  test("a save error stays directly above the pinned buttons on a short form", async ({ adminPage: page, seededData }) => {
+    for (const viewport of [TALL_DESKTOP, PHONE]) {
+      await page.setViewportSize(viewport);
+      await openList(page, "feedstock-types", seededData.facility.id);
+      await page.getByRole("button", { name: "New feedstock type" }).click();
+      await waitForSideSheet(page);
+      const sheet = page.getByRole("dialog");
+      await sheet.locator("[data-sheet-footer]").getByRole("button", { name: /^Create/ }).click();
+      const errorBox = sheet.locator("[data-form-error-box]:not(:empty)");
+      await expect(errorBox).toBeVisible();
+      await expectFooterOnSheetBottom(page);
+      const footer = sheet.locator("[data-sheet-footer]").last();
+      await expect
+        .poll(async () => {
+          const errorBoxRect = await errorBox.boundingBox();
+          const footerBox = await footer.boundingBox();
+          return errorBoxRect && footerBox ? footerBox.y - (errorBoxRect.y + errorBoxRect.height) : Infinity;
+        })
+        .toBeLessThanOrEqual(ERROR_GAP_PX);
+    }
   });
 });

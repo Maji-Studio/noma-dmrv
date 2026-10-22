@@ -199,10 +199,12 @@ export function FormActions<
         "flex flex-col gap-16 border-t border-[var(--color-border-secondary)]",
         sticky
           // `mt-auto!` pins the footer to the bottom of a fill-height flex-column
-          // form on short forms (overriding the form's `space-y` margin); on
+          // form on short forms (overriding the form's `space-y` margin). A
+          // visible error box right before it takes the auto margin instead
+          // (`data-form-error-box`), so the error stays directly above Save. On
           // long forms there is no free space, so `sticky bottom-0` keeps the
           // action error and CTA in view while the body scrolls.
-          ? "sticky bottom-0 z-20 mt-auto! -mx-24 px-24 py-20 bg-[var(--color-background-white)]"
+          ? "sticky bottom-0 z-20 mt-auto! [[data-form-error-box]:not(:empty)+&]:mt-0! -mx-24 px-24 py-20 bg-[var(--color-background-white)]"
           : "pt-20"
       )}
     >
@@ -321,7 +323,7 @@ function ScrolledServerError({ message, action }: { message?: string; action?: R
   }, [message]);
   if (!message) return null;
   return (
-    <div ref={boxRef}>
+    <div ref={boxRef} data-form-error-box="" className="mt-auto!">
       <ServerError message={message} action={action} />
     </div>
   );
