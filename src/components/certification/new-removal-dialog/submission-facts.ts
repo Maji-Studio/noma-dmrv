@@ -21,7 +21,7 @@ import type { DurabilityOption } from "@/schemas/credit-batches";
 import { allowsRemovalSubmission } from "./resume-state";
 
 /** Digits used for every dry-mass figure on this screen. */
-const TONNE_DIGITS = 1;
+export const TONNE_DIGITS = 1;
 
 export interface SubmissionFactsInput {
   ctx: RemovalCertifyContext;
@@ -149,11 +149,22 @@ function reportingWindowLabel(
  * during a failed compilation, which is exactly when an operator is deciding
  * whether the files are their problem.
  */
+/**
+ * What `compileRemovalSubmission` returns when it stops before compiling (a line
+ * blocker, an unbindable input, a failed build): a review with no members and no
+ * bindings. It carries no facts, so nothing may be read from it.
+ */
+export function isEmptyReview(
+  review: NonNullable<RemovalCompilationView["review"]>,
+): boolean {
+  return review.memberCreditBatches?.length === 0 && review.bindings.length === 0;
+}
+
 function pendingDocumentCount(
   ctx: RemovalCertifyContext,
   compilation: RemovalCompilationView | null,
 ): number {
-  if (compilation?.review) return compilation.review.pendingSourceCount ?? 0;
+  if (compilation?.review && !isEmptyReview(compilation.review)) return compilation.review.pendingSourceCount ?? 0;
   const { total, mirrored } = ctx.supportingDocuments;
   return Math.max(total - mirrored, 0);
 }
@@ -276,8 +287,4 @@ export function buildSubmissionFacts({
       ...new Set([...(compilation?.warnings ?? []), ...ctx.submissionWarnings]),
     ].filter((warning) => !advisoryMessages.has(warning)),
   };
-}
-
-export function batchDryTons(batch: MemberCreditBatch): string {
-  return formatTonnes(batch.appliedDryWeightTons, { digits: TONNE_DIGITS });
 }

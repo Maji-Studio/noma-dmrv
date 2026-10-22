@@ -62,7 +62,11 @@ vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: () => null,
 }));
 
-vi.mock("./components-sent", () => ({ ComponentsSent: () => null }));
+vi.mock("./component-table", () => ({ ComponentTable: () => null }));
+vi.mock("./component-table-model", () => ({
+  buildComponentTable: () => ({ loading: false, batches: [], rows: [], groups: [] }),
+}));
+vi.mock("./source-records", () => ({ SourceRecords: () => null }));
 
 vi.mock("@/components/forms", () => ({
   ServerError: ({ message }: { message: string }) => <div>{message}</div>,
