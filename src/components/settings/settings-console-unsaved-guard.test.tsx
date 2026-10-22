@@ -5,9 +5,11 @@
  * soil reference form (real RHF dirty state) inside the real console on the
  * Facilities pane; only data hooks and the other parts of the pane are stubbed.
  */
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SettingsViewer } from "@/lib/settings/panes";
+import { requestAppLeave, suppressUnloadWarning } from "@/lib/leave-guard";
+import { ORG_SWITCH_DISCARD_DESCRIPTION } from "@/lib/org-switch-notice";
 import { FacilitySettingsPane } from "./facility-settings-pane";
 import { SettingsConsole } from "./settings-console";
 
@@ -199,5 +201,88 @@ describe("SettingsConsole unsaved changes", () => {
 
     expect(confirmation()).toBeNull();
     expect(router.push).not.toHaveBeenCalled();
+  });
+});
+
+describe("app-wide leave guard (the sidebar organization switcher)", () => {
+  const OPTIONS = { description: ORG_SWITCH_DISCARD_DESCRIPTION };
+
+  it("runs the leave at once when no pane is mounted", () => {
+    const leave = vi.fn();
+    requestAppLeave(leave, OPTIONS);
+    expect(leave).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs the leave at once when the pane is clean", () => {
+    renderPane();
+    const leave = vi.fn();
+
+    requestAppLeave(leave, OPTIONS);
+
+    expect(leave).toHaveBeenCalledTimes(1);
+    expect(confirmation()).toBeNull();
+  });
+
+  it("asks with the switching text and does not leave until the operator discards", async () => {
+    renderPane();
+    edit();
+    const leave = vi.fn();
+
+    act(() => requestAppLeave(leave, OPTIONS));
+
+    expect(await screen.findByText(ORG_SWITCH_DISCARD_DESCRIPTION)).toBeTruthy();
+    expect(leave).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+    await waitFor(() => expect(leave).toHaveBeenCalledTimes(1));
+    expect(confirmation()).toBeNull();
+  });
+
+  it("keeps the draft and never leaves on Keep editing", async () => {
+    renderPane();
+    edit();
+    const leave = vi.fn();
+    act(() => requestAppLeave(leave, OPTIONS));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Keep editing" }));
+
+    await waitFor(() => expect(confirmation()).toBeNull());
+    expect(leave).not.toHaveBeenCalled();
+    expect(temperature().value).toBe("12.5");
+  });
+
+  it("ignores the leave while a save runs", async () => {
+    saveMock.mutateAsync.mockReturnValue(new Promise<void>(() => {}));
+    renderPane();
+    edit();
+    fireEvent.click(screen.getByRole("button", { name: "Save estimates" }));
+    await waitFor(() => expect(temperature().readOnly).toBe(true));
+    const leave = vi.fn();
+
+    act(() => requestAppLeave(leave, OPTIONS));
+
+    expect(confirmation()).toBeNull();
+    expect(leave).not.toHaveBeenCalled();
+  });
+
+  it("stops registering when the pane unmounts", () => {
+    const view = renderPane();
+    edit();
+    view.unmount();
+    const leave = vi.fn();
+
+    requestAppLeave(leave, OPTIONS);
+
+    expect(leave).toHaveBeenCalledTimes(1);
+  });
+
+  // Last: the suppression is for the page's remaining life, as it is in the app.
+  it("skips the tab-close prompt once a confirmed hard navigation is about to load", async () => {
+    renderPane();
+    edit();
+    await waitFor(() => expect(tabCloseWarned()).toBe(true));
+
+    suppressUnloadWarning();
+
+    expect(tabCloseWarned()).toBe(false);
   });
 });

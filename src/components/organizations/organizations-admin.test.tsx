@@ -6,7 +6,6 @@ import { OrganizationsAdmin } from "./organizations-admin";
 const state = vi.hoisted(() => ({ enter: vi.fn(), toastError: vi.fn() }));
 
 vi.mock("@/hooks/use-organizations", () => ({
-  ORG_SWITCH_FAILED_MESSAGE: "The organization did not open. Try again.",
   useAllOrganizations: () => ({
     data: [
       { id: "org-1", name: "First" },
@@ -80,7 +79,7 @@ describe("OrganizationsAdmin open", () => {
 
     fireEvent.click(open("First"));
     await waitFor(() =>
-      expect(state.toastError).toHaveBeenCalledWith("The organization did not open. Try again."),
+      expect(state.toastError).toHaveBeenCalledWith("First did not open. Try again."),
     );
     expect(open("Second").disabled).toBe(false);
   });

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { isUnloadWarningSuppressed } from "@/lib/leave-guard";
 import { useResetAfterOrgSwitch } from "./use-organizations";
 
 const mocks = vi.hoisted(() => ({ assign: vi.fn() }));
@@ -20,5 +21,13 @@ it("still lands in the new organization when storage is blocked, without throwin
     throw new Error("storage blocked");
   });
   expect(() => useResetAfterOrgSwitch()()).not.toThrow();
+  expect(mocks.assign).toHaveBeenCalledWith("/dashboard");
+});
+
+it("drops the unload prompt before the hard load, so the operator is not asked twice", () => {
+  mocks.assign.mockImplementation(() => {
+    expect(isUnloadWarningSuppressed()).toBe(true);
+  });
+  useResetAfterOrgSwitch()();
   expect(mocks.assign).toHaveBeenCalledWith("/dashboard");
 });

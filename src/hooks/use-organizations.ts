@@ -20,6 +20,7 @@ import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
 import { unwrap } from "@/hooks/types";
 import { NO_ORGANIZATION_MESSAGE } from "@/lib/errors";
 import { stashPendingWarning } from "@/lib/pending-warning";
+import { suppressUnloadWarning } from "@/lib/leave-guard";
 import { stashOrgSwitchNotice, type OrgSwitchTarget } from "@/lib/org-switch-notice";
 
 // How many times the active-organization read is re-attempted after a
@@ -74,13 +75,15 @@ export function useResetAfterOrgSwitch() {
       // succeeded server-side, so swallow it and still land in the new
       // organization.
     }
+    // The operator already chose to switch (and discarded any unsaved edits);
+    // the browser's own "Leave site?" would ask again, and Stay would strand
+    // the page in the old organization with the session in the new one.
+    suppressUnloadWarning();
     // A hard load makes every server component, Better Auth store, and client
     // cache re-read the new context.
     window.location.assign("/dashboard");
   };
 }
-
-export const ORG_SWITCH_FAILED_MESSAGE = "The organization did not open. Try again.";
 
 export function useEnterOrganization() {
   const resetAfterOrgSwitch = useResetAfterOrgSwitch();
