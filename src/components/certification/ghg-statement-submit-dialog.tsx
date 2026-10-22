@@ -7,7 +7,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   FormField,
@@ -15,6 +15,8 @@ import {
   FormTextarea,
   ServerError,
 } from "@/components/forms";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 import { Button, Modal } from "@/components/ui";
 import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { useToast } from "@/components/ui/toast";
@@ -159,11 +161,14 @@ function GhgStatementSubmitDialogContent({
     summaryOfChanges: isResubmit ? "" : undefined,
     confirmProduction: false,
   };
+  const formId = useId();
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
     setError,
+    resetField,
     setValue,
     clearErrors,
     getValues,
@@ -172,6 +177,14 @@ function GhgStatementSubmitDialogContent({
     resolver: zodResolver(schema),
     defaultValues: initialValues,
   });
+
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
+  // A field-named refusal lands at its field; registry and stream failures name
+  // no field and keep their exact text in the footer.
+  const showRefusal = (err: unknown, fallback: string) => {
+    const footer = refuseSave(err, toSaveErrorMessage(err, fallback));
+    if (footer) setError("root.serverError", { message: footer });
+  };
 
   const beginSubmission = () => {
     if (!canSubmit || submissionInFlight.current) return false;
@@ -207,12 +220,7 @@ function GhgStatementSubmitDialogContent({
         toast.success(resultMessage);
       }
     } catch (err) {
-      setError("root.serverError", {
-        message:
-          err instanceof Error
-            ? err.message
-            : "The GHG Statement was not submitted. Check the form and try again.",
-      });
+      showRefusal(err, "The GHG Statement was not submitted. Check the form and try again.");
     }
   };
 
@@ -281,12 +289,7 @@ function GhgStatementSubmitDialogContent({
       markSubmissionAttempt();
       await runSubmission(input);
     } catch (err) {
-      setError("root.serverError", {
-        message:
-          err instanceof Error
-            ? err.message
-            : "The report was not prepared. Check the preview and try again.",
-      });
+      showRefusal(err, "The report was not prepared. Check the preview and try again.");
     } finally {
       finishSubmission();
     }
@@ -336,12 +339,7 @@ function GhgStatementSubmitDialogContent({
       setReviewedReportId(null);
       setStepIndex(REVIEW_STEP_INDEX);
     } catch (err) {
-      setError("root.serverError", {
-        message:
-          err instanceof Error
-            ? err.message
-            : "The report was not prepared. Check the preview and try again.",
-      });
+      showRefusal(err, "The report was not prepared. Check the preview and try again.");
     } finally {
       finishSubmission();
     }
@@ -396,6 +394,7 @@ function GhgStatementSubmitDialogContent({
 
   return (
     <form
+      id={formId}
       onSubmit={(event) => {
         if (stepIndex === REPORT_STEP_INDEX) {
           event.preventDefault();

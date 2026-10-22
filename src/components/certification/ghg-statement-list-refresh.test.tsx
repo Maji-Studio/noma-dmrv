@@ -81,6 +81,12 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: state.refresh }),
 }));
 
+// These tests render the dialogs without a DOM; the refusal hook needs one, so the
+// footer shows the failure as before. The hook has its own tests.
+vi.mock("@/components/forms/use-save-refusal", () => ({
+  useSaveRefusal: () => (_error: unknown, fallback: string) => fallback,
+}));
+
 vi.mock("react-hook-form", () => ({
   useForm: ({ defaultValues }: { defaultValues: Record<string, unknown> }) => ({
     register: () => ({}),

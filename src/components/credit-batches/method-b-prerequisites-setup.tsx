@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -17,6 +17,8 @@ import {
   recordMethodBPrerequisitesSchema,
   type RecordMethodBPrerequisitesInput,
 } from "@/schemas/production-process";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
 
 /** Native min, max and step for each number input, read from the schema. */
@@ -45,9 +47,13 @@ export function MethodBPrerequisitesSetup({
   const [serverError, setServerError] = useState<string | null>(null);
   const recordPrerequisites = useRecordMethodBPrerequisites();
   const toast = useToast();
+  const formId = useId();
   const {
     register,
     handleSubmit,
+    control,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm<
     z.input<typeof recordMethodBPrerequisitesSchema>,
@@ -66,6 +72,7 @@ export function MethodBPrerequisitesSetup({
     },
   });
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const submit = handleSubmit(async (data) => {
     setServerError(null);
     try {
@@ -74,9 +81,10 @@ export function MethodBPrerequisitesSetup({
       setOpen(false);
     } catch (error) {
       setServerError(
-        error instanceof Error
-          ? error.message
-          : "The Method-B prerequisites were not recorded. Try again.",
+        refuseSave(
+          error,
+          toSaveErrorMessage(error, "The Method-B prerequisites were not recorded. Try again."),
+        ),
       );
     }
   });
@@ -97,6 +105,7 @@ export function MethodBPrerequisitesSetup({
         testId="method-b-prerequisites-dialog"
         dismissible={!recordPrerequisites.isPending}
       >
+        <div id={formId} className="flex flex-col gap-24">
         <div className="grid grid-cols-1 gap-x-16 gap-y-20">
           <FormField
             id="method-b-moisture-pathway"
@@ -143,6 +152,7 @@ export function MethodBPrerequisitesSetup({
             {...register("randomSamplingPlanRef")}
           />
         </FormField>
+        </div>
         <FormActions
           sticky={false}
           submitType="button"
