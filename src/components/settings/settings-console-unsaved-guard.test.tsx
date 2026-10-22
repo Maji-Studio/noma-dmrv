@@ -57,7 +57,6 @@ vi.mock("./durability-tier-settings", () => ({
 const viewer: SettingsViewer = {
   organizationId: "organization-1",
   organizationName: "Organization One",
-  organizationSlug: "organization-one",
   isPlatformAdmin: false,
   canManage: true,
   canManageApiKeys: true,
