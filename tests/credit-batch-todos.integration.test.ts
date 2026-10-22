@@ -184,6 +184,17 @@ it("counts explicit Blocking and mixed document, sample and emission Check items
   expect(await getLatestTemplateObservation(ctx, "isometric", template.id)).not.toBeNull();
 });
 
+it.each(["batch", "facility"] as const)("resolves the batch's to-dos with an uppercase %s id", async (uppercaseId) => {
+  const expected = await loadCreditBatchTodosFn(facilityId, batch.id);
+  assert(expected.success, JSON.stringify(expected));
+  expectItems(expected.data, [REVIEW_BLOCKER, ...DATA_BLOCKERS], MIXED_CHECKS);
+  const result = await loadCreditBatchTodosFn(
+    uppercaseId === "facility" ? facilityId.toUpperCase() : facilityId,
+    uppercaseId === "batch" ? batch.id.toUpperCase() : batch.id,
+  );
+  expect(result).toEqual(expected);
+});
+
 it("counts the review line for a stored entry on a retired template component", async () => {
   const retiredComponentId = `${COMPONENT_ID}-retired`;
   const previousTemplate = structuredClone(template);
