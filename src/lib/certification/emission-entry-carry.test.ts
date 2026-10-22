@@ -7,14 +7,14 @@ import { creditBatchApplicationMass } from "@/lib/credit-batches/application-mas
 const observation: EntryObservation = {
   externalTemplateId: "template", definition: { groups: [{ id: "g", key: "pyrolysis", displayName: "Group", description: "",
     components: [{ id: "line", displayName: "Electricity", description: null, blueprintKey: "grid_electricity_use",
-      inputs: [{ key: "energy", type: "monitored", quantityKind: "energy" }] }] }] },
-  enrichment: { line: { energy: { unit: "kWh" } } },
+      inputs: [{ key: "electricity_use", type: "monitored", quantityKind: "energy" }] }] }] },
+  enrichment: { line: { electricity_use: { unit: "kWh" } } },
   lineSources: { line: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } },
 };
 const entry: RemovalEntryFact = { id: "entry", creditBatchId: "origin", componentId: "line", contentRevision: 1,
   kind: "value", lineRule: "additive", occurredOn: "2026-09-14", deletedAt: null, sentByRemovalId: null,
   confirmedForRemovalId: null, sendReservedBySubmissionId: null, counts: true,
-  values: [{ inputKey: "energy", magnitude: "120", unit: "kWh" }], evidenceDocumentIds: ["file"] };
+  values: [{ inputKey: "electricity_use", magnitude: "120", unit: "kWh" }], evidenceDocumentIds: ["file"] };
 const draft: CarryContender = { contenderKind: "draft", removalId: "receiver", code: "RM-010", organizationId: "org", facilityId: "facility",
   createdAt: "2026-10-01", creditBatchIds: ["next"], creditBatchCodes: ["CB-010"], window: { start: "2026-09-16", end: "2026-10-03" }, observation };
 function decide(overrides: Partial<Parameters<typeof removalEntryCarryOwner>[0]> = {}) {
@@ -75,7 +75,7 @@ describe("late manual entry ownership", () => {
     const carry = decide();
     const result = deriveRemovalEntryContributions({ removalId: draft.removalId, memberBatchIds: ["next"], window: draft.window,
       contenders: [draft], entries: [{ ...entry, carry }, { ...entry, id: "zero", creditBatchId: "next", occurredOn: draft.window.start, kind: "zero", values: [], confirmedForRemovalId: draft.removalId }],
-      lineSources: observation.lineSources, monitoredInputs: [{ componentId: "line", inputKey: "energy", unit: "kWh" }] });
+      lineSources: observation.lineSources, monitoredInputs: [{ componentId: "line", inputKey: "electricity_use", unit: "kWh" }] });
     expect(result.selectedEntryIds).toEqual(["entry", "zero"]);
     expect(result.inputs[0].value.magnitude).toBe("120");
     expect(entriesWithoutRemoval([{ ...entry, carry }], [], new Set(), [])).toEqual([]);
@@ -85,7 +85,7 @@ describe("late manual entry ownership", () => {
     const reserved = { ...entry, reservedByRemovalId: draft.removalId, sendReservedBySubmissionId: "attempt" };
     const result = deriveRemovalEntryContributions({ removalId: draft.removalId, memberBatchIds: ["next"], window: draft.window,
       contenders: [{ ...draft, removalId: "earlier", creditBatchIds: ["origin"], window: { start: "2026-09-01", end: "2026-09-15" } }], entries: [reserved],
-      lineSources: observation.lineSources, monitoredInputs: [{ componentId: "line", inputKey: "energy", unit: "kWh" }] });
+      lineSources: observation.lineSources, monitoredInputs: [{ componentId: "line", inputKey: "electricity_use", unit: "kWh" }] });
     expect(result.selectedEntryIds).toEqual([entry.id]);
   });
 });

@@ -5,7 +5,7 @@ import { integer, pgSchema, text } from "drizzle-orm/pg-core";
 import type { PoolClient } from "pg";
 import { db } from "@/db";
 import { activityEvents, certificationSubmissions, certifierGhgStatements, certifierRemovals, creditBatches,
-  emissionEntries, emissionEntryValues, productionRuns, removalTemplateObservations, users } from "@/db/schema";
+  emissionEntries, emissionEntryValues, productionProcesses, productionRuns, removalTemplateObservations, users } from "@/db/schema";
 import { createEmissionEntry, getEmissionEntry, updateEmissionEntry } from "@/data-access/emission-entries";
 import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 import { reserveProductionEmissionsClaims, rejectSubmissionAndReleaseProductionClaims } from "@/data-access/production-claim-reservations";
@@ -23,6 +23,7 @@ const activity = pgSchema("pg_catalog").view("pg_stat_activity", { pid: integer(
 let origin: LineageFixture;
 let receiving: LineageFixture;
 let observation: typeof removalTemplateObservations.$inferSelect;
+let movedProcessId: string;
 let entry: Awaited<ReturnType<typeof createEmissionEntry>>;
 beforeAll(async () => { await ensureTestOrg(); });
 beforeEach(async () => {
@@ -33,14 +34,17 @@ beforeEach(async () => {
     provider: "isometric", externalProjectId: "carry-project", externalTemplateId: `carry-${crypto.randomUUID()}`,
     semanticFingerprint: "carry", fullFingerprint: "carry", definition: { groups: [{ id: "g", key: "pyrolysis", displayName: "Group", description: "",
       components: [{ id: "line", displayName: "Electricity", description: null, blueprintKey: "grid_electricity_use",
-        inputs: [{ key: "energy", type: "monitored", quantityKind: "energy" }] }] }] },
-    enrichment: { line: { energy: { unit: "kWh" } } }, lineSources: { line: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } },
+        inputs: [{ key: "electricity_use", type: "monitored", quantityKind: "energy" }] }] }] },
+    enrichment: { line: { electricity_use: { unit: "kWh" } } }, lineSources: { line: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } },
   }).returning();
   await db.update(creditBatches).set({ removalTemplateId: observation.externalTemplateId }).where(inArray(creditBatches.id, [origin.batchId, receiving.batchId]));
-  await db.update(creditBatches).set({ facilityId: origin.facilityId }).where(eq(creditBatches.id, receiving.batchId));
+  // The batch's process identity is (process, facility, feedstock type), so the receiving batch needs a process at the origin's facility.
+  [{ id: movedProcessId }] = await db.insert(productionProcesses).values({ organizationId: ctx.organizationId,
+    facilityId: origin.facilityId, feedstockTypeId: receiving.feedstockTypeId }).returning({ id: productionProcesses.id });
+  await db.update(creditBatches).set({ facilityId: origin.facilityId, productionProcessId: movedProcessId }).where(eq(creditBatches.id, receiving.batchId));
   await db.update(certifierRemovals).set({ facilityId: origin.facilityId }).where(eq(certifierRemovals.id, receiving.removalId));
   entry = await createEmissionEntry(ctx, { creditBatchId: origin.batchId, componentId: "line", occurredOn: "2026-06-10",
-    values: [{ inputKey: "energy", quantityKind: "energy", magnitude: "120", unit: "kWh" }] });
+    values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "120", unit: "kWh" }] });
   // The fixture applies 190 dry kg. Match its production to represent a fully applied origin.
   await db.update(productionRuns).set({ biocharDryMassKg: 190 }).where(eq(productionRuns.id, origin.productionRunId));
   await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId, provider: "isometric", submissionType: "removal",
@@ -49,7 +53,8 @@ beforeEach(async () => {
 afterEach(async () => {
   await db.delete(emissionEntryValues).where(eq(emissionEntryValues.entryId, entry.id));
   await db.delete(emissionEntries).where(eq(emissionEntries.id, entry.id));
-  await db.update(creditBatches).set({ facilityId: receiving.facilityId }).where(eq(creditBatches.id, receiving.batchId));
+  await db.update(creditBatches).set({ facilityId: receiving.facilityId, productionProcessId: receiving.productionProcessId }).where(eq(creditBatches.id, receiving.batchId));
+  await db.delete(productionProcesses).where(eq(productionProcesses.id, movedProcessId));
   await db.update(certifierRemovals).set({ facilityId: receiving.facilityId }).where(eq(certifierRemovals.id, receiving.removalId));
   await cleanupLineageFixture(receiving);
   await cleanupLineageFixture(origin);
