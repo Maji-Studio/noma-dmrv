@@ -5,6 +5,7 @@
  * organization you are working in. The admin layout's requireAdmin() guards it.
  */
 import { TemplateMappingSettingsPane } from "@/components/settings";
+import { TemplateMappingScope } from "@/components/settings/template-mapping-scope";
 import { PageHeader } from "@/components/ui";
 
 export default function PlatformTemplateMappingPage() {
@@ -15,6 +16,7 @@ export default function PlatformTemplateMappingPage() {
         title="Template mapping"
         subtitle="The working facility's Isometric Removal template mapping and compilation traces. Read only."
       />
+      <TemplateMappingScope />
       <TemplateMappingSettingsPane />
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { MagnifyingGlassIcon, PlusIcon, WarningCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import type { usePlatformOrganizations } from "@/hooks/use-organizations";
+import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 
 /** One row of the Platform Admin directory (`usePlatformOrganizations`). */
@@ -56,7 +57,7 @@ export function PlatformOrganizationList({
 
   return (
     <nav aria-label="Organizations" className={cn("flex flex-col border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)]", className)}>
-      <div className="flex items-center gap-8 border-b border-[var(--color-border-secondary)] px-12">
+      <div className="flex items-center gap-8 border-b border-[var(--color-border-secondary)] px-12 focus-within:ring-1 focus-within:ring-inset focus-within:ring-[var(--color-interaction)]">
         <MagnifyingGlassIcon size={18} className="shrink-0 text-[var(--color-icon-secondary)]" aria-hidden />
         <input
           type="search"
@@ -78,8 +79,13 @@ export function PlatformOrganizationList({
       >
         <PlusIcon size={16} weight="bold" aria-hidden /> New organization
       </button>
-      {shown.length === 0 ? (
-        <p className="body-small px-12 py-16 text-[var(--color-text-secondary)]">No organization matches.</p>
+      {shown.length === 0 && needle ? (
+        <EmptyState
+          icon={<MagnifyingGlassIcon size={32} />}
+          title="No organization matches"
+          description="Try another name."
+          padding="sm"
+        />
       ) : (
         <ul className="flex flex-col">
           {shown.map((org) => {

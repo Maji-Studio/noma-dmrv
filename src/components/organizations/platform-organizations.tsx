@@ -19,6 +19,7 @@ import { useToast } from "@/components/ui/toast";
 import { useViewerOrg } from "@/components/navigation";
 import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import { ORG_SWITCH_FAILED_MESSAGE, useEnterOrganization, usePlatformOrganizations } from "@/hooks/use-organizations";
+import { MEMBER_HOME_HREF } from "@/lib/auth/home-path";
 import { cn } from "@/lib/utils";
 import { CreateOrganizationForm, type CreatedOrganization } from "./create-organization-form";
 import { PlatformOrganizationDetail } from "./platform-organization-detail";
@@ -26,7 +27,8 @@ import { PlatformOrganizationList } from "./platform-organization-rows";
 
 export const PLATFORM_ORGANIZATION_PARAM = "org";
 const CREATE_KEY = "new";
-const DEFAULT_LANDING_HREF = "/dashboard";
+/** Suffix on the held key while "Manage members" switches, so only that control spins. */
+const MEMBERS_ACTION = "|members";
 
 export function PlatformOrganizations() {
   const router = useRouter();
@@ -50,11 +52,11 @@ export function PlatformOrganizations() {
 
   async function switchTo(organizationId: string, organizationName: string, landingHref?: string) {
     if (organizationId === currentId) {
-      router.push(landingHref ?? DEFAULT_LANDING_HREF);
+      router.push(landingHref ?? MEMBER_HOME_HREF);
       return;
     }
     if (switching.held) return;
-    switching.hold(organizationId);
+    switching.hold(landingHref ? `${organizationId}${MEMBERS_ACTION}` : organizationId);
     try {
       const result = await enterOrganization(organizationId, organizationName, landingHref);
       if (!result.success) {
@@ -127,7 +129,15 @@ export function PlatformOrganizations() {
             key={selected.id}
             organization={selected}
             current={selected.id === currentId}
-            switchingId={switching.held}
+            switching={
+              switching.held === null
+                ? null
+                : switching.held === selected.id
+                  ? "switch"
+                  : switching.held === `${selected.id}${MEMBERS_ACTION}`
+                    ? "members"
+                    : "other"
+            }
             onSwitch={(landingHref) => switchTo(selected.id, selected.name, landingHref)}
             invitation={lastInvitation?.organizationId === selected.id ? lastInvitation : null}
           />

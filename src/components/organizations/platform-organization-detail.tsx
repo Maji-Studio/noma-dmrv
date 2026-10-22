@@ -15,8 +15,8 @@ interface PlatformOrganizationDetailProps {
   organization: PlatformOrganization;
   /** True for the organization the viewer is working in now. */
   current: boolean;
-  /** Id of the organization a switch is in flight for, if any. */
-  switchingId: string | null;
+  /** Which control a switch in flight belongs to: this panel's Switch, its Manage members, or another organization. */
+  switching: "switch" | "members" | "other" | null;
   onSwitch: (landingHref?: string) => void;
   /** The invitation link for a first Admin who had no account, right after create. */
   invitation: { email: string; acceptUrl: string } | null;
@@ -28,9 +28,9 @@ interface PlatformOrganizationDetailProps {
  * managed in that organization's Settings, Members, so the link switches first
  * when it is not the current one.
  */
-export function PlatformOrganizationDetail({ organization, current, switchingId, onSwitch, invitation }: PlatformOrganizationDetailProps) {
+export function PlatformOrganizationDetail({ organization, current, switching, onSwitch, invitation }: PlatformOrganizationDetailProps) {
   const { id, name, memberCount, adminCount, isometricKeysSaved, apiAccessEnabled } = organization;
-  const switching = switchingId === id;
+  const anySwitching = switching !== null;
   const membersAction = memberCount === 0 ? "Invite members" : "Manage members";
 
   return (
@@ -38,7 +38,6 @@ export function PlatformOrganizationDetail({ organization, current, switchingId,
       <header className="flex flex-wrap items-center justify-between gap-16 border-b border-[var(--color-border-secondary)] p-24">
         <div className="flex min-w-0 flex-col gap-4">
           <h2 className="title-heading-3 break-words">{name}</h2>
-          <span className="body-small text-[var(--color-text-secondary)]">{membersLabel(memberCount)}</span>
         </div>
         {current ? (
           <span className="body-small flex items-center gap-6 text-[var(--color-text-secondary)]">
@@ -49,11 +48,11 @@ export function PlatformOrganizationDetail({ organization, current, switchingId,
           <Button
             type="button"
             variant="primary"
-            busy={switching}
-            disabled={switchingId !== null && !switching}
+            busy={switching === "switch"}
+            disabled={anySwitching && switching !== "switch"}
             onClick={() => onSwitch()}
           >
-            {switching ? "Switching…" : `Switch to ${name}`}
+            {switching === "switch" ? "Switching…" : `Switch to ${name}`}
           </Button>
         )}
       </header>
@@ -87,8 +86,8 @@ export function PlatformOrganizationDetail({ organization, current, switchingId,
             type="button"
             variant="noOutline"
             size="small"
-            busy={!current && switching}
-            disabled={!current && switchingId !== null && !switching}
+            busy={switching === "members"}
+            disabled={anySwitching && switching !== "members"}
             onClick={() => onSwitch(SETTINGS_MEMBERS_HREF)}
             className="w-fit px-0 underline underline-offset-2"
           >

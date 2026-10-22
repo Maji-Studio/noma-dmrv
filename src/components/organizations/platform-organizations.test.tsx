@@ -22,7 +22,7 @@ vi.mock("@/hooks/use-organizations", () => ({
   ORG_SWITCH_FAILED_MESSAGE: "The organization did not open. Try again.",
   usePlatformOrganizations: () => ({ data: DIRECTORY, isLoading: false, isError: false }),
   useEnterOrganization: () => state.enter,
-  useCreateOrganization: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateOrganization: () => ({ mutateAsync: vi.fn(), isPending: false, startDraft: vi.fn() }),
   useSetOrganizationApiAccess: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock("@/components/ui/toast", () => ({

@@ -9,18 +9,20 @@ import { eq, inArray, like } from "drizzle-orm";
 import { expect, test } from "./fixtures";
 import { createDbConnection } from "./fixtures/db";
 import { seedDedicatedOrg } from "./fixtures/dedicated-org";
-import { enterDefaultOrganization } from "./fixtures/organization-helpers";
+import { createDirectAuthContext } from "./fixtures/auth-fixtures";
 import * as schema from "@/db/schema";
 import { organizationSlugBase } from "@/lib/organizations/organization-slug";
 
 const DASHBOARD_URL = /\/dashboard(?:[/?#]|$)/;
 
 test.describe("Platform Organizations", () => {
-  test("switches into another organization and says when you are already in one", async ({ adminPage: page }) => {
-    // Two full-page switches (in, then back to the shared organization).
-    test.slow();
+  test("switches into another organization and says when you are already in one", async ({ browser, baseURL, testUsers }) => {
+    // Its own session for the Platform Admin, so switching never moves the
+    // worker's shared admin session and nothing has to switch back.
     const fixture = await seedDedicatedOrg({ role: "admin", withRegistryKeys: false });
+    const context = await createDirectAuthContext(browser, testUsers.admin, baseURL!);
     try {
+      const page = await context.newPage();
       await page.goto(`/admin/organizations?org=${fixture.organizationId}`);
       const panel = page.getByRole("article", { name: fixture.organizationName });
       await expect(panel.getByRole("region", { name: "Isometric keys" }).getByText("Missing", { exact: true })).toBeVisible();
@@ -39,7 +41,7 @@ test.describe("Platform Organizations", () => {
       await expect(current.getByText(`You're working in ${fixture.organizationName}.`)).toBeVisible();
       await expect(current.getByRole("button", { name: /^Switch to/ })).toHaveCount(0);
     } finally {
-      await enterDefaultOrganization(page);
+      await context.close();
       await fixture.cleanup();
     }
   });
