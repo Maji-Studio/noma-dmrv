@@ -38,8 +38,10 @@ export function OrganizationPicker() {
   if (!choices.data) return <OAuthCard title={TITLE}><Skeleton className="h-160 w-full" /></OAuthCard>;
 
   const { clientName, clientHost, memberships, preselectedOrganizationId, isPlatformAdmin } = choices.data;
-  const selected = picked ?? preselectedOrganizationId;
   const usable = memberships.some(membership => !membership.disabledReason);
+  // Only an available organization counts as chosen: a refetch can disable the pick or the suggestion.
+  const available = (id: string | null) => (id && memberships.some(m => m.organizationId === id && !m.disabledReason) ? id : null);
+  const selected = available(picked) ?? available(preselectedOrganizationId);
 
   function submitChosen() {
     if (selected) { void submit(selected); return; }

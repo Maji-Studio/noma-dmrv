@@ -162,3 +162,15 @@ it("keeps Continue enabled when every organization is unavailable and says why n
   expect(screen.getByRole("alert").textContent).toBe("None of these organizations can connect apps. Each one says why.");
   expect(mocks.mutateAsync).not.toHaveBeenCalled();
 });
+
+it("ignores a picked organization that becomes unavailable and shows the error on Continue", () => {
+  mocks.choices.mockReturnValue(nonePicked());
+  const { rerender } = render(<OrganizationPicker />);
+  fireEvent.click(screen.getByRole("radio", { name: /E2E Second Organization/ }));
+  const closed = memberships.map(membership => ({ ...membership, disabledReason: "API access is disabled for this organization." }));
+  mocks.choices.mockReturnValue(nonePicked({ memberships: closed }));
+  rerender(<OrganizationPicker />);
+  fireEvent.click(continueButton());
+  expect(mocks.mutateAsync).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert").textContent).toBe("None of these organizations can connect apps. Each one says why.");
+});
