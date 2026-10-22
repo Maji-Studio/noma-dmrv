@@ -3,11 +3,11 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   certifierCredentials, certifierProjects, creditBatches, facilities, feedstockTypes,
-  organizations, productionProcesses, removalTemplateObservations, samples,
+  organizations, productionProcesses, removalTemplateObservations, samples, emissionEntries, emissionEntryValues,
 } from "@/db/schema";
 import { upsertCertifierCredentials } from "@/data-access/certifier-credentials";
 import { updateRemovalDates } from "@/data-access/certifier-removals";
-import { getLatestTemplateObservation } from "@/data-access/removal-template-observations";
+import { getLatestTemplateObservation, observeTemplate } from "@/data-access/removal-template-observations";
 import { requireOrgContext } from "@/lib/auth/server";
 import { listComponentBlueprints, listGhgEntryTemplates, listProjects, type IsometricComponentBlueprint } from "@/lib/isometric";
 import { getDatapoint } from "@/lib/isometric/submissions";
@@ -18,6 +18,13 @@ import { creditBatchStateOf } from "@/lib/credit-batches/batch-state";
 import { loadCreditBatchTodos, type CreditBatchTodos } from "@/fn/certification/credit-batch-todos-core";
 import { loadCreditBatchTodosFn } from "@/fn/certification/credit-batch-todos";
 import { loadCreditBatchHealthSummaries, type CreditBatchHealthSummary } from "@/fn/certification/overview";
+import { loadBatchHealth } from "@/fn/certification/batch-health";
+import { loadCreditBatchDurabilitySummary } from "@/fn/certification/durability-batch-summary";
+import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
+import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/load-enrichment";
+import type { IsometricClient } from "@/lib/isometric/client";
+import * as batchSamples from "@/data-access/credit-batch-samples";
+import * as batchEmissionLines from "@/lib/read-models/batches-emission-lines";
 import * as facilityFacts from "@/fn/certification/facility-certifier-facts";
 import templateFixture from "./fixtures/isometric/sandbox-template-2026-10-15.json";
 import enrichmentFixture from "./fixtures/isometric/sandbox-enrichment-2026-10-15.json";
@@ -99,6 +106,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
   const org = ctx.organizationId;
+  await db.delete(emissionEntryValues).where(eq(emissionEntryValues.organizationId, org));
+  await db.delete(emissionEntries).where(eq(emissionEntries.organizationId, org));
   await db.delete(samples).where(eq(samples.organizationId, org));
   await db.delete(creditBatches).where(eq(creditBatches.organizationId, org));
   await db.delete(removalTemplateObservations).where(eq(removalTemplateObservations.organizationId, org));
@@ -120,8 +129,6 @@ async function insertBatch(removalTemplateId: string | null) {
 function expectItems(todos: CreditBatchTodos, blocking: string[], check: string[]) {
   expect(todos.blocking.map(item => item.id).sort()).toEqual([...blocking].sort());
   expect(todos.check.map(item => item.id).sort()).toEqual([...check].sort());
-  expect(todos.blocking).toHaveLength(blocking.length);
-  expect(todos.check).toHaveLength(check.length);
 }
 
 async function parity(
@@ -147,6 +154,19 @@ async function parity(
     assert(action.success, JSON.stringify(action));
     expect(action.data).toEqual(value);
     const single = await loadBatchEmissionLines(scope.ctx, scope.facilityId, row.id);
+    const pageHealth = await loadBatchHealth(row.id);
+    const pageDurability = await loadCreditBatchDurabilitySummary(row.id);
+    assert(pageHealth.success, JSON.stringify(pageHealth));
+    assert(pageDurability.success, JSON.stringify(pageDurability));
+    // The page model adds only Waiting items, outside Blocking and Check parity.
+    const pageItems = buildCreditBatchOpenItems({
+      facilityId: scope.facilityId, creditBatchId: row.id,
+      canManage: scope.ctx.isPlatformAdmin || scope.ctx.orgRole === "admin",
+      health: pageHealth.data, durability: pageDurability.data ?? undefined,
+      emissionLines: single.status === "ready" ? single.lines : undefined,
+    });
+    expect(pageItems.blocking.map(item => item.id).sort()).toEqual(value.blocking.map(item => item.id).sort());
+    expect(pageItems.check.map(item => item.id).sort()).toEqual(value.check.map(item => item.id).sort());
     const bulk = (await loadBatchesEmissionLines(scope.ctx, rows)).get(row.id)!;
     expect(single.status).toBe(bulk.status);
     if (single.status === "ready" && bulk.status === "ready") {
@@ -162,6 +182,37 @@ it("counts explicit Blocking and mixed document, sample and emission Check items
   const { todos } = await parity([batch], [{ blocking: [REVIEW_BLOCKER, ...DATA_BLOCKERS], check: MIXED_CHECKS }]);
   expect(todos.get(batch.id)?.linesToDecide).toBe(1);
   expect(await getLatestTemplateObservation(ctx, "isometric", template.id)).not.toBeNull();
+});
+
+it("counts the review line for a stored entry on a retired template component", async () => {
+  const retiredComponentId = `${COMPONENT_ID}-retired`;
+  const previousTemplate = structuredClone(template);
+  previousTemplate.groups[0].components[0].id = retiredComponentId;
+  const previous = await observeTemplate(ctx, {
+    provider: "isometric", externalProjectId: template.project_id, template: previousTemplate,
+    enrichment: await loadTemplateEnrichment({} as IsometricClient, previousTemplate,
+      enrichmentFixture.blueprints as IsometricComponentBlueprint[]),
+  });
+  const [entry] = await db.insert(emissionEntries).values({
+    organizationId: ctx.organizationId, creditBatchId: batch.id, removalTemplateId: template.id,
+    componentId: retiredComponentId, observationId: previous.id,
+    inputShape: [{ key: "electricity_use", type: "monitored", quantityKind: "energy" }],
+    lineRule: "additive", kind: "value", occurredOn: "2026-06-13",
+  }).returning();
+  await db.insert(emissionEntryValues).values({ organizationId: ctx.organizationId,
+    entryId: entry.id, inputKey: "electricity_use", magnitude: "2", unit: "kWh" });
+  const { todos, summaries } = await parity([batch], [{
+    blocking: [REVIEW_BLOCKER, ...DATA_BLOCKERS], check: [...MIXED_CHECKS, `emission:${retiredComponentId}`],
+  }]);
+  const display = await loadBatchEmissionLines(ctx, facilityId, batch.id);
+  assert(display.status === "ready");
+  // No current contract means needsReview; buildCreditBatchOpenItems counts that state.
+  expect(display.lines.find(line => line.componentId === retiredComponentId)).toMatchObject({
+    removedFromTemplate: true, state: "needsReview", entries: [{ id: entry.id, counts: false }],
+  });
+  expect(todos.get(batch.id)?.blocking).toHaveLength(3);
+  expect(todos.get(batch.id)?.check).toHaveLength(6);
+  expect(summaries[batch.id]).toMatchObject({ issueCount: 3, checkCount: 6 });
 });
 
 it("counts an unpinned batch without emission Check items", async () => {
@@ -192,9 +243,18 @@ it("persists unknown fixed inputs and keeps their emission Check item", async ()
 it("loads facility facts once through the real list action for pinned and unpinned siblings", async () => {
   const sibling = await insertBatch(null);
   const spy = vi.spyOn(facilityFacts, "loadFacilityCertifierFacts");
+  const linesSpy = vi.spyOn(batchEmissionLines, "loadBatchesEmissionLines");
+  const samplesSpy = vi.spyOn(batchSamples, "getCreditBatchesWithSamples");
   const result = await loadCreditBatchHealthSummaries(facilityId, [batch.id, sibling.id]);
   assert(result.success, JSON.stringify(result));
   expect(spy).toHaveBeenCalledExactlyOnceWith(ctx, facilityId);
+  expect(linesSpy).toHaveBeenCalledExactlyOnceWith(ctx, [
+    expect.objectContaining({ id: batch.id, removalTemplateId: batch.removalTemplateId }),
+    expect.objectContaining({ id: sibling.id, removalTemplateId: sibling.removalTemplateId }),
+  ], { comments: false });
+  // Per-batch durability reads in buildRemovalContext -> loadDurabilityBatchData are pre-existing.
+  const setReads = samplesSpy.mock.calls.filter(([, ids]) => [batch.id, sibling.id].every(id => ids.includes(id)));
+  expect(setReads).toEqual([[ctx, [batch.id, sibling.id]]]);
   await parity([batch, sibling], [
     { blocking: [REVIEW_BLOCKER, ...DATA_BLOCKERS], check: MIXED_CHECKS },
     { blocking: [PIN_BLOCKER, ...DATA_BLOCKERS], check: DOCUMENT_IDS },
@@ -217,6 +277,12 @@ it("keeps member and admin counts identical but removes destinations for decisio
 
 it("refuses another organization, another facility, missing batches and invalid ids through both actions", async () => {
   const spy = vi.spyOn(facilityFacts, "loadFacilityCertifierFacts");
+  expect(await loadCreditBatchTodosFn(facilityId, crypto.randomUUID())).toEqual({
+    success: false, error: "Credit batch was not found.",
+  });
+  expect(await loadCreditBatchTodosFn(otherFacilityId, batch.id)).toEqual({
+    success: false, error: "Batch does not belong to requested facility",
+  });
   for (const [site, id] of [[otherFacilityId, batch.id], [facilityId, crypto.randomUUID()], ["invalid", batch.id], [facilityId, "invalid"]]) {
     expect(await loadCreditBatchTodosFn(site, id)).toMatchObject({ success: false });
     expect(await loadCreditBatchHealthSummaries(site, [id])).toMatchObject({ success: false });

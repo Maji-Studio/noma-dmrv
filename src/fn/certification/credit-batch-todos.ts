@@ -17,7 +17,8 @@ export async function loadCreditBatchTodosFn(
     const validBatchId = z.uuid().parse(creditBatchId);
     await requireOrgFacility(ctx, validFacilityId);
     const [batch] = await listCreditBatchCertificationLinks(ctx, [validBatchId]);
-    if (!batch || batch.facilityId !== validFacilityId) {
+    if (!batch) throw new SafeError("Credit batch was not found.");
+    if (batch.facilityId !== validFacilityId) {
       throw new SafeError("Batch does not belong to requested facility");
     }
     const todos = await loadCreditBatchTodos(ctx, validFacilityId, [batch]);

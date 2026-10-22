@@ -612,18 +612,18 @@ and [0022](./adr/0022-method-b-is-computed-eligibility-not-stored-unlock.md).
 
 ## Certify Integration (Isometric)
 
+Outbound integration submitting MRV data to Isometric's Certify API. Schema is
+provider-agnostic (`certifier_*` tables) so another registry could be hosted
+later; Isometric-specific HTTP, transformers, and typings live under
+`src/lib/isometric/`.
+
 Credit batch to-dos are built in one server read by the directive-free
 `credit-batch-todos-core.ts`: facility certifier facts load once, followed by
 bounded batch contexts and set-based sample and emission-line reads. The list
 projects only Blocking and Check counts, health state and lines to decide from
 this core; its Removal, GHG Statement and lock fields remain in the list action.
-The single-batch action uses the same core. The page will adopt that action in
-PR 3 of #1303; until then it keeps its existing reads and Waiting items.
-
-Outbound integration submitting MRV data to Isometric's Certify API. Schema is
-provider-agnostic (`certifier_*` tables) so another registry could be hosted
-later; Isometric-specific HTTP, transformers, and typings live under
-`src/lib/isometric/`.
+`loadCreditBatchTodosFn` reads one batch through the same core. Waiting items
+need the page model and are never counted.
 
 ```text
 components/certification/  →  hooks/use-certification.ts  →  fn/certification/
