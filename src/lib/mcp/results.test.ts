@@ -2,6 +2,8 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { DomainError } from "@/lib/domain-errors";
 import type { ApiRouteContext } from "@/lib/api/route";
+import { withLockedFieldIssues } from "@/lib/record-lock-fields";
+import { actionFailureResponse } from "@/lib/api/problem";
 import { apiResponseHeaders } from "@/lib/api/problem";
 import { toolErrorSchema, toolFailure, toolSuccess, toolText, writesDisabledResult } from "./results";
 import { parseQueryInput } from "@/lib/api/query";
@@ -76,4 +78,23 @@ it.each(["outcome_unknown", "deadline_exceeded"] as const)("logs %s without a ca
 it("preserves retryable document conflicts just like REST", async () => {
   const result = await toolFailure(new DomainError("conflict", "Upload the file again.", { retryable: true }), context, "confirm_document_upload");
   expect(result).toMatchObject({ isError: true, structuredContent: { code: "conflict", retryable: true } });
+});
+
+it("adds lineage field issues in REST and MCP while preserving the original refusal", async () => {
+  const message = "Delivery DL-001 is locked by a certification submission.";
+  const original = new DomainError("certification_locked", message, {
+    issues: [{ path: ["deliveryId"], code: "certification_locked", message }],
+  });
+  const error = await withLockedFieldIssues(async () => { throw original; },
+    { code: "DL-001" }, { code: "DL-EDIT" },
+  ).catch((failure: DomainError) => failure);
+  const response = actionFailureResponse({ success: false, error: error.message, code: error.code, issues: error.issues }, "/deliveries", "request-1");
+  expect(response.status).toBe(409);
+  const problem = await response.json();
+  const expectedIssues = ["/deliveryId", "/code"].map(pointer => ({ pointer, code: original.code, detail: message }));
+  expect(problem).toMatchObject({ code: original.code, detail: message });
+  expect(problem.errors).toEqual(expectedIssues);
+  const result = await toolFailure(error, context, "update_delivery");
+  expect(result.structuredContent).toMatchObject({ code: original.code, detail: message });
+  expect(result.structuredContent.issues).toEqual(expectedIssues);
 });
