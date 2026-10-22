@@ -53,30 +53,25 @@ function completedRunIds(runs: BatchLineageRunFact[]): string[] {
 export async function resolveScopeForCreditBatch(
   orgCtx: OrgContext,
   creditBatchId: string,
-  options?: { singleBatch?: boolean },
 ): Promise<RemovalScope> {
-  if (!options?.singleBatch) {
-    const removalId = await getCreditBatchActiveScopeRemovalId(
-      orgCtx,
-      creditBatchId,
-    );
-    if (removalId) {
-      return resolveScopeForRemoval(orgCtx, removalId);
-    }
+  const removalId = await getCreditBatchActiveScopeRemovalId(
+    orgCtx,
+    creditBatchId,
+  );
+  if (removalId) {
+    return resolveScopeForRemoval(orgCtx, removalId);
   }
 
   const accounting = (
     await loadCreditBatchRollups(orgCtx, [creditBatchId], {
-      unassignedOnly: !options?.singleBatch,
+      unassignedOnly: true,
     })
   )[creditBatchId];
-  if (!options?.singleBatch) {
-    const racedRemovalId = await getCreditBatchActiveScopeRemovalId(
-      orgCtx,
-      creditBatchId,
-    );
-    if (racedRemovalId) return resolveScopeForRemoval(orgCtx, racedRemovalId);
-  }
+  const racedRemovalId = await getCreditBatchActiveScopeRemovalId(
+    orgCtx,
+    creditBatchId,
+  );
+  if (racedRemovalId) return resolveScopeForRemoval(orgCtx, racedRemovalId);
   if (!accounting) throw new SafeError("Credit batch not found");
 
   return resolveSingleBatchScope(accounting);

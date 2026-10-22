@@ -27,9 +27,9 @@ export {
   type SelectableBatch,
   type SelectableBatchesData,
 } from "./certify-context";
-// Per-batch data-completeness verdict for the credit-batch detail page +
-// New-Removal wizard selection gate (classifier shared via batch-health.ts).
-export { loadBatchHealth } from "./batch-health";
+// The credit batch page's to-dos, from the same core the batch list counts from.
+export { loadCreditBatchTodosFn } from "./credit-batch-todos";
+export type { CreditBatchTodos } from "./credit-batch-todos-core";
 // Per-credit-batch durability sampling roll-up + readiness (ADR 0016) for the
 // lab-sample form's batch progress preview and the credit-batch detail's
 // durability section. Shares `buildDurabilityBatchSummaries` with the submit

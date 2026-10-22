@@ -16,13 +16,14 @@ export interface CreditBatchPageContextValue {
   retryPageModel: () => void;
   retryingPageModel: boolean;
   openItems: CreditBatchOpenItemGroups;
-  /** Blocking items once the batch health has answered; null before. */
+  /** Blocking items once the to-do read has answered; null before. */
   blockingCount: number | null;
-  healthError: Error | null;
-  /** The Components decided check's count of template components to decide; 0 when none or before health answers. */
+  /** Set when the to-do read failed; the page then shows no to-dos at all. */
+  todosError: Error | null;
+  /** The Components decided check's count of template components to decide; 0 when none or before the to-do read answers. */
   linesToDecide: number;
-  retryHealth: () => void;
-  retryingHealth: boolean;
+  retryTodos: () => void;
+  retryingTodos: boolean;
   lock: RecordLockView | undefined;
   lockStatus: RecordLockStatus;
   canManage: boolean;

@@ -637,8 +637,10 @@ Credit batch to-dos are built in one server read by the directive-free
 bounded batch contexts and set-based sample and emission-line reads. The list
 projects only Blocking and Check counts, health state and lines to decide from
 this core; its Removal, GHG Statement and lock fields remain in the list action.
-`loadCreditBatchTodosFn` reads one batch through the same core. Waiting items
-need the page model and are never counted.
+`loadCreditBatchTodosFn` reads one batch through the same core; the batch page
+reads it through `useCreditBatchTodos` (`certificationKeys.batchTodos`, refetched
+on every mount, `staleTime: 0`) and shows no to-dos at all when it fails. Waiting
+items need the page model (`buildCreditBatchWaitingItems`) and are never counted.
 
 ```text
 components/certification/  →  hooks/use-certification.ts  →  fn/certification/

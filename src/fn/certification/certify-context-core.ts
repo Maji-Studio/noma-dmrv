@@ -525,9 +525,8 @@ export async function loadRemovalCertifyContext(
 export async function loadCertifyContextForCreditBatchForUser(
   orgCtx: OrgContext,
   creditBatchId: string,
-  options?: { singleBatch?: boolean },
 ): Promise<RemovalCertifyContext> {
-  const scope = await resolveScopeForCreditBatch(orgCtx, creditBatchId, options);
+  const scope = await resolveScopeForCreditBatch(orgCtx, creditBatchId);
   const facilityFacts = await loadFacilityCertifierFacts(
     orgCtx,
     scope.facilityId,

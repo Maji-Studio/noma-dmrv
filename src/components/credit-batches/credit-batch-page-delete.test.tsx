@@ -43,10 +43,9 @@ vi.mock("nuqs", () => ({
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: FACILITY_ID, isResolving: false }) }));
 vi.mock("@/hooks/use-certification", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/hooks/use-certification")>()),
-  useBatchHealth: () => ({ data: undefined }),
+  useCreditBatchTodos: () => ({ data: undefined, isError: false }),
   useBatchDurabilitySummary: () => ({ data: undefined }),
 }));
-vi.mock("@/hooks/use-emission-entries", () => ({ useBatchEmissionLines: () => ({ data: undefined }) }));
 vi.mock("@/hooks/use-credit-batches", () => ({
   useCreditBatch: () => ({ data: harness.batch, isPending: false }),
   useCreditBatchPageModel: () => ({ data: undefined }),
