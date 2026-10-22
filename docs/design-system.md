@@ -36,12 +36,17 @@ Read these first. Each one fails quietly rather than loudly.
   Sanctioned exceptions keep a 24px hit area (the WCAG 2.5.8 floor): the
   inline `InfoHint` and `ExplanationInfo` glyphs, and the icon-only
   `IsometricLink` beside the ID it opens. A 44px box on any of them would break
-  label-row alignment wherever it appears. Roster row actions (members, vehicles,
-  connected apps, API keys) keep their 32px or 40px look and reach 44px through an
-  invisible `::after` that `OrganizationRosterRow` applies to its actions
-  (`ROW_ACTION_HIT_AREA`, `src/components/ui/touch-target.ts`); new row buttons
-  inside that slot need nothing extra. The same silence hits a `var(--x)` whose property was renamed or never
+  label-row alignment wherever it appears. The same silence hits a `var(--x)` whose property was renamed or never
   defined; `pnpm check:css-vars` (CI) fails on it.
+- **Row action buttons reach 44px without growing.** `OrganizationRosterRow`
+  applies `ROW_ACTION_HIT_AREA` (`src/components/ui/touch-target.ts`) to its
+  actions slot: each button gets an invisible `::after` of at least 44px in both
+  axes, so the 32px and 40px look is unchanged. Every surface using the slot
+  gets it: members, pending invitations, vehicles, drivers and operators,
+  connected apps, API keys and the platform-admin organization rows. Text
+  buttons need nothing extra; two 32px icon buttons side by side need a 12px
+  gap or their hit areas overlap. The Members role select stays a known 40px
+  control, because a select cannot take `::after`.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
   the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),

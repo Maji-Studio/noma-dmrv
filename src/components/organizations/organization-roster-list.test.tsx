@@ -35,11 +35,11 @@ describe("OrganizationRosterList", () => {
     const html = renderToStaticMarkup(
       <OrganizationRosterRow primary="Member" actions={<button type="button">Remove</button>} />,
     );
+    const classes = html.match(/class="([^"]*\[&amp;_button\][^"]*)"/)?.[1] ?? "";
 
-    expect(html).toContain("[&amp;_button]:after:min-h-44");
-    expect(html).toContain("[&amp;_button]:after:min-w-44");
-    expect(html).toContain("[&amp;_button]:after:absolute");
-    expect(ROW_ACTION_HIT_AREA).toContain("after:min-h-44");
-    expect(html).toContain("gap-y-12");
+    for (const cls of ROW_ACTION_HIT_AREA.split(" ")) {
+      expect(classes).toContain(cls.replaceAll("&", "&amp;").replaceAll("'", "&#x27;"));
+    }
+    expect(classes).toContain("gap-y-12");
   });
 });

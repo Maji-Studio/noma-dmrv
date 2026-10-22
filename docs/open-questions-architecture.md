@@ -52,6 +52,13 @@ these areas; the entry rules and invariants live in
   Its reaction to `invalid_client` on refresh is untested: a noma Disconnect
   gives `invalid_grant`, which claude.ai turns into a sign-in prompt. Only a
   dropped CIMD client gives `invalid_client`.
+- **Touch targets outside `OrganizationRosterRow`:** 32px icon buttons that do not
+  use the roster slot still draw a 32px hit area:
+  `src/components/customers/customer-saved-locations.tsx` (Edit, Archive,
+  Delete at `gap-8`) and the `RowActionsMenu` trigger in
+  `src/components/ui/row-actions-menu/index.tsx`. Local hit-area one-offs that
+  could move to the shared helper: `batch-box.tsx`, `credit-batch-line.tsx`,
+  `certification-status-badge.tsx`.
 
 ### Party write adapters per kind (`api/party-write-adapters`, opened 2026-10-17)
 
