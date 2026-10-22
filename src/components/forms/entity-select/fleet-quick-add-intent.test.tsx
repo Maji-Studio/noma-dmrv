@@ -4,11 +4,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DriverQuickAddDialog } from "./driver-quick-add-dialog";
+import { VehicleQuickAddDialog } from "./vehicle-quick-add-dialog";
 import { OperatorQuickAddDialog } from "./operator-quick-add-dialog";
 
-const mocks = vi.hoisted(() => ({ createDriver: vi.fn(), createOperator: vi.fn() }));
-vi.mock("@/fn/quick-add", () => ({ createDriverFn: mocks.createDriver, createOperatorFn: mocks.createOperator }));
+const mocks = vi.hoisted(() => ({ createDriver: vi.fn(), createOperator: vi.fn(), createVehicle: vi.fn() }));
+vi.mock("@/fn/quick-add", () => ({ createDriverFn: mocks.createDriver, createOperatorFn: mocks.createOperator, createVehicleFn: mocks.createVehicle }));
 vi.mock("@/hooks/use-fleet", () => ({
+  useUpdateVehicle: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateDriver: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateOperator: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
@@ -27,6 +29,7 @@ vi.mock("./quick-add-dialog-shell", async () => {
     },
   };
 });
+vi.mock("@/components/vehicles/vehicle-form", () => ({ VehicleForm: StubForm }));
 vi.mock("@/components/drivers/driver-form", () => ({ DriverForm: StubForm }));
 vi.mock("@/components/operators/operator-form", () => ({ OperatorForm: StubForm }));
 
@@ -44,6 +47,7 @@ function StubForm({ onSubmit, errorMessage, submitLabel }: {
 afterEach(cleanup);
 
 const cases = [
+  { name: "vehicle", Dialog: VehicleQuickAddDialog, create: mocks.createVehicle, label: "Create vehicle" },
   { name: "driver", Dialog: DriverQuickAddDialog, create: mocks.createDriver, label: "Create driver" },
   { name: "operator", Dialog: OperatorQuickAddDialog, create: mocks.createOperator, label: "Create operator" },
 ];

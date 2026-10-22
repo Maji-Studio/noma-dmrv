@@ -46,8 +46,8 @@ components (UI)
   caller's `onSuccess`, or when `startDraft()` is called for a new draft. Equal values with
   a new key create a separate entry. App replay uses the store's existing
   retention period. Quick-add dialogs that submit through `useQuickAddSubmit`
-  (formulation, driver, operator) hold the same draft key with
-  `useCreateIntentKey` directly. API key creation is the one keyed create outside the runner: a retry
+  hold their draft key in that hook and call its `startDraft` on open or close.
+  API key creation is the one keyed create outside the runner: a retry
   replaces the unseen key instead of replaying it ([auth.md](./auth.md)).
   It reads the same lazily parsed key through `create.key`; only this adapter
   may use that property. The keyed action shape is
@@ -595,8 +595,9 @@ above, closing their document-write inversion. Membership refresh also takes
 artifacts before runs. The remaining production-run and membership cycles are
 tracked in the [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
 
-Emission entry writers discover ancestors unlocked, then lock the facility
-`FOR SHARE`, credit batch `FOR UPDATE`, entry `FOR UPDATE`, and documents last.
+Emission entry writers discover ancestors unlocked, then lock certification
+artifacts in sorted order before the facility `FOR SHARE`, credit batch
+`FOR UPDATE`, entry `FOR UPDATE`, and documents last.
 They revalidate the batch's facility and the entry's batch after locking; changed
 parents return retryable `conflict` without taking a new ancestor lock.
 This order matches facility archive and applies to confirmation and deletion too.

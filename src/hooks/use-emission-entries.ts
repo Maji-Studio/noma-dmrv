@@ -6,6 +6,7 @@
  */
 "use client";
 
+import { useIntentMutation } from "./use-create-intent-key";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   confirmEmissionEntryFn,
@@ -90,7 +91,12 @@ function useEntryMutation<TInput, TData>(scope: EmissionBatchScope, run: (input:
 }
 
 export function useCreateEmissionEntry(scope: EmissionBatchScope) {
-  return useEntryMutation(scope, createEmissionEntryFn);
+  const queryClient = useQueryClient();
+  return useIntentMutation({
+    mutationFn: async (input: Parameters<typeof createEmissionEntryFn>[0], intentKey) =>
+      unwrapEntry(await createEmissionEntryFn(input, { intentKey })),
+    onSettled: () => invalidateEmissionEntryReads(queryClient, scope),
+  });
 }
 export function useUpdateEmissionEntry(scope: EmissionBatchScope) {
   return useEntryMutation(scope, updateEmissionEntryFn);
