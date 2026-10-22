@@ -58,6 +58,10 @@ it("cannot select or submit a write-only request without its read", () => {
   expect(allow.disabled).toBe(false);
   fireEvent.click(allow);
   expect(screen.getByRole("alert").textContent).toBe("Choose at least one permission.");
+  // No pegs exist, so the choice cards carry the error.
+  const cards = screen.getByRole("group", { name: /What .* can do/ });
+  expect(cards.getAttribute("aria-invalid")).toBe("true");
+  expect(cards.getAttribute("aria-describedby")).toBe(screen.getByRole("alert").id);
   expect(mocks.mutateAsync).not.toHaveBeenCalled();
 });
 
@@ -77,6 +81,7 @@ it("asks for a permission, focuses the first tick box and does not submit when n
   expect(box("Feedstocks, read").getAttribute("aria-invalid")).toBe("true");
   fireEvent.click(box("All areas, read"));
   expect(screen.queryByRole("alert")).toBeNull();
+  expect(box("Feedstocks, read").getAttribute("aria-invalid")).toBeNull();
 });
 
 it("submits only writes with pegs for Read and write and All areas", async () => {

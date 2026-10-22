@@ -288,6 +288,8 @@ export function SampleList({
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
   const [deletingSampleId, setDeletingSampleId] = useState<string | null>(null);
   const [deletingVersion, setDeletingVersion] = useState<number | null>(null);
+  // Kept from the moment the dialog opens: a refetch can move the row off the page before the refusal comes back.
+  const [deletingCode, setDeletingCode] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   // A stale refusal closes the dialog (its Delete would resubmit the same version), so it reads on the page.
@@ -458,6 +460,7 @@ export function SampleList({
     if (!row) return;
     setStaleDeleteNotice(null);
     setDeletingVersion(row.version);
+    setDeletingCode(row.sampleCode);
     setDeletingSampleId(sampleId);
   };
   const handleDeleteConfirm = async () => {
@@ -469,9 +472,8 @@ export function SampleList({
       toast.success("Sample deleted.");
     } catch (error) {
       if (error instanceof StaleVersionError) {
-        const code = samples.find((item) => item.id === deletingSampleId)?.sampleCode;
         setDeletingSampleId(null);
-        setStaleDeleteNotice(staleDeleteMessage(code ? `Sample ${code}` : "Sample"));
+        setStaleDeleteNotice(staleDeleteMessage(deletingCode ? `Sample ${deletingCode}` : "Sample"));
       } else {
         setDeleteError(toDeleteErrorMessage(error, "Sample", "Sample was not deleted. Try again."));
       }

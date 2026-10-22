@@ -6,7 +6,7 @@
 import type { ReactNode } from "react";
 import type { CellContext } from "@tanstack/react-table";
 import { act, create } from "react-test-renderer";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
 
@@ -18,6 +18,7 @@ const REFUSAL = "This Sample's lab report is referenced by a certification revie
 
 const harness = vi.hoisted(() => ({
   deleteSample: vi.fn(),
+  items: [] as Array<typeof SAMPLE_ROW>,
   dialog: null as { isOpen: boolean; errorMessage?: string; onConfirm: () => Promise<void> } | null,
   columns: [] as Array<{ id?: string; cell?: unknown }>,
   rowActions: null as Array<{ label: string; onSelect?: () => void }> | null,
@@ -28,7 +29,7 @@ vi.mock("nuqs", () => ({
   useQueryState: () => [null, () => Promise.resolve(new URLSearchParams())],
 }));
 vi.mock("@/hooks/use-samples", () => ({
-  useSamples: () => ({ data: { items: [SAMPLE_ROW], total: 1, totalPages: 1 }, isLoading: false, error: null }),
+  useSamples: () => ({ data: { items: harness.items, total: 1, totalPages: 1 }, isLoading: false, error: null }),
   useSampleStats: () => ({ data: undefined, isLoading: false }),
   useSample: () => ({ data: undefined, error: null, isSuccess: true }),
   useCreateSample: () => ({ startDraft: vi.fn(), isPending: false, mutateAsync: vi.fn() }),
@@ -110,6 +111,8 @@ async function openDelete() {
 }
 
 describe("Sample delete refusal", () => {
+  beforeEach(() => { harness.items = [SAMPLE_ROW]; });
+
   it("shows the server's reason inside the open dialog and nowhere else", async () => {
     harness.deleteSample.mockRejectedValue(new Error(REFUSAL));
     const page = await openDelete();
@@ -128,6 +131,9 @@ describe("Sample delete refusal", () => {
       new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "sample", id: SAMPLE_ID, code: STALE_VERSION_CONFLICT_CODE }),
     );
     const page = await openDelete();
+    // A refetch moves the row off the page while the dialog is open.
+    harness.items = [];
+    await act(async () => { page.update(<SampleList />); });
 
     await act(async () => { await harness.dialog?.onConfirm(); });
 

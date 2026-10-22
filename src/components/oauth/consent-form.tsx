@@ -61,6 +61,9 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
   const submittedScopes = [...new Set<string>([...allowed, ...ticked])].filter((scope) => scope !== OFFLINE_ACCESS);
   const showError = missing && submittedScopes.length === 0;
   const showBoard = stepUp || preset === "custom";
+  const hasPegs = areas.some((area) => [area.read, area.write].some((scope) => scope && undecided.includes(scope)));
+  // A request with no readable area leaves the board without pegs, so the cards carry the error then.
+  const cardsInvalid = showError && (!showBoard || !hasPegs);
   const newAreas = new Set(stepUp ? areas.filter((area) => [area.read, area.write].some((scope) => scope && stepUpScopes.includes(scope))).map((area) => area.entity) : []);
 
   function choose(next: ConsentPreset) {
@@ -100,7 +103,7 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
           {!stepUp && (
             <ConsentChoices clientName={clientName} readAreas={areas.filter((area) => area.read && undecidedReads.includes(area.read)).length}
               writeAreas={writeAreas} value={preset} onChange={choose} disabled={deciding}
-              error={showError && !showBoard} errorId={showError && !showBoard ? errorId : undefined} />
+              error={cardsInvalid} errorId={cardsInvalid ? errorId : undefined} />
           )}
           {showBoard && (
             <ConsentPegBoard areas={areas} allowed={allowed} undecided={undecided} newAreas={newAreas} ticked={ticked}
