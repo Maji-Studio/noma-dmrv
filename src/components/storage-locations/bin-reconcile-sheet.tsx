@@ -43,8 +43,9 @@ export function BinReconcileSheet({
           </div>
         </SlideOverPanel.Header>
 
-        {/* Single child: fillHeight stretches only the direct child, so the
-            context and form live inside one flex column here. */}
+        {/* Single child: fillHeight only makes the body a flex column; the
+            wrapper's own flex-1 fills it, so the context and form live in
+            one flex column here. */}
         <SlideOverPanel.Body noPaddingBottom fillHeight>
           {storageLocation && (
             <div className="flex flex-1 flex-col gap-20">

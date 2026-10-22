@@ -17,11 +17,14 @@ async function expectFooterOnSheetBottom(page: Page) {
   const sheet = page.getByRole("dialog");
   const footer = sheet.locator("[data-sheet-footer]").last();
   await expect(footer).toBeVisible();
-  const sheetBox = await sheet.boundingBox();
-  const footerBox = await footer.boundingBox();
-  expect(sheetBox && footerBox).toBeTruthy();
-  const sheetBottom = sheetBox!.y + sheetBox!.height;
-  expect(Math.abs(footerBox!.y + footerBox!.height - sheetBottom)).toBeLessThanOrEqual(EDGE_TOLERANCE_PX);
+  await expect
+    .poll(async () => {
+      const sheetBox = await sheet.boundingBox();
+      const footerBox = await footer.boundingBox();
+      if (!sheetBox || !footerBox) return Infinity;
+      return Math.abs(footerBox.y + footerBox.height - (sheetBox.y + sheetBox.height));
+    })
+    .toBeLessThanOrEqual(EDGE_TOLERANCE_PX);
 }
 
 async function openList(page: Page, path: string, facilityId: string) {
@@ -49,11 +52,26 @@ test.describe("Side sheet footer pinning", () => {
     }
   });
 
-  test("a long form (production run create) still ends on the bottom edge while it scrolls", async ({ adminPage: page, seededData }) => {
+  test("a long form (production run create) scrolls under its pinned footer", async ({ adminPage: page, seededData }) => {
     await page.setViewportSize(PHONE);
     await openList(page, "production-runs", seededData.facility.id);
     await page.getByRole("button", { name: /^New production run/ }).click();
     await waitForSideSheet(page);
+    const sheet = page.getByRole("dialog");
+    const body = sheet.locator("div.overflow-y-auto").first();
+    await expect.poll(() => body.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeGreaterThan(0);
     await expectFooterOnSheetBottom(page);
+
+    const footer = sheet.locator("[data-sheet-footer]").last();
+    const lastField = body.locator("input:not([type=hidden]):not([type=file]):not(.sr-only):visible, select:visible, textarea:visible, [role=combobox]:visible").last();
+    // Focus scrolls the field in with the footer clearance (WCAG 2.4.11).
+    await lastField.focus();
+    await expect
+      .poll(async () => {
+        const fieldBox = await lastField.boundingBox();
+        const footerBox = await footer.boundingBox();
+        return fieldBox && footerBox ? footerBox.y - (fieldBox.y + fieldBox.height) : -Infinity;
+      })
+      .toBeGreaterThanOrEqual(0);
   });
 });
