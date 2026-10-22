@@ -26,10 +26,10 @@ export function partyNameConflict(message: string, meta?: DomainIssue["meta"]): 
   return partyRefusal("conflict", message, ["name"], meta);
 }
 export function supplierHasIntakes(feedstockCodes: string[] = []): DomainError {
-  return inUseDeleteRefusal(`Supplier ${IN_USE_DELETE_MARKER} feedstock intakes still use it. Review the linked intakes or keep this supplier.`, ["supplierId"], { feedstockCodes });
+  return inUseDeleteRefusal(`Supplier ${IN_USE_DELETE_MARKER} feedstock intakes still use it. Review the linked intakes or keep this supplier.`, ["supplierId"], { meta: { feedstockCodes } });
 }
 export function customerHasStorageSites(locationIds: string[] = []): DomainError {
-  return inUseDeleteRefusal(`Customer ${IN_USE_DELETE_MARKER} its locations are registered storage sites. Keep this customer.`, ["customerId"], { locationIds });
+  return inUseDeleteRefusal(`Customer ${IN_USE_DELETE_MARKER} its locations are registered storage sites. Keep this customer.`, ["customerId"], { meta: { locationIds } });
 }
 
 export function partyLocationNotFound(kind: Party): DomainError {
@@ -37,7 +37,7 @@ export function partyLocationNotFound(kind: Party): DomainError {
 }
 
 export function customerLocationHasOrders(orderCodes: string[] = [], archived = false): DomainError {
-  return inUseDeleteRefusal(`Customer location ${IN_USE_DELETE_MARKER} orders use it.${archived ? "" : " Archive it instead."}`, ["locationId"], { orderCodes });
+  return inUseDeleteRefusal(`Customer location ${IN_USE_DELETE_MARKER} orders use it.${archived ? "" : " Archive it instead."}`, ["locationId"], { meta: { orderCodes } });
 }
 export function customerLocationHasStorageSite(archived = false): DomainError {
   return inUseDeleteRefusal(`Customer location ${IN_USE_DELETE_MARKER} it is registered with Isometric as a storage site.${archived ? "" : " Archive it instead."}`, ["locationId"]);
@@ -64,7 +64,7 @@ export function customerLocationLastActive(name: string): DomainError {
 }
 
 export function customerHasDeliveries(deliveryCodes: string[] = []): DomainError {
-  return inUseDeleteRefusal(`Customer ${IN_USE_DELETE_MARKER} deliveries were recorded on its orders. Archive it instead.`, ["customerId"], { deliveryCodes });
+  return inUseDeleteRefusal(`Customer ${IN_USE_DELETE_MARKER} deliveries were recorded on its orders. Archive it instead.`, ["customerId"], { meta: { deliveryCodes } });
 }
 export function cascadeChanged(): DomainError {
   return partyRefusal("cascade_changed", "The orders this delete would remove changed since the preview. Review them and confirm again.", ["cascadeFingerprint"]);

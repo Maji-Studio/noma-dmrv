@@ -35,7 +35,7 @@ describe("toActionFailure", () => {
   });
 
   it.each([undefined, conflict])("preserves the in-use reason through serialization and the client throw (conflict=%j)", (ref) => {
-    const error = inUseDeleteRefusal("This record is still used.", ["feedstockTypeId"], { recordCodes: ["FS-001"] }, ref);
+    const error = inUseDeleteRefusal("This record is still used.", ["feedstockTypeId"], { meta: { recordCodes: ["FS-001"] }, conflict: ref });
     const failure = JSON.parse(JSON.stringify(toActionFailure(error, options)));
     let caught: unknown;
     try { throwActionError(failure); } catch (error) { caught = error; }

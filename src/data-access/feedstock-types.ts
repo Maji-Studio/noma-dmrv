@@ -271,8 +271,7 @@ export async function deleteFeedstockType(
       throw inUseDeleteRefusal(
         `Feedstock type ${IN_USE_DELETE_MARKER} records still use it. Archive it instead.`,
         ["feedstockTypeId"],
-        undefined,
-        decision.conflict,
+        { conflict: decision.conflict },
       );
     }
     const [deleted] = await tx

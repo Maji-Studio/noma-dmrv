@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { DefaultLocationBadge } from "@/components/ui/default-location-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
-import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { useToast } from "@/components/ui/toast";
 import { InfoHint } from "@/components/ui/tooltip";
 import {

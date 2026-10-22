@@ -278,7 +278,7 @@ it("does not offer scopes outside the role ceiling", () => {
 it("preserves in-use issue codes, metadata and conflict in a 409 problem", async () => {
   const conflict = { entity: "formulation", id: "formulation-id", code: conflictCode("BCF-001") };
   const message = "This record is still used.";
-  const error = inUseDeleteRefusal(message, ["feedstockTypeId"], { recordCodes: ["FS-001"] }, conflict);
+  const error = inUseDeleteRefusal(message, ["feedstockTypeId"], { meta: { recordCodes: ["FS-001"] }, conflict });
   const failure = toActionFailure(error, { fallbackMessage: "Delete failed.", log: { message: "delete failed" } });
   const response = actionFailureResponse(failure, "/api/v1/feedstock-types/type-id", "request-id");
   expect(response.status).toBe(409);
