@@ -15,7 +15,8 @@
  * still answers `/admin` for unauthenticated and non-admin visitors.
  */
 import { redirect } from "next/navigation";
+import { PLATFORM_HOME_HREF } from "@/lib/auth/home-path";
 
 export default function AdminHomePage() {
-  redirect("/admin/organizations");
+  redirect(PLATFORM_HOME_HREF);
 }

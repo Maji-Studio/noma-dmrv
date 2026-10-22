@@ -13,7 +13,7 @@ import { FormField, FormInput, ServerError } from "@/components/forms";
 import { Notice } from "@/components/ui/notice";
 import { followOAuthContinuation } from "@/lib/auth/oauth-continuation";
 
-const DEFAULT_SIGN_IN_PATH = "/dashboard";
+const DEFAULT_SIGN_IN_PATH = "/";
 
 function getSafeSignInPath(from: string | null): string {
   if (
