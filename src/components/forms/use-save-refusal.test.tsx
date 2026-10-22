@@ -91,7 +91,9 @@ describe("useSaveRefusal", () => {
     render(<Harness refusal={refusal} />);
     fireEvent.change(screen.getByLabelText("Wet mass"), { target: { value: "9" } });
     await save();
-    expect(await screen.findAllByText("Not saved. 1 field is locked.")).toHaveLength(2);
+    await screen.findAllByText("Not saved. 1 field is locked.");
+    // Spoken once: the alert; the visible title is not a live region and the box takes no focus.
+    expect(screen.getAllByRole("alert").filter((node) => node.textContent === "Not saved. 1 field is locked.")).toHaveLength(1);
     expect(screen.getAllByText("Locked. Your change was not saved.").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(LOCK_REASON)).toHaveLength(1);
     expect((screen.getByLabelText("Wet mass") as HTMLInputElement).value).toBe("5");

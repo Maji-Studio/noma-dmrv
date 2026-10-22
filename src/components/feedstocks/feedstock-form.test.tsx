@@ -250,13 +250,13 @@ describe("FeedstockForm single-bin mass editing", () => {
     }), "Feedstock was not saved."));
     const view = render(<FeedstockForm feedstock={feedstock} onSubmit={onSubmit} />);
     try {
-      fireEvent.click(view.getByRole("button", { name: "Override" }));
+      fireEvent.click(view.getByRole("button", { name: "Override the one-way distance" }));
       const input = () => view.container.querySelector<HTMLInputElement>('input[name="transportDistanceKm"]');
       fireEvent.change(input()!, { target: { value: "60" } });
       fireEvent.submit(view.container.querySelector("form")!);
       await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
       await waitFor(() => expect(input()).toBeNull());
-      expect(view.getByRole("button", { name: "Override" })).toBeTruthy();
+      expect(view.getByRole("button", { name: "Override the one-way distance" })).toBeTruthy();
     } finally { cleanup(); }
   });
 

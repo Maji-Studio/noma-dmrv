@@ -122,7 +122,7 @@ describe("ApplicationForm server refusals", () => {
       edit: () => fireEvent.change(screen.getByLabelText(/Field size/), { target: { value: "3" } }),
     });
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect(await screen.findAllByText("Not saved. 1 field is locked.")).toHaveLength(2);
+    expect(await screen.findAllByText("Not saved. 1 field is locked.")).toHaveLength(1);
     expect(screen.getAllByText("Locked. Your change was not saved.").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText(LOCK_REASON)).toBeNull();
     expect((screen.getByLabelText(/Field size/) as HTMLInputElement).value).toBe("2");

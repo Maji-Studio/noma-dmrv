@@ -177,6 +177,8 @@ export function FormErrorSummary<
   const focusedBox = useRef(submitCount);
   const messageOnly = !visible && Boolean(message);
   const allLocked = items.length > 0 && items.every((item) => item.locked);
+  // A locked field is about to be disabled: focus goes to the first field to fix.
+  const focusPath = items.find((item) => !item.locked)?.path ?? null;
 
   // Sanctioned useEffect: moving focus after a refused save is imperative DOM
   // work. Once per attempt, and after react-hook-form's own focus (it runs a
@@ -190,17 +192,21 @@ export function FormErrorSummary<
     const timer = setTimeout(() => {
       focusedAttempt.current = submitCount;
       // Every item a lock: the field turns disabled once the lock re-read
-      // lands, so focus the box, which says what happened.
-      if (allLocked) {
+      // lands, so it is not focused. With the reason beside it, the record may
+      // be about to turn read-only, and then the top box takes focus and reads
+      // the reason once: focusing this box too would read it twice. Without a
+      // reason, the box says what happened.
+      if (focusPath === null) {
+        if (message) return;
         const box = boxRef.current;
         box?.scrollIntoView({ block: "nearest" });
         box?.focus({ preventScroll: true });
         return;
       }
-      focusField(getForm(), firstPath);
+      focusField(getForm(), focusPath);
     }, 0);
     return () => clearTimeout(timer);
-  }, [firstPath, allLocked, submitCount, getForm]);
+  }, [firstPath, focusPath, message, submitCount, getForm]);
 
   // Sanctioned useEffect: a refusal with no field to focus (a whole-record
   // lock) leaves the message in a box at the end of the form, possibly below
@@ -228,29 +234,24 @@ export function FormErrorSummary<
   const lockedOnly = items.length > 0 && items.every((item) => item.locked) ? items.length : 0;
   if (visible && announced.attempt !== submitCount) setAnnounced({ attempt: submitCount, lockedOnly });
   const announcedAttempt = announced.attempt;
-  const announcement = announcedAttempt === submitCount && submitCount > 0 && !isSubmitSuccessful ? (
+  // A lock-only refusal without a reason moves focus to the box, which reads
+  // its own title: no second line for it. With a reason, focus stays put (see
+  // the focus effect), so the count is announced here.
+  const focusReadsBox = announced.lockedOnly > 0 && !message;
+  const announcement = announcedAttempt === submitCount && submitCount > 0 && !isSubmitSuccessful && !focusReadsBox ? (
     <p key={submitCount} role="alert" className="sr-only">
       {announced.lockedOnly > 0 ? lockedAnnouncement(announced.lockedOnly) : ANNOUNCEMENT}
     </p>
   ) : null;
 
-  if (!visible) {
-    return (
-      <>
-        {announcement}
-        {message && (
-          <div ref={boxRef} tabIndex={-1}>
-            <ServerError message={message} action={action} />
-          </div>
-        )}
-      </>
-    );
-  }
-
+  // One wrapper for both branches, so focus on it survives the list clearing.
   return (
     <>
       {announcement}
-      <div ref={boxRef} tabIndex={-1}>
+      <div ref={boxRef} tabIndex={-1} className="empty:hidden">
+      {!visible ? (
+        message && <ServerError message={message} action={action} />
+      ) : (
       <Notice tone="error" live={false} title={countLabel(items)} data-form-error-summary="">
         {message && <p className="body-small">{" "}{message}</p>}
         <ul className="mt-4 flex flex-col">
@@ -279,6 +280,7 @@ export function FormErrorSummary<
         </ul>
         {action && <div className="mt-8">{action}</div>}
       </Notice>
+      )}
       </div>
     </>
   );
