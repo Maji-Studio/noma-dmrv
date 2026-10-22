@@ -48,6 +48,7 @@ function matchedOn(basis: ProductionRunCreditBatchPreviewBasis): string {
 const START_DAY_STANDS_IN =
   "This run has no end time yet, so its start day stands in. Once it is completed, it joins the batch that covers its end day, which can be another one.";
 
+/** The window as its own field, so a phone can hide it (#1059). */
 function windowLabel(batch: CreditBatchPreviewBatch): string {
   return ` (${formatDateRange(batch.startDate, batch.endDate)})`;
 }
@@ -76,15 +77,16 @@ function memberCopy(
   preview: Extract<ProductionRunCreditBatchPreview, { state: "member" }>,
 ): CreditBatchLineCopy {
   const { batch, basis, conflict } = preview;
-  const base = { ...CREDIT_BATCH_LINE_BASE, lead: "In credit batch ", batches: [batch] };
+  const base = { ...CREDIT_BATCH_LINE_BASE, lead: "Credit batch: ", batches: [batch] };
   switch (conflict) {
     case null:
-      return { ...base, tail: windowLabel(batch), info: basis ? matchedOn(basis) : null };
+      return { ...base, window: windowLabel(batch), info: basis ? matchedOn(basis) : null };
     case "outside-window":
       return {
         ...base,
         tone: "warning",
-        tail: `${windowLabel(batch)}. This end day is outside it, so the save is refused.`,
+        window: windowLabel(batch),
+        tail: ". This end day is outside its window, so the save is refused.",
         info: "A run stays in its credit batch. To move it, remove it from the batch on the credit batch page first.",
       };
     case "facility":
@@ -141,9 +143,11 @@ export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreview
     case "match":
       return {
         ...CREDIT_BATCH_LINE_BASE,
-        lead: view.expected ? "Expected credit batch: " : "Joins credit batch ",
+        lead: "Credit batch: ",
         batches: [view.batch],
-        tail: `${windowLabel(view.batch)}${byStartDay(view.basis)}`,
+        window: windowLabel(view.batch),
+        // "once completed" already marks a running run's batch as provisional; the ⓘ says the start day stood in.
+        tail: view.expected ? " once completed" : byStartDay(view.basis),
         info: joinInfo(view.basis, view.expected),
       };
     case "locked":

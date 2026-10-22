@@ -26,7 +26,17 @@ export interface CreditBatchLineCopy {
    * line shows the first code and a "+N" button opening the full list.
    */
   batches: CreditBatchLineBatch[];
-  /** Text after the batch links. */
+  /**
+   * Set when the line names exactly two batches the record could end up in:
+   * they read "A or B" instead of "A +1".
+   */
+  batchJoin?: "or";
+  /**
+   * The batch's date window, "(Sep 1 to Sep 30, 2026)". Its own field, not
+   * part of `tail`, so a phone can hide it while the rest of the line stays.
+   */
+  window: string;
+  /** Text after the batch links and window. */
   tail: string;
   /** The ⓘ explanation, or null when the line says it all. */
   info: string | null;
@@ -46,6 +56,7 @@ export const CREDIT_BATCH_LINE_ERROR = "Credit batch could not be checked.";
 export const CREDIT_BATCH_LINE_BASE: Omit<CreditBatchLineCopy, "lead"> = {
   tone: "neutral",
   batches: [],
+  window: "",
   tail: "",
   info: null,
   retry: false,
@@ -68,4 +79,12 @@ export function errorLineCopy(): CreditBatchLineCopy {
  */
 export function missingLineCopy(token: MissingValueCopy, info: string | null = null): CreditBatchLineCopy {
   return { ...CREDIT_BATCH_LINE_BASE, lead: `Credit batch: ${token}`, info };
+}
+
+/**
+ * The batch cannot be worked out yet. The line says what unblocks it, in its
+ * own words, not the generic "Not yet computed" token.
+ */
+export function unknownLineCopy(unblocks: string, info: string | null): CreditBatchLineCopy {
+  return { ...CREDIT_BATCH_LINE_BASE, lead: `Credit batch: ${unblocks}`, info };
 }

@@ -14,6 +14,7 @@ import {
   errorLineCopy,
   missingLineCopy,
   pendingLineCopy,
+  unknownLineCopy,
   type CreditBatchLineBatch,
   type CreditBatchLineCopy,
 } from "./credit-batch-line-copy";
@@ -99,6 +100,10 @@ const PREVIEW_HELD_OUT_INFO = "This delivery's biochar was drawn from a mix bin,
 
 const SOME_UNBATCHED = " Some of the biochar comes from production runs that are in no credit batch yet.";
 
+/** Unknown lines say what unblocks them instead of "Not yet computed". */
+const REFUSED_LEAD_TOKEN = "Shown once the amount can be saved";
+const UNTRACEABLE_LEAD_TOKEN = "Can't be traced for this delivery";
+
 function sentence(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
@@ -110,20 +115,25 @@ function isSettled(preview: RecordCreditBatchPreview): boolean {
 }
 
 function previewCopy(kind: PreviewedRecordKind, preview: RecordCreditBatchPreview): CreditBatchLineCopy {
-  if (preview.basis === "refused") return missingLineCopy(MISSING_VALUE.notYetComputed, REFUSED_INFO[kind]);
-  if (preview.basis === "untraceable") return missingLineCopy(MISSING_VALUE.notYetComputed, UNTRACEABLE_INFO);
+  if (preview.basis === "refused") return unknownLineCopy(REFUSED_LEAD_TOKEN, REFUSED_INFO[kind]);
+  if (preview.basis === "untraceable") return unknownLineCopy(UNTRACEABLE_LEAD_TOKEN, UNTRACEABLE_INFO);
   if (preview.heldOut) return missingLineCopy(MISSING_VALUE.notApplicable, PREVIEW_HELD_OUT_INFO);
   if (preview.sourceRunCount === 0) return missingLineCopy(MISSING_VALUE.none, EMPTY_SOURCE_INFO[kind]);
   const { batches } = preview;
   const plural = batches.length > 1;
   if (!isSettled(preview)) {
+    // Two possible batches (or one and "none") read as "A or B" / "A or none".
+    const unbatched = preview.unbatchedRunCount > 0;
+    const outcomes = batches.length + (unbatched ? 1 : 0);
     const holds = plural
       ? "biochar from more than one credit batch"
       : "biochar from this credit batch and from production runs that are in none yet";
     return {
       ...CREDIT_BATCH_LINE_BASE,
-      lead: plural ? "Could join credit batches " : "Could join credit batch ",
+      lead: outcomes > 2 ? "Credit batches: " : "Credit batch: ",
       batches,
+      ...(outcomes === 2 && batches.length === 2 ? { batchJoin: "or" as const } : {}),
+      tail: outcomes === 2 && batches.length === 1 ? " or none" : "",
       info: `${THE_SOURCE[kind]} ${holds}. ${STILL_TO_ENTER[kind]} to see which credit ${plural ? "batches" : "batch"} ${RECORD[kind]} joins.`,
     };
   }
@@ -136,10 +146,10 @@ function previewCopy(kind: PreviewedRecordKind, preview: RecordCreditBatchPrevie
   const [only] = batches;
   return {
     ...CREDIT_BATCH_LINE_BASE,
-    lead: plural ? "Joins credit batches " : "Joins credit batch ",
+    lead: plural ? "Credit batches: " : "Credit batch: ",
     batches,
     // One batch names its window; several list theirs behind "+N".
-    tail: !plural && only.startDate && only.endDate ? ` (${formatDateRange(only.startDate, only.endDate)})` : "",
+    window: !plural && only.startDate && only.endDate ? ` (${formatDateRange(only.startDate, only.endDate)})` : "",
     info: preview.unbatchedRunCount > 0 ? `${RULE_INFO[kind]}${SOME_UNBATCHED}` : RULE_INFO[kind],
   };
 }

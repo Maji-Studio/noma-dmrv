@@ -383,7 +383,7 @@ The browser zone is never used. When the facility cannot be resolved, pass
 `UNKNOWN_FACILITY_TIMEZONE` (UTC) explicitly; `timeZone` parameters have no
 default, so the fallback is always visible at the call site.
 
-**Exception (pending confirmation).** Account security metadata that belongs to
+**Exception (Kenji, 2026-10-22).** Account security metadata that belongs to
 no facility (API keys, connected apps: created, last used, expires) keeps the
 viewer's clock via `formatDateTime`.
 

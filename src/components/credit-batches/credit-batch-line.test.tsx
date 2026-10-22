@@ -29,6 +29,27 @@ describe("CreditBatchLine with several batches", () => {
     expect(screen.getByText(/Jul 1 to Sep 30, 2026|Jul 1 to Sep 30/)).toBeTruthy();
   });
 
+  it("joins two possible batches with or, and hides the window on phones", () => {
+    const copy = describeRecordCreditBatchLine("delivery", {
+      state: "preview",
+      preview: { batches: batches.slice(0, 2), heldOut: false, basis: "source", sourceRunCount: 2, unbatchedRunCount: 0 },
+    });
+    render(<CreditBatchLine copy={copy} />);
+    expect(screen.getByRole("status").textContent).toContain("Credit batch: CB-26-001 (opens in a new tab) or CB-26-002");
+    expect(screen.queryByRole("button", { name: /Show all/ })).toBeNull();
+  });
+
+  it("puts a single batch's window in a span hidden below 640px", () => {
+    const copy = describeRecordCreditBatchLine("delivery", {
+      state: "preview",
+      preview: { batches: batches.slice(0, 1), heldOut: false, basis: "planned", sourceRunCount: 1, unbatchedRunCount: 0 },
+    });
+    render(<CreditBatchLine copy={copy} />);
+    const span = screen.getByText(/Jan 1 to Mar 31/);
+    expect(span.className).toContain("hidden");
+    expect(span.className).toContain("sm:inline");
+  });
+
   it("has no +N button for one batch", () => {
     render(<CreditBatchLine copy={describeRecordCreditBatchLine("feedstock", { state: "loaded", batches: batches.slice(0, 1) })} />);
     expect(screen.queryByRole("button", { name: /Show all/ })).toBeNull();
