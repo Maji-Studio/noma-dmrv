@@ -53,23 +53,18 @@ these areas; the entry rules and invariants live in
   gives `invalid_grant`, which claude.ai turns into a sign-in prompt. Only a
   dropped CIMD client gives `invalid_client`.
 
-### Touch targets outside the roster slot (`ui/touch-target-gaps`, opened 2026-10-22)
+### Icon button width (`ui/button-icon-width`, opened 2026-10-22)
 
-- **Anchor:** `src/components/ui/touch-target.ts:ROW_ACTION_HIT_AREA` gives roster
-  row action buttons a 44px hit area. These controls do not get it:
-  - `src/components/organizations/organization-settings.tsx:OrganizationSettings`:
-    the Members role `FormSelect` stays 40px; a select cannot take `::after`.
-  - `src/components/customers/customer-saved-locations.tsx:CustomerSavedLocations`:
-    Edit, Archive and Delete are 32px icon buttons at `gap-8`.
-  - `src/components/ui/row-actions-menu/index.tsx:RowActionsMenu`: the trigger is
-    a 32px icon button.
-- **Duplicate recipes to consolidate** into one shared helper:
-  `src/components/emissions/emission-line-grid.ts:TOUCH_TARGET` (centred
-  `::before`), `src/components/certification/new-removal-dialog/batch-box.tsx:HIT_AREA`,
-  `src/components/credit-batches/credit-batch-line.tsx:MoreBatches` (inline
-  `::after`) and
-  `src/components/certification/certification-status-badge.tsx:CertificationStatusBadge`
-  (centred `::before`).
+- **Anchor:** `src/components/ui/button/index.tsx:buttonVariants`. `size="icon"` sets
+  `w-[32px]`, but the `width` variant default `w-auto` wins the class merge, so every
+  icon-only `Button` is as wide as its glyph (16px) and a flex row can shrink it
+  further. 51 call sites use `size="icon"`; the touch-target fix works around it with
+  `ICON_BUTTON_HIT_AREA` (`touch-target.ts`) on the row menu trigger and the customer
+  location actions only. Fix at the source (drop `w-auto` from the `width` default) and
+  check the 51 sites, then drop `w-32 shrink-0` from `ICON_BUTTON_HIT_AREA`.
+- Archived customer locations keep `gap-12` and a 44px row, but the sheet body still
+  scrolls sideways on a phone (`SlideOverPanel` `fillHeight` makes the form wider than the
+  sheet); the Edit, Archive and Delete buttons sit past the right edge until it is scrolled.
 
 ### Party write adapters per kind (`api/party-write-adapters`, opened 2026-10-17)
 

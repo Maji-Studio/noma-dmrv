@@ -2,6 +2,36 @@
 export const PHONE_TOUCH_TARGET = "max-sm:h-auto max-sm:min-h-44";
 
 /**
+ * A 44px hit area for a control that stays its drawn size, as a `::before`
+ * centred on it and at least 44px in both axes (`w-full` keeps a wider control
+ * its own width). Put it on the control itself; do not combine it with another
+ * `::before` on the same element. Neighbouring controls need a gap that clears
+ * it: two 32px icon buttons side by side need 12px between them or their areas
+ * overlap. Use it for chips, badges and icon buttons.
+ */
+export const CENTRED_HIT_AREA =
+  "relative before:absolute before:left-1/2 before:top-1/2 before:-translate-x-1/2 before:-translate-y-1/2 before:h-44 before:w-full before:min-w-44 before:content-['']";
+
+/**
+ * `Button size="icon"` is meant to be 32px square, but its `width` variant
+ * default (`w-auto`) wins the class merge, so the button collapses to its glyph
+ * (16px) and a flex row can squeeze it further. Pass this on an icon-only
+ * `Button` to get the 32px width back, plus the 44px hit area.
+ */
+export const ICON_BUTTON_HIT_AREA = `w-32 shrink-0 ${CENTRED_HIT_AREA}`;
+
+/**
+ * A 44px tall hit area for an inline text link or button, as an `::after` that
+ * spans the control's width and is centred on its line, so the row does not
+ * grow. Add `after:min-w-24` (or similar) for a very short label. The `sm:`
+ * variant is for controls that already have their own 44px row below `sm`.
+ */
+export const INLINE_HIT_AREA =
+  "relative after:absolute after:inset-x-0 after:top-1/2 after:h-44 after:-translate-y-1/2 after:content-['']";
+export const INLINE_HIT_AREA_FROM_SM =
+  "sm:relative sm:after:absolute sm:after:inset-x-0 sm:after:top-1/2 sm:after:h-44 sm:after:-translate-y-1/2 sm:after:content-['']";
+
+/**
  * Row action buttons (32px and 40px tall) keep their drawn size and reach the
  * 44px touch target through an invisible `::after` centred on the button, at
  * least 44px in both axes. `OrganizationRosterRow` applies it to its actions;

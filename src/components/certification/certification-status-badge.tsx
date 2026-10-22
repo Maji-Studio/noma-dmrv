@@ -17,6 +17,7 @@ import { Popover } from "@/components/ui/popover";
 import { StatusBadge, type StatusValue } from "@/components/ui/status-badge";
 import type { StatusHistoryEntityType } from "@/lib/certification/status-history";
 import { cn } from "@/lib/utils";
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import { SubmissionStatusHistory } from "./submission-status-history";
 
 const HISTORY_ICON_SIZE = 12;
@@ -46,13 +47,11 @@ export function CertificationStatusBadge({
           // The visible label leads the name (WCAG 2.5.3).
           aria-label={`${label}, status history`}
           className={cn(
-            "relative inline-flex items-center self-start cursor-pointer",
-            // 44px touch target without growing the row: an absolutely
-            // positioned hit area centred on the compact badge. Controls
-            // stacked right under a badge sit above it (`relative`), so the
-            // area never takes a press meant for them.
-            "before:absolute before:left-1/2 before:top-1/2 before:-translate-x-1/2 before:-translate-y-1/2",
-            "before:h-44 before:w-full before:min-w-44 before:content-['']",
+            "inline-flex items-center self-start cursor-pointer",
+            // 44px touch target without growing the row. Controls stacked
+            // right under a badge sit above it (`relative`), so the area
+            // never takes a press meant for them.
+            CENTRED_HIT_AREA,
             "hover:opacity-80 transition-opacity",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] focus-visible:ring-offset-1",
             className

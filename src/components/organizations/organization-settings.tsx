@@ -18,6 +18,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { FormSelect } from "@/components/forms/form-select";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import {
   useChangeMemberRole,
@@ -192,7 +194,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
                         onChange={(e) =>
                           onChangeRole(member.memberId, e.target.value)
                         }
-                        className="w-[140px]"
+                        className={cn("w-[140px]", PHONE_TOUCH_TARGET)}
                         aria-label={`Role for ${member.email}`}
                       />
                     ) : (
