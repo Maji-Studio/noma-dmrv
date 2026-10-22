@@ -655,7 +655,7 @@ export function ProductionRunList() {
         <DataTable.Pagination />
       </DataTable>
 
-      {deleteError && <ServerError message={deleteError} />}
+      {deleteError && !deleting && <ServerError message={deleteError} />}
 
       <DeleteConfirmDialog
         isOpen={!!deletingRunId}
@@ -664,6 +664,7 @@ export function ProductionRunList() {
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingRunId(null); setDeleteError(null); }}
         isPending={deleteRun.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       <EntitySideSheet

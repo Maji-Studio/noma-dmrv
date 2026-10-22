@@ -347,7 +347,7 @@ export function ReactorList() {
       </DataTable>
 
       {/* Delete Error */}
-      {deleteError && <ServerError message={deleteError} />}
+      {deleteError && !deletingReactor && <ServerError message={deleteError} />}
 
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog
@@ -360,6 +360,7 @@ export function ReactorList() {
           setDeleteError(null);
         }}
         isPending={deleteReactor.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       {/* Unified Side Sheet */}

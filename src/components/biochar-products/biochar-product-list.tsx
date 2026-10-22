@@ -587,7 +587,7 @@ export function BiocharProductList() {
         <DataTable.Pagination />
       </DataTable>
 
-      {deleteError && <ServerError message={deleteError} />}
+      {deleteError && !deleting && <ServerError message={deleteError} />}
 
       <DeleteConfirmDialog
         isOpen={!!deletingProductId}
@@ -599,6 +599,7 @@ export function BiocharProductList() {
           setDeleteError(null);
         }}
         isPending={deleteProduct.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       <EntitySideSheet

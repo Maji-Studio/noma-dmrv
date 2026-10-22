@@ -649,7 +649,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       </DataTable>
 
       {/* Delete Error */}
-      {deleteError && <ServerError message={deleteError} />}
+      {deleteError && !deleting && <ServerError message={deleteError} />}
 
       {/* Delete Confirmation */}
       <DeleteConfirmDialog
@@ -659,6 +659,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeleting(null); setDeleteError(null); }}
         isPending={deleteFeedstock.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       {/* Side Sheet */}

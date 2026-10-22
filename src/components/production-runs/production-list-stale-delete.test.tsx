@@ -52,8 +52,13 @@ vi.mock("@/lib/biochar-composition", async () => import("@/lib/biochar-compositi
 vi.mock("@/components/ui/stat-card", () => ({ StatCard: () => null }));
 vi.mock("@/components/ui/entity-side-sheet", () => ({ EntitySideSheet: () => null }));
 vi.mock("@/components/ui/delete-confirm-dialog", () => ({
-  DeleteConfirmDialog: ({ isOpen, onConfirm }: { isOpen: boolean; onConfirm: () => Promise<void> }) =>
-    isOpen ? <button aria-label="Confirm delete" onClick={onConfirm} /> : null,
+  DeleteConfirmDialog: ({ isOpen, onConfirm, errorMessage }: { isOpen: boolean; onConfirm: () => Promise<void>; errorMessage?: string }) =>
+    isOpen ? (
+      <div>
+        <button aria-label="Confirm delete" onClick={onConfirm} />
+        {errorMessage && <p data-testid="dialog-delete-error">{errorMessage}</p>}
+      </div>
+    ) : null,
 }));
 vi.mock("@/components/certification/entity-certify-readiness-badge", () => ({ EntityCertifyReadinessBadge: () => null }));
 vi.mock("./production-run-form", () => ({ ProductionRunForm: () => null }));
@@ -104,7 +109,8 @@ for (const [label, entity, idKey, Component] of [
         await act(async () => { renderer.root.findByProps({ "aria-label": "Delete" }).props.onClick(); });
         await act(async () => { await renderer.root.findByProps({ "aria-label": "Confirm delete" }).props.onClick(); });
         expect(renderer.root.findAllByProps({ "aria-label": "Confirm delete" })).toHaveLength(1);
-        expect(renderer.root.findByProps({ "data-testid": "delete-error" }).children).toEqual(["Deletion is blocked by linked records."]);
+        expect(renderer.root.findByProps({ "data-testid": "dialog-delete-error" }).children).toEqual(["Deletion is blocked by linked records."]);
+        expect(renderer.root.findAllByProps({ "data-testid": "delete-error" })).toHaveLength(0);
       } finally { await act(async () => renderer.unmount()); }
     });
   });
