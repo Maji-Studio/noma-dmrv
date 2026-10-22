@@ -79,7 +79,7 @@ export function logUnexpectedSaveError(label: string, err: unknown) {
 /** What one edit save came to: saved (maybe with a warning), or the error to show beside the form. */
 export type CreditBatchSaveOutcome =
   | { status: "saved"; warning?: string }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string; /** The thrown error, so a form on the save refusal can read its issues. */ cause?: unknown };
 
 interface SaveResult {
   success: boolean;
@@ -115,6 +115,6 @@ export async function saveCreditBatchEdit({
     return result.warning ? { status: "saved", warning: result.warning } : { status: "saved" };
   } catch (err) {
     logUnexpectedSaveError("Credit batch update error:", err);
-    return { status: "error", message: err instanceof Error ? err.message : NOT_SAVED_MESSAGE };
+    return { status: "error", message: err instanceof Error ? err.message : NOT_SAVED_MESSAGE, cause: err };
   }
 }

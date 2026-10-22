@@ -12,11 +12,6 @@ const PENDING_SEAMS = [
     pending: /getCreateErrorMessage:\s*\(error\)\s*=>/,
   },
   {
-    file: "src/hooks/use-picker-edit-submit.ts",
-    reason: "PR E: usePickerEditSubmit catches without the form's refusal handler",
-    pending: /setError\(toSaveErrorMessage\(cause,/,
-  },
-  {
     file: "src/hooks/use-quick-add-submit.ts",
     reason: "PR H: useQuickAddSubmit reduces action failures to their message",
     pending: /setError\(result\.error\)/,
@@ -25,9 +20,6 @@ const PENDING_SEAMS = [
 
 /** #1327: remove each entry when its form moves to the shared refusal handler. */
 const PENDING: Record<string, string> = {
-  "orders/order-form.tsx": "PR E: order sheet and picker edit",
-  "samples/sample-form.tsx": "PR E: sample code alias and parent catches",
-  "credit-batches/credit-batch-form.tsx": "PR E: credit batch sheets",
   "production-runs/production-run-form.tsx": "PR F: run overlap catch and parent catches",
   "production-runs/production-incident-form.tsx": "PR F: incident child editor",
   "production-runs/production-sample-form.tsx": "PR F: in-process sample child editor",

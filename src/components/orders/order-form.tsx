@@ -23,6 +23,8 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, PackageIcon, StorefrontIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
+import { useId } from "react";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 
 import { ServerError } from "@/components/forms/server-error";
 import { Button } from "@/components/ui/button";
@@ -69,8 +71,8 @@ function formatPackaging(type: PackagingType): string {
 interface OrderFormProps {
   /** Existing order data for editing (undefined for create mode) */
   order?: Order;
-  /** Form submission handler */
-  onSubmit: (data: OrderFormData) => Promise<void> | void;
+  /** Form submission handler; `onRefusal` shows a refused save at its fields (#1327). */
+  onSubmit: (data: OrderFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -93,6 +95,7 @@ export function OrderForm({
   lock,
 }: OrderFormProps) {
   const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!order;
   // Fail closed: until the lock answers, fields an In use order holds stay disabled.
   const locked = (field: string) => isEditMode && isRecordFieldHeld(lock, recordInUseFreeFields("order"), field);
@@ -113,6 +116,7 @@ export function OrderForm({
     getValues,
     setValue,
     resetField,
+    setError,
     getFieldState,
     formState: { errors },
   } = useForm({
@@ -190,13 +194,14 @@ export function OrderForm({
 
   const defaultSubmitLabel = isEditMode ? "Update order" : "Create order";
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const handleFormSubmit = latched(handleSubmit((data) => {
-    return onSubmit(data as OrderFormData);
+    return onSubmit(data as OrderFormData, refuseSave);
   }));
 
   return (
     <>
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       <FormSpine control={control}>
       {/* Order Information */}
       <FormSection

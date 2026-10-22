@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const SAMPLE_ID = "6f1c4d3a-0f2b-4d6a-9f1e-0a1b2c3d4e5f";
 const FACILITY_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
 
-type SubmitHandler = (data: Record<string, unknown>) => Promise<void>;
+type SubmitHandler = (data: Record<string, unknown>, onRefusal: (error: unknown, fallback: string) => string | null) => Promise<void>;
 type ModeChange = (mode: "view" | "edit" | "create") => void;
 
 const harness = vi.hoisted(() => ({
@@ -19,6 +19,7 @@ const harness = vi.hoisted(() => ({
   sample: null as Record<string, unknown> | null,
   update: vi.fn(),
   onSubmit: null as SubmitHandler | null,
+  formError: undefined as string | undefined,
   onModeChange: null as ModeChange | null,
   sheet: { open: false, mode: "view" as string },
   lock: undefined as RecordLockView | undefined,
@@ -133,13 +134,15 @@ vi.mock("./sample-read-sections", async (importOriginal) => ({
 }));
 vi.mock("./sample-documents-panel", () => ({ SampleDocumentsPanel: () => null }));
 vi.mock("./sample-form", () => ({
-  SampleForm: (props: { onSubmit: SubmitHandler }) => {
+  SampleForm: (props: { onSubmit: SubmitHandler; errorMessage?: string }) => {
     harness.onSubmit = props.onSubmit;
+    harness.formError = props.errorMessage;
     return null;
   },
 }));
 
 import type { CellContext } from "@tanstack/react-table";
+import { ActionError } from "@/lib/action-error";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { SampleList } from "./sample-list";
 
@@ -243,6 +246,30 @@ describe("Sample sheet behind a Sent Removal", () => {
     });
     harness.sheetProps?.submitBlock?.retry?.run();
     expect(harness.retry).toHaveBeenCalled();
+    renderer?.unmount();
+  });
+
+  it("hands a refused save to the form's handler and shows what it returns (#1327)", async () => {
+    harness.lock = IN_USE;
+    harness.query = { sample: SAMPLE_ID, mode: "edit" };
+    const refusal = new ActionError({
+      error: "The Removal holds this sample.", code: "certification_locked",
+      issues: [{ path: ["labName"], code: "certification_locked", message: "The Removal holds this sample." }],
+    });
+    harness.update.mockRejectedValue(refusal);
+    await act(async () => { renderer = create(<SampleList />); });
+
+    // Every reason sits at a field: nothing is left for the footer.
+    const everyReasonAtAField = vi.fn(() => null);
+    await act(async () => { await harness.onSubmit?.({ labName: "Changed" }, everyReasonAtAField); });
+    expect(everyReasonAtAField).toHaveBeenCalledWith(refusal, "The Removal holds this sample.");
+    expect(harness.formError ?? null).toBeNull();
+
+    // The rest of the refusal shows in the footer once.
+    const footer = vi.fn(() => "Your changes were not saved.");
+    await act(async () => { await harness.onSubmit?.({ labName: "Changed" }, footer); });
+    expect(harness.formError).toBe("Your changes were not saved.");
+    expect(harness.sheet).toEqual({ open: true, mode: "edit" });
     renderer?.unmount();
   });
 

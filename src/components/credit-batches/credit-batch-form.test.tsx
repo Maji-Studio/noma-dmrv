@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ActionError } from "@/lib/action-error";
+import { OPEN_LOCK } from "../../../tests/helpers/record-lock-mocks";
 import { useController, type Control } from "react-hook-form";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -208,7 +210,7 @@ describe("CreditBatchForm certifier period policy", () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       startDate: new Date("2026-01-01"),
       endDate: new Date("2026-04-30"),
-    })));
+    }), expect.any(Function)));
   });
 
   it("refuses the same period for an Isometric facility", async () => {
@@ -237,7 +239,7 @@ describe("CreditBatchForm certifier period policy", () => {
     await waitFor(() => expect(screen.queryByText(MONTH_REFUSAL)).toBeNull());
     expect(mocks.certifierSummary).toHaveBeenLastCalledWith(UNMAPPED_FACILITY_ID, true);
     fireEvent.submit(form);
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ facilityId: UNMAPPED_FACILITY_ID })));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ facilityId: UNMAPPED_FACILITY_ID }), expect.any(Function)));
 
     onSubmit.mockClear();
     fireEvent.change(screen.getByRole("combobox", { name: "Facility" }), {
@@ -291,5 +293,67 @@ describe("CreditBatchForm unsaved changes", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Feedstock type" }), { target: { value: FEEDSTOCK_TYPE_ID } });
     await waitFor(() => expect(states.at(-1)).toBe(true));
     expect(dateValue(container, "startDate")).toBe(SEPTEMBER.startDate);
+  });
+});
+
+describe("CreditBatchForm save refusal (#1327)", () => {
+  const creditBatch = {
+    id: "00000000-0000-4000-8000-000000000001",
+    facilityId: "00000000-0000-4000-8000-000000000002",
+    feedstockTypeId: "00000000-0000-4000-8000-000000000003",
+    startDate: "2026-01-01",
+    endDate: "2026-04-30",
+    sampling: "sampled",
+    certifier: null,
+    productionRunIds: [],
+  } as unknown as CreditBatch;
+  const LOCK_REASON = "A Removal holds this batch. Correct the Removal first.";
+  const issue = (path: string[], message: string, code = "validation_failed") => ({ path, code, message });
+
+  /** The parent's catch: `setError(onRefusal(error, fallback))`. */
+  function RefusingBatchForm({ refusal }: { refusal: unknown }) {
+    const [error, setError] = useState<string | null>(null);
+    return (
+      <CreditBatchForm
+        creditBatch={creditBatch}
+        lock={OPEN_LOCK}
+        errorMessage={error ?? undefined}
+        onSubmit={(_data, onRefusal) => { setError(onRefusal(refusal, "Credit batch was not saved. Try again.")); }}
+      />
+    );
+  }
+
+  async function saveRefused(refusal: unknown, edit?: (endDate: HTMLInputElement) => void) {
+    mocks.certifierSummary.mockReturnValue({ data: { mapping: null } });
+    const { container } = render(<RefusingBatchForm refusal={refusal} />);
+    const endDate = container.querySelector<HTMLInputElement>('input[name="endDate"]')!;
+    edit?.(endDate);
+    await act(async () => { fireEvent.submit(container.querySelector("form")!); });
+    return { container, endDate };
+  }
+
+  it("shows a refusal that names a field at that field and not in the footer", async () => {
+    const { container } = await saveRefused(new ActionError({
+      error: "The end date is after today.", code: "validation_failed", issues: [issue(["endDate"], "The end date is after today.")],
+    }));
+    await waitFor(() => expect(container.querySelector("#endDate-error")?.textContent).toBe("The end date is after today."));
+    expect(container.textContent).not.toContain("Try again.");
+  });
+
+  it("keeps a code clash in the footer, since the credit batch form has no code field", async () => {
+    const message = 'Code "CB-26-001" already exists. Use a different code.';
+    const { container } = await saveRefused(new ActionError({ error: message, code: "validation_failed", issues: [issue(["code"], message, "conflict")] }));
+    await waitFor(() => expect(container.textContent).toContain("already exists"));
+    expect(container.querySelector('[id$="-error"]')).toBeNull();
+  });
+
+  it("sends a locked field back to the saved value and says why once", async () => {
+    const { container, endDate } = await saveRefused(
+      new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [issue(["endDate"], LOCK_REASON, "certification_locked")] }),
+      (field) => fireEvent.change(field, { target: { value: "2026-05-31" } }),
+    );
+    await waitFor(() => expect(container.querySelector("#endDate-error")?.textContent).toBe("Locked. Your change was not saved."));
+    expect(endDate.value).toBe("2026-04-30");
+    expect(container.textContent?.split("A Removal holds this batch").length).toBe(2);
   });
 });
