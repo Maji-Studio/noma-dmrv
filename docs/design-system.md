@@ -525,6 +525,11 @@ Always use `Button`; never a raw `<button>` with manual styling.
   `router.push` is wrapped in `startTransition` and holds until the route
   renders. Only a failure clears it. The clicked button carries the spinner and
   its siblings are disabled.
+- **Exception: listbox rows.** The sidebar organization switcher's options are
+  `role="option"` rows (left-aligned text, a trailing icon, 40px, sentence
+  case). `Button` imposes `label-button` type, fixed heights and
+  `disabled:pointer-events-none`, so these keep a raw `<button>` with the same
+  spinner glyph and `aria-busy` as `busy`.
 - **A confirm dialog keeps its label.** `DeleteConfirmDialog` and
   `ConfirmActionDialog` show the spinner through `busy` and never swap the text
   ("Deleting...", "Submitting…"); Cancel is disabled and Escape, the backdrop

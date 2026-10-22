@@ -17,6 +17,7 @@ const LIST_PATH = "/credit-batches";
 
 const harness = vi.hoisted(() => ({
   remove: vi.fn(),
+  pushSpy: vi.fn(),
   push: undefined as ((href: string) => void) | undefined,
   batch: { id: "batch-1", version: 3, code: "CB-1", facilityId: "facility-1", startDate: "2026-09-01", endDate: "2026-09-30" },
 }));
@@ -26,7 +27,7 @@ const path = { value: "/credit-batches/batch-1", listeners: new Set<() => void>(
 const setPath = (next: string) => { path.value = next; path.listeners.forEach((l) => l()); };
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: (href: string) => harness.push?.(href) }),
+  useRouter: () => ({ push: (href: string) => { harness.pushSpy(href); harness.push?.(href); } }),
   usePathname: () => useSyncExternalStore(
     (l) => { path.listeners.add(l); return () => path.listeners.delete(l); },
     () => path.value,
@@ -102,6 +103,7 @@ const openDialog = async () => {
 
 beforeEach(() => {
   harness.remove.mockReset();
+  harness.pushSpy.mockReset();
   setPath("/credit-batches/batch-1");
 });
 afterEach(cleanup);
@@ -128,7 +130,6 @@ describe("deleting a credit batch from its page", () => {
 
   it("closes the dialog and toasts the error, with no navigation, when the delete fails", async () => {
     harness.remove.mockRejectedValue(new Error("boom"));
-    harness.push = vi.fn();
     await openDialog();
 
     fireEvent.click(deleteButton());
@@ -136,6 +137,7 @@ describe("deleting a credit batch from its page", () => {
     expect(await screen.findByText(/was not deleted|boom/i)).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByText("Credit batch deleted.")).toBeNull();
+    expect(harness.pushSpy).not.toHaveBeenCalled();
   });
 
   it("opens the in-use dialog for a conflict, with no navigation", async () => {
@@ -146,5 +148,6 @@ describe("deleting a credit batch from its page", () => {
 
     expect(await screen.findByText(/Has Samples\./)).toBeTruthy();
     expect(screen.queryByText("Credit batch deleted.")).toBeNull();
+    expect(harness.pushSpy).not.toHaveBeenCalled();
   });
 });

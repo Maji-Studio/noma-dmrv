@@ -60,7 +60,7 @@ export function ConfirmActionDialog({
   const isNeutral = variant === "neutral";
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} dismissible={dismissible} ariaLabelledBy={TITLE_ID} width="sm">
+    <Modal isOpen={isOpen} onClose={onClose} dismissible={dismissible && !isPending} ariaLabelledBy={TITLE_ID} width="sm">
       <div className="flex flex-col gap-20">
         {isProduction && <EnvBanner isProduction variant="inline" />}
 

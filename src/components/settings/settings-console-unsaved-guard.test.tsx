@@ -71,7 +71,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   saveMock.mutateAsync.mockResolvedValue({});
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // A restore from the back-forward cache drops the unload suppression a test set.
+  window.dispatchEvent(Object.assign(new Event("pageshow"), { persisted: true }));
+});
 
 const renderPane = () =>
   render(
@@ -275,7 +279,6 @@ describe("app-wide leave guard (the sidebar organization switcher)", () => {
     expect(leave).toHaveBeenCalledTimes(1);
   });
 
-  // Last: the suppression is for the page's remaining life, as it is in the app.
   it("skips the tab-close prompt once a confirmed hard navigation is about to load", async () => {
     renderPane();
     edit();
