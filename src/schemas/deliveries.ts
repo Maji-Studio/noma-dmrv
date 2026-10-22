@@ -302,7 +302,6 @@ export type DeleteDeliveryData = z.infer<typeof deleteDeliverySchema>;
 /** Operation and posting issue paths to the delivery form fields that show them. */
 export const DELIVERY_REFUSAL_ALIASES = {
   deliveredAt: "deliveryDate",
-  occurredAt: "deliveryDate",
   moisturePercent: "moistureContentPercent",
   sources: "deliveredWetMassKg",
 } as const satisfies Readonly<Record<string, keyof z.output<typeof createDeliverySchema>>>;
