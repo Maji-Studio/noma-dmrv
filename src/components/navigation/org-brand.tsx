@@ -19,6 +19,7 @@ import { useToast } from "@/components/ui/toast";
 import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import {
+  ORG_SWITCH_FAILED_MESSAGE,
   useActiveOrganizationProfile,
   useAllOrganizations,
   useEnterOrganization,
@@ -26,8 +27,6 @@ import {
 import { shouldShowOrganizationSwitcher } from "./org-brand-switching";
 import { useViewerOrg } from "./viewer-org";
 import { FALLBACK_ORG_NAME, viewerRoleLabel } from "./viewer-org-rules";
-
-const SWITCH_FAILED_MESSAGE = "The organization did not open. Try again.";
 
 type SwitchableOrg = { id: string; name: string };
 
@@ -158,7 +157,7 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
       setIsOpen(false);
     } catch {
       switching.release();
-      toast.error(SWITCH_FAILED_MESSAGE);
+      toast.error(ORG_SWITCH_FAILED_MESSAGE);
     }
   }
 
@@ -235,10 +234,10 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
                     aria-selected={isSelected}
                     onClick={() => handleSelect(org.id, org.name)}
                     disabled={isSwitching}
-                    className={`w-full h-40 px-16 flex items-center justify-between gap-8 body-caption text-left transition-colors duration-150 ${
+                    className={`w-full h-40 px-16 flex items-center justify-between gap-8 body-caption text-left transition-colors duration-150 disabled:cursor-default disabled:opacity-40 ${
                       isSelected
                         ? "text-white bg-[var(--color-white-100)]/[0.08]"
-                        : "text-[var(--color-white-75)] hover:text-white hover:bg-[var(--color-white-100)]/[0.06]"
+                        : "text-[var(--color-white-75)] enabled:hover:text-white enabled:hover:bg-[var(--color-white-100)]/[0.06]"
                     }`}
                   >
                     <span className="truncate">{org.name}</span>

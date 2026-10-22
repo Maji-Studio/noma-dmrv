@@ -1,10 +1,14 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OrgBrand } from "./org-brand";
 import { ViewerOrgProvider } from "./viewer-org";
 import type { ViewerOrg } from "./viewer-org-rules";
 
 const state = vi.hoisted(() => ({
+  enter: vi.fn(),
+  toastError: vi.fn(),
   isAdmin: false,
   session: {
     data: undefined as
@@ -60,7 +64,7 @@ vi.mock("@/lib/auth/client", () => ({
 }));
 
 vi.mock("@/components/ui/toast", () => ({
-  useToast: () => ({ error: vi.fn() }),
+  useToast: () => ({ error: state.toastError }),
 }));
 
 vi.mock("@/hooks/use-is-admin", () => ({
@@ -70,11 +74,14 @@ vi.mock("@/hooks/use-is-admin", () => ({
 vi.mock("@/hooks/use-organizations", () => ({
   useActiveOrganizationProfile: () => state.activeProfile,
   useAllOrganizations: () => state.allOrganizations,
-  useEnterOrganization: () => vi.fn(),
+  ORG_SWITCH_FAILED_MESSAGE: "The organization did not open. Try again.",
+  useEnterOrganization: () => state.enter,
 }));
 
 describe("OrgBrand", () => {
   beforeEach(() => {
+    state.enter = vi.fn();
+    state.toastError = vi.fn();
     state.isAdmin = false;
     state.session = { data: undefined, isPending: true };
     state.activeProfile = { data: undefined, isPending: true };
@@ -227,6 +234,70 @@ describe("OrgBrand", () => {
 
       expect(html).not.toContain("Platform Admin");
       expect(html).toContain('aria-haspopup="listbox"');
+    });
+  });
+
+  describe("switching organizations", () => {
+    function openPicker() {
+      state.session = { data: { session: { activeOrganizationId: "org-1" } }, isPending: false };
+      state.activeProfile = { data: { id: "org-1", name: "Dark Earth Carbon" }, isPending: false };
+      state.memberOrganizations = {
+        data: [
+          { id: "org-1", name: "Dark Earth Carbon" },
+          { id: "org-2", name: "Second Organization" },
+          { id: "org-3", name: "Third Organization" },
+        ],
+        isPending: false,
+      };
+      render(<OrgBrand />);
+      fireEvent.click(screen.getByRole("button", { name: /Dark Earth Carbon/ }));
+    }
+    const option = (name: string) => screen.getByRole("option", { name }) as HTMLButtonElement;
+    afterEach(() => cleanup());
+
+    it("stays switching after a successful pick and ignores a second pick", async () => {
+      state.enter.mockResolvedValue({ success: true });
+      openPicker();
+
+      fireEvent.click(option("Second Organization"));
+      await waitFor(() => expect(screen.getByText("Switching…")).toBeTruthy());
+      // The page is still unloading: the trigger stays disabled and the list stays locked.
+      expect((screen.getByRole("button", { name: /Switching/ }) as HTMLButtonElement).disabled).toBe(true);
+
+      fireEvent.click(screen.getByRole("button", { name: /Switching/ }));
+      expect(state.enter).toHaveBeenCalledTimes(1);
+    });
+
+    it("disables the other options while a switch is held and ignores clicks on them", async () => {
+      state.enter.mockReturnValue(new Promise(() => {}));
+      openPicker();
+
+      fireEvent.click(option("Second Organization"));
+      await waitFor(() => expect(option("Third Organization").disabled).toBe(true));
+      fireEvent.click(option("Third Organization"));
+      expect(state.enter).toHaveBeenCalledTimes(1);
+      expect(state.enter).toHaveBeenCalledWith("org-2", "Second Organization");
+    });
+
+    it("shows a toast and re-enables the picker when the switch throws", async () => {
+      state.enter.mockRejectedValue(new Error("network"));
+      openPicker();
+
+      fireEvent.click(option("Second Organization"));
+      await waitFor(() =>
+        expect(state.toastError).toHaveBeenCalledWith("The organization did not open. Try again."),
+      );
+      expect(option("Third Organization").disabled).toBe(false);
+      expect(screen.queryByText("Switching…")).toBeNull();
+    });
+
+    it("re-enables the picker when the switch reports failure", async () => {
+      state.enter.mockResolvedValue({ success: false, error: "No access" });
+      openPicker();
+
+      fireEvent.click(option("Second Organization"));
+      await waitFor(() => expect(option("Third Organization").disabled).toBe(false));
+      expect(screen.queryByText("Switching…")).toBeNull();
     });
   });
 });

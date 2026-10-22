@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/loading-skeleton";
 import { FormActions, FormField, FormInput } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import {
+  ORG_SWITCH_FAILED_MESSAGE,
   useAllOrganizations,
   useAllOrganizationApiAccess,
   useCreateOrganization,
@@ -70,7 +71,7 @@ export function OrganizationsAdmin() {
       }
     } catch {
       entering.release();
-      toast.error("The organization did not open. Try again.");
+      toast.error(ORG_SWITCH_FAILED_MESSAGE);
     }
   }
 

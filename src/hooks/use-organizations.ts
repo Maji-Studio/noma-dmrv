@@ -80,6 +80,8 @@ export function useResetAfterOrgSwitch() {
   };
 }
 
+export const ORG_SWITCH_FAILED_MESSAGE = "The organization did not open. Try again.";
+
 export function useEnterOrganization() {
   const resetAfterOrgSwitch = useResetAfterOrgSwitch();
 
