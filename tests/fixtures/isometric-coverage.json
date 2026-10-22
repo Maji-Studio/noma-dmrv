@@ -4,7 +4,7 @@
     {
       "label": "Dark Earth sandbox demo",
       "externalProjectId": "prj_1K9YJ33RKSBX9FFF",
-      "defaultRemovalTemplateId": "rvt_1KS4S43VPSBXA26X"
+      "removalTemplateId": "rvt_1KS4S43VPSBXA26X"
     }
   ]
 }

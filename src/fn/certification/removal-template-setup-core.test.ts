@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { SafeError } from "@/lib/errors";
 import type { OrgContext } from "@/lib/auth/server";
 import type { ApplyRemovalTemplateSetupInput } from "@/schemas/removal-template-setup";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
@@ -26,13 +27,13 @@ import { applyRemovalTemplateSetupCore, loadRemovalTemplateSetupCore } from "./r
 afterEach(() => vi.unstubAllEnvs());
 
 const ctx: OrgContext = { organizationId: "org", userId: "user", orgRole: "admin", isPlatformAdmin: false };
-const input: ApplyRemovalTemplateSetupInput = { facilityId: "facility", removalTemplateId: fixture.id, fingerprints: { semanticFingerprint: "semantic", fullFingerprint: "full" }, planFingerprint: "plan", answers: {}, overrides: {}, makeDefault: true, batches: [] };
+const input: ApplyRemovalTemplateSetupInput = { facilityId: "facility", removalTemplateId: fixture.id, fingerprints: { semanticFingerprint: "semantic", fullFingerprint: "full" }, planFingerprint: "plan", answers: {}, overrides: {}, batchVersions: [] };
 const definition = normalizeTemplateDefinition(fixture as Parameters<typeof normalizeTemplateDefinition>[0]);
 const observation = { id: "observation", version: 1, definition, enrichment: {}, lineSources: resolveLineSources({ definition }), ...input.fingerprints };
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.facility.mockResolvedValue({ id: input.facilityId, name: "Facility", durabilityOption: "1000_year" });
-  mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, defaultRemovalTemplateId: null });
+  mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, removalTemplateId: null });
   mocks.templates.mockResolvedValue([fixture]);
   mocks.latest.mockResolvedValue(observation);
   mocks.previous.mockResolvedValue(null);
@@ -49,6 +50,11 @@ it("refuses Member before any read", async () => {
 it("checks fit before observing", async () => {
   mocks.facility.mockResolvedValue({ durabilityOption: "200_year" });
   await expect(applyRemovalTemplateSetupCore(ctx, input)).rejects.toThrow("durability");
+  expect(mocks.facts).not.toHaveBeenCalled();
+});
+it("refuses a non-Removal template with the setup refusal, not the credit batch one", async () => {
+  mocks.templates.mockResolvedValue([{ ...fixture, credit_type: "REDUCTION" }]);
+  await expect(applyRemovalTemplateSetupCore(ctx, input)).rejects.toThrow(new SafeError("This is not a Removal template."));
   expect(mocks.facts).not.toHaveBeenCalled();
 });
 it("refuses unread templates and fingerprint drift before the apply transaction", async () => {
@@ -111,7 +117,7 @@ it("fingerprints a preview without a stored observation the same way as the firs
   mocks.latest.mockResolvedValue(null);
   const preview = await loadRemovalTemplateSetupCore(ctx, input.facilityId);
   expect(mocks.facts).not.toHaveBeenCalled();
-  mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, defaultRemovalTemplateId: fixture.id });
+  mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, removalTemplateId: fixture.id });
   const stored = await loadRemovalTemplateSetupCore(ctx, input.facilityId);
   expect(preview.fitting[0].planFingerprint).toBe(setupPlanFingerprint(preview.fitting[0].plan));
   expect(preview.fitting[0].planFingerprint).toBe(stored.fitting[0].planFingerprint);
@@ -137,7 +143,7 @@ it("keeps an added decision visible when an unused template already has a matchi
   expect(mocks.facts).not.toHaveBeenCalled();
 });
 it.each(["default", "pinned"])("refreshes facts for a %s template", async (use) => {
-  if (use === "default") mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, defaultRemovalTemplateId: fixture.id });
+  if (use === "default") mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, removalTemplateId: fixture.id });
   else mocks.batches.mockResolvedValue([{ id: "batch", code: "CB", version: 1, removalTemplateId: fixture.id }]);
   const result = await loadRemovalTemplateSetupCore(ctx, input.facilityId);
   expect(result.viewerCanManage).toBe(true);
@@ -147,7 +153,7 @@ it.each(["default", "pinned"])("refreshes facts for a %s template", async (use) 
   expect(mocks.preview).not.toHaveBeenCalled();
 });
 it.each(["default", "pinned", "unused"])("never observes a %s template for a Member", async (use) => {
-  if (use === "default") mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, defaultRemovalTemplateId: fixture.id });
+  if (use === "default") mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, removalTemplateId: fixture.id });
   if (use === "pinned") mocks.batches.mockResolvedValue([{ id: "batch", code: "CB", version: 1, removalTemplateId: fixture.id }]);
   const member: OrgContext = { ...ctx, orgRole: "member" };
   const result = await loadRemovalTemplateSetupCore(member, input.facilityId);
@@ -163,7 +169,7 @@ it.each(["matching", "missing"])("keeps a Member's default template read-only wi
     semanticFingerprint: semanticFingerprint(definition, {}),
     fullFingerprint: fullFingerprint(definition, {}),
   } : null;
-  mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, defaultRemovalTemplateId: fixture.id });
+  mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, removalTemplateId: fixture.id });
   mocks.latest.mockResolvedValue(latest);
   const member: OrgContext = { ...ctx, orgRole: "member" };
   const result = await loadRemovalTemplateSetupCore(member, input.facilityId);
@@ -200,10 +206,32 @@ it("keeps raw retired-source problems after hiding that source from the browser"
   const lineSources = { ...observation.lineSources, [retiredId]: {
     scope: "operating" as const, entryPolicy: "none" as const, origin: "reviewed" as const, automaticSource: "sample-transport" as const,
   } };
-  mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, defaultRemovalTemplateId: fixture.id });
+  mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, removalTemplateId: fixture.id });
   mocks.facts.mockResolvedValue({ observation: { ...observation, lineSources }, enrichmentProblems: [], lineSourceProblems: validateLineSources(definition, lineSources) });
   const result = await loadRemovalTemplateSetupCore(ctx, input.facilityId);
   expect(result.fitting[0].ready).toBe(false);
   expect(result.fitting[0].plan.decided.some((line) => line.component.id === retiredId)).toBe(false);
   expect(result.fitting[0].plan.decisions.find((decision) => decision.id === retiredId)?.options[0].assignments[retiredId]).toEqual({ scope: "operating", entryPolicy: "additive" });
+});
+
+it("previews each candidate's switching and kept batches with current-template metadata", async () => {
+  mocks.mapping.mockResolvedValue({ externalProjectId: fixture.project_id, removalTemplateId: "older" });
+  mocks.templates.mockResolvedValue([fixture, { ...fixture, id: "older", display_name: "Older template" }]);
+  mocks.batches.mockResolvedValue([
+    { id: "unassigned", code: "CB-1", version: 1, removalTemplateId: null, reason: null },
+    { id: "older", code: "CB-2", version: 2, removalTemplateId: "older", reason: null },
+    { id: "sent", code: "CB-3", version: 3, removalTemplateId: "older", reason: "removalSent" },
+    { id: "archived", code: "CB-4", version: 4, removalTemplateId: "older", reason: "archived" },
+    { id: "certified", code: "CB-5", version: 5, removalTemplateId: "older", reason: "certified" },
+    { id: "current", code: "CB-6", version: 6, removalTemplateId: fixture.id, reason: null },
+  ]);
+  const result = await loadRemovalTemplateSetupCore(ctx, input.facilityId);
+  expect(result).toMatchObject({ removalTemplateId: "older", currentTemplateName: "Older template" });
+  expect(result.fitting[0].batchesThatSwitch).toEqual([{ id: "unassigned", code: "CB-1" }, { id: "older", code: "CB-2" }]);
+  expect(result.fitting[0].batchesKept).toEqual([
+    { id: "sent", code: "CB-3", templateName: "Older template", reason: "removalSent" },
+    { id: "archived", code: "CB-4", templateName: "Older template", reason: "archived" },
+    { id: "certified", code: "CB-5", templateName: "Older template", reason: "certified" },
+  ]);
+  expect(result.batchVersions).toHaveLength(6);
 });

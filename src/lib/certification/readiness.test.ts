@@ -142,7 +142,7 @@ describe("deriveRemovalReadiness — blocked: linkage & template", () => {
     const r = deriveRemovalReadiness(ready({ hasRemovalTemplate: false }));
     expect(r.state).toBe("blocked");
     expect(r.reasons).toContain(
-      "Choose a Removal template for this credit batch.",
+      "Set a Removal template in Settings, Removal templates.",
     );
   });
 

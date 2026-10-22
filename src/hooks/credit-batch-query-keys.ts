@@ -1,5 +1,5 @@
 import type { ProductionRunCreditBatchPreviewInput } from "@/schemas/production-run-credit-batch-preview";
-import type { RecordCreditBatchesInput } from "@/schemas/record-credit-batches";
+import type { RecordCreditBatchPreviewInput, RecordCreditBatchesInput } from "@/schemas/record-credit-batches";
 
 export const creditBatchKeys = {
   emissionsOverview: (facilityId: string) => ["creditBatches", "emissionsOverview", facilityId] as const,
@@ -8,6 +8,9 @@ export const creditBatchKeys = {
   recordPrefix: () => [...creditBatchKeys.all, "record"] as const,
   record: (kind: RecordCreditBatchesInput["kind"], id?: string | null) =>
     [...creditBatchKeys.recordPrefix(), kind, id ?? null] as const,
+  recordPreviewPrefix: () => [...creditBatchKeys.all, "recordPreview"] as const,
+  recordPreview: (input: RecordCreditBatchPreviewInput | null) =>
+    [...creditBatchKeys.recordPreviewPrefix(), input] as const,
   runPreviewPrefix: () => [...creditBatchKeys.all, "runPreview"] as const,
   runPreview: (input: ProductionRunCreditBatchPreviewInput | null) =>
     [...creditBatchKeys.runPreviewPrefix(), input] as const,

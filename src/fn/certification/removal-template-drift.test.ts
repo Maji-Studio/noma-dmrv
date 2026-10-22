@@ -54,7 +54,7 @@ function facilityFacts(template: GhgEntryTemplate, lineSources: LineSources): Fa
   return {
     facilityTimezone: "UTC",
     hasOrgCredentials: true, mapping: { externalProjectId: template.project_id },
-    defaultTemplate: { ...template, id: "different-default" },
+    currentTemplate: { ...template, id: "different-default" },
     templatesById: { [template.id]: {
       template, observation: { lineSources }, enrichmentProblems: [],
       lineSourceProblems: validateLineSources(normalizeTemplateDefinition(template), lineSources),

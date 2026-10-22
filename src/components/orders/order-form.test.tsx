@@ -33,6 +33,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityClock: (facilityId: string) => ({ timeZone: state.facilities.find(facility => facility.id === facilityId)?.timezone ?? "UTC", hint: "" }),
   useFacilityContext: () => ({
     facilityId: "facility",
     facilities: state.facilities,
@@ -455,4 +456,20 @@ it("keeps one order submit in flight and allows a separate entry after it settle
   await act(async () => { fireEvent.submit(form); });
   expect(submit).toHaveBeenCalledTimes(2);
   client.clear();
+});
+
+describe("OrderForm facility date default", () => {
+  it("defaults to the active facility day while the browser is still on yesterday", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-21T22:00:00Z"));
+    state.facilities = [{ id: "facility", name: "Facility", timezone: "Africa/Dar_es_Salaam" } as Facility];
+    try {
+      render(<QueryClientProvider client={new QueryClient()}>
+        <OrderForm onSubmit={noop} lock={OPEN_LOCK} />
+      </QueryClientProvider>);
+      expect((screen.getByLabelText(/^Order date/) as HTMLInputElement).value).toBe("2026-10-22");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

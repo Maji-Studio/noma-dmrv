@@ -22,7 +22,7 @@ import {
   useChainOfCustody,
   useCreditBatchChain,
 } from "@/hooks/use-chain-of-custody";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { buildBatchSankey } from "@/lib/chain-of-custody/sankey";
 import { TRACEABILITY_ACTIVITY_VIEW } from "@/lib/certification/links";
 import { cn } from "@/lib/utils";
@@ -310,6 +310,7 @@ export function TraceabilityPage() {
   // resolves to another facility (a facility switch, or a foreign deep link)
   // is dropped below so the chain never renders out-of-facility provenance.
   const { facilityId, selectedFacility } = useFacilityContext();
+  const { timeZone } = useFacilityClock(facilityId);
   const selectedApplicationId = searchParams.get("application");
   const selectedRunId = searchParams.get("run");
   const batchSelection = useCreditBatchCardSelection(facilityId);
@@ -404,6 +405,7 @@ export function TraceabilityPage() {
       // navigating (concept cross-linking); links stay live in lineage view.
       disableLinks: applicationView === "split",
       highlightedNodeId: selection?.nodeId ?? null,
+      timeZone,
     }
   );
   // The run filter narrows the roll-up to lineages flowing through one
@@ -489,6 +491,7 @@ export function TraceabilityPage() {
       // Application cards drill down instead of navigating, so links drop.
       disableLinks: true,
       highlightedNodeId: selection?.nodeId ?? null,
+      timeZone,
     }
   );
 
@@ -732,6 +735,7 @@ export function TraceabilityPage() {
     if (batchView === TRACEABILITY_ACTIVITY_VIEW) {
       return (
         <CreditBatchActivityView
+          facilityId={facilityId}
           key={selectedBatchId}
           creditBatchId={selectedBatchId}
           batchCode={batchSelection.batches.find((batch) => batch.id === selectedBatchId)?.code}

@@ -102,6 +102,7 @@ vi.mock("nuqs", () => ({
   ],
 }));
 vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }),
   useFacilityContext: () => ({ facilityId: "facility-1" }),
 }));
 vi.mock("@/hooks/use-feedstocks", () => ({

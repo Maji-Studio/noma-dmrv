@@ -12,6 +12,7 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 
 import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
+import { outputDrawCreditBatchPreview } from "@/components/credit-batches/record-credit-batch-preview-input";
 import { EntitySelect, FormActions, FormField, FormInput, FormSection, FormSpine, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
 import { EventTimeInput } from "@/components/forms/event-time-input";
@@ -26,6 +27,8 @@ import type { BiocharProductWithRelations } from "@/data-access/biochar-products
 import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
 import { useProductStockPreview } from "@/hooks/use-product-stock-preview";
 import { useOutputDrawDraft } from "@/hooks/use-output-draw-draft";
+import { focusMoistureField, moistureFieldSelectors, ReestimateNotice } from "@/components/storage-locations/reestimate-notice";
+import { showsReestimate } from "@/components/storage-locations/reestimate-flow";
 import { useSubBinDraw } from "@/hooks/use-sub-bin-draw";
 import { SubBinDrawField } from "@/components/storage-locations/sub-bin-draw-field";
 import { MoistureResetChange } from "@/components/storage-locations/moisture-reset-change";
@@ -279,7 +282,7 @@ export function BiocharProductForm({
     occurredAt: watchedPlacedAt ? String(watchedPlacedAt) : null, wetKg: requestedBiocharKg,
   });
   const [attempted, setAttempted] = useState(false);
-  const { preview: sourcePreview, estimate: sourceMoistureEstimate, readingsReady, gate, beginSubmit } = useOutputDrawDraft({
+  const { preview: sourcePreview, input: sourceDrawInput, estimate: sourceMoistureEstimate, readingsReady, gate, beginSubmit } = useOutputDrawDraft({
     draw, bypass: isEditMode,
     singleMoistureReady: watchedMoisture != null,
     moisturePercent: Number(watchedMoisture),
@@ -293,6 +296,9 @@ export function BiocharProductForm({
       if (split) setValue("moistureContentPercent", undefined);
     },
   });
+  // A saved product keeps its source bin, so only a new one previews its batches.
+  const creditBatchPreview = isEditMode ? undefined
+    : outputDrawCreditBatchPreview("biochar-product", { storageLocationId: sourceBiocharStorageLocationId, facilityId: selectedFacilityId, occurredAt: watchedPlacedAt }, sourceDrawInput);
   // A split draw's biochar moisture is its overall 1 − solids ÷ wet, from the preview.
   const biocharMoisture = draw.active ? sourcePreview.data?.movementMoisturePercent ?? null : watchedMoisture;
   const ingredientMassesComplete = (watchedIngredientBins ?? []).every(
@@ -349,6 +355,7 @@ export function BiocharProductForm({
   // product's projection is one plan across every bin, so a refusal in any bin
   // withdraws every label it would otherwise show.
   const sourcePreviewFresh = !isEditMode && !sourcePreview.isFetching && !sourcePreview.error;
+  const reestimating = sourcePreviewFresh && showsReestimate(sourcePreview.data);
   const productPreviewsAvailable = !isEditMode && !affectedBinsUnavailable;
   const affectedBins = productStockPreview.data ?? [];
   const biocharLanePreview = affectedBins.find((bin) => bin.lane === "biochar");
@@ -485,7 +492,7 @@ export function BiocharProductForm({
           // Loading or failed sub-bins replace the single field too: a split bin is never drawn at one reading.
           readings={!draw.usesSingleMoisture ? (
             <>
-              {draw.active && <SubBinDrawField draw={draw} timeZone={placementClock.timeZone} idPrefix="product-source" disabled={isSubmitting} showErrors={attempted} />}
+              {draw.active && <SubBinDrawField draw={draw} timeZone={placementClock.timeZone} idPrefix="product-source" disabled={isSubmitting} showErrors={attempted} hideDeviationWarning={reestimating} />}
               {draw.query.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{draw.query.error.message}</p>}
             </>
           ) : undefined}
@@ -509,6 +516,7 @@ export function BiocharProductForm({
             helperText: isEditMode ? POSTED_FIELD_HINT : "Typically 1 to 2% for biochar",
             estimate: isEditMode ? undefined : sourceMoistureEstimate,
             reading: watchedMoisture,
+            hideDeviationWarning: reestimating,
             registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),
           }}
           splitFooter={
@@ -520,6 +528,8 @@ export function BiocharProductForm({
             )
           }
         />
+        {/* A draw wetter than the bin's estimate re-estimates what stays; the notice replaces the field's own advisory. */}
+        {reestimating && sourcePreview.data && <ReestimateNotice preview={sourcePreview.data} kind="biochar" onMeasureAgain={(layerId) => focusMoistureField(moistureFieldSelectors("product-source", "moistureContentPercent", layerId))} />}
         {/* The biochar reading resets the sub-bin it was taken from. */}
         {sourcePreviewFresh && sourcePreview.data && !sourcePreview.data.blockingMessage && sourcePreview.data.moistureReset && (
           <MoistureResetChange reset={sourcePreview.data.moistureReset} />
@@ -697,7 +707,7 @@ export function BiocharProductForm({
         submitDisabled={hasZeroSourceBiochar || submitDisabled}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
-        preview={<RecordCreditBatchLine kind="biochar-product" id={product?.id} />}
+        preview={<RecordCreditBatchLine kind="biochar-product" id={product?.id} preview={creditBatchPreview} facilityId={selectedFacilityId} />}
       />
     </div>
   );

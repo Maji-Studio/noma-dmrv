@@ -10,8 +10,8 @@ import {
   FEEDSTOCK_TYPE_EDIT_LABEL,
 } from "@/lib/entity-deep-link";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
-import { creditBatchDeepLinkHref, creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
-import { facilityCertificationSettingsHref, removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "./links";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+import { facilityCertificationSettingsHref, removalTemplateSetupHref, removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "./links";
 
 export const BATCH_DETAILS_FIX_LABEL = "Edit details";
 
@@ -93,18 +93,13 @@ export function batchHealthFixLinkFor(
       return { label: "Review emissions", href: creditBatchId ? creditBatchDeepLinkHref(creditBatchId, facilityId, { tab: "emissions" }) : `/credit-batches?${query(undefined, false)}` };
     case "certificationTemplates":
       return { label: "Review Removal templates", href: removalTemplatesSettingsHref(facilityId) };
-    case "creditBatchTemplate":
-      return creditBatchId
-        ? { label: "Switch template", href: creditBatchRemovalTemplateHref(creditBatchId, facilityId) }
-        : { label: "Review credit batches", href: `/credit-batches?${query(undefined, false)}` };
+    case "templateSetup":
     case "templateReplacement":
-      return creditBatchId
-        ? { label: "Switch template", href: creditBatchRemovalTemplateHref(creditBatchId, facilityId) }
-        : { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: removalTemplatesSettingsHref(facilityId) };
+      return { label: "Set template", href: removalTemplateSetupHref(facilityId) };
     case "templateLines":
       return { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: removalTemplatesSettingsHref(facilityId) };
     case "templateLineReview":
-      return { label: DECIDE_LINES_LINK_LABEL, href: removalTemplatesSettingsHref(facilityId) };
+      return { label: DECIDE_LINES_LINK_LABEL, href: removalTemplateSetupHref(facilityId) };
     case "batchDetails":
       return {
         label: BATCH_DETAILS_FIX_LABEL,

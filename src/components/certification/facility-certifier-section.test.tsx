@@ -140,7 +140,7 @@ describe("FacilityCertifierSection", () => {
       mapping: {
         externalProjectId: "prj_test",
         protocolSlug: "biochar",
-        defaultRemovalTemplateId: null,
+        removalTemplateId: null,
         externalFacilityId: "",
       } as NonNullable<FacilityCertifierMapping["mapping"]>,
       availableProjects: [
@@ -180,7 +180,7 @@ describe("FacilityCertifierSection", () => {
       mapping: {
         externalProjectId: "prj_saved",
         protocolSlug: "biochar",
-        defaultRemovalTemplateId: "tpl_saved",
+        removalTemplateId: "tpl_saved",
         externalFacilityId: "fcl_saved",
       } as NonNullable<FacilityCertifierMapping["mapping"]>,
       availableProjects: [
@@ -259,7 +259,7 @@ describe("FacilityCertifierSection", () => {
         externalFacilityId: "fcl_saved",
       }),
     );
-    expect(saveMapping.mock.calls[0][0]).not.toHaveProperty("defaultRemovalTemplateId");
+    expect(saveMapping.mock.calls[0][0]).not.toHaveProperty("removalTemplateId");
 
     await act(async () => {
       renderer?.unmount();
@@ -272,7 +272,7 @@ describe("FacilityCertifierSection", () => {
         mapping: {
           externalProjectId: "prj_test",
           protocolSlug: "biochar",
-          defaultRemovalTemplateId: null,
+          removalTemplateId: null,
           externalFacilityId: "",
         },
         availableProjects: [],
@@ -304,7 +304,7 @@ describe("FacilityCertifierSection", () => {
         mapping: {
           externalProjectId: "prj_saved",
           protocolSlug: "biochar",
-          defaultRemovalTemplateId: "tpl_saved",
+          removalTemplateId: "tpl_saved",
           externalFacilityId: "",
         },
         availableProjects: [],
@@ -332,7 +332,7 @@ describe("FacilityCertifierSection", () => {
         mapping: {
           externalProjectId: "prj_gone",
           protocolSlug: "biochar",
-          defaultRemovalTemplateId: null,
+          removalTemplateId: null,
           externalFacilityId: "",
         },
         availableProjects: [],
@@ -353,3 +353,8 @@ describe("FacilityCertifierSection", () => {
     expect(markup).toContain("prj_gone");
   });
 });
+
+vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityContext: () => ({ facilityId: "facility-1" }),
+  useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }),
+}));

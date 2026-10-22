@@ -9,6 +9,7 @@ import type { Facility } from "@/db/schema";
 import type { FacilityFilterData, CreateFacilityData, UpdateFacilityData } from "@/schemas/facilities";
 import type { PaginatedFacilities, FacilityWithRelations } from "@/data-access/facilities";
 import {
+  getFacilityStatsFn,
   getFacilityCountriesFn,
   getFacilityArchiveImpactFn,
   getFacilityOutputStockFn,
@@ -21,8 +22,7 @@ import { getFacilitiesRead, getFacilityRead } from "@/lib/read-api/client";
 import { missingRecordMessage } from "@/lib/errors";
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 
-import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
-import { unwrap } from "./types";
+import { unwrap, type MutationCallbacks, type OptimisticUpdateOptions } from "./types";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
@@ -40,6 +40,9 @@ export const facilityKeys = {
   lists: () => [...facilityKeys.all, "list"] as const,
   list: (filters?: Partial<FacilityFilterData>) =>
     [...facilityKeys.lists(), filters] as const,
+  stats: (filters?: { archived?: boolean }) =>
+    [...facilityKeys.all, "stats", filters] as const,
+  statsPrefix: () => [...facilityKeys.all, "stats"] as const,
   details: () => [...facilityKeys.all, "detail"] as const,
   detail: (id: string) => [...facilityKeys.details(), id] as const,
   detailWithRelations: (id: string) =>
@@ -67,6 +70,15 @@ const FACILITY_LOOKUP_MAX_RETRIES = 2;
 // ============================================
 // Query Hooks
 // ============================================
+
+export function useFacilityStats(archived = false, options?: { enabled?: boolean }) {
+  const filters = { archived };
+  return useQuery({
+    queryKey: facilityKeys.stats(filters),
+    queryFn: async () => unwrap(await getFacilityStatsFn(filters)),
+    enabled: options?.enabled,
+  });
+}
 
 /** Load stock only for the facility whose read sheet is open. */
 export function useFacilityOutputStock(facilityId: string | null) {
@@ -184,6 +196,7 @@ export function useCreateFacility(
       const listRefresh = queryClient.invalidateQueries({
         queryKey: facilityKeys.lists(),
       });
+      queryClient.invalidateQueries({ queryKey: facilityKeys.statsPrefix() });
       void queryClient.invalidateQueries({
         queryKey: facilityKeys.countriesPrefix(),
       });
@@ -305,6 +318,7 @@ export function useUpdateFacility(
         data,
       );
       queryClient.invalidateQueries({ queryKey: facilityKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: facilityKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: facilityKeys.countriesPrefix() });
 
       if (context?.previousTimezone == null || context.previousTimezone !== data.timezone) {

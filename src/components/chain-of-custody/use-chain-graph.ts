@@ -8,7 +8,7 @@ import type { ChainRunRollForward } from "@/data-access/chain-of-custody-roll-fo
 import { kgToTonnes, tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
-import { formatCalendarDate, formatDate } from "@/lib/format-utils";
+import { formatCalendarDate, formatDate, formatFacilityDay } from "@/lib/format-utils";
 import { formatWetDryMass, splitWetMass } from "@/lib/mass-moisture";
 import dagre from "@dagrejs/dagre";
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
@@ -434,7 +434,7 @@ function productCardCode(product: ChainBiocharProductLineage): string {
   return `${product.code} · ${product.formulationName ?? "Pure biochar"}`;
 }
 
-function buildDeliveryNode(delivery: Omit<ChainDeliveryLineage, "proofOfDeliveryCount">): LineageGraphNode {
+function buildDeliveryNode(delivery: Omit<ChainDeliveryLineage, "proofOfDeliveryCount">, timeZone: string): LineageGraphNode {
   const details: LineageDetailRow[] = [];
   addRow(
     details,
@@ -450,13 +450,13 @@ function buildDeliveryNode(delivery: Omit<ChainDeliveryLineage, "proofOfDelivery
     code: "Delivery",
     href: delivery.href,
     status: delivery.status,
-    date: formatDateOrNull(delivery.deliveryDate),
+    date: formatFacilityDay(delivery.deliveryDate, timeZone),
     details,
   };
 }
 
 /** Also feeds the Carbon Viewer's marker popups (same codes + detail rows). */
-export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] {
+export function buildLineageNodes(data: ChainOfCustodyData, timeZone: string): LineageGraphNode[] {
   const sources = resolveChainSources(data);
   const nodes = buildSourceNodes(sources);
 
@@ -499,7 +499,7 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
     });
   }
 
-  nodes.push(buildDeliveryNode(data.delivery));
+  nodes.push(buildDeliveryNode(data.delivery, timeZone));
 
   {
     const details: LineageDetailRow[] = [];
@@ -659,7 +659,7 @@ function buildLineageEdges(data: ChainOfCustodyData): Edge[] {
  * product layers drawn from it, and the deliveries that shipped those layers.
  * Node and edge ids match the rollback builders, so merging dedupes them.
  */
-export function buildRollForwardGraph(rollForward: ChainRunRollForward): {
+export function buildRollForwardGraph(rollForward: ChainRunRollForward, timeZone: string): {
   nodes: LineageGraphNode[];
   edges: Edge[];
 } {
@@ -687,7 +687,7 @@ export function buildRollForwardGraph(rollForward: ChainRunRollForward): {
       }),
     );
     for (const shipped of deliveries) {
-      nodes.push(buildDeliveryNode(shipped.delivery));
+      nodes.push(buildDeliveryNode(shipped.delivery, timeZone));
       edges.push(
         edge(productNodeId, `delivery:${shipped.delivery.id}`, {
           // Same dry-tonne unit as the rollback's product → delivery edge, so
@@ -707,7 +707,7 @@ export function buildRollForwardGraph(rollForward: ChainRunRollForward): {
  * Every roll-forward card, deduped, with each product's "Drawn from runs"
  * total across member runs. Shared by the DAG merge and the map popups.
  */
-export function buildRollForwardNodes(rollForwards: ChainRunRollForward[]): LineageGraphNode[] {
+export function buildRollForwardNodes(rollForwards: ChainRunRollForward[], timeZone: string): LineageGraphNode[] {
   const drawnByProductNode = new Map<string, { wetKg: number; dryKg: number }>();
   for (const rollForward of rollForwards) {
     for (const { product, drawnWetMassKg, drawnDryMassKg } of rollForward.products) {
@@ -720,7 +720,7 @@ export function buildRollForwardNodes(rollForwards: ChainRunRollForward[]): Line
   }
   const nodeById = new Map<string, LineageGraphNode>();
   for (const rollForward of rollForwards) {
-    for (const node of buildRollForwardGraph(rollForward).nodes) {
+    for (const node of buildRollForwardGraph(rollForward, timeZone).nodes) {
       if (nodeById.has(node.id)) continue;
       const drawn = drawnByProductNode.get(node.id);
       if (drawn) node.details = [{ label: "Drawn from runs", value: formatWetDryMass(drawn) }];
@@ -731,6 +731,8 @@ export function buildRollForwardNodes(rollForwards: ChainRunRollForward[]): Line
 }
 
 export interface ChainGraphOptions {
+  /** Facility zone for delivery instants; other node dates are calendar days. */
+  timeZone: string;
   /**
    * Split/map cross-linking: card clicks highlight the map marker instead of
    * navigating, so the cards drop their links.
@@ -806,7 +808,7 @@ function layoutGraph(
 
 export function useChainGraph(
   data: ChainOfCustodyData | undefined,
-  options: ChainGraphOptions = {}
+  options: ChainGraphOptions
 ) {
   if (!data) {
     return { nodes: [], edges: [] };
@@ -826,7 +828,7 @@ export function useChainGraph(
  */
 function buildMergedChainGraph(
   lineages: ChainOfCustodyData[] | undefined,
-  options: ChainGraphOptions = {},
+  options: ChainGraphOptions,
   rollForwards: ChainRunRollForward[] = [],
 ) {
   if ((!lineages || lineages.length === 0) && rollForwards.length === 0) {
@@ -886,7 +888,7 @@ function buildMergedChainGraph(
   const nodeById = new Map<string, LineageGraphNode>();
   const edgeById = new Map<string, Edge>();
   for (const [index, lineage] of lineages.entries()) {
-    for (const node of buildLineageNodes(normalizedLineages[index])) {
+    for (const node of buildLineageNodes(normalizedLineages[index], options.timeZone)) {
       if (node.kind === "productionRun") {
         const allocations = runAllocations.get(node.id);
         if (allocations) {
@@ -913,14 +915,14 @@ function buildMergedChainGraph(
     }
   }
 
-  for (const node of buildRollForwardNodes(rollForwards)) {
+  for (const node of buildRollForwardNodes(rollForwards, options.timeZone)) {
     if (!nodeById.has(node.id)) nodeById.set(node.id, node);
   }
   // Roll-forward shipments are per-run shares, so two member runs feeding one
   // product sum on its delivery edge. They never sum into a rollback edge.
   const rollForwardEdgeById = new Map<string, Edge>();
   for (const rollForward of rollForwards) {
-    for (const rollForwardEdge of buildRollForwardGraph(rollForward).edges) {
+    for (const rollForwardEdge of buildRollForwardGraph(rollForward, options.timeZone).edges) {
       if (edgeById.has(rollForwardEdge.id)) continue;
       const existing = rollForwardEdgeById.get(rollForwardEdge.id);
       if (!existing) {
@@ -942,7 +944,7 @@ function buildMergedChainGraph(
 export function useBatchChainGraph(
   lineages: ChainOfCustodyData[] | undefined,
   rollForwards: ChainRunRollForward[] | undefined,
-  options: ChainGraphOptions = {},
+  options: ChainGraphOptions,
 ) {
   return buildMergedChainGraph(lineages, options, rollForwards);
 }

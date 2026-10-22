@@ -153,11 +153,13 @@ async function resolveCreditBatchCertifier(
     throw new SafeError("Credit batches currently support only Isometric certifier mappings.");
   }
   if (!provider) return { provider: null, removalTemplateId: null };
-  const [project] = await executor.select({ removalTemplateId: certifierProjects.defaultRemovalTemplateId })
+  // FOR SHARE blocks behind Set template's UPDATE of this row, so a batch
+  // created or moved here during a setup reads the committed template.
+  const [project] = await executor.select({ removalTemplateId: certifierProjects.removalTemplateId })
     .from(certifierProjects).where(and(
       eq(certifierProjects.organizationId, ctx.organizationId), eq(certifierProjects.facilityId, facilityId),
       eq(certifierProjects.provider, provider),
-    )).limit(1);
+    )).limit(1).for("share");
   return { provider, removalTemplateId: project?.removalTemplateId ?? null };
 }
 

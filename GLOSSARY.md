@@ -62,9 +62,8 @@ _Avoid_: activity (reserved for the history log).
 **Recorded zero**:
 A confirmation that one component had no emissions for a specific Removal.
 It is an emissions entry owned by that Removal, contributes 0, and needs no file.
-It is never pooled into another Removal. Distinct from the sandbox zero stub
-(removed), which was a temporary compilation exception and never an operator
-confirmation. On screen it is a component recorded as zero.
+It is never pooled into another Removal. On screen it is a component recorded as zero.
+_Avoid_: zero stub.
 
 **Component comment**:
 One editable comment on a credit batch's Removal-template component, identified by
@@ -181,8 +180,9 @@ proportion to its remaining solids.
 
 **Departure moisture**:
 The water fraction measured in material leaving a storage bin. It sets that
-draw's dry mass only. It never changes the **estimated moisture** or **wet
-stock** of what stays in the bin.
+draw's dry mass. It changes the **estimated moisture** of what stays only if
+subtracting the draw would leave less **wet stock** than dry solids: what stays
+is then re-estimated at that draw's moisture until the next count.
 
 **Wet stock** (output bin):
 The wet mass a sub-bin or mix pile holds by the records: wet mass added less
@@ -192,7 +192,8 @@ has none left. A layer with no dry biochar left holds no wet stock.
 
 **Estimated moisture**:
 A sub-bin's or mix pile's water fraction by the records: what it was added
-with, or the latest count. Removals leave it unchanged. A hint beside moisture
+with, or the latest count. Draws leave it unchanged unless wet stock would fall
+below dry solids, in which case the draw's measured moisture re-estimates what stays. A hint beside moisture
 fields, never a prefilled value.
 
 **Biochar share of solids**:
@@ -522,18 +523,15 @@ An Isometric removal-template input bound in the registry to a
 policy-level value (an emission factor, a global-warming potential) —
 the same for every submission. Contrast **monitored input**.
 
-**Zero stub** (removed):
-A placeholder mapping that emitted `0` for a **monitored input** noma
-could not yet source, on the sandbox only. Removed in PR 4 of epic #1058:
-operators now confirm empty components as a **Recorded zero** instead.
-
 **Removal template**:
 The Isometric template (credit type REMOVAL) a **Removal** is built from. It
 lists the components Isometric expects, in groups. Each facility has one
-default Removal template; a new **credit batch** starts on it, and an Admin can
-switch a batch to another. A template is set up in the Removal template setup
-dialog (Settings, Removal templates, "Set up template"): pick the template,
-decide what noma cannot, apply. It lists every Removal template in the project;
+Removal template, and its **credit batches** use it. An Admin sets it in the
+"Set Removal template" dialog (Settings, Removal templates, "Set template"):
+pick the template, then check what changes. Setting it switches every credit
+batch whose Removal is not sent; batches whose Removal is sent or certified,
+and archived batches, keep their template. A credit batch page shows its
+template read-only. The dialog lists every Removal template in the project;
 those that do not fit the facility are marked "Does not fit" and cannot be
 picked. Admins set up templates; Members read the summary card. Component
 decisions are stored per organization and template, so they apply to every
@@ -556,12 +554,11 @@ _Avoid_: line, emission line, template line, template input.
 The components without a saved decision, always shown with their count
 ("3 components to decide"). A Removal template with components to decide
 blocks the Removals of every credit batch on it. A component added to a template
-after setup reopens as "1 to decide". The link to settle them reads "Decide
-components": it opens the Decisions step of the Removal template setup dialog for that
-template where the page knows it (the credit batch page and the switch dialog),
-and Removal templates in Settings otherwise. A decided component noma cannot
+after setup reopens as "1 to decide". The link to settle them reads "Answer in
+Settings": it opens the Set Removal template dialog, whose Check step asks the open questions, for that
+template where the page knows it, and Removal templates in Settings otherwise. A decided component noma cannot
 fill links "Open Removal templates" (the Settings pane) instead.
-noma decides what it can; the setup dialog asks only the rest. In the New Removal checks
+noma decides what it can; the Check step asks only the rest. In the New Removal checks
 this is the **Components decided** check; the batch's own template choice is
 the **Template set** check.
 _Avoid_: lines to decide, needs review, unresolved, template review.

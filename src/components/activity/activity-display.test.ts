@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ACTIVITY_ENTITY_TYPES } from "@/db/schema/common";
 import { getStatusState } from "@/lib/status-state";
 import { toBadgeProps } from "@/components/chain-of-custody/chain-status-badge";
+import { UNKNOWN_FACILITY_TIMEZONE as VIEW_TIME_ZONE } from "@/lib/date-utils";
 import { activityFieldLines } from "./activity-change-lines";
 import {
   ACTIVITY_RECORD_TYPE_LABELS,
@@ -85,7 +86,7 @@ describe("changed field names", () => {
   });
 
   it("drops bookkeeping fields and repeats", () => {
-    expect(activityFieldLines(item({ changedFields: ["version", "notes", "notes", "facilityId"] })))
+    expect(activityFieldLines(item({ changedFields: ["version", "notes", "notes", "facilityId"] }), VIEW_TIME_ZONE))
       .toEqual([{ kind: "changed", key: "notes", label: "Notes" }]);
   });
 });

@@ -26,7 +26,7 @@ beforeEach(() => {
   vi.mocked(getFacilityById).mockResolvedValue({ timezone: "Africa/Dar_es_Salaam" } as never);
   vi.spyOn(logger, "warn").mockImplementation(() => {});
   vi.mocked(hasCertifierCredentials).mockResolvedValue(true);
-  vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id, defaultRemovalTemplateId: null } as never);
+  vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id, removalTemplateId: null } as never);
   vi.mocked(listPinnedRemovalTemplateIds).mockResolvedValue([fixture.id]);
   vi.mocked(listGhgEntryTemplates).mockResolvedValue([fixture as IsometricGhgEntryTemplate]);
   vi.mocked(listProjects).mockResolvedValue([{ id: fixture.project_id } as never]);
@@ -35,7 +35,7 @@ beforeEach(() => {
 });
 it("observes a pinned template even when the facility has no default", async () => {
   const facts = await loadFacilityCertifierFacts(ctx, "facility-id");
-  expect(facts.defaultTemplate).toBeNull();
+  expect(facts.currentTemplate).toBeNull();
   expect(facts.templatesById[fixture.id]!.template.id).toBe(fixture.id);
   expect(listPinnedRemovalTemplateIds).toHaveBeenCalledOnce();
   expect(observeRemovalTemplate).toHaveBeenCalledWith(ctx, expect.objectContaining({ template: fixture }));

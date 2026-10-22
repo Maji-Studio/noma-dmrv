@@ -18,7 +18,7 @@ import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import { MISSING_VALUE, UNREADABLE_DATE, UNREADABLE_TIME } from "@/lib/copy-utils";
 import { formatFacilityTime, formatUtcDate, parseLocalDateString, SHORT_MONTH_NAMES } from "@/lib/date-utils";
 
-const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+export const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_FORMAT = "MMM d, yyyy";
 const TIME_FORMAT = "HH:mm";
 const DATE_TIME_FORMAT = `MMM d, yyyy, ${TIME_FORMAT}`;
@@ -105,6 +105,13 @@ export function formatTime(value: DateValue): string {
   if (!value) return MISSING_VALUE.notRecorded;
   const date = parseDateValue(value);
   return date ? format(date, TIME_FORMAT) : UNREADABLE_TIME;
+}
+
+/** Time of day on the facility clock, using the app's 24-hour format. */
+export function formatFacilityClockTime(value: DateValue, timeZone: string): string {
+  if (!value) return MISSING_VALUE.notRecorded;
+  const date = typeof value === "string" ? new Date(value) : value;
+  return isValid(date) ? formatFacilityTime(date, timeZone, TIME_FORMAT) : UNREADABLE_TIME;
 }
 
 /**

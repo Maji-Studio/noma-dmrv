@@ -20,6 +20,7 @@ function formulation(code: string, archivedAt: Date | null): FormulationWithIngr
 vi.mock("@/hooks/use-formulations", () => {
   const mutation = () => ({ mutateAsync: vi.fn(), isPending: false });
   return {
+    useFormulationStats: () => ({ data: undefined, isLoading: false, isError: false }),
     useFormulations: (filters: { archived?: boolean }) => {
       state.filters.push(filters);
       const items = state.items.filter((item) => Boolean((item as FormulationWithIngredients).archivedAt) === Boolean(filters.archived));
@@ -68,7 +69,7 @@ vi.mock("@/components/ui/data-table", () => {
           ))}
         </div>
       ),
-      { Toolbar: Slot, Controls: Slot, Search: () => null, ColumnVisibility: () => null, Pagination: () => null },
+      { Toolbar: Slot, Controls: Slot, Search: () => null, ColumnVisibility: () => <button type="button">Columns</button>, Pagination: () => null },
     ),
   };
 });
@@ -100,6 +101,11 @@ describe("FormulationList archive view", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Archived" }));
     expect(within("Actions for BCF-0002")).toEqual(["Restore", "Delete"]);
+  });
+
+  it("shows no Columns control: every record field is already a column", () => {
+    render(<FormulationList />);
+    expect(screen.queryByRole("button", { name: "Columns" })).toBeNull();
   });
 
   it("explains an empty archived view", () => {

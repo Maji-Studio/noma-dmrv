@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { formatDateTime, formatTime } from "@/lib/format-utils";
 import { ActivityEntry } from "./activity-entry";
 import type { ActivityItem } from "./activity-display";
+
+const TIME_ZONE = "Africa/Dar_es_Salaam";
 
 const item: ActivityItem = {
   id: "event-1", action: "updated", entityType: "feedstock", entityId: "feed-1",
@@ -16,14 +17,14 @@ const item: ActivityItem = {
   },
   changeLabels: { supplierId: { from: { label: null, deleted: true, type: "supplier" }, to: null } },
   fromStatus: null, toStatus: null, fromRemote: null, toRemote: null, source: "form",
-  occurredAt: new Date("2026-10-15T21:00:00Z"), registryAt: null, reasonCode: null,
+  occurredAt: new Date("2026-10-21T21:30:00Z"), registryAt: null, reasonCode: null,
   actor: { id: "user-1", name: "Ada Operator" }, record: { label: "FS-001", deleted: false, facilityId: null, facilityTimezone: null },
 };
 
 /** The rendered row as a DOM tree, so text is read the way a browser reads it. */
 function renderEntry(entry: ActivityItem = item, props: { showDate?: boolean } = {}): HTMLElement {
   const container = document.createElement("div");
-  container.innerHTML = renderToStaticMarkup(<ActivityEntry item={entry} creditBatchId="batch-1" {...props} />);
+  container.innerHTML = renderToStaticMarkup(<ActivityEntry timeZone={TIME_ZONE} item={entry} creditBatchId="batch-1" {...props} />);
   return container;
 }
 
@@ -63,8 +64,8 @@ describe("ActivityEntry meta", () => {
     const row = renderEntry();
     const time = row.querySelector("time") as HTMLTimeElement;
     expect(time.getAttribute("datetime")).toBe(item.occurredAt.toISOString());
-    expect(time.getAttribute("title")).toBe(formatDateTime(item.occurredAt));
-    expect(readText(time.parentElement as Element)).toBe(`Ada Operator · ${formatTime(item.occurredAt)}`);
+    expect(time.getAttribute("title")).toBe("Oct 22, 2026, 00:30");
+    expect(readText(time.parentElement as Element)).toBe("Ada Operator · 00:30");
   });
 
   it("draws the record type in a circle node and dashes it for a deleted record", () => {
@@ -77,6 +78,6 @@ describe("ActivityEntry meta", () => {
 
   it("shows the full date and time when asked", () => {
     const row = renderEntry(item, { showDate: true });
-    expect(readText(row.querySelector("time") as Element)).toBe(formatDateTime(item.occurredAt));
+    expect(readText(row.querySelector("time") as Element)).toBe("Oct 22, 2026, 00:30");
   });
 });

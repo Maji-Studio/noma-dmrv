@@ -12,6 +12,9 @@
  *
  * Visited steps (index ≤ `furthest`) are clickable when `onNavigate` is given,
  * so the operator can jump back without losing progress.
+ *
+ * On a phone (below `sm`) either orientation shows the current step only: its
+ * number, its label and "Step 2 of 3" under it. Desktop keeps the full rail.
  */
 "use client";
 
@@ -44,8 +47,6 @@ interface StepFlowProps {
   /** Action row pinned below the content (Back / Next / Submit). */
   footer?: React.ReactNode;
   orientation?: "horizontal" | "vertical";
-  /** Horizontal rail on a phone: only the active step keeps its label, so the rail never scrolls sideways. */
-  compactOnPhone?: boolean;
   className?: string;
 }
 
@@ -79,19 +80,19 @@ function StepIndex({ state, n }: { state: StepState; n: number }) {
 function RailItem({
   step,
   index,
+  total,
   current,
   navigable,
   onNavigate,
   orientation,
-  compactOnPhone,
 }: {
   step: StepFlowStep;
   index: number;
+  total: number;
   current: number;
   navigable: boolean;
   onNavigate?: (index: number) => void;
   orientation: "horizontal" | "vertical";
-  compactOnPhone?: boolean;
 }) {
   const state = stepState(index, current);
   const labelClass = cn(
@@ -100,8 +101,6 @@ function RailItem({
     state === "active"
       ? "text-[var(--color-text-primary)]"
       : "text-[var(--color-text-tertiary)]",
-    // Still read by screen readers; only the sighted phone rail drops the words.
-    compactOnPhone && state !== "active" && "max-sm:sr-only",
   );
 
   const inner = (
@@ -114,6 +113,11 @@ function RailItem({
       <StepIndex state={state} n={index + 1} />
       <span className="flex min-w-0 flex-col">
         <span className={labelClass}>{step.label}</span>
+        {state === "active" && (
+          <span className="body-caption text-[var(--color-text-tertiary)] sm:hidden">
+            Step {index + 1} of {total}
+          </span>
+        )}
         {orientation === "vertical" && step.description && (
           <span className="body-caption truncate text-[var(--color-text-tertiary)]">
             {step.description}
@@ -129,11 +133,7 @@ function RailItem({
         type="button"
         onClick={() => onNavigate(index)}
         aria-current={state === "active" ? "step" : undefined}
-        className={cn(
-          "flex min-w-0 items-center text-left transition-opacity hover:opacity-70",
-          // 44px tap target on a phone; the 24px marker stays the visual.
-          compactOnPhone && "max-sm:min-h-44 max-sm:min-w-44 max-sm:justify-center",
-        )}
+        className="flex min-w-0 items-center text-left transition-opacity hover:opacity-70"
       >
         {inner}
       </button>
@@ -158,7 +158,6 @@ export function StepFlow({
   children,
   footer,
   orientation = "horizontal",
-  compactOnPhone = false,
   className,
 }: StepFlowProps) {
   const reach = furthest ?? current;
@@ -180,22 +179,24 @@ export function StepFlow({
             className={cn(
               "flex min-w-0 items-center",
               orientation === "horizontal" && "shrink-0 gap-8",
+              // A phone shows the current step only.
+              index !== current && "max-sm:hidden",
             )}
           >
             <RailItem
               step={step}
               index={index}
+              total={steps.length}
               current={current}
               navigable={navigable}
               onNavigate={onNavigate}
               orientation={orientation}
-              compactOnPhone={compactOnPhone}
             />
             {orientation === "horizontal" && index < steps.length - 1 && (
               <span
                 aria-hidden
                 className={cn(
-                  "h-px w-24 shrink-0 sm:w-40",
+                  "h-px w-24 shrink-0 max-sm:hidden sm:w-40",
                   index < current
                     ? "bg-[var(--clr-pink)]"
                     : "bg-[var(--color-border-secondary)]",

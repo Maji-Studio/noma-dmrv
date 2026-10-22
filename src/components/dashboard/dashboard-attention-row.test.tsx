@@ -77,3 +77,7 @@ describe("DashboardAttentionRow", () => {
     expect(html).toContain("Showing first 2 of 3");
   });
 });
+
+it("keeps UTC-midnight business dates on their saved calendar", () => {
+  expect(formatDashboardRecordMetadata("FS-1", new Date("2026-10-21T00:00:00Z"))).toBe("FS-1 · Oct 21, 2026");
+});

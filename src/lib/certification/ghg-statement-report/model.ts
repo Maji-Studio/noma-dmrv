@@ -205,10 +205,12 @@ export function buildGhgStatementReportModel(
     finite("GHG Statement buffer pool", creditAllocation.bufferPoolKg);
   }
   // Operator-editable and display-only: neutralized in the hash so a
-  // Certification Settings edit cannot masquerade as live registry drift.
+  // Certification Settings edit or an organization rename cannot masquerade
+  // as live registry drift. A prepared report keeps the name it printed.
   const fingerprintedControl = {
     ...input.documentControl,
     configuredProtocolVersion: null,
+    organizationName: null,
   };
   const sourceFingerprint = sha256Hex(
     canonicalJson({

@@ -1,11 +1,8 @@
-import { legacyTransportObservation } from "../../../tests/helpers/legacy-transport-observation";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
-import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
-import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getLatestTemplateObservation, reviewLineContracts } from "@/data-access/removal-template-observations";
 import { getCertifierProjectByFacility } from "@/data-access/certification";
-import { listPinnedRemovalTemplateIds, switchCreditBatchRemovalTemplate as persistSwitch } from "@/data-access/credit-batch-removal-template";
+import { listPinnedRemovalTemplateIds } from "@/data-access/credit-batch-removal-template";
 import { requireOrgFacility } from "@/data-access/utils";
 import { listComponentBlueprints, listGhgEntryTemplates, type IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { loadRemovalTemplateFacts } from "./removal-template-facts";
@@ -13,9 +10,8 @@ import { observeRemovalTemplate, TEMPLATE_ENRICHMENT_TTL_MS } from "./observe-re
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { enrichmentProblems, fullFingerprint, lineNeedsReview, lineSourcesForObservation, normalizeTemplateDefinition, resolveLineSources, semanticFingerprint, validateLineSources, type TemplateEnrichment } from "@/lib/isometric/template-observations";
 import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/load-enrichment";
-import { loadRemovalTemplateReview, loadRemovalTemplateReviewEntry, reviewRemovalTemplateLines, switchCreditBatchRemovalTemplate } from "./removal-template-review";
+import { loadRemovalTemplateReview, loadRemovalTemplateReviewEntry } from "./removal-template-review";
 import { canAcceptProposal, problemMessages } from "@/components/certification/removal-template-review-model";
-import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR, UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 
 const ctx = vi.hoisted((): OrgContext => ({ userId: "review-user", organizationId: "review-org", orgRole: "admin", isPlatformAdmin: false }));
 vi.mock("../with-action", async () => {
@@ -29,7 +25,7 @@ vi.mock("./observe-removal-template", async (importOriginal) => ({
   ...await importOriginal<typeof import("./observe-removal-template")>(),
   observeRemovalTemplate: vi.fn(),
 }));
-vi.mock("@/data-access/credit-batch-removal-template", () => ({ switchCreditBatchRemovalTemplate: vi.fn(), listPinnedRemovalTemplateIds: vi.fn(async () => []) }));
+vi.mock("@/data-access/credit-batch-removal-template", () => ({ listPinnedRemovalTemplateIds: vi.fn(async () => []) }));
 vi.mock("@/data-access/certification", () => ({ getCertifierProjectByFacility: vi.fn() }));
 vi.mock("@/data-access/certifier-credentials", () => ({ resolveIsometricClient: vi.fn(async () => ({})), hasCertifierCredentials: vi.fn(async () => true) }));
 vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn() }));
@@ -57,7 +53,7 @@ describe("project template listing", () => {
     const result = await loadRemovalTemplateReview(id);
     if (!result.success) throw new Error("expected a read");
     expect(result.data).toHaveLength(1);
-    expect(result.data[0]).toMatchObject({ templateId: fixture.id, observation: null, preview: true, isDefault: false, isPinned: false });
+    expect(result.data[0]).toMatchObject({ templateId: fixture.id, observation: null, preview: true, isCurrent: false, isPinned: false });
     expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
     expect(listComponentBlueprints).toHaveBeenCalledTimes(1);
   });
@@ -82,7 +78,7 @@ describe("project template listing", () => {
       make("unused-a"), make("stored"), make("pinned"), make("default"), make("unused-b"),
       { ...make("reduction"), credit_type: "REDUCTION" },
     ]);
-    vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id, defaultRemovalTemplateId: "default" } as never);
+    vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id, removalTemplateId: "default" } as never);
     vi.mocked(listPinnedRemovalTemplateIds).mockResolvedValue(["pinned", "missing-pin"]);
     vi.mocked(getLatestTemplateObservation).mockImplementation(async (_ctx, _provider, templateId) =>
       templateId === "stored" ? { id: "observation", definition: { groups: [] }, lineSources: {}, enrichment: {} } as never : null);
@@ -99,224 +95,12 @@ describe("project template listing", () => {
   });
 
   it("retains a missing default before the available templates", async () => {
-    vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id, defaultRemovalTemplateId: "gone" } as never);
+    vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id, removalTemplateId: "gone" } as never);
     const result = await loadRemovalTemplateReview(id);
     if (!result.success) throw new Error("expected a read");
-    expect(result.data[0]).toMatchObject({ templateId: "gone", availability: "missing", isDefault: true, isPinned: false });
+    expect(result.data[0]).toMatchObject({ templateId: "gone", availability: "missing", isCurrent: true, isPinned: false });
     expect(result.data[1]).toMatchObject({ templateId: fixture.id, preview: true });
   });
-});
-
-describe("switch readiness", () => {
-  const input = { creditBatchId: id, removalTemplateId: fixture.id, expectedVersion: 7 };
-  const template = { ...fixture, groups: [] } as IsometricGhgEntryTemplate;
-  const observation = { definition: { groups: [] }, lineSources: {}, enrichment: {} };
-  const linesRefusal = { success: false, error: REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview };
-  const readRefusal = { success: false, error: REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead };
-
-  beforeEach(() => {
-    vi.mocked(getCreditBatchById).mockResolvedValue({ facilityId: id, removalTemplateId: "old" } as never);
-    vi.mocked(listGhgEntryTemplates).mockResolvedValue([template]);
-  });
-
-  it("refuses a fixed input without a datapoint with the batch health reason before storing a read", async () => {
-    const component = fixture.groups[1].components[0];
-    const incomplete = { ...template, groups: [{ ...fixture.groups[1], components: [{
-      ...component, inputs: [{ ...component.inputs[0], datapoint_id: null }],
-    }] }] } as IsometricGhgEntryTemplate;
-    const settled = {
-      ...observation, definition: normalizeTemplateDefinition(incomplete),
-      lineSources: { [component.id]: { scope: "operating", entryPolicy: "none", origin: "reviewed" } },
-    };
-    expect(enrichmentProblems(settled.definition, settled.enrichment)).toEqual([]);
-    vi.mocked(listGhgEntryTemplates).mockResolvedValue([incomplete]);
-    vi.mocked(getLatestTemplateObservation).mockResolvedValue(settled as never);
-    vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({
-      template: incomplete, observation: settled, blueprintsForTemplate: [], enrichmentProblems: [], lineSourceProblems: [],
-    } as never);
-
-    expect(await switchCreditBatchRemovalTemplate(input)).toEqual({
-      success: false, error: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint,
-    });
-    expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
-    expect(persistSwitch).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    [DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-      "The selected template uses the legacy 1,000-year component with total-carbon and uncapped durability semantics. Select a template using biochar_sequestration_1000_year_f_durable_max."],
-    [UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-      "The selected template uses the unsampled 1,000-year component. Unsampled Method B is not supported; select the sampled 1,000-year template."],
-  ])("refuses the unselectable %s template before any write", async (blueprintKey, reason) => {
-    const component = fixture.groups[1].components[0];
-    const rejected = { ...template, groups: [{
-      ...fixture.groups[1], components: [{ ...component, blueprint_key: blueprintKey, inputs: [] }],
-    }] };
-    const settled = {
-      ...observation, definition: normalizeTemplateDefinition(rejected),
-      lineSources: { [component.id]: { scope: "operating", entryPolicy: "none", origin: "reviewed" } },
-    };
-    vi.mocked(listGhgEntryTemplates).mockResolvedValue([rejected]);
-    vi.mocked(getLatestTemplateObservation).mockResolvedValue(settled as never);
-    vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({
-      template: rejected, observation: settled, blueprintsForTemplate: [], enrichmentProblems: [], lineSourceProblems: [],
-    } as never);
-
-    expect(await switchCreditBatchRemovalTemplate(input)).toEqual({ success: false, error: reason });
-    expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
-    expect(persistSwitch).not.toHaveBeenCalled();
-  });
-
-  it("refuses an unobserved template before any read can be stored", async () => {
-    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(readRefusal);
-    expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
-    expect(listComponentBlueprints).not.toHaveBeenCalled();
-    expect(persistSwitch).not.toHaveBeenCalled();
-  });
-
-  it("names the line decisions when the stored read also has enrichment problems", async () => {
-    vi.mocked(getLatestTemplateObservation).mockResolvedValue({
-      ...observation, definition: normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate),
-    } as never);
-    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(linesRefusal);
-    expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
-    expect(persistSwitch).not.toHaveBeenCalled();
-  });
-
-  it("names an incomplete stored read when every line is decided", async () => {
-    const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
-    const lineSources = Object.fromEntries(definition.groups.flatMap((group) => group.components.map((component) => [
-      component.id, { scope: "operating", entryPolicy: "none", origin: "reviewed" },
-    ])));
-    vi.mocked(getLatestTemplateObservation).mockResolvedValue({ ...observation, definition, lineSources } as never);
-
-    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(readRefusal);
-    expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
-    expect(persistSwitch).not.toHaveBeenCalled();
-  });
-
-  it("refuses an undecided line before refreshing it", async () => {
-    vi.mocked(getLatestTemplateObservation).mockResolvedValue({
-      ...observation, definition: { groups: [{ ...normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate).groups[0],
-        components: [{ id: "pending", displayName: "Pending", blueprintKey: "unknown", inputs: [], description: null }],
-      }] },
-    } as never);
-    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(linesRefusal);
-    expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
-    expect(persistSwitch).not.toHaveBeenCalled();
-  });
-
-  it.each(["stored", "refreshed"])("refuses a settled retired source with no entries in the %s read", async (phase) => {
-    const definition = normalizeTemplateDefinition(fixture as IsometricGhgEntryTemplate);
-    const componentId = "rtc_1M4ZRPH1RSBXADG2";
-    const lineSources = resolveLineSources({ definition });
-    for (const component of definition.groups.flatMap((group) => group.components)) {
-      lineSources[component.id] = { scope: "operating", entryPolicy: "none", origin: "reviewed" };
-    }
-    lineSources[componentId].automaticSource = "sample-transport";
-    const retiredObservation = { ...observation, definition, lineSources };
-    const lineSourceProblems = validateLineSources(definition, lineSources);
-    expect(lineSourceProblems).toEqual([{ componentId, code: "retired-automatic-source" }]);
-    vi.mocked(getLatestTemplateObservation).mockResolvedValue((phase === "stored" ? retiredObservation : observation) as never);
-    vi.mocked(listGhgEntryTemplates).mockResolvedValue([fixture as IsometricGhgEntryTemplate]);
-    vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({
-      template: fixture, observation: retiredObservation, blueprintsForTemplate: [], enrichmentProblems: [], lineSourceProblems,
-    } as never);
-
-    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(linesRefusal);
-    expect(loadRemovalTemplateFacts).toHaveBeenCalledTimes(phase === "stored" ? 0 : 1);
-    expect(persistSwitch).not.toHaveBeenCalled();
-  });
-
-  it("checks the refreshed read and preserves the version argument on a ready switch", async () => {
-    vi.mocked(getLatestTemplateObservation).mockResolvedValue(observation as never);
-    vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({
-      template, observation, blueprintsForTemplate: [], enrichmentProblems: [], lineSourceProblems: [],
-    } as never);
-    expect((await switchCreditBatchRemovalTemplate(input)).success).toBe(true);
-    expect(persistSwitch).toHaveBeenCalledWith(ctx, input);
-  });
-
-  it("names an enrichment-only failure in the refreshed read", async () => {
-    vi.mocked(getLatestTemplateObservation).mockResolvedValue(observation as never);
-    vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({
-      template, observation, blueprintsForTemplate: [],
-      enrichmentProblems: [{ componentId: "line", inputKey: "value", code: "unknown-enrichment" }], lineSourceProblems: [],
-    } as never);
-    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(readRefusal);
-    expect(persistSwitch).not.toHaveBeenCalled();
-  });
-
-  it("names new line decisions in the refreshed read", async () => {
-    vi.mocked(getLatestTemplateObservation).mockResolvedValue(observation as never);
-    vi.mocked(listGhgEntryTemplates).mockResolvedValue([fixture as IsometricGhgEntryTemplate]);
-    vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({
-      template: fixture, observation, blueprintsForTemplate: [], enrichmentProblems: [], lineSourceProblems: [],
-    } as never);
-
-    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(linesRefusal);
-    expect(persistSwitch).not.toHaveBeenCalled();
-  });
-
-  it("names a missing refreshed read", async () => {
-    vi.mocked(getLatestTemplateObservation).mockResolvedValue(observation as never);
-    vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({
-      template, observation: null, blueprintsForTemplate: [], enrichmentProblems: [], lineSourceProblems: [],
-    } as never);
-
-    expect(await switchCreditBatchRemovalTemplate(input)).toEqual(readRefusal);
-    expect(persistSwitch).not.toHaveBeenCalled();
-  });
-
-  it("allows retaining the current template without new readiness requirements", async () => {
-    vi.mocked(getCreditBatchById).mockResolvedValue({ facilityId: id, removalTemplateId: fixture.id } as never);
-    vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({ observation: null } as never);
-    expect((await switchCreditBatchRemovalTemplate(input)).success).toBe(true);
-    expect(getLatestTemplateObservation).not.toHaveBeenCalled();
-    expect(persistSwitch).toHaveBeenCalledWith(ctx, input);
-  });
-});
-describe("Removal template action guards", () => {
-  it("denies members before review or switch reads", async () => {
-    ctx.orgRole = "member";
-    expect((await reviewRemovalTemplateLines({ observationId: id, expectedVersion: 1, assignments: {} })).success).toBe(false);
-    expect((await switchCreditBatchRemovalTemplate({ creditBatchId: id, removalTemplateId: "rvt-1", expectedVersion: 1 })).success).toBe(false);
-    expect(reviewLineContracts).not.toHaveBeenCalled();
-    expect(getCreditBatchById).not.toHaveBeenCalled();
-  });
-  it.each(["admin"] as const)("permits %s reviews with server-resolved scope", async (role) => {
-    ctx.orgRole = role;
-    vi.mocked(reviewLineContracts).mockResolvedValue({ id, lineSources: {} } as never);
-    const input = { observationId: id, expectedVersion: 1, assignments: {} };
-    expect(await reviewRemovalTemplateLines(input)).toEqual({ success: true, data: { id, lineSources: {} } });
-    expect(reviewLineContracts).toHaveBeenCalledWith(ctx, input);
-  });
-  it("validates contracts and versions before persistence", async () => {
-    expect((await reviewRemovalTemplateLines({ observationId: id, expectedVersion: 0, assignments: {} })).success).toBe(false);
-    expect((await reviewRemovalTemplateLines({ observationId: id, expectedVersion: 1, assignments: { line: { scope: "operating", automaticSource: "invented" as never, entryPolicy: "additive" } } })).success).toBe(false);
-    expect(reviewLineContracts).not.toHaveBeenCalled();
-  });
-});
-
-it("uses the accurate non-Removal refusal for Switch template", async () => {
-  vi.mocked(getCreditBatchById).mockResolvedValue({ facilityId: id } as never);
-  vi.mocked(listGhgEntryTemplates).mockResolvedValue([{ ...fixture, credit_type: "REDUCTION" } as IsometricGhgEntryTemplate]);
-  expect(await switchCreditBatchRemovalTemplate({ creditBatchId: id, removalTemplateId: fixture.id, expectedVersion: 1 }))
-    .toEqual({ success: false, error: REMOVAL_TEMPLATE_BLOCKERS.notRemovalTemplate });
-  expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
-});
-
-it("still observes the template facts before switching", async () => {
-  vi.mocked(getCreditBatchById).mockResolvedValue({ facilityId: id, removalTemplateId: fixture.id } as never);
-  vi.mocked(persistSwitch).mockResolvedValue({ id } as never);
-  const input = { creditBatchId: id, removalTemplateId: fixture.id, expectedVersion: 1 };
-  expect(await switchCreditBatchRemovalTemplate(input)).toEqual({ success: true, data: { id } });
-  expect(loadRemovalTemplateFacts).toHaveBeenCalledWith(ctx, {
-    client: {}, template: fixture, externalProjectId: fixture.project_id, blueprints: [],
-  });
-  expect(persistSwitch).toHaveBeenCalledWith(ctx, input);
-  expect(vi.mocked(loadRemovalTemplateFacts).mock.invocationCallOrder[0])
-    .toBeLessThan(vi.mocked(persistSwitch).mock.invocationCallOrder[0]);
 });
 
 it("lets a member read an unpinned target in their facility's registry project", async () => {
@@ -546,27 +330,4 @@ describe("read-only entry enrichment reuse", () => {
     expect(observeRemovalTemplate).not.toHaveBeenCalled();
     expect(loadRemovalTemplateFacts).not.toHaveBeenCalled();
   });
-});
-
-
-it("gates automatic sources in the saved review response", async () => {
-  vi.stubEnv("EMISSIONS_ENTRIES_ENABLED", "true");
-  const sources = { component: { scope: "operating", entryPolicy: "additive", automaticSource: "sample-transport", origin: "reviewed" } };
-  vi.mocked(reviewLineContracts).mockResolvedValue({ id, lineSources: sources } as never);
-  const result = await reviewRemovalTemplateLines({ observationId: id, expectedVersion: 1, assignments: {} });
-  expect(result).toMatchObject({ success: true, data: { lineSources: { component: { automaticSource: undefined } } } });
-  expect(sources.component.automaticSource).toBe("sample-transport");
-});
-
-it("refuses to switch to a reviewed legacy transport pair", async () => {
-  const { template, observation } = legacyTransportObservation();
-  const input = { creditBatchId: id, removalTemplateId: template.id, expectedVersion: 7 };
-  vi.mocked(getCreditBatchById).mockResolvedValue({ facilityId: id, removalTemplateId: "old" } as never);
-  vi.mocked(listGhgEntryTemplates).mockResolvedValue([template]);
-  vi.mocked(getLatestTemplateObservation).mockResolvedValue(observation as never);
-  vi.mocked(loadRemovalTemplateFacts).mockResolvedValue({ template, observation, blueprintsForTemplate: [],
-    enrichmentProblems: [], lineSourceProblems: validateLineSources(observation.definition, observation.lineSources),
-  } as never);
-  expect((await switchCreditBatchRemovalTemplate(input)).success).toBe(false);
-  expect(persistSwitch).not.toHaveBeenCalled();
 });

@@ -4,14 +4,15 @@
  */
 "use client";
 
+import { useFacilityDateDefaults } from "@/hooks/use-facility-date-defaults";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
-import { toDateInputValue } from "@/lib/date-utils";
+import { toDateInputValue, facilityToday } from "@/lib/date-utils";
 
 import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import type { Order } from "@/db/schema";
 import { useCustomerLocations, useCustomerWithRelations } from "@/hooks/use-customers";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import {
   orderFormSchema,
@@ -97,6 +98,8 @@ export function OrderForm({
   const locked = (field: string) => isEditMode && isRecordFieldHeld(lock, recordInUseFreeFields("order"), field);
   const [editingLocation, setEditingLocation] = useState<{ customerId: string; location: EditableCustomerLocation } | null>(null);
   const { facilityId: contextFacilityId, facilities } = useFacilityContext();
+  const { timeZone: initialTimeZone } = useFacilityClock(order?.facilityId ?? contextFacilityId);
+  const today = facilityToday(initialTimeZone);
   // Organization operating defaults seed create mode only; an existing record
   // always wins. Warmed once per session in FacilityProvider, so this is a
   // cache read rather than a round trip on open.
@@ -109,6 +112,8 @@ export function OrderForm({
     handleSubmit,
     getValues,
     setValue,
+    resetField,
+    getFieldState,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(orderFormSchema),
@@ -119,7 +124,7 @@ export function OrderForm({
       customerId: order?.customerId ?? "",
       customerLocationId: order?.customerLocationId ?? "",
       formulationId: order?.formulationId ?? "",
-      orderDate: toDateInputValue(order?.orderDate),
+      orderDate: toDateInputValue(order?.orderDate, today),
       quantityKg: order?.quantityKg ?? undefined,
       packaging:
         (order?.packaging as PackagingType) ?? orgDefaults.defaultPackaging,
@@ -130,6 +135,14 @@ export function OrderForm({
   const selectedCustomerId = watchedCustomerId || undefined;
   const watchedLocationId = useWatch({ control, name: "customerLocationId" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
+  const { timeZone } = useFacilityClock(order?.facilityId ?? (watchedFacilityId || contextFacilityId));
+  const markDateEdited = useFacilityDateDefaults({
+    timeZone,
+    isEditMode,
+    fields: ["orderDate"] as const,
+    isPristine: (field) => !getFieldState(field).isDirty,
+    setDefault: (field, day) => resetField(field, { defaultValue: day }),
+  });
   const watchedFormulationId = useWatch({
     control,
     name: "formulationId",
@@ -201,7 +214,7 @@ export function OrderForm({
               type="date"
               disabled={isSubmitting || locked("orderDate")}
               error={!!errors.orderDate}
-              {...register("orderDate")}
+              {...register("orderDate", { onChange: () => markDateEdited("orderDate") })}
             />
           </FormField>
 

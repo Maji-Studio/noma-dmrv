@@ -30,6 +30,7 @@ import {
   useCreateReactor,
   useDeleteReactor,
   useReactors,
+  useReactorStats,
   useUpdateReactor,
 } from "@/hooks/use-reactors";
 import {
@@ -39,10 +40,15 @@ import {
 import type { ReactorWithRelations } from "@/data-access/reactors";
 import type { Reactor } from "@/db/schema";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
-import { formatTotalThroughputTph } from "./reactor-throughput";
-import { FACILITY_NOT_FOUND } from "@/lib/copy-utils";
+import { formatThroughputTph } from "./reactor-throughput";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { reactorSheetSections } from "./reactor-read-sections";
 import { ILLUSTRATION_SIZE, ReactorArt } from "@/components/ui/illustrations";
+
+/** Throughput is optional detail an operator can add from the Columns menu. */
+const REACTOR_COLUMNS_HIDDEN_BY_DEFAULT = {
+  nominalThroughputTph: false,
+};
 
 // ============================================
 // Column Definitions
@@ -67,16 +73,20 @@ function createColumns(
       cell: ({ row }) => <span>{row.original.identifier}</span>,
     },
     {
-      accessorKey: "facilityName",
-      header: "Facility",
-      cell: ({ row }) => (
-        <span>{row.original.facilityName || FACILITY_NOT_FOUND}</span>
-      ),
-    },
-    {
       accessorKey: "reactorType",
       header: "Type",
       cell: ({ row }) => <span>{formatReactorType(row.original.reactorType)}</span>,
+    },
+    {
+      accessorKey: "nominalThroughputTph",
+      header: "Nominal throughput (tph)",
+      cell: ({ row }) => (
+        <span>
+          {row.original.nominalThroughputTph === null
+            ? MISSING_VALUE.notRecorded
+            : row.original.nominalThroughputTph.toLocaleString()}
+        </span>
+      ),
     },
     {
       id: "actions",
@@ -134,6 +144,10 @@ export function ReactorList() {
 
   const { data: reactorsData, isLoading, error: fetchError } = useReactors(
     filters,
+    { enabled: !!contextFacilityId },
+  );
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useReactorStats(
+    contextFacilityId || undefined,
     { enabled: !!contextFacilityId },
   );
   const createReactor = useCreateReactor();
@@ -206,7 +220,6 @@ export function ReactorList() {
   const columns = createColumns(openEdit, handleDelete);
 
   const reactors = reactorsData?.items ?? [];
-  const totalReactors = reactorsData?.total ?? 0;
   const totalPages = reactorsData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -214,7 +227,9 @@ export function ReactorList() {
     isLoading,
     setCurrentPage,
   });
-  const totalThroughputValue = formatTotalThroughputTph(reactors);
+  const totalThroughputValue = formatThroughputTph(
+    statsData?.totalNominalThroughputTph ?? null,
+  );
   const hasActiveSearch = searchInput.trim().length > 0;
 
   if (!contextFacilityId) {
@@ -265,20 +280,25 @@ export function ReactorList() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
         <StatCard
           title="Total reactors"
-          value={totalReactors}
+          value={statsData?.totalReactors ?? 0}
+          description="All reactors in this facility"
           icon={<LightningIcon size={24} weight="bold" />}
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
         <StatCard
-          title="Nominal throughput on this page"
+          title="Nominal throughput"
           value={totalThroughputValue}
+          description="Combined across all reactors in this facility"
           icon={<FlaskIcon size={24} weight="bold" />}
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
       </div>
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={REACTOR_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={reactors}
         onRowClick={openView}

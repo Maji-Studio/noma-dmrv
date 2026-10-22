@@ -47,13 +47,13 @@ export async function loadRemovalTemplateDiagnostic(
     const parsedFacilityId = facilityIdSchema.parse(facilityId);
     await requireOrgFacility(orgCtx, parsedFacilityId);
     const facts = await loadFacilityCertifierFacts(orgCtx, parsedFacilityId);
-    const selectedTemplateId = facts.mapping?.defaultRemovalTemplateId ?? null;
+    const selectedTemplateId = facts.mapping?.removalTemplateId ?? null;
 
     let availability: RemovalTemplateDiagnosticAvailability = "ready";
     if (!facts.mapping) availability = "project-not-linked";
     else if (!facts.hasOrgCredentials) availability = "credentials-not-configured";
     else if (!selectedTemplateId) availability = "template-not-selected";
-    else if (!facts.defaultTemplate) availability = "template-not-found";
+    else if (!facts.currentTemplate) availability = "template-not-found";
 
     return {
       environment: env.ISOMETRIC_ENVIRONMENT,
@@ -65,10 +65,10 @@ export async function loadRemovalTemplateDiagnostic(
         name: facts.project?.name ?? null,
       },
       selectedTemplateId,
-      diagnostic: facts.defaultTemplate
+      diagnostic: facts.currentTemplate
         ? buildRemovalTemplateDiagnostic({
-            template: facts.defaultTemplate,
-            lineSources: facts.templatesById?.[facts.defaultTemplate.id]?.observation?.lineSources,
+            template: facts.currentTemplate,
+            lineSources: facts.templatesById?.[facts.currentTemplate.id]?.observation?.lineSources,
             blueprints: facts.blueprintsForTemplate,
           })
         : null,

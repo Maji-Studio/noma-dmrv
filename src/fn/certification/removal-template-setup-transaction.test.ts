@@ -8,19 +8,19 @@ import { protocolDefaultFixture } from "@/lib/certification/removal-template-set
 import { setupPlan } from "@/lib/certification/removal-template-setup-plan";
 import { setupPlanFingerprint } from "@/lib/certification/removal-template-setup-fingerprint";
 
-const mocks = vi.hoisted(() => ({ boundaryLock: vi.fn(), observationLock: vi.fn(), latest: vi.fn(), review: vi.fn(), makeDefault: vi.fn(), pin: vi.fn() }));
+const mocks = vi.hoisted(() => ({ boundaryLock: vi.fn(), observationLock: vi.fn(), latest: vi.fn(), review: vi.fn(), setTemplate: vi.fn(), pin: vi.fn() }));
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/auth/providers/better-auth-server", () => ({}));
 vi.mock("@/data-access/facility-certification-boundary-lock", () => ({ acquireFacilityCertificationBoundaryLock: mocks.boundaryLock }));
 vi.mock("@/data-access/removal-template-observations", () => ({ acquireTemplateObservationLock: mocks.observationLock, getLatestTemplateObservation: mocks.latest, reviewLineContractsInTransaction: mocks.review }));
-vi.mock("@/data-access/certification", () => ({ updateFacilityDefaultRemovalTemplateInTransaction: mocks.makeDefault }));
+vi.mock("@/data-access/certification", () => ({ updateFacilityRemovalTemplateInTransaction: mocks.setTemplate }));
 vi.mock("@/data-access/credit-batch-removal-template", () => ({ switchCreditBatchRemovalTemplateInTransaction: mocks.pin }));
 import { applySetupInTransaction } from "@/data-access/removal-template-setup";
 
 const ctx: OrgContext = { organizationId: "org", userId: "admin", orgRole: "admin", isPlatformAdmin: false };
 const input = { facilityId: "facility",
   fingerprints: { semanticFingerprint: "semantic", fullFingerprint: "full" },
-  answers: {}, overrides: {}, makeDefault: true, batches: [{ id: "batch", expectedVersion: 1 }],
+  answers: {}, overrides: {}, batchVersions: [{ id: "batch", expectedVersion: 1, removalTemplateId: null }],
 };
 
 beforeEach(() => vi.clearAllMocks());
@@ -55,6 +55,6 @@ it.each([false, true])("refuses a changed preview before validating %s answers o
   expect(mocks.observationLock).toHaveBeenCalledOnce();
   expect(mocks.latest).toHaveBeenCalledWith(ctx, "isometric", template.id, tx);
   expect(mocks.review).not.toHaveBeenCalled();
-  expect(mocks.makeDefault).not.toHaveBeenCalled();
+  expect(mocks.setTemplate).not.toHaveBeenCalled();
   expect(mocks.pin).not.toHaveBeenCalled();
 });

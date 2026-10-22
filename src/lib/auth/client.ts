@@ -36,3 +36,4 @@ export function useAuth() {
 
 // Export authClient for use with Better Auth React hooks
 export { authClient };
+export { refreshSession } from "./providers/better-auth-client";

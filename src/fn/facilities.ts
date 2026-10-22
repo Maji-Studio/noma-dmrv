@@ -1,5 +1,7 @@
 "use server";
 
+import { getFacilityStats as getFacilityStatsData, type FacilityStats } from "@/data-access/facility-stats";
+
 import { withAction } from "./with-action";
 
 /**
@@ -37,6 +39,23 @@ import { uuidSchema } from "@/schemas/helpers";
 
 const LOG_MESSAGE = "facility action failed";
 const facilityOutputStockSchema = z.object({ facilityId: uuidSchema() });
+
+const facilityStatsFilterSchema = z.object({
+  archived: z.boolean().optional(),
+}).optional();
+
+export async function getFacilityStatsFn(
+  filters?: { archived?: boolean },
+): Promise<ActionResult<FacilityStats>> {
+  return withAction(async (ctx) => {
+    const validatedFilters = facilityStatsFilterSchema.parse(filters);
+    return getFacilityStatsData(ctx, validatedFilters);
+  }, {
+    fallbackMessage: "Failed to load facility stats",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: LOG_MESSAGE, context: { op: "facility:stats" } },
+  });
+}
 
 // ============================================
 // List/Query Operations

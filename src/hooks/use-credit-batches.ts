@@ -183,11 +183,12 @@ export function useCreateCreditBatch() {
     // not load with it (issue #769).
     mutationFn: async (data: CreditBatchFormData, intentKey) => {
       const result = await createCreditBatchFn(data, { intentKey });
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return { creditBatch: result.data, warning: result.warning };
     },
     onSuccess: ({ creditBatch }) => {
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.runPreviewPrefix() });
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.recordPreviewPrefix() });
       // The created row is not an authoritative detail: when its post-commit
       // roll-up did not load, its applied tonnage and application slices are
       // unknown, and seeding it would serve those unknowns for the whole
@@ -222,6 +223,7 @@ export function useUpdateCreditBatch() {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.runPreviewPrefix() });
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.recordPreviewPrefix() });
       if (result.success) patchArrayListCachesByPrefixWithSavedRow(queryClient, creditBatchKeys.lists(), result.data);
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
       queryClient.invalidateQueries({
@@ -261,6 +263,7 @@ export function useDeleteCreditBatch() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.runPreviewPrefix() });
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.recordPreviewPrefix() });
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
       invalidateCertificationReadiness(queryClient);
     },

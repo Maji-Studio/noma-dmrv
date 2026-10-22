@@ -37,6 +37,7 @@ import type {
 import type { CascadePreview } from "@/lib/domain-errors";
 import {
   getCustomersFn,
+  getCustomerStatsFn,
   getCustomerWithRelationsFn,
   getCustomerLocationsFn,
   createCustomerWithLocationsFn,
@@ -53,6 +54,7 @@ import {
 } from "@/fn/customers";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { unwrap } from "./types";
 import { patchArrayListCacheByExactKeyWithSavedRow, patchListCachesWithSavedRow } from "./list-cache-utils";
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 import { throwIfCascadeChanged } from "@/lib/cascade-changed";
@@ -94,6 +96,14 @@ function seedCreatedCustomerCaches(
 // ============================================
 // Customer Query Hooks
 // ============================================
+
+export function useCustomerStats(filters?: { archived?: boolean }, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: customerKeys.stats(filters),
+    queryFn: async () => unwrap(await getCustomerStatsFn(filters)),
+    enabled: options?.enabled,
+  });
+}
 
 /**
  * Hook to fetch paginated list of customers with filtering
@@ -176,7 +186,10 @@ export function useCustomerDeletePreview(customer: { id: string; version: number
           throwActionError(result);
         } catch (error) {
           // A stale row refreshes the list, as a stale delete does, so reopening the dialog reads the current version.
-          if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+          if (error instanceof StaleVersionError) {
+            void queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+            void queryClient.invalidateQueries({ queryKey: customerKeys.statsPrefix() });
+          }
           throw error;
         }
       }
@@ -221,6 +234,7 @@ export function useCreateCustomerWithLocations(
     },
     onSuccess: async (data, variables) => {
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: customerKeys.statsPrefix() });
       queryClient.invalidateQueries({
         queryKey: customerKeys.locations(data.customer.id),
       });
@@ -341,6 +355,7 @@ export function useUpdateCustomer(
         data,
       );
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: customerKeys.statsPrefix() });
       invalidateEntityTypeQueries(queryClient, CUSTOMER_ENTITY_TYPE);
       invalidateEntityTypeQueries(queryClient, "order");
 
@@ -465,6 +480,7 @@ export function useDeleteCustomer(
       });
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: customerKeys.statsPrefix() });
       // Drop the deleted customer from the pickers
       queryClient.removeQueries({
         queryKey: entityKeys.detail(CUSTOMER_ENTITY_TYPE, customerId),
@@ -502,6 +518,7 @@ export function useDeleteCustomer(
     onSettled: async (data, error, variables) => {
             // Refetch lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: customerKeys.statsPrefix() });
 
       await callbacks?.onSettled?.(data, error, variables);
     },
@@ -542,6 +559,7 @@ function useCustomerLifecycle(
       invalidateEntityTypeQueries(queryClient, "order");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: customerKeys.lists() }),
+        queryClient.invalidateQueries({ queryKey: customerKeys.statsPrefix() }),
         queryClient.invalidateQueries({ queryKey: customerKeys.detailWithRelations(data.id) }),
       ]);
       await callbacks?.onSuccess?.(data, variables);
@@ -596,6 +614,7 @@ export function useCreateCustomerLocation(
       });
       // Invalidate customer lists (location count changed)
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: customerKeys.statsPrefix() });
 
       // Pre-populate the detail cache
       queryClient.setQueryData(customerLocationKeys.detail(data.id), data);
@@ -640,6 +659,7 @@ export function useUpdateCustomerLocation(
     },
     onSuccess: async (data, variables) => {
       patchArrayListCacheByExactKeyWithSavedRow<CustomerLocation>(queryClient, customerKeys.locations(data.customerId), data);
+      queryClient.invalidateQueries({ queryKey: customerKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       // Update cache with actual server data
@@ -715,6 +735,7 @@ export function useDeleteCustomerLocation(
       });
       // Invalidate customer lists (location count changed)
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: customerKeys.statsPrefix() });
 
       queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
       queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
@@ -768,6 +789,7 @@ function useCustomerLocationLifecycle(
         queryClient.invalidateQueries({ queryKey: customerKeys.detailWithRelations(customerId) }),
         // The list's location count covers active locations only.
         queryClient.invalidateQueries({ queryKey: customerKeys.lists() }),
+        queryClient.invalidateQueries({ queryKey: customerKeys.statsPrefix() }),
       ]);
       await callbacks?.onSuccess?.(data, variables);
     },

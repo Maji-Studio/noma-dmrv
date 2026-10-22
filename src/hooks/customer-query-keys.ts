@@ -5,6 +5,9 @@ export const customerKeys = {
   lists: () => [...customerKeys.all, "list"] as const,
   list: (filters?: Partial<CustomerFilterData>) =>
     [...customerKeys.lists(), filters] as const,
+  stats: (filters?: { archived?: boolean }) =>
+    [...customerKeys.all, "stats", filters] as const,
+  statsPrefix: () => [...customerKeys.all, "stats"] as const,
   details: () => [...customerKeys.all, "detail"] as const,
   detail: (id: string) => [...customerKeys.details(), id] as const,
   detailWithRelations: (id: string) =>

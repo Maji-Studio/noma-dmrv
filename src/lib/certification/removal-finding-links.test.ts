@@ -13,12 +13,12 @@ describe("removalFindingFixLink", () => {
     expect(removalFindingFixLink({ fixTarget: "feedstockTypes" }, "fac-1")?.href).toContain("fac-1");
   });
 
-  it("never says Decide components for a template that was not read in full", () => {
+  it("never says Answer in Settings for a template that was not read in full", () => {
     const blocker = templateRemovalBlocker("templateNotFullyRead");
     expect(blocker.fixTarget).toBe("templateLines");
     expect(removalFindingFixLink(blocker, "fac-1", ["b1"])?.label).toBe("Open Removal templates");
-    expect(removalFindingFixLink(templateRemovalBlocker("templateLinesNeedReview"), "fac-1")?.label).toBe("Decide components");
-    expect(removalFindingFixLink({ fixTarget: "templateReplacement" }, "fac-1", ["b1"])?.label).toBe("Switch template");
+    expect(removalFindingFixLink(templateRemovalBlocker("templateLinesNeedReview"), "fac-1")?.label).toBe("Answer in Settings");
+    expect(removalFindingFixLink({ fixTarget: "templateReplacement" }, "fac-1", ["b1"])?.label).toBe("Set template");
   });
 
   it("gives no link when several destinations coexist", () => {
@@ -26,8 +26,8 @@ describe("removalFindingFixLink", () => {
   });
 
   it("resolves batch-level targets to the only member batch", () => {
-    expect(removalFindingFixLink({ fixTarget: "creditBatchTemplate" }, "fac-1", ["b1"])).toEqual(
-      batchHealthFixLinkFor({ key: "templateSet", fixTarget: "creditBatchTemplate" }, "fac-1", "b1"),
+    expect(removalFindingFixLink({ fixTarget: "templateSetup" }, "fac-1", ["b1"])).toEqual(
+      batchHealthFixLinkFor({ key: "templateSet", fixTarget: "templateSetup" }, "fac-1", "b1"),
     );
     expect(removalFindingFixLink({ fixTarget: "batchDetails" }, "fac-1", ["b1"])?.href).toBe(
       creditBatchDeepLinkHref("b1", "fac-1"),
@@ -39,8 +39,8 @@ describe("removalFindingFixLink", () => {
       const link = removalFindingFixLink({ fixTarget: "batchDetails" }, "fac-1", ids);
       expect(link?.href).toBe("/credit-batches?facility=fac-1");
     }
-    expect(removalFindingFixLink({ fixTarget: "creditBatchTemplate" }, "fac-1", ["b1", "b2"])?.href).toBe(
-      batchHealthFixLinkFor({ key: "templateSet", fixTarget: "creditBatchTemplate" }, "fac-1")?.href,
+    expect(removalFindingFixLink({ fixTarget: "templateSetup" }, "fac-1", ["b1", "b2"])?.href).toBe(
+      batchHealthFixLinkFor({ key: "templateSet", fixTarget: "templateSetup" }, "fac-1")?.href,
     );
   });
 

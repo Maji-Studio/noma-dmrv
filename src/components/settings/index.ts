@@ -14,3 +14,4 @@ export { RemovalTemplatesSettingsPane } from "./removal-templates-settings-pane"
 export { FacilitySettingsPane } from "./facility-settings-pane";
 export { TemplateMappingSettingsPane } from "./template-mapping-settings-pane";
 export { VehiclesAndCrewList } from "./vehicles-and-crew-list";
+export { ProfileSettingsPane } from "./profile-settings-pane";
