@@ -402,7 +402,18 @@ export function SubmitStep({
 
       <ComponentTable table={componentTable} facilityId={facilityId} />
 
-      <SourceRecords ledger={ctx.emissionsLedger} facilityId={facilityId} />
+      <SourceRecords
+        ledger={ctx.emissionsLedger}
+        facilityId={facilityId}
+        storageSitesHref={
+          ctx.mapping?.externalProjectId
+            ? isometricRegistry.storageSites({
+                environment: ctx.isProduction ? "production" : "sandbox",
+                externalProjectId: ctx.mapping.externalProjectId,
+              })
+            : null
+        }
+      />
 
       <DebugDrawer
         compilation={compilationQuery.data ?? null}

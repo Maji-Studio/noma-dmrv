@@ -11,7 +11,6 @@
 "use client";
 
 import {
-  ArrowSquareOutIcon,
   CheckCircleIcon,
   SpinnerGapIcon,
   WarningIcon,
@@ -19,6 +18,7 @@ import {
 import { isometricRegistry } from "@/lib/isometric/links";
 import { DetailField } from "@/components/ui/detail-panel";
 import { EnvBanner } from "../env-banner";
+import { LinkLabel } from "./link-label";
 import { CompilationWarnings, RemovalAdvisoryList } from "./compilation-notices";
 import { BlockedComponentsNotice } from "./blocked-components-notice";
 import type { ComponentTable } from "./component-table-model";
@@ -33,7 +33,6 @@ import { SubmissionChecks } from "./submission-checks";
 import { Notice } from "@/components/ui/notice";
 
 const STATE_ICON_SIZE = 20;
-const LINK_ICON_SIZE = 12;
 
 type SubmissionSummaryProps = SubmissionFactsInput & {
   facilityId: string;
@@ -88,10 +87,9 @@ function RegistryFactLink({
       target="_blank"
       rel="noopener noreferrer"
       aria-label={ariaLabel}
-      className="inline-flex items-center gap-4 text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+      className="text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
     >
-      {label}
-      <ArrowSquareOutIcon size={LINK_ICON_SIZE} aria-hidden />
+      <LinkLabel>{label}</LinkLabel>
     </a>
   );
 }

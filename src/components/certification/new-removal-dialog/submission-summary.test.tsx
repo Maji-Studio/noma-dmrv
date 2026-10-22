@@ -9,7 +9,7 @@ import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { SubmissionSummary } from "./submission-summary";
 import type { ComponentTable } from "./component-table-model";
 
-const NO_ROWS: ComponentTable = { loading: false, batches: [], rows: [], groups: [] };
+const NO_ROWS: ComponentTable = { available: true, loading: false, batches: [], rows: [], groups: [] };
 
 vi.mock("next/link", () => ({
   default: ({ children, ...props }: React.ComponentProps<"a">) => (

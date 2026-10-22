@@ -13,11 +13,11 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import {
-  ArrowSquareOutIcon,
   PaperclipIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { InfoHint } from "@/components/ui/tooltip";
+import { LinkLabel } from "./link-label";
 import { ENTRY_ENTITY_TYPE } from "@/components/emissions/emission-entry-files";
 import { useDocumentsForEntity } from "@/hooks/use-documents";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
@@ -28,7 +28,6 @@ import { cn } from "@/lib/utils";
 import type { ComponentRow, ComponentTable as ComponentTableModel } from "./component-table-model";
 
 const ICON_SIZE = 14;
-const LINK_ICON_SIZE = 12;
 const TONNE_DIGITS = 1;
 
 export const STATE_WORD = {
@@ -62,7 +61,7 @@ function NewTabLink({
   mono,
 }: {
   href: string;
-  children: React.ReactNode;
+  children: string;
   className?: string;
   mono?: boolean;
 }) {
@@ -77,9 +76,7 @@ function NewTabLink({
         className,
       )}
     >
-      {children}
-      {" "}
-      <ArrowSquareOutIcon size={LINK_ICON_SIZE} aria-hidden className="inline align-baseline" />
+      <LinkLabel>{children}</LinkLabel>
     </Link>
   );
 }
@@ -130,10 +127,11 @@ function StateCell({ row, facilityId }: { row: ComponentRow; facilityId: string 
             href={fix.href}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex min-h-44 items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline md:min-h-0"
+            className="inline-flex min-h-44 items-center body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline md:min-h-0"
           >
-            {fix.batchCode ? `${fix.label} on ${fix.batchCode}` : fix.label}
-            <ArrowSquareOutIcon size={LINK_ICON_SIZE} aria-hidden />
+            <span>
+              <LinkLabel>{fix.batchCode ? `${fix.label} on ${fix.batchCode}` : fix.label}</LinkLabel>
+            </span>
           </Link>
         ))}
       </span>
@@ -211,7 +209,8 @@ interface ComponentTableProps {
 
 export function ComponentTable({ table, facilityId }: ComponentTableProps) {
   const { batches, groups, rows } = table;
-  if (batches.length === 0) return null;
+  // A failed compile says why in its own notice: no table to read.
+  if (!table.available || batches.length === 0) return null;
   return (
     <section className="flex flex-col" aria-label="Components">
       <div className="flex flex-col bg-[var(--paper)] [border:var(--panel-border)]">

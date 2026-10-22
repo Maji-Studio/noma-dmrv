@@ -115,6 +115,21 @@ describe("componentRows", () => {
     expect(rows[0].fileCount).toBe(3);
   });
 
+  it("shows a ledger input's known reason for a component with manual entries, matched by name", () => {
+    const [row] = componentRows(input([[line({
+      componentId: "lab", displayName: "Samples to lab", state: "filled",
+      entries: [entry({ id: "s1", documentCount: 1 })],
+    })]], {
+      review: review([]),
+      ledger: { claims: [HERE], inputs: [
+        { id: "other", component: "Another component", input: "Diesel", magnitude: null, unit: "L", missingReason: "No reading" },
+        { id: "in-lab", component: "Samples to lab", input: "Mass and distance", magnitude: null, unit: "t·km", missingReason: "Recorded legs cannot be summed" },
+      ] },
+    }));
+    expect(row.source).toBe("1 manual entry");
+    expect(row.figure).toEqual({ text: "Recorded legs cannot be summed", quiet: true });
+  });
+
   describe("blocked, sent earlier and included with no figure read differently", () => {
     it("a blocked component says what to do and where, whatever its recorded zero, and shows no figure", () => {
       const lines = [[line({ componentId: "ok" })], [line({
@@ -186,10 +201,12 @@ describe("buildComponentTable", () => {
     expect(table.rows.map((row) => row.figure)).toEqual(Array(3).fill({ text: "Not yet computed", quiet: true }));
   });
 
-  it("lists no rows without a compiled review, but still names the batches", () => {
+  it("is unavailable without a compiled review, with nothing being prepared", () => {
     const table = buildComponentTable(input([LINES]));
+    expect(table.available).toBe(false);
     expect(table.rows).toEqual([]);
-    expect(table.batches).toHaveLength(1);
+    expect(buildComponentTable(input([LINES], { isLoading: true })).available).toBe(true);
+    expect(buildComponentTable(input([LINES], { review: REVIEW })).available).toBe(true);
   });
 });
 
@@ -251,6 +268,11 @@ describe("ComponentTable", () => {
     render(<ComponentTable table={table} facilityId="facility-1" />);
     expect(screen.queryByText("Included")).toBeNull();
     expect(screen.getAllByText("Not yet computed")).toHaveLength(3);
+  });
+
+  it("renders no table at all after a failed compile, which explains itself in its own notice", () => {
+    const { container } = render(<ComponentTable table={buildComponentTable(input([LINES]))} facilityId="facility-1" />);
+    expect(container.textContent).toBe("");
   });
 
   it("offers the file names behind a toggletip", () => {

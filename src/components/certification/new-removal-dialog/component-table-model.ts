@@ -83,6 +83,8 @@ export interface ComponentBatch {
 }
 
 export interface ComponentTable {
+  /** False when nothing is known about what is sent (no compiled review, none being prepared). */
+  available: boolean;
   /** The compiled review is still being prepared: figures and states are not final. */
   loading: boolean;
   batches: ComponentBatch[];
@@ -151,17 +153,22 @@ const LEDGER_INPUT_FOR_SOURCE: Partial<Record<AutomaticSourceId, string>> = {
 };
 
 function figureGap(
+  componentName: string,
   lines: readonly BatchEmissionLine[],
   ledgerInputs: ComponentTableInput["ledger"]["inputs"],
 ): string | null {
-  for (const line of lines) {
-    const source = line.contract?.automaticSource;
-    const ledgerId = source ? LEDGER_INPUT_FOR_SOURCE[source] : undefined;
-    if (!ledgerId) continue;
-    const gap = ledgerInputs.find((input) => input.id === ledgerId)?.missingReason;
-    if (gap) return gap;
-  }
-  return null;
+  const sources = new Set(
+    lines.flatMap((line) => {
+      const source = line.contract?.automaticSource;
+      return source && LEDGER_INPUT_FOR_SOURCE[source] ? [LEDGER_INPUT_FOR_SOURCE[source]] : [];
+    }),
+  );
+  // A ledger input belongs to a component by the template source feeding it, or by the
+  // component's own name; the old ledger table keyed its rows the same way.
+  const gap = ledgerInputs.find(
+    (input) => input.missingReason && (sources.has(input.id) || input.component === componentName),
+  )?.missingReason;
+  return gap ?? null;
 }
 
 /** One row per template component, in template order, for the whole Removal. */
@@ -255,7 +262,7 @@ export function componentRows(input: ComponentTableInput): ComponentRow[] {
     const figures = shown
       .map(figureText)
       .filter((value): value is string => value !== null);
-    const gap = figures.length === 0 ? figureGap(lines, input.ledger.inputs) : null;
+    const gap = figures.length === 0 ? figureGap(first.displayName, lines, input.ledger.inputs) : null;
     return {
       ...included,
       source: parts.length ? parts.join(", ") : fixed ? SENT_SOURCE.template : SENT_SOURCE.none,
@@ -299,5 +306,5 @@ export function buildComponentTable(input: ComponentTableInput): ComponentTable 
   });
   // Without a compiled review nothing is known about what is sent.
   const rows = input.review || input.isLoading ? componentRows(input) : [];
-  return { loading: input.isLoading, batches, rows, groups: groupRows(rows) };
+  return { available: Boolean(input.review) || input.isLoading, loading: input.isLoading, batches, rows, groups: groupRows(rows) };
 }

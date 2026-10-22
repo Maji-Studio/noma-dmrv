@@ -64,7 +64,7 @@ vi.mock("@/components/ui/tooltip", () => ({
 
 vi.mock("./component-table", () => ({ ComponentTable: () => null }));
 vi.mock("./component-table-model", () => ({
-  buildComponentTable: () => ({ loading: false, batches: [], rows: [], groups: [] }),
+  buildComponentTable: () => ({ available: true, loading: false, batches: [], rows: [], groups: [] }),
 }));
 vi.mock("./source-records", () => ({ SourceRecords: () => null }));
 
