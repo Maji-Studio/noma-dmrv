@@ -5,7 +5,7 @@ import { loadRemovalEntryCorrection } from "@/fn/certification/removal-correctio
 import { assertStatementRemovalsCurrent } from "@/fn/certification/statement-removal-correction-core";
 import { withGhgVerifierSubmissionLock } from "@/data-access/ghg-verifier-submission-lock";
 import { getRecordLock } from "@/data-access/certification-lineage-guards";
-import { updateProductionRun } from "@/data-access/production-runs";
+import { createProductionRun, updateProductionRun } from "@/data-access/production-runs";
 import { buildRemovalSubmissionBuild } from "@/fn/certification/removal-submission-build";
 import { requirePreparedRemovalSubmission } from "@/fn/certification/removal-submission-prepare";
 import * as scopeReader from "@/fn/certification/removal-scope";
@@ -14,9 +14,10 @@ import { afterEach, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { productionRuns, certificationSubmissions, certifierGhgStatements, certifierProjects, certifierRemovals, creditBatches,
-  emissionEntries, emissionEntryValues, facilities, removalTemplateObservations, users, activityEvents } from "@/db/schema";
+  emissionEntries, emissionEntryValues, creditBatchProductionRuns, facilities, feedstocks, outputStockMoistureReadings, productionRunFeedstockDraws, productionRunFeedstocks, reactors, removalTemplateObservations, users, activityEvents } from "@/db/schema";
 import { createLineageFixture, cleanupLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext } from "./helpers/test-org";
+import { feedstockFixtureValues } from "./helpers/feedstock-fixture";
 import { cleanupDocumentUploads } from "./helpers/document-upload-cleanup";
 
 
@@ -49,6 +50,7 @@ let observationId: string | undefined;
 const documentIds: string[] = [];
 afterEach(async () => {
   await cleanupDocumentUploads(org, documentIds.splice(0));
+  await cleanupExtra();
   if (fixture) {
     const ids = await db.select({ id: emissionEntries.id }).from(emissionEntries).where(and(eq(emissionEntries.organizationId, org.organizationId), eq(emissionEntries.creditBatchId, fixture.batchId)));
     if (ids.length) await db.delete(emissionEntryValues).where(and(eq(emissionEntryValues.organizationId, org.organizationId), inArray(emissionEntryValues.entryId, ids.map(row => row.id))));
@@ -60,6 +62,42 @@ afterEach(async () => {
   await db.delete(activityEvents).where(and(eq(activityEvents.organizationId, org.organizationId), eq(activityEvents.actorUserId, userId)));
   await db.delete(users).where(eq(users.id, userId));
 });
+
+const extra = { runIds: [] as string[], reactorIds: [] as string[], feedstockIds: [] as string[] };
+async function cleanupExtra() {
+  const runIds = extra.runIds.splice(0);
+  if (runIds.length) {
+    await db.delete(creditBatchProductionRuns).where(inArray(creditBatchProductionRuns.productionRunId, runIds));
+    await db.delete(productionRunFeedstocks).where(inArray(productionRunFeedstocks.productionRunId, runIds));
+    await db.delete(productionRunFeedstockDraws).where(inArray(productionRunFeedstockDraws.productionRunId, runIds));
+    await db.delete(outputStockMoistureReadings).where(inArray(outputStockMoistureReadings.productionRunId, runIds));
+    await db.delete(productionRuns).where(inArray(productionRuns.id, runIds));
+  }
+  const reactorIds = extra.reactorIds.splice(0);
+  if (reactorIds.length) await db.delete(reactors).where(inArray(reactors.id, reactorIds));
+  const feedstockIds = extra.feedstockIds.splice(0);
+  if (feedstockIds.length) await db.delete(feedstocks).where(inArray(feedstocks.id, feedstockIds));
+}
+/** Records and completes a run through the real write path that attaches it to a covering batch. */
+async function completeRunOn(f: LineageFixture, day: string, tag: string) {
+  // The fixture's own run still occupies its reactor and drained its bin, so each late run gets its own of both.
+  const [feedstock] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, { organizationId: org.organizationId, code: `FS-LATE-${tag}-${userId.slice(0, 6)}`,
+    storageLocationId: f.feedstockBinId, status: "complete", facilityId: f.facilityId, feedstockTypeId: f.feedstockTypeId, massDryKg: 90, massWetKg: 100, moistureContentPercent: 10 })).returning({ id: feedstocks.id });
+  extra.feedstockIds.push(feedstock.id);
+  const [reactor] = await db.insert(reactors).values({ organizationId: org.organizationId, code: `RX-LATE-${tag}-${userId.slice(0, 6)}`,
+    identifier: `Late ${tag}`, facilityId: f.facilityId, reactorType: "batch" }).returning({ id: reactors.id });
+  extra.reactorIds.push(reactor.id);
+  const run = await createProductionRun(org, { code: `PR-LATE-${tag}-${userId.slice(0, 6)}`, facilityId: f.facilityId, reactorId: reactor.id, status: "running",
+    startTime: new Date(`${day}T08:00:00Z`), endTime: null, feedstockMoisturePercent: 20, feedstockDraws: [{ storageLocationId: f.feedstockBinId, wetMassKg: 10 }] });
+  extra.runIds.push(run.id);
+  await updateProductionRun(org, run.id, { expectedVersion: run.version, status: "complete", endTime: new Date(`${day}T12:00:00Z`),
+    biocharStorageLocationId: f.biocharBinId, biocharOutputKg: 3, biocharMoisturePercent: 20 });
+  return run.id;
+}
+async function batchRunIds(batchId: string) {
+  return (await db.select({ id: creditBatchProductionRuns.productionRunId }).from(creditBatchProductionRuns)
+    .where(and(eq(creditBatchProductionRuns.organizationId, org.organizationId), eq(creditBatchProductionRuns.creditBatchId, batchId)))).map(row => row.id);
+}
 
 it("detects a run-only correction, fences the statement, supersedes and relocks on resubmit", async () => {
   // Restore transaction lock exports hidden by the general orchestrator harness.
@@ -175,6 +213,11 @@ it("detects a run-only correction, fences the statement, supersedes and relocks 
   await expect(withGhgVerifierSubmissionLock(org, statement.id,
     () => assertStatementRemovalsCurrent(org, statement.id))).rejects.toThrow("Resubmit Removal");
 
+  // While the Removal is returned, a run completed inside the batch window joins the batch automatically.
+  const lateRunId = await completeRunOn(f, "2026-06-20", "RETURNED");
+  expect(await batchRunIds(f.batchId)).toContain(lateRunId);
+  expect(await loadRemovalEntryCorrection(org, f.removalId)).toMatchObject({ correctionNeeded: true });
+
   const statementArgs = { orgCtx: org, ghgStatementId: statement.id, input: {
     externalReportUrl: "https://example.test/report.pdf", summaryOfChanges: "Corrected electricity consumption.", confirmProduction: true,
   } };
@@ -193,6 +236,9 @@ it("detects a run-only correction, fences the statement, supersedes and relocks 
   ]) } });
   expect((await db.transaction(tx => getRecordLock(org, tx, { entityType: "productionRun", entityId: f.productionRunId }))).level).toBe("sent");
   expect(await loadRemovalEntryCorrection(org, f.removalId)).toMatchObject({ correctionNeeded: false, windowOpen: false });
+  // Contrast: once the Removal is Sent again, a run completed in the window stays without a batch.
+  const sentRunId = await completeRunOn(f, "2026-06-22", "SENT");
+  expect(await batchRunIds(f.batchId)).not.toContain(sentRunId);
   await expect(withGhgVerifierSubmissionLock(org, statement.id,
     () => assertStatementRemovalsCurrent(org, statement.id))).resolves.toBeUndefined();
   // Report storage and registry transport remain harness boundaries. Statement

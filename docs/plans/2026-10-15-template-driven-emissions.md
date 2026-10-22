@@ -359,6 +359,7 @@ Kenji's round 2 note asks to reopen general edits when Isometric pushes a submis
 - **Shared lineage:** a record that also backs a verified Removal stays locked.
 - **Sync:** status comes from the refresh paths and from the scheduled registry sync of #1047 once it exists.
 - **Prerequisite:** none from Isometric, since Kenji decided the trigger on 2026-10-15. Folds item 1 of #687.
+- **Late runs (Kenji, 2026-10-22):** a production run completed while its Removal is returned and dated inside its credit batch joins that batch automatically (the existing attachment, skipped only while Sent), and its emissions go out with the resubmission.
 
 ## 5. Delivery
 
