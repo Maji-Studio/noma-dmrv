@@ -9,7 +9,10 @@ export function deriveEmissionEntryFacts(
   observation: EntryObservation,
   previousObservations: ReadonlyMap<string, EntryObservation | null>,
 ) {
-  return storedEntries.map((entry) => {
+  return storedEntries.map((entry): typeof entry & ReturnType<typeof emissionEntryCounts> & {
+    carry?: EntryCarryDisposition; reportedIn?: EntryCarryDestination | null; unitMismatch: boolean;
+    hasEvidence: boolean; total: { magnitude: string; unit: string } | null;
+  } => {
     const previous = previousObservations.get(entry.observationId);
     const status = previous
       ? emissionEntryCounts(previous, observation, entry.componentId)
@@ -30,7 +33,6 @@ export function deriveEmissionEntryFacts(
     const value = entry.values.length === 1 ? entry.values[0] : null;
     return {
       ...entry,
-      ...({} as { carry?: EntryCarryDisposition; reportedIn?: EntryCarryDestination | null }),
       ...status,
       unitMismatch,
       hasEvidence: entry.documentCount > 0,

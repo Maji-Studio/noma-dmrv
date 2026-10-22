@@ -134,7 +134,7 @@ function declarativeSequestrationBindingRevision(
   return blueprints;
 }
 
-const PRODUCTION_CLAIM_POLICY = "application-slice-delivery-entry-carry-v3";
+const PRODUCTION_CLAIM_POLICY = "application-slice-delivery-entry-carry-v4";
 
 export function buildMappingRevisionInput(
   sequestrationBindings: MappingRevisionSequestrationBindings =

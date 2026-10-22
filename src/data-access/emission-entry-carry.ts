@@ -1,98 +1,102 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { db, type DbTransaction } from "@/db";
+import { db } from "@/db";
 import { creditBatches, creditBatchApplications, certifierRemovals, certificationSubmissions } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { facilityToday } from "@/lib/date-utils";
 import { creditBatchApplicationMass } from "@/lib/credit-batches/application-mass";
-import { removalEntryCarryOwner, type CarryContender } from "@/lib/certification/emission-entry-carry";
+import { removalEntryCarryOwner, type CarryContender, type EntryCarryDestination } from "@/lib/certification/emission-entry-carry";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
-import { isLiveEntryReservation } from "@/lib/certification/removal-emission-contributions";
+import { deriveRemovalEntryWindow, isLiveEntryReservation } from "@/lib/certification/removal-emission-contributions";
+import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 import { requireOrgScope } from "./utils";
-import { listEmissionEntryDraftContenders, loadEmissionEntryReservations } from "./emission-entry-contenders";
-import { listEmissionEntriesForBatches } from "./emission-entries";
+import { loadEmissionEntryReservations } from "./emission-entry-contenders";
+import { hydrateEmissionEntries } from "./emission-entries";
 import { loadCreditBatchRollups } from "./credit-batch-accounting";
-import { getLatestTemplateObservation, getTemplateObservationsByIds } from "./removal-template-observations";
+import { getLatestTemplateObservations, getTemplateObservationsByIds } from "./removal-template-observations";
+import { listCarryCandidates, listCarryDraftMembers, listOwnedCarryEntries, type CarryExecutor, type CarryReadScope } from "./emission-entry-carry-queries";
 
-type CarryExecutor = typeof db | DbTransaction;
-
-/** Facility-scoped contenders and origin facts, also used inside the reservation transaction. */
+/** Discovery is persisted-only, with roll-ups restricted to potential new carries. */
 export async function loadFacilityEmissionEntryCarry(
   ctx: OrgContext, facilityId: string, executor: CarryExecutor = db,
   claimedAttempt?: { removalId: string; submissionId?: string },
+  scope: CarryReadScope = {},
 ) {
   requireOrgScope(ctx);
-  const batches = await executor.select().from(creditBatches).where(and(
-    eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId),
-  ));
-  const batchIds = batches.map(batch => batch.id);
-  const [stored, ownContenders, removals] = await Promise.all([
-    listEmissionEntriesForBatches(ctx, batchIds, executor),
-    listEmissionEntryDraftContenders(ctx, batchIds, executor, claimedAttempt),
-    executor.select().from(certifierRemovals).where(and(
-      eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.facilityId, facilityId),
-    )),
-  ]);
-  const removalIds = removals.map(removal => removal.id);
-  const memberships = removalIds.length ? await executor.select({ removalId: creditBatchApplications.removalId, batchId: creditBatchApplications.creditBatchId })
-    .from(creditBatchApplications).innerJoin(creditBatches, and(eq(creditBatches.id, creditBatchApplications.creditBatchId),
-      eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId)))
-    .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.removalId, removalIds))) : [];
-  const attempts = removalIds.length ? await executor.select().from(certificationSubmissions).where(and(
-    eq(certificationSubmissions.organizationId, ctx.organizationId),
-    eq(certificationSubmissions.provider, "isometric"), eq(certificationSubmissions.localEntityType, "removal"),
-    eq(certificationSubmissions.submissionType, "removal"), inArray(certificationSubmissions.localEntityId, removalIds),
-  )) : [];
-  const templateIds = [...new Set(batches.flatMap(batch => batch.removalTemplateId ? [batch.removalTemplateId] : []))];
-  const observations = await Promise.all(templateIds.map(id => getLatestTemplateObservation(ctx, "isometric", id, executor)));
-  const previous = await getTemplateObservationsByIds(ctx, stored.map(entry => entry.observationId), executor);
-  const previousById = new Map(previous.map(observation => [observation.id, observation]));
-  const nowMs = Date.now();
-  const contenders: CarryContender[] = ownContenders.flatMap(contender => {
-    const removal = removals.find(row => row.id === contender.removalId);
-    const members = batches.filter(batch => contender.creditBatchIds.includes(batch.id));
-    const pins = new Set(members.map(batch => batch.removalTemplateId));
-    const blocked = attempts.some(attempt => attempt.localEntityId === contender.removalId &&
-      (attempt.submittedAt || attempt.status === "submitted" || attempt.status === "accepted" ||
-        (attempt.id !== claimedAttempt?.submissionId && isLiveEntryReservation(attempt, nowMs))));
-    if (!removal || contender.contenderKind !== "draft" || blocked || pins.size !== 1 || !members.length || members.length !== new Set(contender.creditBatchIds).size) return [];
-    return [{ ...contender, organizationId: ctx.organizationId, facilityId, code: removal.code,
-      creditBatchCodes: members.map(batch => batch.code).sort(),
-      observation: observations.find(observation => observation?.externalTemplateId === members[0].removalTemplateId) ?? null }];
-  });
-  const originIds = [...new Set(stored.map(entry => entry.creditBatchId))];
-  const [rollups, slices, reservations] = await Promise.all([
+  const candidates = await listCarryCandidates(ctx, facilityId, executor, scope);
+  const owned = await listOwnedCarryEntries(ctx, facilityId, executor, scope);
+  const selected = [...candidates, ...owned];
+  const empty = { entries: [] as CarryEntry[], contenders: [] as CarryContender[], ownContenders: [] as CarryContender[], batches: [] as (typeof creditBatches.$inferSelect)[] };
+  if (!selected.length) return empty;
+  const originIds = [...new Set(candidates.map(row => row.batch.id))];
+  const allOriginIds = [...new Set(selected.map(row => row.batch.id))];
+  const [stored, draftMembers, rollups, slices, previous] = await Promise.all([
+    hydrateEmissionEntries(ctx, selected.map(row => row.entry), executor),
+    candidates.length ? listCarryDraftMembers(ctx, facilityId, executor) : [],
     loadCreditBatchRollups(ctx, originIds, undefined, executor),
-    originIds.length ? executor.select({ creditBatchId: creditBatchApplications.creditBatchId, dryKg: creditBatchApplications.allocatedDryMassKg })
-      .from(creditBatchApplications).where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.creditBatchId, originIds))) : [],
-    loadEmissionEntryReservations(ctx, stored.flatMap(entry => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []), executor),
+    executor.select().from(creditBatchApplications).where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.creditBatchId, allOriginIds))),
+    getTemplateObservationsByIds(ctx, selected.map(row => row.entry.observationId), executor),
   ]);
+  const reservations = await loadEmissionEntryReservations(ctx, stored.flatMap(entry => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []), executor);
+  const removalIds = [...new Set([...draftMembers.map(row => row.removal.id), ...slices.flatMap(row => row.removalId ? [row.removalId] : []),
+    ...stored.flatMap(entry => entry.sentByRemovalId ? [entry.sentByRemovalId] : []), ...reservations.map(row => row.removalId)])];
+  const [removals, memberships, attempts, observations] = await Promise.all([
+    removalIds.length ? executor.select().from(certifierRemovals).where(and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.facilityId, facilityId), inArray(certifierRemovals.id, removalIds))) : [],
+    removalIds.length ? executor.select({ removalId: creditBatchApplications.removalId, batch: creditBatches }).from(creditBatchApplications)
+      .innerJoin(creditBatches, and(eq(creditBatches.id, creditBatchApplications.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId)))
+      .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.removalId, removalIds))) : [],
+    removalIds.length ? executor.select().from(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId),
+      eq(certificationSubmissions.provider, "isometric"), eq(certificationSubmissions.localEntityType, "removal"),
+      eq(certificationSubmissions.submissionType, "removal"), inArray(certificationSubmissions.localEntityId, removalIds))) : [],
+    getLatestTemplateObservations(ctx, "isometric", [...new Set(draftMembers.flatMap(row => row.batch.removalTemplateId ? [row.batch.removalTemplateId] : []))], executor),
+  ]);
+  const nowMs = Date.now();
+  const contenders: CarryContender[] = [...new Set(draftMembers.map(row => row.removal.id))].flatMap(id => {
+    const rows = draftMembers.filter(row => row.removal.id === id);
+    const members = [...new Map(rows.map(row => [row.batch.id, row.batch])).values()];
+    const removal = rows[0].removal;
+    const pins = new Set(members.map(batch => batch.removalTemplateId));
+    const blocked = attempts.some(attempt => attempt.localEntityId === id && attempt.id !== claimedAttempt?.submissionId && isLiveEntryReservation(attempt, nowMs));
+    const window = deriveRemovalEntryWindow(members, rows.map(row => row.applicationDate));
+    if (blocked || !window || hasFreshRemovalDeletionLease(removal.metadata) || pins.size !== 1 || members.some(batch => batch.facilityId !== facilityId)) return [];
+    return [{ contenderKind: "draft" as const, removalId: id, createdAt: removal.createdAt.toISOString(), window,
+      creditBatchIds: members.map(batch => batch.id), organizationId: ctx.organizationId, facilityId, code: removal.code,
+      creditBatchCodes: members.map(batch => batch.code).sort(),
+      observation: observations.find(observation => observation.externalTemplateId === members[0].removalTemplateId) ?? null }];
+  });
+  const previousById = new Map(previous.map(observation => [observation.id, observation]));
   const entries = stored.flatMap(entry => {
-    const batch = batches.find(batch => batch.id === entry.creditBatchId)!;
-    const observation = previousById.get(entry.observationId) ?? null;
+    const { batch, timezone } = selected.find(row => row.entry.id === entry.id)!;
+    const observation = previousById.get(entry.observationId);
     if (!observation) return [];
     const [fact] = deriveEmissionEntryFacts([entry], observation, previousById);
     const reservation = reservations.find(row => row.submissionId === entry.sendReservedBySubmissionId);
     const live = reservation && isLiveEntryReservation(reservation, nowMs);
     const resolved = { ...fact, reservedByRemovalId: live ? reservation.removalId : null, reservationKnownInactive: !entry.sendReservedBySubmissionId || !!reservation && !live };
-    const mass = creditBatchApplicationMass(rollups[batch.id]?.lineageFacts.runs ?? [], slices.filter(slice => slice.creditBatchId === batch.id));
+    const mass = creditBatchApplicationMass(rollups[batch.id]?.lineageFacts.runs ?? [], slices.filter(slice => slice.creditBatchId === batch.id).map(slice => ({ dryKg: slice.allocatedDryMassKg })));
     const carry = removalEntryCarryOwner({ entry: resolved, organizationId: ctx.organizationId, facilityId,
-      fullyApplied: mass.notAppliedDryKg === 0, ownContenders, contenders, observation });
+      fullyApplied: candidates.some(row => row.entry.id === entry.id) && !!batch.endDate && batch.endDate < facilityToday(timezone) && mass.notAppliedDryKg === 0,
+      ownContenders: contenders, contenders, observation });
     const holdingId = entry.sentByRemovalId ?? (live ? reservation.removalId : null);
-    const holding = holdingId ? removals.find(removal => removal.id === holdingId) : null;
-    // Persisted ownership wins even if the receiver is no longer a contender.
-    const heldMembers = memberships.filter(member => member.removalId === holdingId).map(member => member.batchId);
-    const destination = holding ? { removalId: holding.id, removalCode: holding.code,
-      creditBatchCodes: batches.filter(batch => heldMembers.includes(batch.id)).map(batch => batch.code).sort(),
-      anotherCreditBatch: !heldMembers.includes(entry.creditBatchId) } : null;
-    const reportedIn = entry.sentByRemovalId ? destination : null;
+    const holding = removals.find(removal => removal.id === holdingId);
+    const heldMembers = memberships.filter(member => member.removalId === holdingId).map(member => member.batch);
+    const destination = holding ? { removalId: holding.id, removalCode: holding.code, creditBatchCodes: [...new Set(heldMembers.map(member => member.code))].sort(),
+      anotherCreditBatch: !heldMembers.some(member => member.id === entry.creditBatchId) } : null;
     if (live && destination?.anotherCreditBatch) carry.receiver = destination;
-    const earlier = attempts.filter(attempt => attempt.submittedAt && attempt.submittedAt <= entry.createdAt &&
-      memberships.some(member => member.batchId === entry.creditBatchId && member.removalId === attempt.localEntityId))
+    const earlier = attempts.filter(attempt => attempt.submittedAt && attempt.submittedAt <= entry.createdAt && slices.some(slice => slice.creditBatchId === entry.creditBatchId && slice.removalId === attempt.localEntityId))
       .sort((a, b) => b.submittedAt!.getTime() - a.submittedAt!.getTime() || a.id.localeCompare(b.id))[0];
-    const earlierRemovalCode = removals.find(removal => removal.id === earlier?.localEntityId)?.code;
-    return [{ ...resolved, carry, reportedIn, earlierRemovalCode, creditBatchCode: batch.code, entryObservation: observation }];
+    return [{ ...resolved, carry, reportedIn: entry.sentByRemovalId ? destination : null,
+      earlierRemovalCode: removals.find(removal => removal.id === earlier?.localEntityId)?.code,
+      creditBatchCode: batch.code, entryObservation: observation }];
   });
-  return { entries, contenders, ownContenders, batches };
+  return { entries, contenders, ownContenders: contenders, batches: [...new Map(selected.map(row => [row.batch.id, row.batch])).values()] };
 }
+
+type CarryEntry = ReturnType<typeof deriveEmissionEntryFacts>[number] & {
+  reservedByRemovalId: string | null; reservationKnownInactive: boolean;
+  carry: ReturnType<typeof removalEntryCarryOwner>; reportedIn: EntryCarryDestination | null;
+  earlierRemovalCode: string | undefined; creditBatchCode: string;
+  entryObservation: Awaited<ReturnType<typeof getTemplateObservationsByIds>>[number];
+};
 
 /** Batch display reads discover facilities only through organization-scoped batches. */
 export async function loadBatchEmissionEntryCarry(ctx: OrgContext, batchIds: string[]) {
@@ -102,6 +106,6 @@ export async function loadBatchEmissionEntryCarry(ctx: OrgContext, batchIds: str
     eq(creditBatches.organizationId, ctx.organizationId), inArray(creditBatches.id, batchIds),
   ));
   const contexts = await Promise.all([...new Set(batches.map(batch => batch.facilityId))]
-    .map(facilityId => loadFacilityEmissionEntryCarry(ctx, facilityId)));
+    .map(facilityId => loadFacilityEmissionEntryCarry(ctx, facilityId, db, undefined, { ownedBatchIds: batchIds })));
   return contexts.flatMap(context => context.entries).filter(entry => batchIds.includes(entry.creditBatchId));
 }

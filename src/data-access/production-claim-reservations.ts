@@ -123,7 +123,7 @@ export async function reserveProductionEmissionsClaims(
     const originEntries = entries.filter(entry => !memberIds.includes(entry.creditBatchId));
     const facilityId = batches.find(batch => memberIds.includes(batch.id))?.facilityId;
     const carryContext = originEntries.length && facilityId
-      ? await loadFacilityEmissionEntryCarry(ctx, facilityId, tx, { removalId: args.removalId, submissionId: args.submissionId }) : null;
+      ? await loadFacilityEmissionEntryCarry(ctx, facilityId, tx, { removalId: args.removalId, submissionId: args.submissionId }, { entryIds: originEntries.map(entry => entry.id) }) : null;
     const entryChanged = () => new DomainError("conflict", EMISSION_ENTRIES_CHANGED, { retryable: true });
     if (new Set(entryIds).size !== entryIds.length || entries.length !== frozen.length || entries.some(entry => !ids.includes(entry.creditBatchId))) throw entryChanged();
     const submissionIds = [

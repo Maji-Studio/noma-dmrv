@@ -50,10 +50,26 @@ describe("late manual entry ownership", () => {
     { sentByRemovalId: "sent" }, { heldForRemovalId: "held" },
     { sendReservedBySubmissionId: "attempt", reservedByRemovalId: "reserved" },
     { sendReservedBySubmissionId: "unknown" },
-    { values: [{ ...entry.values[0], massDistanceDetail: { mass: { magnitude: "2", unit: "kg" }, distance: { magnitude: "3", unit: "km" } } }] },
     { values: [entry.values[0], { ...entry.values[0], inputKey: "other" }] },
   ])("never moves a held, sent, zero, single, deleted or paired entry (%j)", change => {
     expect(decide({ entry: { ...entry, ...change } }).receiver).toBeNull();
+  });
+  it("carries a single mass-distance input including its entered detail, but refuses a paired origin", () => {
+    const transport = structuredClone(observation);
+    transport.definition.groups[0].components[0].inputs = [{ key: "transport", type: "monitored", quantityKind: "mass_distance" }];
+    transport.enrichment = { line: { transport: { unit: "t * km" } } };
+    const value = { inputKey: "transport", magnitude: "6", unit: "t * km", massDistanceDetail: {
+      mass: { magnitude: "2", unit: "t" }, distance: { magnitude: "3", unit: "km" },
+    } };
+    expect(decide({ entry: { ...entry, values: [value] }, observation: transport,
+      contenders: [{ ...draft, observation: transport }] }).receiver?.removalId).toBe(draft.removalId);
+    transport.definition.groups[0].components[0].inputs.push({ key: "mass", type: "monitored", quantityKind: "mass" });
+    expect(decide({ entry: { ...entry, values: [value] }, observation: transport }).receiver).toBeNull();
+  });
+  it("distinguishes an unread template from an incompatible one and still selects a later compatible draft", () => {
+    const unread = { ...draft, observation: null };
+    expect(decide({ contenders: [unread] }).waitingReason).toBe("templateUnknown");
+    expect(decide({ contenders: [unread, { ...draft, removalId: "later", window: { ...draft.window, end: "2026-11-01" } }] }).receiver?.removalId).toBe("later");
   });
   it("refuses paired receiving components", () => {
     const paired = structuredClone(observation);

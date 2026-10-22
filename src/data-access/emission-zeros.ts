@@ -1,3 +1,4 @@
+import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
 import { lockEmissionCorrectionScope, emissionCorrectionWindow } from "./emission-entry-corrections";
 import { deriveRemovalEntryInputs } from "@/lib/certification/removal-entry-inputs";
 import { isEnrichmentComplete } from "@/lib/isometric/template-observations/enrichment";
@@ -105,8 +106,12 @@ export async function recordEmissionZeros(ctx: OrgContext, input: z.input<typeof
     const entries = entryFacts[batch.id].entries;
     const contenders = await listEmissionEntryDraftContenders(ctx, memberBatchIds, tx);
     // Existing confirmations stay idempotent; derive eligibility without this draft's zeros.
+    const carryContext = await loadFacilityEmissionEntryCarry(ctx, batch.facilityId, tx, undefined, {
+      entryIds: Object.values(entryFacts).flatMap(facts => facts.entries.map(entry => entry.id)),
+    });
     const candidates = Object.values(entryFacts).flatMap((facts) => facts.entries)
-      .filter((entry) => !(entry.kind === "zero" && entry.confirmedForRemovalId === data.removalId));
+      .filter((entry) => !(entry.kind === "zero" && entry.confirmedForRemovalId === data.removalId))
+      .map(entry => ({ ...entry, carry: carryContext.entries.find(carried => carried.id === entry.id)?.carry }));
     const reservations = await loadEmissionEntryReservations(ctx, candidates.flatMap((entry) => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []), tx);
     const automatic = await loadBatchesEmissionAutomaticFacts(ctx, memberBatchIds, {}, tx);
     const availableApplications = await listEmissionEntryAvailableApplications(ctx, memberBatchIds, tx);

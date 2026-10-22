@@ -18,12 +18,12 @@ export function carriedEntryDatapointDescription(entries: readonly CarriedEntryN
   const base = "Recorded emissions entries";
   if (!entries.length) return base;
   const ordered = [...entries].sort((a, b) => a.entryId.localeCompare(b.entryId));
-  const sentences = ordered.map(entry => `Includes ${canonicalDecimal(entry.value.magnitude) ?? entry.value.magnitude} ${entry.value.unit} used on ${formatCalendarDate(entry.occurredOn)} for earlier credit batch ${entry.creditBatchCode}${entry.earlierRemovalCode ? `, recorded after its Removal ${entry.earlierRemovalCode} was sent` : ""}.`);
+  const sentences = ordered.map(entry => `Includes ${canonicalDecimal(entry.value.magnitude) ?? entry.value.magnitude} ${entry.value.unit} used on ${formatCalendarDate(entry.occurredOn)} for credit batch ${entry.creditBatchCode}${entry.earlierRemovalCode ? `, recorded after its Removal ${entry.earlierRemovalCode} was sent` : ""}.`);
   for (let count = sentences.length; count >= 0; count--) {
     const remaining = sentences.length - count;
-    const rest = remaining ? `${count ? "And" : "Includes"} ${remaining} more ${remaining === 1 ? "entry" : "entries"} from earlier credit batches.` : "";
+    const rest = remaining ? `${count ? "And" : "Includes"} ${remaining} more ${remaining === 1 ? "entry" : "entries"} from credit batches.` : "";
     const description = [`${base}.`, ...sentences.slice(0, count), rest].filter(Boolean).join(" ");
     if (description.length <= DATAPOINT_DESCRIPTION_MAX_LENGTH) return description;
   }
-  return `${base}. Includes entries from earlier credit batches.`;
+  return `${base}. Includes entries from credit batches.`;
 }

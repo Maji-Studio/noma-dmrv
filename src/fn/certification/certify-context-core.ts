@@ -1,3 +1,4 @@
+import type { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 import { frozenEntriesForAttempt, loadRemovalEntryContext } from "./removal-entry-context";
 import { loadBatchEmissionContext } from "./batch-emission-context";
 import { getRemovalCodes } from "@/data-access/removal-codes";
@@ -97,6 +98,7 @@ export async function buildRemovalContext(
   claimedSubmissionId?: string,
   submissionRead = false,
   correctionRead = false,
+  carryReads?: Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>,
 ): Promise<RemovalSubmissionContext> {
   // Load removal-owned facts up-front so every short-circuit carries them.
   const [latestSubmission, hasFinalized, linkedGhgStatement] =
@@ -120,7 +122,7 @@ export async function buildRemovalContext(
       loadLinkedGhgStatementStatus(orgCtx, scope.removal),
     ]);
   const batchEmissionFacts = await loadBatchEmissionContext(orgCtx, scope.facilityId, scope.memberBatches, facilityFacts,
-    (claimedSubmissionId || submissionRead) && scope.removalId ? { removalId: scope.removalId, submissionId: claimedSubmissionId } : undefined, !correctionRead);
+    (claimedSubmissionId || submissionRead) && scope.removalId ? { removalId: scope.removalId, submissionId: claimedSubmissionId } : undefined, !correctionRead, carryReads, scope.removalId ?? undefined);
   // Entry recovery may exclude its own draft from eligibility. Evidence retries
   // must still retain the operator files frozen when that draft was claimed.
   const correctionWindowOpen = latestSubmission?.status !== "draft" && Object.values(batchEmissionFacts).some(batch => batch.contenders?.some(
@@ -561,6 +563,7 @@ export async function buildCreditBatchContexts(
         unassignedOnly: true,
       })
     : await loadCreditBatchRollups(orgCtx, creditBatchIds);
+  const carryReads = new Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>();
   const contextEntries: Array<
     readonly [string, RemovalCertifyContext]
   > = [];
@@ -583,6 +586,7 @@ export async function buildCreditBatchContexts(
             orgCtx,
             resolveSingleBatchScope(accounting),
             facilityFacts,
+            undefined, false, false, carryReads,
           );
           return [creditBatchId, projectUiContext(context)] as const;
         }),

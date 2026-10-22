@@ -313,3 +313,14 @@ it.each([false, true])("reuses one correction read for all member batches and th
   expect(correctionForRemoval("unrelated", states)).toBeUndefined();
   expect(correctionForRemoval("returned", [{ ...state, correction: { ...correction, windowOpen: false } }])).toBeUndefined();
 });
+
+
+it("shares one carry discovery across concurrent batch contexts within a request", async () => {
+  const ctx = makeTestOrgContext();
+  const cache = new Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>();
+  await Promise.all(["one", "two"].map(id => loadBatchEmissionContext(ctx, "facility", [{ id, removalTemplateId: "template" }],
+    facilityFacts, undefined, true, cache)));
+  expect(loadFacilityEmissionEntryCarry).toHaveBeenCalledTimes(1);
+  await loadBatchEmissionContext(ctx, "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts);
+  expect(loadFacilityEmissionEntryCarry).toHaveBeenCalledTimes(2);
+});

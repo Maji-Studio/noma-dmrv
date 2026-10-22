@@ -30,6 +30,8 @@ export async function loadBatchEmissionContext(
   facilityFacts: EntryTemplateContext,
   claimedAttempt?: { removalId: string; submissionId?: string },
   includeCorrections = true,
+  carryReads?: Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>,
+  ownedRemovalId?: string,
 ): Promise<BatchEmissionContext> {
   const result: BatchEmissionContext = {};
   const readableBatches = batches.flatMap((batch) => {
@@ -52,7 +54,13 @@ export async function loadBatchEmissionContext(
     listEmissionEntryDraftContenders(ctx, ids, undefined, claimedAttempt),
     listEmissionEntryAvailableApplications(ctx, ids),
   ]);
-  const carryContext = await loadFacilityEmissionEntryCarry(ctx, facilityId, undefined, claimedAttempt);
+  const carryKey = JSON.stringify([ctx.organizationId, facilityId, claimedAttempt, ownedRemovalId]);
+  let carryRead = carryReads?.get(carryKey);
+  if (!carryRead) {
+    carryRead = loadFacilityEmissionEntryCarry(ctx, facilityId, undefined, claimedAttempt, { ownedRemovalId });
+    carryReads?.set(carryKey, carryRead);
+  }
+  const carryContext = await carryRead;
   const reservations = await loadEmissionEntryReservations(ctx, [...new Set(storedEntries.flatMap((entry) => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []))]);
   const liveReservationIds = new Set(reservations.filter((row) => isLiveEntryReservation(row, Date.now())).map((row) => row.submissionId));
   const observationsById = new Map(readableBatches.map(({ observation }) => [observation.id, observation]));
