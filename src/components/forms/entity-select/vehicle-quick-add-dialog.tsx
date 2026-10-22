@@ -57,7 +57,7 @@ export function VehicleQuickAddDialog({
 }: VehicleQuickAddDialogProps) {
   const create = useQuickAddSubmit<VehicleFormData>({
     entityType: "vehicle",
-    serverFn: (data) => createVehicleFn(toVehiclePayload(data)),
+    serverFn: (data, intentKey) => createVehicleFn(toVehiclePayload(data), { intentKey }),
     onSuccess: (entity) => onSuccess?.(entity),
     onClose,
   });
@@ -90,7 +90,7 @@ export function VehicleQuickAddDialog({
     <QuickAddDialogShell
       isOpen={isOpen}
       onClose={onClose}
-      onOpen={() => setEditError(null)}
+      onOpen={() => { create.startDraft(); setEditError(null); }}
       title={isEdit ? "Edit vehicle" : "New vehicle"}
       testId={isEdit ? "vehicle-edit-dialog" : "vehicle-quick-add-dialog"}
       dismissible={!isSubmitting}

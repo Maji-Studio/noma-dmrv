@@ -13,10 +13,10 @@ function StorageBinEditDialog({ bin, close }: { bin: StorageLocationWithFacility
   return <StorageLocationQuickAddDialog isOpen storageLocation={bin} facilityId={bin.facilityId} onClose={close} onSuccess={() => undefined} />;
 }
 
-const mocks = vi.hoisted(() => ({ update: vi.fn(), create: vi.fn(), success: vi.fn(), actions: undefined as unknown }));
+const mocks = vi.hoisted(() => ({ update: vi.fn(), create: vi.fn(), success: vi.fn(), startDraft: vi.fn(), actions: undefined as unknown }));
 vi.mock("@/hooks/use-storage-locations", () => ({ useUpdateStorageLocation: () => ({ mutateAsync: mocks.update, isPending: false }) }));
 vi.mock("@/hooks/use-record-locks", async () => (await import("../../../../tests/helpers/record-lock-mocks")).openRecordLocksModule);
-vi.mock("@/hooks/use-quick-add-submit", () => ({ useQuickAddSubmit: () => ({ handleSubmit: mocks.create, isSubmitting: false, error: null }) }));
+vi.mock("@/hooks/use-quick-add-submit", () => ({ useQuickAddSubmit: () => ({ startDraft: mocks.startDraft, handleSubmit: mocks.create, isSubmitting: false, error: null }) }));
 vi.mock("@/fn/quick-add", () => ({ createStorageLocationFn: vi.fn() }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: mocks.success }) }));
 vi.mock("@/components/storage-locations/storage-location-form", () => ({
@@ -34,7 +34,7 @@ const bin = {
   feedstockInventory: { currentWetMassKg: 0, pendingWetMassKg: 0, estimatedDryMassKg: 0, estimatedMoisturePercent: null, feedstockTypes: [] },
 } as unknown as StorageLocationWithFacility;
 afterEach(cleanup);
-beforeEach(() => { window.matchMedia = vi.fn().mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }); mocks.update.mockReset().mockResolvedValue(bin); mocks.create.mockReset(); mocks.success.mockReset(); mocks.actions = undefined; });
+beforeEach(() => { window.matchMedia = vi.fn().mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }); mocks.startDraft.mockReset(); mocks.update.mockReset().mockResolvedValue(bin); mocks.create.mockReset(); mocks.success.mockReset(); mocks.actions = undefined; });
 
 describe("StorageLocationQuickAddDialog edit mode", () => {
   it("isolates a portalled submit from the entry form and uses the loaded version", async () => {
@@ -124,4 +124,17 @@ describe("StorageLocationQuickAddDialog edit mode", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create storage bin" }));
     expect(mocks.create).toHaveBeenCalledOnce(); expect(outer).not.toHaveBeenCalled(); expect(mocks.update).not.toHaveBeenCalled();
   });
+});
+
+it("starts a bin draft when the dialog opens, not on a rerender", async () => {
+  const close = vi.fn();
+  const success = vi.fn();
+  const view = (isOpen: boolean) => <StorageLocationQuickAddDialog isOpen={isOpen} facilityId="facility" onClose={close} onSuccess={success} />;
+  const { rerender } = render(view(true));
+  await waitFor(() => expect(mocks.startDraft).toHaveBeenCalledTimes(1));
+  rerender(view(true));
+  expect(mocks.startDraft).toHaveBeenCalledTimes(1);
+  rerender(view(false));
+  rerender(view(true));
+  await waitFor(() => expect(mocks.startDraft).toHaveBeenCalledTimes(2));
 });

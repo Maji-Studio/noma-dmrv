@@ -6,7 +6,8 @@ import { db } from "@/db";
 import { facilities, feedstockTypes, storageLocations, binMovements, feedstocks } from "@/db/schema";
 import { updateStorageLocation } from "@/data-access/storage-locations";
 import { getStorageLocationLaneSummary } from "@/data-access/storage-location-lane-summary";
-import { createFeedstockType as quickCreateFeedstockType } from "@/data-access/quick-add";
+import { createFeedstockType as quickCreateFeedstockType } from "@/lib/operations/feedstock-types";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { createFeedstockType as canonicalCreateFeedstockType, updateFeedstockType } from "@/data-access/feedstock-types";
 import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { updateFacility } from "@/data-access/facility-mutations";
@@ -167,7 +168,7 @@ describe("quick-add authorization baseline observation", () => {
     const input = { code: `AUD-${crypto.randomUUID()}`, name: `Audit ${crypto.randomUUID()}`,
       category: "forestry" as const, usage: "pyrolysis" as const };
     await expect(canonicalCreateFeedstockType(member, input)).rejects.toThrow();
-    const created = await quickCreateFeedstockType(member, input);
+    const created = await runOperationInProcess(quickCreateFeedstockType, member, input);
     try {
       expect(await db.select().from(feedstockTypes).where(eq(feedstockTypes.id, created.id))).toHaveLength(1);
       console.log("F14: canonical Member creation denied; quick-add Member creation persisted");

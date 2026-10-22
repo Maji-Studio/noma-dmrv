@@ -27,19 +27,19 @@ const KEYED = [
   "formulations#createFormulationFn",
   "quick-add#createDriverFn",
   "quick-add#createOperatorFn",
+  "quick-add#createVehicleFn",
+  "quick-add#createFeedstockTypeFn",
+  "quick-add#createStorageLocationFn",
+  "emission-entries#createEmissionEntryFn",
   API_KEY_ACTION,
 ];
 
 // Creates not yet keyed; see docs/open-questions.md. Wiring and client checks apply only to KEYED.
 const PENDING = [
-  "quick-add#createVehicleFn",
-  "quick-add#createFeedstockTypeFn",
-  "quick-add#createStorageLocationFn",
   "storage-locations#createStorageLocationFn",
   "facilities#createFacilityFn",
   "reactors#createReactorFn",
   "feedstock-types#createFeedstockTypeFn",
-  "emission-entries#createEmissionEntryFn",
   "production-processes#startNewProductionProcessFn",
 ];
 

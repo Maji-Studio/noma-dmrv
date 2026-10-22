@@ -93,6 +93,7 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
   const [serverError, setServerError] = useState<string | null>(null);
   const attachments = useDeferredAttachments();
   const queryClient = useQueryClient();
+  // Each form mount scopes a fresh create intent key to this draft.
   const createEntry = useCreateEmissionEntry(scope);
   const updateEntry = useUpdateEmissionEntry(scope);
   const replaceEntry = useReplaceEmissionEntry(scope);

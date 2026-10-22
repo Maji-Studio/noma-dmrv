@@ -1,0 +1,47 @@
+// @vitest-environment jsdom
+import { act, cleanup, renderHook } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
+import { afterEach, expect, it, vi } from "vitest";
+import { useQuickAddSubmit } from "./use-quick-add-submit";
+
+afterEach(cleanup);
+
+it("keeps failures on one key and rotates before success callbacks and for a new draft", async () => {
+  const uuid = vi.spyOn(crypto, "randomUUID");
+  const client = new QueryClient();
+  const entity = { id: "one", code: "V-1", name: "Vehicle" };
+  const serverFn = vi.fn().mockResolvedValueOnce({ success: false, error: "Save again" })
+    .mockRejectedValueOnce(new Error("Response lost"))
+    .mockResolvedValue({ success: true, data: entity });
+  const onSuccess = vi.fn();
+  const onClose = vi.fn();
+  const { result, rerender } = renderHook(() => useQuickAddSubmit({ entityType: "vehicle", serverFn, onSuccess, onClose }), {
+    wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
+  const submit = () => act(async () => { await result.current.handleSubmit({ name: "Vehicle" }); });
+  await submit();
+  expect(result.current.error).toBe("Save again");
+  rerender();
+  await submit();
+  expect(result.current.error).toBe("Response lost");
+  expect(onSuccess).not.toHaveBeenCalled();
+  expect(onClose).not.toHaveBeenCalled();
+  await submit();
+  expect(result.current.error).toBeNull();
+  expect(result.current.isSubmitting).toBe(false);
+  expect(onSuccess).toHaveBeenCalledWith(entity);
+  expect(uuid.mock.invocationCallOrder[1]).toBeLessThan(onSuccess.mock.invocationCallOrder[0]);
+  await submit();
+  const keys = () => serverFn.mock.calls.map(([, key]) => key);
+  expect(keys()[0]).toEqual(expect.any(String));
+  expect(keys()[1]).toBe(keys()[0]);
+  expect(keys()[2]).toBe(keys()[0]);
+  expect(keys()[3]).not.toBe(keys()[0]);
+  serverFn.mockResolvedValue({ success: false, error: "Save again" });
+  await submit();
+  act(() => result.current.startDraft());
+  await submit();
+  expect(keys()[5]).not.toBe(keys()[4]);
+  client.clear();
+});

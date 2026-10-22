@@ -1,8 +1,11 @@
 "use server";
 import { z } from "zod";
+import { withCreate } from "./with-create";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
+import { recordEmissionEntry } from "@/lib/operations/emission-entries";
 import { withAction } from "./with-action";
 import {
-  createEmissionEntry,
+  type createEmissionEntry,
   updateEmissionEntry,
   confirmEmissionEntry,
   deleteEmissionEntry,
@@ -23,8 +26,9 @@ import type { ActionResult } from "@/types/actions";
 
 export async function createEmissionEntryFn(
   input: z.input<typeof createEmissionEntrySchema>,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<Awaited<ReturnType<typeof createEmissionEntry>>>> {
-  return withAction((ctx) => createEmissionEntry(ctx, createEmissionEntrySchema.parse(input)));
+  return withCreate((_ctx, create) => create(recordEmissionEntry, createEmissionEntrySchema.parse(input)), options);
 }
 export async function replaceEmissionEntryFn(
   input: z.input<typeof replaceEmissionEntrySchema>,

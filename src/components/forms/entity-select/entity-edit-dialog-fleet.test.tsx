@@ -33,7 +33,7 @@ vi.mock("@/fn/quick-add", () => ({
 }));
 
 vi.mock("@/hooks/use-quick-add-submit", () => ({
-  useQuickAddSubmit: () => ({ error: null, isSubmitting: false, handleSubmit: vi.fn() }),
+  useQuickAddSubmit: () => ({ startDraft: vi.fn(), error: null, isSubmitting: false, handleSubmit: vi.fn() }),
 }));
 
 vi.mock("@/hooks/use-fleet", () => ({

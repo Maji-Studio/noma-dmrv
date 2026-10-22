@@ -59,9 +59,9 @@ export function StorageLocationQuickAddDialog({
   defaultFormulationId,
   facilityId,
 }: StorageLocationQuickAddDialogProps) {
-  const { error, isSubmitting, handleSubmit } = useQuickAddSubmit<StorageLocationFormData>({
+  const { error, isSubmitting, handleSubmit, startDraft } = useQuickAddSubmit<StorageLocationFormData>({
     entityType: "storageLocation",
-    serverFn: (data) =>
+    serverFn: (data, intentKey) =>
       createStorageLocationFn({
         name: data.name,
         type: data.type,
@@ -71,7 +71,7 @@ export function StorageLocationQuickAddDialog({
         formulationId: data.formulationId ?? null,
         stockMode: data.stockMode,
         drawOrder: data.drawOrder,
-      }),
+      }, { intentKey }),
     onSuccess,
     onClose,
   });
@@ -117,7 +117,7 @@ export function StorageLocationQuickAddDialog({
           isOpen={isOpen}
           onClose={onClose}
           title={title}
-          onOpen={() => setEditError(undefined)}
+          onOpen={() => { startDraft(); setEditError(undefined); }}
           testId="storage-location-quick-add-dialog"
         >
           {archived ? (
