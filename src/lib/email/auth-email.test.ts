@@ -51,6 +51,7 @@ it("keeps invitation HTML and escapes organization names", async () => {
   });
   expect(sendEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
     type: "org-invite", to: INPUT.to,
+    idempotencyKey: `org-invite/${INVITATION.invitationId}`,
     html: expect.stringContaining("<strong>Org &lt;script&gt;</strong> as member."),
   }));
 });

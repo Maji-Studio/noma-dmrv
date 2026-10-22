@@ -31,8 +31,17 @@ it.each(["reset-password", "verify-email", "org-invite"] as const)("sends %s wit
   expect(mocks.send).toHaveBeenCalledExactlyOnceWith({
     to: INPUT.to, subject: INPUT.subject, html: INPUT.html,
     from: env.RESEND_FROM_EMAIL, replyTo: env.RESEND_REPLY_TO,
-  });
+  }, undefined);
   expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ messageId: "message-123", emailType: type }), "email sent");
+});
+
+it("passes an idempotency key to Resend when provided", async () => {
+  const idempotencyKey = "org-invite/invite-123";
+  expect(await sendEmail({ ...INPUT, idempotencyKey })).toEqual({ sent: true, id: "message-123" });
+  expect(mocks.send).toHaveBeenCalledExactlyOnceWith({
+    to: INPUT.to, subject: INPUT.subject, html: INPUT.html,
+    from: env.RESEND_FROM_EMAIL, replyTo: env.RESEND_REPLY_TO,
+  }, { idempotencyKey });
 });
 
 it("returns not-configured without calling Resend", async () => {

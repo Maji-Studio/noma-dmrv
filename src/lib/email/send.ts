@@ -12,6 +12,7 @@ type EmailInput = {
   userId?: string;
   invitationId?: string;
   organizationId?: string;
+  idempotencyKey?: string;
   to: string;
   subject: string;
   html: string;
@@ -47,7 +48,7 @@ export async function sendEmail(input: EmailInput): Promise<EmailResult> {
       to: input.to,
       subject: input.subject,
       html: input.html,
-    });
+    }, input.idempotencyKey === undefined ? undefined : { idempotencyKey: input.idempotencyKey });
     if (error || !data?.id) {
       logger.error({ ...context, statusCode: errorStatus(error) }, "email provider failed");
       return { sent: false, reason: "provider-error" };

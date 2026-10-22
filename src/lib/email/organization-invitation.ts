@@ -2,6 +2,8 @@ import { env } from "@/config/env";
 import { escapeHtml } from "./escape-html";
 import { sendEmail } from "./send";
 
+const INVITATION_IDEMPOTENCY_KEY_PREFIX = "org-invite/";
+
 /** Call only after the authorized invitation write has committed. */
 export async function sendOrganizationInvitation(input: {
   invitationId: string;
@@ -15,6 +17,7 @@ export async function sendOrganizationInvitation(input: {
   const result = await sendEmail({
     type: "org-invite",
     invitationId: input.invitationId,
+    idempotencyKey: `${INVITATION_IDEMPOTENCY_KEY_PREFIX}${input.invitationId}`,
     organizationId: input.organizationId,
     to: input.email,
     subject: `You're invited to join ${input.organizationName}`,
