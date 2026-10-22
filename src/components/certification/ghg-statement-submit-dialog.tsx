@@ -345,6 +345,12 @@ function GhgStatementSubmitDialogContent({
     }
   };
 
+  // The report step runs inside react-hook-form's submit cycle so a refused
+  // field (the production checkbox) is listed in the summary and focused.
+  const onAdvance = handleSubmit(async () => {
+    await advance();
+  });
+
   const returnToReportStep = () => {
     setPreparedReport(null);
     setPreparedReportKey(null);
@@ -397,8 +403,7 @@ function GhgStatementSubmitDialogContent({
       id={formId}
       onSubmit={(event) => {
         if (stepIndex === REPORT_STEP_INDEX) {
-          event.preventDefault();
-          void advance();
+          void onAdvance(event);
           return;
         }
         void onSubmit(event);
@@ -509,7 +514,7 @@ function GhgStatementSubmitDialogContent({
                     <Button className={PHONE_TOUCH_TARGET}
                       type="button"
                       variant="primary"
-                      onClick={advance}
+                      onClick={() => void onAdvance()}
                       disabled={
                         !canSubmit ||
                         (reportSource === "generated" &&

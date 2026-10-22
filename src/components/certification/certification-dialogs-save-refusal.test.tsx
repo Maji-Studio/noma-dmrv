@@ -87,6 +87,18 @@ describe("MethodBPrerequisitesSetup refusals", () => {
     fireEvent.change(await screen.findByPlaceholderText(/sampling plan/), { target: { value: "PDD 8.3" } });
   };
 
+  it("sends one request when the form is submitted twice at once", async () => {
+    let finish: (value?: unknown) => void = () => undefined;
+    mocks.recordPrerequisites.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    await open();
+    const form = document.querySelector("form")!;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    await waitFor(() => expect(mocks.recordPrerequisites).toHaveBeenCalledTimes(1));
+    finish();
+    expect(mocks.recordPrerequisites).toHaveBeenCalledTimes(1);
+  });
+
   it("shows a refused baseline size at its field with no footer", async () => {
     const message = "Agreed baseline size is below the Method-A samples on record.";
     mocks.recordPrerequisites.mockRejectedValue(refusal("agreedBaselineSize", message));
@@ -204,6 +216,9 @@ describe("GhgStatementSubmitDialog refusals", () => {
     fireEvent.click(await screen.findByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await expectAtField(message);
+    // This dialog has no error summary, so nothing is listed or focused; the
+    // message under the checkbox is the whole signal.
+    expect(screen.queryByText("Not saved. Fix 1 field.")).toBeNull();
   });
 
   it("keeps a registry failure in the footer with its exact text", async () => {

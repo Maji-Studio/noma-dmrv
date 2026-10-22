@@ -11,6 +11,7 @@ import { FormActions, FormField, FormInput } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useRecordMethodBPrerequisites } from "@/hooks/use-production-processes";
 import {
   MOISTURE_PATHWAYS,
@@ -48,6 +49,7 @@ export function MethodBPrerequisitesSetup({
   const recordPrerequisites = useRecordMethodBPrerequisites();
   const toast = useToast();
   const formId = useId();
+  const latched = useLatchedSubmit();
   const {
     register,
     handleSubmit,
@@ -105,7 +107,7 @@ export function MethodBPrerequisitesSetup({
         testId="method-b-prerequisites-dialog"
         dismissible={!recordPrerequisites.isPending}
       >
-        <form id={formId} onSubmit={submit} className="flex flex-col gap-24">
+        <form id={formId} onSubmit={latched(submit)} className="flex flex-col gap-24">
           <div className="grid grid-cols-1 gap-x-16 gap-y-20">
             <FormField
               id="method-b-moisture-pathway"
