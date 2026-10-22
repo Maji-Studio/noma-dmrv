@@ -37,10 +37,12 @@ import type { RemovalScope } from "@/fn/certification/removal-scope";
 
 vi.mock("@/lib/isometric/ghg-statements", async original => ({
   ...await original<typeof import("@/lib/isometric/ghg-statements")>(),
-  getGhgStatement: vi.fn(async () => makeRemoteStatement({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: ["original"] })),
+  getGhgStatement: vi.fn(async () => makeRemoteStatement({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: [originalId] })),
   resubmitGhgStatement: vi.fn(), submitGhgStatement: vi.fn(),
 }));
 const userId = crypto.randomUUID();
+const originalId = `original-${userId}`;
+const statementExternalId = `returned-statement-${userId}`;
 const org = { ...makeTestOrgContext(userId), orgRole: "admin" as const };
 let fixture: LineageFixture | undefined;
 let observationId: string | undefined;
@@ -89,12 +91,12 @@ it("detects a run-only correction, fences the statement, supersedes and relocks 
   observationId = observation.id;
   await db.update(facilities).set({ durabilityOption: "200_year" }).where(and(eq(facilities.organizationId, org.organizationId), eq(facilities.id, f.facilityId)));
   await db.update(creditBatches).set({ removalTemplateId: template.id }).where(and(eq(creditBatches.organizationId, org.organizationId), eq(creditBatches.id, f.batchId)));
-  await db.insert(certifierProjects).values({ organizationId: org.organizationId, provider: "isometric", facilityId: f.facilityId, externalProjectId: "prj_test_1", externalFacilityId: "fcl_test_1" });
+  await db.insert(certifierProjects).values({ organizationId: org.organizationId, provider: "isometric", facilityId: f.facilityId, externalProjectId: "prj_test_1", externalFacilityId: `fcl_test_${userId}` });
   const [statement] = await db.insert(certifierGhgStatements).values({ organizationId: org.organizationId, facilityId: f.facilityId, reportingPeriodEndOn: "2026-06-30" }).returning();
   f.ghgStatementId = statement.id;
   await db.update(certifierRemovals).set({ ghgStatementId: statement.id }).where(and(eq(certifierRemovals.organizationId, org.organizationId), eq(certifierRemovals.id, f.removalId)));
   await db.insert(certificationSubmissions).values({ organizationId: org.organizationId, provider: "isometric", localEntityType: "ghgStatement", localEntityId: statement.id,
-    submissionType: "ghg_statement", status: "submitted", version: 1, externalId: "returned-statement", submittedAt: new Date("2026-01-02"), metadata: { remoteStatus: "FAILED_VERIFICATION", submittedToVerifierAt: "2099-01-01T00:00:00Z", removalIds: ["original"] } });
+    submissionType: "ghg_statement", status: "submitted", version: 1, externalId: statementExternalId, submittedAt: new Date("2026-01-02"), metadata: { remoteStatus: "FAILED_VERIFICATION", submittedToVerifierAt: "2099-01-01T00:00:00Z", removalIds: [originalId] } });
   await db.update(productionRuns).set({ electricityKwh: 10 }).where(and(eq(productionRuns.organizationId, org.organizationId), eq(productionRuns.id, f.productionRunId)));
   const realClaims = await vi.importActual<typeof claims>("@/data-access/certification-submissions");
   vi.mocked(claims.claimSubmissionDraft).mockImplementation(realClaims.claimSubmissionDraft);
@@ -159,7 +161,7 @@ it("detects a run-only correction, fences the statement, supersedes and relocks 
     ctx: baselineContext, prepared: requirePreparedRemovalSubmission(baselineContext) });
   // Snapshots are frozen once a row leaves draft, so insert the sent attempt with its snapshot.
   const [prior] = await db.insert(certificationSubmissions).values({ organizationId: org.organizationId, provider: "isometric", localEntityType: "removal",
-    localEntityId: f.removalId, submissionType: "removal", status: "submitted", version: 1, submittedAt: new Date("2026-01-01"), externalId: "original", payloadHash: "original",
+    localEntityId: f.removalId, submissionType: "removal", status: "submitted", version: 1, submittedAt: new Date("2026-01-01"), externalId: originalId, payloadHash: "original",
     payloadSnapshot: { semantic: baseline.semanticPayload, templateObservationId: observation.id, frozenEntrySet: [] } }).returning();
   expect(await loadRemovalEntryCorrection(org, f.removalId)).toMatchObject({ windowOpen: true, correctionNeeded: false });
 
@@ -199,7 +201,7 @@ it("detects a run-only correction, fences the statement, supersedes and relocks 
   vi.mocked(ledger.updateSubmissionMetadata).mockImplementation(realLedger.updateSubmissionMetadata);
   vi.mocked(ledger.attachReportDocument).mockResolvedValue({ id: crypto.randomUUID() } as never);
   vi.mocked(isometric.resubmitGhgStatement).mockResolvedValue(makeRemoteStatement({
-    id: "returned-statement", status: "AWAITING_VERIFICATION", ghg_entry_ids: [sent!.externalId!],
+    id: statementExternalId, status: "AWAITING_VERIFICATION", ghg_entry_ids: [sent!.externalId!],
   }));
   await expect(submitGhgStatementToVerifierCore(statementArgs)).resolves.toMatchObject({ remoteStatus: "AWAITING_VERIFICATION" });
   expect(isometric.resubmitGhgStatement).toHaveBeenCalledOnce();

@@ -37,7 +37,10 @@ it("compiles identical sent content from live fixture facts and their stored obs
   const stored = storedRemovalTemplateFacts(observation);
   const compile = async (removalTemplate: IsometricGhgEntryTemplate, blueprintFacts: IsometricComponentBlueprint[]) => {
     const context = makeContext(undefined, { removalTemplate, blueprintsForTemplate: blueprintFacts, lineSources,
-      latestSubmission: null });
+      latestSubmission: null,
+      // Both compiles share this scope: one feedstock and one biochar leg feed the transport components.
+      transportLegs: { feedstock: [{ id: "feedstock-leg", entityId: "feedstock-1", distanceKm: 10, loadMassKg: 1000, calculationMethodType: "distance_based", transportMethodType: "road" }],
+        biochar: [{ id: "biochar-leg", entityId: "delivery-1", distanceKm: 20, loadMassKg: 1000, calculationMethodType: "distance_based", transportMethodType: "road" }], sample: [] } as never });
     context.batchesWithSamples = context.batchesWithSamples.map(batch => ({ ...batch, durabilityOption: "1000_year" }));
     context.memberBatchClaims = context.memberBatchClaims.map(batch => ({ ...batch, durabilityOption: "1000_year" }));
     expect(context.durabilityGateBlockers).toEqual([]);
