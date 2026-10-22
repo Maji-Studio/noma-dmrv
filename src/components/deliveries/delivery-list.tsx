@@ -57,7 +57,7 @@ import {
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
 import { formatDistanceKm, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
-import { creditBatchFilterLabel } from "@/lib/credit-batch-filter-label";
+import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
 import { DISTANCE_FIELD_LABEL, DISTANCE_SOURCE_FIELD_LABEL, sourceLabel } from "@/components/transport-legs/distance-override";
 import { formatMoisturePercent, MASS_MOISTURE_LABELS, qualifyMassLabel } from "@/lib/mass-moisture";
 import type {
@@ -651,7 +651,7 @@ export function DeliveryList() {
               <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {creditBatchFilterLabel(batch)}
+                  {creditBatchOptionLabel(batch)}
                 </option>
               ))}
             </DataTable.FilterSelect>

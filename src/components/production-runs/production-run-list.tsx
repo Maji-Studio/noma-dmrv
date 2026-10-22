@@ -48,7 +48,7 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
-import { creditBatchFilterLabel } from "@/lib/credit-batch-filter-label";
+import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
 import { StaleVersionError, toDeleteErrorMessage, toSaveErrorMessage } from "@/lib/stale-version";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
@@ -628,7 +628,7 @@ export function ProductionRunList() {
               <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {creditBatchFilterLabel(batch)}
+                  {creditBatchOptionLabel(batch)}
                 </option>
               ))}
             </DataTable.FilterSelect>

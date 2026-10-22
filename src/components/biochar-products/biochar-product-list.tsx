@@ -51,7 +51,7 @@ import {
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
 import { formatDayString } from "@/lib/format-utils";
-import { creditBatchFilterLabel } from "@/lib/credit-batch-filter-label";
+import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
 import {
   formatMoisturePercent,
 } from "@/lib/mass-moisture";
@@ -571,7 +571,7 @@ export function BiocharProductList() {
               <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {creditBatchFilterLabel(batch)}
+                  {creditBatchOptionLabel(batch)}
                 </option>
               ))}
             </DataTable.FilterSelect>

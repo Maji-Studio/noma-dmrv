@@ -49,7 +49,7 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatCalendarDate } from "@/lib/format-utils";
-import { creditBatchFilterLabel } from "@/lib/credit-batch-filter-label";
+import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
 import {
   isStaleVersionFailure,
   STALE_VERSION_MESSAGE,
@@ -708,7 +708,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {creditBatchFilterLabel(batch)}
+                  {creditBatchOptionLabel(batch)}
                 </option>
               ))}
             </DataTable.FilterSelect>

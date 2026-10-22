@@ -1,5 +1,5 @@
 import type { EntityOption } from "@/components/forms/entity-select/types";
-import { formatDateRange } from "@/lib/format-utils";
+import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
 import {
   formatCreditBatchStatus,
   type CreditBatchStatus,
@@ -19,7 +19,7 @@ export function toCreditBatchEntityOption(
   return {
     id: row.id,
     code: row.code,
-    name: formatDateRange(row.startDate, row.endDate),
+    name: creditBatchOptionLabel(row),
     subtitle: formatCreditBatchStatus(row.status),
   };
 }

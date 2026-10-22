@@ -9,7 +9,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
-import { formatDateRange } from "@/lib/format-utils";
+import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
 import { cn } from "@/lib/utils";
 
 const CONTROL_HEIGHT_CLASS = "h-40";
@@ -131,7 +131,7 @@ export function BatchPicker({
                     "text-[var(--color-text-primary)]"
                   )}
                 >
-                  {formatDateRange(selected.startDate, selected.endDate)}
+                  {creditBatchOptionLabel(selected)}
                 </span>
                 <span className="min-w-0 truncate body-caption text-[var(--color-text-tertiary)]">
                   {countLabel(selected.productionRunCount, "run")} ·{" "}
@@ -188,7 +188,7 @@ export function BatchPicker({
                                 : "text-[var(--color-text-primary)]"
                             )}
                           >
-                            {formatDateRange(batch.startDate, batch.endDate)}
+                            {creditBatchOptionLabel(batch)}
                           </span>
                           {isSelected ? (
                             <CheckIcon
