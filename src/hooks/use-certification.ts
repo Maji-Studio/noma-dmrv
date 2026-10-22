@@ -482,9 +482,8 @@ export function useCertifyContextForCreditBatch(
 }
 
 // The credit batch page's to-dos (Blocking and Check items), built on the
-// server from the same core the batch list counts from. Refetches on mount and
-// focus, like the emission lines it replaced, so the page is never older than
-// before. Mutations that affect readiness invalidate `certificationKeys.all`,
+// server from the same core the batch list counts from. Refetched on every mount
+// (`staleTime: 0`), like the emission lines it replaced. Mutations that affect readiness invalidate `certificationKeys.all`,
 // which covers this key.
 export function useCreditBatchTodos(scope: { facilityId: string; creditBatchId: string } | null) {
   return useQuery({

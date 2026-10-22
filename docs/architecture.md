@@ -637,8 +637,8 @@ projects only Blocking and Check counts, health state and lines to decide from
 this core; its Removal, GHG Statement and lock fields remain in the list action.
 `loadCreditBatchTodosFn` reads one batch through the same core; the batch page
 reads it through `useCreditBatchTodos` (`certificationKeys.batchTodos`, refetched
-on mount and focus) and shows no to-dos at all when it fails. Waiting items need
-the page model (`buildCreditBatchWaitingItems`) and are never counted.
+on every mount, `staleTime: 0`) and shows no to-dos at all when it fails. Waiting
+items need the page model (`buildCreditBatchWaitingItems`) and are never counted.
 
 ```text
 components/certification/  →  hooks/use-certification.ts  →  fn/certification/

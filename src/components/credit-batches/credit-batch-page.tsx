@@ -209,10 +209,12 @@ export function CreditBatchPage({
   }
 
   // A failed to-do read shows no list at all, not a partial one.
-  const openItems = todos.data
-    ? { blocking: todos.data.blocking, check: todos.data.check, waiting: buildCreditBatchWaitingItems(pageModel.data) }
-    : { blocking: [], check: [], waiting: todos.isError ? [] : buildCreditBatchWaitingItems(pageModel.data) };
-  const blocking = todos.data ? openItems.blocking : undefined;
+  // React Query keeps old data on a failed refetch, so ignore it on error.
+  const current = todos.isError ? undefined : todos.data;
+  const openItems = current
+    ? { blocking: current.blocking, check: current.check, waiting: buildCreditBatchWaitingItems(pageModel.data) }
+    : { blocking: [], check: [], waiting: [] as ReturnType<typeof buildCreditBatchWaitingItems> };
+  const blocking = current ? openItems.blocking : undefined;
   const editable = isRecordEditable(lock);
   const membershipLocked = isCreditBatchMembershipLocked(lock);
   const primary = creditBatchPrimaryAction({ blocking, pageModel: pageModel.data, lock });
@@ -286,7 +288,7 @@ export function CreditBatchPage({
     openItems,
     blockingCount: blocking ? blocking.length : null,
     todosError: todos.error,
-    linesToDecide: todos.data?.linesToDecide ?? 0,
+    linesToDecide: current?.linesToDecide ?? 0,
     retryTodos: () => void todos.refetch(),
     retryingTodos: todos.isFetching,
     lock,

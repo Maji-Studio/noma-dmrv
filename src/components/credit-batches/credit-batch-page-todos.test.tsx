@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "@/components/ui/toast";
+import { certificationKeys } from "@/hooks/use-certification";
 import { CreditBatchPage } from "./credit-batch-page";
 
 const harness = vi.hoisted(() => ({
@@ -54,7 +55,7 @@ const TODOS = {
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}><ToastProvider><CreditBatchPage creditBatchId="batch-1" canManage /></ToastProvider></QueryClientProvider>);
+  return { client, ...render(<QueryClientProvider client={client}><ToastProvider><CreditBatchPage creditBatchId="batch-1" canManage /></ToastProvider></QueryClientProvider>) };
 }
 
 beforeEach(() => harness.loadTodos.mockReset());
@@ -86,6 +87,22 @@ describe("credit batch page to-dos", () => {
     harness.loadTodos.mockResolvedValue({ success: true, data: TODOS });
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("No lab Samples")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText(/could not be checked/)).toBeNull());
+  });
+
+  it("shows the notice and no items or counts when a refetch fails after a good read, and Retry recovers", async () => {
+    harness.loadTodos.mockResolvedValueOnce({ success: true, data: TODOS });
+    const { client } = renderPage();
+    expect(await screen.findByText("No lab Samples")).toBeTruthy();
+    harness.loadTodos.mockResolvedValueOnce({ success: false, error: "boom" });
+    await client.refetchQueries({ queryKey: certificationKeys.batchTodos("facility-1", "batch-1") });
+    expect(await screen.findByText("Blocking items could not be checked. Retry to load them.")).toBeTruthy();
+    expect(screen.queryByText("No lab Samples")).toBeNull();
+    for (const title of ["Blocking", "Check", "Waiting"]) expect(screen.queryByText(title)).toBeNull();
+    expect(screen.queryByText(/produced but not applied yet/)).toBeNull();
+    harness.loadTodos.mockResolvedValue({ success: true, data: TODOS });
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("No lab Samples")).toBeTruthy();
     await waitFor(() => expect(screen.queryByText(/could not be checked/)).toBeNull());
   });
