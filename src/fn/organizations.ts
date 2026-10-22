@@ -155,6 +155,19 @@ export async function listPlatformOrganizationsFn(): Promise<ActionResult<Platfo
 
 // --- Member management ----------------------------------------------------
 
+/**
+ * The signed-in user's name for invitation wording. The invitation is already
+ * saved when this runs, so a failed lookup must never fail the action: the
+ * email then falls back to wording without a name.
+ */
+async function currentUserName(): Promise<string | undefined> {
+  try {
+    return (await getBetterAuthSession())?.user.name || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function inviteMemberAction(
   input: unknown
 ): Promise<ActionResult<{ invitationId: string; acceptUrl: string; emailSent: boolean }>> {
@@ -175,6 +188,7 @@ export async function inviteMemberAction(
       invitationId: result.id,
       organizationId: ctx.organizationId,
       organizationName: organization.name,
+      inviterName: await currentUserName(),
       email,
       role,
     });
@@ -323,7 +337,7 @@ export async function createOrganizationAction(
   firstAdmin: { kind: "member" } | { kind: "invited"; acceptUrl: string; emailSent: boolean };
 }>> {
   return toResult(async () => {
-    await requirePlatformAdmin();
+    const platformAdmin = await requirePlatformAdmin();
     const values = createOrganizationSchema.parse(input);
     const intentKey = parseCreateIntentKey(options);
     const organization = await createOrganizationWithAdmin({ ...values, organizationId: intentKey });
@@ -335,6 +349,7 @@ export async function createOrganizationAction(
             invitationId: organization.firstAdmin.invitationId,
             organizationId: organization.id,
             organizationName: organization.name,
+            inviterName: platformAdmin?.name,
             email: values.adminEmail,
             role: "admin",
           }),
