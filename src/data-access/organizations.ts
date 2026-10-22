@@ -50,6 +50,7 @@ export type OrgInvitationRow = {
   role: string;
   status: string;
   expiresAt: Date | null;
+  expired: boolean;
   createdAt: Date;
 };
 
@@ -92,7 +93,7 @@ export async function listOrgInvitations(
   ctx: OrgContext
 ): Promise<OrgInvitationRow[]> {
   requireOrgScope(ctx);
-  return db
+  const rows = await db
     .select({
       id: invitations.id,
       email: invitations.email,
@@ -109,6 +110,28 @@ export async function listOrgInvitations(
       )
     )
     .orderBy(desc(invitations.createdAt));
+  const now = Date.now();
+  return rows.map((row) => ({
+    ...row,
+    expired: row.expiresAt !== null && row.expiresAt.getTime() <= now,
+  }));
+}
+
+/** Pending includes expired invitations; other organizations resolve as absent. */
+export async function findPendingOrgInvitation(ctx: OrgContext, invitationId: string) {
+  requireOrgScope(ctx);
+  if (!hasOrgRole(ctx, "admin")) {
+    throw new SafeError("Only organization Admins can send invitations again.");
+  }
+  const [invitation] = await db.select({ email: invitations.email, role: invitations.role })
+    .from(invitations)
+    .where(and(
+      eq(invitations.id, invitationId),
+      eq(invitations.organizationId, ctx.organizationId),
+      eq(invitations.status, "pending"),
+    )).limit(1);
+  if (!invitation) throw new SafeError("Invitation not found or is no longer pending.");
+  return invitation;
 }
 
 /** Create an invitation without the plugin's org-membership requirement. */

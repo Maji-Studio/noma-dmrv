@@ -12,6 +12,8 @@ vi.mock("@/lib/auth/better-auth", () => ({
   auth: {
     api: {
       createInvitation: vi.fn(),
+      cancelInvitation: vi.fn(),
+      leaveOrganization: vi.fn(),
       acceptInvitation: (...args: unknown[]) => mockAcceptInvitation(...args),
       setActiveOrganization: (...args: unknown[]) =>
         mockSetActiveOrganization(...args),
@@ -36,6 +38,7 @@ vi.mock("@/data-access/organizations", () => ({
   createOrganizationWithAdmin: (...args: unknown[]) =>
     mockCreateOrganizationWithAdmin(...args),
   findMembershipRole: vi.fn(),
+  findPendingOrgInvitation: vi.fn(),
   getActiveOrganization: vi.fn(),
   listAllOrganizations: vi.fn(),
   listOrgInvitations: vi.fn(),
@@ -74,11 +77,14 @@ import {
   createInvitationAsPlatformAdmin,
   renameActiveOrganization,
   findMembershipRole,
+  findPendingOrgInvitation,
   listOrgInvitations,
   listOrgMembers,
 } from "@/data-access/organizations";
 import {
   inviteMemberAction,
+  resendInvitationAction,
+  leaveOrganizationAction,
   renameOrganizationAction,
   acceptInvitationAction,
   createOrganizationAction,
@@ -437,5 +443,52 @@ describe("inviteMemberAction delivery", () => {
     expect(auth.api.createInvitation).not.toHaveBeenCalled();
     expect(createInvitationAsPlatformAdmin).not.toHaveBeenCalled();
     expect(sendEmail).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Members page actions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireOrgRole).mockReset();
+    vi.mocked(requireOrgContext).mockResolvedValue(ORG_CONTEXT);
+    vi.mocked(getActiveOrganization).mockResolvedValue({ name: VALID_INPUT.name } as never);
+    vi.mocked(findPendingOrgInvitation).mockResolvedValue({ email: "invitee@example.test", role: "member" });
+    vi.mocked(auth.api.cancelInvitation).mockResolvedValue({} as never);
+    vi.mocked(auth.api.createInvitation).mockResolvedValue({ id: "fresh-invite" } as never);
+    vi.mocked(createInvitationAsPlatformAdmin).mockResolvedValue({ id: "fresh-invite" });
+    vi.mocked(sendEmail).mockResolvedValue({ sent: true, id: "message" });
+  });
+
+  it.each([true, false])("uses the Platform Admin override and sends once (sent=%s)", async sent => {
+    const ctx = { ...ORG_CONTEXT, orgRole: null, isPlatformAdmin: true };
+    vi.mocked(requireOrgContext).mockResolvedValue(ctx);
+    vi.mocked(sendEmail).mockResolvedValue(sent ? { sent: true, id: "message" } : { sent: false, reason: "provider-error" });
+    expect(await resendInvitationAction({ invitationId: "old-invite" })).toEqual({ success: true, data: {
+      invitationId: "fresh-invite", acceptUrl: "http://localhost:3100/accept-invitation/fresh-invite", emailSent: sent,
+    } });
+    expect(findPendingOrgInvitation).toHaveBeenCalledWith(ctx, "old-invite");
+    expect(createInvitationAsPlatformAdmin).toHaveBeenCalledWith(ctx, { email: "invitee@example.test", role: "member" });
+    expect(auth.api.createInvitation).not.toHaveBeenCalled();
+    expect(auth.api.cancelInvitation).not.toHaveBeenCalled();
+    expect(sendEmail).toHaveBeenCalledOnce();
+  });
+
+  it("validates the invitation id before looking it up", async () => {
+    expect(await resendInvitationAction({ invitationId: " " })).toMatchObject({ success: false, code: "validation_failed" });
+    expect(findPendingOrgInvitation).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not send when the plugin refuses the replacement", async () => {
+    vi.mocked(auth.api.createInvitation).mockRejectedValueOnce({ body: { message: "Invitation limit reached." } });
+    expect(await resendInvitationAction({ invitationId: "old-invite" })).toEqual({ success: false, error: "Invitation limit reached." });
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("clearly refuses a Platform Admin who is not a member leaving", async () => {
+    vi.mocked(requireOrgContext).mockResolvedValue({ ...ORG_CONTEXT, orgRole: null, isPlatformAdmin: true });
+    expect(await leaveOrganizationAction()).toEqual({ success: false, error: "You are not a member of this organization, so you cannot leave it." });
+    expect(auth.api.leaveOrganization).not.toHaveBeenCalled();
   });
 });

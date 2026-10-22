@@ -36,6 +36,7 @@ import {
   createInvitationAsPlatformAdmin,
   createOrganizationWithAdmin,
   findMembershipRole,
+  findPendingOrgInvitation,
   getActiveOrganization,
   listAllOrganizations,
   listPlatformOrganizationDirectory,
@@ -53,6 +54,7 @@ import type { ActionResult } from "@/types/actions";
 import {
   createOrganizationSchema,
   inviteMemberSchema,
+  invitationIdSchema,
   orgRoleSchema,
   renameOrganizationSchema,
 } from "@/schemas/organizations";
@@ -203,6 +205,49 @@ export async function revokeInvitationAction(
   }, "Failed to revoke invitation.");
 }
 
+export async function resendInvitationAction(
+  input: unknown,
+): Promise<ActionResult<{ invitationId: string; acceptUrl: string; emailSent: boolean }>> {
+  return withAction(async (ctx) => {
+    const { invitationId } = invitationIdSchema.parse(input);
+    requireOrgRole(ctx, "admin");
+    const invitation = await findPendingOrgInvitation(ctx, invitationId);
+    const { email, role } = inviteMemberSchema.parse(invitation);
+    const organization = await getActiveOrganization(ctx);
+    if (!organization) throw new SafeError("Organization not found.");
+    let result: { id: string };
+    if (ctx.orgRole !== null) {
+      const requestHeaders = await headers();
+      // The plugin's resend option reuses the id, and its automatic re-invite
+      // cancellation ignores expired rows. Cancel this row explicitly instead.
+      await auth.api.cancelInvitation({ body: { invitationId }, headers: requestHeaders })
+        .catch(rethrowOrganizationApiError);
+      result = await auth.api.createInvitation({
+        body: { email, role, organizationId: ctx.organizationId }, headers: requestHeaders,
+      }).catch(rethrowOrganizationApiError);
+    } else {
+      // The override cancels pending rows (including expired ones) and inserts
+      // the fresh seven-day invitation in the same transaction.
+      result = await createInvitationAsPlatformAdmin(ctx, { email, role });
+    }
+    const delivery = await sendOrganizationInvitation({
+      invitationId: result.id, organizationId: ctx.organizationId,
+      organizationName: organization.name, email, role,
+    });
+    return { invitationId: result.id, ...delivery };
+  }, {
+    fallbackMessage: "Failed to send invitation.",
+    log: { message: LOG_MESSAGE, context: { op: "organization:resend-invitation" } },
+  });
+}
+
+/** Translate only the plugin's intentional messages, preserving unexpected failures. */
+function rethrowOrganizationApiError(error: unknown): never {
+  const message = extractApiErrorMessage(error);
+  if (message) throw new SafeError(message);
+  throw error;
+}
+
 export async function changeMemberRoleAction(
   input: unknown
 ): Promise<ActionResult<{ memberId: string }>> {
@@ -243,6 +288,25 @@ export async function removeMemberAction(
     }
     return { memberIdOrEmail };
   }, "Failed to remove member.");
+}
+
+/** Clear the active organization; the caller must hard-navigate out of its workspace. */
+export async function leaveOrganizationAction(): Promise<ActionResult<{ organizationId: null }>> {
+  return withAction(async (ctx) => {
+    if (ctx.orgRole === null) {
+      throw new SafeError("You are not a member of this organization, so you cannot leave it.");
+    }
+    // The plugin enforces the last-Admin rule and clears the stored active org.
+    // Our /organization/leave after hook revokes OAuth grants and API keys.
+    await auth.api.leaveOrganization({
+      body: { organizationId: ctx.organizationId }, headers: await headers(),
+    }).catch(rethrowOrganizationApiError);
+    await clearSessionDataCookies();
+    return { organizationId: null };
+  }, {
+    fallbackMessage: "Failed to leave organization.",
+    log: { message: LOG_MESSAGE, context: { op: "organization:leave" } },
+  });
 }
 
 // --- Org switching --------------------------------------------------------
@@ -302,6 +366,10 @@ async function setActiveOrgForPlatformAdmin(
     .update(sessions)
     .set({ activeOrganizationId: organizationId })
     .where(eq(sessions.id, sessionId));
+  await clearSessionDataCookies();
+}
+
+async function clearSessionDataCookies(): Promise<void> {
   // Drop the cookie-cached session snapshot so the next getSession reads the
   // new active org from the database instead of the 5-minute cache.
   const cookieStore = await cookies();
