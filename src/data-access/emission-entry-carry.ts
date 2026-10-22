@@ -108,6 +108,7 @@ export async function loadFacilityEmissionEntryCarry(
       .sort((a, b) => b.submittedAt!.getTime() - a.submittedAt!.getTime() || a.id.localeCompare(b.id))[0];
     return [{ ...resolved, carry, reportedIn: entry.sentByRemovalId ? destination : null,
       earlierRemovalCode: removals.find(removal => removal.id === earlier?.localEntityId)?.code,
+      earlierRemovalId: removals.find(removal => removal.id === earlier?.localEntityId)?.id,
       creditBatchCode: batch.code, entryObservation: observation }];
   });
   return { entries, contenders, ownContenders, batches: [...new Map(selected.map(row => [row.batch.id, row.batch])).values()] };
@@ -116,7 +117,7 @@ export async function loadFacilityEmissionEntryCarry(
 type CarryEntry = ReturnType<typeof deriveEmissionEntryFacts>[number] & {
   reservedByRemovalId: string | null; reservationKnownInactive: boolean;
   carry: ReturnType<typeof removalEntryCarryOwner>; reportedIn: EntryCarryDestination | null;
-  earlierRemovalCode: string | undefined; creditBatchCode: string;
+  earlierRemovalCode: string | undefined; earlierRemovalId?: string; creditBatchCode: string;
   entryObservation: Awaited<ReturnType<typeof getTemplateObservationsByIds>>[number];
 };
 

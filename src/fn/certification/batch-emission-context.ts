@@ -1,3 +1,4 @@
+import { recordedAfter } from "@/lib/certification/emission-entry-carry";
 import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 import { loadRemovalEntryCorrection } from "./removal-correction-core";
 import type { EntryCorrectionState } from "@/lib/certification/removal-entry-correction";
@@ -87,7 +88,7 @@ export async function loadBatchEmissionContext(
     ));
     const entries = deriveEmissionEntryFacts(stored, observation, previousObservations).map(entry => {
       const carried = carryContext.entries.find(item => item.id === entry.id);
-      return { ...entry, carry: carried?.carry, reportedIn: carried?.reportedIn };
+      return { ...entry, carry: carried?.carry, reportedIn: carried?.reportedIn, recordedAfter: recordedAfter(carried) };
     });
     result[id] = { productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
       entriesWithoutRemoval: entriesWithoutRemoval(entries, contenders, liveReservationIds, availableApplications) };

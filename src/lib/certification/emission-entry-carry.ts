@@ -57,3 +57,9 @@ export function removalEntryCarryOwner(args: {
   return receiver ? { receiver: { removalId: receiver.removalId, removalCode: receiver.code, creditBatchCodes: receiver.creditBatchCodes, anotherCreditBatch: true }, waitingReason: null }
     : { receiver: null, waitingReason: candidates.length ? candidates[0].observation ? "incompatibleTemplate" : "templateUnknown" : "noDraft" };
 }
+
+/** The sent Removal of the entry's own batch, when the entry was recorded after it was sent. */
+export function recordedAfter(carried: { earlierRemovalId?: string; earlierRemovalCode?: string } | undefined): { removalId: string; removalCode: string } | null {
+  return carried?.earlierRemovalId && carried.earlierRemovalCode
+    ? { removalId: carried.earlierRemovalId, removalCode: carried.earlierRemovalCode } : null;
+}

@@ -1,3 +1,5 @@
+import type { LateEntryFacts } from "@/lib/certification/late-entry-view";
+import { recordedAfter } from "@/lib/certification/emission-entry-carry";
 import { loadBatchEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 import type { OrgContext } from "@/lib/auth/server";
 import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
@@ -64,7 +66,7 @@ export async function loadBatchesEmissionLines(
     if (!observation) return [batch.id, { status: "blocked", blocker: "templateNotFullyRead", storedEntries: stored }];
     const entries = deriveEmissionEntryFacts(stored, observation, byId).map(entry => {
       const carried = carryEntries.find(item => item.id === entry.id);
-      return { ...entry, carry: carried?.carry, reportedIn: carried?.reportedIn };
+      return { ...entry, carry: carried?.carry, reportedIn: carried?.reportedIn, recordedAfter: recordedAfter(carried) };
     });
     const lines = buildBatchEmissionLines(observation, entries, byId, automatic[batch.id], commentsByBatch.get(batch.id));
     return [batch.id, { status: "ready", lines, storedEntries: stored }];
@@ -74,7 +76,7 @@ export async function loadBatchesEmissionLines(
 /** The same display derivation is used by the detail page and facility overview. */
 export function buildBatchEmissionLines(
   observation: EntryObservation,
-  entries: ReturnType<typeof deriveEmissionEntryFacts>,
+  entries: readonly (ReturnType<typeof deriveEmissionEntryFacts>[number] & LateEntryFacts)[],
   previousObservations: ReadonlyMap<string, EntryObservation | null>,
   automaticFacts: Pick<BatchEmissionLineFacts, "automaticFigures" | "automaticRecordCounts">,
   comments: Awaited<ReturnType<typeof listEmissionLineCommentsForBatches>> = [],

@@ -33,8 +33,12 @@ const RECORD_SOURCES: Record<AutomaticSourceId, EmissionRecordSource> = {
 export interface EmissionLineEntryFact {
   carry?: EntryCarryDisposition;
   reportedIn?: EntryCarryDestination | null;
+  /** The Removal of the entry's own batch that was already sent when the entry was recorded. */
+  recordedAfter?: { removalId: string; removalCode: string } | null;
   /** Present on stored entries; the submit step's component table reads them. */
   id?: string;
+  /** The day the entry's use happened (YYYY-MM-DD). */
+  occurredOn?: string;
   documentCount?: number;
   componentId: string; kind: "value" | "zero"; hasEvidence: boolean;
   confirmedForRemovalId?: string | null;
