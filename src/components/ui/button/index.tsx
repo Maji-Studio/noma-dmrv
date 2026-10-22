@@ -24,11 +24,18 @@ const buttonVariants = cva(
         icon: "h-[32px] w-[32px] p-0",
       },
       width: {
-        default: "w-auto",
+        /* No class of its own: the icon size owns its 32px width. The
+           `w-auto` for the text sizes lives in compoundVariants below. */
+        default: "",
         square: "aspect-square p-0",
         full: "w-full",
       },
     },
+    compoundVariants: (["default", "small", "large"] as const).map((size) => ({
+      size,
+      width: "default" as const,
+      class: "w-auto",
+    })),
     defaultVariants: {
       variant: "default",
       size: "default",
