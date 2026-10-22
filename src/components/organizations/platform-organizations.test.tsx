@@ -67,7 +67,8 @@ describe("PlatformOrganizations", () => {
     const detail = panel("Kilombero Carbon");
     fireEvent.click(within(detail).getByRole("button", { name: "Switch to Kilombero Carbon" }));
     await waitFor(() => expect(state.enter).toHaveBeenCalledWith("org-other", "Kilombero Carbon", undefined));
-    expect(within(detail).getByRole("button", { name: "Switching…" })).toBeTruthy();
+    const button = within(detail).getByRole("button", { name: "Switch to Kilombero Carbon" });
+    expect(button.getAttribute("aria-busy")).toBe("true");
   });
 
   it("says you're working in the current organization instead of offering a switch", () => {
@@ -105,7 +106,7 @@ describe("PlatformOrganizations", () => {
     state.enter.mockResolvedValue({ success: false, error: "No access" });
     renderAt("org-other");
     fireEvent.click(within(panel("Kilombero Carbon")).getByRole("button", { name: "Switch to Kilombero Carbon" }));
-    await waitFor(() => expect(state.toastError).toHaveBeenCalledWith("Kilombero Carbon did not open. Try again."));
+    await waitFor(() => expect(state.toastError).toHaveBeenCalledWith("Kilombero Carbon did not open. No access"));
     expect(within(panel("Kilombero Carbon")).getByRole("button", { name: "Switch to Kilombero Carbon" })).toBeTruthy();
   });
 

@@ -62,7 +62,7 @@ export function PlatformOrganizations() {
       const result = await enterOrganization(organizationId, organizationName, landingHref);
       if (!result.success) {
         switching.release();
-        toast.error(orgSwitchFailedMessage(organizationName));
+        toast.error(orgSwitchFailedMessage(organizationName, result.error));
       }
     } catch {
       switching.release();

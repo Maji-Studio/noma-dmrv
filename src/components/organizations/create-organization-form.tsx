@@ -84,7 +84,6 @@ export function CreateOrganizationForm({ onCreated, onCancel }: CreateOrganizati
         isSubmitting={create.isPending}
         errorMessage={serverError}
         submitLabel="Create organization"
-        submittingLabel="Creating…"
         onCancel={onCancel}
         sticky={false}
       />

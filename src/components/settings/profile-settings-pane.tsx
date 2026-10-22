@@ -104,7 +104,6 @@ function NameForm({ name, email }: { name: string; email: string }) {
         isSubmitting={mutation.isPending}
         errorMessage={serverError}
         submitLabel="Save name"
-        submittingLabel="Saving…"
         sticky={false}
       />
     </form>
@@ -191,7 +190,6 @@ function PasswordForm() {
         isSubmitting={mutation.isPending}
         errorMessage={serverError}
         submitLabel="Change password"
-        submittingLabel="Changing…"
         sticky={false}
       />
     </form>

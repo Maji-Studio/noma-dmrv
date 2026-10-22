@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { orgNameToAnnounce, orgSwitchMessage, stashOrgSwitchNotice, takeOrgSwitchNotice } from "./org-switch-notice";
+import { orgNameToAnnounce, orgSwitchFailedMessage, orgSwitchMessage, stashOrgSwitchNotice, takeOrgSwitchNotice } from "./org-switch-notice";
 
 function withStorage(store = new Map<string, string>()) {
   vi.stubGlobal("window", {
@@ -76,5 +76,18 @@ describe("orgNameToAnnounce", () => {
     expect(orgNameToAnnounce({ organizationId: null, organizationName: null }, landed)).toBe(
       "Dark Earth Carbon",
     );
+  });
+});
+
+describe("org switch failure message", () => {
+  it("gives the server's reason for a refused switch", () => {
+    expect(orgSwitchFailedMessage("Mafinga Biochar", "Organization not found.")).toBe(
+      "Mafinga Biochar did not open. Organization not found.",
+    );
+  });
+
+  it("falls back to Try again when there is no reason", () => {
+    expect(orgSwitchFailedMessage("Mafinga Biochar")).toBe("Mafinga Biochar did not open. Try again.");
+    expect(orgSwitchFailedMessage("Mafinga Biochar", "  ")).toBe("Mafinga Biochar did not open. Try again.");
   });
 });
