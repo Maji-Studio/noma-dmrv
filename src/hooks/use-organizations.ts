@@ -11,12 +11,15 @@ import {
   listMembersFn,
   listOrganizationsFn,
   removeMemberAction,
+  renameOrganizationAction,
   revokeInvitationAction,
   setActiveOrganizationAction,
 } from "@/fn/organizations";
 import { listOrganizationApiAccessFn, setOrganizationApiAccessFn } from "@/fn/organization-api-access";
 import { getActiveOrganizationRead } from "@/lib/read-api/client";
 import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
+import { authClient } from "@/lib/auth/client";
+import type { RenameOrganizationInput } from "@/schemas/organizations";
 import { unwrap } from "@/hooks/types";
 import { NO_ORGANIZATION_MESSAGE } from "@/lib/errors";
 import { stashPendingWarning } from "@/lib/pending-warning";
@@ -199,6 +202,18 @@ export function useCreateOrganization() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.directory() });
       queryClient.invalidateQueries({ queryKey: organizationKeys.apiAccess() });
+    },
+  });
+}
+
+export function useRenameOrganization() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: RenameOrganizationInput) =>
+      unwrap(await renameOrganizationAction(input)),
+    onSuccess: () => {
+      authClient.$store.notify("$listOrg");
+      return queryClient.invalidateQueries({ queryKey: organizationKeys.all });
     },
   });
 }
