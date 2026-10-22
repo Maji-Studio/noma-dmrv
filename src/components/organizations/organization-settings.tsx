@@ -9,8 +9,10 @@
 "use client";
 
 import { useState } from "react";
+import { format } from "date-fns/format";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { FormSelect } from "@/components/forms/form-select";
@@ -18,8 +20,11 @@ import { useToast } from "@/components/ui/toast";
 import { InvitationLinkNotice, type InvitationDelivery } from "./invitation-link-notice";
 import {
   useChangeMemberRole,
+  useLeaveOrganization,
   useOrgInvitations,
   useOrgMembers,
+  useResendInvitation,
+  useResetAfterOrgSwitch,
   useRevokeInvitation,
   useRemoveMember,
 } from "@/hooks/use-organizations";
@@ -36,7 +41,25 @@ const ROLE_LABELS: Record<string, string> = Object.fromEntries(
   ROLE_OPTIONS.map((option) => [option.value, option.label]),
 );
 
-export function OrganizationSettings({ canManage }: { canManage: boolean }) {
+const EXPIRY_DATE_FORMAT = "MMM d";
+/** After leaving, the hard load lands here: no organization is active any more. */
+const AFTER_LEAVE_HREF = "/";
+
+interface OrganizationSettingsProps {
+  canManage: boolean;
+  /** The organization being worked in; names the Leave control. */
+  organizationName: string;
+  /** True only for a member of this organization, never a Platform Admin without a membership. */
+  canLeave: boolean;
+}
+
+/** "Expires Oct 29" before the day, "Expired Oct 20" after it. */
+function expiryText(expiresAt: Date | string | null, expired: boolean): string | null {
+  if (!expiresAt) return null;
+  return `${expired ? "Expired" : "Expires"} ${format(new Date(expiresAt), EXPIRY_DATE_FORMAT)}`;
+}
+
+export function OrganizationSettings({ canManage, organizationName, canLeave }: OrganizationSettingsProps) {
   const toast = useToast();
   const { data: members, isLoading: membersLoading } = useOrgMembers();
   const { data: invitations, isLoading: invitationsLoading } =
@@ -45,6 +68,9 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
   const changeRole = useChangeMemberRole();
   const removeMember = useRemoveMember();
   const revokeInvitation = useRevokeInvitation();
+  const resendInvitation = useResendInvitation();
+  const leaveOrganization = useLeaveOrganization();
+  const resetAfterOrgSwitch = useResetAfterOrgSwitch();
 
   const [lastInvitation, setLastInvitation] = useState<InvitationDelivery | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -52,6 +78,9 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
     memberId: string;
     email: string;
   } | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [leaveError, setLeaveError] = useState<string | undefined>();
   const [revokingInvite, setRevokingInvite] = useState<{
     id: string;
     email: string;
@@ -84,6 +113,39 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
     } finally {
       setRemovingMember(null);
     }
+  }
+
+  async function sendAgain(invite: { id: string; email: string }) {
+    setResendingId(invite.id);
+    try {
+      const result = await resendInvitation.mutateAsync(invite.id);
+      setLastInvitation({ email: invite.email, acceptUrl: result.acceptUrl, emailSent: result.emailSent });
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "The invitation was not sent again. Try again."
+      );
+    } finally {
+      setResendingId(null);
+    }
+  }
+
+  async function confirmLeave() {
+    setLeaveError(undefined);
+    try {
+      await leaveOrganization.mutateAsync();
+    } catch (error) {
+      setLeaveError(
+        error instanceof Error ? error.message : "You were not removed from the organization. Try again."
+      );
+      return;
+    }
+    // The dialog stays busy until the hard load replaces the page.
+    resetAfterOrgSwitch(undefined, undefined, AFTER_LEAVE_HREF);
+  }
+
+  function closeLeave() {
+    setLeaveOpen(false);
+    setLeaveError(undefined);
   }
 
   async function confirmRevoke() {
@@ -208,24 +270,53 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
               {invitations.map((invite) => (
                 <OrganizationRosterRow
                   key={invite.id}
-                  primary={invite.email}
-                  secondary={ROLE_LABELS[invite.role] ?? invite.role}
+                  primary={
+                    <span className="flex min-w-0 items-center gap-8">
+                      <span className="truncate">{invite.email}</span>
+                      {invite.expired && <StatusBadge status="expired" size="small" />}
+                    </span>
+                  }
+                  secondary={[ROLE_LABELS[invite.role] ?? invite.role, expiryText(invite.expiresAt, invite.expired)]
+                    .filter(Boolean)
+                    .join(" \u00b7 ")}
                   actions={
-                    <Button
-                      type="button"
-                      variant="weak"
-                      size="small"
-                      onClick={() =>
-                        setRevokingInvite({ id: invite.id, email: invite.email })
-                      }
-                    >
-                      Revoke
-                    </Button>
+                    <>
+                      <Button
+                        type="button"
+                        variant="weak"
+                        size="small"
+                        busy={resendingId === invite.id}
+                        onClick={() => sendAgain({ id: invite.id, email: invite.email })}
+                      >
+                        Send again
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="weak"
+                        size="small"
+                        onClick={() =>
+                          setRevokingInvite({ id: invite.id, email: invite.email })
+                        }
+                      >
+                        Revoke
+                      </Button>
+                    </>
                   }
                 />
               ))}
             </OrganizationRosterList>
           )}
+        </section>
+      )}
+
+      {canLeave && (
+        <section className="flex flex-col gap-12 border-t border-[var(--color-border-tertiary)] pt-24">
+          <h2 className="title-heading-3">Leave {organizationName}</h2>
+          <div>
+            <Button type="button" variant="destructive" size="small" className="max-sm:h-44" onClick={() => setLeaveOpen(true)}>
+              Leave organization
+            </Button>
+          </div>
         </section>
       )}
 
@@ -244,6 +335,16 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
         onConfirm={confirmRemoveMember}
         onCancel={() => setRemovingMember(null)}
         isPending={removeMember.isPending}
+      />
+      <DeleteConfirmDialog
+        isOpen={leaveOpen}
+        title={`Leave ${organizationName}?`}
+        message="You lose access to its data straight away."
+        confirmLabel="Leave organization"
+        errorMessage={leaveError}
+        onConfirm={confirmLeave}
+        onCancel={closeLeave}
+        isPending={leaveOrganization.isPending}
       />
       <DeleteConfirmDialog
         isOpen={Boolean(revokingInvite)}

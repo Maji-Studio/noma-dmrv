@@ -106,7 +106,7 @@ it("lists expired pending rows with server expiry and hides completed and foreig
     { id: foreignId, organizationId: otherId, status: "pending", expiresAt: new Date(Date.now() + EXPIRY_OFFSET_MS) },
     ...["accepted", "rejected", "canceled"].map(status => ({ id: status === "canceled" ? canceledId : randomUUID(), organizationId, status,
       expiresAt: new Date(Date.now() + EXPIRY_OFFSET_MS) })),
-  ].map(row => ({ ...row, inviterId: adminId, email: "invitee@example.test", role: "member" })));
+  ].map((row, index) => ({ ...row, inviterId: adminId, email: `invitee-${index}@example.test`, role: "member" })));
   const listed = await listOrgInvitations(ctx);
   expect(listed).toHaveLength(2);
   expect(listed.find(row => row.id === expiredId)).toMatchObject({ expired: true, expiresAt: expect.any(Date) });
