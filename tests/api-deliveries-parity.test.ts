@@ -120,6 +120,13 @@ interface Refusal { code?: string; issues: { pointer: string; code: string; meta
 const apiRefusal = (output: { code: string; errors?: Refusal["issues"]; issues?: Refusal["issues"] }): Refusal => ({
   code: output.code, issues: (output.errors ?? output.issues ?? []).map(({ pointer, code, meta }) => ({ pointer, code, ...(meta ? { meta } : {}) })),
 });
+/** Actions validate the form schema before the operation, so those refusals use form names. */
+function actionPointer(path: readonly PropertyKey[]): string {
+  const [field, ...rest] = path;
+  if (field === "deliveryDate") return jsonPointer(["deliveredAt", ...rest]);
+  if (field === "moistureContentPercent") return jsonPointer(["moisturePercent", ...rest]);
+  return jsonPointer(path);
+}
 async function refuse(transport: Transport, changes: Record<string, unknown>, id?: string): Promise<Refusal> {
   const f = fixtures.get(transport)!;
   if (transport === "action") {
@@ -128,7 +135,7 @@ async function refuse(transport: Transport, changes: Record<string, unknown>, id
     const result = id ? await updateDeliveryFn({ deliveryId: id, expectedVersion: current!.data.version, ...changes } as z.infer<typeof updateDeliverySchema>)
       : await createDeliveryFn(formInput(f, bases.get(transport)!, changes));
     if (result.success) throw new Error("Expected action refusal.");
-    return { code: result.code, issues: (result.issues ?? []).map(({ path, code, meta }) => ({ pointer: jsonPointer(path), code, ...(meta ? { meta } : {}) })) };
+    return { code: result.code, issues: (result.issues ?? []).map(({ path, code, meta }) => ({ pointer: actionPointer(path), code, ...(meta ? { meta } : {}) })) };
   }
   if (transport === "rest") {
     const response = id ? await patchDelivery(f, id, changes, (await readDelivery(f, id)).etag) : await postDelivery(f, deliveryInput(f, changes));
