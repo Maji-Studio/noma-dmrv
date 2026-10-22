@@ -1,6 +1,6 @@
 /**
  * OrganizationSettings — member-management surface for org Admins
- * (and Platform Admins). Invite by email, manage roles, remove members, and
+ * (and Platform Admins). Invite by email (in a dialog), manage roles, remove members, and
  * revoke pending invitations. Read-only members see the roster without controls.
  *
  * Invitation delivery is best-effort email; the reliable path is the copyable
@@ -9,10 +9,6 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { inviteMemberSchema } from "@/schemas/organizations";
 import {
   CheckCircleIcon,
   CopyIcon,
@@ -21,16 +17,10 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import {
-  FormActions,
-  FormField,
-  FormInput,
-  FormSelect,
-} from "@/components/forms";
+import { FormSelect } from "@/components/forms/form-select";
 import { useToast } from "@/components/ui/toast";
 import {
   useChangeMemberRole,
-  useInviteMember,
   useOrgInvitations,
   useOrgMembers,
   useRevokeInvitation,
@@ -41,18 +31,13 @@ import {
   OrganizationRosterRow,
 } from "./organization-roster-list";
 import { Notice } from "@/components/ui/notice";
+import { InviteMemberDialog } from "./invite-member-dialog";
+import { ORG_ROLE_OPTIONS as ROLE_OPTIONS } from "./organization-roles";
 import { ILLUSTRATION_SIZE, EnvelopeArt, MembersArt } from "@/components/ui/illustrations";
-
-const ROLE_OPTIONS = [
-  { value: "admin", label: "Admin" },
-  { value: "member", label: "Member" },
-] as const;
 
 const ROLE_LABELS: Record<string, string> = Object.fromEntries(
   ROLE_OPTIONS.map((option) => [option.value, option.label]),
 );
-
-type InviteForm = z.infer<typeof inviteMemberSchema>;
 
 export function OrganizationSettings({ canManage }: { canManage: boolean }) {
   const toast = useToast();
@@ -60,13 +45,13 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
   const { data: invitations, isLoading: invitationsLoading } =
     useOrgInvitations(canManage);
 
-  const inviteMember = useInviteMember();
   const changeRole = useChangeMemberRole();
   const removeMember = useRemoveMember();
   const revokeInvitation = useRevokeInvitation();
 
   const [lastInviteLink, setLastInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [removingMember, setRemovingMember] = useState<{
     memberId: string;
     email: string;
@@ -75,33 +60,6 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
     id: string;
     email: string;
   } | null>(null);
-
-  const {
-    control,
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<InviteForm>({
-    resolver: zodResolver(inviteMemberSchema),
-    defaultValues: { role: "member" },
-  });
-
-  async function onInvite(values: InviteForm) {
-    try {
-      const result = await inviteMember.mutateAsync(values);
-      setLastInviteLink(result.acceptUrl);
-      setCopied(false);
-      reset({ email: "", role: "member" });
-      toast.success("Invitation created.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "The invitation was not created. Check the email and try again.",
-      );
-    }
-  }
 
   async function copyLink() {
     if (!lastInviteLink) return;
@@ -159,86 +117,49 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
     }
   }
 
+  const inviteButton = canManage ? (
+    <Button
+      type="button"
+      size="small"
+      className="shrink-0 max-sm:h-44"
+      onClick={() => setInviteOpen(true)}
+    >
+      Invite member
+    </Button>
+  ) : null;
+
   return (
     <div className="flex flex-col gap-32">
-      {/* Invite */}
-      {canManage && (
-        <section className="flex flex-col gap-16">
-          <h2 className="title-heading-3">Invite a member</h2>
-          <form
-            onSubmit={handleSubmit(onInvite)}
-            className="content-measure-form flex flex-col gap-16"
-          >
-            <div className="grid grid-cols-1 gap-16">
-              <FormField
-                id="invite-email"
-                label="Email"
-                error={errors.email?.message}
-                required
-              >
-                <FormInput
-                  id="invite-email"
-                  type="email"
-                  placeholder="teammate@example.com"
-                  autoComplete="off"
-                  {...register("email")}
-                />
-              </FormField>
-              <FormField
-                id="invite-role"
-                label="Role"
-                error={errors.role?.message}
-                required
-              >
-                <FormSelect
-                  id="invite-role"
-                  options={ROLE_OPTIONS}
-                  {...register("role")}
-                />
-              </FormField>
-            </div>
-            {lastInviteLink && (
-              <Notice tone="success" title="Share this link with the invitee">
-                <div className="mt-8 flex items-center gap-8">
-                  <input
-                    readOnly
-                    value={lastInviteLink}
-                    onFocus={(e) => e.currentTarget.select()}
-                    className="min-w-0 flex-1 border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] px-8 py-6 body-caption font-mono"
-                  />
-                  <Button
-                    type="button"
-                    variant="weak"
-                    size="small"
-                    onClick={copyLink}
-                  >
-                    {copied ? (
-                      <CheckCircleIcon size={16} weight="fill" />
-                    ) : (
-                      <CopyIcon size={16} />
-                    )}
-                    {copied ? "Copied" : "Copy"}
-                  </Button>
-                </div>
-              </Notice>
-            )}
-            <FormActions
-              control={control}
-              isSubmitting={inviteMember.isPending}
-              submitLabel="Send invitation"
-              submittingLabel="Sending…"
-              sticky={false}
+      {canManage && lastInviteLink && (
+        <Notice tone="success" title="Share this link with the invitee">
+          <div className="mt-8 flex items-center gap-8">
+            <input
+              readOnly
+              value={lastInviteLink}
+              aria-label="Invitation link"
+              onFocus={(e) => e.currentTarget.select()}
+              className="min-w-0 flex-1 border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] px-8 py-6 body-caption font-mono"
             />
-          </form>
-        </section>
+            <Button type="button" variant="weak" size="small" onClick={copyLink}>
+              {copied ? (
+                <CheckCircleIcon size={16} weight="fill" />
+              ) : (
+                <CopyIcon size={16} />
+              )}
+              {copied ? "Copied" : "Copy"}
+            </Button>
+          </div>
+        </Notice>
       )}
 
       {/* The roster. Named "Current members" rather than "Members" because the
-          pane it sits in is already titled Members — and because it reads as
-          one of three states beside "Pending invitations" and "Invite a
-          member". */}
+          pane it sits in is already titled Members. The invite button sits in
+          its heading row and opens the invite dialog. */}
       <section className="flex flex-col gap-16">
-        <h2 className="title-heading-3">Current members</h2>
+        <div className="flex items-start justify-between gap-12">
+          <h2 className="title-heading-3 min-w-0 flex-1">Current members</h2>
+          {inviteButton}
+        </div>
         {membersLoading ? (
           <Skeleton className="h-64 w-full" />
         ) : !members || members.length === 0 ? (
@@ -247,6 +168,13 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
             title="No members yet"
             description="Invite teammates to give them access to this organization."
             padding="md"
+            action={
+              canManage ? (
+                <Button type="button" size="small" onClick={() => setInviteOpen(true)}>
+                  Invite your first member
+                </Button>
+              ) : undefined
+            }
           />
         ) : (
           <OrganizationRosterList>
@@ -336,6 +264,17 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
         </section>
       )}
 
+      {canManage && inviteOpen && (
+        // Mounted only while open, so a discarded draft never comes back.
+        <InviteMemberDialog
+          isOpen
+          onClose={() => setInviteOpen(false)}
+          onInvited={(acceptUrl) => {
+            setLastInviteLink(acceptUrl);
+            setCopied(false);
+          }}
+        />
+      )}
       <DeleteConfirmDialog
         isOpen={Boolean(removingMember)}
         title="Remove member"

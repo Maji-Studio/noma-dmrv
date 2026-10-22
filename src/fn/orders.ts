@@ -26,9 +26,10 @@ import { z } from "zod";
 import { recordOrder, updateOrder, deleteOrder } from "@/lib/operations/orders";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 import { getOrderById, getOrderWithRelationsById, type OrderWithRelations } from "@/data-access/orders";
 import { uuidSchema } from "@/schemas/helpers";
-import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 
 // ============================================
 // List/Query Operations
@@ -118,11 +119,11 @@ export async function createOrderFn(
   data: z.infer<typeof createOrderSchema>,
   options?: CreateIntentOptions
 ): Promise<ActionResult<Order>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const validated = createOrderSchema.parse(data);
 
-    return runOperationInProcess(recordOrder, ctx, validated, createIntentOptionsSchema.parse(options));
-  }, { fallbackMessage: "Failed to create order" });
+    return create(recordOrder, validated);
+  }, options, { fallbackMessage: "Failed to create order" });
 }
 
 // ============================================
