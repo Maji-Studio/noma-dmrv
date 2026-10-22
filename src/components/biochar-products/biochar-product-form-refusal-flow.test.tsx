@@ -12,6 +12,8 @@ import { ActionError } from "@/lib/action-error";
 import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 
+const SPLIT_BIN = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const SUB_BIN = { layerId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", code: "SB-1", placedAt: "2026-01-01T00:00:00.000Z", dryMassKg: 900, solidsKg: 900, wetEstimateKg: 1000, moisturePercent: 10 };
 const preview = vi.hoisted(() => ({
   block: null as string | null,
   // The recipe the product was made from, so the form's ingredient sync runs as it does on screen.
@@ -29,7 +31,10 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
   const client = new actual.QueryClient();
   const useQuery = (options: { queryKey?: unknown[] }) => {
     const key = options?.queryKey ?? [];
-    if (key[0] === "outputStock" && key[1] === "subBins") return { ...base, data: { stockMode: "mix", subBins: [] } };
+    if (key[0] === "outputStock" && key[1] === "subBins") {
+      const split = JSON.stringify(key).includes(SPLIT_BIN);
+      return { ...base, data: split ? { stockMode: "split", drawOrder: "oldest_first", subBins: [SUB_BIN] } : { stockMode: "mix", subBins: [] } };
+    }
     if (key[0] === "outputStock" && key[1] === "preview") return { ...base, data: { blockingMessage: preview.block, basisFingerprint: "fp-1" } };
     if (key[0] === "outputStock" && key[1] === "productPreview") return { ...base, data: [{ lane: "biochar", storageLocationId: "b", basisFingerprint: "fp-1", blockingMessage: null }] };
     if (key[0] === "formulations" && key[1] === "detail") return { ...base, data: preview.formulation };
@@ -143,6 +148,20 @@ describe("new product refused saves", () => {
     expect(screen.queryByText(RECONCILIATION)).toBeTruthy();
     expect(screen.queryAllByText(live).length).toBeGreaterThan(0);
     expect(document.querySelector("[data-form-error-summary]")).toBeNull();
+  });
+
+  it("keeps a refusal on a split bin at the mass after submitting clears the single moisture", async () => {
+    const message = "This load holds more dry solids than SB-1 holds by the records.";
+    const form = fillNewProduct([refusal("insufficient_stock", ["sources", 0], message)]);
+    // The moisture was typed for a mix bin; the split bin replaces it with per-sub-bin readings.
+    form.pick("sourceBiocharStorageLocationId", SPLIT_BIN);
+    fireEvent.change(await screen.findByLabelText(/moisture/i, { selector: `[id="product-source-moisture-${SUB_BIN.layerId}"]` }), { target: { value: "5" } });
+    form.submit();
+    await waitFor(() => expect(form.onSubmit).toHaveBeenCalledOnce());
+    expect(await screen.findAllByText(message)).toHaveLength(1);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(screen.getAllByText(message)).toHaveLength(1);
+    expect(document.querySelector("[data-form-error-summary]")?.textContent).toContain("Biochar wet mass");
   });
 
   it.each([

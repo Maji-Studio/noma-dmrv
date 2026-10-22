@@ -333,7 +333,8 @@ export function BiocharProductForm({
     selectedFormulationId,
     watchedPlacedAt,
     watchedMassKg,
-    watchedMoisture,
+    // A split draw carries its readings in the sources; submitting clears the single moisture.
+    draw.active ? "" : watchedMoisture,
     JSON.stringify(draw.sources ?? null),
     ...(watchedIngredientBins ?? []).map((ingredient) => ingredient.massKg),
   ].join(":");
