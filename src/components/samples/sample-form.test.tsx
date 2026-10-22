@@ -3,7 +3,7 @@ import { useEffect, type ReactNode } from "react";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SampleWithRelations } from "@/data-access/samples";
-import { FormDialogContext, type DialogFormState } from "@/components/ui/form-dialog-context";
+import { expectStayedClean, renderReportingDirty } from "../../../tests/helpers/form-dialog-dirty";
 import { SampleForm } from "./sample-form";
 
 const autoSelect = vi.hoisted(() => ({ on: false }));
@@ -180,36 +180,24 @@ describe("SampleForm contextual CERT chips", () => {
 });
 
 describe("SampleForm unsaved changes", () => {
-  const dirtyStates = (ui: ReactNode) => {
-    const states: boolean[] = [];
-    const actions = {
-      report: (_id: object, state: DialogFormState | null) => { if (state) states.push(state.dirty); },
-      cancel: vi.fn(),
-      markSaved: vi.fn(),
-    };
-    const view = render(<FormDialogContext.Provider value={actions}>{ui}</FormDialogContext.Provider>);
-    return { states, ...view };
-  };
-
   it("stays clean when the only batch is picked for the operator and its tier resolves", async () => {
     autoSelect.on = true;
     loadBatch("1000_year");
-    const { states, container } = dirtyStates(<SampleForm onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    const { states, container } = renderReportingDirty(<SampleForm onSubmit={vi.fn()} onCancel={vi.fn()} />);
     await waitFor(() => expect(input(container, "creditBatchId").value).toBe("00000000-0000-4000-8000-000000000001"));
-    expect(states.length).toBeGreaterThan(0);
-    expect(states.every((dirty) => !dirty)).toBe(true);
+    expectStayedClean(states);
   });
 
   it("stays clean when a preselected batch resolves", async () => {
     loadBatch("1000_year");
-    const { states } = dirtyStates(<SampleForm creditBatchId={saved.creditBatchId!} onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    const { states } = renderReportingDirty(<SampleForm creditBatchId={saved.creditBatchId!} onSubmit={vi.fn()} onCancel={vi.fn()} />);
     await waitFor(() => expect(states.length).toBeGreaterThan(0));
-    expect(states.every((dirty) => !dirty)).toBe(true);
+    expectStayedClean(states);
   });
 
   it("turns dirty once the operator picks a batch", async () => {
     loadBatch("1000_year");
-    const { states, container } = dirtyStates(<SampleForm onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    const { states, container } = renderReportingDirty(<SampleForm onSubmit={vi.fn()} onCancel={vi.fn()} />);
     const select = input(container, "creditBatchId");
     fireEvent.change(select, { target: { value: "00000000-0000-4000-8000-000000000001" } });
     await waitFor(() => expect(states.at(-1)).toBe(true));

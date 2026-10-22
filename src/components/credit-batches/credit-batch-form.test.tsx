@@ -1,15 +1,16 @@
 // @vitest-environment jsdom
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useController, type Control } from "react-hook-form";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
 import type { CreditBatch } from "@/db/schema/credits";
+import { expectStayedClean, renderReportingDirty } from "../../../tests/helpers/form-dialog-dirty";
 import { CreditBatchForm } from "./credit-batch-form";
 
 const mocks = vi.hoisted(() => ({
   certifierSummary: vi.fn(), methodBEligibility: vi.fn(), recordPrerequisites: vi.fn(),
-  showFacilitySelect: false, showFeedstockSelect: false, timeZone: "UTC",
+  showFacilitySelect: false, showFeedstockSelect: false, realPicker: false, autoPick: false, timeZone: "UTC",
 }));
 
 const ISOMETRIC_FACILITY_ID = "00000000-0000-4000-8000-000000000002";
@@ -60,12 +61,35 @@ vi.mock("@/hooks/use-credit-batches", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-credit-batches")>(),
   useCreditBatchProductionRunOptions: () => ({ data: [], isSuccess: true }),
 }));
-vi.mock("@/components/forms", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@/components/forms")>(),
-  // Expose selected fields without coupling this test to the entity picker.
-  FormEntitySelect: ({ control }: { control: Control<SelectFields> }) =>
-    mocks.showFacilitySelect ? <FacilitySelect control={control} />
-      : mocks.showFeedstockSelect ? <FeedstockSelect control={control} /> : null,
+vi.mock("@/components/forms", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/forms")>();
+  return {
+    ...actual,
+    // Expose selected fields without coupling this test to the entity picker.
+    FormEntitySelect: (props: Parameters<typeof actual.FormEntitySelect>[0]) => {
+      const control = props.control as unknown as Control<SelectFields>;
+      return mocks.realPicker ? <actual.FormEntitySelect {...props} />
+        : mocks.showFacilitySelect ? <FacilitySelect control={control} />
+        : mocks.showFeedstockSelect ? <FeedstockSelect control={control} /> : null;
+    },
+  };
+});
+// Under the real FormEntitySelect: a plain select that, like the real one,
+// picks the lone feedstock type by itself when asked (autoSelectSingle).
+vi.mock("@/components/forms/entity-select/entity-select", () => ({
+  EntitySelect: ({ id, value, onChange, onAutoSelect, autoSelectSingle }: {
+    id: string; value: string; onChange: (value: string) => void; onAutoSelect?: (value: string) => void; autoSelectSingle?: boolean;
+  }) => {
+    useEffect(() => {
+      if (mocks.autoPick && autoSelectSingle && !value) (onAutoSelect ?? onChange)(FEEDSTOCK_TYPE_ID);
+    }, [value, onChange, onAutoSelect, autoSelectSingle]);
+    return (
+      <select id={id} aria-label="Feedstock type" value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">Select feedstock type</option>
+        <option value={FEEDSTOCK_TYPE_ID}>Pyrolysis feedstock</option>
+      </select>
+    );
+  },
 }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn() }) }));
 vi.mock("@/components/ui/tooltip", () => ({
@@ -80,6 +104,8 @@ beforeEach(() => {
   mocks.showFacilitySelect = false;
   mocks.timeZone = "UTC";
   mocks.showFeedstockSelect = false;
+  mocks.realPicker = false;
+  mocks.autoPick = false;
   mocks.recordPrerequisites.mockReset();
   mocks.recordPrerequisites.mockResolvedValue(undefined);
   mocks.certifierSummary.mockReturnValue({ data: undefined });
@@ -242,5 +268,28 @@ describe("CreditBatchForm certifier period policy", () => {
     await screen.findByText(MONTH_REFUSAL);
     await act(async () => { fireEvent.submit(container.querySelector("form")!); });
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+describe("CreditBatchForm unsaved changes", () => {
+  const SEPTEMBER = { startDate: "2026-09-01", endDate: "2026-09-30" };
+  const dateValue = (container: HTMLElement, name: string) => container.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.value;
+
+  it("stays clean when the only feedstock type and its month are picked for the operator", async () => {
+    mocks.realPicker = true;
+    mocks.autoPick = true;
+    const { states, container } = renderReportingDirty(<CreditBatchForm onSubmit={vi.fn()} onCancel={vi.fn()} windowForFeedstock={() => SEPTEMBER} />);
+    await waitFor(() => expect(dateValue(container, "startDate")).toBe(SEPTEMBER.startDate));
+    expect(dateValue(container, "endDate")).toBe(SEPTEMBER.endDate);
+    expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Feedstock type" }).value).toBe(FEEDSTOCK_TYPE_ID);
+    expectStayedClean(states);
+  });
+
+  it("turns dirty once the operator picks the feedstock type", async () => {
+    mocks.realPicker = true;
+    const { states, container } = renderReportingDirty(<CreditBatchForm onSubmit={vi.fn()} onCancel={vi.fn()} windowForFeedstock={() => SEPTEMBER} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Feedstock type" }), { target: { value: FEEDSTOCK_TYPE_ID } });
+    await waitFor(() => expect(states.at(-1)).toBe(true));
+    expect(dateValue(container, "startDate")).toBe(SEPTEMBER.startDate);
   });
 });

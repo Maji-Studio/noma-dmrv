@@ -44,6 +44,7 @@ export {
   FormEntitySelect,
   QuickAddDialog,
   useQuickAddDialog,
+  useSelectDefault,
   type EntityOption,
   type EntityType,
   type EntitySelectProps,

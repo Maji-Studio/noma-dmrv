@@ -9,7 +9,13 @@ import { useController, type Control, type FieldPath, type FieldValues } from "r
 import { FormField } from "../form-field";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { EntitySelect } from "./entity-select";
+import { useSelectDefault } from "./use-select-default";
 import type { EntitySelectProps, EntityType } from "./types";
+
+/** How a value reached the field: `asDefault` when it became the form's baseline. */
+export interface EntityPickChange {
+  asDefault: boolean;
+}
 
 interface FormEntitySelectProps<
   TFieldValues extends FieldValues = FieldValues,
@@ -38,15 +44,23 @@ interface FormEntitySelectProps<
   createLabel?: string;
   /** Callback when quick-add is triggered */
   onCreateNew?: () => void;
-  /** Optional side effect after the form value changes. */
-  onChange?: EntitySelectProps["onChange"];
+  /**
+   * Optional side effect after the form value changes, including the
+   * automatic pick of a lone option. On a pick that became the field's
+   * default (`change.asDefault`), a side effect that sets other fields should
+   * set them as defaults too (`resetField`), or the untouched form turns dirty.
+   */
+  onChange?: (value: string | undefined, change: EntityPickChange) => void;
   /** Filter options (e.g., facilityId for filtering reactors by facility) */
   filterBy?: Record<string, string>;
   /** Option ids to hide (e.g. materials already picked on other lines). */
   excludeIds?: readonly string[];
   /** Whether the field is required */
   required?: boolean;
-  /** Auto-select when there is exactly one option (defaults to true when required) */
+  /**
+   * Auto-select when there is exactly one option (defaults to true when
+   * required). On an untouched form the pick is the field's default, not an edit.
+   */
   autoSelectSingle?: boolean;
   /** Always show the search input while dropdown is open */
   alwaysShowSearch?: boolean;
@@ -108,8 +122,9 @@ export function FormEntitySelect<
   const generatedId = useId();
   const id = suppliedId ?? generatedId;
   const { field, fieldState } = useController({ control, name });
+  const setOwnChange = useSelectDefault(control);
 
-  useClearOnDependencyChange(dependsOn, field.onChange);
+  useClearOnDependencyChange(dependsOn, (value) => setOwnChange(name, value, field.onChange));
 
   return (
     <FormField
@@ -127,7 +142,11 @@ export function FormEntitySelect<
         onBlur={field.onBlur}
         onChange={(value) => {
           field.onChange(value);
-          onChange?.(value);
+          onChange?.(value, { asDefault: false });
+        }}
+        onAutoSelect={(value) => {
+          const asDefault = setOwnChange(name, value, field.onChange);
+          onChange?.(value, { asDefault });
         }}
         placeholder={placeholder}
         disabled={disabled}

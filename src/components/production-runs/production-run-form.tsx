@@ -31,6 +31,7 @@ import {
   EntitySelect,
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
+  useSelectDefault,
 } from "@/components/forms/entity-select";
 import { useEntityById } from "@/hooks/use-entities";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
@@ -159,7 +160,9 @@ export function ProductionRunForm({
         : [{ ...EMPTY_FEEDSTOCK_DRAW }],
     feedstockMoisturePercent: productionRun?.feedstockMoisturePercent ?? null,
     feedingRateKgHr: productionRun?.feedingRateKgHr ?? null,
-    residenceTimeMinutes: productionRun?.residenceTimeMinutes ?? undefined,
+    // "", not undefined: the input has no setValueAs, so it reads empty as
+    // "", and a field with no default would read as edited.
+    residenceTimeMinutes: productionRun?.residenceTimeMinutes ?? "",
     dieselOperationLiters: productionRun?.dieselOperationLiters ?? null,
     dieselGensetLiters: productionRun?.dieselGensetLiters ?? null,
     preprocessingFuelLiters: productionRun?.preprocessingFuelLiters ?? null,
@@ -316,6 +319,7 @@ export function ProductionRunForm({
     dirtyFields,
     resetField,
   });
+  const setSelectDefault = useSelectDefault(control);
 
   const defaultSubmitLabel = isEditMode ? "Update production run" : "Create production run";
 
@@ -430,6 +434,8 @@ export function ProductionRunForm({
                   allowEdit
                   value={field.value}
                   onChange={field.onChange}
+                  // The select's own pick of a facility's only reactor is a default, not an edit.
+                  onAutoSelect={(id) => setSelectDefault("reactorId", id, field.onChange)}
                   placeholder="Select a reactor..."
                   disabled={isSubmitting || !watchedFacilityId || outputLocked}
                   error={!!errors.reactorId}

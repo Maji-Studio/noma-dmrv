@@ -131,6 +131,7 @@ export function CreditBatchForm({
     trigger,
     formState: { errors, isSubmitted, dirtyFields },
     setValue,
+    resetField,
   } = useForm<CreditBatchFormInput, unknown, CreditBatchFormData>({
     resolver: resolveBatch,
     defaultValues: {
@@ -353,14 +354,20 @@ export function CreditBatchForm({
             disabled={isSubmitting || membershipLocked}
             required
             filterBy={{ usage: "pyrolysis" }}
-            onChange={(value) => {
+            onChange={(value, { asDefault }) => {
               onClearServerError?.();
               // A new batch proposes the feedstock's next free month, until
               // the operator has typed a date of their own.
               const proposed = !isEditMode && value && !dirtyFields.startDate && !dirtyFields.endDate
                 ? windowForFeedstock?.(String(value))
                 : null;
-              if (proposed) {
+              if (!proposed) return;
+              if (asDefault) {
+                // The lone feedstock was picked for the operator, so its
+                // window is the untouched form's baseline too.
+                resetField("startDate", { defaultValue: proposed.startDate as never });
+                resetField("endDate", { defaultValue: proposed.endDate as never });
+              } else {
                 setValue("startDate", proposed.startDate as never);
                 setValue("endDate", proposed.endDate as never);
               }

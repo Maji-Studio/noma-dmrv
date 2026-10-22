@@ -32,7 +32,7 @@ import { useEffect, useId } from "react";
 import { useForm, useController, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FlaskIcon, FireIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, MoistureField, makeCertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, MoistureField, makeCertFieldStatus, useSelectDefault } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { labOToCOrgRatioDefault, prepareSampleSubmission, resolveSamplingClock } from "./sample-form-values";
 import { ResolvedErrorRevalidator } from "@/components/forms";
@@ -211,6 +211,7 @@ export function SampleForm({
     placeholderTimeZone: contextClock.timeZone,
     cue: facilityTimeCue,
   });
+  const setSelectDefault = useSelectDefault(control);
   // resetField only acts on a registered field; this one has no input of its own.
   useController({ name: "durabilityOption", control });
   useEffect(() => {
@@ -358,7 +359,7 @@ export function SampleForm({
                       value={field.value}
                       onChange={field.onChange}
                       // The select's own pick of a facility's only batch is a default, not an edit.
-                      onAutoSelect={(id) => resetField("creditBatchId", { defaultValue: id })}
+                      onAutoSelect={(id) => setSelectDefault("creditBatchId", id, field.onChange)}
                       placeholder={contextFacilityId ? "Select a credit batch..." : "Select a facility first"}
                       disabled={isSubmitting || !!preselectedCreditBatchId || !contextFacilityId}
                       error={!!errors.creditBatchId}
