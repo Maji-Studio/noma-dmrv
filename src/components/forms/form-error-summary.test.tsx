@@ -363,7 +363,9 @@ describe("FormActions error box", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Save locked" }));
     });
-    await waitFor(() => expect(document.activeElement?.id).toBe("labName"));
+    // Every item a lock: focus is on the box, not the field that is about to be disabled.
+    await waitFor(() => expect(document.activeElement?.hasAttribute("tabindex")).toBe(true));
+    expect(document.activeElement?.querySelector("[data-form-error-summary]")).not.toBeNull();
     expect(screen.getAllByRole("alert").some(node => node.textContent === "Not saved. 1 field is locked.")).toBe(true);
     expect(screen.queryByText(/Undo that change to save/)).toBeNull();
     const scrolls = vi.mocked(Element.prototype.scrollIntoView).mock.calls.filter(([arg]) => (arg as ScrollIntoViewOptions)?.block === "nearest").length;
@@ -372,8 +374,39 @@ describe("FormActions error box", () => {
       fireEvent.click(screen.getByRole("button", { name: "Revalidate" }));
     });
 
-    expect(document.activeElement?.id).toBe("labName");
+    expect(document.activeElement?.id).not.toBe("labName");
     expect(vi.mocked(Element.prototype.scrollIntoView).mock.calls.filter(([arg]) => (arg as ScrollIntoViewOptions)?.block === "nearest").length).toBe(scrolls);
+  });
+});
+
+describe("lock-only refusals", () => {
+  function LockedForm() {
+    const { control, register, handleSubmit, setError } = useForm<{ labName: string }>({ defaultValues: { labName: "x" } });
+    return (
+      <form aria-label="Locked" onSubmit={handleSubmit(() => setError("labName", { type: "locked", message: "Locked. Your change was not saved." }))}>
+        <FormField id="labName" label="Lab name">
+          <FormInput id="labName" {...register("labName")} />
+        </FormField>
+        <FormActions control={control} submitLabel="Save locked" />
+      </form>
+    );
+  }
+
+  it("scrolls a locked link to its field without focusing it", async () => {
+    render(<LockedForm />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save locked" }));
+    });
+    const link = await screen.findByRole("link", { name: "Lab name" });
+    const scroll = vi.mocked(Element.prototype.scrollIntoView);
+    scroll.mockClear();
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    await act(async () => {
+      fireEvent.click(link);
+    });
+    await waitFor(() => expect(scroll).toHaveBeenCalledWith({ block: "center" }));
+    expect(focus.mock.instances).not.toContain(document.getElementById("labName"));
+    focus.mockRestore();
   });
 });
 

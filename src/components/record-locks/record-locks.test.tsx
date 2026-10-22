@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
+import { FormActions } from "@/components/forms/form-actions";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RecordLockLink, RecordLockView } from "@/lib/record-lock-view";
 import { RecordLockChip, RecordLockOverviewChip, RecordLockSentMark } from "./record-lock-chip";
 import { recordLockTitleMark } from "./record-lock-title-mark";
-import { recordLockSheetProps } from "./record-lock-sheet-props";
+import { RecordLockFormFrame, recordLockSheetProps } from "./record-lock-sheet-props";
 import { INTERRUPTED_HOW_TO_FREE, INTERRUPTED_HOW_TO_FREE_ONE, INTERRUPTED_MIXED_HOW_TO_FREE_ONE } from "@/lib/record-lock";
 import { RecordLockNotice } from "./record-lock-notice";
 import { RecordUsedBy } from "./record-used-by";
@@ -286,5 +287,22 @@ describe("RecordUsedBy", () => {
   it("counts storage bin references", () => {
     render(<RecordUsedBy lock={view("inUse", [], [{ kind: "binReference", id: "feedstock batches", label: "feedstock batches", facilityId: FACILITY, count: 12 }])} />);
     expect(screen.getByText("Feedstock batches (12)")).toBeTruthy();
+  });
+});
+
+describe("RecordLockFormFrame refusal slot", () => {
+  it("shows a refusal above the lock line once the record is Sent, with focus and no Save", () => {
+    const sent = view("sent", [REMOVAL]);
+    render(
+      <RecordLockFormFrame lock={sent} status="ready">
+        <FormActions errorMessage="Locked. Its Removal was sent." submitLabel="Save record" />
+      </RecordLockFormFrame>,
+    );
+    const box = document.querySelector<HTMLElement>("[data-top-refusal]");
+    expect(box?.textContent).toContain("Its Removal was sent.");
+    expect(document.activeElement).toBe(box);
+    expect(screen.queryByRole("button", { name: "Save record" })).toBeNull();
+    const lockLine = screen.getByRole("status");
+    expect(box!.compareDocumentPosition(lockLine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

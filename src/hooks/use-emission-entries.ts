@@ -1,4 +1,3 @@
-import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 /**
  * Emissions entries on one credit batch (epic #1058): the batch's emission
  * lines and the manual entry writes. Every write refreshes the lines, the
@@ -7,6 +6,7 @@ import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
  */
 "use client";
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   confirmEmissionEntryFn,

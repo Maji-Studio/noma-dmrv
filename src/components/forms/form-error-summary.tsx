@@ -176,6 +176,7 @@ export function FormErrorSummary<
   const boxRef = useRef<HTMLDivElement>(null);
   const focusedBox = useRef(submitCount);
   const messageOnly = !visible && Boolean(message);
+  const allLocked = items.length > 0 && items.every((item) => item.locked);
 
   // Sanctioned useEffect: moving focus after a refused save is imperative DOM
   // work. Once per attempt, and after react-hook-form's own focus (it runs a
@@ -188,10 +189,18 @@ export function FormErrorSummary<
     focusedBox.current = submitCount;
     const timer = setTimeout(() => {
       focusedAttempt.current = submitCount;
+      // Every item a lock: the field turns disabled once the lock re-read
+      // lands, so focus the box, which says what happened.
+      if (allLocked) {
+        const box = boxRef.current;
+        box?.scrollIntoView({ block: "nearest" });
+        box?.focus({ preventScroll: true });
+        return;
+      }
       focusField(getForm(), firstPath);
     }, 0);
     return () => clearTimeout(timer);
-  }, [firstPath, submitCount, getForm]);
+  }, [firstPath, allLocked, submitCount, getForm]);
 
   // Sanctioned useEffect: a refusal with no field to focus (a whole-record
   // lock) leaves the message in a box at the end of the form, possibly below
@@ -241,6 +250,7 @@ export function FormErrorSummary<
   return (
     <>
       {announcement}
+      <div ref={boxRef} tabIndex={-1}>
       <Notice tone="error" live={false} title={countLabel(items)} data-form-error-summary="">
         {message && <p className="body-small">{" "}{message}</p>}
         <ul className="mt-4 flex flex-col">
@@ -252,7 +262,8 @@ export function FormErrorSummary<
                   className="flex min-h-44 items-center py-4 text-[var(--color-text-primary)] underline underline-offset-2"
                   onClick={(event) => {
                     event.preventDefault();
-                    focusField(getForm(), item.path);
+                    // A locked field is disabled, so its link only scrolls to it.
+                    focusField(getForm(), item.path, { focus: !item.locked });
                   }}
                 >
                   {/* One span keeps the label and message flowing as text. */}
@@ -268,6 +279,7 @@ export function FormErrorSummary<
         </ul>
         {action && <div className="mt-8">{action}</div>}
       </Notice>
+      </div>
     </>
   );
 }

@@ -1,6 +1,6 @@
-import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 "use client";
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   canChangeDocumentVisibility,

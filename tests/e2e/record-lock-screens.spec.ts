@@ -112,4 +112,102 @@ test.describe("Record locks on screen", () => {
       await removal.cleanup();
     }
   });
+
+  test("an application that becomes held while its sheet is open goes back to the saved value", async ({
+    adminPage: page,
+    seededData,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData;
+    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const removal = await seedGroupedRemovalWithChain(chainSeedRefs(seededData), tag);
+    const { db, pool } = createDbConnection();
+    try {
+      const [application] = await db.select({ id: schema.applications.id }).from(schema.applications)
+        .where(and(eq(schema.applications.organizationId, DEC_ORG_ID), eq(schema.applications.code, `E2E-APP-${tag}`)));
+      const slice = and(
+        eq(schema.creditBatchApplications.organizationId, DEC_ORG_ID),
+        eq(schema.creditBatchApplications.applicationId, application.id),
+      );
+      // Free while the sheet opens; the Removal takes the application afterwards.
+      await db.update(schema.creditBatchApplications).set({ removalId: null }).where(slice);
+
+      await page.goto(`/applications?facility=${seededData.facility.id}&application=${application.id}`);
+      await waitForFacilityHydration(page, seededData.facility.name);
+      await waitForSideSheet(page);
+      const sheet = page.getByRole("dialog");
+      await sheet.getByRole("button", { name: "Edit application" }).click();
+      const applied = sheet.locator('input[name="biocharAppliedKg"]');
+      await expect(applied).toBeEnabled();
+      await expect(applied).toHaveValue("100");
+
+      await db.update(schema.creditBatchApplications).set({ removalId: removal.removalId }).where(slice);
+      await applied.fill("90");
+      await sheet.getByRole("button", { name: "Update application", exact: true }).click();
+
+      await expect(applied).toBeDisabled();
+      await expect(applied).toHaveValue("100");
+      await expect(sheet.getByText("Locked. Your change was not saved.")).toBeVisible();
+    } finally {
+      await pool.end();
+      await removal.cleanup();
+    }
+  });
+
+  test("a record that becomes Sent while its sheet is open turns read-only with the refusal on top", async ({
+    adminPage: page,
+    seededData,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData;
+    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const removal = await seedGroupedRemovalWithChain(chainSeedRefs(seededData), tag);
+    const submissionId = crypto.randomUUID();
+    const { db, pool } = createDbConnection();
+    try {
+      await page.goto(`/feedstocks?facility=${seededData.facility.id}&feedstock=${seededData.feedstock.id}`);
+      await waitForFacilityHydration(page, seededData.facility.name);
+      await waitForSideSheet(page);
+      const sheet = page.getByRole("dialog");
+      await sheet.getByRole("button", { name: "Edit feedstock" }).click();
+      const wetMass = sheet.locator('input[name="totalWetMassKg"]');
+      await expect(wetMass).toBeEnabled();
+
+      await db.insert(schema.certificationSubmissions).values({
+        organizationId: DEC_ORG_ID,
+        id: submissionId,
+        provider: "isometric",
+        submissionType: "removal",
+        localEntityType: "removal",
+        localEntityId: removal.removalId,
+        version: 1,
+        status: "submitted",
+        externalId: `e2e-removal-${tag}`,
+        payloadSnapshot: {},
+        payloadHash: `e2e-record-lock-sent-${tag}`,
+        submittedAt: new Date(),
+      });
+      const original = await wetMass.inputValue();
+      await wetMass.fill(String(Number(original) + 10));
+      await sheet.getByRole("button", { name: "Save changes", exact: true }).click();
+
+      const refusal = sheet.locator("[data-top-refusal]");
+      await expect(refusal).toBeVisible();
+      await expect(refusal).toBeFocused();
+      await expect(sheet.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+      // The header arrow and the footer both go back to the view.
+      await expect(sheet.getByRole("button", { name: "Back to view" })).toHaveCount(2);
+      await expect(wetMass).toBeDisabled();
+      // Above the lock line, not at the end of the form.
+      const lockLine = sheet.getByText(/Nothing can be changed, because this was sent to Isometric/);
+      await expect(lockLine).toBeVisible();
+      const refusalBox = await refusal.boundingBox();
+      const lockBox = await lockLine.boundingBox();
+      expect(refusalBox!.y).toBeLessThan(lockBox!.y);
+    } finally {
+      await db.delete(schema.certificationSubmissions).where(and(eq(schema.certificationSubmissions.organizationId, DEC_ORG_ID), eq(schema.certificationSubmissions.id, submissionId)));
+      await pool.end();
+      await removal.cleanup();
+    }
+  });
 });

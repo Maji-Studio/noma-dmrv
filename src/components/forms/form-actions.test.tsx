@@ -1,6 +1,9 @@
+// @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MapControls } from "@/components/map";
+import { RefusalSlotContext } from "@/components/ui/refusal-slot-context";
 import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-block-context";
 import { FormActions, reserveStickyFooterSpace } from "./form-actions";
 
@@ -199,5 +202,46 @@ describe("reserveStickyFooterSpace", () => {
     const footer = node(node(null));
 
     expect(reserveStickyFooterSpace(footer as unknown as HTMLElement)).toBeUndefined();
+  });
+});
+
+describe("FormActions refusal on a read-only form", () => {
+  const SENT: SubmitBlock = { reason: "Sent", tone: "error", readOnly: true };
+  afterEach(cleanup);
+
+  it("portals the error box into the sheet's refusal slot", () => {
+    const slot = document.createElement("div");
+    document.body.append(slot);
+    render(
+      <RefusalSlotContext.Provider value={slot}>
+        <SubmitBlockContext.Provider value={SENT}>
+          <div data-testid="form"><FormActions errorMessage="Locked. Its Removal was sent." submitLabel="Save record" /></div>
+        </SubmitBlockContext.Provider>
+      </RefusalSlotContext.Provider>,
+    );
+    expect(slot.textContent).toContain("Its Removal was sent.");
+    expect(screen.getByTestId("form").textContent).not.toContain("Its Removal was sent.");
+    expect(document.activeElement).toBe(slot.querySelector("[data-top-refusal]"));
+    expect(screen.queryByRole("button", { name: "Save record" })).toBeNull();
+    slot.remove();
+  });
+
+  it("renders the box inline without a slot instead of vanishing", () => {
+    render(
+      <SubmitBlockContext.Provider value={SENT}>
+        <div data-testid="form"><FormActions errorMessage="Locked. Its Removal was sent." submitLabel="Save record" /></div>
+      </SubmitBlockContext.Provider>,
+    );
+    expect(screen.getByTestId("form").textContent).toContain("Its Removal was sent.");
+    expect(screen.queryByRole("button", { name: "Save record" })).toBeNull();
+  });
+
+  it("shows nothing for a read-only form with no refusal", () => {
+    render(
+      <SubmitBlockContext.Provider value={SENT}>
+        <div data-testid="form"><FormActions submitLabel="Save record" /></div>
+      </SubmitBlockContext.Provider>,
+    );
+    expect(screen.getByTestId("form").textContent).toBe("");
   });
 });

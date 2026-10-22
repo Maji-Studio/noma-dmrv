@@ -13,6 +13,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import {
   useFormState,
   type Control,
@@ -22,6 +23,7 @@ import { Button } from "@/components/ui";
 import { FormDialogContext } from "@/components/ui/form-dialog-context";
 import { Notice } from "@/components/ui/notice";
 import { useSubmitBlock } from "@/components/ui/submit-block-context";
+import { useRefusalSlot } from "@/components/ui/refusal-slot-context";
 import { cn } from "@/lib/utils";
 import {
   useSideSheetActions,
@@ -127,6 +129,7 @@ export function FormActions<
   const dialogActions = React.useContext(FormDialogContext);
   const inSheet = sticky && sheetActions !== null;
   const block = useSubmitBlock();
+  const refusalSlot = useRefusalSlot();
   const blockedReasonId = React.useId();
   const inDialog = guardDialogCancel && dialogActions !== null;
   // Labels and order of the fields, read on every submit of the form (a
@@ -163,7 +166,13 @@ export function FormActions<
         <SheetDirtyBridge control={control} reportDirty={sheetActions.reportDirty} />
       )}
     {/* A read-only form (a lock that arrived Sent) offers no actions here; its
-        container keeps the way back and the lock line says why. */}
+        container keeps the way back and the lock line says why. A refusal that
+        got it there moves to the top of the sheet, where Save used to be. */}
+    {block?.readOnly && errorMessage && (
+      refusalSlot
+        ? createPortal(<TopRefusal message={errorMessage} action={errorAction} />, refusalSlot)
+        : <TopRefusal message={errorMessage} action={errorAction} />
+    )}
     {/* The error box scrolls with the form, after its last field. */}
     {!block?.readOnly && (
       control && showSubmit ? (
@@ -230,6 +239,26 @@ export function FormActions<
       </div>
     </div>}
     </>
+  );
+}
+
+/**
+ * The refusal of a record that turned read-only. The Save button that held
+ * focus is gone, so the box takes it; it is not a live region, so a screen
+ * reader hears it once, from focus.
+ */
+function TopRefusal({ message, action }: { message: string; action?: React.ReactNode }) {
+  const boxRef = React.useRef<HTMLDivElement>(null);
+  // Sanctioned useEffect: focus and scroll are imperative DOM work.
+  React.useEffect(() => {
+    const box = boxRef.current;
+    box?.scrollIntoView?.({ block: "nearest" });
+    box?.focus({ preventScroll: true });
+  }, [message]);
+  return (
+    <div ref={boxRef} tabIndex={-1} data-top-refusal="">
+      <ServerError message={message} action={action} live={false} />
+    </div>
   );
 }
 

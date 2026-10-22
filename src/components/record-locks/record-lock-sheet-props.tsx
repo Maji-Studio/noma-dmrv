@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-block-context";
 import { RECORD_LOCK_RETRY_LABEL, recordLockSaveBlock, type RecordLockStatus, type RecordLockView } from "@/lib/record-lock-view";
+import { RefusalSlotContext } from "@/components/ui/refusal-slot-context";
 import { RecordLockChip } from "./record-lock-chip";
 import { isInterruptedLockDisplay } from "./record-lock-labels";
 import { RecordLockNotice } from "./record-lock-notice";
@@ -54,12 +55,17 @@ export function recordLockSheetProps(options: RecordLockSheetOptions) {
  */
 export function RecordLockFormFrame({ children, ...options }: RecordLockSheetOptions & { children: ReactNode }) {
   const block = recordLockSubmitBlock(options);
+  // The refusal's place above the lock line once the record is Sent (no Save left).
+  const [refusalSlot, setRefusalSlot] = useState<HTMLElement | null>(null);
   return (
     <SubmitBlockContext.Provider value={block}>
-      <div className="flex flex-col gap-20">
-        <RecordLockNotice lock={options.lock} subject={options.subject} inUseLocksNothing={options.inUseLocksNothing} />
-        <fieldset disabled={!!block?.readOnly} className="contents">{children}</fieldset>
-      </div>
+      <RefusalSlotContext.Provider value={refusalSlot}>
+        <div className="flex flex-col gap-20">
+          <div ref={setRefusalSlot} className="empty:hidden" />
+          <RecordLockNotice lock={options.lock} subject={options.subject} inUseLocksNothing={options.inUseLocksNothing} />
+          <fieldset disabled={!!block?.readOnly} className="contents">{children}</fieldset>
+        </div>
+      </RefusalSlotContext.Provider>
     </SubmitBlockContext.Provider>
   );
 }

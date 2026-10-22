@@ -226,6 +226,18 @@ even on other failures. Refetching retains ready status while saved lock data
 is available. Registered customer locations have no lock-read kind; their
 refusal-specific disabling belongs to the customer forms migration.
 
+When the re-read turns the whole record Sent, the form is read-only and `FormActions`
+hides its footer, so the refusal would vanish. `EntitySideSheet` (edit mode) and
+`RecordLockFormFrame` hold a refusal slot above the lock line, shared through
+`RefusalSlotContext` (`src/components/ui/refusal-slot-context.tsx`; the element is
+kept in a `useState` ref callback, no effect). On `block.readOnly` with an error
+message `FormActions` portals the error box into that slot and focuses it, since
+the Save button that held focus is gone; the box is not a live region, so a
+screen reader hears it once from focus. Without a slot the box renders inline.
+A refusal made only of locks focuses the error box rather than the field, which is
+disabled once the lock read lands; a locked link in the summary scrolls to its
+field without focusing it.
+
 ## Dates
 
 Union date fields use `dateOrStringSchema` from `@/schemas/helpers`.
