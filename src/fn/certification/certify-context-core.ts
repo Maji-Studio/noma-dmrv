@@ -372,6 +372,7 @@ export async function buildRemovalContext(
       transportLegs: recordedTransportLegs,
       runs,
       lineages,
+      facilityTimezone: facilityFacts.facilityTimezone,
     }),
     ...entityReadiness.warnings,
     ...durabilityWarnings,

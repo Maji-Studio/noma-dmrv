@@ -140,7 +140,9 @@ function reportingWindowLabel(
 ): string | null {
   const window = compilation?.review?.reportingWindow;
   if (!window?.startedOn || !window.completedOn) return null;
-  return formatDateRange(window.startedOn, window.completedOn);
+  // The compiled window carries calendar dates at UTC midnight; pass the bare
+  // date so a viewer west of UTC does not see the previous day.
+  return formatDateRange(window.startedOn.slice(0, 10), window.completedOn.slice(0, 10));
 }
 
 /**

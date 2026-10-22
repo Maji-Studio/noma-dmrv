@@ -152,9 +152,9 @@ describe("pinned-template compilation drift matrix", () => {
     expect(result.resolved.requiredTransportCategories).not.toContain(category);
     const transportLegs: TransportLegsByCategory = { feedstock: [], biochar: [], sample: [] };
     transportLegs[category] = [{ id: "recorded-leg", distanceKm: 20 } as TransportLegsByCategory[typeof category][number]];
-    expect(buildSubmissionWarnings({ removalTemplate: result.prepared!.removalTemplate, lineSources, runs: [], lineages: [], transportLegs }))
+    expect(buildSubmissionWarnings({ facilityTimezone: "UTC", removalTemplate: result.prepared!.removalTemplate, lineSources, runs: [], lineages: [], transportLegs }))
       .toEqual([expect.stringContaining(`${label} is recorded`)]);
-    expect(buildSubmissionWarnings({ removalTemplate: result.prepared!.removalTemplate, lineSources, runs: [], lineages: [] })).toEqual([]);
+    expect(buildSubmissionWarnings({ facilityTimezone: "UTC", removalTemplate: result.prepared!.removalTemplate, lineSources, runs: [], lineages: [] })).toEqual([]);
   });
 
   it("fails closed when a carried automatic contract moves to an incompatible scope", () => {
@@ -176,7 +176,7 @@ describe("pinned-template compilation drift matrix", () => {
 
 it("stops warning about retired sample transport facts", () => {
   const template = supportedAutomaticTemplate(sandbox);
-  const warnings = buildSubmissionWarnings({ removalTemplate: template, lineSources: sources(template), runs: [], lineages: [],
+  const warnings = buildSubmissionWarnings({ facilityTimezone: "UTC", removalTemplate: template, lineSources: sources(template), runs: [], lineages: [],
     transportLegs: { feedstock: [], biochar: [], sample: [{ id: "legacy-sample-leg", distanceKm: 20 } as TransportLegsByCategory["sample"][number]] },
   });
   expect(warnings).toEqual([]);

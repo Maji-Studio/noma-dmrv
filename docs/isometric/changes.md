@@ -879,3 +879,27 @@ Batch health uses batch-scoped stored entries and automatic figures.
 Facility Energy activity includes counting entries only on reviewed facility
 energy sources. These local changes remain behind `EMISSIONS_ENTRIES_ENABLED`;
 PR 4 owns Removal-flow zero confirmation and registry contribution compilation.
+
+## 2026-10-21: reporting window dates are facility days (#1282)
+
+Resolves `isometric/reporting-window-utc-days`. GHG Entry `started_on` and
+`completed_on` carry the facility's local calendar day, and the reporting-window
+refusal compares and prints only the facility day. Verified 2026-10-21:
+
+- Isometric API standards, "Dates": "Datetime fields in the APIs conform to the
+  ISO 8601 date and time format in UTC." This covers datetime fields, not
+  date-only ones.
+- Certify `CreateGhgEntryRequest.started_on` / `completed_on` are `format: date`
+  ("The date at which activities related to this GHG entry started" / "The date
+  by which activities related to this GHG entry finished") with no time-zone
+  wording.
+- Biochar Protocol v1.1.1: the reporting period "ends upon application of
+  biochar from that batch at the storage site".
+
+Rule in `resolveRemovalReportingWindow`: production start and end are instants
+and convert to the facility day through the facility's IANA time zone.
+Application dates are stored calendar dates (UTC midnight) and are used as
+written, never converted. The application day must not precede the production
+end's facility day. The returned `startedOn` and `completedOn` are calendar dates
+at UTC midnight; the same-day production-end floor is gone because the fields
+are date-only.

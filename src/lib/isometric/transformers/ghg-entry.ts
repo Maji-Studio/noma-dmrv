@@ -25,11 +25,10 @@ export interface BuildCreateGhgEntryArgs {
   // inputs carry one ID; measurement-sample-backed sequestration LIST inputs
   // carry every returned replicate ID.
   datapointIdsByRtcInput: DatapointIdsByRtcInput;
-  // The removal's reporting window (Biochar Protocol §8.6.2; local
-  // interpretation pin v1.2): starts with production, ends when the biochar is
-  // applied at the storage site — NOT the production window. The orchestrator
-  // derives `completedOn` from the latest application date across the removal's
-  // lineages (issue #320).
+  // Biochar Protocol v1.1.1: the reporting period "ends upon application of
+  // biochar from that batch at the storage site". The orchestrator resolves
+  // facility calendar dates from production start to the latest application
+  // across the removal's lineages (issue #320).
   reportingWindow: { startedOn: Date; completedOn: Date };
   projectId: string;
   supplierRefId: string;
@@ -140,9 +139,9 @@ export function buildCreateGhgEntryRequest(
   }
 
   return {
-    // §8.6.2: the Reporting Period "ends upon application of biochar from that
-    // batch at the storage site" — completed_on carries the latest application
-    // date, not production end (issue #320).
+    // Biochar Protocol v1.1.1: the reporting period "ends upon application of
+    // biochar from that batch at the storage site". completed_on carries the
+    // latest application calendar date (issue #320).
     completed_on: toISODate(reportingWindow.completedOn),
     project_id: projectId,
     started_on: toISODate(reportingWindow.startedOn),
@@ -152,6 +151,8 @@ export function buildCreateGhgEntryRequest(
   };
 }
 
+// Inputs are calendar dates at UTC midnight from resolveRemovalReportingWindow;
+// resume snapshots read the same values back.
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }

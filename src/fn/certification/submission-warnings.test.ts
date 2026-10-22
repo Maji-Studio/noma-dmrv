@@ -12,7 +12,7 @@ const GENSET = "rtc_1KWHFRM4GSBX5Y7A";
 const STARTUP = "rtc_1KWP4Y13JSBXV8FB";
 const ELECTRICITY = "rtc_1KVFZ1MY9SBXFWVN";
 function warnings(template: GhgEntryTemplate, recorded = { dieselGensetLiters: 7, preprocessingFuelLiters: 3, dieselOperationLiters: 5, electricityKwh: 10 }) {
-  return buildSubmissionWarnings({
+  return buildSubmissionWarnings({ facilityTimezone: "UTC",
     removalTemplate: template,
     lineSources: resolveLineSources({ definition: normalizeTemplateDefinition(template) }),
     runs: [{ ...recorded, startTime: new Date("2026-10-01") } as ProductionRunForCertification], lineages: [],
@@ -38,14 +38,14 @@ describe("dropped recorded automatic sources", () => {
   });
   it("ignores zero and absent records, and preserves the month advisory", () => {
     expect(warnings(sandbox, { dieselGensetLiters: 0, preprocessingFuelLiters: 0, dieselOperationLiters: 0, electricityKwh: 0 })).toEqual([]);
-    expect(buildSubmissionWarnings({ removalTemplate: null, lineSources: {}, runs: [{ startTime: new Date("2026-09-30") } as ProductionRunForCertification],
+    expect(buildSubmissionWarnings({ facilityTimezone: "UTC", removalTemplate: null, lineSources: {}, runs: [{ startTime: new Date("2026-09-30") } as ProductionRunForCertification],
       lineages: [{ application: { applicationDate: new Date("2026-10-01") } }],
     })).toEqual([expect.stringContaining("Reporting window spans multiple months")]);
   });
   it("warns when an automatic source is only proposed", () => {
     const lineSources = resolveLineSources({ definition: normalizeTemplateDefinition(sandbox) });
     lineSources[GENSET].origin = "proposed";
-    expect(buildSubmissionWarnings({ removalTemplate: sandbox, lineSources,
+    expect(buildSubmissionWarnings({ facilityTimezone: "UTC", removalTemplate: sandbox, lineSources,
       runs: [{ dieselGensetLiters: 1 } as ProductionRunForCertification], lineages: [],
     })).toEqual([expect.stringContaining("Genset diesel")]);
   });
@@ -64,6 +64,6 @@ it("classifies every automatic source as covered or deliberately excluded", asyn
 it("exposes dropped facts as nonblocking advisories with the same message", async () => {
   const { buildSubmissionAdvisories } = await import("./submission-warnings");
   const args = { removalTemplate: cula, lineSources: resolveLineSources({ definition: normalizeTemplateDefinition(cula) }),
-    runs: [{ electricityKwh: 10, startTime: new Date("2026-10-01") } as ProductionRunForCertification], lineages: [] };
+    runs: [{ electricityKwh: 10, startTime: new Date("2026-10-01") } as ProductionRunForCertification], lineages: [], facilityTimezone: "UTC" };
   expect(buildSubmissionAdvisories(args)).toEqual([{ code: "droppedRecordedFact", fixTarget: "templateLines", message: buildSubmissionWarnings(args)[0] }]);
 });
