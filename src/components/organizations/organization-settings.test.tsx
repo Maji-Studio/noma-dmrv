@@ -118,7 +118,7 @@ describe("OrganizationSettings invite dialog", () => {
     render(<OrganizationSettings canManage />);
     await fillAndSend("dev@example.com");
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("That person is already a member."));
+    expect(await screen.findByText("That person is already a member.")).toBeTruthy();
     expect(screen.getByRole("dialog", { name: "Invite a member" })).toBeTruthy();
     expect(screen.queryByRole("textbox", { name: "Invitation link" })).toBeNull();
   });

@@ -6,11 +6,12 @@
  */
 "use client";
 
-import { useId } from "react";
+import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { inviteMemberSchema, type InviteMemberInput } from "@/schemas/organizations";
 import { FormActions, FormField, FormInput, FormSelect } from "@/components/forms";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { useToast } from "@/components/ui/toast";
 import { useInviteMember } from "@/hooks/use-organizations";
@@ -32,6 +33,8 @@ export function InviteMemberDialog({
   onInvited: (acceptUrl: string) => void;
 }) {
   const titleId = useId();
+  const formId = useId();
+  const [serverError, setServerError] = useState("");
   const toast = useToast();
   const inviteMember = useInviteMember();
   const latched = useLatchedSubmit();
@@ -41,13 +44,17 @@ export function InviteMemberDialog({
     register,
     handleSubmit,
     reset,
+    setError,
     formState: { errors },
   } = useForm<InviteForm>({
     resolver: zodResolver(inviteMemberSchema),
     defaultValues: EMPTY_INVITE,
   });
 
+  const refuseSave = useSaveRefusal({ control, setError, formId });
+
   async function onInvite(values: InviteForm) {
+    setServerError("");
     try {
       const result = await inviteMember.mutateAsync(values);
       onInvited(result.acceptUrl);
@@ -55,10 +62,13 @@ export function InviteMemberDialog({
       toast.success("Invitation created.");
       onClose();
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "The invitation was not created. Check the email and try again.",
+      setServerError(
+        refuseSave(
+          error,
+          error instanceof Error
+            ? error.message
+            : "The invitation was not created. Check the email and try again.",
+        ) ?? "",
       );
     }
   }
@@ -71,6 +81,7 @@ export function InviteMemberDialog({
       width="md"
     >
       <form
+        id={formId}
         onSubmit={latched(handleSubmit(onInvite))}
         className="flex flex-col gap-16"
       >
@@ -106,6 +117,7 @@ export function InviteMemberDialog({
         <FormActions
           control={control}
           isSubmitting={inviteMember.isPending}
+          errorMessage={serverError}
           submitLabel="Send invitation"
           submittingLabel="Sending…"
           onCancel={onClose}
