@@ -1,3 +1,4 @@
+import { makeContext, makeTemplate, fakeExternalIds, makeInventorySourceDocument } from "./fixtures/submit-removal-orchestrator";
 import { submitGhgStatementToVerifierCore } from "@/fn/certification/submit-ghg-statement";
 import { makeRemoteStatement } from "./fixtures/isometric-ghg-statement";
 import { loadRemovalEntryCorrection } from "@/fn/certification/removal-correction-core";
@@ -9,7 +10,6 @@ import { buildRemovalSubmissionBuild } from "@/fn/certification/removal-submissi
 import { requirePreparedRemovalSubmission } from "@/fn/certification/removal-submission-prepare";
 import * as scopeReader from "@/fn/certification/removal-scope";
 /** DB-backed claim/freshness/reservation regression. Registry I/O uses the orchestrator harness. */
-import { makeContext, makeTemplate, fakeExternalIds, makeInventorySourceDocument } from "./fixtures/submit-removal-orchestrator";
 import { afterEach, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -90,8 +90,6 @@ it("detects a run-only correction, fences the statement, supersedes and relocks 
   await db.update(facilities).set({ durabilityOption: "200_year" }).where(and(eq(facilities.organizationId, org.organizationId), eq(facilities.id, f.facilityId)));
   await db.update(creditBatches).set({ removalTemplateId: template.id }).where(and(eq(creditBatches.organizationId, org.organizationId), eq(creditBatches.id, f.batchId)));
   await db.insert(certifierProjects).values({ organizationId: org.organizationId, provider: "isometric", facilityId: f.facilityId, externalProjectId: "prj_test_1", externalFacilityId: "fcl_test_1" });
-  const [prior] = await db.insert(certificationSubmissions).values({ organizationId: org.organizationId, provider: "isometric", localEntityType: "removal",
-    localEntityId: f.removalId, submissionType: "removal", status: "submitted", version: 1, submittedAt: new Date("2026-01-01"), externalId: "original", payloadHash: "original" }).returning();
   const [statement] = await db.insert(certifierGhgStatements).values({ organizationId: org.organizationId, facilityId: f.facilityId, reportingPeriodEndOn: "2026-06-30" }).returning();
   f.ghgStatementId = statement.id;
   await db.update(certifierRemovals).set({ ghgStatementId: statement.id }).where(and(eq(certifierRemovals.organizationId, org.organizationId), eq(certifierRemovals.id, f.removalId)));
@@ -159,9 +157,10 @@ it("detects a run-only correction, fences the statement, supersedes and relocks 
   const baselineContext = await loadContext();
   const baseline = await buildRemovalSubmissionBuild({ orgCtx: org, removalId: f.removalId,
     ctx: baselineContext, prepared: requirePreparedRemovalSubmission(baselineContext) });
-  await db.update(certificationSubmissions).set({ payloadSnapshot: { semantic: baseline.semanticPayload,
-    templateObservationId: observation.id, frozenEntrySet: [] } }).where(and(
-      eq(certificationSubmissions.organizationId, org.organizationId), eq(certificationSubmissions.id, prior.id)));
+  // Snapshots are frozen once a row leaves draft, so insert the sent attempt with its snapshot.
+  const [prior] = await db.insert(certificationSubmissions).values({ organizationId: org.organizationId, provider: "isometric", localEntityType: "removal",
+    localEntityId: f.removalId, submissionType: "removal", status: "submitted", version: 1, submittedAt: new Date("2026-01-01"), externalId: "original", payloadHash: "original",
+    payloadSnapshot: { semantic: baseline.semanticPayload, templateObservationId: observation.id, frozenEntrySet: [] } }).returning();
   expect(await loadRemovalEntryCorrection(org, f.removalId)).toMatchObject({ windowOpen: true, correctionNeeded: false });
 
   // Exercise the real mutation guard and update path, not a direct fixture SQL edit.

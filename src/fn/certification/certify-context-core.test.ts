@@ -151,5 +151,5 @@ it.each([undefined, "claimed-draft"])("forwards the submission read scope for co
   vi.mocked(loadFacilityCertifierFacts).mockResolvedValue(facilityFacts);
   await loadRemovalSubmissionContext(ctx, "removal-1", { claimedSubmissionId });
   expect(loadBatchEmissionContext).toHaveBeenCalledWith(ctx, scope.facilityId, scope.memberBatches, facilityFacts,
-    { removalId: "removal-1", submissionId: claimedSubmissionId });
+    { removalId: "removal-1", submissionId: claimedSubmissionId }, true);
 });
