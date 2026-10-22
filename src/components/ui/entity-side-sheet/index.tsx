@@ -27,6 +27,11 @@ import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-blo
  * Back Arrow Icon
  * -----------------------------------------------------------------------------------------------*/
 
+// The fieldset is the body's flex child (`[&>*]:flex` beats `contents`), so it
+// repeats the body's fill rule for the form inside it. `min-w-0` undoes the
+// fieldset's default min-content width.
+const SHEET_FIELDSET_CLASS = "min-w-0 [&>*]:flex [&>*]:flex-1 [&>*]:flex-col";
+
 function ArrowLeftIcon() {
   return (
     <svg
@@ -278,10 +283,20 @@ function EntitySideSheet({
             <SideSheetActionsContext.Provider value={sheetActions}>
               <SubmitBlockContext.Provider value={editBlock}>
                 {mode === "edit" && editNotice ? (
-                  <div className="flex flex-col gap-12 pb-20">{editNotice}</div>
+                  // flex-none!: the body's `[&>*]:flex-1` would grow the notice.
+                  <div className="flex flex-none! flex-col gap-12 pb-20">{editNotice}</div>
                 ) : null}
-                {/* Always mounted, so turning read-only never remounts the form. */}
-                <fieldset disabled={!!editBlock?.readOnly} className="contents" data-submit-block-fieldset>{children}</fieldset>
+                {/* Always mounted, so turning read-only never remounts the form.
+                    The body's `[&>*]:flex` beats `contents`, so the fieldset is
+                    the flex child; it passes the fill on to the form inside so
+                    FormActions' `mt-auto` still pins the buttons to the bottom. */}
+                <fieldset
+                  disabled={!!editBlock?.readOnly}
+                  className={SHEET_FIELDSET_CLASS}
+                  data-submit-block-fieldset
+                >
+                  {children}
+                </fieldset>
               </SubmitBlockContext.Provider>
             </SideSheetActionsContext.Provider>
           )}
