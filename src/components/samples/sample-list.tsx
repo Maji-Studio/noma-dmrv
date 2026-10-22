@@ -43,7 +43,8 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
+import { creditBatchFilterLabel } from "@/lib/credit-batch-filter-label";
 import { SAMPLE_DELETE_MESSAGE } from "./sample-delete-copy";
 import { formatMoisturePercent, MASS_MOISTURE_LABELS } from "@/lib/mass-moisture";
 import {
@@ -647,7 +648,7 @@ export function SampleList({
               <option value="">All credit batches</option>
               {creditBatchesData?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {formatDateRange(batch.startDate, batch.endDate)}
+                  {creditBatchFilterLabel(batch)}
                 </option>
               ))}
             </DataTable.FilterSelect>
