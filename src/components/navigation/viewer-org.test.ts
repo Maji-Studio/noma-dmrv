@@ -17,19 +17,27 @@ describe("viewerRoleLabel", () => {
 
 describe("shouldShowPlatformAdminBar", () => {
   it("shows for a Platform Admin without a membership", () => {
-    expect(shouldShowPlatformAdminBar({ orgRole: null, isPlatformAdmin: true })).toBe(true);
+    expect(shouldShowPlatformAdminBar({ orgRole: null, isPlatformAdmin: true }, "/dashboard")).toBe(true);
   });
 
   it("hides for a Platform Admin who is also a member", () => {
-    expect(shouldShowPlatformAdminBar({ orgRole: "admin", isPlatformAdmin: true })).toBe(false);
+    expect(shouldShowPlatformAdminBar({ orgRole: "admin", isPlatformAdmin: true }, "/dashboard")).toBe(false);
   });
 
   it("never shows for members", () => {
-    expect(shouldShowPlatformAdminBar({ orgRole: "member", isPlatformAdmin: false })).toBe(false);
+    expect(shouldShowPlatformAdminBar({ orgRole: "member", isPlatformAdmin: false }, "/dashboard")).toBe(false);
   });
 
   it("hides without a viewer", () => {
-    expect(shouldShowPlatformAdminBar(null)).toBe(false);
+    expect(shouldShowPlatformAdminBar(null, "/dashboard")).toBe(false);
+  });
+
+  it.each(["/admin", "/admin/organizations"])("hides on the Platform page %s", (path) => {
+    expect(shouldShowPlatformAdminBar({ orgRole: null, isPlatformAdmin: true }, path)).toBe(false);
+  });
+
+  it("keeps showing on pages that only start with the same letters", () => {
+    expect(shouldShowPlatformAdminBar({ orgRole: null, isPlatformAdmin: true }, "/administration")).toBe(true);
   });
 });
 
