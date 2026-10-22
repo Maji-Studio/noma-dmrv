@@ -13,6 +13,7 @@ import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { LOCKED_ERROR_TYPE } from "@/components/forms/form-error-summary";
 import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { FACILITY_DISTANCE_REFUSAL_ALIASES } from "@/lib/facility-distance-changes";
 import { isLockRefusal, LOCKED_FIELD_MESSAGE } from "@/lib/save-refusal";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormActions } from "@/components/forms";
@@ -144,6 +145,7 @@ export function CustomerLocationForm({
     setError: form.setError,
     resetField: form.resetField,
     formId,
+    aliases: FACILITY_DISTANCE_REFUSAL_ALIASES,
   });
   const refuseSave: SaveRefusalHandler = (error, fallback) => {
     if (!isLockRefusal(error)) return refuseWithFields(error, fallback);

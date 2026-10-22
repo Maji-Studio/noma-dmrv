@@ -22,6 +22,7 @@ import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { isActionError } from "@/lib/action-error";
 import { useCreateSupplierWithLocations } from "@/hooks/use-suppliers";
+import { NESTED_FACILITY_DISTANCE_REFUSAL_ALIASES } from "@/lib/facility-distance-changes";
 import { resolveLocationCountry } from "@/lib/location-defaults";
 import {
   type CreateSupplierWithLocationsData,
@@ -34,7 +35,11 @@ import { QuickAddDialogShell } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
 
 /** The dialog's one location is flat, and a create sends `{ supplier, locations: [location] }`. */
-const SUPPLIER_QUICK_ADD_REFUSAL_ALIASES = { "supplier.*": "*", "locations.0.*": "*" } as const;
+const SUPPLIER_QUICK_ADD_REFUSAL_ALIASES = {
+  "supplier.*": "*",
+  ...NESTED_FACILITY_DISTANCE_REFUSAL_ALIASES,
+  "locations.0.*": "*",
+} as const;
 
 interface SupplierQuickAddDialogProps {
   isOpen: boolean;

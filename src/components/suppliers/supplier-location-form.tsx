@@ -9,6 +9,7 @@ import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useId } from "react";
 import { useController, useForm } from "react-hook-form";
 import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { FACILITY_DISTANCE_REFUSAL_ALIASES } from "@/lib/facility-distance-changes";
 import type { FacilityDistanceInput } from "@/schemas/facility-distances";
 import { PartyFacilityDistances } from "@/components/party-facility-distances";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -152,7 +153,7 @@ export function SupplierLocationForm({
       : null;
 
   const formId = useId();
-  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: FACILITY_DISTANCE_REFUSAL_ALIASES });
   const handleFormSubmit = latched(handleSubmit((data) => {
     return onSubmit(data, refuseSave);
   }));

@@ -14,7 +14,7 @@ import {
 import type { SupplierLocation } from "@/db/schema/parties";
 import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { toSaveErrorMessage } from "@/lib/stale-version";
-import { facilityDistanceChanges } from "@/lib/facility-distance-changes";
+import { facilityDistanceChanges, withFormDistanceRows } from "@/lib/facility-distance-changes";
 import type { SupplierLocationFormData } from "@/schemas/suppliers";
 import { SupplierLocationForm } from "./supplier-location-form";
 
@@ -60,6 +60,7 @@ export function SupplierLocationDialog({
 
   const handleSubmit = async (data: SupplierLocationFormData, onRefusal: SaveRefusalHandler) => {
     setError(null);
+    const submitted = facilityDistanceChanges(data.facilityDistances, location?.facilityDistances);
     try {
       if (location) {
         await updateLocation.mutateAsync({
@@ -68,11 +69,11 @@ export function SupplierLocationDialog({
           // instead of silently overwritten (#768).
           expectedVersion: location.version,
           ...data,
-          facilityDistances: facilityDistanceChanges(data.facilityDistances, location.facilityDistances),
+          facilityDistances: submitted,
         });
       } else {
         await createLocation.mutateAsync({ supplierId, ...data,
-          facilityDistances: facilityDistanceChanges(data.facilityDistances),
+          facilityDistances: submitted,
         });
       }
       handleClose();
@@ -81,7 +82,7 @@ export function SupplierLocationDialog({
       // survives an expected-version refusal untouched.
       setError(
         onRefusal(
-          err,
+          withFormDistanceRows(err, submitted, data.facilityDistances),
           toSaveErrorMessage(
             err,
             isEditing
@@ -106,6 +107,7 @@ export function SupplierLocationDialog({
       }
     >
       <SupplierLocationForm
+        key={location?.id ?? "new"}
         idPrefix={SUPPLIER_LOCATION_DIALOG_ID_PREFIX}
         location={location}
         initialIsDefault={isFirstLocation}
