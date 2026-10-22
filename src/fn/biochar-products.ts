@@ -21,6 +21,7 @@ import { z } from "zod";
 import { requireOrgFacility } from "@/data-access/utils";
 import { deriveSourceBiocharMassKg, toCompositionJsonb } from "@/lib/biochar-composition/composition";
 import { DomainError } from "@/lib/domain-errors";
+import { BIOCHAR_PRODUCT_MASS_ISSUE_PATH } from "@/lib/biochar-composition/product-submission";
 import { makeBiocharProduct, updateBiocharProduct } from "@/lib/operations/biochar-products";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import {
@@ -39,7 +40,7 @@ const ZERO_SOURCE_BIOCHAR_MESSAGE = "A product requires positive source biochar.
 /** The refusal for a product without source biochar, filed on the biochar mass the operation names it by. */
 function zeroSourceBiocharRefusal(): DomainError {
   return new DomainError("validation_failed", ZERO_SOURCE_BIOCHAR_MESSAGE, {
-    issues: [{ path: ["biocharWetMassKg"], code: "validation_failed", message: ZERO_SOURCE_BIOCHAR_MESSAGE }],
+    issues: [{ path: [BIOCHAR_PRODUCT_MASS_ISSUE_PATH], code: "validation_failed", message: ZERO_SOURCE_BIOCHAR_MESSAGE }],
   });
 }
 

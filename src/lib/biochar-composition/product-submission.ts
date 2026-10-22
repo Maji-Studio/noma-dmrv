@@ -32,6 +32,9 @@ export function prepareBiocharProductSubmission(
     : next;
 }
 
+/** The operation names the source biochar mass by this issue path. */
+export const BIOCHAR_PRODUCT_MASS_ISSUE_PATH = "biocharWetMassKg";
+
 /**
  * Server issue path to form field, for a refused save. The create action
  * renames the form's fields to the operation's (`massKg` is sent as
@@ -39,7 +42,7 @@ export function prepareBiocharProductSubmission(
  * on update names the stored `composition`. `*` matches one path segment.
  */
 export const BIOCHAR_PRODUCT_REFUSAL_ALIASES = {
-  biocharWetMassKg: "massKg",
+  [BIOCHAR_PRODUCT_MASS_ISSUE_PATH]: "massKg",
   biocharMoisturePercent: "moistureContentPercent",
   "ingredients.*.wetMassKg": "ingredientBins.*.massKg",
   "ingredients.*.moisturePercent": "ingredientBins.*.moistureContentPercent",

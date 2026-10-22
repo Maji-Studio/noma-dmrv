@@ -12,7 +12,15 @@ import { ActionError } from "@/lib/action-error";
 import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 
-const preview = vi.hoisted(() => ({ block: null as string | null }));
+const preview = vi.hoisted(() => ({
+  block: null as string | null,
+  // The recipe the product was made from, so the form's ingredient sync runs as it does on screen.
+  formulation: null as unknown,
+  recipe: {
+    id: "22222222-2222-4222-8222-222222222222", biocharRatio: 0.5,
+    ingredients: [{ id: "77777777-7777-4777-8777-777777777777", feedstockTypeId: "88888888-8888-4888-8888-888888888888", ratio: 0.5, feedstockType: { name: "Compost", category: "compost" } }],
+  },
+}));
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();
@@ -24,6 +32,7 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
     if (key[0] === "outputStock" && key[1] === "subBins") return { ...base, data: { stockMode: "mix", subBins: [] } };
     if (key[0] === "outputStock" && key[1] === "preview") return { ...base, data: { blockingMessage: preview.block, basisFingerprint: "fp-1" } };
     if (key[0] === "outputStock" && key[1] === "productPreview") return { ...base, data: [{ lane: "biochar", storageLocationId: "b", basisFingerprint: "fp-1", blockingMessage: null }] };
+    if (key[0] === "formulations" && key[1] === "detail") return { ...base, data: preview.formulation };
     return base;
   };
   return {
@@ -63,7 +72,7 @@ vi.mock("@/components/forms/event-time-input", () => ({ EventTimeInput: () => nu
 import { BiocharProductForm } from "./biochar-product-form";
 import { OPEN_LOCK } from "../../../tests/helpers/record-lock-mocks";
 
-beforeEach(() => { preview.block = null; });
+beforeEach(() => { preview.block = null; preview.formulation = null; });
 afterEach(cleanup);
 
 const SOURCE_BIN = "44444444-4444-4444-8444-444444444444";
@@ -133,6 +142,22 @@ describe("new product refused saves", () => {
     await waitFor(() => expect(screen.queryAllByText(message)).toHaveLength(0));
     expect(screen.queryByText(RECONCILIATION)).toBeTruthy();
     expect(screen.queryAllByText(live).length).toBeGreaterThan(0);
+    expect(document.querySelector("[data-form-error-summary]")).toBeNull();
+  });
+
+  it.each([
+    ["moisture", (t: ReturnType<typeof fillNewProduct>) => fireEvent.change(t.byName("moistureContentPercent"), { target: { value: "6" } })],
+    ["formulation", (t: ReturnType<typeof fillNewProduct>) => t.pick("formulationId", "12222222-2222-4222-8222-222222222222")],
+  ])("clears the refusal and the error summary when the %s changes", async (_name, change) => {
+    const message = "A product requires positive source biochar.";
+    const form = fillNewProduct([refusal("validation_failed", ["biocharWetMassKg"], message)]);
+    form.submit();
+    await waitFor(() => expect(form.onSubmit).toHaveBeenCalledOnce());
+    expect(await screen.findAllByText(message)).toHaveLength(1);
+    expect(document.querySelector("[data-form-error-summary]")?.textContent).toContain("Biochar wet mass");
+    change(form);
+    await waitFor(() => expect(screen.queryAllByText(message)).toHaveLength(0));
+    expect(document.querySelector("[data-form-error-summary]")).toBeNull();
   });
 });
 
@@ -149,6 +174,7 @@ describe("legacy product ingredient rows", () => {
   } as unknown as BiocharProductWithRelations;
 
   it("restores a changed row and says Locked at the rows when the composition is locked", async () => {
+    preview.formulation = preview.recipe;
     const reason = "This product feeds a Removal sent to Isometric.";
     const footers: Array<string | null> = [];
     const onSubmit = vi.fn((_data: unknown, onRefusal: SaveRefusalHandler) => { footers.push(onRefusal(refusal("certification_locked", ["composition"], reason), "FALLBACK")); });
@@ -156,9 +182,16 @@ describe("legacy product ingredient rows", () => {
     const mass = () => document.querySelector<HTMLInputElement>('[name="ingredientBins.0.massKg"]')!;
     const saved = mass().value;
     fireEvent.change(mass(), { target: { value: "60" } });
+    fireEvent.blur(mass());
     fireEvent.click(screen.getByRole("button", { name: "Update product" }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
     await waitFor(() => expect(document.getElementById("ingredientBins-error")?.textContent).toBe(LOCKED));
+    // The summary names the set; the sentence itself shows once, under the rows.
+    const entry = document.querySelector("[data-form-error-summary] a[href='#ingredientBins']");
+    expect(entry?.textContent).toBe("Ingredients");
+    expect(screen.getAllByText(LOCKED)).toHaveLength(1);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(document.getElementById("ingredientBins-error")?.textContent).toBe(LOCKED);
     expect(mass().value).toBe(saved);
     expect(footers).toEqual([reason]);
   });
