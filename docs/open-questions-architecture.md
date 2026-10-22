@@ -52,10 +52,6 @@ these areas; the entry rules and invariants live in
   Its reaction to `invalid_client` on refresh is untested: a noma Disconnect
   gives `invalid_grant`, which claude.ai turns into a sign-in prompt. Only a
   dropped CIMD client gives `invalid_client`.
-- **Shared Disconnect touch target:**
-  `src/components/oauth/connected-app-list.tsx:ConnectedAppList` uses the shared
-  `src/components/ui/button/index.tsx:Button` at 40px. Resolve the shared target size
-  against the design system's 44px minimum without a one-off OAuth override.
 
 ### Party write adapters per kind (`api/party-write-adapters`, opened 2026-10-17)
 
