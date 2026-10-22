@@ -73,7 +73,9 @@ export function orgSwitchMessage(organizationName: string): string {
  */
 export function orgSwitchFailedMessage(organizationName: string, reason?: string): string {
   const why = reason?.trim();
-  return `${organizationName} did not open. ${why || "Try again."}`;
+  // Better Auth's membership errors come without a closing period.
+  const sentence = why ? (/[.!?]$/.test(why) ? why : `${why}.`) : "Try again.";
+  return `${organizationName} did not open. ${sentence}`;
 }
 
 /** The discard dialog's body when a switch would leave a pane with unsaved changes. */

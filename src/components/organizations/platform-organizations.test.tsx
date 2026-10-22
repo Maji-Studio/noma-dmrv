@@ -106,7 +106,7 @@ describe("PlatformOrganizations", () => {
     state.enter.mockResolvedValue({ success: false, error: "No access" });
     renderAt("org-other");
     fireEvent.click(within(panel("Kilombero Carbon")).getByRole("button", { name: "Switch to Kilombero Carbon" }));
-    await waitFor(() => expect(state.toastError).toHaveBeenCalledWith("Kilombero Carbon did not open. No access"));
+    await waitFor(() => expect(state.toastError).toHaveBeenCalledWith("Kilombero Carbon did not open. No access."));
     expect(within(panel("Kilombero Carbon")).getByRole("button", { name: "Switch to Kilombero Carbon" })).toBeTruthy();
   });
 

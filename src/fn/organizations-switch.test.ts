@@ -133,7 +133,8 @@ describe("setActiveOrganizationAction", () => {
       organizationId: ORGANIZATION_ID,
     });
 
-    expect(result.success).toBe(false);
+    // The catch-all is only the next step, so the toast does not say "did not open" twice.
+    expect(result).toEqual({ success: false, error: "Try again." });
     expect(mocks.persistLastActiveOrganization).not.toHaveBeenCalled();
   });
 });

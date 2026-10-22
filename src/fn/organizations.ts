@@ -280,7 +280,9 @@ export async function setActiveOrganizationAction(
     // failure here is a warning, never a failed switch (issue #769).
     const warning = await saveOrgPreference(session.user.id, organizationId);
     return { data: { organizationId }, warning };
-  }, "Failed to switch organization.");
+    // The toast already says "<Org> did not open.", so the catch-all carries
+    // only the next step; a "Failed to switch ..." sentence would repeat it.
+  }, "Try again.");
 }
 
 async function setActiveOrgForPlatformAdmin(
