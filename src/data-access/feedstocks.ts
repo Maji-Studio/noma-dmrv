@@ -847,6 +847,7 @@ export async function deleteFeedstockInTransaction(
     throw inUseDeleteRefusal(
       `Feedstock ${locked.code} ${IN_USE_DELETE_MARKER} production runs still use it. Keep this feedstock.`,
       ["feedstockId"],
+      { code: "certification_locked" },
     );
   }
 

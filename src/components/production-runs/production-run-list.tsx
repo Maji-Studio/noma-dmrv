@@ -35,7 +35,12 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { InUseDeleteDialog, InUseReference } from "@/components/ui/in-use-delete-dialog";
+import { useQueryClient } from "@tanstack/react-query";
+import { recordLockKeys } from "@/hooks/record-lock-query-keys";
+import { ActionError } from "@/lib/action-error";
+import { biocharProductDeepLinkHref } from "@/lib/biochar-product-links";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
@@ -287,7 +292,7 @@ export function ProductionRunList() {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   // A refused delete because records still use the row: its code and the server's reason.
-  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string } | null>(null);
+  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string; reference?: { href: string; code: string; kind: string } } | null>(null);
 
   const filters: Partial<ProductionRunFilterData> = {
     ids: affectedRunIds.length > 0 ? affectedRunIds : undefined,
@@ -314,6 +319,7 @@ export function ProductionRunList() {
   const createRun = useCreateProductionRun();
   const updateRun = useUpdateProductionRun();
   const deleteRun = useDeleteProductionRun();
+  const queryClient = useQueryClient();
   const toast = useToast();
 
   const runs = runsData?.items ?? [];
@@ -406,7 +412,15 @@ export function ProductionRunList() {
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Production run ${deleting.code}`, "Production run was not deleted. Try again.");
       if (isInUseDeleteRefusal(error)) {
-        setInUseRefusal({ code: deleting.code, message });
+        const blocker = error instanceof ActionError ? error.conflict : undefined;
+        const reference = blocker?.entity === "biocharProduct"
+          ? { href: biocharProductDeepLinkHref(blocker.id, deleting.facilityId), code: blocker.code, kind: "biochar product" }
+          : blocker?.entity === "creditBatch"
+            ? { href: creditBatchDeepLinkHref(blocker.id, deleting.facilityId), code: blocker.code, kind: "credit batch" }
+            : undefined;
+        setInUseRefusal({ code: deleting.code, message, reference });
+        // The row learned it is in use: drop Delete from its menu.
+        void queryClient.invalidateQueries({ queryKey: recordLockKeys.kind("productionRun") });
         setDeletingRunId(null);
         return;
       }
@@ -673,6 +687,7 @@ export function ProductionRunList() {
       {inUseRefusal && (
         <InUseDeleteDialog label={inUseRefusal.code} onClose={() => setInUseRefusal(null)}>
           <p>{inUseRefusal.message}</p>
+          {inUseRefusal.reference && <InUseReference {...inUseRefusal.reference} />}
         </InUseDeleteDialog>
       )}
 

@@ -8,8 +8,8 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ActionError } from "@/lib/action-error";
 
-const ORDER = { id: "order-1", code: "OR-001", version: 3 };
-const IN_USE_MESSAGE = "Order OR-001 was not deleted because delivery DL-001 still uses it.";
+const ORDER = { id: "order-1", code: "OR-001", version: 3, facilityId: "f1" };
+const IN_USE_MESSAGE = "Order OR-001 was not deleted because delivery DL-001 still uses it. Delete delivery DL-001 first, or keep this order.";
 const harness = vi.hoisted(() => ({ remove: vi.fn() }));
 
 vi.mock("nuqs", () => ({ parseAsString: { withOptions: () => ({}) }, useQueryState: () => [null, vi.fn()] }));
@@ -71,7 +71,7 @@ describe("Order in-use delete refusal", () => {
   it("opens the in-use dialog with the server's reason and no Delete button", async () => {
     harness.remove.mockRejectedValue(new ActionError({
       error: IN_USE_MESSAGE, code: "conflict",
-      issues: [{ path: ["orderId"], code: "conflict", message: IN_USE_MESSAGE, meta: { reason: "in_use", deliveryCode: "DL-001" } }],
+      issues: [{ path: ["orderId"], code: "conflict", message: IN_USE_MESSAGE, meta: { reason: "in_use", deliveryCode: "DL-001", deliveryId: "delivery-1" } }],
     }));
     render(<OrderList />);
     await confirmDelete();
@@ -82,6 +82,7 @@ describe("Order in-use delete refusal", () => {
     expect(dialog.getByText(IN_USE_MESSAGE)).toBeTruthy();
     expect(dialog.queryByRole("button", { name: "Delete" })).toBeNull();
     expect(dialog.queryByRole("button", { name: "Archive instead" })).toBeNull();
+    expect(dialog.getByRole("link", { name: "Open delivery DL-001" }).getAttribute("href")).toBe("/deliveries?facility=f1&delivery=delivery-1");
 
     fireEvent.click(dialog.getAllByRole("button", { name: "Close" }).at(-1)!);
     expect(screen.queryByRole("dialog")).toBeNull();

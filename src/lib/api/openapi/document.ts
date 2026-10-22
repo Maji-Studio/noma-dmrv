@@ -244,7 +244,7 @@ export function buildOpenApiDocument() {
     requestBody: requestBody(patchInput, { massWetKg: 4250, notes: "Corrected weighbridge wet mass for bin B2." }),
   };
   paths["/feedstocks/{idOrCode}"].delete = {
-    ...privateOperation("delete_feedstock", "feedstocks:delete", "Delete by UUID using a strong If-Match. Production-run usage answers 409 conflict at /feedstockId with issue metadata reason in_use. Certified lineage answers 409 certification_locked. Dry runs return the would-be deleted representation and roll back. The request body may be omitted; any supplied body must be an empty JSON object. Malformed JSON returns 400; unknown fields and other JSON values return 422.",
+    ...privateOperation("delete_feedstock", "feedstocks:delete", "Delete by UUID using a strong If-Match. Production-run usage answers 409 certification_locked at /feedstockId with issue metadata reason in_use. Certified lineage answers 409 certification_locked. Dry runs return the would-be deleted representation and roll back. The request body may be omitted; any supplied body must be an empty JSON object. Malformed JSON returns 400; unknown fields and other JSON values return 422.",
     { ...problemResponses([...WRITE_ERRORS, 412, 413, 415, 428]), ...feedstockPreconditionResponse,
       "204": { description: "Deleted, or replay of a committed deletion; no body.", headers: { ...privateHeaders, ...writeHeaders } },
       "200": jsonResponse("Dry-run deleted representation.", publishOutput(stockWriteEnvelopeSchema(feedstockRepresentationSchema)), writeHeaders) },

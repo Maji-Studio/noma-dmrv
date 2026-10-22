@@ -83,7 +83,7 @@ export const writeTools: WriteTool[] = [
   {
     kind: "write", name: deleteFeedstock.id, scope: "feedstocks:delete", requiredScopes: () => ["feedstocks:delete"], input: deleteInput, output: deleteOutput,
     annotations: { ...annotations, destructiveHint: true },
-    description: `Delete a feedstock by UUID and remove its bin stock and transport details. Production-run usage returns conflict at /feedstockId with issue metadata reason in_use. Certified lineage returns certification_locked. Returns deleted id and code after saving, or data on a dry run. ${versionGuidance} ${writeGuidance}`,
+    description: `Delete a feedstock by UUID and remove its bin stock and transport details. Production-run usage returns certification_locked at /feedstockId with issue metadata reason in_use, as does certified lineage. Returns deleted id and code after saving, or data on a dry run. ${versionGuidance} ${writeGuidance}`,
     execute: (context, raw) => mutate(context, raw, "delete"),
     summarize(body, dryRun) {
       const data = body as z.infer<typeof deleteOutput>;

@@ -12,7 +12,9 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { InUseDeleteDialog, InUseReference } from "@/components/ui/in-use-delete-dialog";
+import { deliveryDeepLinkHref } from "@/lib/delivery-links";
+import { ActionError } from "@/lib/action-error";
 import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
@@ -201,7 +203,7 @@ export function OrderList() {
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   // A refused delete because records still use the row: its code and the server's reason.
-  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string } | null>(null);
+  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string; reference?: { href: string; code: string; kind: string } } | null>(null);
 
   const filters: Partial<OrderFilterData> = {
     search: debouncedSearch || undefined,
@@ -347,7 +349,14 @@ export function OrderList() {
       const message = toDeleteErrorMessage(error, "Order", "Order was not deleted. Try again.");
       if (isInUseDeleteRefusal(error)) {
         const row = orders.find((item) => item.id === deletingOrderId);
-        setInUseRefusal({ code: row?.code ?? "Order", message });
+        const meta = error instanceof ActionError ? error.issues.find((issue) => issue.meta?.reason === "in_use")?.meta : undefined;
+        const deliveryId = typeof meta?.deliveryId === "string" ? meta.deliveryId : null;
+        const deliveryCode = typeof meta?.deliveryCode === "string" ? meta.deliveryCode : null;
+        setInUseRefusal({
+          code: row?.code ?? "Order",
+          message,
+          reference: deliveryId && deliveryCode ? { href: deliveryDeepLinkHref(deliveryId, row?.facilityId), code: deliveryCode, kind: "delivery" } : undefined,
+        });
         setDeletingOrderId(null);
         return;
       }
@@ -517,6 +526,7 @@ export function OrderList() {
       {inUseRefusal && (
         <InUseDeleteDialog label={inUseRefusal.code} onClose={() => setInUseRefusal(null)}>
           <p>{inUseRefusal.message}</p>
+          {inUseRefusal.reference && <InUseReference {...inUseRefusal.reference} />}
         </InUseDeleteDialog>
       )}
 

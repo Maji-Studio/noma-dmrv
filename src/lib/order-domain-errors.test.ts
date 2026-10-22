@@ -86,16 +86,16 @@ describe("order errors", () => {
   it("marks a delivery delete refusal for the client and REST, retaining its delivery code and id", async () => {
     const error = orderHasDeliveries({ id: "delivery-id", code: "DL-1" }, "OR-1");
     expect(error.message).toBe("Order OR-1 was not deleted because delivery DL-1 still uses it. Delete delivery DL-1 first, or keep this order.");
-    expect(error).toMatchObject({ code: "conflict", issues: [{ path: ["orderId"], code: "conflict", meta: { reason: "in_use", deliveryCode: "DL-1", deliveryId: "delivery-id" } }] });
+    expect(error).toMatchObject({ code: "certification_locked", issues: [{ path: ["orderId"], code: "certification_locked", meta: { reason: "in_use", deliveryCode: "DL-1", deliveryId: "delivery-id" } }] });
     const failure = toActionFailure(error, options);
     expect(isInUseDeleteRefusal(new ActionError(failure))).toBe(true);
     const response = actionFailureResponse(failure, "/api/v1/orders/order-id", "request-id");
     expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ code: "conflict", errors: [{ pointer: "/orderId", code: "conflict", meta: { reason: "in_use", deliveryCode: "DL-1", deliveryId: "delivery-id" } }] });
+    expect(await response.json()).toMatchObject({ code: "certification_locked", errors: [{ pointer: "/orderId", code: "certification_locked", meta: { reason: "in_use", deliveryCode: "DL-1", deliveryId: "delivery-id" } }] });
     const context = { ctx, instance: "/api/mcp", requestId: "request-id" } as ApiRouteContext;
     expect(await toolFailure(error, context, "delete_order")).toMatchObject({ isError: true, structuredContent: {
-      code: "conflict", detail: error.message,
-      issues: [{ pointer: "/orderId", code: "conflict", meta: { reason: "in_use", deliveryCode: "DL-1", deliveryId: "delivery-id" } }],
+      code: "certification_locked", detail: error.message,
+      issues: [{ pointer: "/orderId", code: "certification_locked", meta: { reason: "in_use", deliveryCode: "DL-1", deliveryId: "delivery-id" } }],
     } });
   });
 
