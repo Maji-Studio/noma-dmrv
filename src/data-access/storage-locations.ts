@@ -328,6 +328,15 @@ export async function getStorageLocationWithFacility(
  */
 export async function createStorageLocation(
   ctx: OrgContext,
+  data: Parameters<typeof createStorageLocationInTransaction>[2],
+): Promise<StorageLocation> {
+  requireOrgScope(ctx);
+  return db.transaction((tx) => createStorageLocationInTransaction(ctx, tx, data));
+}
+
+export async function createStorageLocationInTransaction(
+  ctx: OrgContext,
+  tx: DbTransaction,
   data: {
     code: string;
     name: string;
@@ -344,60 +353,58 @@ export async function createStorageLocation(
 ): Promise<StorageLocation> {
   requireOrgScope(ctx);
 
-  return db.transaction(async (tx) => {
-    await lockActiveFacilityReference(ctx, tx, data.facilityId);
+  await lockActiveFacilityReference(ctx, tx, data.facilityId);
 
-    if (data.feedstockTypeId) {
-      const [feedstockType] = await tx
-        .select({ id: feedstockTypes.id })
-        .from(feedstockTypes)
-        .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
+  if (data.feedstockTypeId) {
+    const [feedstockType] = await tx
+      .select({ id: feedstockTypes.id })
+      .from(feedstockTypes)
+      .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
 
-      if (!feedstockType) {
-        throw new SafeError("Feedstock type not found");
-      }
+    if (!feedstockType) {
+      throw new SafeError("Feedstock type not found");
     }
+  }
 
-    // The Zod create schema enforces this for form/fn flows; repeat it here so
-    // direct data-access callers (seeds, scripts) can't create a bin the update
-    // path's invariant check would then refuse to touch.
-    if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
-      throw new SafeError(
-        "Feedstock bins must be restricted to one feedstock type"
-      );
-    }
-
-    // A formulation only makes sense on a product bin; ignore it for other types.
-    const formulationId = data.type === "product_bin" ? data.formulationId ?? null : null;
-    if (formulationId) {
-      await lockFormulationReference(ctx, tx, formulationId);
-    }
-
-    const [storageLocation] = await guardStorageLocationName(ctx, data.name, () =>
-      tx
-        .insert(storageLocations)
-        .values({
-          organizationId: ctx.organizationId,
-          code: data.code,
-          name: data.name,
-          type: data.type,
-          facilityId: data.facilityId,
-          capacityKg: data.capacityKg ?? null,
-          // Only meaningful on feedstock bins, like formulationId below.
-          feedstockTypeId: isFeedstockBinType(data.type)
-            ? data.feedstockTypeId ?? null
-            : null,
-          formulationId,
-          stockMode: initialStockMode(data.type, data.stockMode),
-          drawOrder: data.drawOrder ?? "oldest_first",
-          storageMethod: data.storageMethod ?? null,
-          storageDescription: data.storageDescription ?? null,
-        })
-        .returning()
+  // The Zod create schema enforces this for form/fn flows; repeat it here so
+  // direct data-access callers (seeds, scripts) can't create a bin the update
+  // path's invariant check would then refuse to touch.
+  if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
+    throw new SafeError(
+      "Feedstock bins must be restricted to one feedstock type"
     );
+  }
 
-    return storageLocation;
-  });
+  // A formulation only makes sense on a product bin; ignore it for other types.
+  const formulationId = data.type === "product_bin" ? data.formulationId ?? null : null;
+  if (formulationId) {
+    await lockFormulationReference(ctx, tx, formulationId);
+  }
+
+  const [storageLocation] = await guardStorageLocationName(ctx, data.name, () =>
+    tx
+      .insert(storageLocations)
+      .values({
+        organizationId: ctx.organizationId,
+        code: data.code,
+        name: data.name,
+        type: data.type,
+        facilityId: data.facilityId,
+        capacityKg: data.capacityKg ?? null,
+        // Only meaningful on feedstock bins, like formulationId below.
+        feedstockTypeId: isFeedstockBinType(data.type)
+          ? data.feedstockTypeId ?? null
+          : null,
+        formulationId,
+        stockMode: initialStockMode(data.type, data.stockMode),
+        drawOrder: data.drawOrder ?? "oldest_first",
+        storageMethod: data.storageMethod ?? null,
+        storageDescription: data.storageDescription ?? null,
+      })
+      .returning()
+  );
+
+  return storageLocation;
 }
 
 // ============================================

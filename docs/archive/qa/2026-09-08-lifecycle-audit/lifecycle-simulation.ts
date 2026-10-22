@@ -8,7 +8,7 @@ import { updateStorageLocation } from "@/data-access/storage-locations";
 import { getStorageLocationLaneSummary } from "@/data-access/storage-location-lane-summary";
 import { createFeedstockType as quickCreateFeedstockType } from "@/lib/operations/feedstock-types";
 import { runOperationInProcess } from "@/lib/operations/runner";
-import { createFeedstockType as canonicalCreateFeedstockType, updateFeedstockType } from "@/data-access/feedstock-types";
+import { createFeedstockTypeInTransaction as canonicalCreateFeedstockType, updateFeedstockType } from "@/data-access/feedstock-types";
 import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { updateFacility } from "@/data-access/facility-mutations";
 import { updateFeedstockTypeSchema } from "@/schemas/feedstock-types";
@@ -167,7 +167,7 @@ describe("quick-add authorization baseline observation", () => {
     const member = { ...context, orgRole: "member" as const };
     const input = { code: `AUD-${crypto.randomUUID()}`, name: `Audit ${crypto.randomUUID()}`,
       category: "forestry" as const, usage: "pyrolysis" as const };
-    await expect(canonicalCreateFeedstockType(member, input)).rejects.toThrow();
+    await expect(db.transaction((tx) => canonicalCreateFeedstockType(member, tx, input))).rejects.toThrow();
     const created = await runOperationInProcess(quickCreateFeedstockType, member, input);
     try {
       expect(await db.select().from(feedstockTypes).where(eq(feedstockTypes.id, created.id))).toHaveLength(1);

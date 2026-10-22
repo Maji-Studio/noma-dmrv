@@ -157,6 +157,7 @@ export function ReactorList() {
 
   // Side sheet helpers
   const openCreate = () => {
+    createReactor.startDraft();
     setCreateError(null);
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });

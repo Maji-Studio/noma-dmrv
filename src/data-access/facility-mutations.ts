@@ -63,6 +63,15 @@ async function lockFacilityRow(
 
 export async function createFacility(
   ctx: OrgContext,
+  data: Parameters<typeof createFacilityInTransaction>[2],
+): Promise<Facility> {
+  requireOrgScope(ctx);
+  return db.transaction((tx) => createFacilityInTransaction(ctx, tx, data));
+}
+
+export async function createFacilityInTransaction(
+  ctx: OrgContext,
+  tx: DbTransaction,
   data: {
     code: string;
     name: string;
@@ -80,7 +89,7 @@ export async function createFacility(
   requireOrgScope(ctx);
 
   const [facility] = await guardFacilityName(ctx, data.name, () =>
-    db
+    tx
       .insert(facilities)
       .values({
         organizationId: ctx.organizationId,

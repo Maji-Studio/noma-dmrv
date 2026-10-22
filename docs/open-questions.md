@@ -630,16 +630,6 @@ before allowing confirmation to convert stored entry values to the new unit.
   out of #1298) and per-field detail for feedstock lineage locks.
 - Delivery update posting refusals at `occurredAt` and `wetMassKg` show in the footer and need aliases (follow-up PR).
 
-## Creates without a retry key (#1302) - **deferred**
-
-- Five creates still run without `withCreate`: `createStorageLocationFn`
-  (storage-locations); `createFacilityFn`; `createReactorFn`; `createFeedstockTypeFn`
-  (feedstock-types); `startNewProductionProcessFn`. These remain for the settings
-  create (#1302).
-  Each needs a writer that takes `tx` plus an app-only runner operation, so the key
-  and the record of the save commit together. They sit in the PENDING table of
-  `src/fn/create-action-coverage.test.ts` until then (#1302).
-
 ## In-use delete refusals on the remaining lists - **deferred**
 
 - The rule: an "in use" delete refusal opens `InUseDeleteDialog` (`src/components/ui/in-use-delete-dialog.tsx`), with no Delete button and "Archive instead" where archiving exists. Customers, suppliers, formulations and feedstock types already follow it: their data-access deletes throw `inUseDeleteRefusal(...)` and the callers branch on `isInUseDeleteRefusal` (`src/lib/delete-refusal.ts`), as `customer-list.tsx` does.

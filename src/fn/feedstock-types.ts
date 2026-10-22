@@ -5,7 +5,6 @@ import { hasCertifierCredentials, resolveIsometricClient } from "@/data-access/c
 import {
   FEEDSTOCK_TYPE_MANAGE_ROLE,
   archiveFeedstockType,
-  createFeedstockType,
   deleteFeedstockType,
   importIsometricFeedstockType,
   listFeedstockTypes,
@@ -25,6 +24,9 @@ import {
   updateFeedstockTypeSchema,
 } from "@/schemas/feedstock-types";
 import type { ActionResult } from "@/types/actions";
+import { createFeedstockType } from "@/lib/operations/feedstock-types";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
+import { withCreate } from "./with-create";
 import { withAction } from "./with-action";
 import { getFeedstockTypeById } from "@/data-access/feedstock-types";
 import { uuidSchema } from "@/schemas/helpers";
@@ -39,18 +41,10 @@ export async function listFeedstockTypesFn(): Promise<
 
 export async function createFeedstockTypeFn(
   input: unknown,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<FeedstockType>> {
-  return withAction(async (ctx) => {
-    const data = createFeedstockTypeSchema.parse(input);
-    return withAutoCode(
-      ctx,
-      FEEDSTOCK_TYPE_CODE_PREFIX,
-      feedstockTypes,
-      feedstockTypes.code,
-      undefined,
-      (code) => createFeedstockType(ctx, { ...data, code }),
-    );
-  });
+  return withCreate((_ctx, create) =>
+    create(createFeedstockType, createFeedstockTypeSchema.parse(input)), options);
 }
 
 export async function updateFeedstockTypeFn(
