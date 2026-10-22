@@ -50,6 +50,7 @@ const PENDING: Record<string, string> = {
   "vehicles/vehicle-form.tsx": "PR J: vehicle quick-add and picker edit",
   "settings/organization-defaults-form.tsx": "PR K1: operating defaults refusal",
   "settings/durability-tier-settings.tsx": "PR K1: durability settings refusal",
+  "settings/organization-name-form.tsx": "PR K1: organization name refusal",
   "certification/registry-source-visibility-settings.tsx": "PR K1: replace root.serverError routing",
   "organizations/organization-certifier-credentials.tsx": "PR K1: credential refusal",
   "organizations/organization-settings.tsx": "PR K1: move invitation toast into the form",
