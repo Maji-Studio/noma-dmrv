@@ -179,3 +179,35 @@ describe("DataTable default column visibility", () => {
     expect(onChange).toHaveBeenCalledWith({ facility: false });
   });
 });
+
+describe("DataTable one-line cells", () => {
+  interface CodeRow {
+    id: string;
+    code: string;
+    quantityKg: number;
+    customer: string;
+  }
+  const rows: CodeRow[] = [
+    { id: "1", code: "OR-26-002", quantityKg: 1000, customer: "Demo Mbeya Coffee Farm" },
+  ];
+  const cols: ColumnDef<CodeRow>[] = [
+    { accessorKey: "code", header: "Code" },
+    {
+      accessorKey: "quantityKg",
+      header: "Quantity",
+      cell: ({ row }) => `${row.original.quantityKg.toLocaleString("en-US")} kg`,
+    },
+    { accessorKey: "customer", header: "Customer" },
+  ];
+
+  const cellClass = (html: string, text: string) =>
+    new RegExp(`<td class="([^"]*)"[^>]*>(?:<[^>]+>)*${text}`).exec(html)?.[1] ?? "";
+
+  it("keeps codes and figures on one line, and lets names wrap", () => {
+    const html = renderToStaticMarkup(<DataTable columns={cols} data={rows} />);
+
+    expect(cellClass(html, "OR-26-002")).toContain("whitespace-nowrap");
+    expect(cellClass(html, "1,000 kg")).toContain("whitespace-nowrap");
+    expect(cellClass(html, "Demo Mbeya")).not.toContain("whitespace-nowrap");
+  });
+});

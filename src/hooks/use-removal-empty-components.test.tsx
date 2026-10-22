@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ context: vi.fn(), empties: vi.fn() }));
@@ -13,6 +13,7 @@ vi.mock("@/fn/certification/emission-zeros", () => ({
 }));
 
 import { useRemovalLanding } from "./use-removal-empty-components";
+import { certificationKeys } from "./use-certification";
 
 const OPEN = { removalVersion: 1, editable: true, batches: [{ creditBatchId: "b", code: "CB-1", lines: [{ componentId: "a" }], zeros: [] }] };
 const CONFIRMED = { removalVersion: 2, editable: true, batches: [{ creditBatchId: "b", code: "CB-1", lines: [], zeros: [{ id: "z", componentId: "a" }] }] };
@@ -53,7 +54,12 @@ describe("useRemovalLanding", () => {
     await waitFor(() => expect(view.result.current.data?.step).toBe("empty"));
     mocks.empties.mockResolvedValue({ success: true, data: CONFIRMED });
     view.rerender();
-    await client.invalidateQueries();
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: certificationKeys.all });
+      // React Query schedules observer notifications after the refetch promise resolves.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await waitFor(() => expect(view.result.current.fetchStatus).toBe("idle"));
     expect(view.result.current.data?.step).toBe("empty");
   });
 });

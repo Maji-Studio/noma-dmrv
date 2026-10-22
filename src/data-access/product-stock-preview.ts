@@ -57,7 +57,7 @@ export async function prepareProductStock(ctx: OrgContext, raw: ProductStockPrev
         blockingMessage: wetDraw > beforeWet ? 'Ingredient withdrawal exceeds available wet stock.' : null, discrepancySolidsKg: 0,
         // Ingredient bins keep wet stock; an ingredient reading describes the material used, not the bin.
         // The spread source preview's mix facts belong to the biochar bin, not this ingredient bin.
-        moistureEstimate: null, moistureReset: null, calculatedWithout: [], stockMode: undefined });
+        moistureEstimate: null, moistureReset: null, reestimate: null, calculatedWithout: [], stockMode: undefined });
     }
     const wetAdded = input.massKg + input.waterAddedKg + ingredients.reduce((sum, ingredient) => sum + ingredient.massKg, 0);
     const solidsAdded = source.preview.removedDryKg + ingredients.reduce((sum, ingredient) => sum + (ingredient.massKg > 0 ? ingredient.massDryKg : 0), 0);
@@ -70,7 +70,7 @@ export async function prepareProductStock(ctx: OrgContext, raw: ProductStockPrev
     const beforeWet = before.beforeEstimatedWetKg;
     const beforeAllocations = before.beforeAllocations;
     const added = { layerId: 'proposed-product', code: 'New product', wetMassKg: wetAdded, dryMassKg: source.preview.removedDryKg, runs: source.preview.allocations.flatMap(a => a.runs) };
-    bins.push({ ...before, movementMoisturePercent: moisture, beforeEstimatedWetKg: beforeWet, beforeAllocations, afterDryKg: before.beforeDryKg + source.preview.removedDryKg, afterSolidsKg: before.beforeSolidsKg + solidsAdded,
+    bins.push({ ...before, reestimate: null, movementMoisturePercent: moisture, beforeEstimatedWetKg: beforeWet, beforeAllocations, afterDryKg: before.beforeDryKg + source.preview.removedDryKg, afterSolidsKg: before.beforeSolidsKg + solidsAdded,
       afterEstimatedWetKg: beforeWet === null ? null : beforeWet + wetAdded,
       afterAllocations: [...(beforeAllocations ?? []), added], allocations: [added], removedDryKg: -source.preview.removedDryKg,
       removedWetKg: -wetAdded, discrepancySolidsKg: 0, blockingMessage: source.preview.blockingMessage });

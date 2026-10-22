@@ -2,6 +2,24 @@
 
 **Status: Accepted** (2026-09-14; implemented in [#759](https://github.com/Maji-Studio/noma-dmrv/pull/759); amended 2026-09-28 and 2026-10-02, see below). [Design and examples](../plans/2026-09-14-fifo-bin-accounting.md).
 
+## Amendment (2026-10-21): wet stock below solids, #1252 variant A
+
+Decision A in [#1252](https://github.com/Maji-Studio/noma-dmrv/issues/1252)
+supersedes the 2026-10-02 "never reset" and "shown as zero" rules below.
+
+- Saving a draw remains allowed when its wet subtraction would leave less wet
+  stock than remaining solids. Re-estimate what stays at that draw's measured
+  moisture until the next count. Solids include dry biochar and blend ingredients.
+- Split bins check each drawn sub-bin separately and retain each affected
+  sub-bin's own reading. Mix bins check the whole physical pile present at that
+  posting and draw time, even when a correction allocates from fewer layers.
+  Accounting layers may carry negative wet balances; only the pile total decides
+  whether to re-estimate. Saved dry allocations and provenance do not change.
+- If a legacy draw has no measured moisture, floor its remaining wet estimate at
+  solids. A later count replaces the estimate. Dry biochar still limits draws.
+- Previews identify the affected layers and their readings, plus whole-bin wet,
+  solids and dry biochar balances. The public moisture basis calls this a `draw`.
+
 ## Amendment (2026-10-02): removals keep the bin's moisture
 
 Agreed with Kenji. Where this conflicts with the 2026-09-28 amendment, this wins.

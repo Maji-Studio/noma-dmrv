@@ -44,6 +44,28 @@ export const STICKY_END_HEADER_CLASSES =
  */
 export const FACILITY_COLUMN_HIDDEN_BY_DEFAULT = { facility: false } as const;
 
+/** A record code such as "OR-26-002": letters and digits joined by hyphens. */
+const RECORD_CODE_PATTERN = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+$/;
+
+/**
+ * Whether a cell's value is a figure or a record code, which read as one
+ * token and never wrap (#1162: one line per cell). A figure formatted into
+ * text with its unit ("1,000 kg") has a number accessor, so the value decides
+ * rather than the rendered text. Display columns opt in with `meta.nowrap`.
+ */
+export function isSingleLineValue(value: unknown): boolean {
+  if (typeof value === "number" || typeof value === "bigint") return true;
+  return typeof value === "string" && RECORD_CODE_PATTERN.test(value);
+}
+
+/** Whether a body cell stays on one line: its column says so, or its value is a figure or a record code. */
+export function cellKeepsOneLine(cell: {
+  column: { columnDef: { meta?: { nowrap?: boolean } } };
+  getValue: () => unknown;
+}): boolean {
+  return !!cell.column.columnDef.meta?.nowrap || isSingleLineValue(cell.getValue());
+}
+
 const INTERACTIVE_ROW_CONTROL_SELECTOR =
   'button, a, label, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])';
 

@@ -20,6 +20,7 @@ import type { LinkedGhgStatementStatus } from "./linked-ghg-statement-status";
 import type { MemberCreditBatch } from "./member-credit-batch";
 import type { RemovalLedgerPreview } from "./removal-ledger-preview";
 import type { TransportCategory, TransportCoverage } from "./certify-transport-coverage";
+import type { FixedInputValue } from "./resolve-removal-template";
 
 type DurabilityOption = "200_year" | "1000_year";
 // UI-facing removal context — the lean payload React Query caches.
@@ -108,7 +109,7 @@ export interface RemovalCertifyContext {
 export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "emissionsLedger"> {
   facilityTimezone: string;
   /** Datapoints fixed in the template, for the compiled review's value column. */
-  fixedInputValues?: readonly { componentId: string; inputKey: string; magnitude: number; unit: string }[];
+  fixedInputValues?: readonly FixedInputValue[];
   removalEntryContext?: Omit<NonNullable<Awaited<ReturnType<typeof loadRemovalEntryContext>>>, "batchFacts">;
   lineages: ChainOfCustodyData[];
   runs: ProductionRunForCertification[];
