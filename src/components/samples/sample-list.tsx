@@ -286,8 +286,8 @@ export function SampleList({
   const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
-  const [deletingSampleId, setDeletingSampleId] = useState<string | null>(null);
-  const [deletingVersion, setDeletingVersion] = useState<number | null>(null);
+  // One snapshot from the moment the dialog opens: a refetch can move the row off the page before the refusal comes back.
+  const [deleting, setDeleting] = useState<{ id: string; version: number; code: string } | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   // A stale refusal closes the dialog (its Delete would resubmit the same version), so it reads on the page.
@@ -457,20 +457,19 @@ export function SampleList({
     const row = (samples).find((item) => item.id === sampleId);
     if (!row) return;
     setStaleDeleteNotice(null);
-    setDeletingVersion(row.version);
-    setDeletingSampleId(sampleId);
+    setDeleting({ id: sampleId, version: row.version, code: row.sampleCode });
   };
   const handleDeleteConfirm = async () => {
-    if (!deletingSampleId || deletingVersion === null) return;
+    if (!deleting) return;
     setDeleteError(null);
     try {
-      await deleteSample.mutateAsync({ sampleId: deletingSampleId, expectedVersion: deletingVersion });
-      setDeletingSampleId(null);
+      await deleteSample.mutateAsync({ sampleId: deleting.id, expectedVersion: deleting.version });
+      setDeleting(null);
       toast.success("Sample deleted.");
     } catch (error) {
       if (error instanceof StaleVersionError) {
-        setDeletingSampleId(null);
-        setStaleDeleteNotice(staleDeleteMessage("Sample"));
+        setDeleting(null);
+        setStaleDeleteNotice(staleDeleteMessage(`Sample ${deleting.code}`));
       } else {
         setDeleteError(toDeleteErrorMessage(error, "Sample", "Sample was not deleted. Try again."));
       }
@@ -674,11 +673,11 @@ export function SampleList({
 
       {staleDeleteNotice && <ServerError message={staleDeleteNotice} />}
       <DeleteConfirmDialog
-        isOpen={!!deletingSampleId}
+        isOpen={!!deleting}
         title="Delete Sample"
         message={SAMPLE_DELETE_MESSAGE}
         onConfirm={handleDeleteConfirm}
-        onCancel={() => { setDeletingSampleId(null); setDeleteError(null); }}
+        onCancel={() => { setDeleting(null); setDeleteError(null); }}
         isPending={deleteSample.isPending}
         errorMessage={deleteError ?? undefined}
       />

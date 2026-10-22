@@ -155,6 +155,7 @@ it("shows a notice instead of Continue when every organization is unavailable", 
   expect(screen.getByText("None of your organizations can connect apps. Ask an Admin to turn on API access, then connect again.")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
   expect(screen.queryByRole("radio")).toBeNull();
+  expect(screen.getByRole("alert").getAttribute("data-tone")).toBe("error");
 });
 
 it("swaps to the notice when a refetch makes every organization unavailable after a pick", () => {
