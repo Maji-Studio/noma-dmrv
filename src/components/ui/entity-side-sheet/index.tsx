@@ -302,9 +302,10 @@ function EntitySideSheet({
           </SlideOverPanel.Footer>
         )}
 
-        {/* Footer — only in view mode; the header X is the way out. A preview's
-            lead action (its link to the record's own page) comes before Edit. */}
-        {isViewMode && (canEdit || viewPrimaryAction) && (
+        {/* Footer — only in view mode: the actions at natural width, then Close
+            last. A preview's lead action (its link to the record's own page)
+            comes before Edit. A sheet without actions keeps Close alone. */}
+        {isViewMode && (
           <SlideOverPanel.Footer>
             {viewPrimaryAction}
             {canEdit && (
@@ -312,6 +313,7 @@ function EntitySideSheet({
                 {editLabel}
               </Button>
             )}
+            <SlideOverPanel.FooterClose />
           </SlideOverPanel.Footer>
         )}
 

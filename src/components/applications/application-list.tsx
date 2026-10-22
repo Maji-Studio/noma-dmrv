@@ -756,9 +756,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         <DataTable.Pagination />
       </DataTable>
 
-      {/* Delete Error */}
-      {deleteError && <ServerError message={deleteError} />}
-
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog
         isOpen={!!deletingApplicationId}
@@ -770,6 +767,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           setDeleteError(null);
         }}
         isPending={deleteApplication.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       {/* Unified Side Sheet */}

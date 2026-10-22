@@ -10,7 +10,7 @@ import {
   certificationSubmissions,
   productionRuns,
 } from "@/db/schema";
-import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
+import { buildCreditBatchWaitingItems } from "@/lib/credit-batches/open-items";
 import { getCreditBatchPageModel } from "@/data-access/credit-batch-page-model";
 import * as creditBatchAccounting from "@/data-access/credit-batch-accounting";
 import { markSubmissionSubmitted } from "@/data-access/certification";
@@ -238,9 +238,7 @@ describe("credit batch page model", () => {
       const decimalModel = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
       expect(decimalModel.mass).toEqual({ producedDryKg: 0.9, appliedDryKg: 0.9,
         inSubmittedDryKg: 0.1, inDraftDryKg: 0.1, notInRemovalDryKg: 0.7, notAppliedDryKg: 0 });
-      expect(buildCreditBatchOpenItems({
-        facilityId: fixture.facilityId, creditBatchId: fixture.batchId, pageModel: decimalModel, canManage: true,
-      }).waiting).toEqual([]);
+      expect(buildCreditBatchWaitingItems(decimalModel)).toEqual([]);
 
       const [statement] = await db.insert(certifierGhgStatements).values({
         organizationId: TEST_ORG_ID,

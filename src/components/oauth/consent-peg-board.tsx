@@ -15,7 +15,7 @@ const HEAD_CELL = "py-8 text-center body-small font-medium text-[var(--color-tex
  * settled ticks, scopes in `undecided` are pegs, areas in `newAreas` lead the
  * board with a New marker. Areas without a write scope show only the read peg.
  */
-export function ConsentPegBoard({ areas, allowed, undecided, newAreas, ticked, onChange, clientName, disabled }: {
+export function ConsentPegBoard({ areas, allowed, undecided, newAreas, ticked, onChange, clientName, disabled, invalid = false, errorId }: {
   areas: readonly ConsentArea[];
   allowed: readonly ApiScope[];
   /** Offered scopes not yet allowed: the ones the person decides on. */
@@ -26,6 +26,9 @@ export function ConsentPegBoard({ areas, allowed, undecided, newAreas, ticked, o
   onChange: (next: ApiScope[]) => void;
   clientName: string;
   disabled: boolean;
+  /** The "choose at least one" error is showing: red pegs that point at it. */
+  invalid?: boolean;
+  errorId?: string;
 }) {
   const fresh = areas.filter((area) => newAreas.has(area.entity));
   const rest = areas.filter((area) => !newAreas.has(area.entity));
@@ -37,7 +40,7 @@ export function ConsentPegBoard({ areas, allowed, undecided, newAreas, ticked, o
 
   const row = (area: ConsentArea) => (
     <AreaRow key={area.entity} area={area} allowed={allowed} undecided={undecided} ticked={ticked} isNew={newAreas.has(area.entity)} withWrite={hasWrites}
-      disabled={disabled} onToggle={(kind, on) => onChange(togglePeg(ticked, area, kind, on))} />
+      disabled={disabled} invalid={invalid} errorId={errorId} onToggle={(kind, on) => onChange(togglePeg(ticked, area, kind, on))} />
   );
 
   return (
@@ -61,12 +64,12 @@ export function ConsentPegBoard({ areas, allowed, undecided, newAreas, ticked, o
         <tr className={ROW}>
           <th scope="row" className="py-4 pr-8 text-left body-small font-medium">All areas</th>
           <td className="text-center">
-            {reads.length ? <Peg state={groupState(ticked, reads)} label="All areas, read" disabled={disabled}
+            {reads.length ? <Peg state={groupState(ticked, reads)} label="All areas, read" disabled={disabled} invalid={invalid} describedBy={invalid ? errorId : undefined}
               onChange={(on) => onChange(toggleAll(ticked, areas, undecided, "read", on))} /> : <SettledPeg label="All areas, read" />}
           </td>
           {hasWrites && (
             <td className="text-center">
-              {writes.length ? <Peg state={groupState(ticked, writes)} label="All areas, write" disabled={disabled}
+              {writes.length ? <Peg state={groupState(ticked, writes)} label="All areas, write" disabled={disabled} invalid={invalid} describedBy={invalid ? errorId : undefined}
                 onChange={(on) => onChange(toggleAll(ticked, areas, undecided, "write", on))} /> : <SettledPeg label="All areas, write" />}
             </td>
           )}
@@ -87,7 +90,7 @@ export function ConsentPegBoard({ areas, allowed, undecided, newAreas, ticked, o
   );
 }
 
-function AreaRow({ area, allowed, undecided, ticked, isNew, withWrite, disabled, onToggle }: {
+function AreaRow({ area, allowed, undecided, ticked, isNew, withWrite, disabled, invalid, errorId, onToggle }: {
   area: ConsentArea;
   allowed: readonly ApiScope[];
   undecided: readonly ApiScope[];
@@ -95,6 +98,8 @@ function AreaRow({ area, allowed, undecided, ticked, isNew, withWrite, disabled,
   isNew: boolean;
   withWrite: boolean;
   disabled: boolean;
+  invalid: boolean;
+  errorId?: string;
   onToggle: (kind: "read" | "write", on: boolean) => void;
 }) {
   const cell = (scope: ApiScope | null, kind: "read" | "write") => {
@@ -102,7 +107,7 @@ function AreaRow({ area, allowed, undecided, ticked, isNew, withWrite, disabled,
     if (!scope) return <span className="sr-only">Not applicable</span>;
     if (allowed.includes(scope)) return <SettledPeg label={label} />;
     if (!undecided.includes(scope)) return <span className="sr-only">Not applicable</span>;
-    return <Peg state={ticked.includes(scope) ? "on" : "off"} label={label} disabled={disabled} onChange={(on) => onToggle(kind, on)} />;
+    return <Peg state={ticked.includes(scope) ? "on" : "off"} label={label} disabled={disabled} invalid={invalid} describedBy={invalid ? errorId : undefined} onChange={(on) => onToggle(kind, on)} />;
   };
   return (
     <tr className={cn(ROW, isNew && "bg-[var(--color-background-interaction-light)]")}>

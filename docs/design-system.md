@@ -950,6 +950,11 @@ stays as a preview whose lead footer action opens the page
 - KPI strips: `gap-24` grid, `md:grid-cols-2` with `lg:grid-cols-3` (3 cards)
   or `lg:grid-cols-4` (4 cards).
 - Tables/panels never sit flush on the warm field — use the `--panel-*` recipe.
+- Side sheet footer (view mode): the sheet's actions first at natural width,
+  bottom left (primary Edit, then a destructive one), then `Close`
+  (`variant="default"` in `SlideOverPanel.Close`) last. A sheet with no action
+  keeps a footer with Close alone. The header X and Escape stay. Never
+  `flex-1` or `justify-stretch`. Edit and create mode use `FormActions`.
 - Side sheets: header title = entity code (or `Create X` in create mode — **no
   filler subtitle in create mode**); view/edit subtitle = the identifying
   secondary. **Storage bins invert this**: the name is the title and the code

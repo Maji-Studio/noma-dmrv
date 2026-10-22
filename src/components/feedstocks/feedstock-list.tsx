@@ -369,7 +369,10 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     }
   };
 
-  const handleDelete = (feedstock: FeedstockWithRelations) => setDeleting(feedstock);
+  const handleDelete = (feedstock: FeedstockWithRelations) => {
+    setDeleteError(null);
+    setDeleting(feedstock);
+  };
 
   const handleDeleteConfirm = async () => {
     if (!deleting) return;
@@ -649,16 +652,18 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       </DataTable>
 
       {/* Delete Error */}
-      {deleteError && <ServerError message={deleteError} />}
+      {deleteError && !deleting && <ServerError message={deleteError} />}
 
       {/* Delete Confirmation */}
       <DeleteConfirmDialog
         isOpen={!!deleting}
         title="Delete feedstock"
-        message="Are you sure you want to delete this feedstock? This action cannot be undone. Note: Feedstocks used in production runs cannot be deleted."
+        // Once the server refuses, its reason says the rule; the Note would repeat it.
+        message={deleteError ? "Are you sure you want to delete this feedstock? This action cannot be undone." : "Are you sure you want to delete this feedstock? This action cannot be undone. Note: Feedstocks used in production runs cannot be deleted."}
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeleting(null); setDeleteError(null); }}
         isPending={deleteFeedstock.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       {/* Side Sheet */}

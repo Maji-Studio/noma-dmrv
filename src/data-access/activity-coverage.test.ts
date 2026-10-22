@@ -17,6 +17,7 @@ const ACTIVITY_COVERAGE = {
   },
   "emission-entries.ts": {
     createEmissionEntry: { status: "direct" },
+    createEmissionEntryInTransaction: { status: "direct" },
     updateEmissionEntry: { status: "direct" },
     confirmEmissionEntry: { status: "direct" },
     deleteEmissionEntry: { status: "direct" },
