@@ -12,8 +12,8 @@
 "use client";
 
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
-import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { formatUtcDate, toDateInputValue, facilityToday } from "@/lib/date-utils";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { useFeedstockTypeList } from "@/hooks/use-feedstock-types";
 import { useMethodBEligibility } from "@/hooks/use-production-processes";
@@ -121,6 +121,8 @@ export function CreditBatchForm({
   // lock that arrives Held can never meet an edited membership.
   const membershipLocked = isEditMode && (!lock || isCreditBatchMembershipLocked(lock));
   const { facilityId: contextFacilityId } = useFacilityContext();
+  const { timeZone } = useFacilityClock(creditBatch?.facilityId ?? contextFacilityId);
+  const today = facilityToday(timeZone);
 
   const {
     register,
@@ -134,8 +136,8 @@ export function CreditBatchForm({
     defaultValues: {
       facilityId: creditBatch?.facilityId ?? contextFacilityId ?? "",
       feedstockTypeId: creditBatch?.feedstockTypeId ?? defaultValues?.feedstockTypeId ?? "",
-      startDate: toDateInputValue(creditBatch?.startDate ?? defaultValues?.startDate),
-      endDate: toDateInputValue(creditBatch?.endDate ?? defaultValues?.endDate),
+      startDate: toDateInputValue(creditBatch?.startDate ?? defaultValues?.startDate, today),
+      endDate: toDateInputValue(creditBatch?.endDate ?? defaultValues?.endDate, today),
       sampling: creditBatch?.sampling ?? "sampled",
       productionRunIds: creditBatch?.productionRunIds ?? [],
       siteManagementNotes: creditBatch?.siteManagementNotes ?? "",

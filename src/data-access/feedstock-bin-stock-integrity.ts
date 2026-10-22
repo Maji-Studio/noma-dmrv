@@ -23,6 +23,7 @@ import { alias } from "drizzle-orm/pg-core";
 import type { DbTransaction } from "@/db";
 import {
   biocharProducts,
+  facilities,
   binMovements,
   productionRunFeedstockDraws,
   productionRuns,
@@ -31,7 +32,7 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { conflictCode, type ConflictRef } from "@/lib/conflict-ref";
 import { DomainError, type DomainIssue } from "@/lib/domain-errors";
-import { formatDateTime, formatMassKg } from "@/lib/format-utils";
+import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { STOCK_CONFLICT_ENTITY } from "@/lib/stock-conflict-entities";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
@@ -84,6 +85,7 @@ async function listLaneWithdrawals(
   ctx: OrgContext,
   tx: DbTransaction,
   storageLocationId: string,
+  timeZone: string,
 ): Promise<ConflictRef[]> {
   const runs = await tx
     .selectDistinct({ id: productionRuns.id, code: productionRuns.code })
@@ -181,7 +183,7 @@ async function listLaneWithdrawals(
       entity: STOCK_CONFLICT_ENTITY.binMovement,
       id: movement.id,
       // Feedstock history shows the reason and recorded time, not an output physical date.
-      code: conflictCode(`${movement.reason} (${formatDateTime(movement.createdAt)})`),
+      code: conflictCode(`${movement.reason} (${formatFacilityDateTime(movement.createdAt, timeZone)})`),
     })),
   ];
 }
@@ -207,8 +209,12 @@ export async function assertFeedstockBinLanesNotNegative(
   if (binIds.length === 0) return;
 
   const bins = await tx
-    .select({ id: storageLocations.id, code: storageLocations.code })
+    .select({ id: storageLocations.id, code: storageLocations.code, timeZone: facilities.timezone })
     .from(storageLocations)
+    .innerJoin(facilities, and(
+      eq(facilities.id, storageLocations.facilityId),
+      eq(facilities.organizationId, ctx.organizationId),
+    ))
     .where(
       and(
         inArray(storageLocations.id, binIds),
@@ -219,7 +225,7 @@ export async function assertFeedstockBinLanesNotNegative(
   for (const bin of bins) {
     const [stock] = await deriveLaneStock(ctx, tx, { storageLocationIds: [bin.id], lanes: "feedstock" });
     if (isNegativeStock(stock.feedstockStockWetKg)) {
-      const blockers = await listLaneWithdrawals(ctx, tx, bin.id);
+      const blockers = await listLaneWithdrawals(ctx, tx, bin.id, bin.timeZone);
       const message = negativeLaneMessage(write, bin.code, Math.abs(stock.feedstockStockWetKg));
       const issueMessage = `Bin ${bin.code} would go ${formatMassKg(Math.abs(stock.feedstockStockWetKg))} below zero.`;
       // Compare the proposed intake supply with existing withdrawals. Movement

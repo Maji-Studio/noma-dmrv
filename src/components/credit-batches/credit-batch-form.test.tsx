@@ -9,7 +9,7 @@ import { CreditBatchForm } from "./credit-batch-form";
 
 const mocks = vi.hoisted(() => ({
   certifierSummary: vi.fn(), methodBEligibility: vi.fn(), recordPrerequisites: vi.fn(),
-  showFacilitySelect: false, showFeedstockSelect: false,
+  showFacilitySelect: false, showFeedstockSelect: false, timeZone: "UTC",
 }));
 
 const ISOMETRIC_FACILITY_ID = "00000000-0000-4000-8000-000000000002";
@@ -41,7 +41,8 @@ function FeedstockSelect({ control }: { control: Control<SelectFields> }) {
   );
 }
 
-vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: "facility" }) }));
+vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: mocks.timeZone, hint: "" }),
+  useFacilityContext: () => ({ facilityId: "facility" }) }));
 vi.mock("@/hooks/use-certification", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-certification")>(),
   useFacilityCertifierSummary: mocks.certifierSummary,
@@ -77,6 +78,7 @@ beforeEach(() => {
   mocks.methodBEligibility.mockClear();
   mocks.methodBEligibility.mockReturnValue({ data: undefined });
   mocks.showFacilitySelect = false;
+  mocks.timeZone = "UTC";
   mocks.showFeedstockSelect = false;
   mocks.recordPrerequisites.mockReset();
   mocks.recordPrerequisites.mockResolvedValue(undefined);
@@ -104,6 +106,17 @@ describe("CreditBatchForm required dates", () => {
       expect(label.textContent).toContain("Required");
       expect(label.querySelector('[aria-hidden="true"]')?.textContent).toBe("*");
     }
+  });
+});
+
+describe("CreditBatchForm month window", () => {
+  it("keeps the supplied month window when the facility zone resolves late", () => {
+    const defaultValues = { startDate: "2026-09-01", endDate: "2026-09-30" };
+    const { container, rerender } = render(<CreditBatchForm defaultValues={defaultValues} onSubmit={vi.fn()} />);
+    mocks.timeZone = "Africa/Dar_es_Salaam";
+    rerender(<CreditBatchForm defaultValues={defaultValues} onSubmit={vi.fn()} />);
+    expect(container.querySelector<HTMLInputElement>('input[name="startDate"]')?.value).toBe("2026-09-01");
+    expect(container.querySelector<HTMLInputElement>('input[name="endDate"]')?.value).toBe("2026-09-30");
   });
 });
 

@@ -17,6 +17,7 @@ vi.mock("nuqs", () => ({
   useQueryState: () => [null, vi.fn()],
 }));
 vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }),
   useFacilityContext: () => ({ facilityId: FACILITY_ID, selectedFacility: { name: "Facility", code: "FAC" } }),
 }));
 vi.mock("@/hooks/use-open-create-intent", () => ({

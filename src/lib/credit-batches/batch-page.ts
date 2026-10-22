@@ -6,7 +6,7 @@
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import type { DerivedStatusKind } from "@/lib/certification/status";
-import { formatDate, formatTonnes } from "@/lib/format-utils";
+import { formatFacilityDay, formatTonnes } from "@/lib/format-utils";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import type { CreditBatchOpenItem } from "./open-items";
 
@@ -90,6 +90,7 @@ const STATEMENT_STEP_CAPTION_KINDS: readonly DerivedStatusKind[] = ["in-verifica
 const SAME_MASS_TOLERANCE_KG = 0.001;
 
 export interface CreditBatchMilestoneInput {
+  timeZone: string;
   /** Blocking open items; null while the batch health is loading or failed. */
   blockingCount: number | null;
   /** The Overview badge count (Blocking + Check), the number the first step shows. */
@@ -97,7 +98,7 @@ export interface CreditBatchMilestoneInput {
   pageModel: CreditBatchPageModel | undefined;
 }
 
-function removalCaption(model: CreditBatchPageModel): string | null {
+function removalCaption(model: CreditBatchPageModel, timeZone: string): string | null {
   const { firstRemovalSubmittedAt, firstRemovalSubmittedCode } = model.milestones;
   if (!firstRemovalSubmittedAt) {
     const draft = model.removals.find((removal) => removal.phase === "draft");
@@ -110,7 +111,7 @@ function removalCaption(model: CreditBatchPageModel): string | null {
   if (appliedDryKg - inSubmittedDryKg > SAME_MASS_TOLERANCE_KG) {
     return `${name}, ${formatTonnes(kgToTonnes(inSubmittedDryKg))} of ${formatTonnes(kgToTonnes(appliedDryKg))}`;
   }
-  return `${name}, ${formatDate(firstRemovalSubmittedAt)}`;
+  return `${name}, ${formatFacilityDay(firstRemovalSubmittedAt, timeZone)}`;
 }
 
 /**
@@ -119,7 +120,7 @@ function removalCaption(model: CreditBatchPageModel): string | null {
  * then "Ready for submission"; it reads "Batch data" while the batch health is loading or failed.
  * "Ready for submission" and "Verified" carry no date: none is stored.
  */
-export function creditBatchMilestones({ blockingCount, openCount, pageModel }: CreditBatchMilestoneInput): CreditBatchMilestone[] {
+export function creditBatchMilestones({ blockingCount, openCount, pageModel, timeZone }: CreditBatchMilestoneInput): CreditBatchMilestone[] {
   const statement = pageModel?.milestones.ghgStatement ?? null;
   const missing = blockingCount != null && blockingCount > 0;
   const steps: { key: CreditBatchMilestoneKey; label: string; done: boolean; failed?: boolean; caption: string | null; count?: number }[] = [
@@ -135,7 +136,7 @@ export function creditBatchMilestones({ blockingCount, openCount, pageModel }: C
       key: "removal",
       label: "Removal submitted",
       done: !!pageModel?.milestones.firstRemovalSubmittedAt,
-      caption: pageModel ? removalCaption(pageModel) : null,
+      caption: pageModel ? removalCaption(pageModel, timeZone) : null,
     },
     {
       key: "verified",
@@ -148,7 +149,7 @@ export function creditBatchMilestones({ blockingCount, openCount, pageModel }: C
       key: "issued",
       label: "Credits issued",
       done: statement?.status.kind === "issued",
-      caption: statement?.status.kind === "issued" && statement.creditsIssuedAt ? formatDate(statement.creditsIssuedAt) : null,
+      caption: statement?.status.kind === "issued" && statement.creditsIssuedAt ? formatFacilityDay(statement.creditsIssuedAt, timeZone) : null,
     },
   ];
   const currentIndex = steps.findIndex((step) => !step.done);

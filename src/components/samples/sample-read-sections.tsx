@@ -1,6 +1,7 @@
 /** Sample side-sheet view mode: the sections config for EntitySideSheet. */
+import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatDate, formatDateTime, formatFacilityDateTime, formatPercent } from "@/lib/format-utils";
+import { formatDate, formatFacilityDateTime, formatPercent } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL, PERCENT_SCALE } from "@/lib/mass-moisture";
 import { formatDurabilityOption } from "@/schemas/samples";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
@@ -17,12 +18,10 @@ function formatLabPercent(value: number | null | undefined): string {
 
 /**
  * Sampling time on the credit batch facility's clock, the clock it is entered
- * on (round 7 Q51). Without a configured facility zone, use the viewer's clock.
+ * on (round 7 Q51). Unknown facilities use the shared UTC fallback.
  */
 export function formatSamplingTime(sample: Pick<SampleWithRelations, "samplingTime" | "facilityTimezone">): string {
-  return sample.facilityTimezone
-    ? formatFacilityDateTime(sample.samplingTime, sample.facilityTimezone)
-    : formatDateTime(sample.samplingTime);
+  return formatFacilityDateTime(sample.samplingTime, sample.facilityTimezone ?? UNKNOWN_FACILITY_TIMEZONE);
 }
 
 export function sampleSheetSections(

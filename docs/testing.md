@@ -8,6 +8,8 @@ themselves. Related: [security.md](./security.md) (env inventory),
 [database.md](./database.md), [troubleshooting.md](./troubleshooting.md),
 [isometric/README.md](./isometric/README.md).
 
+`vitest.config.ts` pins the process zone to `America/Los_Angeles`, a zone no facility uses, so code that reads the process zone instead of the facility's fails in tests.
+
 Vitest defaults to the `node` environment. Component tests that need a real DOM
 or portals opt in with `// @vitest-environment jsdom` and use
 `@testing-library/react`.

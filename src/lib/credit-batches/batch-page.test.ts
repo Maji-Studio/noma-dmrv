@@ -1,3 +1,4 @@
+import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { describe, expect, it } from "vitest";
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
 import type { DerivedStatus } from "@/lib/certification/status";
@@ -87,25 +88,41 @@ describe("overviewBadgeCount", () => {
 });
 
 describe("creditBatchMilestones", () => {
+  it("reads submission and issuance instants on the batch facility calendar", () => {
+    const at = new Date("2026-10-21T22:00:00Z");
+    const steps = creditBatchMilestones({
+      timeZone: "Africa/Dar_es_Salaam", blockingCount: 0, openCount: 0,
+      pageModel: model({
+        mass: { inSubmittedDryKg: 800 },
+        milestones: {
+          firstRemovalSubmittedAt: at, firstRemovalSubmittedCode: "RM-26-001",
+          ghgStatement: statement("issued", { creditsIssuedAt: at.toISOString() }),
+        },
+      }),
+    });
+    expect(steps[1].caption).toBe("RM-26-001, Oct 22, 2026");
+    expect(steps[3].caption).toBe("Oct 22, 2026");
+  });
+
   it("reads Open to-dos with the Overview badge count while items block", () => {
     // 2 Blocking + 2 Check: the step shows the same 4 as the Overview tab.
-    const [data, removalStep, verified, issued] = creditBatchMilestones({ blockingCount: 2, openCount: 4, pageModel: model() });
+    const [data, removalStep, verified, issued] = creditBatchMilestones({ timeZone: UNKNOWN_FACILITY_TIMEZONE, blockingCount: 2, openCount: 4, pageModel: model() });
     expect(data).toEqual({ key: "data", label: "Open to-dos", state: "current", caption: null, count: 4 });
     expect([removalStep.state, verified.state, issued.state]).toEqual(["todo", "todo", "todo"]);
   });
 
   it("reads Ready for submission when only Check items remain", () => {
-    expect(creditBatchMilestones({ blockingCount: 0, openCount: 3, pageModel: model() })[0]).toEqual({ key: "data", label: "Ready for submission", state: "done", caption: null });
+    expect(creditBatchMilestones({ timeZone: UNKNOWN_FACILITY_TIMEZONE, blockingCount: 0, openCount: 3, pageModel: model() })[0]).toEqual({ key: "data", label: "Ready for submission", state: "done", caption: null });
   });
 
   it("reads Ready for submission without a date once nothing blocks, and names a draft Removal", () => {
-    const steps = creditBatchMilestones({ blockingCount: 0, openCount: 0, pageModel: model({ removals: [removal()] }) });
+    const steps = creditBatchMilestones({ timeZone: UNKNOWN_FACILITY_TIMEZONE, blockingCount: 0, openCount: 0, pageModel: model({ removals: [removal()] }) });
     expect(steps[0]).toEqual({ key: "data", label: "Ready for submission", state: "done", caption: null });
     expect(steps[1]).toMatchObject({ state: "current", caption: "RM-26-001 in draft" });
   });
 
   it("shows the submitted share of a partly sent batch", () => {
-    const steps = creditBatchMilestones({
+    const steps = creditBatchMilestones({ timeZone: UNKNOWN_FACILITY_TIMEZONE,
       blockingCount: 0,
       openCount: 0,
       pageModel: model({
@@ -120,7 +137,7 @@ describe("creditBatchMilestones", () => {
 
   it("dates a fully sent Removal and keeps Verified undated", () => {
     const submittedAt = new Date("2026-10-12T12:00:00Z");
-    const steps = creditBatchMilestones({
+    const steps = creditBatchMilestones({ timeZone: UNKNOWN_FACILITY_TIMEZONE,
       blockingCount: 0,
       openCount: 0,
       pageModel: model({
@@ -136,15 +153,15 @@ describe("creditBatchMilestones", () => {
 
   it("dates issued credits and marks failed verification", () => {
     const base = { firstRemovalSubmittedAt: new Date("2026-10-12T00:00:00Z"), firstRemovalSubmittedCode: "RM-26-001" };
-    const issued = creditBatchMilestones({ blockingCount: 0, openCount: 0, pageModel: model({ milestones: { ...base, ghgStatement: statement("issued", { creditsIssuedAt: "2026-11-03" }) } }) });
+    const issued = creditBatchMilestones({ timeZone: UNKNOWN_FACILITY_TIMEZONE, blockingCount: 0, openCount: 0, pageModel: model({ milestones: { ...base, ghgStatement: statement("issued", { creditsIssuedAt: "2026-11-03" }) } }) });
     expect(issued.map((step) => step.state)).toEqual(["done", "done", "done", "done"]);
     expect(issued[3].caption).toBe("Nov 3, 2026");
-    const failed = creditBatchMilestones({ blockingCount: 0, openCount: 0, pageModel: model({ milestones: { ...base, ghgStatement: statement("verification-failed") } }) });
+    const failed = creditBatchMilestones({ timeZone: UNKNOWN_FACILITY_TIMEZONE, blockingCount: 0, openCount: 0, pageModel: model({ milestones: { ...base, ghgStatement: statement("verification-failed") } }) });
     expect(failed[2]).toMatchObject({ state: "failed", caption: "Verification failed" });
   });
 
   it("names the data step without a verdict while the health loads or failed", () => {
-    expect(creditBatchMilestones({ blockingCount: null, openCount: 0, pageModel: undefined })[0]).toEqual({ key: "data", label: "Batch data", state: "current", caption: null });
+    expect(creditBatchMilestones({ timeZone: UNKNOWN_FACILITY_TIMEZONE, blockingCount: null, openCount: 0, pageModel: undefined })[0]).toEqual({ key: "data", label: "Batch data", state: "current", caption: null });
   });
 });
 

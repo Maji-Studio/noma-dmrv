@@ -1,5 +1,6 @@
 "use client";
 
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import {
   useApplicationStorageLocationSync,
   useSyncApplicationStorageLocation,
 } from "@/hooks/use-storage-location-sync";
-import { formatDateTime } from "@/lib/format-utils";
+import { formatFacilityDateTime } from "@/lib/format-utils";
 import type { ApplicationStorageLocationSyncState } from "@/fn/certification";
 
 const STATE_PRESENTATION: Record<
@@ -31,6 +32,8 @@ export function ApplicationStorageLocationSync({
   applicationId: string;
 }) {
   const query = useApplicationStorageLocationSync(applicationId);
+  const { facilityId } = useFacilityContext();
+  const { timeZone } = useFacilityClock(facilityId);
   const sync = useSyncApplicationStorageLocation();
 
   if (query.isLoading) {
@@ -100,7 +103,7 @@ export function ApplicationStorageLocationSync({
       )}
       {view.attemptedAt && (
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Last checked {formatDateTime(new Date(view.attemptedAt))}
+          Last checked {formatFacilityDateTime(new Date(view.attemptedAt), timeZone)}
         </p>
       )}
       {view.state === "drifted" && (

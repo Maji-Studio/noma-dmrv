@@ -8,6 +8,7 @@ import type { OnboardingStatus } from "@/data-access/onboarding";
 
 const mocks = vi.hoisted(() => ({
   facilityId: null as string | null,
+  generatedAt: undefined as string | undefined,
   mode: "takeover-guide",
   reactors: 0,
   setFacilityId: vi.fn(),
@@ -29,9 +30,10 @@ vi.mock("@/components/onboarding", async (importOriginal) => ({
   },
 }));
 vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }),
   useFacilityContext: () => ({ facilityId: mocks.facilityId, activeOrganizationId: "org-1", setFacilityId: mocks.setFacilityId }),
 }));
-vi.mock("@/hooks/use-dashboard-overview", () => ({ useDashboardOverview: () => ({ data: undefined, isLoading: false }) }));
+vi.mock("@/hooks/use-dashboard-overview", () => ({ useDashboardOverview: () => ({ data: mocks.generatedAt ? { generatedAt: mocks.generatedAt } : undefined, isLoading: false }) }));
 vi.mock("@/hooks/use-facilities", () => ({ useCreateFacility: () => ({ mutateAsync: mocks.createFacility, isPending: false }) }));
 vi.mock("@/hooks/use-reactors", () => ({ useCreateReactor: () => ({ mutateAsync: mocks.createReactor, isPending: false }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -52,6 +54,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.facilityId = null;
   mocks.mode = "takeover-guide";
+  mocks.generatedAt = undefined;
   mocks.reactors = 0;
   mocks.setFacilityId.mockImplementation((id: string) => { mocks.facilityId = id; });
   mocks.createFacility.mockResolvedValue({ id: "facility-1" });
@@ -106,5 +109,14 @@ describe("DashboardView setup surfaces", () => {
     expect(JSON.stringify(renderer.toJSON())).toContain("Setup in progress");
     expect(sheets()).toHaveLength(0);
     expect(renderer.root.findAllByType("button").some((node) => node.children.includes("Add facility"))).toBe(false);
+  });
+});
+
+describe("DashboardView updated time", () => {
+  it("shows the active facility date and time", async () => {
+    mocks.facilityId = "facility-1";
+    mocks.generatedAt = "2026-10-21T21:30:00Z";
+    await mount();
+    expect(JSON.stringify(renderer.toJSON())).toContain("Live operations · updated Oct 22, 2026, 00:30");
   });
 });

@@ -129,5 +129,5 @@ export function CreditBatchSamplesTab() {
 
 export function CreditBatchActivitiesTab() {
   const { batch } = useCreditBatchPage();
-  return <CreditBatchActivityView creditBatchId={batch.id} batchCode={batch.code} inline />;
+  return <CreditBatchActivityView facilityId={batch.facilityId} creditBatchId={batch.id} batchCode={batch.code} inline />;
 }

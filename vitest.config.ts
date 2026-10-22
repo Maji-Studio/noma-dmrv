@@ -1,6 +1,11 @@
 import { defineConfig } from "vitest/config";
 import { resolve } from "path";
 
+// Run every test in a zone that is not a facility zone (facilities are in
+// Africa/Dar_es_Salaam, UTC and elsewhere), so code that reads the process
+// zone instead of the facility's fails here, not in front of a tester.
+process.env.TZ = "America/Los_Angeles";
+
 const DEFAULT_LOCAL_MAX_WORKERS = 2;
 const configuredMaxWorkers = Number(process.env.VITEST_MAX_WORKERS ?? DEFAULT_LOCAL_MAX_WORKERS);
 const localMaxWorkers = Number.isInteger(configuredMaxWorkers) && configuredMaxWorkers > 0

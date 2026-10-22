@@ -32,7 +32,7 @@ import {
   storageLocations,
   users,
 } from "@/db/schema";
-import { formatDateTime } from "@/lib/format-utils";
+import { formatFacilityDateTime } from "@/lib/format-utils";
 import { negativeLaneMessage } from "@/data-access/feedstock-bin-stock-integrity";
 import { deleteOutputProductFixtures, outputProductFixtureValues } from "./helpers/output-contract-fixtures";
 import { deleteFeedstockInTransaction, updateFeedstockInTransaction } from "@/data-access/feedstocks";
@@ -73,6 +73,9 @@ const historyBlocksMessage = (changedField: string) =>
 
 const ORG_PREFIX = "e2e-bin-integrity-org-";
 
+/** A zone away from UTC and from the test process, so a browser-clock label cannot pass. */
+const FACILITY_TIME_ZONE = "Africa/Dar_es_Salaam";
+
 interface Fixture {
   tag: string;
   ctx: OrgContext;
@@ -108,7 +111,7 @@ async function seedFixture(intakeWetKg = INTAKE_WET_KG): Promise<Fixture> {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: FACILITY_TIME_ZONE,
       organizationId,
       code: `E2E-BINT-F-${tag}`,
       name: `E2E Bin integrity ${tag}`,
@@ -198,7 +201,7 @@ async function recordLoss(fixture: Fixture, wetKg: number) {
   return {
     entity: "binMovement",
     id: movement.id,
-    code: `${movement.reason} (${formatDateTime(movement.createdAt)})`,
+    code: `${movement.reason} (${formatFacilityDateTime(movement.createdAt, FACILITY_TIME_ZONE)})`,
   };
 }
 

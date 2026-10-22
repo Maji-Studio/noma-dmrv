@@ -6,6 +6,7 @@ import { Button } from "@/components/ui";
 import type { ApiKeyListItem } from "@/hooks/use-api-keys";
 import { scopesFromPermissions } from "@/lib/auth/api-scopes";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+// Account/organization security metadata has no facility clock.
 import { formatDateTime } from "@/lib/format-utils";
 import { compactPermissionSummary } from "./api-key-permissions";
 

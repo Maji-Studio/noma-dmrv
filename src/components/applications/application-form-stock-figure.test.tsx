@@ -100,3 +100,8 @@ describe("ApplicationForm stock figure", () => {
     expect(html).not.toContain("Remaining now");
   });
 });
+
+vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityContext: () => ({ facilityId: "facility-1" }),
+  useFacilityClock: () => ({ timeZone: "UTC", hint: "" }),
+}));

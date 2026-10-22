@@ -31,7 +31,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import {
   useFacilityCertifierSummary,
   useGhgStatementsForFacility,
@@ -275,6 +275,7 @@ function StatusCell({ item }: { item: GhgStatementListItem }) {
 const createColumns = (
   registryHref: (externalId: string) => string | null,
   sorting: { submittedOn: boolean; lastSynced: boolean },
+  timeZone: string,
 ): ColumnDef<GhgStatementListItem>[] => [
   {
     id: "period",
@@ -306,18 +307,18 @@ const createColumns = (
   {
     id: "submittedOn",
     header: "Submitted on",
-    accessorFn: (item) => submittedOnText(item.submittedOn),
+    accessorFn: (item) => submittedOnText(item.submittedOn, timeZone),
     sortingFn: submittedOnSortingFn<GhgStatementListItem>(sorting.submittedOn),
     cell: ({ row }) => (
-      <SubmittedOnCell state={row.original.submittedOn} />
+      <SubmittedOnCell state={row.original.submittedOn} timeZone={timeZone} />
     ),
   },
   {
     id: "lastSynced",
     header: "Last synced",
-    accessorFn: (item) => lastSyncedText(item.lastSyncedAt),
+    accessorFn: (item) => lastSyncedText(item.lastSyncedAt, timeZone),
     sortingFn: lastSyncedSortingFn<GhgStatementListItem>(sorting.lastSynced),
-    cell: ({ row }) => <LastSyncedCell value={row.original.lastSyncedAt} />,
+    cell: ({ row }) => <LastSyncedCell value={row.original.lastSyncedAt} timeZone={timeZone} />,
   },
   {
     id: "status",
@@ -336,6 +337,7 @@ const createColumns = (
 ];
 
 function ListBody({ facilityId }: { facilityId: string }) {
+  const { timeZone } = useFacilityClock(facilityId);
   // DB-only summary — this page only needs link-presence + env. It must NOT pull
   // the management payload (available projects/templates, cross-facility link
   // hints, live Isometric API calls) that `useFacilityCertifierMapping` fetches.
@@ -366,6 +368,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
       submittedOn: isSortedDescending(sorting, "submittedOn"),
       lastSynced: isSortedDescending(sorting, "lastSynced"),
     },
+    timeZone,
   );
   const gate = deriveGhgCreateGate({
     isLoading: summaryQuery.isLoading,

@@ -38,6 +38,7 @@ vi.mock("nuqs", () => ({
   useQueryState: () => useState<string | null>(null),
 }));
 vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }),
   useFacilityContext: () => ({ facilityId: "facility-1" }),
 }));
 vi.mock("@/components/ui/data-table", () => {

@@ -5,6 +5,7 @@
  * selected credit batch and its records as a timeline on a panel, newest first, one rail per day,
  * filterable by kind and record type, loaded a page at a time.
  */
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { useId, useState } from "react";
 import { ClockCounterClockwiseIcon, FunnelSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState } from "@/components/ui";
@@ -83,10 +84,12 @@ function FilterSelect({
 
 export function CreditBatchActivityView({
   creditBatchId,
+  facilityId,
   batchCode,
   inline = false,
 }: {
   creditBatchId: string;
+  facilityId: string | null;
   /** Names the list for assistive tech; absent while the batch list loads. */
   batchCode?: string;
   /**
@@ -95,6 +98,7 @@ export function CreditBatchActivityView({
    */
   inline?: boolean;
 }) {
+  const { timeZone } = useFacilityClock(facilityId);
   const [filters, setFilters] = useState<ActivityFilters>({});
   // Index of the first row a "Show older activity" press added; that row takes focus once.
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
@@ -103,7 +107,7 @@ export function CreditBatchActivityView({
   const summary = useCreditBatchActivitySummary(creditBatchId);
   const activity = useCreditBatchActivity(creditBatchId, { limit: ACTIVITY_LIST_PAGE_SIZE, filters });
   const items = activity.data?.pages.flatMap((page) => page.items) ?? [];
-  const dayGroups = groupActivityByDay(items);
+  const dayGroups = groupActivityByDay(items, timeZone);
   const counts = summary.data?.counts ?? [];
   const filtered = hasActivityFilters(filters);
 
@@ -151,7 +155,7 @@ export function CreditBatchActivityView({
           padding="lg"
           icon={<ClockCounterClockwiseIcon size={EMPTY_ICON_PX} weight="thin" />}
           title={ACTIVITY_EMPTY_TITLE}
-          description={activityEmptyDescription()}
+          description={activityEmptyDescription(timeZone)}
         />
       );
     }
@@ -170,6 +174,7 @@ export function CreditBatchActivityView({
                   <ActivityEntry
                     key={item.id}
                     item={item}
+                    timeZone={timeZone}
                     creditBatchId={creditBatchId}
                     focusRef={items.indexOf(item) === focusIndex ? focusFirstNew : undefined}
                   />
@@ -195,7 +200,7 @@ export function CreditBatchActivityView({
             <span aria-hidden className="relative flex justify-center">
               <span className={RAIL_END_DOT_CLASS} />
             </span>
-            <span>{activityHistoryStartNote()}</span>
+            <span>{activityHistoryStartNote(timeZone)}</span>
           </p>
         )}
       </div>

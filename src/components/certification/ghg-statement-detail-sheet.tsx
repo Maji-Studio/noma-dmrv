@@ -9,6 +9,7 @@
  */
 "use client";
 
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { useState } from "react";
 import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
@@ -106,6 +107,7 @@ function DetailState({
   open: boolean;
 }) {
   const { statement } = item;
+  const { timeZone } = useFacilityClock(statement.facilityId);
   const query = useGhgStatementState(statement.id);
   const reportsQuery = useGhgStatementReports(statement.id);
   const breakdownQuery = useGhgStatementBreakdown(statement.id, open);
@@ -343,7 +345,7 @@ function DetailState({
                 </Accordion.Trigger>
               </Accordion.Header>
               <Accordion.Panel className="[&>div]:p-16">
-                <SyncEventList events={recentSyncEvents} />
+                <SyncEventList events={recentSyncEvents} timeZone={timeZone} />
               </Accordion.Panel>
             </Accordion.Item>
           )}
