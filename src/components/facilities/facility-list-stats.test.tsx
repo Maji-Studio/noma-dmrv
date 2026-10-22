@@ -14,6 +14,7 @@ vi.mock("@/hooks/use-facilities", () => {
   return {
   useFacilities: () => ({ data: { items: [], total: 25, totalPages: 3 }, isLoading: false, error: null }),
   useFacilityCountries: () => ({ data: [] }),
+  useFacilityOutputStock: () => ({ data: undefined, isPending: false, isError: false }),
   useFacilityStats: (archived: boolean) => {
     state.archivedArgs.push(archived);
     return state.stats;

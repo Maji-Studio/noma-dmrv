@@ -1,11 +1,10 @@
 import { db, type DbTransaction } from "@/db";
 import { emissionDeliveryShares } from "@/lib/certification/emission-delivery-shares";
-import { requireOrgFacility, requireOrgScope } from "@/data-access/utils";
+import { requireOrgScope } from "@/data-access/utils";
 import { getEmissionAutomaticMasses } from "@/data-access/emission-automatic-masses";
 import { batchAutomaticFigures } from "@/lib/certification/batch-automatic-figures";
 import type { BatchEmissionLineFacts } from "@/lib/certification/emission-lines";
 import type { OrgContext } from "@/lib/auth/server";
-import { getCreditBatchById } from "@/data-access/credit-batches";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import { getProductionRunsForCertification } from "@/data-access/production-runs";
 import { getTransportLegsForEntities } from "@/data-access/transport-legs";
@@ -77,21 +76,4 @@ export async function loadBatchesEmissionAutomaticFacts(
       },
     }];
   }));
-}
-
-export async function loadBatchEmissionAutomaticFacts(
-  ctx: OrgContext, facilityId: string, creditBatchId: string, options: AutomaticOptions = {},
-) {
-  requireOrgScope(ctx);
-  await requireOrgFacility(ctx, facilityId);
-  const batch = await getCreditBatchById(ctx, creditBatchId, { skipPreview: true });
-  if (!batch || batch.facilityId !== facilityId) throw new SafeError("Credit batch was not found.");
-  return (await loadBatchesEmissionAutomaticFacts(ctx, [creditBatchId], options))[creditBatchId];
-}
-
-export async function loadBatchAutomaticFigures(
-  ctx: OrgContext, facilityId: string, creditBatchId: string, options: AutomaticOptions = {},
-) {
-  requireOrgScope(ctx);
-  return (await loadBatchEmissionAutomaticFacts(ctx, facilityId, creditBatchId, options)).automaticFigures;
 }

@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { ActionError } from "@/lib/action-error";
+import { inUseDeleteRefusal } from "@/lib/delete-refusal";
 import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { CascadeChangedError } from "@/lib/cascade-changed";
@@ -6,6 +8,10 @@ import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError }
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CustomerWithRelations } from "@/data-access/customers";
 import { CustomerList } from "./customer-list";
+
+function inUseError(message: string): ActionError {
+  return new ActionError({ error: message, ...inUseDeleteRefusal(message, []) });
+}
 
 const state = vi.hoisted(() => ({
   filters: [] as Array<{ archived?: boolean }>,
@@ -165,7 +171,7 @@ describe("CustomerList archive view", () => {
   });
 
   it("offers Archive instead when a delete is refused because records use the customer", async () => {
-    state.remove.mockRejectedValue(new Error("Customer was not deleted because orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer."));
+    state.remove.mockRejectedValue(inUseError("Customer was not deleted because orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer."));
     render(<CustomerList />);
     fireEvent.click(within("Actions for CUST-0001", "Delete"));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
@@ -176,7 +182,7 @@ describe("CustomerList archive view", () => {
   });
 
   it("retries Archive instead with the refreshed version after a stale refusal", async () => {
-    state.remove.mockRejectedValue(new Error("Customer was not deleted because orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer."));
+    state.remove.mockRejectedValue(inUseError("Customer was not deleted because orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer."));
     state.archive.mockRejectedValueOnce(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "customer", id: "id-CUST-0001", code: STALE_VERSION_CONFLICT_CODE })).mockResolvedValue(undefined);
     const view = render(<CustomerList />);
     fireEvent.click(within("Actions for CUST-0001", "Delete"));
@@ -224,7 +230,7 @@ describe("CustomerList archive view", () => {
   });
 
   it("offers Archive instead as soon as the dry run refuses a customer that has deliveries", () => {
-    state.preview = { data: undefined, isPending: false, isError: true, error: new Error("Customer was not deleted because deliveries were recorded on its orders. Archive it instead.") };
+    state.preview = { data: undefined, isPending: false, isError: true, error: inUseError("Customer was not deleted because deliveries were recorded on its orders. Archive it instead.") };
     render(<CustomerList />);
     fireEvent.click(within("Actions for CUST-0001", "Delete"));
     expect(screen.getByText("CUST-0001 is in use")).toBeTruthy();
@@ -266,7 +272,7 @@ describe("CustomerList archive view", () => {
   });
 
   it("does not offer Archive instead when an already archived customer is refused as in use", async () => {
-    state.remove.mockRejectedValue(new Error("Customer was not deleted because orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer."));
+    state.remove.mockRejectedValue(inUseError("Customer was not deleted because orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer."));
     render(<CustomerList />);
     fireEvent.click(screen.getByRole("button", { name: "Archived" }));
     fireEvent.click(within("Actions for CUST-0002", "Delete"));

@@ -110,7 +110,8 @@ superseding version.
 
 `completed_on` is the latest application date across the Removal's lineage and
 fails closed when no application exists. `started_on` currently uses the
-earliest production start. The pinned protocol says the Reporting Period begins
+facility day of the earliest production start. Both are facility calendar days
+(see `changes.md`, 2026-10-21). The pinned protocol says the Reporting Period begins
 with feedstock sourcing, so the start boundary is a known implementation gap
 and must not be described as conformant.
 

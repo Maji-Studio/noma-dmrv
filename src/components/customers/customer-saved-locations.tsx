@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { DefaultLocationBadge } from "@/components/ui/default-location-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
-import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { useToast } from "@/components/ui/toast";
 import { InfoHint } from "@/components/ui/tooltip";
 import {
@@ -165,7 +165,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Location ${target.name}`, "Location was not deleted. Try again.");
       setDeletingLocation(null);
-      if (isInUseDeleteRefusal(message)) {
+      if (isInUseDeleteRefusal(error)) {
         // In use: the delete dialog gives way to the in-use dialog. It offers Archive
         // only while archiving can work: never for an archived location, and not for
         // the only active location.

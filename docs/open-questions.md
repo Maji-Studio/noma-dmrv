@@ -619,16 +619,9 @@ operational tradeoff, and this is not a registry requirement we verified.
 when a monitored input changes unit. Define an exact decimal unit-conversion table
 before allowing confirmation to convert stored entry values to the new unit.
 
-## Refusal UIs match server copy (`errors/action-error-code`) - **deferred**
-
-- Hooks now throw `ActionError` (`src/lib/action-error.ts`) carrying the refusal's
-  `code` and `issues`, but `src/components/ui/lifecycle-notices.tsx:isInUseDeleteRefusal`
-  (marker in `src/lib/delete-refusal.ts`) still matches the message text to offer
-  "Archive instead". Branch on the code instead (#1327).
-
 ## Save refusals on the remaining forms (#1327) - **deferred**
 
 - Only delivery, application and feedstock edit use `useSaveRefusal`; the other forms
   keep the bottom line. Also left: re-reading locks after a lock refusal (Kenji left it
-  out of #1298), delivery's server alias seam beside its client alias map, and per-field
-  detail for feedstock lineage locks.
+  out of #1298) and per-field detail for feedstock lineage locks.
+- Delivery update posting refusals at `occurredAt` and `wetMassKg` show in the footer and need aliases (follow-up PR).

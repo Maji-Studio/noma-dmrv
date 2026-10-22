@@ -5,11 +5,23 @@ import type {
   ChainSourceLineage,
 } from "@/data-access/chain-of-custody";
 import type { ChainRunRollForward } from "@/data-access/chain-of-custody-roll-forward";
-import { kgToTonnes, tonnesToKg } from "@/lib/calculations/unit-conversions";
+import {
+  applicationNodeId,
+  buildRollbackMassTotals,
+  buildRollForwardMassTotals,
+  deliveryNodeId,
+  edgeMass,
+  flowEdgeId,
+  nodeMass,
+  productNodeId,
+  productionRunNodeId,
+  sourceAllocationMass,
+  type LineageMassTotals,
+} from "@/lib/chain-of-custody/lineage-mass-totals";
 import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
 import { formatCalendarDate, formatDate, formatFacilityDay } from "@/lib/format-utils";
-import { formatWetDryMass, splitWetMass } from "@/lib/mass-moisture";
+import { formatWetDryMass } from "@/lib/mass-moisture";
 import dagre from "@dagrejs/dagre";
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import {
@@ -19,7 +31,6 @@ import {
   NODE_WIDTH,
   type LineageNodeKind,
 } from "./chain-constants";
-import { sumNullable } from "@/lib/nullable-sum";
 import type { ChainNodeData } from "./chain-node";
 import { expandProductLineages } from "./expand-product-lineages";
 
@@ -78,10 +89,7 @@ export interface LineageGraphNode {
 // Stroke, casing, and the mass label chip live in ChainEdge (chain-edge.tsx).
 // Mass-flow lines are dark purple for contrast on the tinted canvas; the
 // reactor's equipment link is a quieter dashed tint of the same ink.
-const PRODUCTION_RUN_NODE_PREFIX = "production-run:";
 const APPLIED_FROM_SOURCE_LABEL = "Applied from source";
-const productionRunNodeId = (productionRunId: string) =>
-  `${PRODUCTION_RUN_NODE_PREFIX}${productionRunId}`;
 
 const FLOW_EDGE_COLOR = "var(--clr-dark-purple)";
 const EQUIPMENT_EDGE_COLOR = "var(--clr-dark-purple-40)";
@@ -144,16 +152,6 @@ function formatKg(value: number | null | undefined): string | null {
 function formatDryTons(value: number | null | undefined): string | null {
   if (value == null) return null;
   return `${value.toFixed(2)} t dry`;
-}
-
-function formatWetDryTonnes(
-  wetTons: number | null | undefined,
-  dryTons: number | null | undefined,
-): string {
-  return formatWetDryMass({
-    wetKg: wetTons == null ? null : tonnesToKg(wetTons),
-    dryKg: dryTons == null ? null : tonnesToKg(dryTons),
-  });
 }
 
 function massLabel(mass: EdgeMass | null): string | null {
@@ -327,7 +325,10 @@ function addRow(
 }
 
 /** Reactor, feedstock and production-run cards for a set of chain sources. */
-function buildSourceNodes(sources: ChainSourceLineage[]): LineageGraphNode[] {
+function buildSourceNodes(
+  sources: ChainSourceLineage[],
+  totals?: LineageMassTotals,
+): LineageGraphNode[] {
   const nodes: LineageGraphNode[] = [];
   const seenNodeIds = new Set<string>();
 
@@ -376,6 +377,10 @@ function buildSourceNodes(sources: ChainSourceLineage[]): LineageGraphNode[] {
 
   for (const source of sources) {
     const productionRun = source.productionRun;
+    const allocated = (totals ? nodeMass(totals, productionRunNodeId(productionRun.id)) : null) ?? {
+      wetKg: source.allocatedWetMassKg,
+      dryKg: source.allocatedDryMassKg,
+    };
     const details: LineageDetailRow[] = [];
     addRow(details, "Feedstock in", formatKg(productionRun.feedstockMassDryKg));
     addRow(
@@ -387,16 +392,13 @@ function buildSourceNodes(sources: ChainSourceLineage[]): LineageGraphNode[] {
       }),
     );
     if (
-      source.allocatedWetMassKg != null ||
-      source.allocatedDryMassKg != null
+      allocated.wetKg != null ||
+      allocated.dryKg != null
     ) {
       addRow(
         details,
         APPLIED_FROM_SOURCE_LABEL,
-        formatWetDryMass({
-          wetKg: source.allocatedWetMassKg,
-          dryKg: source.allocatedDryMassKg,
-        }),
+        formatWetDryMass(allocated),
       );
     }
 
@@ -414,22 +416,6 @@ function buildSourceNodes(sources: ChainSourceLineage[]): LineageGraphNode[] {
   return nodes;
 }
 
-/** Adds another run's share of the same product → delivery shipment. */
-function sumShipmentEdge(target: Edge, addition: Edge): void {
-  const into = target.data as ChainEdgeBuildData | undefined;
-  const from = addition.data as ChainEdgeBuildData | undefined;
-  if (!into || !from || into.mass == null || from.mass == null) return;
-  const dryTons = into.mass + from.mass;
-  const wetKg =
-    into.wetKg != null && from.wetKg != null ? Number(into.wetKg) + Number(from.wetKg) : null;
-  target.data = {
-    ...into,
-    mass: dryTons,
-    wetKg,
-    kgLabel: formatWetDryMass({ wetKg, dryKg: tonnesToKg(dryTons) }),
-  };
-}
-
 function productCardCode(product: ChainBiocharProductLineage): string {
   return `${product.code} · ${product.formulationName ?? "Pure biochar"}`;
 }
@@ -445,7 +431,7 @@ function buildDeliveryNode(delivery: Omit<ChainDeliveryLineage, "proofOfDelivery
     }),
   );
   return {
-    id: `delivery:${delivery.id}`,
+    id: deliveryNodeId(delivery.id),
     kind: "delivery",
     code: "Delivery",
     href: delivery.href,
@@ -456,19 +442,28 @@ function buildDeliveryNode(delivery: Omit<ChainDeliveryLineage, "proofOfDelivery
 }
 
 /** Also feeds the Carbon Viewer's marker popups (same codes + detail rows). */
-export function buildLineageNodes(data: ChainOfCustodyData, timeZone: string): LineageGraphNode[] {
+export function buildLineageNodes(
+  data: ChainOfCustodyData,
+  timeZone: string,
+  totals: LineageMassTotals = buildRollbackMassTotals(expandProductLineages(data)),
+  productMassBasis: "sourceAllocation" | "applied" = "sourceAllocation",
+): LineageGraphNode[] {
+  if (data.products?.length) {
+    const nodes = expandProductLineages(data).flatMap(slice => buildLineageNodes(slice, timeZone, totals, productMassBasis));
+    return [...new Map(nodes.map(node => [node.id, node])).values()];
+  }
   const sources = resolveChainSources(data);
-  const nodes = buildSourceNodes(sources);
+  const nodes = buildSourceNodes(sources, totals);
 
   if (data.biocharProduct) {
+    const productId = productNodeId(data.biocharProduct.id);
     const details: LineageDetailRow[] = [];
-    addRow(details, "Applied from batch", formatWetDryMass({
-      wetKg: sources.reduce((n, source) => n + (source.allocatedWetMassKg ?? 0), 0),
-      dryKg: sources.reduce((n, source) => n + (source.allocatedDryMassKg ?? 0), 0),
-    }));
+    addRow(details, "Applied from batch", formatWetDryMass(
+      productMassBasis === "applied" ? nodeMass(totals, productId) : sourceAllocationMass(totals, productId),
+    ));
 
     nodes.push({
-      id: `biochar-product:${data.biocharProduct.id}`,
+      id: productNodeId(data.biocharProduct.id),
       kind: "biocharProduct",
       code: productCardCode(data.biocharProduct),
       href: data.biocharProduct.href,
@@ -507,14 +502,11 @@ export function buildLineageNodes(data: ChainOfCustodyData, timeZone: string): L
     addRow(
       details,
       "Biochar applied",
-      formatWetDryTonnes(
-        data.application.biocharAppliedTons,
-        data.application.biocharAppliedDryTons,
-      ),
+      formatWetDryMass(nodeMass(totals, applicationNodeId(data.application.id))),
     );
 
     nodes.push({
-      id: `application:${data.application.id}`,
+      id: applicationNodeId(data.application.id),
       kind: "application",
       code:
         data.application.fieldIdentifier ?? "Field application",
@@ -543,7 +535,7 @@ function edge(
   const mass = opts?.mass ?? null;
   const color = variant === "equipment" ? EQUIPMENT_EDGE_COLOR : FLOW_EDGE_COLOR;
   return {
-    id: `${source}->${target}`,
+    id: flowEdgeId(source, target),
     source,
     target,
     type: "chainEdge",
@@ -590,68 +582,55 @@ function buildSourceEdges(source: ChainSourceLineage): Edge[] {
  * between records read directly off the graph. (Per-step CO₂e isn't recorded
  * along the lineage — the batch-level net removal lives on the Sankey.)
  */
-function buildLineageEdges(data: ChainOfCustodyData): Edge[] {
+function buildLineageEdges(data: ChainOfCustodyData, totals: LineageMassTotals): Edge[] {
   const edges: Edge[] = [];
   const sources = resolveChainSources(data);
 
   for (const source of sources) {
-    const productionRun = source.productionRun;
     edges.push(...buildSourceEdges(source));
-
     if (data.biocharProduct) {
-      const legacyDryMassKg = splitWetMass(
-        data.biocharProduct.massKg,
-        data.biocharProduct.moistureContentPercent,
-      )?.dryKg;
-      const wetMassKg =
-        source.allocatedWetMassKg ??
-        (sources.length === 1 ? data.biocharProduct.massKg : null);
-      const dryMassKg =
-        source.allocatedDryMassKg ??
-        (sources.length === 1 ? legacyDryMassKg : null);
-      edges.push(
-        edge(
-          productionRunNodeId(productionRun.id),
-          `biochar-product:${data.biocharProduct.id}`,
-          {
-            mass: { value: dryMassKg ?? wetMassKg, unit: "kg" },
-            wetKg: wetMassKg,
-            massLabel: formatWetDryMass({
-              wetKg: wetMassKg,
-              dryKg: dryMassKg,
-            }),
-          },
-        ),
-      );
+      edges.push(massFlowEdge(
+        productionRunNodeId(source.productionRun.id),
+        productNodeId(data.biocharProduct.id),
+        totals,
+      ));
     }
   }
-
   if (data.order) {
-    edges.push(edge(`order:${data.order.id}`, `delivery:${data.delivery.id}`));
+    edges.push(edge(`order:${data.order.id}`, deliveryNodeId(data.delivery.id)));
   }
   if (data.biocharProduct) {
-    edges.push(edge(`biochar-product:${data.biocharProduct.id}`, `delivery:${data.delivery.id}`, {
-      mass: { value: data.application.biocharAppliedDryTons, unit: "tDry" },
-      massLabel: formatWetDryTonnes(data.application.biocharAppliedTons, data.application.biocharAppliedDryTons),
-      wetKg: data.application.biocharAppliedTons == null ? null : tonnesToKg(data.application.biocharAppliedTons),
-    }));
+    edges.push(massFlowEdge(
+      productNodeId(data.biocharProduct.id),
+      deliveryNodeId(data.delivery.id),
+      totals,
+    ));
   }
-
-  edges.push(
-    edge(`delivery:${data.delivery.id}`, `application:${data.application.id}`, {
-      // Branch-share accounting stays on the authoritative dry value. The
-      // visible label carries both bases so operators never have to infer
-      // whether the application figure is wet or dry.
-      mass: { value: data.application.biocharAppliedDryTons, unit: "tDry" },
-      wetKg: data.application.biocharAppliedTons == null ? null : tonnesToKg(data.application.biocharAppliedTons),
-      massLabel: formatWetDryTonnes(
-        data.application.biocharAppliedTons,
-        data.application.biocharAppliedDryTons,
-      ),
-    }),
-  );
-
+  edges.push(massFlowEdge(
+    deliveryNodeId(data.delivery.id),
+    applicationNodeId(data.application.id),
+    totals,
+  ));
   return edges;
+}
+
+/** Render the roll-up's native branch-share value and wet/dry label. */
+function massFlowEdge(
+  source: string,
+  target: string,
+  totals: LineageMassTotals,
+  massBasis: EdgeMassBasis = "applied",
+): Edge {
+  const mass = edgeMass(totals, source, target);
+  return edge(source, target, {
+    mass: {
+      value: mass.mass,
+      unit: mass.unit,
+    },
+    wetKg: mass.wetKg,
+    massLabel: formatWetDryMass(mass),
+    massBasis,
+  });
 }
 
 /**
@@ -659,7 +638,11 @@ function buildLineageEdges(data: ChainOfCustodyData): Edge[] {
  * product layers drawn from it, and the deliveries that shipped those layers.
  * Node and edge ids match the rollback builders, so merging dedupes them.
  */
-export function buildRollForwardGraph(rollForward: ChainRunRollForward, timeZone: string): {
+export function buildRollForwardGraph(
+  rollForward: ChainRunRollForward,
+  timeZone: string,
+  totals: LineageMassTotals = buildRollForwardMassTotals([rollForward]),
+): {
   nodes: LineageGraphNode[];
   edges: Edge[];
 } {
@@ -667,10 +650,10 @@ export function buildRollForwardGraph(rollForward: ChainRunRollForward, timeZone
   const nodes = buildSourceNodes([source]);
   const edges = buildSourceEdges(source);
   const runNodeId = productionRunNodeId(source.productionRun.id);
-  for (const { product, drawnWetMassKg, drawnDryMassKg, deliveries } of rollForward.products) {
-    const productNodeId = `biochar-product:${product.id}`;
+  for (const { product, deliveries } of rollForward.products) {
+    const productId = productNodeId(product.id);
     nodes.push({
-      id: productNodeId,
+      id: productId,
       kind: "biocharProduct",
       code: productCardCode(product),
       href: product.href,
@@ -678,26 +661,10 @@ export function buildRollForwardGraph(rollForward: ChainRunRollForward, timeZone
       date: formatDateOrNull(product.productionDate),
       details: [],
     });
-    edges.push(
-      edge(runNodeId, productNodeId, {
-        mass: { value: drawnDryMassKg, unit: "kg" },
-        wetKg: drawnWetMassKg,
-        massLabel: formatWetDryMass({ wetKg: drawnWetMassKg, dryKg: drawnDryMassKg }),
-        massBasis: "recorded",
-      }),
-    );
+    edges.push(massFlowEdge(runNodeId, productId, totals, "recorded"));
     for (const shipped of deliveries) {
       nodes.push(buildDeliveryNode(shipped.delivery, timeZone));
-      edges.push(
-        edge(productNodeId, `delivery:${shipped.delivery.id}`, {
-          // Same dry-tonne unit as the rollback's product → delivery edge, so
-          // a product's outflow fan sums within one unit.
-          mass: { value: kgToTonnes(shipped.dryMassKg), unit: "tDry" },
-          wetKg: shipped.wetMassKg,
-          massLabel: formatWetDryMass({ wetKg: shipped.wetMassKg, dryKg: shipped.dryMassKg }),
-          massBasis: "recorded",
-        }),
-      );
+      edges.push(massFlowEdge(productId, deliveryNodeId(shipped.delivery.id), totals, "recorded"));
     }
   }
   return { nodes, edges };
@@ -707,22 +674,16 @@ export function buildRollForwardGraph(rollForward: ChainRunRollForward, timeZone
  * Every roll-forward card, deduped, with each product's "Drawn from runs"
  * total across member runs. Shared by the DAG merge and the map popups.
  */
-export function buildRollForwardNodes(rollForwards: ChainRunRollForward[], timeZone: string): LineageGraphNode[] {
-  const drawnByProductNode = new Map<string, { wetKg: number; dryKg: number }>();
-  for (const rollForward of rollForwards) {
-    for (const { product, drawnWetMassKg, drawnDryMassKg } of rollForward.products) {
-      const nodeId = `biochar-product:${product.id}`;
-      const total = drawnByProductNode.get(nodeId) ?? { wetKg: 0, dryKg: 0 };
-      total.wetKg += drawnWetMassKg;
-      total.dryKg += drawnDryMassKg;
-      drawnByProductNode.set(nodeId, total);
-    }
-  }
+export function buildRollForwardNodes(
+  rollForwards: ChainRunRollForward[],
+  timeZone: string,
+  totals: LineageMassTotals = buildRollForwardMassTotals(rollForwards),
+): LineageGraphNode[] {
   const nodeById = new Map<string, LineageGraphNode>();
   for (const rollForward of rollForwards) {
-    for (const node of buildRollForwardGraph(rollForward, timeZone).nodes) {
+    for (const node of buildRollForwardGraph(rollForward, timeZone, totals).nodes) {
       if (nodeById.has(node.id)) continue;
-      const drawn = drawnByProductNode.get(node.id);
+      const drawn = totals.nodes.get(node.id);
       if (drawn) node.details = [{ label: "Drawn from runs", value: formatWetDryMass(drawn) }];
       nodeById.set(node.id, node);
     }
@@ -836,103 +797,29 @@ function buildMergedChainGraph(
   }
 
   lineages = (lineages ?? []).flatMap(expandProductLineages);
-  const applicationMasses = new Map<
-    string,
-    { wetTons: number | null; dryTons: number | null }
-  >();
-  for (const lineage of lineages) {
-    const totals = applicationMasses.get(lineage.application.id) ?? {
-      wetTons: null,
-      dryTons: null,
-    };
-    if (lineage.application.biocharAppliedTons != null) {
-      totals.wetTons =
-        (totals.wetTons ?? 0) +
-        lineage.application.biocharAppliedTons;
-    }
-    if (lineage.application.biocharAppliedDryTons != null) {
-      totals.dryTons =
-        (totals.dryTons ?? 0) +
-        lineage.application.biocharAppliedDryTons;
-    }
-    applicationMasses.set(lineage.application.id, totals);
-  }
-  const productMasses = new Map<string, { wetKg: number; dryKg: number }>();
-  const runAllocations = new Map<string, { wetKg: (number | null)[]; dryKg: (number | null)[] }>();
-  for (const lineage of lineages) {
-    for (const source of resolveChainSources(lineage)) {
-      const runNodeId = productionRunNodeId(source.productionRun.id);
-      const allocations = runAllocations.get(runNodeId) ?? { wetKg: [], dryKg: [] };
-      allocations.wetKg.push(source.allocatedWetMassKg ?? null);
-      allocations.dryKg.push(source.allocatedDryMassKg ?? null);
-      runAllocations.set(runNodeId, allocations);
-    }
-    if (!lineage.biocharProduct) continue;
-    const total = productMasses.get(lineage.biocharProduct.id) ?? { wetKg: 0, dryKg: 0 };
-    total.wetKg += tonnesToKg(lineage.application.biocharAppliedTons ?? 0);
-    total.dryKg += tonnesToKg(lineage.application.biocharAppliedDryTons ?? 0);
-    productMasses.set(lineage.biocharProduct.id, total);
-  }
-  const normalizedLineages = lineages.map((lineage) => {
-    const totals = applicationMasses.get(lineage.application.id);
-    return {
-      ...lineage,
-      application: {
-        ...lineage.application,
-        biocharAppliedTons: totals?.wetTons ?? null,
-        biocharAppliedDryTons: totals?.dryTons ?? null,
-      },
-    };
-  });
-
+  const totals = buildRollbackMassTotals(lineages);
   const nodeById = new Map<string, LineageGraphNode>();
   const edgeById = new Map<string, Edge>();
-  for (const [index, lineage] of lineages.entries()) {
-    for (const node of buildLineageNodes(normalizedLineages[index], options.timeZone)) {
-      if (node.kind === "productionRun") {
-        const allocations = runAllocations.get(node.id);
-        if (allocations) {
-          const total = { wetKg: sumNullable(allocations.wetKg), dryKg: sumNullable(allocations.dryKg) };
-          node.details = node.details.map(row => row.label === APPLIED_FROM_SOURCE_LABEL
-            ? { ...row, value: formatWetDryMass(total) }
-            : row);
-        }
-      }
-      if (node.kind === "biocharProduct" && lineage.biocharProduct) {
-        const total = productMasses.get(lineage.biocharProduct.id);
-        if (total) node.details = [{ label: "Applied from batch", value: formatWetDryMass(total) }];
-      }
+  for (const lineage of lineages) {
+    for (const node of buildLineageNodes(lineage, options.timeZone, totals, "applied")) {
       if (!nodeById.has(node.id)) nodeById.set(node.id, node);
     }
-    for (const lineageEdge of buildLineageEdges(lineage)) {
-      const existing = edgeById.get(lineageEdge.id);
-      if (!existing) edgeById.set(lineageEdge.id, lineageEdge);
-      else if ((lineageEdge.source.startsWith(PRODUCTION_RUN_NODE_PREFIX) || lineageEdge.source.startsWith("biochar-product:") || lineageEdge.source.startsWith("delivery:")) && existing.data && lineageEdge.data && existing.data.mass != null && lineageEdge.data.mass != null) {
-        const mass = Number(existing.data.mass) + Number(lineageEdge.data.mass);
-        const wetKg = existing.data.wetKg != null && lineageEdge.data.wetKg != null ? Number(existing.data.wetKg) + Number(lineageEdge.data.wetKg) : null;
-        existing.data = { ...existing.data, mass, wetKg, kgLabel: wetKg != null ? formatWetDryMass({ wetKg, dryKg: existing.data.unit === "tDry" ? tonnesToKg(mass) : mass }) : existing.data.unit === "tDry" ? formatDryTons(mass) : formatKg(mass) };
-      }
+    for (const lineageEdge of buildLineageEdges(lineage, totals)) {
+      if (!edgeById.has(lineageEdge.id)) edgeById.set(lineageEdge.id, lineageEdge);
     }
   }
 
-  for (const node of buildRollForwardNodes(rollForwards, options.timeZone)) {
+  const forwardTotals = buildRollForwardMassTotals(rollForwards);
+  for (const node of buildRollForwardNodes(rollForwards, options.timeZone, forwardTotals)) {
     if (!nodeById.has(node.id)) nodeById.set(node.id, node);
   }
   // Roll-forward shipments are per-run shares, so two member runs feeding one
   // product sum on its delivery edge. They never sum into a rollback edge.
-  const rollForwardEdgeById = new Map<string, Edge>();
   for (const rollForward of rollForwards) {
-    for (const rollForwardEdge of buildRollForwardGraph(rollForward, options.timeZone).edges) {
-      if (edgeById.has(rollForwardEdge.id)) continue;
-      const existing = rollForwardEdgeById.get(rollForwardEdge.id);
-      if (!existing) {
-        rollForwardEdgeById.set(rollForwardEdge.id, rollForwardEdge);
-      } else if (rollForwardEdge.source.startsWith("biochar-product:")) {
-        sumShipmentEdge(existing, rollForwardEdge);
-      }
+    for (const rollForwardEdge of buildRollForwardGraph(rollForward, options.timeZone, forwardTotals).edges) {
+      if (!edgeById.has(rollForwardEdge.id)) edgeById.set(rollForwardEdge.id, rollForwardEdge);
     }
   }
-  for (const [id, rollForwardEdge] of rollForwardEdgeById) edgeById.set(id, rollForwardEdge);
 
   return layoutGraph(
     Array.from(nodeById.values()),
