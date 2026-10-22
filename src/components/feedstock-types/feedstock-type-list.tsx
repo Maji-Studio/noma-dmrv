@@ -19,7 +19,7 @@ import { ServerError } from "@/components/forms";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
-import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import {
   EntitySideSheet,
   type SideSheetMode,
@@ -371,7 +371,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       toast.success("Feedstock type deleted.");
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Feedstock type ${deletingType.code}`, "Feedstock type was not deleted. Try again.");
-      if (isInUseDeleteRefusal(message)) {
+      if (isInUseDeleteRefusal(error)) {
         setDeleteConflict(deletingType);
       } else {
         toast.error(message);

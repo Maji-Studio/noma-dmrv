@@ -400,7 +400,7 @@ describe("customer location delete blockers", () => {
     const before = await db.select().from(customerLocations).where(eq(customerLocations.id, archived.id));
     await expect(db.transaction(tx => deleteCustomerLocationInTransaction(f.ctx, tx, customerVersion(archived)))).rejects.toMatchObject({
       code: "conflict", message: "Customer location was not deleted because orders use it.",
-      issues: [{ path: ["locationId"], meta: { orderCodes: [order.code] } }],
+      issues: [{ path: ["locationId"], meta: { orderCodes: [order.code], reason: "in_use" } }],
     });
     expect(await db.select().from(customerLocations).where(eq(customerLocations.id, archived.id))).toEqual(before);
   });
@@ -417,7 +417,7 @@ describe("customer location delete blockers", () => {
     }
     await expect(runOperationInProcess(deleteCustomerLocation, f.ctx, customerVersion(f.location))).rejects.toMatchObject({
       code: "conflict", message: "Customer location was not deleted because orders use it. Archive it instead.",
-      issues: [{ path: ["locationId"], meta: { orderCodes: codes.sort().slice(0, BLOCKER_COUNT) } }],
+      issues: [{ path: ["locationId"], meta: { orderCodes: codes.sort().slice(0, BLOCKER_COUNT), reason: "in_use" } }],
     });
     expect(await getCustomerLocations(f.ctx, f.customer.id)).toMatchObject([{ id: f.location.id, version: f.location.version }]);
   });

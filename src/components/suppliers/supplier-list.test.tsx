@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
+import { ActionError } from "@/lib/action-error";
+import { inUseDeleteRefusal } from "@/lib/delete-refusal";
 import type { ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
 import { SupplierList } from "./supplier-list";
+
+function inUseError(message: string): ActionError {
+  return new ActionError({ error: message, ...inUseDeleteRefusal(message, []) });
+}
 
 const state = vi.hoisted(() => ({
   filters: [] as Array<{ archived?: boolean }>,
@@ -164,7 +170,7 @@ describe("SupplierList archive view", () => {
   });
 
   it("offers Archive instead when a delete is refused because records use the supplier", async () => {
-    state.remove.mockRejectedValue(new Error("Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier."));
+    state.remove.mockRejectedValue(inUseError("Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier."));
     render(<SupplierList />);
     fireEvent.click(within("Actions for SUP-0001", "Delete"));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
@@ -175,7 +181,7 @@ describe("SupplierList archive view", () => {
   });
 
   it("retries Archive instead with the refreshed version after a stale refusal", async () => {
-    state.remove.mockRejectedValue(new Error("Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier."));
+    state.remove.mockRejectedValue(inUseError("Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier."));
     state.archive.mockRejectedValueOnce(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "supplier", id: "id-SUP-0001", code: STALE_VERSION_CONFLICT_CODE })).mockResolvedValue(undefined);
     const view = render(<SupplierList />);
     fireEvent.click(within("Actions for SUP-0001", "Delete"));
@@ -252,7 +258,7 @@ describe("SupplierList archive view", () => {
   });
 
   it("does not offer Archive instead when an already archived supplier is refused as in use", async () => {
-    state.remove.mockRejectedValue(new Error("Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier."));
+    state.remove.mockRejectedValue(inUseError("Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier."));
     render(<SupplierList />);
     fireEvent.click(screen.getByRole("button", { name: "Archived" }));
     fireEvent.click(within("Actions for SUP-0002", "Delete"));

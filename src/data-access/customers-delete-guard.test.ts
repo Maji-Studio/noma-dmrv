@@ -79,7 +79,7 @@ describe("deleteCustomer", () => {
     state.locationCount = 3;
     state.failDeleteAt = 2;
     await expect(deleteCustomer(ctx, "customer-1", 1)).rejects.toMatchObject({
-      code: "conflict", issues: [expect.objectContaining({ path: ["customerId"], meta: { locationIds: ["location-1"] } })],
+      code: "conflict", issues: [expect.objectContaining({ path: ["customerId"], meta: { locationIds: ["location-1"], reason: "in_use" } })],
     });
   });
 

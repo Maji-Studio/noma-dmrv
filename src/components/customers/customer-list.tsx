@@ -35,7 +35,7 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { useToast } from "@/components/ui/toast";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
-import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { ArchivedCustomerNotice } from "@/components/parties";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { CustomerForm, type PendingLocation } from "./customer-form";
@@ -378,7 +378,7 @@ export function CustomerList() {
         return;
       }
       const message = toDeleteErrorMessage(error, `Customer ${deletingCustomer.code}`, "Customer was not deleted. Try again.");
-      if (isInUseDeleteRefusal(message) && !deletingCustomer.archivedAt) {
+      if (isInUseDeleteRefusal(error) && !deletingCustomer.archivedAt) {
         // In use: the dialog gives way to the in-use dialog that offers Archive instead.
         setDeleteConflict(deletingCustomer);
         setDeletingCustomer(null);
@@ -431,7 +431,7 @@ export function CustomerList() {
   // A customer whose orders have deliveries is refused when the dialog opens,
   // so the lock shows before the operator confirms anything.
   const previewRefusedInUse =
-    !!deletingCustomer && !deletingCustomer.archivedAt && !!deletePreview.error && isInUseDeleteRefusal(deletePreview.error.message);
+    !!deletingCustomer && !deletingCustomer.archivedAt && !!deletePreview.error && isInUseDeleteRefusal(deletePreview.error);
   const conflictCustomer = deleteConflict ?? (previewRefusedInUse ? deletingCustomer : null);
 
   const columns = createColumns(openView, openEdit, handleArchive, handleRestore, handleDelete);

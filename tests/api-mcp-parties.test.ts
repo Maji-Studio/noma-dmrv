@@ -336,12 +336,13 @@ describe.each(["supplier", "customer"] as const)("%s refusal parity and isolatio
       const [intake] = await db.select().from(feedstocks).where(eq(feedstocks.organizationId, a.ctx.organizationId));
       const problem = await refusal(kind, "delete", {}, await read(kind, intake.supplierId), "conflict", "/supplierId");
       expect(problem.errors[0].meta.feedstockCodes).toContain(intake.code);
+      expect(problem.errors[0].meta.reason).toBe("in_use");
     } else {
       const savedCustomer = await saved(kind);
       const order = await insertReadOrder(a, "PARTY-PARITY-ORDER", { customerId: savedCustomer.data.id, customerLocationId: savedCustomer.locations[0].id });
       const delivery = await insertReadDelivery(a, order.id, order.quantityKg);
       const problem = await refusal(kind, "delete", {}, savedCustomer.data, "conflict", "/customerId");
-      expect(problem.errors[0].meta).toEqual({ deliveryCodes: [delivery.code] });
+      expect(problem.errors[0].meta).toEqual({ deliveryCodes: [delivery.code], reason: "in_use" });
     }
   }, TIMEOUT_MS);
 
