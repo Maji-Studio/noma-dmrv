@@ -133,6 +133,7 @@ export function CreditBatchForm({
     handleSubmit,
     control,
     trigger,
+    getValues,
     formState: { errors, isSubmitted, dirtyFields },
     setValue,
     resetField,
@@ -337,7 +338,22 @@ export function CreditBatchForm({
     ? "Update credit batch"
     : "Create credit batch";
 
-  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
+  const refuseCreditBatchSave = useSaveRefusal({ control, setError, resetField, formId });
+  // The membership dates decide which runs belong to the batch, and changing
+  // them prunes the cohort. A lock revert that restores a date therefore
+  // restores the saved cohort with it.
+  const refuseSave: SaveRefusalHandler = (error, fallback) => {
+    const [startBefore, endBefore] = getValues(["startDate", "endDate"]);
+    const footer = refuseCreditBatchSave(error, fallback);
+    const [startAfter, endAfter] = getValues(["startDate", "endDate"]);
+    if (startAfter !== startBefore || endAfter !== endBefore) {
+      // setValue tells the watchers (resetField alone does not reach the
+      // unregistered cohort field); resetField then clears its dirty mark.
+      setValue("productionRunIds", creditBatch?.productionRunIds ?? [], { shouldValidate: true });
+      resetField("productionRunIds");
+    }
+    return footer;
+  };
   const handleFormSubmit = latched(handleSubmit((data) => {
     const sampling =
       isEditMode ||

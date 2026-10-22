@@ -35,7 +35,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { FlaskIcon, FireIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, MoistureField, makeCertFieldStatus, useSelectDefault } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
-import { SAMPLE_REFUSAL_ALIASES, labOToCOrgRatioDefault, prepareSampleSubmission, resolveSamplingClock } from "./sample-form-values";
+import { labOToCOrgRatioDefault, prepareSampleSubmission, resolveSamplingClock } from "./sample-form-values";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { RATIO_MAX_MESSAGE } from "@/schemas/helpers";
@@ -313,7 +313,7 @@ export function SampleForm({
 
   const defaultSubmitLabel = isEditMode ? "Update Sample" : "Create Sample";
 
-  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: SAMPLE_REFUSAL_ALIASES });
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const handleFormSubmit = latched(handleSubmit((entered) => {
     if (!samplingClock.ready) {
       setError("samplingTime", { type: "validate", message: samplingClock.hint });

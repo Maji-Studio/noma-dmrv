@@ -12,6 +12,7 @@ import { CreditBatchForm } from "./credit-batch-form";
 
 const mocks = vi.hoisted(() => ({
   certifierSummary: vi.fn(), methodBEligibility: vi.fn(), recordPrerequisites: vi.fn(),
+  claimedRun: null as null | { endsOn: string; run: Record<string, unknown> },
   showFacilitySelect: false, showFeedstockSelect: false, realPicker: false, autoPick: false, timeZone: "UTC",
 }));
 
@@ -61,7 +62,11 @@ vi.mock("@/hooks/use-production-processes", async (importOriginal) => ({
 }));
 vi.mock("@/hooks/use-credit-batches", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-credit-batches")>(),
-  useCreditBatchProductionRunOptions: () => ({ data: [], isSuccess: true }),
+  useCreditBatchProductionRunOptions: (params: { endDate?: string }) => ({
+    // A claimed run is in the window once the batch ends on or after the run's own end.
+    data: mocks.claimedRun && params.endDate && params.endDate >= mocks.claimedRun.endsOn ? [mocks.claimedRun.run] : [],
+    isSuccess: true,
+  }),
 }));
 vi.mock("@/components/forms", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/components/forms")>();
@@ -104,6 +109,7 @@ beforeEach(() => {
   mocks.methodBEligibility.mockClear();
   mocks.methodBEligibility.mockReturnValue({ data: undefined });
   mocks.showFacilitySelect = false;
+  mocks.claimedRun = null;
   mocks.timeZone = "UTC";
   mocks.showFeedstockSelect = false;
   mocks.realPicker = false;
@@ -323,11 +329,11 @@ describe("CreditBatchForm save refusal (#1327)", () => {
     );
   }
 
-  async function saveRefused(refusal: unknown, edit?: (endDate: HTMLInputElement) => void) {
+  async function saveRefused(refusal: unknown, edit?: (endDate: HTMLInputElement) => void | Promise<void>) {
     mocks.certifierSummary.mockReturnValue({ data: { mapping: null } });
     const { container } = render(<RefusingBatchForm refusal={refusal} />);
     const endDate = container.querySelector<HTMLInputElement>('input[name="endDate"]')!;
-    edit?.(endDate);
+    await edit?.(endDate);
     await act(async () => { fireEvent.submit(container.querySelector("form")!); });
     return { container, endDate };
   }
@@ -337,6 +343,8 @@ describe("CreditBatchForm save refusal (#1327)", () => {
       error: "The end date is after today.", code: "validation_failed", issues: [issue(["endDate"], "The end date is after today.")],
     }));
     await waitFor(() => expect(container.querySelector("#endDate-error")?.textContent).toBe("The end date is after today."));
+    await act(async () => {});
+    expect(container.querySelector("#endDate-error")?.textContent).toBe("The end date is after today.");
     expect(container.textContent).not.toContain("Try again.");
   });
 
@@ -350,10 +358,39 @@ describe("CreditBatchForm save refusal (#1327)", () => {
   it("sends a locked field back to the saved value and says why once", async () => {
     const { container, endDate } = await saveRefused(
       new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [issue(["endDate"], LOCK_REASON, "certification_locked")] }),
-      (field) => fireEvent.change(field, { target: { value: "2026-05-31" } }),
+      (field) => { fireEvent.change(field, { target: { value: "2026-05-31" } }); },
     );
     await waitFor(() => expect(container.querySelector("#endDate-error")?.textContent).toBe("Locked. Your change was not saved."));
+    await act(async () => {});
+    expect(container.querySelector("#endDate-error")?.textContent).toBe("Locked. Your change was not saved.");
     expect(endDate.value).toBe("2026-04-30");
     expect(container.textContent?.split("A Removal holds this batch").length).toBe(2);
+  });
+
+  it("brings the saved production runs back with a reverted date", async () => {
+    const RUN_ID = "00000000-0000-4000-8000-0000000000aa";
+    const batch = creditBatch as unknown as { productionRunIds: string[] };
+    batch.productionRunIds = [RUN_ID];
+    mocks.claimedRun = {
+      endsOn: "2026-04-15",
+      run: { id: RUN_ID, code: "PR-1", status: "complete", feedstockTypeIds: [creditBatch.feedstockTypeId], assignedCreditBatchId: creditBatch.id },
+    };
+    try {
+      const { container, endDate } = await saveRefused(
+        new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [issue(["endDate"], LOCK_REASON, "certification_locked")] }),
+        async (field) => {
+          fireEvent.change(field, { target: { value: "2026-03-31" } });
+          await act(async () => {});
+          // Moving the end date back drops the claimed run, as the notice says.
+          expect(document.body.textContent).toContain("Saving removes a claimed production run");
+        },
+      );
+      await waitFor(() => expect(endDate.value).toBe("2026-04-30"));
+
+      await act(async () => {});
+      expect(container.textContent).not.toContain("Saving removes a claimed production run");
+    } finally {
+      batch.productionRunIds = [];
+    }
   });
 });

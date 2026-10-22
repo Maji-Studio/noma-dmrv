@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
 import { useEffect, useState, type ReactNode } from "react";
 import { ActionError } from "@/lib/action-error";
-import { planSaveRefusal } from "@/lib/save-refusal";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SampleWithRelations } from "@/data-access/samples";
 import { expectStayedClean, renderReportingDirty } from "../../../tests/helpers/form-dialog-dirty";
 import { SampleForm } from "./sample-form";
-import { SAMPLE_REFUSAL_ALIASES } from "./sample-form-values";
 
 const autoSelect = vi.hoisted(() => ({ on: false }));
 const batch = vi.hoisted(() => ({
@@ -246,12 +244,6 @@ describe("SampleForm save refusal (#1327)", () => {
     const container = await saveRefused(new ActionError({ error: message, code: "validation_failed", issues: [issue(["code"], message, "conflict")] }));
     await waitFor(() => expect(container.textContent).toContain("already exists"));
     expect(container.querySelector('[id$="-error"]')).toBeNull();
-  });
-
-  it("names the server's code the form's sampleCode", () => {
-    const refusal = new ActionError({ error: "Clash", code: "validation_failed", issues: [issue(["code"], "Code is taken.", "conflict")] });
-    const plan = planSaveRefusal(refusal, { aliases: SAMPLE_REFUSAL_ALIASES, isShown: (field) => field === "sampleCode", isChanged: () => true });
-    expect(plan).toEqual({ fieldErrors: [{ field: "sampleCode", message: "Code is taken.", locked: false }], footer: null });
   });
 
   it("sends a locked field back to the saved value and says why once", async () => {

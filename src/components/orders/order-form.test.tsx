@@ -26,6 +26,7 @@ const state = vi.hoisted(() => ({
   detailRequests: [] as { entityType: EntityType; id: string | undefined }[],
   customersById: {} as Record<string, EntityOption>,
   locationOptions: [] as EntityOption[],
+  customerOptions: [] as EntityOption[],
   formulationOptions: [] as EntityOption[],
   locations: [] as CustomerLocation[],
   /** The selected customer's detail read; archived when `archivedAt` is set. */
@@ -72,6 +73,7 @@ vi.mock("@/hooks/use-entities", () => ({
   }) => {
     state.optionRequests.push({ entityType, enabled });
     const options = entityType === "customerLocation" ? state.locationOptions
+      : entityType === "customer" ? state.customerOptions
       : entityType === "formulation" ? state.formulationOptions : [];
     return { data: enabled ? options : [], dataUpdatedAt: 0, isLoading: false, error: null };
   },
@@ -110,6 +112,7 @@ beforeEach(() => {
   state.detailRequests = [];
   state.customersById = {};
   state.locationOptions = [];
+  state.customerOptions = [];
   state.formulationOptions = [];
   state.locations = [];
   state.customer = { archivedAt: null };
@@ -551,6 +554,38 @@ describe("OrderForm save refusal (#1327)", () => {
     expect(quantity.getAttribute("aria-invalid")).toBe("true");
     expect(screen.queryByText(FALLBACK)).toBeNull();
     expect(screen.queryAllByText(/Quantity is too high\./)).toHaveLength(1);
+  });
+
+  it("restores the saved customer and its location together when the customer is locked", async () => {
+    const LOCATION_ONE = { id: ORDER.customerLocationId, code: "", name: "North field" };
+    const LOCATION_TWO = { id: "55555555-5555-4555-8555-555555555555", code: "", name: "South field" };
+    const CUSTOMER_A = { id: ORDER.customerId, code: "", name: "Customer A" };
+    const CUSTOMER_B = { id: "66666666-6666-4666-8666-666666666666", code: "", name: "Customer B" };
+    state.customerOptions = [CUSTOMER_A, CUSTOMER_B];
+    state.customersById = { [CUSTOMER_A.id]: CUSTOMER_A, [CUSTOMER_B.id]: CUSTOMER_B };
+    state.locationOptions = [LOCATION_ONE, LOCATION_TWO];
+    const client = new QueryClient();
+    const refusal = new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [issue(["customerId"], LOCK_REASON, "certification_locked")] });
+    render(<QueryClientProvider client={client}><RefusingOrderForm refusal={refusal} /></QueryClientProvider>);
+    const customer = () => screen.getByRole("combobox", { name: /^Customer(Required)?$/ });
+    const location = () => screen.getByRole("combobox", { name: /^Customer location/ });
+    await waitFor(() => expect(location().textContent).toBe("North field"));
+
+    fireEvent.click(customer());
+    fireEvent.click(await screen.findByText("Customer B"));
+    await waitFor(() => expect(customer().textContent).toBe("Customer B"));
+    // The operator's own change clears the location until they pick one of B's.
+    await waitFor(() => expect(location().textContent).not.toBe("North field"));
+    fireEvent.click(location());
+    fireEvent.click(await screen.findByText("South field"));
+    await waitFor(() => expect(location().textContent).toBe("South field"));
+
+    await act(async () => { fireEvent.submit(customer().closest("form")!); });
+    await waitFor(() => expect(customer().textContent).toBe("Customer A"));
+    await act(async () => {});
+    expect(customer().textContent).toBe("Customer A");
+    expect(location().textContent).toBe("North field");
+    client.clear();
   });
 
   it("keeps a code clash in the footer, since the order form has no Code field", async () => {

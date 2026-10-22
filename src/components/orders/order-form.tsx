@@ -23,7 +23,6 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, PackageIcon, StorefrontIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
-import { useId } from "react";
 import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 
 import { ServerError } from "@/components/forms/server-error";
@@ -34,7 +33,7 @@ import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
 import { recordInUseFreeFields } from "@/lib/record-lock";
 import { MatchingOutputBins } from "./matching-output-bins";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { CustomerLocationDialog } from "@/components/customers/customer-location-dialog";
 import type { EditableCustomerLocation } from "@/components/customers/customer-location-form";
 import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
@@ -194,7 +193,15 @@ export function OrderForm({
 
   const defaultSubmitLabel = isEditMode ? "Update order" : "Create order";
 
-  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
+  const refuseCustomerAware = useSaveRefusal({ control, setError, resetField, formId });
+  // A lock revert sends the customer back to the saved one. The location the
+  // operator picked belongs to the customer they tried, so it goes back with it.
+  const refuseSave: SaveRefusalHandler = (error, fallback) => {
+    const customerBefore = getValues("customerId");
+    const footer = refuseCustomerAware(error, fallback);
+    if (getValues("customerId") !== customerBefore) resetField("customerLocationId");
+    return footer;
+  };
   const handleFormSubmit = latched(handleSubmit((data) => {
     return onSubmit(data as OrderFormData, refuseSave);
   }));
@@ -248,6 +255,10 @@ export function OrderForm({
             // this order. Require an explicit pick, matching the feedstock
             // supplier field (#379).
             autoSelectSingle={false}
+            // The location belongs to the customer, so a pick clears it. This
+            // runs only for the operator's own change, never for a programmatic
+            // reset such as a lock revert, which restores both fields together.
+            onChange={() => setValue("customerLocationId", "", { shouldDirty: true })}
           />
 
           <FormEntitySelect
@@ -265,7 +276,6 @@ export function OrderForm({
             emptyHint={{ message: "Add a location to this customer first." }}
             disabled={isSubmitting || !selectedCustomerId || locked("customerLocationId")}
             filterBy={selectedCustomerId ? { customerId: selectedCustomerId } : undefined}
-            dependsOn={watchedCustomerId}
             autoSelectSingle
           />
         </div>

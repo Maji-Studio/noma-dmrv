@@ -45,7 +45,12 @@ interface PickerEditFormDialogProps<R extends { id: string }, D> {
   width?: ModalWidth;
   renderForm: (record: R, props: {
     key: string;
-    /** For forms that still show a message line. */
+    /**
+     * For forms that still show a message line. It drops the form's refusal
+     * handler, though a form typed `(data, onRefusal)` still accepts it. A form
+     * migrated to the shared save refusal must take `onSubmitWithRefusal`, or it
+     * silently loses field routing.
+     */
     onSubmit: (data: D) => Promise<void>;
     /** For forms on the shared save refusal: hands the form's handler to the save. */
     onSubmitWithRefusal: (data: D, onRefusal: SaveRefusalHandler) => Promise<void>;

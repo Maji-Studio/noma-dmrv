@@ -79,7 +79,12 @@ export function logUnexpectedSaveError(label: string, err: unknown) {
 /** What one edit save came to: saved (maybe with a warning), or the error to show beside the form. */
 export type CreditBatchSaveOutcome =
   | { status: "saved"; warning?: string }
-  | { status: "error"; message: string; /** The thrown error, so a form on the save refusal can read its issues. */ cause?: unknown };
+  | {
+      status: "error";
+      message: string;
+      /** The thrown error, so a form on the save refusal can read its issues. */
+      cause?: unknown;
+    };
 
 interface SaveResult {
   success: boolean;

@@ -86,9 +86,3 @@ export function prepareSampleSubmission<T extends SampleRatioInputs>(entered: T,
   // null clears a stored ratio on edit, as the partial-update contract reads it.
   return { ...data, hToCOrgRatio: ratios.hToCOrgRatio, oToCOrgRatio: ratios.oToCOrgRatio };
 }
-
-/**
- * Server path to form field for a refused sample save: the operation names the
- * code `code`, the form calls it `sampleCode` (`updateSampleFn` maps it).
- */
-export const SAMPLE_REFUSAL_ALIASES = { code: "sampleCode" } as const;
