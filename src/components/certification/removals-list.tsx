@@ -316,12 +316,14 @@ const createColumns = (
   },
   {
     id: "reportingStart",
+    enableGlobalFilter: false,
     header: "Reporting start",
     accessorFn: (summary) => summary.startedOn ?? "",
     cell: ({ row }) => <span>{formatDayString(row.original.startedOn)}</span>,
   },
   {
     id: "reportingEnd",
+    enableGlobalFilter: false,
     header: "Reporting end",
     accessorFn: (summary) => summary.completedOn ?? "",
     cell: ({ row }) => <span>{formatDayString(row.original.completedOn)}</span>,

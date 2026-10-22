@@ -154,6 +154,7 @@ function createColumns(params: {
     },
     {
       accessorKey: "description",
+      enableGlobalFilter: false,
       header: "Description",
       cell: ({ row }) => (
         <MutedValue archived={!!row.original.archivedAt}>
