@@ -9,20 +9,15 @@
 import { useId } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { inviteMemberSchema } from "@/schemas/organizations";
+import { inviteMemberSchema, type InviteMemberInput } from "@/schemas/organizations";
 import { FormActions, FormField, FormInput, FormSelect } from "@/components/forms";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { useToast } from "@/components/ui/toast";
 import { useInviteMember } from "@/hooks/use-organizations";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
+import { ORG_ROLE_OPTIONS } from "./organization-roles";
 
-export const INVITE_ROLE_OPTIONS = [
-  { value: "admin", label: "Admin" },
-  { value: "member", label: "Member" },
-] as const;
-
-type InviteForm = z.infer<typeof inviteMemberSchema>;
+type InviteForm = InviteMemberInput;
 
 const EMPTY_INVITE: InviteForm = { email: "", role: "member" };
 
@@ -104,7 +99,7 @@ export function InviteMemberDialog({
         >
           <FormSelect
             id="invite-role"
-            options={INVITE_ROLE_OPTIONS}
+            options={ORG_ROLE_OPTIONS}
             {...register("role")}
           />
         </FormField>
@@ -114,6 +109,7 @@ export function InviteMemberDialog({
           submitLabel="Send invitation"
           submittingLabel="Sending…"
           onCancel={onClose}
+          guardDialogCancel
           sticky={false}
         />
       </form>

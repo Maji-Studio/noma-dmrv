@@ -63,7 +63,8 @@ describe("OrganizationSettings invite dialog", () => {
     render(<OrganizationSettings canManage />);
 
     expect(screen.getByText("No members yet")).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Invite member" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Invite member" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Invite your first member" })).toBeTruthy();
   });
 
   it("opens the dialog with the email and role fields", async () => {
@@ -95,6 +96,21 @@ describe("OrganizationSettings invite dialog", () => {
     expect((screen.getByRole("textbox", { name: "Invitation link" }) as HTMLInputElement).value).toBe(
       "https://app.test/accept-invitation/t",
     );
+  });
+
+  it("asks before Cancel discards a draft, and a discard starts the next draft empty", async () => {
+    render(<OrganizationSettings canManage />);
+    fireEvent.click(openButton()!);
+    await screen.findByRole("dialog", { name: "Invite a member" });
+    fireEvent.change(screen.getByLabelText(/Email/), { target: { value: "draft@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: /Discard/ }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    fireEvent.click(openButton()!);
+    await screen.findByRole("dialog", { name: "Invite a member" });
+    expect((screen.getByLabelText(/Email/) as HTMLInputElement).value).toBe("");
   });
 
   it("keeps the dialog open and shows the error when the invitation fails", async () => {

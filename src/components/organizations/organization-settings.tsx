@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { FormSelect } from "@/components/forms";
+import { FormSelect } from "@/components/forms/form-select";
 import { useToast } from "@/components/ui/toast";
 import {
   useChangeMemberRole,
@@ -31,7 +31,8 @@ import {
   OrganizationRosterRow,
 } from "./organization-roster-list";
 import { Notice } from "@/components/ui/notice";
-import { INVITE_ROLE_OPTIONS as ROLE_OPTIONS, InviteMemberDialog } from "./invite-member-dialog";
+import { InviteMemberDialog } from "./invite-member-dialog";
+import { ORG_ROLE_OPTIONS as ROLE_OPTIONS } from "./organization-roles";
 import { ILLUSTRATION_SIZE, EnvelopeArt, MembersArt } from "@/components/ui/illustrations";
 
 const ROLE_LABELS: Record<string, string> = Object.fromEntries(
@@ -167,7 +168,13 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
             title="No members yet"
             description="Invite teammates to give them access to this organization."
             padding="md"
-            action={inviteButton}
+            action={
+              canManage ? (
+                <Button type="button" size="small" onClick={() => setInviteOpen(true)}>
+                  Invite your first member
+                </Button>
+              ) : undefined
+            }
           />
         ) : (
           <OrganizationRosterList>
@@ -257,9 +264,10 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
         </section>
       )}
 
-      {canManage && (
+      {canManage && inviteOpen && (
+        // Mounted only while open, so a discarded draft never comes back.
         <InviteMemberDialog
-          isOpen={inviteOpen}
+          isOpen
           onClose={() => setInviteOpen(false)}
           onInvited={(acceptUrl) => {
             setLastInviteLink(acceptUrl);
