@@ -16,6 +16,7 @@ import {
 import type { ColumnDef } from "@tanstack/react-table";
 import { LightningIcon, FlaskIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { DataTable } from "@/components/ui/data-table";
+import { FACILITY_COLUMN_HIDDEN_BY_DEFAULT } from "@/components/ui/data-table/data-table-helpers";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -68,7 +69,8 @@ function createColumns(
       cell: ({ row }) => <span>{row.original.identifier}</span>,
     },
     {
-      accessorKey: "facilityName",
+      id: "facility",
+      accessorFn: (row) => row.facilityName ?? "",
       header: "Facility",
       cell: ({ row }) => (
         <span>{row.original.facilityName || FACILITY_NOT_FOUND}</span>
@@ -289,6 +291,7 @@ export function ReactorList() {
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={FACILITY_COLUMN_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={reactors}
         onRowClick={openView}

@@ -36,6 +36,14 @@ export const STICKY_END_CELL_CLASSES =
   "sticky right-0 z-10 bg-[var(--panel-bg)] [border-left:var(--hair-3)] group-hover/row:bg-[var(--row-hover-bg-solid)]";
 export const STICKY_END_HEADER_CLASSES =
   "sticky right-0 z-10 bg-[var(--panel-head-bg-solid)] [border-left:var(--hair-3)]";
+
+/**
+ * Starting visibility for lists the facility switcher already scopes: the
+ * Facility column (id `facility`) is redundant there, so it starts hidden and
+ * stays available in the Columns menu.
+ */
+export const FACILITY_COLUMN_HIDDEN_BY_DEFAULT = { facility: false } as const;
+
 /** A record code such as "OR-26-002": letters and digits joined by hyphens. */
 const RECORD_CODE_PATTERN = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+$/;
 
