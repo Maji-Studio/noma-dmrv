@@ -92,7 +92,7 @@ export interface HistoryDay {
 }
 
 /** Half a storage step: the smallest change worth a row. */
-const MIN_SHOWN_CHANGE_KG = 0.5 * 10 ** -MASS_KG_STORAGE_DECIMALS;
+export const MIN_SHOWN_CHANGE_KG = 0.5 * 10 ** -MASS_KG_STORAGE_DECIMALS;
 
 /** Rounding left over after a bin empties reads as nothing, never as a negative mass. */
 function settled(kg: number): number {

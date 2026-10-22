@@ -11,7 +11,7 @@ import { InfoHint } from "@/components/ui/tooltip";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { useOutputStockBalance, useOutputStockHistory } from "@/hooks/use-output-stock";
 import { formatMassKg } from "@/lib/format-utils";
-import { LOST_MASS_LABEL, WET_STOCK_DEFINITION } from "@/lib/output-stock/labels";
+import { LOST_MASS_LABEL, STOCK_HISTORY_HINT, WET_STOCK_DEFINITION } from "@/lib/output-stock/labels";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { useState, type ReactNode } from "react";
@@ -22,10 +22,6 @@ import { OutputStockForm } from "./output-stock-form";
 import { outputStockFigure } from "./stock-preview-shared";
 
 const ICON_PX = 16;
-
-/** The one fact the entries cannot show as a figure. */
-const HISTORY_HINT =
-  "Each entry is one measurement. Wet stock is wet mass added less wet mass taken out. A later entry never changes an earlier one.";
 
 /**
  * A day's heading: the date, and the wet mass when it ended. A day end without a
@@ -85,7 +81,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
         <div className="flex items-center justify-between gap-12 pr-24">
           <h3 className="flex min-w-0 items-center gap-6 title-heading-3">
             <span className="truncate">Stock history</span>
-            <InfoHint label="About stock history">{HISTORY_HINT}</InfoHint>
+            <InfoHint label="About stock history">{STOCK_HISTORY_HINT}</InfoHint>
           </h3>
         </div>
         {now && history.data && history.data.length > 0 && (

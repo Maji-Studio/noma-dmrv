@@ -15,7 +15,7 @@ import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { MoistureResetChange } from "./moisture-reset-change";
-import { entryAmount, entrySentence, formatPartFigures, WET_MASS_LABEL, type HistoryRow } from "./output-stock-history-days";
+import { entryAmount, entrySentence, formatPartFigures, MIN_SHOWN_CHANGE_KG, WET_MASS_LABEL, type HistoryRow } from "./output-stock-history-days";
 import { LEDGER_SUMMARY_CLASS, LedgerCaret, LedgerFacts } from "./stock-ledger";
 import { StockChip } from "./stock-figures";
 import { StockSourceLink } from "./stock-source-link";
@@ -110,11 +110,22 @@ function PartsTable({ row, subject }: { row: HistoryRow; subject: string }) {
   );
 }
 
+/** The wet change the entry was saved with, when a later entry has since moved today's estimate of it. Null when they agree. */
+export function savedWetChange(row: HistoryRow): string | null {
+  const { savedWetDeltaKg, wetDeltaKg } = row.entry;
+  if (row.status !== "counts" || savedWetDeltaKg == null || wetDeltaKg == null) return null;
+  if (Math.abs(savedWetDeltaKg - wetDeltaKg) < MIN_SHOWN_CHANGE_KG) return null;
+  const figure = formatPartFigures({ label: WET_MASS_LABEL, changeKg: savedWetDeltaKg, afterKg: 0, estimated: true }).change;
+  return `${WET_MASS_LABEL} ${figure}. A later entry changed this estimate.`;
+}
+
 function facts(row: HistoryRow, timeZone: string, linked: boolean) {
   const { entry, replaces, replacedBy, reversedBy } = row;
   const recordedLater = entry.recordedAt.slice(0, 16) !== entry.occurredAt.slice(0, 16);
   const batches = entry.allocations.map((allocation) => allocation.code);
+  const saved = savedWetChange(row);
   return [
+    ...(saved ? [{ label: "When saved", value: saved }] : []),
     ...(batches.length > 0 ? [{ label: batches.length === 1 ? "Batch" : "Batches", value: batches.join(", ") }] : []),
     ...(entry.moisturePercent !== null ? [{ label: "Moisture", value: formatMoisturePercent(entry.moisturePercent) }] : []),
     ...(replaces ? [{ label: "Replaces", value: <EntryLink entryId={replaces.id} linked={linked}>{`${entryAmount(replaces, row.kind, formatMassKg)}, ${formatFacilityDateTime(replaces.occurredAt, timeZone)}`}</EntryLink> }] : []),
