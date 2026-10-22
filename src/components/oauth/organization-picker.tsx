@@ -2,8 +2,10 @@
 
 import { useId, useRef, useState } from "react";
 import { BuildingsIcon } from "@phosphor-icons/react/dist/ssr";
-import { ChoiceCardGroup, FormError } from "@/components/forms";
+import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
+import { FormError } from "@/components/forms/form-error";
 import { Button, EmptyState } from "@/components/ui";
+import { Notice } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import { useOAuthOrganizationChoices, useSelectOAuthOrganization } from "@/hooks/use-oauth-flow";
@@ -17,7 +19,7 @@ const TITLE = "Choose an organization";
 const EMPTY_TITLE = "No organizations yet";
 const EMPTY_DESCRIPTION = "Ask an Admin to invite you.";
 const CHOOSE_ERROR = "Choose an organization.";
-const NONE_AVAILABLE_ERROR = "None of these organizations can connect apps. Each one says why.";
+const NONE_AVAILABLE = "None of your organizations can connect apps. Ask an Admin to turn on API access, then connect again.";
 const EMPTY_ADMIN_TITLE = "Join an organization first";
 const EMPTY_ADMIN_DESCRIPTION = "Apps connect as a member of an organization. Platform Admins are not members, so invite yourself to one in Settings, then connect again.";
 
@@ -71,6 +73,9 @@ export function OrganizationPicker() {
         <EmptyState icon={<BuildingsIcon size={EMPTY_ICON_SIZE} />} padding="sm"
           title={isPlatformAdmin ? EMPTY_ADMIN_TITLE : EMPTY_TITLE}
           description={isPlatformAdmin ? EMPTY_ADMIN_DESCRIPTION : EMPTY_DESCRIPTION} />
+      ) : !usable ? (
+        // Every membership has API access off (the only disabledReason the server sets), so there is nothing to choose.
+        <Notice tone="warning">{NONE_AVAILABLE}</Notice>
       ) : (
         <form ref={formRef} className="flex flex-col gap-24" onSubmit={event => { event.preventDefault(); submitChosen(); }}>
           <div>
@@ -90,7 +95,7 @@ export function OrganizationPicker() {
                 disabled: !!membership.disabledReason,
               }))}
             />
-            <FormError id={errorId} message={showError ? (usable ? CHOOSE_ERROR : NONE_AVAILABLE_ERROR) : undefined} />
+            <FormError id={errorId} message={showError ? CHOOSE_ERROR : undefined} />
           </div>
           {refused && <OAuthRestartNotice />}
           <div className="flex justify-start">

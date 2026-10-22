@@ -8,11 +8,6 @@ vi.mock("@/hooks/use-oauth-flow", () => ({
   useOAuthOrganizationChoices: () => mocks.choices(),
   useSelectOAuthOrganization: () => ({ mutateAsync: mocks.mutateAsync, isPending: false }),
 }));
-vi.mock("@/components/forms", async () => ({
-  ...await import("@/components/forms/choice-card-group"),
-  ...await import("@/components/forms/server-error"),
-  ...await import("@/components/forms/form-error"),
-}));
 vi.mock("@/components/ui", async () => ({
   ...await import("@/components/ui/button"),
   ...await import("@/components/ui/empty-state"),
@@ -153,26 +148,25 @@ it("clears the error when an organization is picked, then submits it", async () 
   await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith("org-2"));
 });
 
-it("keeps Continue enabled when every organization is unavailable and says why nothing can be chosen", () => {
+it("shows a notice instead of Continue when every organization is unavailable", () => {
   const closed = memberships.map(membership => ({ ...membership, disabledReason: "API access is disabled for this organization." }));
   mocks.choices.mockReturnValue(nonePicked({ memberships: closed }));
   render(<OrganizationPicker />);
-  expect(continueButton().disabled).toBe(false);
-  fireEvent.click(continueButton());
-  expect(screen.getByRole("alert").textContent).toBe("None of these organizations can connect apps. Each one says why.");
-  expect(mocks.mutateAsync).not.toHaveBeenCalled();
+  expect(screen.getByText("None of your organizations can connect apps. Ask an Admin to turn on API access, then connect again.")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+  expect(screen.queryByRole("radio")).toBeNull();
 });
 
-it("ignores a picked organization that becomes unavailable and shows the error on Continue", () => {
+it("swaps to the notice when a refetch makes every organization unavailable after a pick", () => {
   mocks.choices.mockReturnValue(nonePicked());
   const { rerender } = render(<OrganizationPicker />);
   fireEvent.click(screen.getByRole("radio", { name: /E2E Second Organization/ }));
   const closed = memberships.map(membership => ({ ...membership, disabledReason: "API access is disabled for this organization." }));
   mocks.choices.mockReturnValue(nonePicked({ memberships: closed }));
   rerender(<OrganizationPicker />);
-  fireEvent.click(continueButton());
+  expect(screen.getByText("None of your organizations can connect apps. Ask an Admin to turn on API access, then connect again.")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
   expect(mocks.mutateAsync).not.toHaveBeenCalled();
-  expect(screen.getByRole("alert").textContent).toBe("None of these organizations can connect apps. Each one says why.");
 });
 
 it("does not fall back to the suggestion when the picked organization becomes unavailable", () => {
