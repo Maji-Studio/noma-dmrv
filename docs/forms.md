@@ -387,10 +387,14 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
   resolves the runs through `getCreditBatchesForSourceRuns`, by each record's
   saved lineage rule: a delivery keeps runs with drawn dry biochar, a product
   every run layer it draws (a residual one included), an application runs with
-  a share. Before the mass is entered it reads the runs the source holds:
-  "Joins" when they share one batch, "Could join" when they span several. An
-  entry the save would refuse, or a delivery whose saved allocation does not
-  balance, names no batch. A failed stock save invalidates these previews with
+  a share. Every line reads as a label, the same before and after saving:
+  "Credit batch: CB-26-001". Before the mass is entered it reads the runs the
+  source holds: "Credit batch:" when they share one batch, "Possible credit
+  batch(es):" when they span several or some are in none (the draw can take
+  from one or all of them). An entry the save would refuse says "Shown once
+  the load / amount / biochar draw can be saved"; a delivery whose saved
+  allocation does not balance says "Can't be traced for this delivery". The
+  date window is hidden below 640 px, except in a warning about the window. A failed stock save invalidates these previews with
   the stock previews (`invalidateAfterFailedStockSave`).
   When several batches apply, "+N" opens a list of all their batches.
 - The submit skips the browser's constraint bubbles except for unparsed number text (see [Native number constraints](#native-number-constraints)); a nested `submitType="button"` is untouched.

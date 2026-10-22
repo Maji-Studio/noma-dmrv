@@ -95,6 +95,8 @@ export function CreditBatchLine({ copy, facilityId, onRetry, retrying = false }:
       {copy.lead}
       {first && <BatchLink batch={first} facilityId={facilityId} />}
       {rest > 0 && <MoreBatches batches={copy.batches} rest={rest} facilityId={facilityId} />}
+      {/* The window is the long part: below 640px the line keeps one row. */}
+      {copy.window && <span className="hidden sm:inline">{copy.window}</span>}
       {copy.tail}
     </FormFooterPreview>
   );

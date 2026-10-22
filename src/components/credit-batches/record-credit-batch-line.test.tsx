@@ -65,7 +65,7 @@ describe("RecordCreditBatchLine", () => {
     expect(screen.getByRole("status").textContent).toContain("Checking credit batch...");
     act(() => vi.advanceTimersByTime(PREVIEW_SETTLE_MS));
     expect(previewHook).toHaveBeenLastCalledWith(input);
-    expect(screen.getByRole("status").textContent).toContain("Joins credit batch CB-26-001");
+    expect(screen.getByRole("status").textContent).toContain("Credit batch: CB-26-001");
     expect(screen.getByRole("link", { name: /CB-26-001/ })).toBeTruthy();
   });
 

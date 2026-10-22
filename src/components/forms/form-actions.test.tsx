@@ -90,7 +90,7 @@ describe("FormActions", () => {
 });
 
 describe("FormActions preview slot", () => {
-  const PREVIEW = <p data-testid="association-preview">Joins credit batch CB-1</p>;
+  const PREVIEW = <p data-testid="association-preview">Credit batch: CB-1</p>;
 
   it("renders the preview after the action error and directly above the buttons", () => {
     const markup = renderToStaticMarkup(

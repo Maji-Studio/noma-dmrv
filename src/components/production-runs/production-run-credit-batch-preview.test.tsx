@@ -130,7 +130,7 @@ describe("ProductionRunCreditBatchPreview", () => {
     await act(async () => {
       calls[1].resolve({ success: true, data: { state: "match", batch: OCTOBER, basis: { ...BASIS, day: "2026-10-01" }, expected: false } });
     });
-    await waitFor(() => expect(status().textContent).toContain("Joins credit batch CB-26-010 (opens in a new tab) (Oct 1 to Oct 31, 2026)"));
+    await waitFor(() => expect(status().textContent).toContain("Credit batch: CB-26-010 (opens in a new tab) (Oct 1 to Oct 31, 2026)"));
     expect(status().textContent).not.toContain("CB-26-009");
   });
 
