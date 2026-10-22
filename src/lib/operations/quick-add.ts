@@ -17,7 +17,7 @@ export const createVehicle: Operation<typeof vehicleQuickAddSchema, EntityOption
 };
 
 // Quick-add omits storageMethod/storageDescription and returns an enriched option.
-// The full bin writer in PR C has a different input and normalization contract.
+// The settings create (#1302) has a different input and normalization contract.
 export const createQuickStorageLocation: Operation<typeof storageLocationQuickAddSchema, EntityOption> = {
   id: "create_quick_storage_location",
   input: storageLocationQuickAddSchema,

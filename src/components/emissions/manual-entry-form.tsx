@@ -9,7 +9,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { FormField } from "@/components/forms/form-field";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { FormTextarea } from "@/components/forms/form-textarea";
@@ -93,10 +93,8 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
   const [serverError, setServerError] = useState<string | null>(null);
   const attachments = useDeferredAttachments();
   const queryClient = useQueryClient();
+  // Each form mount scopes a fresh create intent key to this draft.
   const createEntry = useCreateEmissionEntry(scope);
-  // This form mounts when its panel opens and remounts for another line/mode.
-  const startDraft = useEffectEvent(() => createEntry.startDraft());
-  useEffect(() => { startDraft(); }, []);
   const updateEntry = useUpdateEmissionEntry(scope);
   const replaceEntry = useReplaceEmissionEntry(scope);
   const saving = createEntry.isPending || updateEntry.isPending || replaceEntry.isPending || attachments.attachments.some((a) => a.status === "uploading");

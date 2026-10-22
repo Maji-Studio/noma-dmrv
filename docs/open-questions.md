@@ -630,7 +630,8 @@ before allowing confirmation to convert stored entry values to the new unit.
 
 - Five creates still run without `withCreate`: `createStorageLocationFn`
   (storage-locations); `createFacilityFn`; `createReactorFn`; `createFeedstockTypeFn`
-  (feedstock-types); `startNewProductionProcessFn`. These remain for PR C.
+  (feedstock-types); `startNewProductionProcessFn`. These remain for the settings
+  create (#1302).
   Each needs a writer that takes `tx` plus an app-only runner operation, so the key
   and the record of the save commit together. They sit in the PENDING table of
   `src/fn/create-action-coverage.test.ts` until then (#1302).

@@ -10,7 +10,7 @@ const AUTO_CODE_COUNT = 1;
 const REGISTRY_ID_CONSTRAINT = "feedstock_types_organization_id_isometric_id_unique";
 const NAME_USAGE_CONSTRAINT = "feedstock_types_organization_id_name_usage_unique";
 
-/** App-only operation shared by quick-add and the full create in PR C. */
+/** App-only operation for quick-add and the settings create (#1302). */
 export const createFeedstockType: Operation<typeof createFeedstockTypeSchema, FeedstockType> = {
   id: "create_feedstock_type",
   input: createFeedstockTypeSchema,

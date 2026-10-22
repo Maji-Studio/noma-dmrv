@@ -9,12 +9,11 @@ import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 const mutations = vi.hoisted(() => ({
   replace: vi.fn(),
   create: vi.fn(),
-  startDraft: vi.fn(),
   update: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-emission-entries", () => ({
-  useCreateEmissionEntry: () => ({ isPending: false, mutateAsync: mutations.create, startDraft: mutations.startDraft }),
+  useCreateEmissionEntry: () => ({ isPending: false, mutateAsync: mutations.create }),
   useUpdateEmissionEntry: () => ({ isPending: false, mutateAsync: mutations.update }),
   useReplaceEmissionEntry: () => ({ isPending: false, mutateAsync: mutations.replace }),
   invalidateEmissionEntryReads: vi.fn(),
@@ -105,17 +104,4 @@ describe("ManualEntryForm credit batch line", () => {
     renderForm({ kind: "edit", entry: makeEntry({}) });
     expect(screen.getByRole("link", { name: /CB-1/ }).getAttribute("href")).toBe(creditBatchDeepLinkHref("cb", "fac"));
   });
-});
-
-it("starts one create draft per opened form, retaining it on rerender", () => {
-  const client = new QueryClient();
-  const view = () => <QueryClientProvider client={client}><ManualEntryForm line={makeLine()} batch={BATCH} scope={SCOPE} today="2026-10-10" mode={{ kind: "add" }} onCancel={vi.fn()} onSaved={vi.fn()} /></QueryClientProvider>;
-  const { rerender, unmount } = render(view());
-  expect(mutations.startDraft).toHaveBeenCalledTimes(1);
-  rerender(view());
-  expect(mutations.startDraft).toHaveBeenCalledTimes(1);
-  unmount();
-  render(view());
-  expect(mutations.startDraft).toHaveBeenCalledTimes(2);
-  client.clear();
 });

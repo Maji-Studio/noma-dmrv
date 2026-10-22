@@ -76,13 +76,14 @@ describe("data-access/quick-add: auth enforcement", () => {
   });
 
   it("createFeedstockType rejects empty userId", async () => {
-    const { createFeedstockType } = await import("@/data-access/quick-add");
+    const { createFeedstockType } = await import("@/lib/operations/feedstock-types");
+    const { runOperationInProcess } = await import("@/lib/operations/runner");
 
     await expect(
-      createFeedstockType(makeTestOrgContext(""), {
-        code: "FT-001",
+      runOperationInProcess(createFeedstockType, makeTestOrgContext(""), {
         name: "Test Type",
         category: "forestry",
+        usage: "pyrolysis",
       })
     ).rejects.toThrow("Unauthorized");
   });

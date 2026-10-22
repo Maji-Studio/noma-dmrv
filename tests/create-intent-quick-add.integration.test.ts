@@ -63,6 +63,25 @@ const cases = [
   { name: "emission entry", table: emissionEntries, dates: true, prefix: null, run: (f: Fixture, intentKey: string, changed = false) => runOperationInProcess(recordEmissionEntry, f.ctx, { ...entryInput(f), note: changed ? "Changed" : null }, { intentKey }) },
 ];
 
+it("assigns the next vehicle code with its prefix when a generated code is already taken", async () => {
+  const f = await fixture();
+  const year = String(new Date().getFullYear()).slice(-2);
+  const prefix = `VEH-${year}-`;
+  await db.insert(vehicles).values({
+    organizationId: f.ctx.organizationId,
+    code: `${prefix}001`,
+    name: "Existing vehicle",
+    vehicleType: vehicleInput.vehicleType,
+  });
+  const intentKey = randomUUID();
+  const created = await runOperationInProcess(createVehicle, f.ctx, vehicleInput, { intentKey });
+  expect(created.code).toBe(`${prefix}002`);
+  expect(await runOperationInProcess(createVehicle, f.ctx, vehicleInput, { intentKey })).toEqual(created);
+  const saved = await db.select().from(vehicles).where(eq(vehicles.organizationId, f.ctx.organizationId));
+  expect(saved).toHaveLength(2);
+  expect(saved.map(({ code }) => code).sort()).toEqual([`${prefix}001`, `${prefix}002`]);
+}, SUITE_TIMEOUT_MS);
+
 describe.each(cases)("$name create intent", ({ table, run, dates, prefix }) => {
   it("replays one row, rejects changed values and isolates organizations", async () => {
     const f = await fixture();

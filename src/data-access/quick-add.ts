@@ -25,15 +25,9 @@ import { SafeError } from "@/lib/errors";
 import { guardStorageLocationName } from "./unique-name-guards";
 import { isPgUniqueViolation } from "@/db/errors";
 import { getStorageLocationById } from "./entities/storage-locations";
-import { createFeedstockTypeInTransaction as createCanonicalFeedstockType } from "./feedstock-types";
-import type { FeedstockCategory } from "@/schemas/feedstock-types";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 
 const VEHICLE_NAME_CONSTRAINT = "vehicles_organization_id_name_unique";
-const ISOMETRIC_FEEDSTOCK_TYPE_CONSTRAINT =
-  "feedstock_types_organization_id_isometric_id_unique";
-const FEEDSTOCK_TYPE_NAME_USAGE_CONSTRAINT =
-  "feedstock_types_organization_id_name_usage_unique";
 
 // ============================================
 // Driver Quick Add
@@ -192,59 +186,6 @@ export async function createVehicleInTransaction(
   } catch (error) {
     if (isPgUniqueViolation(error, VEHICLE_NAME_CONSTRAINT)) {
       throw new SafeError("A vehicle with this name already exists");
-    }
-    throw error;
-  }
-}
-
-// ============================================
-// Feedstock Type Quick Add
-// ============================================
-
-export interface CreateFeedstockTypeData {
-  code: string;
-  name: string;
-  category: FeedstockCategory;
-  usage?: "pyrolysis" | "blend";
-  description?: string | null;
-  registryUrl?: string | null;
-  isometricFeedstockTypeId?: string | null;
-}
-
-/**
- * Create a new feedstock type with required fields
- * Returns EntityOption for immediate use in select dropdowns
- */
-export async function createFeedstockType(
-  ctx: OrgContext,
-  data: CreateFeedstockTypeData
-): Promise<EntityOption> {
-  requireOrgScope(ctx);
-  return db.transaction((tx) => createFeedstockTypeInTransaction(ctx, tx, data));
-}
-
-export async function createFeedstockTypeInTransaction(
-  ctx: OrgContext, tx: DbTransaction, data: CreateFeedstockTypeData,
-): Promise<EntityOption> {
-  requireOrgScope(ctx);
-  try {
-    const feedstockType = await createCanonicalFeedstockType(ctx, tx, {
-      ...data,
-      usage: data.usage ?? "pyrolysis",
-    });
-
-    return {
-      id: feedstockType.id,
-      code: feedstockType.code,
-      name: feedstockType.name,
-      subtitle: `${feedstockType.category} · ${feedstockType.usage}`,
-    };
-  } catch (error) {
-    if (isPgUniqueViolation(error, ISOMETRIC_FEEDSTOCK_TYPE_CONSTRAINT)) {
-      throw new SafeError("This Isometric feedstock type already exists. Select the existing feedstock type.");
-    }
-    if (isPgUniqueViolation(error, FEEDSTOCK_TYPE_NAME_USAGE_CONSTRAINT)) {
-      throw new SafeError("A feedstock type with this name and usage already exists");
     }
     throw error;
   }

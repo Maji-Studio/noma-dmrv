@@ -9,7 +9,7 @@ vi.mock("@/lib/operations/runner", () => ({
 }));
 vi.mock("@/data-access/code-generator", () => ({
   CODE_CONFLICT_MESSAGES: { feedstockType: "duplicate" },
-  withAutoCodes: async (_ctx: unknown, _prefix: unknown, _table: unknown, _column: unknown, _code: unknown, _count: unknown, create: (codes: string[], tx: unknown) => Promise<unknown>) => create(["FT-TEST"], "savepoint"),
+  withAutoCodes: async (_ctx: unknown, _tx: unknown, _prefix: unknown, _table: unknown, _column: unknown, _count: unknown, insertFn: (codes: string[], tx: unknown) => Promise<unknown>) => insertFn(["FT-TEST"], "savepoint"),
 }));
 import { createFeedstockTypeFn } from "@/fn/quick-add";
 const data = { name: "Selected type", category: "forestry" as const, usage: "pyrolysis" as const, isometricFeedstockTypeId: " ft_selected " };
