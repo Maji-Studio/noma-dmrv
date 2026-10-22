@@ -12,6 +12,8 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -198,6 +200,8 @@ export function OrderList() {
   // Error state
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A refused delete because records still use the row: its code and the server's reason.
+  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string } | null>(null);
 
   const filters: Partial<OrderFilterData> = {
     search: debouncedSearch || undefined,
@@ -340,7 +344,14 @@ export function OrderList() {
       setDeletingOrderId(null);
       toast.success("Order deleted.");
     } catch (error) {
-      setDeleteError(toDeleteErrorMessage(error, "Order", "Order was not deleted. Try again."));
+      const message = toDeleteErrorMessage(error, "Order", "Order was not deleted. Try again.");
+      if (isInUseDeleteRefusal(error)) {
+        const row = orders.find((item) => item.id === deletingOrderId);
+        setInUseRefusal({ code: row?.code ?? "Order", message });
+        setDeletingOrderId(null);
+        return;
+      }
+      setDeleteError(message);
     }
   };
 
@@ -503,7 +514,13 @@ export function OrderList() {
         />
       </EntitySideSheet>
 
-      <DeleteConfirmDialog isOpen={!!deletingOrderId} title="Delete order" message={deleteError ? "Are you sure you want to delete this order? This action cannot be undone." : "Are you sure you want to delete this order? This action cannot be undone. Note: Orders with deliveries cannot be deleted."} onConfirm={handleDeleteConfirm} onCancel={() => { setDeletingOrderId(null); setDeleteError(null); }} isPending={deleteOrder.isPending} errorMessage={deleteError ?? undefined} />
+      {inUseRefusal && (
+        <InUseDeleteDialog label={inUseRefusal.code} onClose={() => setInUseRefusal(null)}>
+          <p>{inUseRefusal.message}</p>
+        </InUseDeleteDialog>
+      )}
+
+      <DeleteConfirmDialog isOpen={!!deletingOrderId} title="Delete order" message="Are you sure you want to delete this order? This action cannot be undone." onConfirm={handleDeleteConfirm} onCancel={() => { setDeletingOrderId(null); setDeleteError(null); }} isPending={deleteOrder.isPending} errorMessage={deleteError ?? undefined} />
     </div>
   );
 }

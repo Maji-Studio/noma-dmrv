@@ -35,6 +35,8 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { MassPair } from "@/components/ui/mass-pair";
@@ -284,6 +286,8 @@ export function ProductionRunList() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A refused delete because records still use the row: its code and the server's reason.
+  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string } | null>(null);
 
   const filters: Partial<ProductionRunFilterData> = {
     ids: affectedRunIds.length > 0 ? affectedRunIds : undefined,
@@ -400,8 +404,14 @@ export function ProductionRunList() {
       setDeletingRunId(null);
       toast.success("Production run deleted.");
     } catch (error) {
+      const message = toDeleteErrorMessage(error, `Production run ${deleting.code}`, "Production run was not deleted. Try again.");
+      if (isInUseDeleteRefusal(error)) {
+        setInUseRefusal({ code: deleting.code, message });
+        setDeletingRunId(null);
+        return;
+      }
       if (error instanceof StaleVersionError) setDeleting(null);
-      setDeleteError(toDeleteErrorMessage(error, `Production run ${deleting.code}`, "Production run was not deleted. Try again."));
+      setDeleteError(message);
     }
   };
 
@@ -660,11 +670,16 @@ export function ProductionRunList() {
 
       {deleteError && !deleting && <ServerError message={deleteError} />}
 
+      {inUseRefusal && (
+        <InUseDeleteDialog label={inUseRefusal.code} onClose={() => setInUseRefusal(null)}>
+          <p>{inUseRefusal.message}</p>
+        </InUseDeleteDialog>
+      )}
+
       <DeleteConfirmDialog
         isOpen={!!deletingRunId}
         title="Delete production run"
-        // Once the server refuses, its reason says the rule; the Note would repeat it.
-        message={deleteError ? "Are you sure you want to delete this production run? This action cannot be undone." : "Are you sure you want to delete this production run? This action cannot be undone. Note: Production runs with dependent biochar products or credit batches cannot be deleted."}
+        message="Are you sure you want to delete this production run? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingRunId(null); setDeleteError(null); }}
         isPending={deleteRun.isPending}
