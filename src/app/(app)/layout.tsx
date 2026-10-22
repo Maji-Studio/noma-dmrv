@@ -9,10 +9,8 @@ import {
   AppSidebar,
   MobileNav,
   OrgSwitchToast,
-  PLATFORM_ADMIN_BAR_HEIGHT,
-  PlatformAdminBar,
+  PlatformAdminColumn,
   ViewerOrgProvider,
-  shouldShowPlatformAdminBar,
   type ViewerOrg,
 } from "@/components/navigation";
 import { FacilityProvider } from "@/components/navigation/facility-provider";
@@ -60,8 +58,6 @@ export default async function AppLayout({
         }
       : null;
 
-  const showPlatformAdminBar = shouldShowPlatformAdminBar(viewerOrg);
-
   return (
     <ViewerOrgProvider value={viewerOrg}>
     <FacilityProvider
@@ -94,21 +90,7 @@ export default async function AppLayout({
         </a>
         <AppSidebar />
         <MobileNav />
-        {/* The Platform Admin bar sits above `main`, inside this column, so it
-            pushes the page down instead of covering it. */}
-        <div
-          className="flex flex-1 min-w-0 flex-col md:min-h-0"
-          style={
-            showPlatformAdminBar
-              ? ({ "--platform-admin-bar-height": PLATFORM_ADMIN_BAR_HEIGHT } as React.CSSProperties)
-              : undefined
-          }
-        >
-          <PlatformAdminBar />
-          <main id="main-content" tabIndex={-1} className="flex-1 min-h-0 min-w-0 overflow-auto focus:outline-none">
-            {children}
-          </main>
-        </div>
+        <PlatformAdminColumn>{children}</PlatformAdminColumn>
       </div>
     </FacilityProvider>
     </ViewerOrgProvider>

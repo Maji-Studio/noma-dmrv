@@ -118,7 +118,7 @@ describe("read-only Removal template previews", () => {
     expect(result.success).toBe(true);
     if (!result.success) throw new Error("expected a read");
     expect(result.data.find((entry) => entry.templateId === template.id)).toMatchObject({
-      observation: null, preview: true, isDefault: false, isPinned: false,
+      observation: null, preview: true, isCurrent: false, isPinned: false,
     });
     expect(await storedObservations()).toEqual(before);
   });

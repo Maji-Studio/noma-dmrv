@@ -583,3 +583,17 @@ it("publishes all eight location writes with child-specific precondition problem
   }
   for (const command of ["archive", "restore"]) expect(document.paths[`/customers/{idOrCode}/locations/{locationId}/${command}`].post.operationId).toBe(`${command}_customer_location`);
 });
+
+
+it('publishes draw moisture bases with movement kind and date', () => {
+  let bases = 0;
+  visit(document.components.schemas.output_bin_stock, node => {
+    const properties = node.properties as Record<string, JsonSchema> | undefined;
+    if (!properties?.source || !properties.at) return;
+    expect(properties.source.enum).toEqual(['reading', 'recorded', 'draw']);
+    expect(properties.kind).toMatchObject({ type: 'string', enum: ['loss', 'delivery', 'production_draw', 'product_draw'] });
+    expect(properties.at).toMatchObject({ type: 'string', format: 'date-time' });
+    bases++;
+  });
+  expect(bases).toBe(2);
+});

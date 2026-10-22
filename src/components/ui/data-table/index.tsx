@@ -26,7 +26,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { pluralize } from "@/lib/copy-utils";
-import { cva, type VariantProps } from "class-variance-authority";
+import { type VariantProps } from "class-variance-authority";
 import { Button } from "@/components/ui/button";
 import { TableRowSkeleton } from "@/components/ui/loading-skeleton";
 import { ListPagination } from "@/components/ui/list-pagination";
@@ -39,6 +39,7 @@ import {
   STICKY_END_HEADER_CLASSES,
   columnLabel,
   handleRowActivationClick,
+  cellKeepsOneLine,
 } from "./data-table-helpers";
 import {
   RowLink,
@@ -46,6 +47,7 @@ import {
   rowLinkColumnId,
   warnMissingRecordLink,
 } from "./row-link";
+import { tableRowVariants, tableVariants } from "./table-variants";
 
 /* ------------------------------------------------------------------ */
 /*  Data Table Context                                                  */
@@ -54,6 +56,14 @@ import {
 interface DataTableContextValue<TData> {
   table: TanStackTable<TData>;
 }
+
+// TanStack's `table` is one mutable instance for the table's lifetime. The
+// React Compiler skips `DataTable` itself (`useReactTable` is a known
+// incompatible library) but compiles the parts below, which would cache every
+// `table.*` read on that stable reference and never show a later page count,
+// search value or column state (#1280). So each part that reads the table opts
+// out with "use no memo", and the context value is a new object on every
+// `DataTable` render so those parts re-render with it.
 
 const DataTableContext = React.createContext<DataTableContextValue<unknown> | null>(null);
 
@@ -65,63 +75,13 @@ function useDataTable<TData>() {
   return context;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Table Variants (CVA)                                                */
-/* ------------------------------------------------------------------ */
-
-const tableVariants = cva(
-  "w-full border-collapse",
-  {
-    variants: {
-      variant: {
-        default: "",
-        bordered: "[border:var(--panel-border)]",
-      },
-      size: {
-        default: "",
-        compact: "[&_th]:py-6 [&_th]:px-8 [&_td]:py-4 [&_td]:px-8",
-        comfortable: "[&_th]:py-16 [&_th]:px-16 [&_td]:py-12 [&_td]:px-16",
-      },
-    },
-    defaultVariants: {
-      variant: "bordered",
-      size: "default",
-    },
-  }
-);
-
-const tableRowVariants = cva(
-  // 1px 10%-plum divider between rows (--hair-3 weight); the panel frame
-  // closes the bottom, so the last row drops its divider.
-  "[border-bottom:var(--row-divider)] last:[border-bottom:none] align-middle transition-colors",
-  {
-    variants: {
-      striped: {
-        true: "even:bg-[var(--row-stripe-bg)]",
-        false: "",
-      },
-      hoverable: {
-        true: "hover:bg-[var(--row-hover-bg)]",
-        false: "",
-      },
-      selected: {
-        true: "bg-[var(--color-interaction)]/10",
-        false: "",
-      },
-    },
-    defaultVariants: {
-      striped: false,
-      hoverable: false,
-      selected: false,
-    },
-  }
-);
-
 const MAX_LOADING_ROWS = 5;
 
 /* ------------------------------------------------------------------ */
 /*  Data Table Props                                                    */
 /* ------------------------------------------------------------------ */
+
+const NO_HIDDEN_COLUMNS: VisibilityState = {};
 
 export interface DataTableProps<TData, TValue> extends VariantProps<typeof tableVariants> {
   columns: ColumnDef<TData, TValue>[];
@@ -148,6 +108,8 @@ export interface DataTableProps<TData, TValue> extends VariantProps<typeof table
   enableMultiRowSelection?: boolean;
   // Column visibility
   columnVisibility?: VisibilityState;
+  /** Columns that start hidden (`{ id: false }`); "Reset columns" restores this state. */
+  defaultColumnVisibility?: VisibilityState;
   onColumnVisibilityChange?: (visibility: VisibilityState) => void;
   // Row options
   striped?: boolean;
@@ -217,6 +179,7 @@ function DataTableRoot<TData, TValue>({
   enableMultiRowSelection = true,
   // Column visibility
   columnVisibility: externalColumnVisibility,
+  defaultColumnVisibility = NO_HIDDEN_COLUMNS,
   onColumnVisibilityChange,
   // Row options
   striped = false,
@@ -244,7 +207,7 @@ function DataTableRoot<TData, TValue>({
   const [sorting, setSorting] = React.useState<SortingState>(defaultSorting);
   const [globalFilter, setGlobalFilter] = React.useState("");
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(defaultColumnVisibility);
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
   const [pagination, setPagination] = React.useState<PaginationState>({
     pageIndex: externalPageIndex ?? 0,
@@ -333,6 +296,7 @@ function DataTableRoot<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
+    initialState: { columnVisibility: defaultColumnVisibility },
     state: {
       sorting,
       globalFilter: effectiveGlobalFilter,
@@ -386,10 +350,7 @@ function DataTableRoot<TData, TValue>({
     );
   };
 
-  const contextValue = React.useMemo(
-    () => ({ table }),
-    [table]
-  );
+  const contextValue: DataTableContextValue<TData> = { table };
 
   // Slot partition: pagination renders BELOW the table (visually and in DOM —
   // keyboard/screen-reader order must match the visual order inside the
@@ -535,8 +496,7 @@ function DataTableRoot<TData, TValue>({
                         key={cell.id}
                         className={cn(
                           "py-8 px-12 body-small",
-                          cell.column.columnDef.meta?.nowrap &&
-                            "whitespace-nowrap",
+                          cellKeepsOneLine(cell) && "whitespace-nowrap",
                           cell.column.columnDef.meta?.stickyEnd &&
                             STICKY_END_CELL_CLASSES
                         )}
@@ -601,7 +561,7 @@ function DataTableRoot<TData, TValue>({
                           {label}
                         </span>
                       )}
-                      <div className="body-small min-w-0 break-words text-right">
+                      <div className={cn("body-small min-w-0 break-words text-right", cellKeepsOneLine(cell) && "whitespace-nowrap")}>
                         {renderCell(cell, row.original)}
                       </div>
                     </div>
@@ -660,6 +620,7 @@ function DataTableSearch({
   className,
   "aria-label": ariaLabel = "Search table",
 }: DataTableSearchProps) {
+  "use no memo";
   const { table } = useDataTable();
   const value = (table.getState().globalFilter as string) ?? "";
 
@@ -755,6 +716,7 @@ interface DataTableColumnVisibilityProps {
 }
 
 function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps) {
+  "use no memo";
   const { table } = useDataTable();
   const [isOpen, setIsOpen] = React.useState(false);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
@@ -768,7 +730,10 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
         !column.columnDef.meta?.recordLink &&
         columnLabel(column),
     );
-  const hasVisibilityChanges = hideableColumns.some((column) => !column.getIsVisible());
+  const defaultVisibility = table.initialState.columnVisibility;
+  const hasVisibilityChanges = hideableColumns.some(
+    (column) => column.getIsVisible() !== (defaultVisibility[column.id] !== false),
+  );
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -809,7 +774,7 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
           id={menuId}
           role="dialog"
           aria-label="Column visibility"
-          className="absolute right-0 top-[calc(100%+4px)] z-10 min-w-[160px] border border-[var(--color-border-primary)] bg-[var(--color-background-white)]"
+          className="absolute right-0 top-[calc(100%+4px)] z-[var(--z-layer-popover)] max-h-320 w-max min-w-[160px] overflow-y-auto border border-[var(--color-border-primary)] bg-[var(--color-background-white)]"
         >
           {hideableColumns.map((column) => (
             <label
@@ -830,7 +795,7 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
                 onChange={column.getToggleVisibilityHandler()}
                 className="sr-only"
               />
-              <span>{columnLabel(column)}</span>
+              <span className="whitespace-nowrap">{columnLabel(column)}</span>
             </label>
           ))}
           {hasVisibilityChanges && (
@@ -868,6 +833,7 @@ function DataTablePagination({
   showSelectedCount = false,
   className,
 }: DataTablePaginationProps) {
+  "use no memo";
   const { table } = useDataTable();
   const pageIndex = table.getState().pagination.pageIndex;
   const pageSize = table.getState().pagination.pageSize;

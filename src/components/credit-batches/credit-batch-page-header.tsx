@@ -2,6 +2,7 @@
 
 /** The credit batch page header: identity, the state-driven action, progress and key numbers. */
 import Link from "next/link";
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import {
   ArrowLeftIcon,
   CheckIcon,
@@ -80,8 +81,9 @@ const STEP_BAR: Record<CreditBatchMilestone["state"], string> = {
  * opens the same four in a popover.
  */
 function ProgressSteps() {
-  const { pageModel, blockingCount, openItems } = useCreditBatchPage();
-  const steps = creditBatchMilestones({ blockingCount, openCount: overviewBadgeCount(openItems), pageModel });
+  const { batch, pageModel, blockingCount, openItems } = useCreditBatchPage();
+  const { timeZone } = useFacilityClock(batch.facilityId);
+  const steps = creditBatchMilestones({ timeZone, blockingCount, openCount: overviewBadgeCount(openItems), pageModel });
   return (
     <>
       <CreditBatchProgressCompact steps={steps} className="sm:hidden" />

@@ -814,6 +814,20 @@ describe("EntitySelect caller-owned options", () => {
     expect(change).not.toHaveBeenCalled();
   });
 
+  it("hands the automatic pick to onAutoSelect, not onChange, when the form asks", () => {
+    const change = vi.fn();
+    const auto = vi.fn();
+    render(<EntitySelect options={[state.options[0]]} value="" onChange={change} onAutoSelect={auto} autoSelectSingle />);
+    expect(auto).toHaveBeenCalledExactlyOnceWith("one");
+    expect(change).not.toHaveBeenCalled();
+  });
+
+  it("still sends the automatic pick to onChange without onAutoSelect", () => {
+    const change = vi.fn();
+    render(<EntitySelect options={[state.options[0]]} value="" onChange={change} autoSelectSingle />);
+    expect(change).toHaveBeenCalledExactlyOnceWith("one");
+  });
+
   it("renders caller loading and errors instead of selectable retained options", () => {
     const { rerender } = render(<EntitySelect options={localOptions} onChange={vi.fn()} isLoading />);
     open();

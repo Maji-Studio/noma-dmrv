@@ -29,7 +29,7 @@ import {
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import {
   useFacilityCertifierSummary,
@@ -37,12 +37,13 @@ import {
   useRemovalsForFacility,
 } from "@/hooks/use-certification";
 import { deriveRemovalWorkflowStatus } from "@/lib/certification/status";
-import { formatDateRange } from "@/lib/format-utils";
+import { formatDateRange, formatDayString } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { SubmittedOnCell, submittedOnSortingFn, submittedOnText } from "./submitted-on-cell";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import { NewRemovalDialog } from "./new-removal-dialog";
 import { CORRECTION_NEEDED_LABEL, RemovalCorrectionCell } from "./removal-correction-needed";
+import { correctionStatus } from "@/lib/removal-correction-copy";
 import { useRecordLocks } from "@/hooks/use-record-locks";
 import type { RecordLockView, RecordLockViews } from "@/lib/record-lock-view";
 import { RemovalDetailSheet } from "./removal-detail-sheet";
@@ -206,6 +207,9 @@ export function StatusCell({ summary, lock }: { summary: RemovalListRow; lock?: 
     enrichmentStatus: summary.enrichmentStatus,
     readiness: summary.readiness,
   });
+  // A returned Removal with its correction window open names that state in
+  // place of its own status, and #1134's lock-based cell steps aside.
+  const shown = summary.correction ? correctionStatus(summary.correction) : status;
   const firstReason = status.reasons[0]?.split("\n")[0];
   const remainingReasonCount = status.reasons.length - 1;
 
@@ -214,8 +218,8 @@ export function StatusCell({ summary, lock }: { summary: RemovalListRow; lock?: 
       <CertificationStatusBadge
         entityType="removal"
         entityId={summary.removalId}
-        status={status.value}
-        label={status.label}
+        status={shown.value}
+        label={shown.label}
       />
       {firstReason && (
         // `relative` paints the reason above the badge's expanded hit area,
@@ -233,7 +237,7 @@ export function StatusCell({ summary, lock }: { summary: RemovalListRow; lock?: 
           </span>
         </span>
       )}
-      <RemovalCorrectionCell lock={lock} />
+      <RemovalCorrectionCell lock={summary.correction ? undefined : lock} />
       {status.canRetry && (
         <Button
           variant="default"
@@ -268,19 +272,19 @@ function BatchesColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
   return <MemberBatchesCell summary={row.original} />;
 }
 
-function SubmittedOnColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
-  return <SubmittedOnCell state={row.original.submittedOn} />;
-}
-
 function StatusColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
   const locks = useContext(RemovalLocksContext);
   return <StatusCell summary={row.original} lock={locks[row.original.removalId]} />;
 }
 
+/** The reporting window is already on the Removal cell; its two dates can be added as columns. */
+const REMOVAL_COLUMNS_HIDDEN_BY_DEFAULT = { reportingStart: false, reportingEnd: false };
+
 const createColumns = (
   submittedOnDescending: boolean,
   locks: RecordLockViews,
   registryHref: (externalId: string) => string | null,
+  timeZone: string,
 ): ColumnDef<RemovalListRow>[] => [
   {
     id: "removal",
@@ -306,9 +310,23 @@ const createColumns = (
   {
     id: "submittedOn",
     header: "Submitted on",
-    accessorFn: (summary) => submittedOnText(summary.submittedOn),
+    accessorFn: (summary) => submittedOnText(summary.submittedOn, timeZone),
     sortingFn: submittedOnSortingFn<RemovalListRow>(submittedOnDescending),
-    cell: SubmittedOnColumnCell,
+    cell: ({ row }) => <SubmittedOnCell state={row.original.submittedOn} timeZone={timeZone} />,
+  },
+  {
+    id: "reportingStart",
+    enableGlobalFilter: false,
+    header: "Reporting start",
+    accessorFn: (summary) => summary.startedOn ?? "",
+    cell: ({ row }) => <span>{formatDayString(row.original.startedOn)}</span>,
+  },
+  {
+    id: "reportingEnd",
+    enableGlobalFilter: false,
+    header: "Reporting end",
+    accessorFn: (summary) => summary.completedOn ?? "",
+    cell: ({ row }) => <span>{formatDayString(row.original.completedOn)}</span>,
   },
   {
     id: "status",
@@ -321,7 +339,9 @@ const createColumns = (
         enrichmentStatus: summary.enrichmentStatus,
         readiness: summary.readiness,
       });
-      return `${status.label} ${status.reasons.join(" ")}${locks[summary.removalId]?.returnedBy.length ? ` ${CORRECTION_NEEDED_LABEL}` : ""}`;
+      const correction = summary.correction;
+      const returned = correction ? ` ${correctionStatus(correction).label}` : locks[summary.removalId]?.returnedBy.length ? ` ${CORRECTION_NEEDED_LABEL}` : "";
+      return `${status.label} ${status.reasons.join(" ")}${returned}`;
     },
     cell: StatusColumnCell,
   },
@@ -334,6 +354,7 @@ function ListBody({
   facilityId: string;
   onNewRemoval: () => void;
 }) {
+  const { timeZone } = useFacilityClock(facilityId);
   const identities = useRemovalsForFacility(facilityId);
   const [searchQuery, setSearchQuery] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -374,6 +395,7 @@ function ListBody({
       externalProjectId,
       isProduction,
     }),
+    timeZone,
   );
   const selected = removalId
     ? rows.find((r) => r.removalId === removalId)
@@ -390,6 +412,7 @@ function ListBody({
         </h2>
         <RemovalLocksContext.Provider value={removalLocks.locks}>
           <DataTable
+            defaultColumnVisibility={REMOVAL_COLUMNS_HIDDEN_BY_DEFAULT}
             columns={columns}
             data={rows}
             // Rows carry `removalId`, not `id`: key by it so an open status

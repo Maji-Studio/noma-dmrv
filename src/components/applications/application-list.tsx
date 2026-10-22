@@ -29,6 +29,7 @@ import {
   applicationKeys,
   useApplicationDeliveryOptions,
   useApplications,
+  useApplicationStats,
   useCreateApplication,
   useDeleteApplication,
   useUpdateApplication,
@@ -48,7 +49,6 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatCalendarDate, formatDateRange } from "@/lib/format-utils";
-import { sumNullableBy } from "@/lib/nullable-sum";
 import {
   isStaleVersionFailure,
   STALE_VERSION_MESSAGE,
@@ -65,6 +65,13 @@ import { useEffect, useRef, useState } from "react";
 import { ApplicationForm } from "./application-form";
 import { applicationSheetSections } from "./application-read-sections";
 import { formatApplicationKgFromTons, formatFieldSizeHa, type ApplicationDeliveryOption } from "./mass-utils";
+
+/** Record details an operator can add from the Columns menu. */
+const APPLICATION_COLUMNS_HIDDEN_BY_DEFAULT = {
+  deliveryCode: false,
+  cropType: false,
+  fieldIdentifier: false,
+};
 
 // ============================================
 // Column Definitions
@@ -91,6 +98,12 @@ function createColumns(
       cell: ({ row }) => (
         <span>{formatCalendarDate(row.original.applicationDate)}</span>
       ),
+    },
+    {
+      accessorKey: "deliveryCode",
+      meta: { nowrap: true },
+      header: "Delivery",
+      cell: ({ row }) => <span>{row.original.deliveryCode}</span>,
     },
     {
       id: "customer",
@@ -135,6 +148,16 @@ function createColumns(
       cell: ({ row }) => (
         <span className="font-mono">{formatFieldSizeHa(row.original.fieldSizeHa)}</span>
       ),
+    },
+    {
+      accessorKey: "cropType",
+      header: "Crop type",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.cropType ?? MISSING_VALUE.notRecorded}</span>,
+    },
+    {
+      accessorKey: "fieldIdentifier",
+      header: "Field identifier",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.fieldIdentifier ?? MISSING_VALUE.notRecorded}</span>,
     },
     {
       accessorKey: "applicationMethodType",
@@ -503,7 +526,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const applicationLocks = useRecordLocks("application", items.map((item) => item.id));
   const columns = createColumns(openEdit, handleDelete, applicationLocks.locks);
   const deliveryOptions = scopedDeliveries ?? deliveries;
-  const totalApplications = applications?.total ?? 0;
   const totalPages = applications?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -511,7 +533,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     isLoading,
     setCurrentPage,
   });
-  const totalBiochar = sumNullableBy(items, (item) => item.biocharAppliedTons);
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useApplicationStats(contextFacilityId || undefined, { enabled: !!contextFacilityId });
 
   const hasActiveFilters =
     !!searchQuery ||
@@ -591,15 +613,19 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
         <StatCard
           title="Total applications"
-          value={totalApplications}
+          value={statsData?.totalApplications ?? 0}
+          description="All applications in this facility"
           icon={<MapPinIcon size={24} weight="bold" />}
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
         <StatCard
-          title="Biochar applied on this page"
-          value={formatApplicationKgFromTons(totalBiochar)}
+          title="Total biochar applied"
+          value={formatApplicationKgFromTons(statsData?.totalBiocharAppliedTons)}
+          description="Across all applications in this facility"
           icon={<LeafIcon size={24} weight="bold" />}
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
       </div>
 
@@ -607,6 +633,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={APPLICATION_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={items}
         enableSorting={false}

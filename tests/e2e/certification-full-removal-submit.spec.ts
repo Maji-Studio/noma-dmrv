@@ -88,7 +88,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
     const mapping: SeededMapping = await seedCertifierMapping(facilityId, {
       externalProjectId: projectId,
       externalFacilityId: SANDBOX_FACILITY_ID || undefined,
-      defaultRemovalTemplateId: defaultRemovalTemplate?.id,
+      removalTemplateId: defaultRemovalTemplate?.id,
     });
 
     // The sandbox project's only fully-bound template is the 1000-year one;
@@ -185,7 +185,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       );
       // ...and the submission summary renders (not the loading/error fallback) —
       // proof the removal context resolved against the real project.
-      await expect(dialog.getByText("You are sending")).toBeVisible({
+      await expect(dialog.getByText("Biochar dry mass", { exact: true })).toBeVisible({
         timeout: COLD_COMPILE_TIMEOUT_MS,
       });
 
@@ -193,7 +193,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       // confirmed above reads as a recorded zero.
       if (confirmedEmptyComponents) {
         await expect(
-          dialog.getByRole("region", { name: "Components sent" }),
+          dialog.getByRole("region", { name: "Components" }),
         ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
         await expect(dialog.getByText("Recorded zero").first()).toBeVisible();
       }

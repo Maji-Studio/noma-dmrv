@@ -24,7 +24,7 @@ Next.js 16 uses `src/proxy.ts` (Node runtime, so Better Auth can use Node crypto
   ownership. Matching is prefix-based
   (`pathname === route || pathname.startsWith(route + "/")`), so every
   descendant is public too.
-- `AUTH_ROUTES` — only `/login` and `/forgot-password`; authenticated users are redirected to `/dashboard`. `/reset-password` and `/set-password` are public but **not** auth routes, deliberately: a signed-in user must be able to follow an invite's set-password link.
+- `AUTH_ROUTES` — only `/login` and `/forgot-password`; authenticated users are redirected by `homePathFor(session.user)`: Platform Admins go to `/admin/organizations`, everyone else to `/dashboard`. The authenticated root route uses the same rule. Successful sign-in without a safe explicit `from=` navigates to `/` so the server chooses the home; organization membership does not affect that choice. `/reset-password` and `/set-password` are public but **not** auth routes, deliberately: a signed-in user must be able to follow an invite's set-password link.
 - Unverified sessions are redirected to `/verify-email` (403 JSON for `/api/*`). `requireAuth()` does **not** check `emailVerified` — the `(app)` layout calls bare `requireAuth()`, so verification enforcement there comes entirely from the proxy. Use `requireVerifiedAuth()` where the page itself must guarantee it.
 - `/admin/*` is gated by the admin layout's `requireAdmin()`.
 - Exact `/api/mcp`, `/api/v1`, and `/api/v1/*` bypass session lookup. The v1 method guard handles unsupported methods; supported methods keep their route handlers. MCP and private REST routes resolve bearer API keys or OAuth access tokens with `resolveApiContext`. MCP validates Origin before admission, uses the shared pre-auth and authenticated read/write rate limits, and filters key tool discovery by scopes. OAuth discovers grantable writes for step-up. `/api/v1x`, `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by `tests/middleware.test.ts`. See [MCP tools](./api.md#mcp-tools-on-api-keys) for write tools, requestKey, dryRun, server instructions and the in-MCP `api_writes_disabled` result.
@@ -119,6 +119,10 @@ Two distinct limiters — a real trip hazard:
 Signup is invite-only: public signup is off in code (`disableSignUp: true` in `src/lib/auth/better-auth.ts`), with no env flag to turn it on. Users join through an organization invite or the admin bootstrap CLI.
 
 Organization Admins invite from organization settings; Better Auth enforces invitation and membership changes server-side. Re-inviting the same email cancels the stale pending invite. Email delivery is best-effort — the inviter always gets a copyable accept link. `/admin/users` redirects to Settings, Members (`/settings/members`).
+
+## Profile: name and password
+
+Settings, Profile (`src/fn/profile.ts`) changes only the caller's own user, through Better Auth with the request's session headers. Email cannot be changed; a new address comes as a new invitation. `changePasswordFn` checks the current password with `changePassword` (`revokeOtherSessions: false`), then calls `revokeOtherSessions`, keeping this device's session. Better Auth's own `revokeOtherSessions: true` creates a replacement session inside its transaction, and the session-create hook in `better-auth.ts` then waits for a second pool connection, so the two calls stay separate. Other devices stop working within `SESSION_COOKIE_CACHE_SECONDS` (5 minutes), because each browser trusts its signed session snapshot that long. The change is limited to 5 attempts per 15 minutes per user.
 
 ## Better Auth schema and credential identity
 

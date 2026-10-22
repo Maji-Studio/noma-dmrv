@@ -24,7 +24,8 @@ import {
 } from "@/hooks/use-certification";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { removalTemplatesSettingsHref } from "@/lib/certification/links";
-import { formatDate } from "@/lib/format-utils";
+import { useFacilityClock } from "@/hooks/use-facility-context";
+import { formatFacilityDay } from "@/lib/format-utils";
 import { MISSING_VALUE, NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
 import type { CertifierProjectRow } from "@/data-access/certification";
 import {
@@ -149,6 +150,7 @@ function CertifierMappingFields({
   projectName?: string | null;
   templateName?: string | null;
 }) {
+  const { timeZone } = useFacilityClock(facilityId);
   const resolvesNames = projectName !== undefined;
 
   return (
@@ -181,31 +183,31 @@ function CertifierMappingFields({
           View on Isometric ↗
         </a>
       </Field>
-      <Field label="Default Removal template">
+      <Field label="Removal template">
         {resolvesNames ? (
           <>
             <span className="body-small">
               {templateName ??
                 // A selected ID with no name is not among Isometric's templates; no ID means no relation was chosen.
-                (mapping.defaultRemovalTemplateId
+                (mapping.removalTemplateId
                   ? NOT_FOUND_ON_ISOMETRIC
                   : MISSING_VALUE.notSet)}
             </span>
-            {mapping.defaultRemovalTemplateId && (
+            {mapping.removalTemplateId && (
               <span className="body-caption text-[var(--color-text-tertiary)]">
-                {mapping.defaultRemovalTemplateId}
+                {mapping.removalTemplateId}
               </span>
             )}
           </>
         ) : (
           <span
             className={
-              mapping.defaultRemovalTemplateId
+              mapping.removalTemplateId
                 ? "body-small font-mono"
                 : "body-small text-[var(--color-text-tertiary)]"
             }
           >
-            {mapping.defaultRemovalTemplateId ?? MISSING_VALUE.notSet}
+            {mapping.removalTemplateId ?? MISSING_VALUE.notSet}
           </span>
         )}
         {/* Chosen with its lines in Removal templates; shown here read-only. */}
@@ -218,7 +220,7 @@ function CertifierMappingFields({
       </Field>
       <Field label="Linked at">
         <span className="body-small">
-          {formatDate(mapping.createdAt)}
+          {formatFacilityDay(mapping.createdAt, timeZone)}
         </span>
       </Field>
       <Field label="Isometric facility">
@@ -304,9 +306,9 @@ function FacilityCertifierManage({
       )?.name ?? null)
     : null;
 
-  const templateName = data?.mapping?.defaultRemovalTemplateId
+  const templateName = data?.mapping?.removalTemplateId
     ? (data.availableTemplates.find(
-        (t) => t.id === data.mapping?.defaultRemovalTemplateId,
+        (t) => t.id === data.mapping?.removalTemplateId,
       )?.display_name ?? null)
     : null;
 

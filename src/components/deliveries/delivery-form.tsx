@@ -17,9 +17,12 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useId, useState } from "react";
 
 import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
+import { outputDrawCreditBatchPreview } from "@/components/credit-batches/record-credit-batch-preview-input";
 import { FormActions, FormEntitySelect, FormField, FormSection, FormSpine, makeCertFieldStatus, MoistureField, FieldErrorRow, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
+import { focusMoistureField, moistureFieldSelectors } from "@/components/storage-locations/reestimate-notice";
+import { showsReestimate } from "@/components/storage-locations/reestimate-flow";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import { TransportRoutePreview } from "@/components/transport-legs";
 import type { Delivery } from "@/db/schema";
@@ -217,7 +220,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const massChanged = isEditMode && (draw.changed || wetMass !== delivery.deliveredWetMassKg || (!draw.active && moisture !== delivery.moistureContentPercent) ||
     ((draw.sources ?? watchSources) != null && JSON.stringify(draw.sources ?? watchSources) !== JSON.stringify(openedMovement?.sources)));
   const stockChanged = !isEditMode || (!stockLocked && (massChanged || dateChanged));
-  const { preview: stockPreview, estimate: moistureEstimate, gate, beginSubmit } = useOutputDrawDraft({
+  const { preview: stockPreview, input: drawInput, estimate: moistureEstimate, gate, beginSubmit } = useOutputDrawDraft({
     draw, bypass: !stockChanged,
     singleMoistureReady: Number.isFinite(moisture) && moisture >= 0 && moisture < 100,
     moisturePercent: moisture,
@@ -233,6 +236,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     },
   });
   const { canSave, submitDisabled: draftSubmitDisabled, basisFingerprint } = gate();
+  // A saved delivery keeps its source bin, so only a new one previews its batches.
+  const creditBatchPreview = isEditMode ? undefined
+    : outputDrawCreditBatchPreview("delivery", { storageLocationId: watchBinId, facilityId: formFacilityId, occurredAt: watchDate }, drawInput);
   const submitDisabled = draftSubmitDisabled || (stockLocked && (massChanged || dateChanged));
   useClearOnDependencyChange(watchOrderId, () => setValue("storageLocationId", ""));
   // A refusal caused by the new time alone belongs under the date, not the mass.
@@ -372,6 +378,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             placeholder="e.g. 20"
             estimate={isEditMode ? undefined : moistureEstimate}
             reading={watchMoisture}
+            hideDeviationWarning={showsReestimate(stockPreview.data)}
             registration={register("moistureContentPercent")}
           /></div>}
           {/* The composition cards belong to the same grid as the two inputs
@@ -380,12 +387,12 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
               wrapper drops out while every child is hidden (before a bin and
               mass give a preview), so it adds no empty grid row under the inputs. */}
           <div className="md:col-span-2 space-y-16 [&:not(:has(>:not([hidden])))]:hidden">
-            {draw.active && <SubBinDrawField draw={draw} timeZone={deliveryClock.timeZone} idPrefix="delivery" disabled={isSubmitting || stockLocked} showErrors={attempted} />}
+            {draw.active && <SubBinDrawField draw={draw} timeZone={deliveryClock.timeZone} idPrefix="delivery" disabled={isSubmitting || stockLocked} showErrors={attempted} hideDeviationWarning={showsReestimate(stockPreview.data)} />}
             {draw.query.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{draw.query.error.message}</p>}
             {delivery && <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />}
             {stockPreview.isFetching && <p role="status" className="body-caption text-[var(--color-text-tertiary)]">Refreshing stock preview...</p>}
             {stockPreview.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{stockPreview.error.message}</p>}
-            {stockPreview.data && <OutputStockPreview variant="movement" hideBlockingMessage={deliveredWetMassError === blockingMessage || deliveryDateError === blockingMessage} preview={stockPreview.data} entry={{ kind: "delivery", wetMassKg: wetMass }} />}
+            {stockPreview.data && <OutputStockPreview variant="movement" hideBlockingMessage={deliveredWetMassError === blockingMessage || deliveryDateError === blockingMessage} preview={stockPreview.data} entry={{ kind: "delivery", wetMassKg: wetMass }} onMeasureAgain={(layerId) => focusMoistureField(moistureFieldSelectors("delivery", "moistureContentPercent", layerId))} />}
           </div>
         </div>
       </FormSection>
@@ -474,7 +481,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         submitDisabled={submitDisabled}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
-        preview={<RecordCreditBatchLine kind="delivery" id={delivery?.id} />}
+        preview={<RecordCreditBatchLine kind="delivery" id={delivery?.id} preview={creditBatchPreview} facilityId={formFacilityId} />}
       />
     </div>
   );

@@ -1,0 +1,66 @@
+import { db } from "@/db";
+import { facilities, reactors, storageLocations } from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
+import { and, count, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { storageLocationTypes } from "@/schemas/storage-locations";
+import { requireOrgScope } from "./utils";
+import { getFacilityFeedstockWetStock } from "./facility-feedstock-stock";
+
+export interface FacilityStats {
+  totalFacilities: number;
+  totalReactors: number;
+  totalStorageBins: number;
+  totalFeedstockWetKg: number;
+}
+
+export interface FacilityStatsFilters {
+  archived?: boolean;
+}
+
+export async function getFacilityStats(
+  ctx: OrgContext,
+  filters?: FacilityStatsFilters,
+): Promise<FacilityStats> {
+  requireOrgScope(ctx);
+  const facilityArchiveFilter = filters?.archived
+    ? isNotNull(facilities.archivedAt)
+    : isNull(facilities.archivedAt);
+  const [facilityRows, [reactorStats], [storageStats]] = await Promise.all([
+    db.select({ id: facilities.id })
+      .from(facilities)
+      .where(and(eq(facilities.organizationId, ctx.organizationId), facilityArchiveFilter)),
+    db.select({ totalReactors: count() })
+      .from(reactors)
+      .innerJoin(facilities, and(
+        eq(reactors.facilityId, facilities.id),
+        eq(facilities.organizationId, ctx.organizationId),
+      ))
+      .where(and(
+        eq(reactors.organizationId, ctx.organizationId),
+        // getFacilities counts reactors in every archive state for the selected facilities.
+        facilityArchiveFilter,
+      )),
+    db.select({ totalStorageBins: count() })
+      .from(storageLocations)
+      .innerJoin(facilities, and(
+        eq(storageLocations.facilityId, facilities.id),
+        eq(facilities.organizationId, ctx.organizationId),
+      ))
+      .where(and(
+        eq(storageLocations.organizationId, ctx.organizationId),
+        inArray(storageLocations.type, storageLocationTypes),
+        // getFacilities counts bins in every archive state for the selected facilities.
+        facilityArchiveFilter,
+      )),
+  ]);
+  const feedstockWetStockByFacility = await getFacilityFeedstockWetStock(
+    ctx,
+    facilityRows.map((facility) => facility.id),
+  );
+  return {
+    totalFacilities: facilityRows.length,
+    totalReactors: Number(reactorStats.totalReactors),
+    totalStorageBins: Number(storageStats.totalStorageBins),
+    totalFeedstockWetKg: [...feedstockWetStockByFacility.values()].reduce((sum, stock) => sum + stock, 0),
+  };
+}

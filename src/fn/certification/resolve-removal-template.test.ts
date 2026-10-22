@@ -9,9 +9,8 @@ import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib
 import { deriveBatchHealth } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
-import { removalTemplatesSettingsHref } from "@/lib/certification/links";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
-import { creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
+import { removalTemplateSetupHref } from "@/lib/certification/links";
 
 const template = templateFixture as GhgEntryTemplate;
 
@@ -19,7 +18,7 @@ function facts(): FacilityCertifierFacts {
   return {
     facilityTimezone: "UTC",
     // Deliberately a different default. It must never be used for a Removal.
-    defaultTemplate: { ...template, id: "other-default" },
+    currentTemplate: { ...template, id: "other-default" },
     templatesById: {
       [template.id]: {
         template, observation: { lineSources: {} }, enrichmentProblems: [], lineSourceProblems: [],
@@ -42,7 +41,7 @@ describe("Removal template pins", () => {
   it("blocks an unpinned member without substituting the default", () => {
     const result = resolveRemovalTemplate([{ removalTemplateId: template.id }, { removalTemplateId: null }], facts());
     expect(result.removalTemplate).toBeNull();
-    expect(result.templateBlockers).toEqual([{ code: "unpinnedTemplate", message: "Choose a Removal template for this credit batch." }]);
+    expect(result.templateBlockers).toEqual([{ code: "unpinnedTemplate", message: "Set a Removal template in Settings, Removal templates." }]);
   });
   it("refuses mixed pins", () => {
     expect(resolveRemovalTemplate([{ removalTemplateId: template.id }, { removalTemplateId: "other-default" }], facts()).templateBlockers)
@@ -101,7 +100,7 @@ describe("Removal template pins", () => {
     const batchCheck = health.checks.find((check) => check.key === "templateSet")!;
     expect(batchCheck).toMatchObject({ status: "unmet", detail: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint });
     expect(batchHealthFixLinkFor(batchCheck, "facility-1", "batch-1")).toEqual({
-      label: "Switch template", href: creditBatchRemovalTemplateHref("batch-1", "facility-1"),
+      label: "Set template", href: removalTemplateSetupHref("facility-1"),
     });
   });
 });
@@ -149,7 +148,7 @@ it.each(["incompatible-carried", "duplicate-source"] as const)("routes %s contra
   const batchCheck = health.checks.find((check) => check.key === "templateLines" && check.fixTarget === "templateLineReview")!;
   expect(batchCheck.status).toBe("unmet");
   expect(batchHealthFixLinkFor(batchCheck, "facility-1", "batch-1")).toEqual({
-    label: "Decide components", href: removalTemplatesSettingsHref("facility-1"),
+    label: "Answer in Settings", href: removalTemplateSetupHref("facility-1"),
   });
 });
 

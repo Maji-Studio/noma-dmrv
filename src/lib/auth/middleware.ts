@@ -4,6 +4,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/better-auth";
+import { homePathFor } from "./home-path";
 
 /**
  * Route configuration
@@ -84,10 +85,10 @@ export async function updateSession(request: NextRequest) {
   const isAuthRoute = matchesRoute(pathname, AUTH_ROUTES);
   const isApiRoute = pathname.startsWith("/api");
 
-  // Root path: redirect to dashboard or login
+  // Root path: redirect to the role-based home or login
   if (pathname === "/") {
     if (isAuthenticated) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+      return NextResponse.redirect(new URL(homePathFor(session?.user), request.url));
     }
     return NextResponse.redirect(new URL("/login", request.url));
   }
@@ -95,7 +96,7 @@ export async function updateSession(request: NextRequest) {
   // If authenticated and on an auth page, redirect to app
   const isOAuthLogin = pathname === "/login" && request.nextUrl.searchParams.has("sig") && request.nextUrl.searchParams.has("ba_param");
   if (isAuthenticated && isAuthRoute && !isOAuthLogin) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL(homePathFor(session?.user), request.url));
   }
 
   // If not authenticated and not on a public route

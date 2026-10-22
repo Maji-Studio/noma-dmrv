@@ -237,7 +237,7 @@ describe("loadRemovalCompilation preparation blockers", () => {
           "Add the application logbook.",
         ],
         removalBlockers: [
-          { code: "notRemovalTemplate", message: REMOVAL_PREPARATION_BLOCKERS.notRemovalTemplate, fixTarget: "creditBatchTemplate" },
+          { code: "notRemovalTemplate", message: REMOVAL_PREPARATION_BLOCKERS.notRemovalTemplate, fixTarget: "templateSetup" },
           { code: "legacy", message: "Add the application logbook.", fixTarget: null },
         ],
         snapshot: null,

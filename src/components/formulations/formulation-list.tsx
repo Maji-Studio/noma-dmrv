@@ -15,6 +15,7 @@ import {
   useRestoreFormulation,
   useFormulations,
   useUpdateFormulation,
+  useFormulationStats,
 } from "@/hooks/use-formulations";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
@@ -165,6 +166,7 @@ export function FormulationList() {
     page: currentPage,
     pageSize,
   });
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useFormulationStats(showArchived);
   const createFormulation = useCreateFormulation();
   const updateFormulation = useUpdateFormulation();
   const deleteFormulation = useDeleteFormulation();
@@ -173,7 +175,6 @@ export function FormulationList() {
   const toast = useToast();
 
   const formulations = formulationsData?.items ?? [];
-  const totalFormulations = formulationsData?.total ?? 0;
   const totalPages = formulationsData?.totalPages ?? 0;
   const hasActiveSearch = searchInput.trim().length > 0;
   useReconcileListPage({
@@ -322,9 +323,10 @@ export function FormulationList() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
           title={showArchived ? "Archived formulations" : "Active formulations"}
-          value={totalFormulations}
+          value={statsData?.totalFormulations ?? 0}
           icon={<ListChecksIcon size={24} weight="bold" />}
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
       </div>
 
@@ -390,7 +392,6 @@ export function FormulationList() {
               <ArchiveIcon size={16} weight="bold" />
               Archived
             </Button>
-            <DataTable.ColumnVisibility />
           </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />

@@ -39,7 +39,7 @@ export async function seedCertifierMapping(
   opts: {
     externalProjectId: string;
     externalFacilityId?: string;
-    defaultRemovalTemplateId?: string | null;
+    removalTemplateId?: string | null;
   },
 ): Promise<SeededMapping> {
   const { db, pool } = createDbConnection();
@@ -51,7 +51,7 @@ export async function seedCertifierMapping(
       externalProjectId: opts.externalProjectId,
       protocolSlug: CERTIFICATION_PROTOCOL_SLUG,
       protocolVersion: CERTIFICATION_PROTOCOL_VERSION,
-      defaultRemovalTemplateId: opts.defaultRemovalTemplateId ?? null,
+      removalTemplateId: opts.removalTemplateId ?? null,
       externalFacilityId: opts.externalFacilityId ?? `fcl_e2e_${facilityId.replaceAll("-", "")}`,
     });
   } finally {

@@ -20,7 +20,7 @@ import {
 } from "@/lib/chain-of-custody/lineage-mass-totals";
 import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
-import { formatCalendarDate, formatDate } from "@/lib/format-utils";
+import { formatCalendarDate, formatDate, formatFacilityDay } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import dagre from "@dagrejs/dagre";
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
@@ -420,7 +420,7 @@ function productCardCode(product: ChainBiocharProductLineage): string {
   return `${product.code} · ${product.formulationName ?? "Pure biochar"}`;
 }
 
-function buildDeliveryNode(delivery: Omit<ChainDeliveryLineage, "proofOfDeliveryCount">): LineageGraphNode {
+function buildDeliveryNode(delivery: Omit<ChainDeliveryLineage, "proofOfDeliveryCount">, timeZone: string): LineageGraphNode {
   const details: LineageDetailRow[] = [];
   addRow(
     details,
@@ -436,7 +436,7 @@ function buildDeliveryNode(delivery: Omit<ChainDeliveryLineage, "proofOfDelivery
     code: "Delivery",
     href: delivery.href,
     status: delivery.status,
-    date: formatDateOrNull(delivery.deliveryDate),
+    date: formatFacilityDay(delivery.deliveryDate, timeZone),
     details,
   };
 }
@@ -444,11 +444,12 @@ function buildDeliveryNode(delivery: Omit<ChainDeliveryLineage, "proofOfDelivery
 /** Also feeds the Carbon Viewer's marker popups (same codes + detail rows). */
 export function buildLineageNodes(
   data: ChainOfCustodyData,
+  timeZone: string,
   totals: LineageMassTotals = buildRollbackMassTotals(expandProductLineages(data)),
   productMassBasis: "sourceAllocation" | "applied" = "sourceAllocation",
 ): LineageGraphNode[] {
   if (data.products?.length) {
-    const nodes = expandProductLineages(data).flatMap(slice => buildLineageNodes(slice, totals, productMassBasis));
+    const nodes = expandProductLineages(data).flatMap(slice => buildLineageNodes(slice, timeZone, totals, productMassBasis));
     return [...new Map(nodes.map(node => [node.id, node])).values()];
   }
   const sources = resolveChainSources(data);
@@ -493,7 +494,7 @@ export function buildLineageNodes(
     });
   }
 
-  nodes.push(buildDeliveryNode(data.delivery));
+  nodes.push(buildDeliveryNode(data.delivery, timeZone));
 
   {
     const details: LineageDetailRow[] = [];
@@ -639,6 +640,7 @@ function massFlowEdge(
  */
 export function buildRollForwardGraph(
   rollForward: ChainRunRollForward,
+  timeZone: string,
   totals: LineageMassTotals = buildRollForwardMassTotals([rollForward]),
 ): {
   nodes: LineageGraphNode[];
@@ -661,7 +663,7 @@ export function buildRollForwardGraph(
     });
     edges.push(massFlowEdge(runNodeId, productId, totals, "recorded"));
     for (const shipped of deliveries) {
-      nodes.push(buildDeliveryNode(shipped.delivery));
+      nodes.push(buildDeliveryNode(shipped.delivery, timeZone));
       edges.push(massFlowEdge(productId, deliveryNodeId(shipped.delivery.id), totals, "recorded"));
     }
   }
@@ -674,11 +676,12 @@ export function buildRollForwardGraph(
  */
 export function buildRollForwardNodes(
   rollForwards: ChainRunRollForward[],
+  timeZone: string,
   totals: LineageMassTotals = buildRollForwardMassTotals(rollForwards),
 ): LineageGraphNode[] {
   const nodeById = new Map<string, LineageGraphNode>();
   for (const rollForward of rollForwards) {
-    for (const node of buildRollForwardGraph(rollForward, totals).nodes) {
+    for (const node of buildRollForwardGraph(rollForward, timeZone, totals).nodes) {
       if (nodeById.has(node.id)) continue;
       const drawn = totals.nodes.get(node.id);
       if (drawn) node.details = [{ label: "Drawn from runs", value: formatWetDryMass(drawn) }];
@@ -689,6 +692,8 @@ export function buildRollForwardNodes(
 }
 
 export interface ChainGraphOptions {
+  /** Facility zone for delivery instants; other node dates are calendar days. */
+  timeZone: string;
   /**
    * Split/map cross-linking: card clicks highlight the map marker instead of
    * navigating, so the cards drop their links.
@@ -764,7 +769,7 @@ function layoutGraph(
 
 export function useChainGraph(
   data: ChainOfCustodyData | undefined,
-  options: ChainGraphOptions = {}
+  options: ChainGraphOptions
 ) {
   if (!data) {
     return { nodes: [], edges: [] };
@@ -784,7 +789,7 @@ export function useChainGraph(
  */
 function buildMergedChainGraph(
   lineages: ChainOfCustodyData[] | undefined,
-  options: ChainGraphOptions = {},
+  options: ChainGraphOptions,
   rollForwards: ChainRunRollForward[] = [],
 ) {
   if ((!lineages || lineages.length === 0) && rollForwards.length === 0) {
@@ -796,7 +801,7 @@ function buildMergedChainGraph(
   const nodeById = new Map<string, LineageGraphNode>();
   const edgeById = new Map<string, Edge>();
   for (const lineage of lineages) {
-    for (const node of buildLineageNodes(lineage, totals, "applied")) {
+    for (const node of buildLineageNodes(lineage, options.timeZone, totals, "applied")) {
       if (!nodeById.has(node.id)) nodeById.set(node.id, node);
     }
     for (const lineageEdge of buildLineageEdges(lineage, totals)) {
@@ -805,13 +810,13 @@ function buildMergedChainGraph(
   }
 
   const forwardTotals = buildRollForwardMassTotals(rollForwards);
-  for (const node of buildRollForwardNodes(rollForwards, forwardTotals)) {
+  for (const node of buildRollForwardNodes(rollForwards, options.timeZone, forwardTotals)) {
     if (!nodeById.has(node.id)) nodeById.set(node.id, node);
   }
   // Roll-forward shipments are per-run shares, so two member runs feeding one
   // product sum on its delivery edge. They never sum into a rollback edge.
   for (const rollForward of rollForwards) {
-    for (const rollForwardEdge of buildRollForwardGraph(rollForward, forwardTotals).edges) {
+    for (const rollForwardEdge of buildRollForwardGraph(rollForward, options.timeZone, forwardTotals).edges) {
       if (!edgeById.has(rollForwardEdge.id)) edgeById.set(rollForwardEdge.id, rollForwardEdge);
     }
   }
@@ -826,7 +831,7 @@ function buildMergedChainGraph(
 export function useBatchChainGraph(
   lineages: ChainOfCustodyData[] | undefined,
   rollForwards: ChainRunRollForward[] | undefined,
-  options: ChainGraphOptions = {},
+  options: ChainGraphOptions,
 ) {
   return buildMergedChainGraph(lineages, options, rollForwards);
 }

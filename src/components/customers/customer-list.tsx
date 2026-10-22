@@ -19,6 +19,7 @@ import {
   useRestoreCustomer,
   useCustomerLocations,
   useCustomers,
+  useCustomerStats,
   useUpdateCustomer,
 } from "@/hooks/use-customers";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -53,6 +54,13 @@ import { ILLUSTRATION_SIZE, CustomerArt } from "@/components/ui/illustrations";
 
 /** Shown when the orders deleted with a customer changed after the dialog listed them. */
 const CASCADE_CHANGED_MESSAGE = "The orders deleted with this customer changed. Review the list and delete again.";
+
+/** Contact details an operator can add from the Columns menu. */
+const CUSTOMER_COLUMNS_HIDDEN_BY_DEFAULT = {
+  address: false,
+  contactEmail: false,
+  contactPhone: false,
+};
 
 // ============================================
 // Column Definitions
@@ -95,6 +103,34 @@ function createColumns(
       cell: ({ row }) => (
         <span className="inline-flex items-center justify-center min-w-[28px] px-8 py-2 bg-[var(--color-surface-light)] border border-[var(--color-border-tertiary)] text-[var(--text-s)] font-medium">
           {row.original.locationCount}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "address",
+      header: "Address",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate text-[var(--color-text-secondary)]">
+          {row.original.address || MISSING_VALUE.notRecorded}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "contactEmail",
+      header: "Contact email",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate text-[var(--color-text-secondary)]">
+          {row.original.contactEmail || MISSING_VALUE.notRecorded}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "contactPhone",
+      meta: { nowrap: true },
+      header: "Contact phone",
+      cell: ({ row }) => (
+        <span className="text-[var(--color-text-secondary)]">
+          {row.original.contactPhone || MISSING_VALUE.notRecorded}
         </span>
       ),
     },
@@ -198,7 +234,6 @@ export function CustomerList() {
   const customers = customersData?.items ?? [];
 
   // Computed stats
-  const totalCustomers = customersData?.total ?? 0;
   const totalPages = customersData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -206,7 +241,7 @@ export function CustomerList() {
     isLoading,
     setCurrentPage,
   });
-  const totalLocations = customers.reduce((sum, c) => sum + c.locationCount, 0);
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useCustomerStats({ archived: showArchived });
   const hasActiveSearch = searchInput.trim().length > 0;
 
   // Side sheet helpers
@@ -441,20 +476,25 @@ export function CustomerList() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
           title={showArchived ? "Archived customers" : "Active customers"}
-          value={totalCustomers}
+          value={statsData?.totalCustomers ?? 0}
+          description="In this organization"
           icon={<UsersIcon size={24} weight="bold" />}
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
         <StatCard
-          title="Locations on this page"
-          value={totalLocations}
+          title="Total locations"
+          value={statsData?.totalLocations ?? 0}
+          description={showArchived ? "Locations of all archived customers" : "Locations of all customers that are not archived"}
           icon={<MapTrifoldIcon size={24} weight="bold" />}
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
       </div>
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={CUSTOMER_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={customers}
         enableSorting={false}

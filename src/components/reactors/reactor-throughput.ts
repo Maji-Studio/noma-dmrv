@@ -8,6 +8,12 @@ interface ThroughputSource {
   nominalThroughputTph: number | null;
 }
 
+/** A combined throughput as card text; null (nothing recorded) reads "Not recorded", with no unit. */
+export function formatThroughputTph(total: number | null): string {
+  if (total === null) return MISSING_VALUE.notRecorded;
+  return `${total.toLocaleString()} ${THROUGHPUT_UNIT}`;
+}
+
 /**
  * Combined nominal throughput for a page of reactors.
  *
@@ -19,7 +25,7 @@ interface ThroughputSource {
 export function formatTotalThroughputTph(
   reactors: readonly ThroughputSource[],
 ): string {
-  const total = sumNullableBy(reactors, (r) => r.nominalThroughputTph);
-  if (total === null) return MISSING_VALUE.notRecorded;
-  return `${total.toLocaleString()} ${THROUGHPUT_UNIT}`;
+  return formatThroughputTph(
+    sumNullableBy(reactors, (r) => r.nominalThroughputTph),
+  );
 }

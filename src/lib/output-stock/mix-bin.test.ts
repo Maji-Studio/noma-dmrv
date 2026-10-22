@@ -23,7 +23,7 @@ const afterDraw = (bases: LayerMoistureBasis[], remaining: readonly OutputStockL
   bases.map(b => ({ ...b, remainingSolidsKg: remaining.find(l => l.id === b.layerId)!.remainingSolidsKg ?? b.remainingSolidsKg }));
 /** The bases after a posted removal: remaining solids, and the wet mass it took from each batch. */
 const afterRemoval = (bases: LayerMoistureBasis[], request: OutputStockRequest, plan: ReturnType<typeof drawn>, at: string, sequence: number) =>
-  withMovement(afterDraw(bases, plan.remainingLayers), { readings: planReadings(request, plan, at), removals: planWetRemovals(plan) }, at, BigInt(sequence));
+  withMovement(afterDraw(bases, plan.remainingLayers), { readings: planReadings(request, plan, at), removals: planWetRemovals(plan) }, at, BigInt(sequence), 'loss', 'mix');
 
 describe('mix bins: the plan worked example, to the gram', () => {
   // 1,636.8 kg solids in batch shares of 45%, 35% and 20%, all at 31.8% (2,400 kg wet).

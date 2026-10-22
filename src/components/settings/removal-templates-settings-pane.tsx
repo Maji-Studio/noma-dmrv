@@ -1,11 +1,11 @@
 /**
  * Settings, Removal templates (Q10): a summary card for the working facility's
- * default Removal template, with the setup dialog (#1276) behind its buttons.
+ * Removal template, with the setup dialog (#1276) behind its buttons.
  * Removal readiness blockers link here, so every member can read which
  * components block a Removal; only Admins set templates up.
  *
- * `?setup=` (with `template` and `makeDefault`) opens the dialog; the credit
- * batch "Decide components" links arrive that way.
+ * `?setup=` (with `template`) opens the dialog; the credit
+ * "Answer in Settings" links arrive that way.
  */
 "use client";
 

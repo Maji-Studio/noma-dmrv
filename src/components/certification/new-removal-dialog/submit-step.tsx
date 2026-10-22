@@ -54,8 +54,11 @@ import { DebugDrawer } from "./debug-drawer";
 import { isRemovalCompilationReady } from "./submission-facts";
 import { SubmissionSummary } from "./submission-summary";
 import { allowsRemovalSubmission } from "./resume-state";
-import { RemovalEmissionsLedger } from "./removal-emissions-ledger";
-import { ComponentsSent } from "./components-sent";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
+import { cn } from "@/lib/utils";
+import { ComponentTable } from "./component-table";
+import { buildComponentTable } from "./component-table-model";
+import { SourceRecords } from "./source-records";
 import { Notice } from "@/components/ui/notice";
 
 const REJECTED_IN_ISOMETRIC_MSG =
@@ -71,6 +74,8 @@ interface SubmitStepProps {
   facilityName: string;
   onDone: () => void;
   submitMutation: ReturnType<typeof useSubmitRemoval>;
+  /** Back to the Empty components step, to undo a recorded zero. Shown on phones only, where the rail shows one step. */
+  onBackToEmpty?: () => void;
 }
 
 export function SubmitStep({
@@ -80,6 +85,7 @@ export function SubmitStep({
   facilityName,
   onDone,
   submitMutation,
+  onBackToEmpty,
 }: SubmitStepProps) {
   const router = useRouter();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
@@ -107,6 +113,17 @@ export function SubmitStep({
   const compilationReady = isRemovalCompilationReady(
     compilationQuery.data ?? null,
   );
+  const componentTable = buildComponentTable({
+    batches: ctx.memberBatches,
+    linesByBatchId: ctx.emissionLinesByBatchId,
+    review: compilationQuery.data?.review ?? null,
+    isLoading: compilationQuery.isLoading,
+    unbindableComponentIds: new Set(
+      (ctx.unbindableTemplateInputs ?? []).map((input) => input.componentId),
+    ),
+    ledger: ctx.emissionsLedger,
+    facilityId,
+  });
   const requirementsMet =
     allowsRemovalSubmission(readiness.state) && compilationReady === true;
   // Anything short of "Submission complete" may be deleted. Once a ledger
@@ -164,7 +181,6 @@ export function SubmitStep({
           : undefined
       }
       confirmLabel={deleteCopy.actionLabel}
-      pendingLabel={deleteCopy.pendingLabel}
     />
   );
 
@@ -268,7 +284,7 @@ export function SubmitStep({
           isResubmission={attemptIsResubmission}
         />
         <div className="flex flex-wrap items-center justify-start gap-12">
-          <Button variant="primary" onClick={onDone}>
+          <Button variant="primary" className={PHONE_TOUCH_TARGET} onClick={onDone}>
             Done
           </Button>
           {viewUrl && (
@@ -316,12 +332,13 @@ export function SubmitStep({
           {!submitMutation.isPending && (
             <div className="flex items-center gap-12">
               {submissionStalled ? (
-                <Button variant="primary" onClick={onDone}>
+                <Button variant="primary" className={PHONE_TOUCH_TARGET} onClick={onDone}>
                   Close
                 </Button>
               ) : (
                 <>
                   <Button
+                    className={PHONE_TOUCH_TARGET}
                     onClick={() => {
                       setProgressUpdates([]);
                       submitMutation.reset();
@@ -331,6 +348,7 @@ export function SubmitStep({
                   </Button>
                   <Button
                     variant="primary"
+                    className={PHONE_TOUCH_TARGET}
                     onClick={() => fireSubmit(lastConfirmProduction)}
                   >
                     Try again
@@ -355,6 +373,7 @@ export function SubmitStep({
   const submitButton = (
     <Button
       variant="primary"
+      className={PHONE_TOUCH_TARGET}
       onClick={handleSubmit}
       busy={submitMutation.isPending}
       disabled={rejectedWithExternal || !requirementsMet}
@@ -373,24 +392,26 @@ export function SubmitStep({
         isCompilationLoading={compilationQuery.isLoading}
         compilationError={compilationQuery.error}
         checks={checklist}
+        table={componentTable}
         readiness={readiness}
         rejectionMessage={
           rejectedWithExternal ? REJECTED_IN_ISOMETRIC_MSG : null
         }
       />
 
-      <ComponentsSent
-        ctx={ctx}
-        facilityId={facilityId}
-        review={compilationQuery.data?.review ?? null}
-        isLoading={compilationQuery.isLoading}
-      />
+      <ComponentTable table={componentTable} facilityId={facilityId} />
 
-      <RemovalEmissionsLedger
-        compilation={compilationQuery.data ?? null}
+      <SourceRecords
         ledger={ctx.emissionsLedger}
         facilityId={facilityId}
-        isLoading={compilationQuery.isLoading}
+        storageSitesHref={
+          ctx.mapping?.externalProjectId
+            ? isometricRegistry.storageSites({
+                environment: ctx.isProduction ? "production" : "sandbox",
+                externalProjectId: ctx.mapping.externalProjectId,
+              })
+            : null
+        }
       />
 
       <DebugDrawer
@@ -416,9 +437,15 @@ export function SubmitStep({
             </span>
           </Tooltip>
         )}
+        {onBackToEmpty && (
+          <Button variant="default" className={cn(PHONE_TOUCH_TARGET, "sm:hidden")} onClick={onBackToEmpty} data-phone-back>
+            Back
+          </Button>
+        )}
         {canDeleteRemoval ? (
           <Button
             variant="default"
+            className={PHONE_TOUCH_TARGET}
             onClick={() => setDeleteConfirmOpen(true)}
             disabled={submitMutation.isPending}
           >

@@ -15,7 +15,6 @@ import type { BatchHealthFixTarget } from "@/lib/certification/batch-health";
 import {
   buildCreditBatchOpenItems,
   CREDIT_BATCH_DETAILS_ROW,
-  CREDIT_BATCH_TEMPLATE_ROW,
 } from "./open-items";
 
 const batchContext = { facilityId: "facility", creditBatchId: "batch", canManage: true };
@@ -78,7 +77,64 @@ function pageModel(): CreditBatchPageModel {
   };
 }
 
+const STATEMENT = { id: "statement-1", status: "FAILED_VERIFICATION" as const, reportingPeriodStartOn: "2026-07-01", reportingPeriodEndOn: "2026-09-30" };
+const returnedHealth = (correction: object) => ({
+  state: "ready", issueCount: 0, checks: [], removalCorrections: [correction],
+}) as never;
+
 describe("buildCreditBatchOpenItems", () => {
+  it("opens the Removal for a returned Removal whose sent components changed on this batch", () => {
+    const { check } = buildCreditBatchOpenItems({ ...batchContext, health: returnedHealth({
+      removalId: "removal-1", removalCode: "RM-26-003", windowOpen: true, resubmitNeeded: true, statement: STATEMENT,
+      batches: [{ id: "batch", code: "CB-1" }],
+      changed: [
+        { componentId: "a", componentName: "Diesel use", batchId: "batch", batchCode: "CB-1" },
+        { componentId: "b", componentName: "Transport to field", batchId: "batch", batchCode: "CB-1" },
+        { componentId: "a", componentName: "Diesel use", batchId: "batch", batchCode: "CB-1" },
+      ],
+    }) });
+    expect(check).toEqual([{
+      id: "correction:removal-1",
+      title: "RM-26-003: Resubmit needed",
+      detail: "Diesel use and Transport to field changed here since RM-26-003 was sent. Resubmit the Removal to send them.",
+      target: { href: "/certification/removals?facility=facility&removal=removal-1" },
+    }]);
+  });
+
+  it("says send it for a single changed component", () => {
+    const [item] = buildCreditBatchOpenItems({ ...batchContext, health: returnedHealth({
+      removalId: "removal-1", removalCode: "RM-26-003", windowOpen: true, resubmitNeeded: true, statement: STATEMENT,
+      batches: [{ id: "batch", code: "CB-1" }],
+      changed: [{ componentId: "a", componentName: "Diesel use", batchId: "batch", batchCode: "CB-1" }],
+    }) }).check;
+    expect(item.detail).toBe("Diesel use changed here since RM-26-003 was sent. Resubmit the Removal to send it.");
+  });
+
+  it("says the Removal changed on another batch when nothing changed on this one", () => {
+    const [item] = buildCreditBatchOpenItems({ ...batchContext, health: returnedHealth({
+      removalId: "removal-1", removalCode: "RM-26-003", windowOpen: true, resubmitNeeded: true, statement: STATEMENT,
+      batches: [{ id: "batch", code: "CB-1" }, { id: "other", code: "CB-2" }], changed: [],
+    }) }).check;
+    expect(item.title).toBe("RM-26-003: Resubmit needed");
+    expect(item.detail).toBe("Entries changed on another credit batch since RM-26-003 was sent. Resubmit the Removal to send them.");
+  });
+
+  it.each([
+    ["FAILED_VERIFICATION", "GHG Statement Jul 1 to Sep 30, 2026 failed verification."],
+    ["DRAFT", "GHG Statement Jul 1 to Sep 30, 2026 is back in draft."],
+  ] as const)("sends a returned Removal with nothing changed to the Emissions tab: %s", (status, phrase) => {
+    const { check } = buildCreditBatchOpenItems({ ...batchContext, health: returnedHealth({
+      removalId: "removal-1", removalCode: "RM-26-003", windowOpen: true, resubmitNeeded: false,
+      statement: { ...STATEMENT, status }, batches: [{ id: "batch", code: "CB-1" }], changed: [],
+    }) });
+    expect(check).toEqual([{
+      id: "correction:removal-1",
+      title: "RM-26-003: Returned by Isometric",
+      detail: `${phrase} You can correct the sent entries on the Emissions tab.`,
+      target: { tab: "emissions" },
+    }]);
+  });
+
   it("keeps absent sources empty", () => {
     expect(buildCreditBatchOpenItems(batchContext)).toEqual({
       blocking: [],
@@ -168,13 +224,12 @@ describe("buildCreditBatchOpenItems", () => {
   });
 
   it.each<BatchHealthFixTarget>([
-    "creditBatchTemplate", "batchDetails", "labSamples", "emissions",
+    "templateSetup", "batchDetails", "labSamples", "emissions",
     "templateLineReview", "templateLines", "certificationTemplates", "certificationEmissions", "productionRuns",
   ])("preserves the repair destination for %s", fixTarget => {
     const check = { key: "templateSet" as const, label: "Template", requirementLabel: "Template ready", unmetLabel: "Template not ready",
       status: "unmet" as const, fixTarget };
     const localTargets = {
-      creditBatchTemplate: { tab: "overview", rowId: CREDIT_BATCH_TEMPLATE_ROW },
       batchDetails: { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW },
       labSamples: { tab: "samples" },
       emissions: { tab: "emissions" },
@@ -201,9 +256,9 @@ describe("buildCreditBatchOpenItems", () => {
       : { href: batchHealthFixLinkFor({ key: "emissions", fixTarget }, "facility", "batch").href });
   });
 
-  it("gives a member no Decide components link, only who decides the components", () => {
+  it("gives a member no Answer in Settings link, only who decides the components", () => {
     const check = { key: "templateLines" as const, label: "Components decided", requirementLabel: "Components decided", unmetLabel: "5 components to decide",
-      status: "unmet" as const, fixTarget: "templateLineReview" as const, linesToDecide: 5, detail: "Decide them in Removal templates." };
+      status: "unmet" as const, fixTarget: "templateLineReview" as const, linesToDecide: 5, detail: "Answer them in Settings, Removal templates." };
     const line = {
       componentId: "diesel", displayName: "Diesel", state: "needsReview" as const, groupKey: "production", groupName: "Production", groupPosition: 0, position: 0,
       description: null, entryPolicy: "additive" as const, records: null,
@@ -214,12 +269,12 @@ describe("buildCreditBatchOpenItems", () => {
 
     const member = buildCreditBatchOpenItems({ ...input, canManage: false });
     expect(member.blocking[0]).toMatchObject({
-      title: "5 components to decide", detail: "An Admin decides them in Removal templates.", target: null,
+      title: "5 components to decide", detail: "An Admin answers them in Settings, Removal templates.", target: null,
     });
-    expect(member.check[0]).toMatchObject({ detail: "An Admin decides it in Removal templates.", target: null });
+    expect(member.check[0]).toMatchObject({ detail: "An Admin answers it in Settings, Removal templates.", target: null });
 
     const owner = buildCreditBatchOpenItems({ ...input, canManage: true });
-    expect(owner.blocking[0]).toMatchObject({ detail: "Decide them in Removal templates." });
+    expect(owner.blocking[0]).toMatchObject({ detail: "Answer them in Settings, Removal templates." });
     expect(owner.blocking[0].target).toEqual({ href: batchHealthFixLinkFor(check, "facility", "batch").href });
     expect(owner.check[0].target).toEqual({ href: batchHealthFixLinkFor({ key: "emissions", fixTarget: "templateLineReview" }, "facility", "batch").href });
   });

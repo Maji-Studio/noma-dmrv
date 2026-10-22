@@ -22,6 +22,19 @@ export async function getMixBinHeldApplicationIds(ctx: OrgContext, reader: Reade
     .from(applicationOutputAllocations)
     .where(and(eq(applicationOutputAllocations.organizationId, ctx.organizationId), inArray(applicationOutputAllocations.applicationId, [...applicationIds])));
   if (!shares.length) return new Set();
+  const mix = await getMixDrawnSources(ctx, reader, shares);
+  return new Set(shares.filter(s => mix.deliveryIds.has(s.deliveryId) || mix.productIds.has(s.productId)).map(s => s.applicationId));
+}
+
+/**
+ * Of these application shares' deliveries and products, the ones drawn
+ * pro-rata from a mix bin by a live draw. A share from either is held out of
+ * credit batches. The saved hold above and the form's credit batch preview
+ * both decide with this, so they cannot disagree.
+ */
+export async function getMixDrawnSources(ctx: OrgContext, reader: Reader, shares: readonly { deliveryId: string; productId: string }[]): Promise<{ deliveryIds: Set<string>; productIds: Set<string> }> {
+  requireOrgScope(ctx);
+  if (MIX_BIN_REMOVALS_CREDITABLE || !shares.length) return { deliveryIds: new Set(), productIds: new Set() };
   const deliveryIds = [...new Set(shares.map(s => s.deliveryId))];
   const productIds = [...new Set(shares.map(s => s.productId))];
   const draws = await reader.select({ id: outputStockAllocations.id, deliveryId: outputStockAllocations.deliveryId, productId: outputStockAllocations.targetBiocharProductId, reverses: outputStockAllocations.reversesAllocationId })
@@ -32,7 +45,8 @@ export async function getMixBinHeldApplicationIds(ctx: OrgContext, reader: Reade
   // Reversal rows copy the original's snapshot, so they arrive in the same read.
   const reversed = new Set(draws.flatMap(d => d.reverses ? [d.reverses] : []));
   const live = draws.filter(d => !d.reverses && !reversed.has(d.id));
-  const mixDeliveries = new Set(live.flatMap(d => d.deliveryId ? [d.deliveryId] : []));
-  const mixProducts = new Set(live.flatMap(d => d.productId ? [d.productId] : []));
-  return new Set(shares.filter(s => mixDeliveries.has(s.deliveryId) || mixProducts.has(s.productId)).map(s => s.applicationId));
+  return {
+    deliveryIds: new Set(live.flatMap(d => d.deliveryId ? [d.deliveryId] : [])),
+    productIds: new Set(live.flatMap(d => d.productId ? [d.productId] : [])),
+  };
 }

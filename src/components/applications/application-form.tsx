@@ -16,7 +16,8 @@ import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
 import { recordInUseFreeFields } from "@/lib/record-lock";
 import { FACILITY_REFERENCE_TEMPERATURE_NOTICE } from "@/lib/application-guidance";
 import { nullableNumericValue, numericValue } from "@/lib/form-utils";
-import { toDateInputValue } from "@/lib/date-utils";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
+import { toDateInputValue, UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useEffect, useId, useState } from "react";
@@ -25,6 +26,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { PackageIcon, MapPinIcon, FileIcon, MapTrifoldIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
+import { applicationCreditBatchPreview } from "@/components/credit-batches/record-credit-batch-preview-input";
 import { EntitySelect, FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
@@ -46,6 +48,7 @@ import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-chan
 import { APPLICATION_REFUSAL_ALIASES } from "@/lib/application-operation-input";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import type { DurabilityOption } from "@/schemas/credit-batches";
+import { useFacilityDateDefaults } from "@/hooks/use-facility-date-defaults";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { ApplicationSupportingEvidencePanel } from "./application-supporting-evidence-panel";
 import { resolveApplicationDateDefault, resolveApplicationEvidenceMethodDefault } from "./application-form-defaults";
@@ -168,6 +171,10 @@ export function ApplicationForm({
 }: ApplicationFormProps) {
   const latched = useLatchedSubmit();
   const formId = useId();
+  const { facilityId } = useFacilityContext();
+  const initialDelivery = deliveries.find(delivery => delivery.id === application?.deliveryId);
+  const { timeZone } = useFacilityClock(facilityId);
+  const today = resolveApplicationDateDefault(initialDelivery?.facilityTimezone ?? (application ? UNKNOWN_FACILITY_TIMEZONE : timeZone));
   const isEditMode = !!application;
   // A Removal slice refuses delivery and applied mass changes (`assertMutableSlices`).
   // Fail closed: until the lock answers, fields an In use application holds stay disabled.
@@ -179,8 +186,8 @@ export function ApplicationForm({
 
   const defaultValues = {
     applicationDate: application?.applicationDate
-      ? toDateInputValue(application.applicationDate)
-      : resolveApplicationDateDefault(),
+      ? toDateInputValue(application.applicationDate, today)
+      : today,
     deliveryId: application?.deliveryId ?? "",
     biocharAppliedKg: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
     fieldSizeHa: application?.fieldSizeHa ?? "",
@@ -225,6 +232,9 @@ export function ApplicationForm({
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
   const { field: deliveryField } = useController({ control, name: "deliveryId" });
   const watchedAppliedKg = useWatch({ control, name: "biocharAppliedKg" });
+  // A saved application reads its saved shares until another delivery is chosen.
+  const creditBatchPreview = isEditMode && selectedDeliveryId === application?.deliveryId ? undefined
+    : applicationCreditBatchPreview(selectedDeliveryId, watchedAppliedKg, application?.id ?? null);
   // A refused over-draw named the old delivery's remaining mass; another delivery voids it.
   useClearOnDependencyChange(selectedDeliveryId, () => {
     if (getFieldState("biocharAppliedKg").error?.type === SERVER_ERROR_TYPE) clearErrors("biocharAppliedKg");
@@ -246,6 +256,15 @@ export function ApplicationForm({
     disabled: d.status !== "delivered",
   }));
   const selectedDelivery = deliveries.find((delivery) => delivery.id === selectedDeliveryId);
+  // A new application's date follows the selected delivery's facility clock,
+  // else the active facility's; it re-defaults while the date is untouched.
+  const markDateEdited = useFacilityDateDefaults({
+    timeZone: selectedDelivery?.facilityTimezone ?? timeZone,
+    isEditMode,
+    fields: ["applicationDate"] as const,
+    isPristine: (field) => !getFieldState(field).isDirty,
+    setDefault: (field, day) => resetField(field, { defaultValue: day }),
+  });
   const derivedPosition = selectedDelivery
     ? resolveApplicationPositionDefault({ delivery: selectedDelivery })
     : null;
@@ -411,7 +430,7 @@ export function ApplicationForm({
               type="date"
               disabled={isSubmitting}
               error={!!errors.applicationDate}
-              {...register("applicationDate")}
+              {...register("applicationDate", { onChange: () => markDateEdited("applicationDate") })}
             />
           </FormField>
         </div>
@@ -437,7 +456,7 @@ export function ApplicationForm({
                 deliveryField.onChange(id);
                 if (!isEditMode && !getFieldState("applicationDate").isDirty) {
                   setValue("applicationDate", resolveApplicationDateDefault(
-                    deliveries.find(delivery => delivery.id === id)?.facilityTimezone,
+                    deliveries.find(delivery => delivery.id === id)?.facilityTimezone ?? timeZone,
                   ));
                 }
               }}
@@ -682,7 +701,7 @@ export function ApplicationForm({
         errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
-        preview={<RecordCreditBatchLine kind="application" id={application?.id} />}
+        preview={<RecordCreditBatchLine kind="application" id={application?.id} preview={creditBatchPreview} />}
       />
     </form>
   );

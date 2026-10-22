@@ -312,7 +312,7 @@ function makeMapping(): CertifierProjectRow {
     externalProjectId: EXTERNAL_PROJECT_ID,
     protocolSlug: "biochar",
     protocolVersion: "1.2",
-    defaultRemovalTemplateId: TEMPLATE_ID,
+    removalTemplateId: TEMPLATE_ID,
     webhookSecret: null,
     metadata: null,
     defaultSoilTemperatureC: 24.2,

@@ -7,7 +7,7 @@ import templateFixture from "../../tests/fixtures/isometric/sandbox-template-202
 const mocks = vi.hoisted(() => ({ transaction: vi.fn(), select: vi.fn(), update: vi.fn(), execute: vi.fn(), insert: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 vi.mock("@/lib/auth/providers/better-auth-server", () => ({}));
-vi.mock("./activity-events", () => ({ recordActivity: vi.fn() }));
+vi.mock("./activity-events", () => ({ recordActivity: vi.fn(), recordActivityChange: vi.fn() }));
 vi.mock("./certification-lineage-guards", () => ({ assertCanMutateCertifiedLineage: vi.fn() }));
 vi.mock("./credit-batch-certification-lock", () => ({
   lockCreditBatchArtifacts: vi.fn().mockResolvedValue([]),
@@ -15,8 +15,12 @@ vi.mock("./credit-batch-certification-lock", () => ({
 }));
 vi.mock("./facility-certification-boundary-lock", () => ({ acquireFacilityCertificationBoundaryLock: vi.fn() }));
 
+import { DomainError } from "@/lib/domain-errors";
+import { assertRemovalAllowsCreditBatchMutation } from "./credit-batch-certification-lock";
+import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { recordActivityChange } from "./activity-events";
 import { observeTemplate, reviewLineContracts } from "./removal-template-observations";
-import { switchCreditBatchRemovalTemplate, switchCreditBatchRemovalTemplateInTransaction } from "./credit-batch-removal-template";
+import { switchCreditBatchRemovalTemplateInTransaction } from "./credit-batch-removal-template";
 
 const ctx: OrgContext = { organizationId: "org-1", userId: "user-1", orgRole: "admin", isPlatformAdmin: false };
 const template = templateFixture as GhgEntryTemplate;
@@ -42,6 +46,7 @@ function observation() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.select.mockReset();
   mocks.transaction.mockImplementation((callback: (tx: typeof executor) => Promise<unknown>) => callback(executor));
 });
 
@@ -49,7 +54,7 @@ describe("Removal template write boundaries", () => {
   it("rejects members at both data-access boundaries before database work", async () => {
     const member = { ...ctx, orgRole: "member" } as const;
     await expect(reviewLineContracts(member, { observationId: "observation-1", expectedVersion: 1, assignments: {} })).rejects.toThrow("permission");
-    await expect(switchCreditBatchRemovalTemplate(member, { creditBatchId: "batch-1", expectedVersion: 1, removalTemplateId: "next" })).rejects.toThrow("permission");
+    await expect(switchCreditBatchRemovalTemplateInTransaction(member, executor as never, { creditBatchId: "batch-1", expectedVersion: 1, removalTemplateId: "next" }, { facilityId: "facility-1", expectedTemplateId: null })).rejects.toThrow("permission");
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
@@ -88,10 +93,12 @@ describe("Removal template write boundaries", () => {
   });
 
   it.each(["batch", "facility"])("refuses a template switch on an archived %s with the current version", async (archived) => {
-    const batch = { id: "batch-1", version: 4, facilityId: "facility-1", archivedAt: archived === "batch" ? new Date() : null };
+    const batch = { id: "batch-1", version: 4, facilityId: "facility-1", removalTemplateId: null, archivedAt: archived === "batch" ? new Date() : null };
     mocks.select.mockReturnValueOnce(query([{ facilityId: batch.facilityId }])).mockReturnValueOnce(query([batch]));
     if (archived === "facility") mocks.select.mockReturnValueOnce(query([{ archivedAt: new Date() }]));
-    await expect(switchCreditBatchRemovalTemplate(ctx, { creditBatchId: batch.id, expectedVersion: batch.version, removalTemplateId: "next" })).rejects.toThrow("archived");
+    const result = switchCreditBatchRemovalTemplateInTransaction(ctx, executor as never, { creditBatchId: batch.id, expectedVersion: batch.version, removalTemplateId: "next" }, { facilityId: batch.facilityId, expectedTemplateId: null });
+    if (archived === "batch") await expect(result).resolves.toMatchObject({ status: "kept", reason: "archived" });
+    else await expect(result).rejects.toThrow("archived");
     expect(mocks.update).not.toHaveBeenCalled();
   });
 });
@@ -123,10 +130,58 @@ it("serializes first observations and reviews by the same org/provider/template 
 
 it("refuses a setup batch pinned meanwhile under its row lock, even with an unchanged version", async () => {
   const batch = { id: "batch-1", facilityId: "facility-1", version: 1, removalTemplateId: "another-template" };
-  mocks.select.mockReturnValueOnce(query([{ facilityId: batch.facilityId }])).mockReturnValueOnce(query([batch]));
+  mocks.select.mockReturnValueOnce(query([{ facilityId: batch.facilityId }])).mockReturnValueOnce(query([batch])).mockReturnValueOnce(query([{ archivedAt: null }]));
   await expect(switchCreditBatchRemovalTemplateInTransaction(ctx, executor as never,
     { creditBatchId: batch.id, expectedVersion: batch.version, removalTemplateId: "next" },
-    { facilityId: batch.facilityId, requireUnpinned: true },
+    { facilityId: batch.facilityId, expectedTemplateId: null },
+  )).rejects.toMatchObject({ code: "stale_version" });
+  expect(mocks.update).not.toHaveBeenCalled();
+});
+
+const switchBatch = { id: "batch-1", code: "CB-1", facilityId: "facility-1", version: 3, removalTemplateId: "older", archivedAt: null };
+function prepareSwitch(batch = switchBatch) {
+  mocks.select.mockReturnValueOnce(query([{ facilityId: batch.facilityId }]))
+    .mockReturnValueOnce(query([batch])).mockReturnValueOnce(query([{ archivedAt: null }]));
+  return () => switchCreditBatchRemovalTemplateInTransaction(ctx, executor as never,
+    { creditBatchId: batch.id, expectedVersion: batch.version, removalTemplateId: "next" },
+    { facilityId: batch.facilityId, expectedTemplateId: batch.removalTemplateId });
+}
+
+it.each(["removalSent", "certified"] as const)("keeps a batch refused by the %s guard", async (reason) => {
+  const guard = reason === "removalSent" ? assertRemovalAllowsCreditBatchMutation : assertCanMutateCertifiedLineage;
+  vi.mocked(guard).mockRejectedValueOnce(new DomainError("certification_locked", "Locked."));
+  await expect(prepareSwitch()()).resolves.toMatchObject({ status: "kept", reason, batch: switchBatch });
+  expect(mocks.update).not.toHaveBeenCalled();
+  expect(recordActivityChange).not.toHaveBeenCalled();
+});
+
+it("propagates unexpected guard errors instead of treating them as kept batches", async () => {
+  vi.mocked(assertRemovalAllowsCreditBatchMutation).mockRejectedValueOnce(new Error("read failed"));
+  await expect(prepareSwitch()()).rejects.toThrow("read failed");
+  expect(mocks.update).not.toHaveBeenCalled();
+});
+
+it("leaves a batch already on the template untouched", async () => {
+  await expect(prepareSwitch({ ...switchBatch, removalTemplateId: "next" })()).resolves.toMatchObject({ status: "unchanged" });
+  expect(mocks.update).not.toHaveBeenCalled();
+  expect(recordActivityChange).not.toHaveBeenCalled();
+});
+
+it("switches an older template with a version increment and one activity record", async () => {
+  const updated = { ...switchBatch, removalTemplateId: "next", version: switchBatch.version + 1 };
+  mocks.update.mockReturnValue({ set: vi.fn().mockReturnThis(), where: vi.fn().mockReturnThis(), returning: vi.fn().mockResolvedValue([updated]) });
+  await expect(prepareSwitch()()).resolves.toEqual({ status: "updated", batch: updated });
+  expect(recordActivityChange).toHaveBeenCalledExactlyOnceWith(ctx, executor, {
+    entityType: "credit_batch", entityId: switchBatch.id, creditBatchId: switchBatch.id, facilityId: switchBatch.facilityId,
+    action: "updated", source: "form",
+  }, switchBatch, updated);
+});
+
+it("rejects stale row versions for mutable batches", async () => {
+  prepareSwitch();
+  await expect(switchCreditBatchRemovalTemplateInTransaction(ctx, executor as never,
+    { creditBatchId: switchBatch.id, expectedVersion: switchBatch.version - 1, removalTemplateId: "next" },
+    { facilityId: switchBatch.facilityId, expectedTemplateId: switchBatch.removalTemplateId },
   )).rejects.toMatchObject({ code: "stale_version" });
   expect(mocks.update).not.toHaveBeenCalled();
 });

@@ -26,7 +26,7 @@ import {
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
 import { useCreateOrder, useDeleteOrder, useOrderWithRelations, useOrders, useOrderStats, useUpdateOrder } from "@/hooks/use-orders";
-import { FACILITY_NOT_FOUND, MISSING_VALUE, pluralize } from "@/lib/copy-utils";
+import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
 import { formatCalendarDate } from "@/lib/format-utils";
 import {
   ORDER_FULFILLMENT_DISPLAY,
@@ -48,6 +48,13 @@ import { ILLUSTRATION_SIZE, OrderArt } from "@/components/ui/illustrations";
 
 /** The customer filter also lists archived customers, so their orders stay findable. */
 const ORDER_CUSTOMER_FILTER_OPTIONS = { includeArchived: "true" };
+
+/** Record detail an operator can add from the Columns menu. */
+const ORDER_COLUMNS_HIDDEN_BY_DEFAULT = {
+  customerLocation: false,
+  formulation: false,
+  packaging: false,
+};
 
 // ============================================
 // Column Definitions
@@ -78,19 +85,30 @@ function createColumns(
       cell: ({ row }) => row.original.customerName || MISSING_VALUE.notRecorded,
     },
     {
-      id: "facility",
-      header: "Facility",
-      accessorFn: (row) => row.facilityName ?? "",
+      id: "customerLocation",
+      header: "Customer location",
+      accessorFn: (row) => row.customerLocationName ?? "",
       cell: ({ row }) => (
-        <span className="text-[var(--color-text-secondary)]">
-          {row.original.facilityName || FACILITY_NOT_FOUND}
-        </span>
+        <span className="block max-w-xs truncate">{row.original.customerLocationName || MISSING_VALUE.notSet}</span>
+      ),
+    },
+    {
+      id: "formulation",
+      header: "Formulation",
+      accessorFn: (row) => row.formulationName ?? "",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate">{row.original.formulationName || MISSING_VALUE.notSet}</span>
       ),
     },
     {
       accessorKey: "quantityKg",
       header: "Requested wet mass (kg)",
       cell: ({ row }) => row.original.quantityKg.toLocaleString(),
+    },
+    {
+      accessorKey: "packaging",
+      header: "Packaging",
+      cell: ({ row }) => <span className="capitalize">{row.original.packaging}</span>,
     },
     {
       accessorKey: "deliveryCount",
@@ -384,6 +402,7 @@ export function OrderList() {
       <RecordLockListNotice read={orderLocks} />
 
       <DataTable
+        defaultColumnVisibility={ORDER_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={orders}
         enableSorting={false}

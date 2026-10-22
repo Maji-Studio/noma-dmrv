@@ -287,3 +287,8 @@ it("shows the boundary field refusal in the evidence panel", () => {
   </QueryClientProvider>);
   expect(html).toContain(message);
 });
+
+vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityContext: () => ({ facilityId: "facility-1" }),
+  useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }),
+}));

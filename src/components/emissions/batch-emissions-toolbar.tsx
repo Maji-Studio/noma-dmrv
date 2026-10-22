@@ -4,9 +4,10 @@
  */
 "use client";
 
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { DataTable } from "@/components/ui";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatDate } from "@/lib/format-utils";
+import { formatFacilityDay } from "@/lib/format-utils";
 import { EMISSION_LINE_STATE_LABELS } from "@/lib/certification/emission-lines";
 import { cn } from "@/lib/utils";
 import { LINE_SORTS, LINE_SORT_LABELS, type LineCounts, type LineFilter, type LineSort } from "./emission-line-display";
@@ -23,11 +24,13 @@ export interface BatchKpis {
 interface KpiCell { label: string; value: string; detail: string; filter?: LineFilter }
 
 export function BatchKpiStrip({ kpis, filter, onFilter }: { kpis: BatchKpis; filter: LineFilter | null; onFilter: (next: LineFilter | null) => void }) {
+  const { facilityId } = useFacilityContext();
+  const { timeZone } = useFacilityClock(facilityId);
   const cells: KpiCell[] = [
     { label: "Components open", value: String(kpis.open), detail: `of ${kpis.total} components`, filter: "open" },
     { label: "Files missing", value: String(kpis.filesMissing), detail: kpis.filesMissing === 1 ? "component" : "components", filter: "missing" },
     { label: "Manual entries this month", value: String(kpis.entriesThisMonth), detail: "" },
-    { label: "Last entry", value: kpis.lastEntryAt ? formatDate(kpis.lastEntryAt) : MISSING_VALUE.none, detail: "" },
+    { label: "Last entry", value: kpis.lastEntryAt ? formatFacilityDay(kpis.lastEntryAt, timeZone) : MISSING_VALUE.none, detail: "" },
   ];
   return (
     <div className="grid grid-cols-2 bg-[var(--paper)] [border:var(--panel-border)] lg:grid-cols-4">

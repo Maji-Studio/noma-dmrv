@@ -26,7 +26,12 @@ export interface CreditBatchLineCopy {
    * line shows the first code and a "+N" button opening the full list.
    */
   batches: CreditBatchLineBatch[];
-  /** Text after the batch links. */
+  /**
+   * The batch's date window, "(Sep 1 to Sep 30, 2026)". Its own field, not
+   * part of `tail`, so a phone can hide it while the rest of the line stays.
+   */
+  window: string;
+  /** Text after the batch links and window. */
   tail: string;
   /** The ⓘ explanation, or null when the line says it all. */
   info: string | null;
@@ -37,6 +42,10 @@ export interface CreditBatchLineCopy {
   busy: boolean;
 }
 
+/** The label every line that names a batch opens with, before and after saving. */
+export const CREDIT_BATCH_LEAD = "Credit batch: ";
+export const CREDIT_BATCHES_LEAD = "Credit batches: ";
+
 /** The line's label for the ⓘ, so a screen reader names what it explains. */
 export const CREDIT_BATCH_INFO_LABEL = "How the credit batch is chosen";
 
@@ -46,6 +55,7 @@ export const CREDIT_BATCH_LINE_ERROR = "Credit batch could not be checked.";
 export const CREDIT_BATCH_LINE_BASE: Omit<CreditBatchLineCopy, "lead"> = {
   tone: "neutral",
   batches: [],
+  window: "",
   tail: "",
   info: null,
   retry: false,
@@ -67,5 +77,13 @@ export function errorLineCopy(): CreditBatchLineCopy {
  * missing-value vocabulary, never hand-written; `info` says why.
  */
 export function missingLineCopy(token: MissingValueCopy, info: string | null = null): CreditBatchLineCopy {
-  return { ...CREDIT_BATCH_LINE_BASE, lead: `Credit batch: ${token}`, info };
+  return { ...CREDIT_BATCH_LINE_BASE, lead: `${CREDIT_BATCH_LEAD}${token}`, info };
+}
+
+/**
+ * The batch cannot be worked out yet. The line says what unblocks it, in its
+ * own words, not the generic "Not yet computed" token.
+ */
+export function unknownLineCopy(unblocks: string, info: string | null): CreditBatchLineCopy {
+  return { ...CREDIT_BATCH_LINE_BASE, lead: `${CREDIT_BATCH_LEAD}${unblocks}`, info };
 }

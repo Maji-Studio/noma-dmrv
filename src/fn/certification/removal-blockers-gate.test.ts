@@ -146,7 +146,7 @@ describe("Removal preflight", () => {
   it("uses the template blocker destination when the preparation code has one", () => {
     const ctx = makeContext();
     ctx.removalTemplate!.credit_type = "REDUCTION";
-    expect(collectContextRemovalBlockers(ctx)[0]).toMatchObject({ code: "notRemovalTemplate", fixTarget: "creditBatchTemplate" });
+    expect(collectContextRemovalBlockers(ctx)[0]).toMatchObject({ code: "notRemovalTemplate", fixTarget: "templateSetup" });
   });
 
   it("uses the lineage target for the build's exact joined lineage refusal", async () => {

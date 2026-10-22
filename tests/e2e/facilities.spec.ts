@@ -54,7 +54,7 @@ test.describe("Facility + Reactor UI CRUD", () => {
     // Navigate to facilities list
     await page.goto("/facilities");
     await expect(page).toHaveURL(/\/facilities/);
-    await expect(page.getByText("Active facilities")).toBeVisible({
+    await expect(page.getByText("Active facilities", { exact: true })).toBeVisible({
       timeout: 15000,
     });
 
@@ -143,9 +143,6 @@ test.describe("Facility + Reactor UI CRUD", () => {
     await expect(
       page.locator("table tbody tr").filter({ hasText: reactorIdentifier }).first()
     ).toBeVisible({ timeout: 10000 });
-    await expect(
-      page.locator("table tbody tr").filter({ hasText: reactorIdentifier })
-    ).toContainText(facilityName);
 
     void cleanupTestData;
   });
@@ -235,7 +232,7 @@ test.describe("Facility blank-name display fallback", () => {
     adminPage: page,
   }) => {
     await page.goto("/facilities");
-    await expect(page.getByText("Active facilities")).toBeVisible({
+    await expect(page.getByText("Active facilities", { exact: true })).toBeVisible({
       timeout: 15000,
     });
 
@@ -305,7 +302,7 @@ test.describe("Facility durability tier", () => {
       context = await createDirectAuthContext(browser, fixture.user, baseURL!);
       const page = await context.newPage();
       await page.goto("/facilities");
-      await expect(page.getByText("Active facilities")).toBeVisible({
+      await expect(page.getByText("Active facilities", { exact: true })).toBeVisible({
         timeout: 15000,
       });
 

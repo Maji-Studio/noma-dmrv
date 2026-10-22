@@ -1,10 +1,16 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useUnsavedPaneGuard } from "@/components/certification/use-unsaved-pane-guard";
+import { ORG_SWITCH_DISCARD_DESCRIPTION } from "@/lib/org-switch-notice";
 import { OrgBrand } from "./org-brand";
 import { ViewerOrgProvider } from "./viewer-org";
 import type { ViewerOrg } from "./viewer-org-rules";
 
 const state = vi.hoisted(() => ({
+  enter: vi.fn(),
+  toastError: vi.fn(),
   isAdmin: false,
   session: {
     data: undefined as
@@ -59,6 +65,10 @@ vi.mock("@/lib/auth/client", () => ({
   },
 }));
 
+vi.mock("@/components/ui/toast", () => ({
+  useToast: () => ({ error: state.toastError }),
+}));
+
 vi.mock("@/hooks/use-is-admin", () => ({
   useIsAdmin: () => state.isAdmin,
 }));
@@ -66,11 +76,13 @@ vi.mock("@/hooks/use-is-admin", () => ({
 vi.mock("@/hooks/use-organizations", () => ({
   useActiveOrganizationProfile: () => state.activeProfile,
   useAllOrganizations: () => state.allOrganizations,
-  useEnterOrganization: () => vi.fn(),
+  useEnterOrganization: () => state.enter,
 }));
 
 describe("OrgBrand", () => {
   beforeEach(() => {
+    state.enter = vi.fn();
+    state.toastError = vi.fn();
     state.isAdmin = false;
     state.session = { data: undefined, isPending: true };
     state.activeProfile = { data: undefined, isPending: true };
@@ -223,6 +235,155 @@ describe("OrgBrand", () => {
 
       expect(html).not.toContain("Platform Admin");
       expect(html).toContain('aria-haspopup="listbox"');
+    });
+  });
+
+  describe("switching organizations", () => {
+    function openPicker() {
+      state.session = { data: { session: { activeOrganizationId: "org-1" } }, isPending: false };
+      state.activeProfile = { data: { id: "org-1", name: "Dark Earth Carbon" }, isPending: false };
+      state.memberOrganizations = {
+        data: [
+          { id: "org-1", name: "Dark Earth Carbon" },
+          { id: "org-2", name: "Second Organization" },
+          { id: "org-3", name: "Third Organization" },
+        ],
+        isPending: false,
+      };
+      render(<OrgBrand />);
+      fireEvent.click(screen.getByRole("button", { name: /Dark Earth Carbon/ }));
+    }
+    const option = (name: string) => screen.getByRole("option", { name }) as HTMLButtonElement;
+    afterEach(() => cleanup());
+
+    it("stays switching after a successful pick and ignores a second pick", async () => {
+      state.enter.mockResolvedValue({ success: true });
+      openPicker();
+
+      fireEvent.click(option("Second Organization"));
+      await waitFor(() => expect(screen.getByText("Switching…")).toBeTruthy());
+      // The page is still unloading: the trigger stays disabled and the list stays locked.
+      expect((screen.getByRole("button", { name: /Switching/ }) as HTMLButtonElement).disabled).toBe(true);
+
+      fireEvent.click(screen.getByRole("button", { name: /Switching/ }));
+      expect(state.enter).toHaveBeenCalledTimes(1);
+    });
+
+    it("marks the picked organization busy and leaves the others plainly disabled", async () => {
+      state.enter.mockReturnValue(new Promise(() => {}));
+      openPicker();
+
+      fireEvent.click(option("Second Organization"));
+
+      await waitFor(() => expect(option("Second Organization").getAttribute("aria-busy")).toBe("true"));
+      expect(option("Second Organization").querySelector(".animate-spin")).not.toBeNull();
+      expect(option("Second Organization").className).not.toContain("disabled:opacity-40");
+      expect(option("Third Organization").getAttribute("aria-busy")).toBeNull();
+      expect(option("Third Organization").querySelector(".animate-spin")).toBeNull();
+      expect(option("Third Organization").className).toContain("disabled:opacity-40");
+    });
+
+    it("disables the other options while a switch is held and ignores clicks on them", async () => {
+      state.enter.mockReturnValue(new Promise(() => {}));
+      openPicker();
+
+      fireEvent.click(option("Second Organization"));
+      await waitFor(() => expect(option("Third Organization").disabled).toBe(true));
+      fireEvent.click(option("Third Organization"));
+      expect(state.enter).toHaveBeenCalledTimes(1);
+      expect(state.enter).toHaveBeenCalledWith("org-2", "Second Organization");
+    });
+
+    it("shows a toast and re-enables the picker when the switch throws", async () => {
+      state.enter.mockRejectedValue(new Error("network"));
+      openPicker();
+
+      fireEvent.click(option("Second Organization"));
+      await waitFor(() =>
+        expect(state.toastError).toHaveBeenCalledWith("Second Organization did not open. Try again."),
+      );
+      expect(option("Third Organization").disabled).toBe(false);
+      expect(screen.queryByText("Switching…")).toBeNull();
+    });
+
+    it("re-enables the picker when the switch reports failure", async () => {
+      state.enter.mockResolvedValue({ success: false, error: "No access" });
+      openPicker();
+
+      fireEvent.click(option("Second Organization"));
+      await waitFor(() => expect(option("Third Organization").disabled).toBe(false));
+      expect(screen.queryByText("Switching…")).toBeNull();
+      expect(state.toastError).toHaveBeenCalledWith("Second Organization did not open. Try again.");
+    });
+  });
+  describe("with unsaved changes in the open pane", () => {
+    function PaneWithDraft({ dirty }: { dirty: boolean }) {
+      const guard = useUnsavedPaneGuard();
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => guard.actions.report({}, { dirty, busy: false })}
+          >
+            Edit pane
+          </button>
+          <OrgBrand />
+          {guard.dialog}
+        </>
+      );
+    }
+    function openPickerWith(dirty: boolean) {
+      state.session = { data: { session: { activeOrganizationId: "org-1" } }, isPending: false };
+      state.activeProfile = { data: { id: "org-1", name: "Dark Earth Carbon" }, isPending: false };
+      state.memberOrganizations = {
+        data: [
+          { id: "org-1", name: "Dark Earth Carbon" },
+          { id: "org-2", name: "Second Organization" },
+        ],
+        isPending: false,
+      };
+      render(<PaneWithDraft dirty={dirty} />);
+      fireEvent.click(screen.getByRole("button", { name: "Edit pane" }));
+      fireEvent.click(screen.getByRole("button", { name: /Dark Earth Carbon/ }));
+      fireEvent.click(screen.getByRole("option", { name: "Second Organization" }));
+    }
+    afterEach(() => cleanup());
+
+    it("asks first and does not call the server action", async () => {
+      openPickerWith(true);
+
+      expect(await screen.findByText(ORG_SWITCH_DISCARD_DESCRIPTION)).toBeTruthy();
+      expect(state.enter).not.toHaveBeenCalled();
+      expect(screen.queryByText("Switching…")).toBeNull();
+    });
+
+    it("switches after Discard changes", async () => {
+      state.enter.mockReturnValue(new Promise(() => {}));
+      openPickerWith(true);
+
+      fireEvent.click(await screen.findByRole("button", { name: "Discard changes" }));
+
+      await waitFor(() => expect(state.enter).toHaveBeenCalledWith("org-2", "Second Organization"));
+      expect(screen.getByText("Switching…")).toBeTruthy();
+    });
+
+    it("stays in the old organization on Keep editing, with the switcher back to normal", async () => {
+      openPickerWith(true);
+
+      fireEvent.click(await screen.findByRole("button", { name: "Keep editing" }));
+
+      await waitFor(() => expect(screen.queryByText(ORG_SWITCH_DISCARD_DESCRIPTION)).toBeNull());
+      expect(state.enter).not.toHaveBeenCalled();
+      expect(screen.queryByText("Switching…")).toBeNull();
+      expect((screen.getByRole("button", { name: /Dark Earth Carbon/ }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it("switches directly when nothing is unsaved", async () => {
+      state.enter.mockReturnValue(new Promise(() => {}));
+      openPickerWith(false);
+
+      await waitFor(() => expect(state.enter).toHaveBeenCalledWith("org-2", "Second Organization"));
+      expect(screen.queryByText("Discard unsaved changes?")).toBeNull();
     });
   });
 });

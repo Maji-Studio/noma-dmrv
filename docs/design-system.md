@@ -374,6 +374,19 @@ the zone through `Intl`, so a viewer inside their own daylight-saving change
 still sees the facility time; do not swap in `formatInTimeZone`. Input side:
 [forms.md](./forms.md#dates).
 
+**Wherever a facility exists, use its clock.** Every time and business date a
+record shows, and every new-record default date, reads the record's facility
+(or the active facility when the record has none) through the same helpers. A
+time of day alone is `formatFacilityClockTime(value, timeZone)` (`14:30`); a
+new-record default day is `facilityToday(timeZone)`, never the browser's day.
+The browser zone is never used. When the facility cannot be resolved, pass
+`UNKNOWN_FACILITY_TIMEZONE` (UTC) explicitly; `timeZone` parameters have no
+default, so the fallback is always visible at the call site.
+
+**Exception.** Account security metadata that belongs to
+no facility (API keys, connected apps: created, last used, expires) keeps the
+viewer's clock via `formatDateTime`.
+
 ---
 
 ## Missing values
@@ -505,6 +518,27 @@ Always use `Button`; never a raw `<button>` with manual styling.
 - **`busy` is the one sanctioned in-flight convention.** It disables the button
   and renders a leading spinner. Do not hand-roll `disabled={isPending}` plus a
   text swap or your own spinner — `busy` exists to replace exactly that mix.
+- **Busy lasts until the result is visible.** When the action ends in a
+  navigation, the button stays busy through it: a `window.location` navigation
+  holds until the page unloads (`useBusyUntilUnload`, which also drops the hold
+  when Back restores the page from the back-forward cache), an in-app
+  `router.push` is wrapped in `startTransition` and holds until the route
+  renders. Only a failure clears it. The clicked button carries the spinner and
+  its siblings are disabled.
+- **Exception: listbox rows.** The sidebar organization switcher's options are
+  `role="option"` rows (left-aligned text, a trailing icon, 40px, sentence
+  case). `Button` imposes `label-button` type, fixed heights and
+  `disabled:pointer-events-none`, so these keep a raw `<button>` with the same
+  spinner glyph and `aria-busy` as `busy`.
+- **A confirm dialog keeps its label.** `DeleteConfirmDialog` and
+  `ConfirmActionDialog` show the spinner through `busy` and never swap the text
+  ("Deleting...", "Submitting…"); Cancel is disabled and Escape, the backdrop
+  and the X are held while it runs. A delete that returns to a list stays open
+  and busy until that list has rendered, and its success toast arrives with the
+  list: call `useNavigateWithToast().navigate(href, message)` and pass
+  `isPending={mutation.isPending || navigation.isPending}`. Never toast, close
+  the dialog and then push. Deletes that stay on the page toast as the request
+  returns.
 - **Quiet icon button:** `size="icon"` with `variant="noOutline"` (or
   `variant="destructive"` for a delete row action), plus an `aria-label`. Use
   this rather than `width="square"`, which yields a differently-sized control.
@@ -689,7 +723,11 @@ The one outcome screen for auth pages (check your email, email verified, verific
   fires an unscoped query.
 - **`StepFlow`** — step rail + content slot + pinned footer. Deliberately dumb:
   **StepFlow never validates**; the parent owns the active index and gates
-  forward progress by disabling its own Next button.
+  forward progress by disabling its own Next button. Below `sm` it shows the
+  current step only (its number, its label and "Step 2 of 3" under it), in both
+  orientations; the full rail returns from `sm` up. The rail's jump back is then a
+  desktop affordance, so a flow that relies on it carries a footer Back for
+  phones (New Removal's submit step does, `sm:hidden`).
 - **`StatCard`** — the one KPI card. **Always carries a 24px Phosphor icon.**
   `value` accepts a `ReactNode`: use the default `valueLayout="headline"` for a
   single scalar or short text value, and `valueLayout="breakdown"` for a

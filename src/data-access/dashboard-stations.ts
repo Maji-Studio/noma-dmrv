@@ -94,6 +94,8 @@ export interface DashboardActivityItem {
   title: string;
   /** ISO date the event happened (date-only precision is fine). */
   dateIso: string;
+  /** UTC-midnight business dates carry a calendar, rather than a physical time. */
+  calendarDay?: boolean;
   href: string;
 }
 
@@ -489,6 +491,7 @@ function buildActivity(
       code: row.code,
       title: ACTIVITY_TITLES[row.kind],
       dateIso: new Date(row.sortMs).toISOString(),
+      calendarDay: row.kind === "feedstock" || row.kind === "application",
       href: activityHref(row.kind, row.id, facilityId),
     }));
 }

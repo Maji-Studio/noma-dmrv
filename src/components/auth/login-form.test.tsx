@@ -11,7 +11,7 @@ vi.mock("@/components/forms", () => ({
   FormInput: (props: React.InputHTMLAttributes<HTMLInputElement> & { error?: boolean }) => { const { error, ...rest } = props; return <input {...rest} aria-invalid={error} />; },
   ServerError: ({ message }: { message: string }) => <div>{message}</div>,
 }));
-vi.mock("@/components/ui", () => ({ Button: ({ children, type, disabled }: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button type={type} disabled={disabled}>{children}</button> }));
+vi.mock("@/components/ui", () => ({ Button: ({ children, type, disabled, busy }: React.ButtonHTMLAttributes<HTMLButtonElement> & { busy?: boolean }) => <button type={type} disabled={disabled || busy} aria-busy={busy || undefined}>{children}</button> }));
 vi.mock("@/components/ui/notice", () => ({ Notice: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 
 beforeEach(() => {
@@ -27,11 +27,18 @@ async function submit() {
   fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
   await waitFor(() => expect(mocks.signIn).toHaveBeenCalled());
 }
-it.each(["/settings", "//evil.test", "https://evil.test"])("keeps normal sign-in navigation safe for %s", async from => {
+it("navigates to the server-selected home when from is absent", async () => {
+  mocks.search = new URLSearchParams();
+  mocks.signIn.mockResolvedValue({ success: true });
+  await submit();
+  await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/"));
+  expect(mocks.assign).not.toHaveBeenCalled();
+});
+it.each(["/settings", "", "settings", "//evil.test", "https://evil.test", "/path?next=https://evil.test", "/\\evil.test"])("keeps normal sign-in navigation safe for %s", async from => {
   mocks.search = new URLSearchParams({ from });
   mocks.signIn.mockResolvedValue({ success: true });
   await submit();
-  await waitFor(() => expect(mocks.push).toHaveBeenCalledWith(from === "/settings" ? from : "/dashboard"));
+  await waitFor(() => expect(mocks.push).toHaveBeenCalledWith(from === "/settings" ? from : "/"));
   expect(mocks.assign).not.toHaveBeenCalled();
 });
 it("fully navigates to the provider continuation after OAuth sign-in", async () => {
@@ -70,4 +77,32 @@ it("refuses a callback added outside the signed parameter list", async () => {
   await submit();
   await screen.findByText("Start again from the app.");
   expect(mocks.assign).not.toHaveBeenCalled();
+});
+
+const signInButton = () => screen.getByRole("button", { name: "Sign in" }) as HTMLButtonElement;
+
+it("stays busy after the OAuth continuation starts, until the page leaves", async () => {
+  mocks.search = new URLSearchParams("sig=test&ba_param=client_id&client_id=app");
+  mocks.signIn.mockResolvedValue({ success: true, redirectUrl: "/oauth/organization?signed=test" });
+  await submit();
+  await waitFor(() => expect(mocks.assign).toHaveBeenCalled());
+  expect(signInButton().getAttribute("aria-busy")).toBe("true");
+  expect(signInButton().disabled).toBe(true);
+});
+
+it("clears busy when the sign-in fails", async () => {
+  mocks.signIn.mockResolvedValue({ success: false, error: "Wrong password." });
+  await submit();
+  await screen.findByText("Wrong password.");
+  expect(signInButton().getAttribute("aria-busy")).toBeNull();
+  expect(signInButton().disabled).toBe(false);
+});
+
+it("clears busy when the continuation is refused", async () => {
+  mocks.search = new URLSearchParams({ sig: "test", ba_param: "redirect_uri", redirect_uri: "https://client.test/callback" });
+  mocks.signIn.mockResolvedValue({ success: true, redirectUrl: "https://evil.test" });
+  await submit();
+  await screen.findByText("Start again from the app.");
+  expect(signInButton().getAttribute("aria-busy")).toBeNull();
+  expect(signInButton().disabled).toBe(false);
 });

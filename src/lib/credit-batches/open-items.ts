@@ -20,8 +20,18 @@ import type {
 } from "@/lib/certification/durability-batch-summary";
 import { EMISSION_LINE_STATE_LABELS, type BatchEmissionLine } from "@/lib/certification/emission-lines";
 import type { SampleDocumentWarningKey } from "@/lib/certification/sample-document-warnings";
+import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
+import type { RemovalCorrection } from "@/lib/certification/removal-entry-correction";
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { formatTonnes } from "@/lib/format-utils";
+import {
+  RESUBMIT_NEEDED_LABEL,
+  changedComponentNames,
+  correctionStatementLabel,
+  joinWithAnd,
+  removalSheetHref,
+  returnedStatementPhrase,
+} from "@/lib/removal-correction-copy";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
 
 // Five kg rounds up to the smallest visible amount at two-decimal tonne precision.
@@ -100,6 +110,35 @@ function memberTemplateText(
   return null;
 }
 
+/**
+ * One item per returned Removal that includes the batch (variant A). Once a
+ * sent fact changed it opens the Removal, where it is resubmitted; before that
+ * the entries are corrected on this batch's Emissions tab.
+ */
+function removalCorrectionItem(
+  correction: RemovalCorrection,
+  facilityId: string,
+): CreditBatchOpenItem {
+  const code = correction.removalCode;
+  if (correction.resubmitNeeded) {
+    const names = changedComponentNames(correction);
+    return {
+      id: `correction:${correction.removalId}`,
+      title: `${code}: ${RESUBMIT_NEEDED_LABEL}`,
+      detail: names.length
+        ? `${joinWithAnd(names)} changed here since ${code} was sent. Resubmit the Removal to send ${names.length === 1 ? "it" : "them"}.`
+        : `Entries changed on another credit batch since ${code} was sent. Resubmit the Removal to send them.`,
+      target: { href: removalSheetHref(correction.removalId, facilityId) },
+    };
+  }
+  return {
+    id: `correction:${correction.removalId}`,
+    title: `${code}: ${RETURNED_BY_ISOMETRIC_LABEL}`,
+    detail: `${correctionStatementLabel(correction.statement)} ${returnedStatementPhrase(correction.statement.status)}. You can correct the sent entries on the Emissions tab.`,
+    target: { tab: "emissions" },
+  };
+}
+
 export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
   const canManage = input.canManage;
   const blocking: CreditBatchOpenItem[] = [];
@@ -119,8 +158,6 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       target = { tab: "samples" };
     } else if (fix === "emissions") {
       target = { tab: "emissions" };
-    } else if (fix === "creditBatchTemplate") {
-      target = { tab: "overview", rowId: CREDIT_BATCH_TEMPLATE_ROW };
     } else if (fix === "batchDetails") {
       target = { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW };
     } else {
@@ -183,6 +220,10 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
         target,
       });
     }
+  }
+
+  for (const correction of input.health?.removalCorrections ?? []) {
+    check.push(removalCorrectionItem(correction, input.facilityId));
   }
 
   const statement = input.pageModel?.milestones.ghgStatement;

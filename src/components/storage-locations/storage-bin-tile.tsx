@@ -27,6 +27,7 @@
  */
 "use client";
 
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { RowActionsMenu } from "@/components/ui";
 import { handleRowActivationClick } from "@/components/ui/data-table/data-table-helpers";
 import { SecondaryFigure } from "@/components/ui/secondary-figure";
@@ -37,7 +38,7 @@ import type { RecordLockView } from "@/lib/record-lock-view";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { useOutputStockBalance } from "@/hooks/use-output-stock";
 import { LOAD_FAILED } from "@/lib/copy-utils";
-import { formatDate, formatDateTime, formatMassKg } from "@/lib/format-utils";
+import { formatFacilityDay, formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import { outputStockFigure } from "./stock-preview-shared";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
@@ -251,6 +252,7 @@ function ReconcileLink({
  */
 function LastActivity({ bin }: { bin: StorageLocationWithFacility }) {
   const { lastActivity } = bin;
+  const { timeZone } = useFacilityClock(bin.facilityId);
 
   if (!lastActivity) {
     // Worth saying: under the board's default order this bin sorts last, and
@@ -275,11 +277,11 @@ function LastActivity({ bin }: { bin: StorageLocationWithFacility }) {
   return (
     <p
       className="truncate body-caption text-[var(--color-text-tertiary)]"
-      title={`${lastActivity.label} · ${sign}${activityMass} · ${formatDateTime(
-        lastActivity.date,
+      title={`${lastActivity.label} · ${sign}${activityMass} · ${formatFacilityDateTime(
+        lastActivity.date, timeZone,
       )}`}
     >
-      Last activity: {formatDate(lastActivity.date)}
+      Last activity: {formatFacilityDay(lastActivity.date, timeZone)}
     </p>
   );
 }
