@@ -116,6 +116,7 @@ const NOT_SHEET_FORMS: Record<string, string> = {
   "components/settings/organization-defaults-form.tsx": "settings page",
   "components/settings/organization-name-form.tsx": "settings page",
   "components/admin/emission-estimates-form.tsx": "admin page",
+  "components/organizations/create-organization-form.tsx": "Platform Organizations panel",
   "components/api-keys/api-key-form.tsx": "settings dialog",
   "components/oauth/consent-form.tsx": "auth page card",
   "components/emissions/manual-entry-form.tsx": "emissions line drawer",

@@ -10,6 +10,7 @@ import {
   listInvitationsFn,
   listMembersFn,
   listOrganizationsFn,
+  listPlatformOrganizationsFn,
   removeMemberAction,
   renameOrganizationAction,
   revokeInvitationAction,
@@ -19,7 +20,7 @@ import { listOrganizationApiAccessFn, setOrganizationApiAccessFn } from "@/fn/or
 import { getActiveOrganizationRead } from "@/lib/read-api/client";
 import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
 import { authClient } from "@/lib/auth/client";
-import type { RenameOrganizationInput } from "@/schemas/organizations";
+import type { CreateOrganizationInput, RenameOrganizationInput } from "@/schemas/organizations";
 import { unwrap } from "@/hooks/types";
 import { NO_ORGANIZATION_MESSAGE } from "@/lib/errors";
 import { stashPendingWarning } from "@/lib/pending-warning";
@@ -30,11 +31,15 @@ import { stashOrgSwitchNotice, type OrgSwitchTarget } from "@/lib/org-switch-not
 // no-organization answer never spends one; it is refused outright below.
 const ACTIVE_ORGANIZATION_MAX_RETRIES = 3;
 
-const organizationKeys = {
+/** Where an organization switch lands unless the caller names a page. */
+const ORG_SWITCH_LANDING_HREF = "/dashboard";
+
+export const organizationKeys = {
   all: ["organizations"] as const,
   members: () => [...organizationKeys.all, "members"] as const,
   invitations: () => [...organizationKeys.all, "invitations"] as const,
   apiAccess: () => [...organizationKeys.all, "api-access"] as const,
+  platformDirectory: () => [...organizationKeys.all, "platform-directory"] as const,
   directory: () => [...organizationKeys.all, "directory"] as const,
   activeProfile: () => [...organizationKeys.all, "active-profile"] as const,
 };
@@ -67,9 +72,15 @@ export function useResetAfterOrgSwitch() {
    * organization" preference was not saved). The reload below discards any
    * toast raised here, so it is handed to the page the operator lands on. The
    * "Now working in <org>" confirmation travels the same way; the name is
-   * optional because an accepted invitation does not know it.
+   * optional because an accepted invitation does not know it. `landingHref`
+   * is where the hard load goes, the Dashboard unless the caller switched to
+   * reach a specific page (Platform "Manage members" opens Settings, Members).
    */
-  return function resetAfterOrgSwitch(warning?: string, target?: OrgSwitchTarget) {
+  return function resetAfterOrgSwitch(
+    warning?: string,
+    target?: OrgSwitchTarget,
+    landingHref: string = ORG_SWITCH_LANDING_HREF,
+  ) {
     if (typeof window === "undefined") {
       return;
     }
@@ -84,7 +95,7 @@ export function useResetAfterOrgSwitch() {
     }
     // A hard load makes every server component, Better Auth store, and client
     // cache re-read the new context.
-    window.location.assign("/dashboard");
+    window.location.assign(landingHref);
   };
 }
 
@@ -93,7 +104,11 @@ export const ORG_SWITCH_FAILED_MESSAGE = "The organization did not open. Try aga
 export function useEnterOrganization() {
   const resetAfterOrgSwitch = useResetAfterOrgSwitch();
 
-  return async function enterOrganization(organizationId: string, organizationName?: string) {
+  return async function enterOrganization(
+    organizationId: string,
+    organizationName?: string,
+    landingHref?: string,
+  ) {
     const result = await setActiveOrganizationAction({ organizationId });
     // Success means the server session moved, whether or not the "remember my
     // organization" preference was saved with it. Always reset, or the client
@@ -101,7 +116,7 @@ export function useEnterOrganization() {
     // (issue #769). A `warning` on the result is the preference, not the
     // switch.
     if (result.success) {
-      resetAfterOrgSwitch(result.warning, { organizationId, organizationName });
+      resetAfterOrgSwitch(result.warning, { organizationId, organizationName }, landingHref);
     }
     return result;
   };
@@ -134,6 +149,14 @@ export function useAllOrganizations(enabled = true) {
   });
 }
 
+export function usePlatformOrganizations(enabled = true) {
+  return useQuery({
+    queryKey: organizationKeys.platformDirectory(),
+    queryFn: async () => unwrap(await listPlatformOrganizationsFn()),
+    enabled,
+  });
+}
+
 export function useAllOrganizationApiAccess(enabled = true) {
   return useQuery({
     queryKey: organizationKeys.apiAccess(),
@@ -147,7 +170,10 @@ export function useSetOrganizationApiAccess() {
   return useMutation({
     mutationFn: async (input: { id: string; enabled: boolean }) =>
       unwrap(await setOrganizationApiAccessFn(input)),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: organizationKeys.apiAccess() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: organizationKeys.apiAccess() });
+      queryClient.invalidateQueries({ queryKey: organizationKeys.platformDirectory() });
+    },
   });
 }
 
@@ -184,6 +210,7 @@ export function useChangeMemberRole() {
       unwrap(await changeMemberRoleAction(input)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.members() });
+      queryClient.invalidateQueries({ queryKey: organizationKeys.platformDirectory() });
     },
   });
 }
@@ -195,6 +222,7 @@ export function useRemoveMember() {
       unwrap(await removeMemberAction({ memberIdOrEmail })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.members() });
+      queryClient.invalidateQueries({ queryKey: organizationKeys.platformDirectory() });
     },
   });
 }
@@ -202,13 +230,11 @@ export function useRemoveMember() {
 export function useCreateOrganization() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: {
-      name: string;
-      slug: string;
-      adminEmail: string;
-    }) => unwrap(await createOrganizationAction(input)),
+    mutationFn: async (input: CreateOrganizationInput) =>
+      unwrap(await createOrganizationAction(input)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.directory() });
+      queryClient.invalidateQueries({ queryKey: organizationKeys.platformDirectory() });
       queryClient.invalidateQueries({ queryKey: organizationKeys.apiAccess() });
     },
   });

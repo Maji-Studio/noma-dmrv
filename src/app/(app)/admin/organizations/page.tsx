@@ -1,21 +1,17 @@
 /**
- * Platform: Organizations. Platform Admins list every organization, open any
- * one (sets the session's active org), and create the first org. Access is
- * gated by the parent admin layout's requireAdmin() guard.
- *
- * The only surface that genuinely lives under `/admin`: everything else it used
- * to advertise was organization configuration, which moved to `/settings` where
- * an org Admin can actually reach it.
+ * Platform: Organizations, the Platform home (#1365). Platform Admins pick an
+ * organization to switch into it, set its Isometric keys and API access, and
+ * create organizations (#1373). Access is gated by the parent admin layout's
+ * requireAdmin() guard.
  */
 import { PageHeader } from "@/components/ui";
-import { OrganizationsAdmin } from "@/components/organizations/organizations-admin";
+import { PlatformOrganizations } from "@/components/organizations/platform-organizations";
 
 export default function AdminOrganizationsPage() {
   return (
     <div className="container-max page-shell">
       <PageHeader eyebrow="Platform" title="Organizations" />
-
-      <OrganizationsAdmin />
+      <PlatformOrganizations />
     </div>
   );
 }

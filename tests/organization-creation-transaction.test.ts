@@ -1,14 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { feedstockTypes, formulations, members, organizations, users } from "@/db/schema";
+import { feedstockTypes, formulations, invitations, members, organizations, users } from "@/db/schema";
 
 vi.mock("@/lib/auth/server", () => ({
   requirePlatformAdmin: vi.fn().mockResolvedValue({}),
 }));
 
+import { requirePlatformAdmin } from "@/lib/auth/server";
+import { organizationSlugBase } from "@/lib/organizations/organization-slug";
 import { createOrganizationWithAdmin } from "@/data-access/organizations";
+
+const INVITATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
+const createdIds: string[] = [];
 
 let triggerName: string | null = null;
 let functionName: string | null = null;
@@ -24,14 +29,15 @@ afterEach(async () => {
   }
   if (organizationSlug) {
     // Organization creation seeds starter rows (seedOrgDefaults): clear them first.
-    const orgIds = db.select({ id: organizations.id }).from(organizations).where(eq(organizations.slug, organizationSlug));
+    const orgIds = db.select({ id: organizations.id }).from(organizations).where(or(eq(organizations.slug, organizationSlug), inArray(organizations.id, createdIds)));
     await db.delete(feedstockTypes).where(inArray(feedstockTypes.organizationId, orgIds));
     await db.delete(formulations).where(inArray(formulations.organizationId, orgIds));
-    await db.delete(organizations).where(eq(organizations.slug, organizationSlug));
+    await db.delete(organizations).where(or(eq(organizations.slug, organizationSlug), inArray(organizations.id, createdIds)));
   }
   if (adminUserId) {
     await db.delete(users).where(eq(users.id, adminUserId));
   }
+  createdIds.length = 0;
   triggerName = null;
   functionName = null;
   adminUserId = null;
@@ -49,12 +55,36 @@ describe("organization creation transaction", () => {
       emailVerified: true,
     });
     const org = await createOrganizationWithAdmin({
-      name: "Creation test",
-      slug: organizationSlug,
-      adminUserId,
+      name: organizationSlug,
+      adminEmail: `  ${adminUserId.toUpperCase()}@EXAMPLE.TEST  `,
     });
     expect(await db.select().from(members).where(eq(members.organizationId, org.id)))
       .toMatchObject([{ userId: adminUserId, role: "admin" }]);
+  });
+
+  it("derives slugs, suffixes collisions and creates pending invitations for an unknown account", async () => {
+    adminUserId = randomUUID();
+    await db.insert(users).values({
+      id: adminUserId, email: `${adminUserId}@example.test`, name: "Platform Admin", role: "admin",
+    });
+    vi.mocked(requirePlatformAdmin).mockResolvedValue({ id: adminUserId } as never);
+    const name = `New company ${randomUUID()}`;
+    organizationSlug = organizationSlugBase(name);
+    const email = `${randomUUID()}@example.test`;
+    for (const suffix of ["", "-2", "-3"]) {
+      const before = Date.now();
+      const org = await createOrganizationWithAdmin({ name, adminEmail: `  ${email.toUpperCase()}  ` });
+      createdIds.push(org.id);
+      expect(org.firstAdmin.kind).toBe("invited");
+      expect(await db.select({ slug: organizations.slug }).from(organizations).where(eq(organizations.id, org.id)))
+        .toEqual([{ slug: `${organizationSlug}${suffix}` }]);
+      expect(await db.select().from(members).where(eq(members.organizationId, org.id))).toEqual([]);
+      const [invitation] = await db.select().from(invitations).where(eq(invitations.organizationId, org.id));
+      expect(invitation).toMatchObject({ email, role: "admin", status: "pending", inviterId: adminUserId });
+      expect(org.firstAdmin).toEqual({ kind: "invited", invitationId: invitation.id });
+      expect(invitation.expiresAt?.getTime()).toBeGreaterThanOrEqual(before + INVITATION_LIFETIME_MS);
+      expect(invitation.expiresAt?.getTime()).toBeLessThanOrEqual(Date.now() + INVITATION_LIFETIME_MS);
+    }
   });
 
   it("rolls back the organization when Admin creation fails", async () => {
@@ -91,16 +121,15 @@ describe("organization creation transaction", () => {
 
     await expect(
       createOrganizationWithAdmin({
-        name: "Rollback Organization",
-        slug: organizationSlug,
-        adminUserId,
+        name: organizationSlug,
+        adminEmail: `${organizationSlug}@example.test`,
       }),
     ).rejects.toThrow();
 
     const rows = await db
       .select({ id: organizations.id })
       .from(organizations)
-      .where(eq(organizations.slug, organizationSlug));
+      .where(or(eq(organizations.slug, organizationSlug), inArray(organizations.id, createdIds)));
     expect(rows).toEqual([]);
   });
 });

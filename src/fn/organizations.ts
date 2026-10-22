@@ -34,8 +34,9 @@ import {
   createInvitationAsPlatformAdmin,
   createOrganizationWithAdmin,
   findMembershipRole,
-  findUserIdByEmail,
   listAllOrganizations,
+  listPlatformOrganizationDirectory,
+  type PlatformOrganizationDirectoryRow,
   listOrgInvitations,
   listOrgMembers,
   removeMemberAsPlatformAdmin,
@@ -143,6 +144,13 @@ export async function listOrganizationsFn(): Promise<
   return toResult(async () => {
     await requirePlatformAdmin();
     return listAllOrganizations();
+  }, "Failed to load organizations.");
+}
+
+export async function listPlatformOrganizationsFn(): Promise<ActionResult<PlatformOrganizationDirectoryRow[]>> {
+  return toResult(async () => {
+    await requirePlatformAdmin();
+    return listPlatformOrganizationDirectory();
   }, "Failed to load organizations.");
 }
 
@@ -303,23 +311,22 @@ async function setActiveOrgForPlatformAdmin(
 
 export async function createOrganizationAction(
   input: unknown
-): Promise<ActionResult<{ organizationId: string }>> {
+): Promise<ActionResult<{
+  organizationId: string;
+  organizationName: string;
+  firstAdmin: { kind: "member" } | { kind: "invited"; acceptUrl: string };
+}>> {
   return toResult(async () => {
-    const { name, slug, adminEmail } = createOrganizationSchema.parse(input);
     await requirePlatformAdmin();
-
-    const adminUserId = await findUserIdByEmail(adminEmail);
-    if (!adminUserId) {
-      throw new SafeError(
-        "No user account found for the admin email. The admin must have an account first."
-      );
-    }
-    const organization = await createOrganizationWithAdmin({
-      name,
-      slug,
-      adminUserId,
-    });
-    return { organizationId: organization.id };
+    const values = createOrganizationSchema.parse(input);
+    const organization = await createOrganizationWithAdmin(values);
+    return {
+      organizationId: organization.id,
+      organizationName: organization.name,
+      firstAdmin: organization.firstAdmin.kind === "member"
+        ? { kind: "member" as const }
+        : { kind: "invited" as const, acceptUrl: buildAcceptUrl(organization.firstAdmin.invitationId) },
+    };
   }, "Failed to create organization.");
 }
 
