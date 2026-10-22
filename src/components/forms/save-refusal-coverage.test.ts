@@ -53,7 +53,6 @@ const PENDING: Record<string, string> = {
   "settings/organization-name-form.tsx": "PR K1: organization name refusal",
   "certification/registry-source-visibility-settings.tsx": "PR K1: replace root.serverError routing",
   "organizations/organization-certifier-credentials.tsx": "PR K1: credential refusal",
-  "organizations/organization-settings.tsx": "PR K1: move invitation toast into the form",
   "organizations/organizations-admin.tsx": "PR K1: move organization create toast into the form",
   "organizations/invitation-bootstrap-form.tsx": "PR K1: preserve ActionError from result",
   "api-keys/api-key-form.tsx": "PR K1: API key refusal",
