@@ -31,3 +31,18 @@ export function prepareBiocharProductSubmission(
     ? { ...next, ingredientBins: undefined }
     : next;
 }
+
+/**
+ * Server issue path to form field, for a refused save. The create action
+ * renames the form's fields to the operation's (`massKg` is sent as
+ * `biocharWetMassKg`, `ingredientBins` as `ingredients`), and a lineage lock
+ * on update names the stored `composition`. `*` matches one path segment.
+ */
+export const BIOCHAR_PRODUCT_REFUSAL_ALIASES = {
+  biocharWetMassKg: "massKg",
+  biocharMoisturePercent: "moistureContentPercent",
+  "ingredients.*.wetMassKg": "ingredientBins.*.massKg",
+  "ingredients.*.moisturePercent": "ingredientBins.*.moistureContentPercent",
+  "ingredients.*.storageLocationId": "ingredientBins.*.storageLocationId",
+  composition: "ingredientBins",
+} as const;
