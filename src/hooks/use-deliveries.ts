@@ -2,7 +2,7 @@ import { invalidateRecordedTransport } from "./transport-distance-query-keys";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
-import { outputStockKeys } from "./use-output-stock";
+import { invalidateAfterFailedStockSave, outputStockKeys } from "./use-output-stock";
 /**
  * Deliveries React Query Hooks
  * Client-side state management for delivery operations
@@ -182,7 +182,7 @@ export function useCreateDelivery(
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {
-      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
+      invalidateAfterFailedStockSave(queryClient);
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
@@ -300,7 +300,7 @@ export function useUpdateDelivery(
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables, context) => {
-      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
+      invalidateAfterFailedStockSave(queryClient);
       // Rollback to previous values on error
       if (context) {
         const { previousDelivery, previousLists } = context as {
@@ -408,7 +408,7 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
     },
     onError: async (error, variables, context) => {
       const { deliveryId } = variables;
-      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
+      invalidateAfterFailedStockSave(queryClient);
       // Rollback to previous values on error
       if (context) {
         const { previousDelivery, previousLists } = context as {

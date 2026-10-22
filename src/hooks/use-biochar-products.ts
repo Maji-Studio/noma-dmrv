@@ -1,7 +1,7 @@
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
-import { outputStockKeys } from "./use-output-stock";
+import { invalidateAfterFailedStockSave, outputStockKeys } from "./use-output-stock";
 /**
  * Biochar Products React Query Hooks
  * Client-side state management for biochar product operations
@@ -126,7 +126,7 @@ export function useCreateBiocharProduct(
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {
-      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
+      invalidateAfterFailedStockSave(queryClient);
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
@@ -234,7 +234,7 @@ export function useUpdateBiocharProduct(
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables, context) => {
-      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
+      invalidateAfterFailedStockSave(queryClient);
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousProduct, previousLists } = context as {
@@ -341,7 +341,7 @@ export function useDeleteBiocharProduct(
       await callbacks?.onSuccess?.(undefined, variables);
     },
     onError: async (error, variables, context) => {
-      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
+      invalidateAfterFailedStockSave(queryClient);
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousProduct, previousLists } = context as {

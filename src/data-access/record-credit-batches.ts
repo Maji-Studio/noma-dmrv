@@ -1,14 +1,15 @@
-import { and, eq, inArray, isNotNull, type SQL } from "drizzle-orm";
+import { and, eq, isNotNull, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   applications, biocharProducts,
-  creditBatchApplications, creditBatchProductionRuns, creditBatches, deliveries,
+  creditBatchApplications, creditBatches, deliveries,
   feedstocks,
-  productionRunFeedstocks, productionRuns,
+  productionRunFeedstocks,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { RecordCreditBatchesInput } from "@/schemas/record-credit-batches";
 import type { RecordCreditBatch, RecordCreditBatches } from "@/types/record-credit-batches";
+import { getCreditBatchesForSourceRuns } from "./credit-batch-source-runs";
 import { getMixBinHeldApplicationIds } from "./mix-bin-credit-hold";
 import { inApplicationCreditBatchLineage, inCreditBatchLineage, inDeliveryCreditBatchLineage } from "./credit-batch-lineage-filter";
 import { assertSameOrg, requireOrgScope } from "./utils";
@@ -78,22 +79,6 @@ export async function getRecordCreditBatches(
       eq(productionRunFeedstocks.organizationId, ctx.organizationId),
       eq(productionRunFeedstocks.feedstockId, input.id),
     ));
-  return { batches: await batchesForRuns(ctx, runs.map(run => run.id)), heldOut: false };
-}
-
-/** Resolve feedstock source runs through explicit batch membership. */
-async function batchesForRuns(ctx: OrgContext, runIds: string[]): Promise<RecordCreditBatch[]> {
-  requireOrgScope(ctx);
-  if (!runIds.length) return [];
-  return db.selectDistinct(batchSelection).from(creditBatchProductionRuns)
-    .innerJoin(productionRuns, and(
-      eq(productionRuns.id, creditBatchProductionRuns.productionRunId),
-      eq(productionRuns.organizationId, ctx.organizationId),
-    )).innerJoin(creditBatches, and(
-      eq(creditBatches.id, creditBatchProductionRuns.creditBatchId),
-      eq(creditBatches.organizationId, ctx.organizationId),
-    )).where(and(
-      eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
-      inArray(creditBatchProductionRuns.productionRunId, runIds),
-    )).orderBy(creditBatches.startDate, creditBatches.code);
+  const { batches } = await getCreditBatchesForSourceRuns(ctx, runs.map(run => run.id));
+  return { batches, heldOut: false };
 }

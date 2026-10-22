@@ -1,9 +1,9 @@
 import { db, type DbTransaction } from "@/db";
 import { applicationOutputAllocations, applications, biocharProducts, biocharProductSourceAllocations, creditBatchApplications, deliveries, outputStockAllocations, outputStockRunAllocations, productionRuns, storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
+import { KG_PER_TONNE, tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { SafeError } from "@/lib/errors";
-import { and, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne, sql, sum } from "drizzle-orm";
 import { allocateApplicationShares, GRAMS_PER_KG, massGrams, splitGrams, type DeliveryRunShare } from "./delivery-allocation-math";
 import { requireOrgScope } from "./utils";
 
@@ -84,10 +84,39 @@ export async function saveApplicationOutputAllocations(ctx: OrgContext, tx: DbTr
   await tx.select({ id: deliveries.id }).from(deliveries).where(and(eq(deliveries.id, application.deliveryId), eq(deliveries.organizationId, ctx.organizationId))).for("update");
   const [owned] = await tx.select({ id: creditBatchApplications.id }).from(creditBatchApplications).where(and(eq(creditBatchApplications.applicationId, application.id), eq(creditBatchApplications.organizationId, ctx.organizationId), isNotNull(creditBatchApplications.removalId)));
   if (owned) throw new SafeError("Cannot change application shares owned by a Removal.");
-  const saved = await getDeliveryAllocationProvenance(ctx, [application.deliveryId], tx);
+  const shares = await planApplicationShares(ctx, tx, {
+    deliveryId: application.deliveryId, applicationId: application.id,
+    wetKg: application.biocharAppliedTons * KG_PER_TONNE, dryKg: (application.biocharAppliedDryTons ?? 0) * KG_PER_TONNE,
+  });
+  await tx.delete(applicationOutputAllocations).where(and(eq(applicationOutputAllocations.organizationId, ctx.organizationId), eq(applicationOutputAllocations.applicationId, application.id)));
+  await tx.insert(applicationOutputAllocations).values(shares.map(s => ({ ...s, wetMassKg: String(s.wetMassKg), dryMassKg: String(s.dryMassKg), organizationId: ctx.organizationId, applicationId: application.id })));
+}
+
+/** Wet and dry biochar the delivery's applications already took, leaving out `excludeId` (the one being saved). */
+export async function appliedOnDelivery(ctx: OrgContext, executor: typeof db | DbTransaction, deliveryId: string, excludeId?: string | null): Promise<{ wetKg: number; dryKg: number }> {
+  requireOrgScope(ctx);
+  const [{ wet, dry }] = await executor.select({ wet: sum(applications.biocharAppliedTons), dry: sum(applications.biocharAppliedDryTons) }).from(applications)
+    .where(and(eq(applications.organizationId, ctx.organizationId), eq(applications.deliveryId, deliveryId), excludeId ? ne(applications.id, excludeId) : undefined));
+  return { wetKg: tonnesToKg(Number(wet ?? 0)), dryKg: tonnesToKg(Number(dry ?? 0)) };
+}
+
+/**
+ * The run shares an application of `wetKg` and `dryKg` takes from its
+ * delivery: proportional shares of the saved truck allocation, less what the
+ * delivery's other applications already took. The save writes exactly these;
+ * the form's credit batch preview reads them, so the two cannot disagree.
+ * `applicationId` names the application being saved, left out of "other".
+ */
+export async function planApplicationShares(ctx: OrgContext, executor: typeof db | DbTransaction, input: {
+  deliveryId: string; applicationId: string | null; wetKg: number; dryKg: number;
+}): Promise<DeliveryRunShare[]> {
+  requireOrgScope(ctx);
+  const others = (idColumn: typeof applicationOutputAllocations.applicationId | typeof applications.id) =>
+    input.applicationId ? ne(idColumn, input.applicationId) : undefined;
+  const saved = await getDeliveryAllocationProvenance(ctx, [input.deliveryId], executor);
   if (!saved.length) throw new SafeError("Delivery has no saved source allocations. Save its stock allocation before recording an application.");
-  const used = await tx.select().from(applicationOutputAllocations).where(and(eq(applicationOutputAllocations.organizationId, ctx.organizationId), eq(applicationOutputAllocations.deliveryId, application.deliveryId), ne(applicationOutputAllocations.applicationId, application.id)));
-  const otherApplications = await tx.select({ id: applications.id, wetTons: applications.biocharAppliedTons, dryTons: applications.biocharAppliedDryTons }).from(applications).where(and(eq(applications.deliveryId, application.deliveryId), eq(applications.organizationId, ctx.organizationId), ne(applications.id, application.id)));
+  const used = await executor.select().from(applicationOutputAllocations).where(and(eq(applicationOutputAllocations.organizationId, ctx.organizationId), eq(applicationOutputAllocations.deliveryId, input.deliveryId), others(applicationOutputAllocations.applicationId)));
+  const otherApplications = await executor.select({ id: applications.id, wetTons: applications.biocharAppliedTons, dryTons: applications.biocharAppliedDryTons }).from(applications).where(and(eq(applications.deliveryId, input.deliveryId), eq(applications.organizationId, ctx.organizationId), others(applications.id)));
   for (const prior of otherApplications) {
     const allocations = used.filter(share => share.applicationId === prior.id);
     if (!allocations.length || prior.dryTons == null ||
@@ -96,9 +125,7 @@ export async function saveApplicationOutputAllocations(ctx: OrgContext, tx: DbTr
       throw new SafeError("An existing application has missing or unbalanced saved source allocations.");
     }
   }
-  const shares = allocateApplicationShares(saved, used.map(s => ({ ...s, wetMassKg: Number(s.wetMassKg), dryMassKg: Number(s.dryMassKg) })), application.biocharAppliedTons * KG_PER_TONNE, (application.biocharAppliedDryTons ?? 0) * KG_PER_TONNE);
-  await tx.delete(applicationOutputAllocations).where(and(eq(applicationOutputAllocations.organizationId, ctx.organizationId), eq(applicationOutputAllocations.applicationId, application.id)));
-  await tx.insert(applicationOutputAllocations).values(shares.map(s => ({ ...s, wetMassKg: String(s.wetMassKg), dryMassKg: String(s.dryMassKg), organizationId: ctx.organizationId, applicationId: application.id })));
+  return allocateApplicationShares(saved, used.map(s => ({ ...s, wetMassKg: Number(s.wetMassKg), dryMassKg: Number(s.dryMassKg) })), input.wetKg, input.dryKg);
 }
 
 export interface ApplicationAllocationShare extends DeliveryRunShare {
