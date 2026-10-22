@@ -18,7 +18,7 @@ const keys = (access: SettingsPaneAccess) => visibleSettingsPanes(access).map((p
 describe("settings console rail", () => {
   it("groups panes as You, Organization, Certification, Platform", () => {
     expect(settingsPaneGroups(platformAdmin).map((group) => [group.label, group.panes.map((pane) => pane.label)])).toEqual([
-      ["You", ["Connected apps"]],
+      ["You", ["Profile", "Connected apps"]],
       ["Organization", ["General", "Members", "Developers"]],
       ["Certification", ["Registry", "Removal templates", "Facilities"]],
       ["Platform", ["Organizations", "Diagnostics", "Template mapping"]],
@@ -26,7 +26,7 @@ describe("settings console rail", () => {
   });
 
   it("shows a member General and Members but not Developers or Platform", () => {
-    expect(keys(member)).toEqual(["connected-apps", "general", "members", "registry", "removal-templates", "facilities"]);
+    expect(keys(member)).toEqual(["profile", "connected-apps", "general", "members", "registry", "removal-templates", "facilities"]);
     expect(settingsPaneGroups(member).map((group) => group.key)).toEqual(["you", "organization", "certification"]);
   });
 
@@ -52,9 +52,16 @@ describe("settings console rail", () => {
 
   it("builds every organization access line from one role phrase", () => {
     for (const pane of SETTINGS_PANES) {
-      if (pane.group === "platform") continue;
+      // Platform panes are read-only; Profile is yours alone.
+      if (pane.group === "platform" || pane.key === "profile") continue;
       expect(pane.access).toContain(ORGANIZATION_SETTINGS_ROLES);
     }
+  });
+
+  it("puts Profile first under You, changeable only by you", () => {
+    expect(SETTINGS_PANES[0]).toMatchObject({ key: "profile", group: "you", href: "/settings/profile", audience: "everyone" });
+    expect(settingsPane("profile").access).toBe("Only you can change your name and password.");
+    expect(keys(platformAdmin)[0]).toBe("profile");
   });
 
   it("gives every pane with its own route a caption and an access line", () => {

@@ -6,6 +6,7 @@
 export const SETTINGS_HREF = "/settings";
 
 // You
+export const SETTINGS_PROFILE_HREF = "/settings/profile";
 export const SETTINGS_CONNECTED_APPS_HREF = "/settings/connected-apps";
 
 // Organization

@@ -40,6 +40,11 @@ export const authClient = createAuthClient({
   plugins: [organizationClient(), oauthProviderClient()],
 });
 
+/** Refetch subscribers after a server action changes the current user. */
+export function refreshSession(): void {
+  authClient.$store.notify("$sessionSignal");
+}
+
 export interface AuthResult<T = void> {
   success: boolean;
   data?: T;

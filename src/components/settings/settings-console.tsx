@@ -36,6 +36,7 @@ import {
   SlidersHorizontalIcon,
   TreeStructureIcon,
   UserCircleIcon,
+  UserIcon,
   UsersIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { EnvBanner } from "@/components/certification/env-banner";
@@ -59,6 +60,7 @@ import {
 export const SETTINGS_CONSOLE_MAX_WIDTH_CLASS = "max-w-[1160px]";
 
 const PANE_ICONS: Record<SettingsPaneKey, Icon> = {
+  profile: UserIcon,
   "connected-apps": PlugsConnectedIcon,
   general: SlidersHorizontalIcon,
   members: UsersIcon,

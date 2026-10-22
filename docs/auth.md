@@ -120,6 +120,10 @@ Signup is invite-only: public signup is off in code (`disableSignUp: true` in `s
 
 Organization Admins invite from organization settings; Better Auth enforces invitation and membership changes server-side. Re-inviting the same email cancels the stale pending invite. Email delivery is best-effort — the inviter always gets a copyable accept link. `/admin/users` redirects to Settings, Members (`/settings/members`).
 
+## Profile: name and password
+
+Settings, Profile (`src/fn/profile.ts`) changes only the caller's own user, through Better Auth with the request's session headers. Email cannot be changed; a new address comes as a new invitation. `changePasswordFn` checks the current password with `changePassword` (`revokeOtherSessions: false`), then calls `revokeOtherSessions`, keeping this device's session. Better Auth's own `revokeOtherSessions: true` creates a replacement session inside its transaction, and the session-create hook in `better-auth.ts` then waits for a second pool connection, so the two calls stay separate. Other devices stop working within `SESSION_COOKIE_CACHE_SECONDS` (5 minutes), because each browser trusts its signed session snapshot that long. The change is limited to 5 attempts per 15 minutes per user.
+
 ## Better Auth schema and credential identity
 
 The Drizzle adapter validates the configured schema at startup and before
