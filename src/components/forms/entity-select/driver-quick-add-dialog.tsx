@@ -30,7 +30,7 @@ interface DriverQuickAddDialogProps {
 
 const DRIVER_NOT_SAVED = "The driver was not saved. Try again.";
 
-function toDriverPayload(data: DriverFormData) {
+export function toDriverPayload(data: DriverFormData) {
   return {
     name: data.name.trim(),
     licenseNumber: data.licenseNumber?.trim() || null,

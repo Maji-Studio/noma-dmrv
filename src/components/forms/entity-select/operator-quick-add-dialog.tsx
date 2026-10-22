@@ -30,7 +30,7 @@ interface OperatorQuickAddDialogProps {
 
 const OPERATOR_NOT_SAVED = "The operator was not saved. Try again.";
 
-function toOperatorPayload(data: OperatorFormData) {
+export function toOperatorPayload(data: OperatorFormData) {
   return {
     name: data.name.trim(),
     credentials: data.credentials?.trim() || null,
