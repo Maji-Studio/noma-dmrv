@@ -233,7 +233,9 @@ describe("FeedstockForm single-bin mass editing", () => {
     const view = render(<FeedstockForm feedstock={feedstock} onSubmit={onSubmit} />);
     const input = (name: string) => view.container.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
     try {
-      fireEvent.change(input(field), { target: { value: "120" } });
+      // An allocation-only edit must stay within the unchanged delivery total.
+      const editedMass = field === "totalWetMassKg" ? "120" : "80";
+      fireEvent.change(input(field), { target: { value: editedMass } });
       fireEvent.submit(view.container.querySelector("form")!);
       await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
       await waitFor(() => expect(input("totalWetMassKg").value).toBe("100"));

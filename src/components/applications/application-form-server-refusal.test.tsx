@@ -6,7 +6,7 @@
  * delivery has left. Locks are covered with the shared hook.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Application } from "@/db/schema/application";
 import { ActionError } from "@/lib/action-error";
@@ -151,14 +151,31 @@ it("restores the committed baseline after an update whose attachment upload fail
   fireEvent.change(size(), { target: { value: "3" } });
   fireEvent.submit(view.container.querySelector("form")!);
   await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
-  // application-list's partial-save path supplies the committed row while
-  // the failed upload keeps this same form mounted.
+  // The partial-save handler explicitly advances the baseline while the
+  // failed upload keeps this same form mounted. Preserve later typed input too.
   saved = { ...APPLICATION, fieldSizeHa: 3, version: 2 };
+  fireEvent.change(size(), { target: { value: "3.5" } });
+  act(() => onSubmit.mock.calls[0][2](saved));
   view.rerender(form());
-  await waitFor(() => expect(size().value).toBe("3"));
+  expect(size().value).toBe("3.5");
   onSubmit.mockImplementation((_data, onRefusal) => onRefusal(lockRefusal("fieldSizeHa"), LOCK_REASON));
   fireEvent.change(size(), { target: { value: "4" } });
   fireEvent.submit(view.container.querySelector("form")!);
   await waitFor(() => expect(screen.getByText("Locked. Your change was not saved.")).toBeTruthy());
   expect(size().value).toBe("3");
+});
+
+
+it("keeps typed input when the same application is refetched while editing", () => {
+  const client = new QueryClient();
+  const form = (application: Application) => (
+    <QueryClientProvider client={client}>
+      <ApplicationForm application={application} lock={OPEN_LOCK} deliveries={[DELIVERY]} onSubmit={vi.fn()} />
+    </QueryClientProvider>
+  );
+  const view = render(form(APPLICATION));
+  const size = () => screen.getByLabelText(/Field size/) as HTMLInputElement;
+  fireEvent.change(size(), { target: { value: "4" } });
+  view.rerender(form({ ...APPLICATION, fieldSizeHa: 3, version: 2 }));
+  expect(size().value).toBe("4");
 });

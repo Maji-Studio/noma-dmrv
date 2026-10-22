@@ -137,7 +137,7 @@ interface ApplicationFormProps {
   deliveries?: ApplicationDeliveryOption[];
   /** Form submission handler */
   /** `onRefusal` shows a refused save at the fields it names (#1298). */
-  onSubmit: (data: ApplicationFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
+  onSubmit: (data: ApplicationFormData, onRefusal: SaveRefusalHandler, onCommitted: (record: Application) => void) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -184,28 +184,29 @@ export function ApplicationForm({
   // removals derive durability from petrographic reflectance + TGA.
   const hideSoilTemperature = durabilityOption === "1000_year";
 
-  const defaultValues = {
-    applicationDate: application?.applicationDate
-      ? toDateInputValue(application.applicationDate, today)
+  const valuesForRecord = (record: Application | undefined) => ({
+    applicationDate: record?.applicationDate
+      ? toDateInputValue(record.applicationDate, today)
       : today,
-    deliveryId: application?.deliveryId ?? "",
-    biocharAppliedKg: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
-    fieldSizeHa: application?.fieldSizeHa ?? "",
-    fieldIdentifier: application?.fieldIdentifier ?? "",
-    cropType: application?.cropType ?? "",
-    gpsLatitude: application?.gpsLatitude ?? undefined,
-    gpsLongitude: application?.gpsLongitude ?? undefined,
-    applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? "",
+    deliveryId: record?.deliveryId ?? "",
+    biocharAppliedKg: applicationTonsToKg(record?.biocharAppliedTons) ?? undefined,
+    fieldSizeHa: record?.fieldSizeHa ?? "",
+    fieldIdentifier: record?.fieldIdentifier ?? "",
+    cropType: record?.cropType ?? "",
+    gpsLatitude: record?.gpsLatitude ?? undefined,
+    gpsLongitude: record?.gpsLongitude ?? undefined,
+    applicationMethodType: (record?.applicationMethodType as ApplicationMethod) ?? "",
     // The visual path remains UI-locked, but existing records keep their
     // declared evidence method when another field is edited.
     evidenceMethod: resolveApplicationEvidenceMethodDefault(
-      application?.evidenceMethod,
+      record?.evidenceMethod,
       organizationDefaults.defaultEvidenceMethod,
     ),
-    gisBoundary: application?.gisBoundary ?? null,
-    soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? "",
-    soilTemperatureC: application?.soilTemperatureC ?? null,
-  };
+    gisBoundary: record?.gisBoundary ?? null,
+    soilTemperatureSource: (record?.soilTemperatureSource as SoilTemperatureSource) ?? "",
+    soilTemperatureC: record?.soilTemperatureC ?? null,
+  });
+  const defaultValues = valuesForRecord(application);
 
   const {
     register,
@@ -215,6 +216,7 @@ export function ApplicationForm({
     setError,
     setValue,
     resetField,
+    reset,
     getFieldState,
     clearErrors,
     formState: { errors },
@@ -223,10 +225,6 @@ export function ApplicationForm({
     // onTouched so spine markers can flag errors on blur, not only on submit.
     mode: "onTouched",
     defaultValues,
-    // The parent keeps the opened snapshot until our own update commits.
-    // A failed attachment upload leaves it open with the newly saved record;
-    // RHF adopts that record as both values and resetField's saved baseline.
-    values: application ? defaultValues : undefined,
   });
 
   // CERT chips reflect the saved record (frozen), neutral while creating.
@@ -414,7 +412,7 @@ export function ApplicationForm({
     await onSubmit({
       ...data,
       gisBoundary: data.evidenceMethod === "boundary" ? data.gisBoundary : null,
-    }, refuseSave);
+    }, refuseSave, (record) => reset(valuesForRecord(record), { keepValues: true }));
   }));
 
   return (

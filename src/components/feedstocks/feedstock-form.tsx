@@ -329,7 +329,7 @@ export function FeedstockForm({
   const refuseSave = useSaveRefusal({ control, setError, formId, aliases: feedstockRefusalAliases(hasEditedAllocationMass),
     resetField: (field) => {
       // Both controls describe the same saved row in edit mode.
-      if (isEditMode && (field === "totalWetMassKg" || field === "allocations.0.allocatedWetMassKg")) {
+      if (isEditMode && (field === "totalWetMassKg" || String(field) === "allocations.0.allocatedWetMassKg")) {
         resetField("totalWetMassKg");
         resetField("allocations.0.allocatedWetMassKg");
         setHasEditedAllocationMass(false);

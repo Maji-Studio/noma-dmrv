@@ -212,10 +212,11 @@ Prefer the `PositionPicker` component (map preview + address search + manual lat
 locked-field reset uses RHF defaults, so those defaults must describe saved
 values. Delivery and feedstock initialize from the opened record. Feedstock
 resets both its total and single-bin allocation mass together. Application
-also supplies the parent's saved snapshot through RHF `values`: when an update
-commits but an attachment upload fails, the parent adopts the returned row and
-the still-open form adopts its new values and defaults. A stale-version refusal
-does not replace that snapshot. The profile password pane also wires
+updates its defaults explicitly when an update commits but an attachment upload
+fails: the parent adopts the returned row and calls the form's committed-record
+callback, which uses `reset(committedValues, { keepValues: true })`. Typed input
+stays on screen; a background refetch never re-syncs the form. A stale-version
+refusal does not replace that snapshot. The profile password pane also wires
 `resetField`, although it has no record-lock read.
 
 Mutations declare affected kinds with `recordLockMeta`. A `certification_locked`
