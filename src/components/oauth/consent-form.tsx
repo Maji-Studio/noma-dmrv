@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
+import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import { useOAuthConsentDecision, useOAuthConsentView, type OAuthConsentView } from "@/hooks/use-oauth-flow";
 import type { ApiScope } from "@/lib/auth/api-scopes";
 import { useOAuthQuery } from "@/hooks/use-oauth-query";
@@ -48,6 +49,9 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
   const [preset, setPreset] = useState<ConsentPreset>(stepUp ? "read" : seed.preset);
   const [failed, setFailed] = useState(false);
   const decision = useOAuthConsentDecision(oauthQuery);
+  // Busy from the click until the page leaves for the app, not just until the request returns; only a failure clears it.
+  const busy = useBusyUntilUnload<"allow" | "deny">();
+  const deciding = busy.held !== null;
 
   const submittedScopes = [...new Set<string>([...allowed, ...ticked])].filter((scope) => scope !== OFFLINE_ACCESS);
   const newAreas = new Set(stepUp ? areas.filter((area) => [area.read, area.write].some((scope) => scope && stepUpScopes.includes(scope))).map((area) => area.entity) : []);
@@ -59,13 +63,17 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
   }
 
   async function decide(accept: boolean) {
+    if (deciding) return;
     setFailed(false);
+    busy.hold(accept ? "allow" : "deny");
     // Accepting replaces the stored consent: a step-up keeps the allowed scopes, a fresh choice submits only what is ticked.
     const scope = accept ? [...submittedScopes, ...(offlineAccessRequested ? [OFFLINE_ACCESS] : [])].join(" ") : undefined;
     try {
       const url = await decision.mutateAsync({ accept, scope });
-      if (!followOAuthContinuation(url, new URLSearchParams(oauthQuery))) setFailed(true);
-    } catch { setFailed(true); }
+      if (followOAuthContinuation(url, new URLSearchParams(oauthQuery))) return;
+    } catch { /* The restart notice below covers a refused request. */ }
+    busy.release();
+    setFailed(true);
   }
 
   return (
@@ -74,11 +82,11 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
       <OAuthAppIdentity name={view.clientName} host={clientHost} redirectHost={redirectHost} />
       {!stepUp && (
         <ConsentChoices clientName={clientName} readAreas={areas.filter((area) => area.read && undecidedReads.includes(area.read)).length}
-          writeAreas={writeAreas} value={preset} onChange={choose} disabled={decision.isPending} />
+          writeAreas={writeAreas} value={preset} onChange={choose} disabled={deciding} />
       )}
       {(stepUp || preset === "custom") && (
         <ConsentPegBoard areas={areas} allowed={allowed} undecided={undecided} newAreas={newAreas} ticked={ticked}
-          onChange={setTicked} clientName={clientName} disabled={decision.isPending} />
+          onChange={setTicked} clientName={clientName} disabled={deciding} />
       )}
       {offlineAccessRequested && (
         <p className="body-caption text-[var(--color-text-secondary)]">
@@ -87,8 +95,8 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
       )}
       {failed && <OAuthRestartNotice />}
       <div className="flex justify-start gap-16">
-        <Button variant="primary" size="large" busy={decision.isPending} disabled={submittedScopes.length === 0} onClick={() => void decide(true)}>Allow</Button>
-        <Button size="large" disabled={decision.isPending} onClick={() => void decide(false)}>Deny</Button>
+        <Button variant="primary" size="large" busy={busy.held === "allow"} disabled={submittedScopes.length === 0 || deciding} onClick={() => void decide(true)}>Allow</Button>
+        <Button size="large" busy={busy.held === "deny"} disabled={deciding} onClick={() => void decide(false)}>Deny</Button>
       </div>
       <p className="body-caption text-[var(--color-text-tertiary)]">
         You can disconnect at any time in <Link href={SETTINGS_CONNECTED_APPS_HREF} target="_blank" rel="noopener" className="underline">Settings, Connected apps</Link>.

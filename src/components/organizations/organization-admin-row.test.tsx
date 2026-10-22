@@ -42,8 +42,8 @@ function text(node: ReactTestInstance): string {
 function button(label: string, root = tree.root) {
   return root.findAllByType("button").find((node) => (node.props["aria-label"] ?? text(node)) === label)!;
 }
-async function render(enabled: boolean | undefined, current = false) {
-  const node: ReactNode = <OrganizationAdminRow org={org} apiAccessEnabled={enabled} entering={false} current={current} onEnter={vi.fn()} />;
+async function render(enabled: boolean | undefined, current = false, enterDisabled = false) {
+  const node: ReactNode = <OrganizationAdminRow org={org} apiAccessEnabled={enabled} entering={false} enterDisabled={enterDisabled} current={current} onEnter={vi.fn()} />;
   await act(async () => { tree = create(node); });
 }
 async function click(label: string, root = tree.root) {
@@ -129,5 +129,12 @@ describe("open and current", () => {
     await render(true, true);
     expect(tree.root.findAllByType("button").some((node) => text(node) === "Open")).toBe(false);
     expect(text(tree.root)).toContain("Current");
+  });
+});
+
+describe("OrganizationAdminRow Open", () => {
+  it("is disabled while another organization is opening", async () => {
+    await render(true, false, true);
+    expect(button("Open").props.disabled).toBe(true);
   });
 });

@@ -100,3 +100,25 @@ it("tells the person to start again when the pick fails", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   await screen.findByText("Start again from the app.");
 });
+
+const continueButton = () => screen.getByRole("button", { name: "Continue" }) as HTMLButtonElement;
+
+it("stays busy with the choices disabled after the pick resolves and the page is leaving", async () => {
+  mocks.choices.mockReturnValue(data());
+  mocks.mutateAsync.mockResolvedValue("/oauth/consent?sig=next");
+  render(<OrganizationPicker />);
+  fireEvent.click(continueButton());
+  await waitFor(() => expect(mocks.assign).toHaveBeenCalled());
+  expect(continueButton().getAttribute("aria-busy")).toBe("true");
+  expect((screen.getByRole("radio", { name: /E2E Mafinga Biochar/ }) as HTMLInputElement).disabled).toBe(true);
+});
+
+it("clears busy when the pick fails", async () => {
+  mocks.choices.mockReturnValue(data());
+  mocks.mutateAsync.mockRejectedValue(new Error("no"));
+  render(<OrganizationPicker />);
+  fireEvent.click(continueButton());
+  await screen.findByText("Start again from the app.");
+  expect(continueButton().getAttribute("aria-busy")).toBeNull();
+  expect(continueButton().disabled).toBe(false);
+});
