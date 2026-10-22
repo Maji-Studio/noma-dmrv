@@ -7,8 +7,10 @@
  * from the server's per-batch lines (`ctx.emissionLinesByBatchId`).
  *
  * Every row is in exactly one state: Included, Blocked (the submission cannot
- * send it until something is fixed) or Sent earlier (an earlier Removal already
- * sent its production emissions). They read differently on purpose.
+ * send it until something is fixed), Sent earlier (an earlier Removal holds the
+ * batches' production emissions claim, so this production component is left
+ * out) or In another Removal (an entry held by another Removal, which may still
+ * be in progress, takes the component out). They read differently on purpose.
  */
 import {
   displayUnit,
@@ -26,7 +28,8 @@ import {
 } from "@/lib/certification/links";
 import { removalFindingFixLink } from "@/lib/certification/removal-finding-links";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
+import { SOURCE_IDS, type AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
+import { SOURCE_BUCKETS } from "@/lib/isometric/utils/aggregation";
 
 export const SENT_SOURCE = {
   automatic: "Automatic datapoints",
@@ -41,13 +44,19 @@ export const ESTIMATE_POINTER = "In the CO₂e estimate";
 const UNBINDABLE_REASON =
   "noma cannot submit this component. Review the Removal template.";
 
-export type ComponentState = "included" | "blocked" | "earlier";
+export type ComponentState = "included" | "blocked" | "earlier" | "elsewhere";
 
 export interface ComponentFix {
   label: string;
   href: string;
   /** The credit batch the fix is about, or null for a template-wide fix. */
   batchCode: string | null;
+}
+
+export interface ComponentBlocker {
+  message: string;
+  batchCodes: string[];
+  fixes: ComponentFix[];
 }
 
 export interface ComponentRow {
@@ -58,15 +67,13 @@ export interface ComponentRow {
   state: ComponentState;
   /** Where the figure comes from. Empty when the state already says all there is to say. */
   source: string;
-  /** The figure sent, a pointer or a reason it has none. Null leaves the cell empty. */
+  /** The figure sent, a pointer or a reason it has none. Null leaves the cell empty (or pending while the table loads). */
   figure: { text: string; quiet: boolean } | null;
   fileCount: number;
   /** Entries holding files, to read their names on demand. */
   fileEntryIds: string[];
-  /** Blocked only: what to do, and where. */
-  blocked: { message: string; fixes: ComponentFix[]; batchCodes: string[] } | null;
-  /** Sent earlier only: the Removals that sent it. */
-  earlier: { removals: Array<{ id: string; code: string | null }> } | null;
+  /** Blocked only: each distinct blocker, with its credit batches and its fix. */
+  blocked: { items: ComponentBlocker[] } | null;
 }
 
 export interface ComponentBatch {
@@ -83,8 +90,6 @@ export interface ComponentBatch {
 }
 
 export interface ComponentTable {
-  /** False when nothing is known about what is sent (no compiled review, none being prepared). */
-  available: boolean;
   /** The compiled review is still being prepared: figures and states are not final. */
   loading: boolean;
   batches: ComponentBatch[];
@@ -153,22 +158,68 @@ const LEDGER_INPUT_FOR_SOURCE: Partial<Record<AutomaticSourceId, string>> = {
 };
 
 function figureGap(
-  componentName: string,
   lines: readonly BatchEmissionLine[],
   ledgerInputs: ComponentTableInput["ledger"]["inputs"],
 ): string | null {
-  const sources = new Set(
-    lines.flatMap((line) => {
-      const source = line.contract?.automaticSource;
-      return source && LEDGER_INPUT_FOR_SOURCE[source] ? [LEDGER_INPUT_FOR_SOURCE[source]] : [];
-    }),
-  );
-  // A ledger input belongs to a component by the template source feeding it, or by the
-  // component's own name; the old ledger table keyed its rows the same way.
-  const gap = ledgerInputs.find(
-    (input) => input.missingReason && (sources.has(input.id) || input.component === componentName),
-  )?.missingReason;
-  return gap ?? null;
+  for (const line of lines) {
+    const source = line.contract?.automaticSource;
+    const ledgerId = source ? LEDGER_INPUT_FOR_SOURCE[source] : undefined;
+    if (!ledgerId) continue;
+    const gap = ledgerInputs.find((input) => input.id === ledgerId)?.missingReason;
+    if (gap) return gap;
+  }
+  return null;
+}
+
+const PRODUCTION_SOURCES: ReadonlySet<string> = new Set(
+  (Object.keys(SOURCE_IDS) as Array<keyof typeof SOURCE_IDS>)
+    .filter((key) => key in SOURCE_BUCKETS && SOURCE_BUCKETS[key as keyof typeof SOURCE_BUCKETS] === "production")
+    .map((key) => SOURCE_IDS[key]),
+);
+
+/**
+ * Why the submission leaves a component out. When every batch's production
+ * emissions are claimed by an earlier Removal, its production components are
+ * left out: those were sent earlier. Any other omission comes from an entry
+ * another Removal holds (possibly still in progress), so nothing was sent yet.
+ */
+function omissionState(
+  lines: readonly BatchEmissionLine[],
+  claims: ComponentTableInput["ledger"]["claims"],
+): "earlier" | "elsewhere" {
+  const claimedEarlier = claims.length > 0 && claims.every((claim) => claim.contribution === "delivery-only");
+  const production = lines.some((line) => {
+    const source = line.contract?.automaticSource;
+    return source !== undefined && PRODUCTION_SOURCES.has(source);
+  });
+  return claimedEarlier && production ? "earlier" : "elsewhere";
+}
+
+function blockedItems(
+  entries: Array<{ batch: MemberCreditBatch; line: BatchEmissionLine }>,
+  input: ComponentTableInput,
+  unbindable: boolean,
+): ComponentBlocker[] {
+  const byMessage = new Map<string, ComponentBlocker>();
+  for (const { batch, line } of entries) {
+    if (!line.blocker) continue;
+    const item = byMessage.get(line.blocker.message) ?? { message: line.blocker.message, batchCodes: [], fixes: [] };
+    if (!item.batchCodes.includes(batch.code)) item.batchCodes.push(batch.code);
+    const link = removalFindingFixLink(line.blocker, input.facilityId, [batch.id]);
+    if (link && !item.fixes.some((fix) => fix.href === link.href)) {
+      item.fixes.push({ label: link.label, href: link.href, batchCode: input.batches.length > 1 ? batch.code : null });
+    }
+    byMessage.set(line.blocker.message, item);
+  }
+  const items = [...byMessage.values()];
+  if (unbindable) {
+    items.push({
+      message: UNBINDABLE_REASON,
+      batchCodes: [],
+      fixes: [{ label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: removalTemplatesSettingsHref(input.facilityId), batchCode: null }],
+    });
+  }
+  return items;
 }
 
 /** One row per template component, in template order, for the whole Removal. */
@@ -180,16 +231,6 @@ export function componentRows(input: ComponentTableInput): ComponentRow[] {
     }
   }
   const omitted = new Set(input.review?.omittedComponentIds ?? []);
-  const earlierRemovals = [
-    ...new Map(
-      input.ledger.claims
-        .filter((claim) => claim.contribution === "delivery-only" && claim.claimingRemovalId)
-        .map((claim) => [
-          claim.claimingRemovalId!,
-          { id: claim.claimingRemovalId!, code: claim.claimingRemovalCode },
-        ]),
-    ).values(),
-  ];
 
   return [...byComponent.values()].map((entries) => {
     const lines = entries.map((entry) => entry.line);
@@ -208,46 +249,26 @@ export function componentRows(input: ComponentTableInput): ComponentRow[] {
 
     if (omitted.has(first.componentId)) {
       return {
-        ...base, state: "earlier" as const, source: "", figure: null, fileCount: 0,
-        fileEntryIds: [], blocked: null, earlier: { removals: earlierRemovals },
+        ...base, state: omissionState(lines, input.ledger.claims), source: "", figure: null, fileCount: 0,
+        fileEntryIds: [], blocked: null,
       };
     }
 
-    const blockedEntries = entries.filter((entry) => entry.line.blocker);
     const unbindable = input.unbindableComponentIds?.has(first.componentId) ?? false;
-    if (blockedEntries.length > 0 || unbindable) {
-      const message = blockedEntries[0]?.line.blocker?.message ?? UNBINDABLE_REASON;
-      const fixes: ComponentFix[] = blockedEntries.flatMap(({ batch, line }) => {
-        const link = removalFindingFixLink(line.blocker!, input.facilityId, [batch.id]);
-        return link
-          ? [{ label: link.label, href: link.href, batchCode: input.batches.length > 1 ? batch.code : null }]
-          : [];
-      });
-      if (blockedEntries.length === 0) {
-        fixes.push({
-          label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL,
-          href: removalTemplatesSettingsHref(input.facilityId),
-          batchCode: null,
-        });
-      }
+    if (unbindable || entries.some((entry) => entry.line.blocker)) {
       return {
         ...base, state: "blocked" as const, source: parts.join(", "), figure: null, fileCount: 0,
-        fileEntryIds: [],
-        blocked: {
-          message,
-          fixes,
-          batchCodes: blockedEntries.length > 0 ? [...new Set(blockedEntries.map((entry) => entry.batch.code))] : [],
-        },
-        earlier: null,
+        fileEntryIds: [], blocked: { items: blockedItems(entries, input, unbindable) },
       };
     }
 
     const files = filesOf(lines);
     const included = { ...base, state: "included" as const, fileCount: files.count,
-      fileEntryIds: files.entryIds, blocked: null, earlier: null };
+      fileEntryIds: files.entryIds, blocked: null };
 
     if (input.isLoading) {
-      return { ...included, source: parts.join(", "), figure: { text: MISSING_VALUE.notYetComputed, quiet: true } };
+      // Figures are not known yet: the cell stays pending, never a settled "not computed".
+      return { ...included, source: parts.join(", "), figure: null };
     }
     if (lines.some((line) => line.contract?.automaticSource === "sequestration")) {
       // Compiled from Samples and applications, inside the estimate above the table.
@@ -262,7 +283,7 @@ export function componentRows(input: ComponentTableInput): ComponentRow[] {
     const figures = shown
       .map(figureText)
       .filter((value): value is string => value !== null);
-    const gap = figures.length === 0 ? figureGap(first.displayName, lines, input.ledger.inputs) : null;
+    const gap = figures.length === 0 ? figureGap(lines, input.ledger.inputs) : null;
     return {
       ...included,
       source: parts.length ? parts.join(", ") : fixed ? SENT_SOURCE.template : SENT_SOURCE.none,
@@ -286,6 +307,11 @@ export function groupRows(rows: readonly ComponentRow[]) {
   return [...groups.values()];
 }
 
+/** What `compileRemovalSubmission` returns when the build fails: a review with nothing in it. */
+function isEmptyReview(review: NonNullable<RemovalCompilationView["review"]>): boolean {
+  return review.memberCreditBatches?.length === 0 && review.bindings.length === 0;
+}
+
 /** The table's batches, each with its production claim, and its rows. Rows wait for the compiled review. */
 export function buildComponentTable(input: ComponentTableInput): ComponentTable {
   const claimByBatch = new Map(input.ledger.claims.map((claim) => [claim.creditBatchId, claim]));
@@ -304,7 +330,9 @@ export function buildComponentTable(input: ComponentTableInput): ComponentTable 
           : { kind: "earlier", removalId: claim.claimingRemovalId, removalCode: claim.claimingRemovalCode },
     };
   });
-  // Without a compiled review nothing is known about what is sent.
-  const rows = input.review || input.isLoading ? componentRows(input) : [];
-  return { available: Boolean(input.review) || input.isLoading, loading: input.isLoading, batches, rows, groups: groupRows(rows) };
+  // Without a compiled review, or after a failed build (which returns a review
+  // with no members and no bindings), nothing is known about what is sent.
+  const compiled = input.review && !isEmptyReview(input.review) ? input.review : null;
+  const rows = compiled || input.isLoading ? componentRows({ ...input, review: compiled }) : [];
+  return { loading: input.isLoading, batches, rows, groups: groupRows(rows) };
 }

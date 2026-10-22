@@ -21,7 +21,7 @@ import type { DurabilityOption } from "@/schemas/credit-batches";
 import { allowsRemovalSubmission } from "./resume-state";
 
 /** Digits used for every dry-mass figure on this screen. */
-const TONNE_DIGITS = 1;
+export const TONNE_DIGITS = 1;
 
 export interface SubmissionFactsInput {
   ctx: RemovalCertifyContext;

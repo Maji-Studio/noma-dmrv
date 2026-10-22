@@ -9,7 +9,7 @@ import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { SubmissionSummary } from "./submission-summary";
 import type { ComponentTable } from "./component-table-model";
 
-const NO_ROWS: ComponentTable = { available: true, loading: false, batches: [], rows: [], groups: [] };
+const NO_ROWS: ComponentTable = { loading: false, batches: [], rows: [], groups: [] };
 
 vi.mock("next/link", () => ({
   default: ({ children, ...props }: React.ComponentProps<"a">) => (
@@ -88,6 +88,7 @@ function render(overrides: {
   facilityName?: string;
   advisories?: string[];
   transportVehicleAdvisories?: string[];
+  loading?: boolean;
 } = {}) {
   return renderToStaticMarkup(
     <SubmissionSummary
@@ -95,7 +96,7 @@ function render(overrides: {
       facilityId="facility-1"
       facilityName={overrides.facilityName ?? "Tanzania facility"}
       compilation={overrides.compilation ?? COMPILATION}
-      isCompilationLoading={false}
+      isCompilationLoading={overrides.loading ?? false}
       compilationError={null}
       checks={overrides.checks ?? PASSING_CHECKS}
       readiness={{ state: "ready", reasons: [], advisories: overrides.advisories ?? [], transportVehicleAdvisories: overrides.transportVehicleAdvisories ?? [] }}
@@ -199,6 +200,12 @@ describe("SubmissionSummary", () => {
   it("gives the estimate its figure, and Not yet computed until the review has one", () => {
     expect(render({ compilation: { ...COMPILATION, estimatedStoredCo2eTonnes: 12.34 } as unknown as RemovalCompilationView })).toContain("≈ 12.34 t CO₂e");
     expect(render()).toContain("Not yet computed");
+  });
+
+  it("shows the estimate and reporting window as pending while the compile loads, never as not yet computed", () => {
+    const html = render({ loading: true });
+    expect(html).not.toContain("Not yet computed");
+    expect(html).toContain("animate-skeleton");
   });
 
   it("counts the files to upload, and says None when there are none", () => {

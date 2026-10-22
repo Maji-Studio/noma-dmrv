@@ -5,7 +5,6 @@
  */
 "use client";
 
-import Link from "next/link";
 import { Accordion } from "@/components/ui/accordion";
 import type { RemovalLedgerPreview } from "@/fn/certification/removal-ledger-preview";
 import {
@@ -13,27 +12,12 @@ import {
   traceabilityApplicationHref,
 } from "@/lib/certification/links";
 import { countLabel } from "./submission-facts";
-import { LinkLabel } from "./link-label";
+import { NewTabLink } from "./link-label";
 
 const ACCORDION_ITEM =
   "rounded-none border-[var(--color-border-secondary)] bg-[var(--color-background-white)]";
 const ACCORDION_TRIGGER =
   "min-h-44 bg-[var(--color-background-white)] px-16 py-10 hover:bg-[var(--color-surface-light)]";
-
-function RecordLink({ href, children, mono = true }: { href: string; children: string; mono?: boolean }) {
-  return (
-    <Link
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={`inline-flex min-h-44 items-center underline-offset-4 hover:text-[var(--color-interaction)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] md:min-h-0 ${mono ? "font-mono" : ""}`}
-    >
-      <span>
-        <LinkLabel>{children}</LinkLabel>
-      </span>
-    </Link>
-  );
-}
 
 interface SourceRecordsProps {
   ledger: Pick<RemovalLedgerPreview, "productionRuns" | "applications" | "creditBatches">;
@@ -67,17 +51,17 @@ export function SourceRecords({ ledger, facilityId, storageSitesHref }: SourceRe
             {storageSitesHref && (
               <li className="flex items-baseline justify-between gap-12">
                 <span>Storage sites</span>
-                <RecordLink href={storageSitesHref} mono={false}>
+                <NewTabLink href={storageSitesHref} tall>
                   View in Isometric
-                </RecordLink>
+                </NewTabLink>
               </li>
             )}
             {productionRuns.map((run) => (
               <li key={run.id} className="flex items-baseline justify-between gap-12">
                 <span>Production run</span>
-                <RecordLink href={productionRunDeepLinkHref(run.id, facilityId)}>
+                <NewTabLink tall mono href={productionRunDeepLinkHref(run.id, facilityId)}>
                   {run.code ?? "Open run"}
-                </RecordLink>
+                </NewTabLink>
               </li>
             ))}
             {applications.map((application) => (
@@ -87,14 +71,14 @@ export function SourceRecords({ ledger, facilityId, storageSitesHref }: SourceRe
                   {application.creditBatchIds.length === 0
                     ? "No credit batch"
                     : application.creditBatchIds.map((creditBatchId) => (
-                        <RecordLink
+                        <NewTabLink tall mono
                           key={creditBatchId}
                           href={traceabilityApplicationHref(creditBatchId, application.id)}
                         >
                           {application.creditBatchIds.length > 1
                             ? `${application.code} · ${creditBatchCodeById.get(creditBatchId) ?? creditBatchId}`
                             : application.code}
-                        </RecordLink>
+                        </NewTabLink>
                       ))}
                 </span>
               </li>

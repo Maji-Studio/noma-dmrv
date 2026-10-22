@@ -38,7 +38,7 @@ function binding(componentId: string, wireMagnitude: number, wireUnit: string, k
   return { componentId, componentBlueprintKey: "b", inputKey: "i", binding: kind, wireMagnitude, wireUnit };
 }
 function review(bindings: unknown[], omittedComponentIds: string[] = []) {
-  return { bindings, omittedComponentIds } as never;
+  return { bindings, omittedComponentIds, memberCreditBatches: [{ id: "batch-a", code: "CB-26-001" }] } as never;
 }
 const HERE = { creditBatchId: "batch-a", creditBatchCode: "CB-26-001", claimingRemovalId: null, claimingRemovalCode: null, contribution: "production-and-delivery" } as const;
 const EARLIER = { creditBatchId: "batch-b", creditBatchCode: "CB-26-002", claimingRemovalId: "rm-3", claimingRemovalCode: "RM-26-003", contribution: "delivery-only" } as const;
@@ -115,19 +115,18 @@ describe("componentRows", () => {
     expect(rows[0].fileCount).toBe(3);
   });
 
-  it("shows a ledger input's known reason for a component with manual entries, matched by name", () => {
+  it("leaves the figure out for a component with manual entries and no source-mapped ledger reason", () => {
     const [row] = componentRows(input([[line({
       componentId: "lab", displayName: "Samples to lab", state: "filled",
       entries: [entry({ id: "s1", documentCount: 1 })],
     })]], {
       review: review([]),
       ledger: { claims: [HERE], inputs: [
-        { id: "other", component: "Another component", input: "Diesel", magnitude: null, unit: "L", missingReason: "No reading" },
         { id: "in-lab", component: "Samples to lab", input: "Mass and distance", magnitude: null, unit: "t·km", missingReason: "Recorded legs cannot be summed" },
       ] },
     }));
     expect(row.source).toBe("1 manual entry");
-    expect(row.figure).toEqual({ text: "Recorded legs cannot be summed", quiet: true });
+    expect(row.figure).toBeNull();
   });
 
   describe("blocked, sent earlier and included with no figure read differently", () => {
@@ -140,12 +139,25 @@ describe("componentRows", () => {
       const lab = rows.find((row) => row.componentId === "lab")!;
       expect(lab.state).toBe("blocked");
       expect(lab.figure).toBeNull();
-      expect(lab.blocked?.message).toBe(BLOCK_MESSAGE);
-      expect(lab.blocked?.batchCodes).toEqual(["CB-26-002"]);
-      expect(lab.blocked?.fixes).toEqual([
-        { label: "Review emissions", href: expect.stringContaining("batch-b"), batchCode: "CB-26-002" },
+      expect(lab.blocked?.items).toEqual([{
+        message: BLOCK_MESSAGE,
+        batchCodes: ["CB-26-002"],
+        fixes: [{ label: "Review emissions", href: expect.stringContaining("batch-b"), batchCode: "CB-26-002" }],
+      }]);
+    });
+
+    it("keeps every distinct blocker of one component, each with its own batch and fix", () => {
+      const blocker = (message: string, fixTarget: string) => ({ code: "lineNeedsReview", message, fixTarget, lineRef: { componentId: "lab", displayName: "Lab electricity" } });
+      const rows = componentRows(input([
+        [line({ componentId: "lab", displayName: "Lab electricity", state: "missingEvidence", blocker: blocker(BLOCK_MESSAGE, "emissions") })],
+        [line({ componentId: "lab", displayName: "Lab electricity", state: "needsReview", blocker: blocker("Enter the values again for the current component.", "emissions") })],
+      ], { review: review([]) }));
+      expect(rows).toHaveLength(1);
+      expect(rows[0].blocked?.items.map((item) => [item.message, item.batchCodes])).toEqual([
+        [BLOCK_MESSAGE, ["CB-26-001"]],
+        ["Enter the values again for the current component.", ["CB-26-002"]],
       ]);
-      expect(lab.earlier).toBeNull();
+      expect(rows[0].blocked?.items.every((item) => item.fixes.length === 1)).toBe(true);
     });
 
     it("an unbindable component is blocked and links to the Removal templates", () => {
@@ -153,19 +165,33 @@ describe("componentRows", () => {
         review: review([]), unbindableComponentIds: new Set(["u"]),
       }));
       expect(row.state).toBe("blocked");
-      expect(row.blocked?.message).toContain("noma cannot submit");
-      expect(row.blocked?.fixes[0].href).toContain("/settings/removal-templates");
+      expect(row.blocked?.items[0].message).toContain("noma cannot submit");
+      expect(row.blocked?.items[0].fixes[0].href).toContain("/settings/removal-templates");
     });
 
-    it("a component an earlier Removal sent is its own state, with that Removal, and no figure", () => {
-      const [row] = componentRows(input([[line({ componentId: "prod", state: "filled" })]], {
-        review: review([binding("prod", 5, "L")], ["prod"]),
+    it("a production component left out because every batch's production was claimed earlier reads Sent earlier", () => {
+      const [row] = componentRows(input([[line({ componentId: "prod", state: "filled", contract: { automaticSource: "run-electricity" } })]], {
+        review: review([binding("prod", 5, "kWh")], ["prod"]),
         ledger: { claims: [EARLIER], inputs: [] },
       }));
       expect(row.state).toBe("earlier");
-      expect(row.earlier?.removals).toEqual([{ id: "rm-3", code: "RM-26-003" }]);
       expect(row.figure).toBeNull();
       expect(row.blocked).toBeNull();
+    });
+
+    it("a component left out for any other reason reads In another Removal, never Sent earlier", () => {
+      // An entry held by another Removal (possibly still in progress) takes a single-entry component out.
+      const held = componentRows(input([[line({ componentId: "single", state: "filled", entries: [entry({ id: "x" })] })]], {
+        review: review([], ["single"]),
+        ledger: { claims: [HERE], inputs: [] },
+      }));
+      expect(held[0].state).toBe("elsewhere");
+      // A manual production-section component stays in even when the production claim is earlier: not "sent earlier".
+      const manual = componentRows(input([[line({ componentId: "manual-prod", state: "filled", entries: [entry({ id: "y" })] })]], {
+        review: review([], ["manual-prod"]),
+        ledger: { claims: [EARLIER], inputs: [] },
+      }));
+      expect(manual[0].state).toBe("elsewhere");
     });
 
     it("an included component with no figure leaves the figure out", () => {
@@ -195,18 +221,23 @@ describe("buildComponentTable", () => {
     ]);
   });
 
-  it("while the review compiles, shows every figure as not yet computed and no final state", () => {
+  it("while the review compiles, leaves every figure pending, not a settled token", () => {
     const table = buildComponentTable(input([LINES], { isLoading: true }));
     expect(table.loading).toBe(true);
-    expect(table.rows.map((row) => row.figure)).toEqual(Array(3).fill({ text: "Not yet computed", quiet: true }));
+    expect(table.rows.map((row) => row.figure)).toEqual([null, null, null]);
   });
 
-  it("is unavailable without a compiled review, with nothing being prepared", () => {
-    const table = buildComponentTable(input([LINES]));
-    expect(table.available).toBe(false);
+  it("treats the empty review of a failed build like no review: no rows", () => {
+    const empty = { bindings: [], memberCreditBatches: [], omittedComponentIds: [] } as never;
+    const table = buildComponentTable(input([LINES], { review: empty }));
     expect(table.rows).toEqual([]);
-    expect(buildComponentTable(input([LINES], { isLoading: true })).available).toBe(true);
-    expect(buildComponentTable(input([LINES], { review: REVIEW })).available).toBe(true);
+    expect(table.batches).toHaveLength(1);
+  });
+
+  it("lists no rows without a compiled review, but still names the batches", () => {
+    const table = buildComponentTable(input([LINES]));
+    expect(table.rows).toEqual([]);
+    expect(table.batches).toHaveLength(1);
   });
 });
 
@@ -214,9 +245,9 @@ describe("ComponentTable", () => {
   const rows = (ledgerClaims = [HERE, EARLIER]) => {
     const lines = [
       [line({ componentId: "auto", displayName: "Metered electricity", state: "filled", automaticFigure: { magnitude: "72", unit: "kWh" } }),
-        line({ componentId: "prod", displayName: "Kiln construction", state: "filled" })],
+        line({ componentId: "prod", displayName: "Kiln construction", state: "filled", contract: { automaticSource: "run-electricity" } })],
       [line({ componentId: "auto", displayName: "Metered electricity", state: "filled" }),
-        line({ componentId: "prod", displayName: "Kiln construction", state: "filled" }),
+        line({ componentId: "prod", displayName: "Kiln construction", state: "filled", contract: { automaticSource: "run-electricity" } }),
         line({ componentId: "lab", displayName: "Lab electricity", state: "missingEvidence",
           blocker: { code: "entryMissingEvidence", message: BLOCK_MESSAGE, fixTarget: "emissions", lineRef: { componentId: "lab", displayName: "Lab electricity" } } })],
     ];
@@ -232,11 +263,11 @@ describe("ComponentTable", () => {
     const region = screen.getByRole("region", { name: "Components" });
     expect(within(region).getAllByText("CB-26-001")).toHaveLength(1);
     expect(within(region).getByText("Production emissions in this Removal")).toBeTruthy();
-    // The header says where batch CB-26-002's production emissions went; the row says which component.
+    // Only the header links the Removal that holds the production claim.
     const links = within(region).getAllByRole("link", { name: /RM-26-003/ });
-    expect(links).toHaveLength(2);
+    expect(links).toHaveLength(1);
     expect(links[0].getAttribute("href")).toContain("removal=rm-3");
-    expect(within(region).getByText("12.4 t")).toBeTruthy();
+    expect(within(region).getByText("12.4 t dry")).toBeTruthy();
   });
 
   it("reads a blocked row as a state word, what to do and a link, on a white row", () => {
@@ -249,12 +280,25 @@ describe("ComponentTable", () => {
     expect(within(row).queryByText("Not applicable")).toBeNull();
   });
 
-  it("reads a component an earlier Removal sent as Sent earlier with a link, never as not applicable", () => {
-    render(<ComponentTable table={rows()} facilityId="facility-1" />);
+  it("reads a component left out for an earlier production claim as Sent earlier, with no link, never as not applicable", () => {
+    render(<ComponentTable table={rows([EARLIER, EARLIER])} facilityId="facility-1" />);
     const row = screen.getByText("Kiln construction").closest("li")!;
     expect(within(row).getByText("Sent earlier")).toBeTruthy();
-    expect(within(row).getByRole("link", { name: /RM-26-003/ })).toBeTruthy();
+    expect(within(row).queryByRole("link")).toBeNull();
     expect(within(row).queryByText(/Not applicable|Not available|Blocked/)).toBeNull();
+  });
+
+  it("reads a component left out for another reason as In another Removal", () => {
+    // One batch still produces in this Removal, so the omission is not an earlier production claim.
+    render(<ComponentTable table={rows([HERE, EARLIER])} facilityId="facility-1" />);
+    const row = screen.getByText("Kiln construction").closest("li")!;
+    expect(within(row).getByText("In another Removal")).toBeTruthy();
+    expect(within(row).queryByText("Sent earlier")).toBeNull();
+  });
+
+  it("shows each batch's dry tonnes only when there are two or more batches", () => {
+    render(<ComponentTable table={buildComponentTable(input([LINES], { review: REVIEW }))} facilityId="facility-1" />);
+    expect(screen.queryByText(/ t dry/)).toBeNull();
   });
 
   it("hides the Included state on a phone, where the row already reads as fine", () => {
@@ -263,16 +307,17 @@ describe("ComponentTable", () => {
     expect(within(row).getByText("Included").parentElement!.className).toContain("hidden md:block");
   });
 
-  it("states no Included while the review compiles", () => {
+  it("states no Included and no settled token while the review compiles", () => {
     const table = buildComponentTable(input([LINES], { isLoading: true }));
     render(<ComponentTable table={table} facilityId="facility-1" />);
     expect(screen.queryByText("Included")).toBeNull();
-    expect(screen.getAllByText("Not yet computed")).toHaveLength(3);
+    expect(screen.queryByText("Not yet computed")).toBeNull();
   });
 
-  it("renders no table at all after a failed compile, which explains itself in its own notice", () => {
-    const { container } = render(<ComponentTable table={buildComponentTable(input([LINES]))} facilityId="facility-1" />);
-    expect(container.textContent).toBe("");
+  it("still names the credit batches after a failed compile, with no rows", () => {
+    render(<ComponentTable table={buildComponentTable(input([LINES]))} facilityId="facility-1" />);
+    expect(screen.getByText("CB-26-001")).toBeTruthy();
+    expect(screen.queryByRole("list", { name: "Components" })).toBeNull();
   });
 
   it("offers the file names behind a toggletip", () => {
@@ -306,7 +351,7 @@ describe("BlockedComponentsNotice", () => {
   it("names the blocked component with its credit batch and keeps blockers the table cannot show", () => {
     setup();
     const notice = screen.getByRole("alert");
-    expect(within(notice).getByRole("button", { name: "Lab electricity" })).toBeTruthy();
+    expect(within(notice).getByRole("link", { name: "Lab electricity" })).toBeTruthy();
     expect(notice.textContent).toContain("on CB-26-001");
     expect(notice.textContent).toContain("Delivery DL-1 has no proof of delivery.");
     // What to do is said once, in the row.
@@ -315,10 +360,37 @@ describe("BlockedComponentsNotice", () => {
 
   it("scrolls the table to the row and moves focus to it", () => {
     setup();
-    fireEvent.click(screen.getByRole("button", { name: "Lab electricity" }));
+    fireEvent.click(screen.getByRole("link", { name: "Lab electricity" }));
     const row = screen.getByText(BLOCK_MESSAGE).closest("li")!;
     expect(document.activeElement).toBe(row);
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("keeps the compile blocker when the row shows a different message", () => {
+    const lines = [[line({ componentId: "lab", displayName: "Lab electricity", state: "missingEvidence",
+      blocker: { code: "entryMissingEvidence", message: BLOCK_MESSAGE, fixTarget: "emissions", lineRef: { componentId: "lab", displayName: "Lab electricity" } } })]];
+    const table = buildComponentTable(input(lines, { review: review([]) }));
+    const blockers = [{ code: "lineNeedsReview", message: "Enter the values again for the current component.", fixTarget: null, lineRef: { componentId: "lab", displayName: "Lab electricity" } }] as never;
+    render(<BlockedComponentsNotice blockers={blockers} blockedRows={table.rows} facilityId="facility-1" memberBatchIds={["batch-a"]} />);
+    expect(screen.getByRole("alert").textContent).toContain("Enter the values again for the current component.");
+  });
+
+  it("drops the compiler's unbindable sentence only when every component it names is a blocked row", () => {
+    const table = buildComponentTable(input([[line({ componentId: "u", displayName: "Unbindable", state: "filled" })]], {
+      review: review([]), unbindableComponentIds: new Set(["u"]),
+    }));
+    const sentence = "These inputs cannot be submitted:\nUnbindable";
+    const blockers = [{ code: "legacy", message: sentence, fixTarget: null }] as never;
+    const { unmount } = render(<BlockedComponentsNotice blockers={blockers} blockedRows={table.rows} facilityId="facility-1" memberBatchIds={[]} unbindableText={sentence} unbindableComponentIds={["u"]} />);
+    expect(screen.getByRole("alert").textContent).not.toContain("These inputs cannot be submitted");
+    unmount();
+    render(<BlockedComponentsNotice blockers={blockers} blockedRows={table.rows} facilityId="facility-1" memberBatchIds={[]} unbindableText={sentence} unbindableComponentIds={["u", "other"]} />);
+    expect(screen.getByRole("alert").textContent).toContain("These inputs cannot be submitted");
+  });
+
+  it("links to the row as an anchor", () => {
+    setup();
+    expect(screen.getByRole("link", { name: "Lab electricity" }).getAttribute("href")).toBe("#submit-component-lab");
   });
 
   it("does nothing for a row that is not there", () => {

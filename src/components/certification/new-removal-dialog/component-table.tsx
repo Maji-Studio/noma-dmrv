@@ -11,29 +11,30 @@
 "use client";
 
 import { Fragment } from "react";
-import Link from "next/link";
 import {
   PaperclipIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { InfoHint } from "@/components/ui/tooltip";
-import { LinkLabel } from "./link-label";
+import { NewTabLink } from "./link-label";
 import { ENTRY_ENTITY_TYPE } from "@/components/emissions/emission-entry-files";
 import { useDocumentsForEntity } from "@/hooks/use-documents";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { certificationRemovalsHref } from "@/lib/certification/links";
 import { pluralize } from "@/lib/copy-utils";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
+import { Skeleton } from "@/components/ui/loading-skeleton";
+import { TONNE_DIGITS } from "./submission-facts";
 import { cn } from "@/lib/utils";
 import type { ComponentRow, ComponentTable as ComponentTableModel } from "./component-table-model";
 
 const ICON_SIZE = 14;
-const TONNE_DIGITS = 1;
 
 export const STATE_WORD = {
   included: "Included",
   blocked: "Blocked",
   earlier: "Sent earlier",
+  elsewhere: "In another Removal",
 } as const;
 
 /** The row's id, so the blocker Notice can scroll to it and move focus there. */
@@ -53,33 +54,6 @@ export function jumpToComponentRow(componentId: string): void {
 // Phone: name and figure, then source and files, then the state. Desktop: four columns.
 const ROW_GRID =
   "grid grid-cols-[minmax(0,1fr)_auto] gap-x-12 gap-y-4 md:grid-cols-[minmax(0,1fr)_144px_minmax(0,200px)_minmax(0,220px)] md:items-start";
-
-function NewTabLink({
-  href,
-  children,
-  className,
-  mono,
-}: {
-  href: string;
-  children: string;
-  className?: string;
-  mono?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={cn(
-        "text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]",
-        mono && "font-mono",
-        className,
-      )}
-    >
-      <LinkLabel>{children}</LinkLabel>
-    </Link>
-  );
-}
 
 function EntryFileNames({ entryId }: { entryId: string }) {
   const { data } = useDocumentsForEntity(ENTRY_ENTITY_TYPE, entryId);
@@ -111,53 +85,45 @@ function FilesText({ row }: { row: ComponentRow }) {
   );
 }
 
-/** The state of one row: what to do (blocked), where it went (sent earlier), or a quiet Included. */
-function StateCell({ row, facilityId }: { row: ComponentRow; facilityId: string }) {
+/** The state of one row: what to do (blocked), a plain fact (left out), or a quiet Included. */
+function StateCell({ row }: { row: ComponentRow }) {
   if (row.state === "blocked" && row.blocked) {
     return (
-      <span className="flex flex-col gap-2">
+      <span className="flex flex-col gap-8">
         <span className="inline-flex items-center gap-4 body-small font-medium text-[var(--st-bad)]">
           <WarningIcon size={ICON_SIZE} weight="fill" aria-hidden />
           {STATE_WORD.blocked}
         </span>
-        <span className="body-caption text-[var(--color-text-primary)]">{row.blocked.message}</span>
-        {row.blocked.fixes.map((fix) => (
-          <Link
-            key={`${fix.href}:${fix.batchCode ?? ""}`}
-            href={fix.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex min-h-44 items-center body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline md:min-h-0"
-          >
-            <span>
-              <LinkLabel>{fix.batchCode ? `${fix.label} on ${fix.batchCode}` : fix.label}</LinkLabel>
+        {row.blocked.items.map((item) => (
+          <span key={item.message} className="flex flex-col gap-2">
+            <span className="body-caption text-[var(--color-text-primary)]">
+              {item.message}
+              {item.batchCodes.length > 0 && row.blocked!.items.length > 1 && (
+                <span className="font-mono text-[var(--color-text-tertiary)]"> ({item.batchCodes.join(", ")})</span>
+              )}
             </span>
-          </Link>
+            {item.fixes.map((fix) => (
+              <NewTabLink
+                key={`${fix.href}:${fix.batchCode ?? ""}`}
+                href={fix.href}
+                tall
+                className="body-caption font-medium text-[var(--color-interaction)] underline-offset-2"
+              >
+                {fix.batchCode ? `${fix.label} on ${fix.batchCode}` : fix.label}
+              </NewTabLink>
+            ))}
+          </span>
         ))}
       </span>
     );
   }
-  if (row.state === "earlier" && row.earlier) {
-    return (
-      <span className="flex flex-col gap-2 body-small text-[var(--color-text-secondary)]">
-        <span>{STATE_WORD.earlier}</span>
-        {row.earlier.removals.map((removal) => (
-          <NewTabLink
-            key={removal.id}
-            href={certificationRemovalsHref({ facility: facilityId, removal: removal.id })}
-            mono
-            className="inline-flex min-h-44 items-center body-caption text-[var(--color-text-secondary)] md:min-h-0"
-          >
-            {removal.code ?? "Earlier Removal"}
-          </NewTabLink>
-        ))}
-      </span>
-    );
+  if (row.state === "earlier" || row.state === "elsewhere") {
+    return <span className="body-small text-[var(--color-text-secondary)]">{STATE_WORD[row.state]}</span>;
   }
   return <span className="body-small text-[var(--color-text-tertiary)]">{STATE_WORD.included}</span>;
 }
 
-function Row({ row, facilityId, loading }: { row: ComponentRow; facilityId: string; loading: boolean }) {
+function Row({ row, loading }: { row: ComponentRow; loading: boolean }) {
   return (
     <li
       id={componentRowDomId(row.componentId)}
@@ -168,7 +134,8 @@ function Row({ row, facilityId, loading }: { row: ComponentRow; facilityId: stri
       )}
     >
       <span className="body-small text-[var(--color-text-primary)]">{row.name}</span>
-      <span className="text-right md:text-left">
+      <div className="text-right md:text-left">
+        {loading && row.state === "included" && <Skeleton className="ml-auto h-16 w-64 md:ml-0" />}
         {row.figure && (
           <span
             className={cn(
@@ -182,7 +149,7 @@ function Row({ row, facilityId, loading }: { row: ComponentRow; facilityId: stri
             {row.figure.text}
           </span>
         )}
-      </span>
+      </div>
       {(row.source || row.fileCount > 0) && (
         <span className="col-span-2 flex flex-wrap items-center gap-x-8 gap-y-2 body-small text-[var(--color-text-secondary)] md:col-span-1">
           {row.source}
@@ -196,7 +163,7 @@ function Row({ row, facilityId, loading }: { row: ComponentRow; facilityId: stri
         )}
       >
         {/* "Included" is a claim the compile has not made yet. */}
-        {!(loading && row.state === "included") && <StateCell row={row} facilityId={facilityId} />}
+        {!(loading && row.state === "included") && <StateCell row={row} />}
       </span>
     </li>
   );
@@ -209,8 +176,7 @@ interface ComponentTableProps {
 
 export function ComponentTable({ table, facilityId }: ComponentTableProps) {
   const { batches, groups, rows } = table;
-  // A failed compile says why in its own notice: no table to read.
-  if (!table.available || batches.length === 0) return null;
+  if (batches.length === 0) return null;
   return (
     <section className="flex flex-col" aria-label="Components">
       <div className="flex flex-col bg-[var(--paper)] [border:var(--panel-border)]">
@@ -220,16 +186,19 @@ export function ComponentTable({ table, facilityId }: ComponentTableProps) {
               <NewTabLink
                 href={creditBatchDeepLinkHref(batch.id, facilityId)}
                 mono
-                className="inline-flex min-h-44 items-center font-medium md:min-h-0"
+                tall
+                className="font-medium"
               >
                 {batch.code}
               </NewTabLink>
               <span className="text-[var(--color-text-secondary)]">
                 {formatDateRange(batch.startDate, batch.endDate)}
               </span>
-              <span className="font-mono tabular-nums text-[var(--color-text-secondary)]">
-                {formatTonnes(batch.dryTons, { digits: TONNE_DIGITS })}
-              </span>
+              {batches.length > 1 && (
+                <span className="font-mono tabular-nums text-[var(--color-text-secondary)]">
+                  {formatTonnes(batch.dryTons, { digits: TONNE_DIGITS })} dry
+                </span>
+              )}
               {batch.claim?.kind === "here" && (
                 <span className="body-caption text-[var(--color-text-tertiary)]">
                   Production emissions in this Removal
@@ -242,7 +211,8 @@ export function ComponentTable({ table, facilityId }: ComponentTableProps) {
                     <NewTabLink
                       href={certificationRemovalsHref({ facility: facilityId, removal: batch.claim.removalId })}
                       mono
-                      className="inline-flex min-h-44 items-center text-[var(--color-text-tertiary)] md:min-h-0"
+                      tall
+                      className="text-[var(--color-text-tertiary)]"
                     >
                       {batch.claim.removalCode ?? "an earlier Removal"}
                     </NewTabLink>
@@ -275,7 +245,7 @@ export function ComponentTable({ table, facilityId }: ComponentTableProps) {
                     {group.label}
                   </li>
                   {group.rows.map((row) => (
-                    <Row key={row.componentId} row={row} facilityId={facilityId} loading={table.loading} />
+                    <Row key={row.componentId} row={row} loading={table.loading} />
                   ))}
                 </Fragment>
               ))}

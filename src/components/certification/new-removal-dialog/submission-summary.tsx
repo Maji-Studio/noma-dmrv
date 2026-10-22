@@ -18,11 +18,12 @@ import {
 import { isometricRegistry } from "@/lib/isometric/links";
 import { DetailField } from "@/components/ui/detail-panel";
 import { EnvBanner } from "../env-banner";
-import { LinkLabel } from "./link-label";
+import { NewTabLink } from "./link-label";
 import { CompilationWarnings, RemovalAdvisoryList } from "./compilation-notices";
 import { BlockedComponentsNotice } from "./blocked-components-notice";
 import type { ComponentTable } from "./component-table-model";
 import { formatTonnes } from "@/lib/format-utils";
+import { formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import {
   buildSubmissionFacts,
   countLabel,
@@ -69,28 +70,6 @@ function StateIcon({ state }: { state: SubmitState }) {
       aria-hidden
       className="shrink-0 text-[var(--st-ok)]"
     />
-  );
-}
-
-function RegistryFactLink({
-  href,
-  label,
-  ariaLabel,
-}: {
-  href: string;
-  label: string;
-  ariaLabel: string;
-}) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={ariaLabel}
-      className="text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-    >
-      <LinkLabel>{label}</LinkLabel>
-    </a>
   );
 }
 
@@ -143,6 +122,12 @@ export function SubmissionSummary({
         blockedRows={facts.state === "loading" ? [] : table.rows.filter((row) => row.state === "blocked")}
         facilityId={facilityId}
         memberBatchIds={memberBatchIds}
+        unbindableText={
+          factsInput.ctx.unbindableTemplateInputs?.length
+            ? formatUnbindableTemplateInputsText(factsInput.ctx.unbindableTemplateInputs)
+            : null
+        }
+        unbindableComponentIds={(factsInput.ctx.unbindableTemplateInputs ?? []).map((input) => input.componentId)}
       />
 
       {facts.checksAttention > 0 && (
@@ -158,12 +143,14 @@ export function SubmissionSummary({
             estimate == null ? null : `≈ ${formatTonnes(estimate, { unit: TOTAL_UNIT })}`
           }
           emptySituation="notYetComputed"
+          pending={factsInput.isCompilationLoading}
         />
         <DetailField label="Biochar dry mass" value={facts.dryTons} />
         <DetailField
           label="Reporting window"
           value={facts.reportingWindowLabel}
           emptySituation="notYetComputed"
+          pending={factsInput.isCompilationLoading}
         />
         <DetailField
           label="Files to upload"
@@ -179,14 +166,15 @@ export function SubmissionSummary({
           label="Destination"
           value={
             externalProjectId ? (
-              <RegistryFactLink
+              <NewTabLink
                 href={isometricRegistry.certifyProject({
                   environment,
                   externalProjectId,
                 })}
-                label={destinationLabel}
                 ariaLabel={`Open destination ${destinationLabel} in Isometric in a new tab`}
-              />
+              >
+                {destinationLabel}
+              </NewTabLink>
             ) : (
               destinationLabel
             )
@@ -197,15 +185,16 @@ export function SubmissionSummary({
           label="Facility"
           value={
             externalProjectId && externalFacilityId ? (
-              <RegistryFactLink
+              <NewTabLink
                 href={isometricRegistry.facility({
                   environment,
                   externalProjectId,
                   externalFacilityId,
                 })}
-                label={facilityName}
                 ariaLabel={`Open facility ${facilityName} in Isometric in a new tab`}
-              />
+              >
+                {facilityName}
+              </NewTabLink>
             ) : (
               facilityName
             )
