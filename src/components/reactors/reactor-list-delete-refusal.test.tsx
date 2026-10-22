@@ -67,3 +67,19 @@ describe("Reactor delete refusal", () => {
     expect(screen.queryByText(REFUSAL)).toBeNull();
   });
 });
+
+describe("Reactor stale delete refusal", () => {
+  it("closes the dialog on a stale version and does not carry the notice into the next dialog", async () => {
+    const { StaleVersionError, STALE_VERSION_MESSAGE, STALE_VERSION_CONFLICT_CODE } = await import("@/lib/stale-version");
+    harness.remove.mockRejectedValue(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "reactor", id: REACTOR.id, code: STALE_VERSION_CONFLICT_CODE }));
+    render(<ReactorList />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Row Delete" }));
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" })); });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByText(/RCT-001/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Row Delete" }));
+    expect(screen.queryByText(/RCT-001/)).toBeNull();
+  });
+});

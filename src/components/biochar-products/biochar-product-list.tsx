@@ -307,7 +307,10 @@ export function BiocharProductList() {
   const toast = useToast();
 
   const products = productsData?.items ?? [];
-  const setDeletingProductId = (id: string | null) => setDeleting(products.find(row => row.id === id) ?? null);
+  const setDeletingProductId = (id: string | null) => {
+    setDeleteError(null);
+    setDeleting(products.find(row => row.id === id) ?? null);
+  };
   // Freeze the version beneath a deep-linked edit draft across refetches.
   const [deepLinkSnapshot, setDeepLinkSnapshot] = useState<BiocharProductWithRelations | null>(null);
   if (!focusedProductId && deepLinkSnapshot) setDeepLinkSnapshot(null);

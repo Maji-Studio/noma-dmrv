@@ -369,7 +369,10 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     }
   };
 
-  const handleDelete = (feedstock: FeedstockWithRelations) => setDeleting(feedstock);
+  const handleDelete = (feedstock: FeedstockWithRelations) => {
+    setDeleteError(null);
+    setDeleting(feedstock);
+  };
 
   const handleDeleteConfirm = async () => {
     if (!deleting) return;

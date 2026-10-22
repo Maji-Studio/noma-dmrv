@@ -96,6 +96,9 @@ for (const [label, entity, idKey, Component] of [
         expect(renderer.root.findAllByProps({ "aria-label": "Confirm delete" })).toHaveLength(0);
         expect(renderer.root.findByProps({ "data-testid": "delete-error" }).children).toEqual([staleDeleteMessage(`${label} ${state.row.code}`)]);
         await act(async () => { renderer.root.findByProps({ "aria-label": "Delete" }).props.onClick(); });
+        // The old stale notice must not follow the operator into the fresh dialog.
+        expect(renderer.root.findAllByProps({ "data-testid": "delete-error" })).toHaveLength(0);
+        expect(renderer.root.findAllByProps({ "data-testid": "dialog-delete-error" })).toHaveLength(0);
         await act(async () => { await renderer.root.findByProps({ "aria-label": "Confirm delete" }).props.onClick(); });
         expect(state.remove).toHaveBeenLastCalledWith({ [idKey]: state.row.id, expectedVersion: REFRESHED_VERSION });
       } finally { await act(async () => renderer.unmount()); }

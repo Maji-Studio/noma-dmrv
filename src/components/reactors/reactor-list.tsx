@@ -201,6 +201,7 @@ export function ReactorList() {
   };
 
   const handleDelete = (reactorId: string) => {
+    setDeleteError(null);
     setDeletingReactor((reactorsData?.items ?? []).find((row) => row.id === reactorId) ?? null);
   };
 

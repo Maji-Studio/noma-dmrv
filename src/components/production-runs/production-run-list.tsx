@@ -384,7 +384,10 @@ export function ProductionRunList() {
     }
   };
 
-  const handleDelete = (runId: string) => setDeletingRunId(runId);
+  const handleDelete = (runId: string) => {
+    setDeleteError(null);
+    setDeletingRunId(runId);
+  };
 
   const handleDeleteConfirm = async () => {
     if (!deleting) return;
