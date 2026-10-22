@@ -13,3 +13,6 @@ export const SESSION_COOKIE_CACHE_SECONDS = 5 * 60;
 
 /** Pending invitations expire after 7 days. */
 export const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
+
+/** Match Better Auth's default limit on unexpired pending invitations. */
+export const ORGANIZATION_INVITATION_LIMIT = 100;

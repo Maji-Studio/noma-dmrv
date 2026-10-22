@@ -3,9 +3,9 @@
 /**
  * Server actions for the Organization foundation (multi-tenancy PR 1):
  * org switching, member management, invitations, and Platform-Admin org
- * lifecycle. Member/invitation mutations use the Better Auth organization
- * plugin for real org members and scoped data-access overrides for Platform
- * Admins, who deliberately have no membership rows.
+ * lifecycle. Most member/invitation mutations use Better Auth for real org
+ * members and scoped overrides for Platform Admins. Invitation replacement
+ * uses one scoped transaction for both roles.
  */
 import { cookies, headers } from "next/headers";
 import { eq } from "drizzle-orm";
@@ -30,14 +30,14 @@ import { saveOrgPreference } from "@/fn/org-preference";
 import type { CreateIntentOptions } from "@/schemas/create-intent";
 import { parseCreateIntentKey } from "./with-create";
 import { withAction } from "@/fn/with-action";
+import { createAndDeliverInvitation } from "@/fn/organization-invitation-core";
 import { sendOrganizationInvitation } from "@/lib/email/organization-invitation";
 import {
   cancelInvitationAsPlatformAdmin,
   createInvitationAsPlatformAdmin,
   createOrganizationWithAdmin,
   findMembershipRole,
-  findPendingOrgInvitation,
-  getActiveOrganization,
+  replacePendingInvitation,
   listAllOrganizations,
   listPlatformOrganizationDirectory,
   type PlatformOrganizationDirectoryRow,
@@ -164,23 +164,15 @@ export async function inviteMemberAction(
     const { email, role } = inviteMemberSchema.parse(input);
     const ctx = await requireOrgContext();
     requireOrgRole(ctx, "admin");
-    const organization = await getActiveOrganization(ctx);
-    if (!organization) throw new SafeError("Organization not found.");
-    const result =
-      ctx.orgRole !== null
+    return createAndDeliverInvitation(ctx, async () => {
+      const result = ctx.orgRole !== null
         ? await auth.api.createInvitation({
-            body: { email, role, organizationId: ctx.organizationId },
-            headers: await headers(),
-          })
+          body: { email, role, organizationId: ctx.organizationId },
+          headers: await headers(),
+        })
         : await createInvitationAsPlatformAdmin(ctx, { email, role });
-    const delivery = await sendOrganizationInvitation({
-      invitationId: result.id,
-      organizationId: ctx.organizationId,
-      organizationName: organization.name,
-      email,
-      role,
+      return { id: result.id, email, role };
     });
-    return { invitationId: result.id, ...delivery };
   }, "Failed to send invitation.");
 }
 
@@ -211,30 +203,8 @@ export async function resendInvitationAction(
   return withAction(async (ctx) => {
     const { invitationId } = invitationIdSchema.parse(input);
     requireOrgRole(ctx, "admin");
-    const invitation = await findPendingOrgInvitation(ctx, invitationId);
-    const { email, role } = inviteMemberSchema.parse(invitation);
-    const organization = await getActiveOrganization(ctx);
-    if (!organization) throw new SafeError("Organization not found.");
-    let result: { id: string };
-    if (ctx.orgRole !== null) {
-      const requestHeaders = await headers();
-      // The plugin's resend option reuses the id, and its automatic re-invite
-      // cancellation ignores expired rows. Cancel this row explicitly instead.
-      await auth.api.cancelInvitation({ body: { invitationId }, headers: requestHeaders })
-        .catch(rethrowOrganizationApiError);
-      result = await auth.api.createInvitation({
-        body: { email, role, organizationId: ctx.organizationId }, headers: requestHeaders,
-      }).catch(rethrowOrganizationApiError);
-    } else {
-      // The override cancels pending rows (including expired ones) and inserts
-      // the fresh seven-day invitation in the same transaction.
-      result = await createInvitationAsPlatformAdmin(ctx, { email, role });
-    }
-    const delivery = await sendOrganizationInvitation({
-      invitationId: result.id, organizationId: ctx.organizationId,
-      organizationName: organization.name, email, role,
-    });
-    return { invitationId: result.id, ...delivery };
+    return createAndDeliverInvitation(ctx, () =>
+      replacePendingInvitation(ctx, { invitationId }).catch(rethrowOrganizationApiError));
   }, {
     fallbackMessage: "Failed to send invitation.",
     log: { message: LOG_MESSAGE, context: { op: "organization:resend-invitation" } },

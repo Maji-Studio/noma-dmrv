@@ -1,9 +1,9 @@
-/** Database contract: provider failure must never undo Platform Admin writes. */
+/** Database contract: replacement is atomic; provider failure never undoes writes. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { invitations, organizations, users } from "@/db/schema";
+import { invitations, members, organizations, users } from "@/db/schema";
 
 vi.mock("@/lib/auth/better-auth", () => ({ auth: { api: {} } }));
 vi.mock("@/lib/auth/server", async importOriginal => ({
@@ -18,8 +18,8 @@ vi.mock("@/lib/email/send", async (importOriginal) => ({
 
 import { inviteMemberAction, createOrganizationAction, resendInvitationAction } from "@/fn/organizations";
 import { requireOrgContext, requirePlatformAdmin } from "@/lib/auth/server";
-import { findPendingOrgInvitation, listOrgInvitations } from "@/data-access/organizations";
-import { INVITATION_EXPIRES_IN_SECONDS } from "@/config/auth";
+import { findPendingOrgInvitation, listOrgInvitations, replacePendingInvitation } from "@/data-access/organizations";
+import { INVITATION_EXPIRES_IN_SECONDS, ORGANIZATION_INVITATION_LIMIT } from "@/config/auth";
 import { sendEmail } from "@/lib/email/send";
 
 const MILLISECONDS_PER_SECOND = 1_000;
@@ -68,11 +68,15 @@ it("retains the new organization and first Admin invitation on provider failure"
 
 
 
-it.each([true, false])("replaces an expired Platform Admin invitation atomically with a new id (sent=%s)", async sent => {
+it.each([
+  { platform: false, sent: true }, { platform: false, sent: false },
+  { platform: true, sent: true }, { platform: true, sent: false },
+])("replaces an expired invitation atomically (platform=$platform, sent=$sent)", async ({ platform, sent }) => {
   const organizationId = randomUUID();
   organizationIds.push(organizationId);
   await db.insert(organizations).values({ id: organizationId, name: "Test", slug: `mail-${organizationId}` });
-  const ctx = { userId: adminId, organizationId, orgRole: null, isPlatformAdmin: true };
+  const ctx = { userId: adminId, organizationId, orgRole: platform ? null : "admin" as const, isPlatformAdmin: platform };
+  if (!platform) await db.insert(members).values({ id: randomUUID(), organizationId, userId: adminId, role: "admin" });
   vi.mocked(requireOrgContext).mockResolvedValue(ctx);
   const oldId = randomUUID();
   await db.insert(invitations).values({ id: oldId, organizationId, inviterId: adminId, email: "invitee@example.test",
@@ -86,7 +90,7 @@ it.each([true, false])("replaces an expired Platform Admin invitation atomically
   const stored = await db.select().from(invitations).where(eq(invitations.organizationId, organizationId));
   expect(stored.find(row => row.id === oldId)?.status).toBe("canceled");
   const fresh = stored.find(row => row.id === result.data.invitationId)!;
-  expect(fresh).toMatchObject({ status: "pending", email: "invitee@example.test", role: "admin" });
+  expect(fresh).toMatchObject({ status: "pending", email: "invitee@example.test", role: "admin", inviterId: adminId });
   expect(fresh.expiresAt!.getTime()).toBeGreaterThanOrEqual(now + INVITATION_EXPIRES_IN_SECONDS * MILLISECONDS_PER_SECOND);
   expect(sendEmail).toHaveBeenCalledOnce();
 });
@@ -115,4 +119,102 @@ it("lists expired pending rows with server expiry and hides completed and foreig
   for (const id of [foreignId, canceledId, randomUUID()]) {
     await expect(findPendingOrgInvitation(ctx, id)).rejects.toThrow("Invitation not found or is no longer pending.");
   }
+});
+
+
+it.each([false, true])("rolls back cancellation when the replacement insert fails (platform=%s)", async platform => {
+  const organizationId = randomUUID();
+  organizationIds.push(organizationId);
+  await db.insert(organizations).values({ id: organizationId, name: "Test", slug: `mail-${organizationId}` });
+  const oldId = randomUUID();
+  await db.insert(invitations).values({ id: oldId, organizationId, inviterId: adminId, email: "invitee@example.test",
+    role: "member", status: "pending", expiresAt: new Date(Date.now() + EXPIRY_OFFSET_MS) });
+  // A stale context whose inviter was deleted makes the actual INSERT fail its FK.
+  const ctx = { userId: randomUUID(), organizationId, orgRole: platform ? null : "admin" as const, isPlatformAdmin: platform };
+  await expect(replacePendingInvitation(ctx, { invitationId: oldId }))
+    .rejects.toMatchObject({ cause: { code: "23503" } });
+  expect(await db.select().from(invitations).where(eq(invitations.organizationId, organizationId)))
+    .toMatchObject([{ id: oldId, status: "pending", inviterId: adminId }]);
+  expect(sendEmail).not.toHaveBeenCalled();
+});
+
+it("allows only one concurrent replacement of the same pending row", async () => {
+  const organizationId = randomUUID();
+  organizationIds.push(organizationId);
+  await db.insert(organizations).values({ id: organizationId, name: "Test", slug: `mail-${organizationId}` });
+  const ctx = { userId: adminId, organizationId, orgRole: "admin" as const, isPlatformAdmin: false };
+  vi.mocked(requireOrgContext).mockResolvedValue(ctx);
+  const oldId = randomUUID();
+  await db.insert(invitations).values({ id: oldId, organizationId, inviterId: adminId, email: "invitee@example.test",
+    role: "member", status: "pending", expiresAt: new Date(Date.now() + EXPIRY_OFFSET_MS) });
+  const results = await Promise.all([resendInvitationAction({ invitationId: oldId }), resendInvitationAction({ invitationId: oldId })]);
+  expect(results.filter(result => result.success)).toHaveLength(1);
+  expect(results.find(result => !result.success)).toMatchObject({ error: "Invitation not found or is no longer pending." });
+  const stored = await db.select().from(invitations).where(eq(invitations.organizationId, organizationId));
+  expect(stored).toHaveLength(2);
+  expect(stored.find(row => row.id === oldId)?.status).toBe("canceled");
+  expect(stored.filter(row => row.status === "pending")).toHaveLength(1);
+  expect(sendEmail).toHaveBeenCalledOnce();
+});
+
+it.each(["owner", "admin,member"])("keeps the old invitation pending when its stored role is %s", async role => {
+  const organizationId = randomUUID();
+  organizationIds.push(organizationId);
+  await db.insert(organizations).values({ id: organizationId, name: "Test", slug: `mail-${organizationId}` });
+  const oldId = randomUUID();
+  await db.insert(invitations).values({ id: oldId, organizationId, inviterId: adminId, email: "invitee@example.test",
+    role, status: "pending", expiresAt: new Date(Date.now() + EXPIRY_OFFSET_MS) });
+  vi.mocked(requireOrgContext).mockResolvedValue({ userId: adminId, organizationId, orgRole: "admin", isPlatformAdmin: false });
+  expect(await resendInvitationAction({ invitationId: oldId })).toMatchObject({ success: false, error: "Choose Admin or Member." });
+  expect(await db.select().from(invitations).where(eq(invitations.organizationId, organizationId)))
+    .toMatchObject([{ id: oldId, role, status: "pending" }]);
+  expect(sendEmail).not.toHaveBeenCalled();
+});
+
+it("refuses replacement after the recipient has become a member", async () => {
+  const organizationId = randomUUID();
+  organizationIds.push(organizationId);
+  await db.insert(organizations).values({ id: organizationId, name: "Test", slug: `mail-${organizationId}` });
+  await db.insert(members).values({ id: randomUUID(), organizationId, userId: adminId, role: "admin" });
+  const oldId = randomUUID();
+  await db.insert(invitations).values({ id: oldId, organizationId, inviterId: adminId, email: `${adminId}@example.test`,
+    role: "member", status: "pending", expiresAt: new Date(Date.now() + EXPIRY_OFFSET_MS) });
+  const ctx = { userId: adminId, organizationId, orgRole: null, isPlatformAdmin: true };
+  await expect(replacePendingInvitation(ctx, { invitationId: oldId })).rejects.toThrow("User is already a member");
+  expect(await db.select().from(invitations).where(eq(invitations.organizationId, organizationId)))
+    .toMatchObject([{ id: oldId, status: "pending" }]);
+});
+
+it("preserves an expired invitation when refreshing it would exceed the active invitation limit", async () => {
+  const organizationId = randomUUID();
+  organizationIds.push(organizationId);
+  await db.insert(organizations).values({ id: organizationId, name: "Test", slug: `mail-${organizationId}` });
+  const oldId = randomUUID();
+  await db.insert(invitations).values([
+    { id: oldId, organizationId, inviterId: adminId, email: "invitee@example.test", role: "member",
+      status: "pending", expiresAt: new Date(Date.now() - EXPIRY_OFFSET_MS) },
+    ...Array.from({ length: ORGANIZATION_INVITATION_LIMIT }, (_, index) => ({
+      id: randomUUID(), organizationId, inviterId: adminId, email: `other-${index}@example.test`,
+      role: "member", status: "pending", expiresAt: new Date(Date.now() + EXPIRY_OFFSET_MS),
+    })),
+  ]);
+  const ctx = { userId: adminId, organizationId, orgRole: "admin" as const, isPlatformAdmin: false };
+  await expect(replacePendingInvitation(ctx, { invitationId: oldId })).rejects.toThrow("Invitation limit reached.");
+  const stored = await db.select().from(invitations).where(eq(invitations.organizationId, organizationId));
+  expect(stored).toHaveLength(ORGANIZATION_INVITATION_LIMIT + 1);
+  expect(stored.every(row => row.status === "pending")).toBe(true);
+});
+
+it.each(["other-org", "accepted", "rejected", "canceled"])("cannot replace a %s invitation", async state => {
+  const [organizationId, otherId] = [randomUUID(), randomUUID()];
+  organizationIds.push(organizationId, otherId);
+  await db.insert(organizations).values([organizationId, otherId].map(id => ({ id, name: "Test", slug: `mail-${id}` })));
+  const oldId = randomUUID();
+  await db.insert(invitations).values({ id: oldId, organizationId: state === "other-org" ? otherId : organizationId,
+    inviterId: adminId, email: "invitee@example.test", role: "member", status: state === "other-org" ? "pending" : state,
+    expiresAt: new Date(Date.now() + EXPIRY_OFFSET_MS) });
+  const ctx = { userId: adminId, organizationId, orgRole: "admin" as const, isPlatformAdmin: false };
+  await expect(replacePendingInvitation(ctx, { invitationId: oldId })).rejects.toThrow("Invitation not found or is no longer pending.");
+  expect(await db.select().from(invitations).where(eq(invitations.id, oldId)))
+    .toMatchObject([{ status: state === "other-org" ? "pending" : state }]);
 });

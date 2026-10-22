@@ -1,10 +1,11 @@
 /** Exercise the installed plugin through HTTP with the application's real config. */
-import { createHmac } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { beforeEach, expect, it, vi } from "vitest";
 import { INVITATION_EXPIRES_IN_SECONDS } from "@/config/auth";
 import { SafeError } from "@/lib/errors";
 import { revokeDeletedMemberOAuthGrants } from "@/data-access/oauth-grant-lifecycle";
 import { LAST_ADMIN_MESSAGE } from "./organization-role-policy";
+import { replacePendingInvitation } from "@/data-access/organizations";
 const cookieStore = vi.hoisted(() => ({ getAll: () => [{ name: "better-auth.session_data" }, { name: "better-auth.session_token" }], delete: vi.fn() }));
 const databaseFailure = vi.hoisted(() => ({ enabled: false }));
 const memory = vi.hoisted(() => Object.fromEntries(
@@ -56,11 +57,16 @@ import { auth } from "./better-auth";
 vi.mock("next/headers", () => ({ headers: () => sessionHeaders(), cookies: () => cookieStore }));
 vi.mock("@/data-access/organizations", () => ({
   getActiveOrganization: async () => memory.organization[0],
-  findPendingOrgInvitation: async (ctx: { organizationId: string }, id: string) => {
-    const invitation = memory.invitation.find(row => row.id === id && row.organizationId === ctx.organizationId && row.status === "pending");
+  // The real scoped transaction is exercised by organization-invitation-delivery.test.ts.
+  replacePendingInvitation: vi.fn(async (ctx: { userId: string; organizationId: string }, { invitationId }: { invitationId: string }) => {
+    const invitation = memory.invitation.find(row => row.id === invitationId && row.organizationId === ctx.organizationId && row.status === "pending");
     if (!invitation) throw new SafeError("Invitation not found or is no longer pending.");
-    return invitation;
-  },
+    const fresh = { ...invitation, id: randomUUID(), inviterId: ctx.userId,
+      expiresAt: new Date(Date.now() + INVITATION_EXPIRES_IN_SECONDS * MILLISECONDS_PER_SECOND) };
+    invitation.status = "canceled";
+    memory.invitation.push(fresh);
+    return fresh;
+  }),
 }));
 vi.mock("@/lib/email/send", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/email/send")>()),
@@ -80,6 +86,7 @@ const MILLISECONDS_PER_SECOND = 1_000;
 beforeEach(() => {
   vi.mocked(sendEmail).mockReset().mockResolvedValue({ sent: true, id: "message-123" });
   databaseFailure.enabled = false;
+  vi.mocked(replacePendingInvitation).mockClear();
   vi.mocked(revokeDeletedMemberOAuthGrants).mockClear();
   cookieStore.delete.mockClear();
   Object.values(memory).forEach(rows => rows.splice(0));
@@ -254,13 +261,14 @@ it("returns the same reset response for existing and unknown accounts when deliv
 it.each([
   { expired: false, sent: true }, { expired: false, sent: false },
   { expired: true, sent: true }, { expired: true, sent: false },
-])("replaces expired=$expired with a fresh id, cancels the old link and sends once (sent=$sent)", async ({ expired, sent }) => {
+])("uses the replacement seam for expired=$expired and sends once (sent=$sent)", async ({ expired, sent }) => {
   const now = Date.now();
   memory.invitation.push({ id: "old-invite", organizationId: "org", inviterId: "actor", email: "invite@example.test",
     role: "member", status: "pending", expiresAt: new Date(now + (expired ? -SESSION_LIFETIME_MS : SESSION_LIFETIME_MS)) });
   vi.mocked(sendEmail).mockResolvedValue(sent ? { sent: true, id: "message" } : { sent: false, reason: "provider-error" });
   const result = await resendInvitationAction({ invitationId: "old-invite" });
   expect(result).toMatchObject({ success: true, data: { emailSent: sent } });
+  expect(replacePendingInvitation).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ organizationId: "org", userId: "actor" }), { invitationId: "old-invite" });
   expect(memory.invitation).toHaveLength(2);
   expect(memory.invitation[0].status).toBe("canceled");
   const fresh = memory.invitation[1];
