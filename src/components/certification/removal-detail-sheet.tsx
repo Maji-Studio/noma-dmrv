@@ -23,6 +23,7 @@ import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { DetailField, DetailSection } from "@/components/ui/detail-panel";
 import {
   useDeleteRemoval,
+  useRemovalCertifyContext,
   useFacilityCertifierSummary,
 } from "@/hooks/use-certification";
 import {
@@ -32,6 +33,7 @@ import {
 import { pluralize } from "@/lib/copy-utils";
 import { formatDateRange } from "@/lib/format-utils";
 import { isometricRegistry } from "@/lib/isometric/links";
+import { CarriedEntriesSection } from "./new-removal-dialog/carried-entries";
 import { EnvBanner } from "./env-banner";
 import { IsometricLink } from "./isometric-link";
 import { ProductionBatchLinks } from "./production-batch-links";
@@ -169,6 +171,7 @@ export function RemovalDetailSheet({
   lock,
 }: RemovalDetailSheetProps) {
   const { timeZone } = useFacilityClock(facilityId);
+  const { data: certifyContext } = useRemovalCertifyContext(facilityId, summary.removalId, open);
   const { data: certifierSummary } = useFacilityCertifierSummary(
     facilityId,
     open,
@@ -316,6 +319,12 @@ export function RemovalDetailSheet({
                 )}
               </div>
             </DetailSection>
+
+            <CarriedEntriesSection
+              entries={certifyContext?.carriedEntries}
+              facilityId={facilityId}
+              sent={workflowStatus.kind === "submitted"}
+            />
 
             {/*
               Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant

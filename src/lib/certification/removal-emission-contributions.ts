@@ -60,7 +60,10 @@ export const entryInputManifestSchema = z.object({
 });
 export type EntryInputManifest = z.infer<typeof entryInputManifestSchema>;
 export interface RemovalEntryContributions {
-  carriedEntries?: (CarriedEntryNote & { componentId: string; evidenceDocumentIds: readonly string[] })[];
+  carriedEntries?: (CarriedEntryNote & {
+    componentId: string; componentName?: string; creditBatchId: string; earlierRemovalId?: string;
+    evidenceDocumentIds: readonly string[];
+  })[];
   manifest: EntryInputManifest[];
   inputs: { componentId: string; inputKey: string; value: EmissionFigure }[];
   entrySet: { entryId: string; contentRevision: number }[];

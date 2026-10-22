@@ -1,4 +1,4 @@
-import { emissionEntryCounts } from "@/lib/certification/emission-entry-rules";
+import { emissionEntryCounts, entryLine } from "@/lib/certification/emission-entry-rules";
 import { EMISSION_ENTRIES_CHANGED } from "@/lib/certification/emission-entry-messages";
 import type { certificationSubmissions } from "@/db/schema/certification";
 import { readRemovalEntrySnapshot } from "@/lib/certification/removal-entry-snapshot";
@@ -39,9 +39,10 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
     entriesWithoutRemoval: frozenEntrySet ? [] : Object.values(facts).flatMap((batch) => batch.entriesWithoutRemoval ?? []),
   });
   contributions.carriedEntries = carriedEntries.filter(entry => contributions.selectedEntryIds.includes(entry.id)).map(entry => ({
-    entryId: entry.id, creditBatchCode: entry.creditBatchCode, occurredOn: entry.occurredOn,
-    componentId: entry.componentId, value: entry.values[0], evidenceDocumentIds: entry.evidenceDocumentIds,
-    earlierRemovalCode: entry.earlierRemovalCode,
+    entryId: entry.id, creditBatchCode: entry.creditBatchCode, creditBatchId: entry.creditBatchId, occurredOn: entry.occurredOn,
+    componentId: entry.componentId, componentName: entryLine(observation, entry.componentId)?.component.displayName,
+    value: entry.values[0], evidenceDocumentIds: entry.evidenceDocumentIds,
+    earlierRemovalCode: entry.earlierRemovalCode, earlierRemovalId: entry.earlierRemovalId,
   }));
   if (frozenChanged) contributions.blockers.push({ code: "lineNeedsReview", message: EMISSION_ENTRIES_CHANGED,
     fixTarget: "emissions", creditBatchId: scope.memberBatches[0].id });

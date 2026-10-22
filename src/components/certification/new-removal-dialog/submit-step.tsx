@@ -57,6 +57,7 @@ import { allowsRemovalSubmission } from "./resume-state";
 import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { cn } from "@/lib/utils";
 import { ComponentTable } from "./component-table";
+import { CarriedEntriesPanel } from "./carried-entries";
 import { buildComponentTable } from "./component-table-model";
 import { SourceRecords } from "./source-records";
 import { Notice } from "@/components/ui/notice";
@@ -400,6 +401,8 @@ export function SubmitStep({
       />
 
       <ComponentTable table={componentTable} facilityId={facilityId} />
+
+      <CarriedEntriesPanel entries={ctx.carriedEntries} facilityId={facilityId} />
 
       <SourceRecords
         ledger={ctx.emissionsLedger}
