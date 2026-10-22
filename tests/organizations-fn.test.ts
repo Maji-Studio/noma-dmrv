@@ -311,7 +311,7 @@ describe("setActiveOrganizationAction", () => {
     expect(mockPersistLastActiveOrganization).not.toHaveBeenCalled();
     expect(result).toEqual({
       success: false,
-      error: "You no longer have access to it. Ask one of its Admins to add you again.",
+      error: "You no longer have access to it. If you still need it, ask one of its Admins.",
     });
   });
 });

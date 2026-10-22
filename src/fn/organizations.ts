@@ -247,7 +247,7 @@ export async function removeMemberAction(
 
 // The switch toast reads "<Org> did not open. <reason>", so each reason says
 // why in the switcher's own words. Better Auth's texts are system language.
-const SWITCH_ACCESS_LOST = "You no longer have access to it. Ask one of its Admins to add you again.";
+const SWITCH_ACCESS_LOST = "You no longer have access to it. If you still need it, ask one of its Admins.";
 const SWITCH_ORG_GONE = "It no longer exists.";
 const SWITCH_REASONS_BY_CODE: Record<string, string> = {
   USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION: SWITCH_ACCESS_LOST,

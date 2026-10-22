@@ -131,7 +131,7 @@ describe("setActiveOrganizationAction", () => {
   });
 
   it.each([
-    ["USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION", "You no longer have access to it. Ask one of its Admins to add you again."],
+    ["USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION", "You no longer have access to it. If you still need it, ask one of its Admins."],
     ["ORGANIZATION_NOT_FOUND", "It no longer exists."],
   ])("words the Better Auth code %s for the person switching", async (code, reason) => {
     mocks.setActiveOrganization.mockRejectedValue({ status: "BAD_REQUEST", body: { code, message: "system text" } });
@@ -148,7 +148,7 @@ describe("setActiveOrganizationAction", () => {
 
     const result = await setActiveOrganizationAction({ organizationId: ORGANIZATION_ID });
 
-    expect(result).toEqual({ success: false, error: "You no longer have access to it. Ask one of its Admins to add you again." });
+    expect(result).toEqual({ success: false, error: "You no longer have access to it. If you still need it, ask one of its Admins." });
     expect(mocks.requirePlatformAdmin).not.toHaveBeenCalled();
     expect(mocks.setActiveOrganization).not.toHaveBeenCalled();
     expect(mocks.persistLastActiveOrganization).not.toHaveBeenCalled();
