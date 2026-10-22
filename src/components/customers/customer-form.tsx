@@ -18,6 +18,7 @@ import {
 import { FormField, FormInput, FormTextarea, FormActions, FormSection } from "@/components/forms";
 import {
   customerFormSchema,
+  CUSTOMER_REFUSAL_ALIASES,
   MAX_PENDING_CUSTOMER_LOCATIONS,
   type CustomerFormData,
   type CustomerLocationFormData,
@@ -41,8 +42,6 @@ import { CustomerLocationForm } from "./customer-location-form";
 
 export type PendingLocation = CustomerLocationFormData;
 
-/** Create sends `{ customer, locations }`, so its customer refusals name `customer.*`. */
-const CUSTOMER_REFUSAL_ALIASES = { "customer.*": "*" } as const;
 
 function formatPendingLocationSummary({
   city,

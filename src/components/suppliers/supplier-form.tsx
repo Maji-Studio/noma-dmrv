@@ -40,6 +40,7 @@ import {
 } from "@/hooks/use-suppliers";
 import {
   supplierFormSchema,
+  SUPPLIER_REFUSAL_ALIASES,
   type SupplierFormData,
   type SupplierLocationFormData,
 } from "@/schemas/suppliers";
@@ -105,9 +106,6 @@ function formatPendingLocationSummary({
 // ============================================
 // Component
 // ============================================
-
-/** Create sends `{ supplier, locations }`, so its supplier refusals name `supplier.*`. */
-const SUPPLIER_REFUSAL_ALIASES = { "supplier.*": "*" } as const;
 
 interface SupplierFormProps {
   /** Existing supplier data for editing (undefined for create mode) */

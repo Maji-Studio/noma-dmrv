@@ -27,6 +27,7 @@ import { resolveLocationCountry } from "@/lib/location-defaults";
 import {
   type CreateSupplierWithLocationsData,
   supplierQuickAddSchema,
+  SUPPLIER_REFUSAL_ALIASES,
   type SupplierQuickAddData,
   type SupplierQuickAddInput,
 } from "@/schemas/suppliers";
@@ -36,7 +37,7 @@ import type { EntityOption } from "./types";
 
 /** The dialog's one location is flat, and a create sends `{ supplier, locations: [location] }`. */
 const SUPPLIER_QUICK_ADD_REFUSAL_ALIASES = {
-  "supplier.*": "*",
+  ...SUPPLIER_REFUSAL_ALIASES,
   ...NESTED_FACILITY_DISTANCE_REFUSAL_ALIASES,
   "locations.0.*": "*",
 } as const;

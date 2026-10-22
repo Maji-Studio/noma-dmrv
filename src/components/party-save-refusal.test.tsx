@@ -7,7 +7,7 @@
  * the form a shape no action sends today, to pin the form's side of it.
  */
 import { NuqsTestingAdapter } from "nuqs/adapters/testing";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ActionError } from "@/lib/action-error";
@@ -182,10 +182,12 @@ describe("CustomerLocationForm", () => {
     expect(input("name").disabled).toBe(false);
   });
 
-  it("reverts a registered site's name, says Locked and switches name and GPS off", async () => {
+  const siteLock = (...fields: string[]) =>
+    refusal(fields.map((field) => issue([field], LOCK_REASON, "certification_locked")), "certification_locked");
+
+  it("reverts every changed field the storage-site lock names, says Locked and switches name and GPS off", async () => {
     const footers: Array<string | null> = [];
-    const lock = refusal([issue(["name"], LOCK_REASON, "certification_locked")], "certification_locked");
-    render(<CustomerLocationForm location={savedCustomerLocation} onSubmit={withFooter(lock, footers)} />);
+    render(<CustomerLocationForm location={savedCustomerLocation} onSubmit={withFooter(siteLock("name", "gpsLatitude"), footers)} />);
     fireEvent.change(input("name"), { target: { value: "Renamed" } });
     fireEvent.change(input(LATITUDE), { target: { value: "9.5" } });
     await save("Update location");
@@ -196,6 +198,37 @@ describe("CustomerLocationForm", () => {
     expect(input(LATITUDE).disabled).toBe(true);
     expect(input(LONGITUDE).disabled).toBe(true);
     expect(footers).toEqual([LOCK_REASON]);
+  });
+
+  it("keeps the reason on screen after the next save clears the footer", async () => {
+    const refusals = [siteLock("name"), refusal([issue(["city"], "City is not recognised.")])];
+    const footers: Array<string | null> = [];
+    render(
+      <CustomerLocationForm
+        location={savedCustomerLocation}
+        onSubmit={async (_data, onRefusal) => { footers.push(onRefusal(refusals.shift(), "FALLBACK")); }}
+      />,
+    );
+    fireEvent.change(input("name"), { target: { value: "Renamed" } });
+    await save("Update location");
+    await screen.findAllByText(LOCKED);
+    expect(screen.getAllByText(LOCK_REASON).length).toBeGreaterThanOrEqual(1);
+    await save("Update location");
+    expect(await screen.findByText("City is not recognised.")).toBeTruthy();
+    expect(footers).toEqual([LOCK_REASON, null]);
+    expect(screen.getAllByText(LOCK_REASON)).toHaveLength(1);
+    expect(input("name").disabled).toBe(true);
+  });
+
+  it("does not lock the site for a certification lock on another field", async () => {
+    const footers: Array<string | null> = [];
+    render(<CustomerLocationForm location={savedCustomerLocation} onSubmit={withFooter(siteLock("city"), footers)} />);
+    fireEvent.change(input("name"), { target: { value: "Renamed" } });
+    await save("Update location");
+    await waitFor(() => expect(footers).toEqual([LOCK_REASON]));
+    expect(input("name").disabled).toBe(false);
+    expect(input("name").value).toBe("Renamed");
+    expect(input(LATITUDE).disabled).toBe(false);
   });
 });
 
@@ -295,6 +328,8 @@ describe("facility distance rows", () => {
   });
 });
 
+const siteLockOf = (field: string) => refusal([issue([field], LOCK_REASON, "certification_locked")], "certification_locked");
+
 describe("CustomerLocationDialog", () => {
   const at = (id: string, name: string, extra: object = {}) => ({
     ...savedCustomerLocation, id, name, version: 1, updatedAt: new Date("2026-01-01"), ...extra,
@@ -313,7 +348,7 @@ describe("CustomerLocationDialog", () => {
   });
 
   it("does not carry a lock on one location over to the next one opened", async () => {
-    mocks.updateCustomerLocation.mockRejectedValue(refusal([issue(["name"], LOCK_REASON, "certification_locked")], "certification_locked"));
+    mocks.updateCustomerLocation.mockRejectedValue(siteLockOf("name"));
     const { rerender } = render(dialog(at("loc-a", "Block A")));
     fireEvent.change(input(NAME), { target: { value: "Renamed" } });
     await save("Save changes");

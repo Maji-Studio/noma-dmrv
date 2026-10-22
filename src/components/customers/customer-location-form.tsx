@@ -11,10 +11,10 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { Notice } from "@/components/ui/notice";
 import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
-import { LOCKED_ERROR_TYPE } from "@/components/forms/form-error-summary";
 import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { FACILITY_DISTANCE_REFUSAL_ALIASES } from "@/lib/facility-distance-changes";
-import { isLockRefusal, LOCKED_FIELD_MESSAGE } from "@/lib/save-refusal";
+import { isActionError } from "@/lib/action-error";
+import { REGISTERED_SITE_LOCKED_FIELDS } from "@/lib/party-domain-errors";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormActions } from "@/components/forms";
 import {
@@ -33,10 +33,14 @@ import { CustomerLocationFields } from "./customer-location-fields";
 // ============================================
 
 /**
- * What a registered storage site freezes. Registered locations are not a
- * lock-read kind, so the form locks these fields from the refusal itself.
+ * The reason a registered storage site froze this location, when the refusal is
+ * that lock (a lock on one of the site's fields), not any other certification lock.
  */
-const REGISTERED_SITE_FIELDS = ["name", "gpsLatitude", "gpsLongitude"] as const;
+function storageSiteLockReason(error: unknown): string | null {
+  if (!isActionError(error)) return null;
+  const frozen: readonly unknown[] = REGISTERED_SITE_LOCKED_FIELDS;
+  return error.issues.find((issue) => issue.code === "certification_locked" && issue.path.length === 1 && frozen.includes(issue.path[0]))?.message ?? null;
+}
 
 /** Fields the form pre-fills from: a saved location or a pending one. */
 export type CustomerLocationInitialValues = Pick<CustomerLocation, "country"> &
@@ -138,8 +142,10 @@ export function CustomerLocationForm({
   const defaultSubmitLabel = isEditMode ? "Update location" : "Add location";
 
   const formId = useId();
-  // Set by a lock refusal and kept until the dialog reopens (the form remounts).
-  const [siteLocked, setSiteLocked] = useState(false);
+  // Registered locations are not a lock-read kind, so the storage-site refusal's
+  // message is the lock. It stays until the dialog reopens or switches location
+  // (the form remounts); the hook has already reverted the changed fields.
+  const [siteLockReason, setSiteLockReason] = useState<string | null>(null);
   const refuseWithFields = useSaveRefusal({
     control: form.control,
     setError: form.setError,
@@ -148,16 +154,9 @@ export function CustomerLocationForm({
     aliases: FACILITY_DISTANCE_REFUSAL_ALIASES,
   });
   const refuseSave: SaveRefusalHandler = (error, fallback) => {
-    if (!isLockRefusal(error)) return refuseWithFields(error, fallback);
-    const edited = REGISTERED_SITE_FIELDS.filter((field) => form.getFieldState(field).isDirty);
     const footer = refuseWithFields(error, fallback);
-    // The server names the first changed field; the whole site is frozen, so
-    // every edited one goes back to its saved value and the fields switch off.
-    for (const field of edited) {
-      form.resetField(field);
-      form.setError(field, { type: LOCKED_ERROR_TYPE, message: LOCKED_FIELD_MESSAGE });
-    }
-    setSiteLocked(true);
+    const reason = storageSiteLockReason(error);
+    if (reason) setSiteLockReason(reason);
     return footer;
   };
   const handleFormSubmit = latched(form.handleSubmit((data) => {
@@ -178,7 +177,7 @@ export function CustomerLocationForm({
         form={form}
         facility={facility}
         isSubmitting={isSubmitting}
-        siteLocked={siteLocked}
+        siteLockReason={siteLockReason}
         isCurrentDefault={location?.isDefault === true}
         idPrefix={idPrefix}
         isEditMode={isEditMode}
