@@ -7,7 +7,7 @@
 
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { FacilityDistanceInput } from "@/schemas/facility-distances";
 import { facilityDistanceDefaults } from "@/lib/facility-distance-defaults";
 import { PartyFacilityDistances } from "@/components/party-facility-distances";
@@ -18,7 +18,9 @@ import { FormField } from "@/components/forms/form-field";
 import { FormInput } from "@/components/forms/form-input";
 import { GPS_FIELD_NAMES, PositionPicker } from "@/components/forms/position-picker";
 import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
+import { isActionError } from "@/lib/action-error";
 import { useCreateSupplierWithLocations } from "@/hooks/use-suppliers";
 import { resolveLocationCountry } from "@/lib/location-defaults";
 import {
@@ -30,6 +32,9 @@ import {
 import { ENTITY_TYPE_LABELS } from "./entity-labels";
 import { QuickAddDialogShell } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
+
+/** The dialog's one location is flat, and a create sends `{ supplier, locations: [location] }`. */
+const SUPPLIER_QUICK_ADD_REFUSAL_ALIASES = { "supplier.*": "*", "locations.0.*": "*" } as const;
 
 interface SupplierQuickAddDialogProps {
   isOpen: boolean;
@@ -46,6 +51,7 @@ export function SupplierQuickAddDialog({
   const { selectedFacility } = useFacilityContext();
   const [error, setError] = useState<string | null>(null);
   const activePayloadRef = useRef<CreateSupplierWithLocationsData | null>(null);
+  const formId = useId();
   const { defaults: organizationDefaults } = useOrganizationDefaultValues();
   const defaultCountry = resolveLocationCountry(
     undefined,
@@ -58,6 +64,8 @@ export function SupplierQuickAddDialog({
     handleSubmit,
     register,
     reset,
+    resetField,
+    setError: setFieldError,
     setValue,
     trigger,
   } = useForm<SupplierQuickAddInput, unknown, SupplierQuickAddData>({
@@ -69,6 +77,13 @@ export function SupplierQuickAddDialog({
       gpsLatitude: undefined,
       gpsLongitude: undefined,
     },
+  });
+  const refuseSave = useSaveRefusal({
+    control,
+    setError: setFieldError,
+    resetField,
+    formId,
+    aliases: SUPPLIER_QUICK_ADD_REFUSAL_ALIASES,
   });
   const { field: facilityDistances } = useController({ control, name: "facilityDistances" });
   const gpsLatitude = useWatch({
@@ -94,7 +109,9 @@ export function SupplierQuickAddDialog({
     onError: (cause, variables) => {
       if (variables !== activePayloadRef.current) return;
       activePayloadRef.current = null;
-      setError(cause.message);
+      // Runs before the awaited submit settles, so the field errors land inside
+      // the handleSubmit callback and reach the error summary.
+      setError(isActionError(cause) ? refuseSave(cause, cause.message) : cause.message);
     },
   });
 
@@ -152,6 +169,7 @@ export function SupplierQuickAddDialog({
       dismissible={!createSupplier.isPending}
     >
       <form
+        id={formId}
         onSubmit={(event) => {
           event.stopPropagation();
           return latched(handleSubmit(submitSupplier))(event);
@@ -227,6 +245,7 @@ export function SupplierQuickAddDialog({
         />}
         <FormActions
           control={control}
+          formId={formId}
           onCancel={handleClose}
           isSubmitting={createSupplier.isPending}
           errorMessage={error ?? undefined}

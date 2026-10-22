@@ -6,7 +6,9 @@
 "use client";
 
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
+import { useId } from "react";
 import { useController, useForm } from "react-hook-form";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import type { FacilityDistanceInput } from "@/schemas/facility-distances";
 import { PartyFacilityDistances } from "@/components/party-facility-distances";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -56,8 +58,8 @@ interface SupplierLocationFormProps {
   initialIsDefault?: boolean;
   /** Prefix field IDs when the form opens above another form with overlapping IDs. */
   idPrefix?: string;
-  /** Form submission handler */
-  onSubmit: (data: SupplierLocationFormData) => Promise<void> | void;
+  /** Form submission handler; `onRefusal` shows a refused save at its fields (#1327). */
+  onSubmit: (data: SupplierLocationFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -108,6 +110,8 @@ export function SupplierLocationForm({
     getValues,
     register,
     handleSubmit,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(supplierLocationFormSchema),
@@ -147,12 +151,15 @@ export function SupplierLocationForm({
       ? { lat: gpsLatitude, lng: gpsLongitude }
       : null;
 
+  const formId = useId();
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const handleFormSubmit = latched(handleSubmit((data) => {
-    return onSubmit(data);
+    return onSubmit(data, refuseSave);
   }));
 
   return (
     <form
+      id={formId}
       onSubmit={(event) => {
         event.stopPropagation();
         return handleFormSubmit(event);
@@ -302,6 +309,7 @@ export function SupplierLocationForm({
 
       <FormActions
         control={control}
+        formId={formId}
         sticky={false}
         onCancel={onCancel}
         isSubmitting={isSubmitting}

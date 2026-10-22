@@ -34,6 +34,8 @@ interface CustomerLocationFieldsProps {
   /** Contextual editors restrict distances to this facility; standalone forms show all active facilities. */
   facility?: Facility;
   isSubmitting?: boolean;
+  /** A registered storage site refused a change: name and GPS stay as saved. */
+  siteLocked?: boolean;
   /** The edited location is the party's default; it stays checked until another is set. */
   isCurrentDefault?: boolean;
   idPrefix?: string;
@@ -49,6 +51,7 @@ export function CustomerLocationFields({
   form,
   facility,
   isSubmitting = false,
+  siteLocked = false,
   isCurrentDefault = false,
   idPrefix,
   isEditMode,
@@ -104,7 +107,7 @@ export function CustomerLocationFields({
             id={nameId}
             type="text"
             placeholder="e.g., Coffee Block A"
-            disabled={isSubmitting}
+            disabled={isSubmitting || siteLocked}
             error={!!errors.name}
             {...register("name")}
           />
@@ -189,7 +192,7 @@ export function CustomerLocationFields({
           }}
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
-          disabled={isSubmitting}
+          disabled={isSubmitting || siteLocked}
         />
       </FormSection>
 

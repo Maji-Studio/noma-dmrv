@@ -12,6 +12,7 @@ import {
   useUpdateSupplierLocation,
 } from "@/hooks/use-suppliers";
 import type { SupplierLocation } from "@/db/schema/parties";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { facilityDistanceChanges } from "@/lib/facility-distance-changes";
 import type { SupplierLocationFormData } from "@/schemas/suppliers";
@@ -57,7 +58,7 @@ export function SupplierLocationDialog({
     onClose();
   };
 
-  const handleSubmit = async (data: SupplierLocationFormData) => {
+  const handleSubmit = async (data: SupplierLocationFormData, onRefusal: SaveRefusalHandler) => {
     setError(null);
     try {
       if (location) {
@@ -79,11 +80,14 @@ export function SupplierLocationDialog({
       // The dialog stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
       setError(
-        toSaveErrorMessage(
+        onRefusal(
           err,
-          isEditing
-            ? "Location was not saved. Try again."
-            : "Location was not created. Check the form.",
+          toSaveErrorMessage(
+            err,
+            isEditing
+              ? "Location was not saved. Try again."
+              : "Location was not created. Check the form.",
+          ),
         ),
       );
     }

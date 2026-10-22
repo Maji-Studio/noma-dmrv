@@ -12,6 +12,7 @@ import {
   useUpdateCustomerLocation,
 } from "@/hooks/use-customers";
 import { useToast } from "@/components/ui/toast";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { facilityDistanceChanges } from "@/lib/facility-distance-changes";
 import type { CustomerLocationFormData } from "@/schemas/customers";
@@ -64,7 +65,7 @@ export function CustomerLocationDialog({
     onClose();
   };
 
-  const handleSubmit = async (data: CustomerLocationFormData) => {
+  const handleSubmit = async (data: CustomerLocationFormData, onRefusal: SaveRefusalHandler) => {
     setError(null);
     try {
       const locationData = {
@@ -103,11 +104,14 @@ export function CustomerLocationDialog({
       // The dialog stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
       setError(
-        toSaveErrorMessage(
+        onRefusal(
           err,
-          isEditing
-            ? "Location was not saved. Try again."
-            : "Location was not created. Check the form.",
+          toSaveErrorMessage(
+            err,
+            isEditing
+              ? "Location was not saved. Try again."
+              : "Location was not created. Check the form.",
+          ),
         ),
       );
     }

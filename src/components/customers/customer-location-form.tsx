@@ -9,7 +9,11 @@ import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { facilityDistanceDefaults } from "@/lib/facility-distance-defaults";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { Notice } from "@/components/ui/notice";
+import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
+import { LOCKED_ERROR_TYPE } from "@/components/forms/form-error-summary";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { isLockRefusal, LOCKED_FIELD_MESSAGE } from "@/lib/save-refusal";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormActions } from "@/components/forms";
 import {
@@ -26,6 +30,12 @@ import { CustomerLocationFields } from "./customer-location-fields";
 // ============================================
 // Component
 // ============================================
+
+/**
+ * What a registered storage site freezes. Registered locations are not a
+ * lock-read kind, so the form locks these fields from the refusal itself.
+ */
+const REGISTERED_SITE_FIELDS = ["name", "gpsLatitude", "gpsLongitude"] as const;
 
 /** Fields the form pre-fills from: a saved location or a pending one. */
 export type CustomerLocationInitialValues = Pick<CustomerLocation, "country"> &
@@ -72,8 +82,8 @@ interface CustomerLocationFormProps {
   initialIsDefault?: boolean;
   /** Prefix field IDs when the form opens above another form with overlapping IDs. */
   idPrefix?: string;
-  /** Form submission handler */
-  onSubmit: (data: CustomerLocationFormData) => Promise<void> | void;
+  /** Form submission handler; `onRefusal` shows a refused save at its fields (#1327). */
+  onSubmit: (data: CustomerLocationFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -126,12 +136,35 @@ export function CustomerLocationForm({
 
   const defaultSubmitLabel = isEditMode ? "Update location" : "Add location";
 
+  const formId = useId();
+  // Set by a lock refusal and kept until the dialog reopens (the form remounts).
+  const [siteLocked, setSiteLocked] = useState(false);
+  const refuseWithFields = useSaveRefusal({
+    control: form.control,
+    setError: form.setError,
+    resetField: form.resetField,
+    formId,
+  });
+  const refuseSave: SaveRefusalHandler = (error, fallback) => {
+    if (!isLockRefusal(error)) return refuseWithFields(error, fallback);
+    const edited = REGISTERED_SITE_FIELDS.filter((field) => form.getFieldState(field).isDirty);
+    const footer = refuseWithFields(error, fallback);
+    // The server names the first changed field; the whole site is frozen, so
+    // every edited one goes back to its saved value and the fields switch off.
+    for (const field of edited) {
+      form.resetField(field);
+      form.setError(field, { type: LOCKED_ERROR_TYPE, message: LOCKED_FIELD_MESSAGE });
+    }
+    setSiteLocked(true);
+    return footer;
+  };
   const handleFormSubmit = latched(form.handleSubmit((data) => {
-    return onSubmit(data);
+    return onSubmit(data, refuseSave);
   }));
 
   return (
     <form
+      id={formId}
       onSubmit={(event) => {
         event.stopPropagation();
         return handleFormSubmit(event);
@@ -143,6 +176,7 @@ export function CustomerLocationForm({
         form={form}
         facility={facility}
         isSubmitting={isSubmitting}
+        siteLocked={siteLocked}
         isCurrentDefault={location?.isDefault === true}
         idPrefix={idPrefix}
         isEditMode={isEditMode}
@@ -151,6 +185,7 @@ export function CustomerLocationForm({
 
       <FormActions
         control={form.control}
+        formId={formId}
         sticky={false}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
