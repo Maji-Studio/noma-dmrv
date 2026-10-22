@@ -192,6 +192,9 @@ export function FormActions<
     )}
     {!block?.readOnly && (showSubmit || handleCancel || errorMessage) && <div
       ref={sticky ? reserveStickyFooterSpace : undefined}
+      // EntitySideSheet's fieldset stretches every ancestor of this marker so
+      // `mt-auto!` pins the row to the sheet bottom (SHEET_FORM_FILL).
+      data-sheet-footer={sticky ? "" : undefined}
       className={cn(
         "flex flex-col gap-16 border-t border-[var(--color-border-secondary)]",
         sticky

@@ -285,8 +285,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   }));
 
   return (
-    // The wrapper div absorbs the side-sheet Body's direct-child flex-col
-    // override so the sticky CTA row keeps its own layout (see sample-form).
     <div className="space-y-20">
       <FormSpine control={control}>
       <form id={formId} onSubmit={(event) => {

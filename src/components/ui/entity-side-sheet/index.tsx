@@ -24,6 +24,19 @@ import { SideSheetActionsContext } from "./side-sheet-context";
 import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-block-context";
 import { RefusalSlotContext } from "@/components/ui/refusal-slot-context";
 
+/**
+ * The fieldset fills the body, and every element between it and the sticky
+ * footer (`data-sheet-footer`, set by FormActions) becomes a filling flex
+ * column with no bottom margin (a `space-y` sibling, even a hidden one, would
+ * otherwise lift the footer), whatever shape the form has: a direct `<form>`, a wrapper `<div>`
+ * around the form and its extension content, or a fragment. That lets the
+ * footer's `mt-auto` pin it to the sheet bottom on short forms. Forms need no
+ * class of their own.
+ */
+const SHEET_FORM_FILL =
+  "flex min-w-0 flex-1 flex-col " +
+  "[&_:has([data-sheet-footer])]:flex [&_:has([data-sheet-footer])]:flex-1 [&_:has([data-sheet-footer])]:flex-col [&_:has([data-sheet-footer])]:mb-0";
+
 /* -------------------------------------------------------------------------------------------------
  * Back Arrow Icon
  * -----------------------------------------------------------------------------------------------*/
@@ -286,7 +299,7 @@ function EntitySideSheet({
                   <div className="flex flex-col gap-12 pb-20">{editNotice}</div>
                 ) : null}
                 {/* Always mounted, so turning read-only never remounts the form. */}
-                <fieldset disabled={!!editBlock?.readOnly} className="contents" data-submit-block-fieldset>{children}</fieldset>
+                <fieldset disabled={!!editBlock?.readOnly} className={SHEET_FORM_FILL} data-submit-block-fieldset>{children}</fieldset>
                </RefusalSlotContext.Provider>
               </SubmitBlockContext.Provider>
             </SideSheetActionsContext.Provider>
