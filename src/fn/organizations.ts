@@ -251,6 +251,39 @@ export async function removeMemberAction(
  * the cached session snapshot so the next read reflects the switch.
  */
 // Callers must pair a successful switch with resetAfterOrgSwitch() from useResetAfterOrgSwitch.
+// The switch toast reads "<Org> did not open. <reason>", so each reason says
+// why in the switcher's own words. Better Auth's texts are system language.
+const SWITCH_ACCESS_LOST = "You no longer have access to it.";
+const SWITCH_ORG_GONE = "It no longer exists.";
+const SWITCH_REASONS_BY_CODE: Record<string, string> = {
+  USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION: SWITCH_ACCESS_LOST,
+  ORGANIZATION_NOT_FOUND: SWITCH_ORG_GONE,
+};
+
+/** Better Auth's setActiveOrganization, with its error codes worded for the switcher. */
+async function setActiveOrganizationAsMember(organizationId: string): Promise<void> {
+  try {
+    await auth.api.setActiveOrganization({
+      body: { organizationId },
+      headers: await headers(),
+    });
+  } catch (error) {
+    const code = apiErrorCode(error);
+    const reason = code ? SWITCH_REASONS_BY_CODE[code] : undefined;
+    if (reason) throw new SafeError(reason);
+    // Unmapped: keep Better Auth's system wording out of the toast ("Try again.").
+    throw new Error("Better Auth could not set the active organization.", { cause: error });
+  }
+}
+
+function apiErrorCode(error: unknown): string | null {
+  if (error && typeof error === "object" && "body" in error) {
+    const code = (error.body as { code?: unknown } | null)?.code;
+    if (typeof code === "string") return code;
+  }
+  return null;
+}
+
 export async function setActiveOrganizationAction(
   input: unknown
 ): Promise<ActionResult<{ organizationId: string }>> {
@@ -267,10 +300,7 @@ export async function setActiveOrganizationAction(
     const membershipRole = await findMembershipRole(organizationId);
     if (membershipRole) {
       // Target-org member: let the plugin verify membership and refresh cookie.
-      await auth.api.setActiveOrganization({
-        body: { organizationId },
-        headers: await headers(),
-      });
+      await setActiveOrganizationAsMember(organizationId);
     } else {
       await requirePlatformAdmin();
       await setActiveOrgForPlatformAdmin(sessionId, organizationId);
@@ -295,7 +325,7 @@ async function setActiveOrgForPlatformAdmin(
     .where(eq(organizations.id, organizationId))
     .limit(1);
   if (!org) {
-    throw new SafeError("Organization not found.");
+    throw new SafeError(SWITCH_ORG_GONE);
   }
   await db
     .update(sessions)

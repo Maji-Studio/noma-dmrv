@@ -124,6 +124,26 @@ describe("setActiveOrganizationAction", () => {
     expect(Object.keys(logged)).not.toContain("name");
   });
 
+  it.each([
+    ["USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION", "You no longer have access to it."],
+    ["ORGANIZATION_NOT_FOUND", "It no longer exists."],
+  ])("words the Better Auth code %s for the person switching", async (code, reason) => {
+    mocks.setActiveOrganization.mockRejectedValue({ status: "BAD_REQUEST", body: { code, message: "system text" } });
+
+    const result = await setActiveOrganizationAction({ organizationId: ORGANIZATION_ID });
+
+    expect(result).toEqual({ success: false, error: reason });
+    expect(mocks.persistLastActiveOrganization).not.toHaveBeenCalled();
+  });
+
+  it("says Try again for a Better Auth code it does not word", async () => {
+    mocks.setActiveOrganization.mockRejectedValue({ body: { code: "SOMETHING_ELSE", message: "system text" } });
+
+    const result = await setActiveOrganizationAction({ organizationId: ORGANIZATION_ID });
+
+    expect(result).toEqual({ success: false, error: "Try again." });
+  });
+
   it("keeps the failure when the switch itself fails", async () => {
     mocks.setActiveOrganization.mockRejectedValue(
       new Error("plugin rejected the switch"),
