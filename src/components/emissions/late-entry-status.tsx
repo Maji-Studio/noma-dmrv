@@ -1,0 +1,78 @@
+/**
+ * An entry recorded after its own batch's Removal was sent (#1059): one fact
+ * line ("Recorded after RM-26-009 was sent.") and one line that says where it
+ * goes. Waiting reads in warning ink with the one action that clears it; the
+ * row around it stays white. Shared by the entry row and the credit batch
+ * Overview.
+ */
+"use client";
+
+import Link from "next/link";
+import { ArrowBendDownRightIcon, CheckIcon, ClockIcon } from "@phosphor-icons/react/dist/ssr";
+import { lateEntryView, type LateEntryDestination, type LateEntryFacts } from "@/lib/certification/late-entry-view";
+import { cn } from "@/lib/utils";
+
+const ICON = 14;
+const CODE_LINK = "whitespace-nowrap font-mono underline decoration-[color:var(--color-border-primary)] underline-offset-4 hover:decoration-current hover:text-[var(--color-text-primary)]";
+const ACTION_LINK = "inline-flex min-h-24 items-center font-medium text-[var(--color-text-interaction-primary)] underline decoration-[color:var(--color-border-primary)] underline-offset-4 hover:decoration-current";
+const LINE = "flex items-start gap-x-4 body-caption";
+
+/** Rows are click targets; a link inside must not also open the row. */
+function stop(event: { stopPropagation: () => void }) {
+  event.stopPropagation();
+}
+
+function CodeLink({ href, children }: { href: string; children: string }) {
+  return <Link href={href} className={CODE_LINK} onClick={stop}>{children}</Link>;
+}
+
+/** "Goes into RM-26-010 (credit batch CB-26-010)." or "Reported in RM-26-010 (another credit batch)." */
+function placedText(destination: Extract<LateEntryDestination, { kind: "draft" | "reported" }>) {
+  const removal = <CodeLink href={destination.removalHref}>{destination.removalCode}</CodeLink>;
+  if (destination.kind === "reported") {
+    return <>Reported in {removal}{destination.anotherCreditBatch ? " (another credit batch)" : ""}.</>;
+  }
+  const codes = destination.creditBatchCodes.join(", ");
+  const batches = destination.creditBatchCodes.length === 1 ? "credit batch" : "credit batches";
+  return <>Goes into {removal}{destination.anotherCreditBatch && codes ? ` (${batches} ${codes})` : ""}.</>;
+}
+
+export function LateEntryDestinationLine({ destination, className, withAction = true }: {
+  destination: LateEntryDestination;
+  className?: string;
+  withAction?: boolean;
+}) {
+  if (destination.kind === "waiting") {
+    return (
+      <span className={cn(LINE, "flex-col gap-y-2 text-[var(--st-wait)]", className)}>
+        <span className="flex items-start gap-x-4">
+          <ClockIcon size={ICON} weight="bold" aria-hidden className="mt-2 shrink-0" />
+          <span>{destination.text}</span>
+        </span>
+        {withAction && <Link href={destination.action.href} className={cn(ACTION_LINK, "ml-18")} onClick={stop}>{destination.action.label}</Link>}
+      </span>
+    );
+  }
+  const Icon = destination.kind === "reported" ? CheckIcon : ArrowBendDownRightIcon;
+  const tone = destination.kind === "reported" ? "text-[var(--st-ok)]" : "text-[var(--color-text-tertiary)]";
+  return (
+    <span className={cn(LINE, "text-[var(--color-text-primary)]", className)}>
+      <Icon size={ICON} weight="bold" aria-hidden className={cn("mt-2 shrink-0", tone)} />
+      <span>{placedText(destination)}</span>
+    </span>
+  );
+}
+
+/** Both lines under an entry. Nothing for an entry that was not recorded after its Removal was sent. */
+export function LateEntryStatus({ entry, facilityId, className }: { entry: LateEntryFacts; facilityId: string; className?: string }) {
+  const view = lateEntryView(entry, facilityId);
+  if (!view) return null;
+  return (
+    <span className={cn("flex flex-col gap-2", className)} data-late-entry>
+      <span className="body-caption text-[var(--color-text-secondary)]">
+        Recorded after <CodeLink href={view.recordedAfter.removalHref}>{view.recordedAfter.removalCode}</CodeLink> was sent.
+      </span>
+      <LateEntryDestinationLine destination={view.destination} />
+    </span>
+  );
+}

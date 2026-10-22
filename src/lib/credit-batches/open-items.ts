@@ -32,6 +32,7 @@ import {
   removalSheetHref,
   returnedStatementPhrase,
 } from "@/lib/removal-correction-copy";
+import { lateEntryView, waitingDetail, waitingEntryTitle } from "@/lib/certification/late-entry-view";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
 
 // Five kg rounds up to the smallest visible amount at two-decimal tonne precision.
@@ -174,6 +175,20 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       ...(healthCheck.whyDetail ? { why: healthCheck.whyDetail } : {}),
       target,
     });
+  }
+
+  // An entry recorded after its Removal was sent that no Removal will report yet.
+  for (const line of input.emissionLines ?? []) {
+    for (const entry of line.entries) {
+      const view = lateEntryView(entry, input.facilityId);
+      if (view?.destination.kind !== "waiting" || !entry.occurredOn) continue;
+      blocking.push({
+        id: `late-entry:${entry.id ?? `${line.componentId}:${entry.occurredOn}`}`,
+        title: waitingEntryTitle(line.displayName, entry.occurredOn),
+        detail: `Recorded after ${view.recordedAfter.removalCode} was sent. ${waitingDetail(view.destination.reason)}`,
+        target: { href: view.destination.action.href },
+      });
+    }
   }
 
   for (const key of new Set(input.health?.documentWarnings ?? [])) {

@@ -23,6 +23,7 @@ import { isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
 import { useCreditBatchPage } from "./credit-batch-page-context";
 import { FOCUS_RING, FocusRow, MUTED_TEXT, PagePanel, ROW_RULE, StatusDot, TODO_TONE } from "./credit-batch-page-parts";
 import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
+import { CreditBatchLateEntries } from "./credit-batch-late-entries";
 import { CompactRemovalBar, tonnesFromKg } from "./credit-batch-removal-bar";
 import { durabilityLabel } from "./credit-batch-view";
 
@@ -172,6 +173,7 @@ function RemovalsPanel() {
         <p className={cn("body-small", MUTED_TEXT)}>Nothing blocks this credit batch. Start a Removal to submit its applied biochar.</p>
       )}
       <CompactRemovalBar groups={groups} facilityId={batch.facilityId} />
+      <CreditBatchLateEntries facilityId={batch.facilityId} creditBatchId={batch.id} />
     </PagePanel>
   );
 }
