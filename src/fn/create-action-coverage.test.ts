@@ -51,7 +51,7 @@ const EXCEPTION: Record<string, string> = {
   "emission-entries#replaceEmissionEntryFn": "expectedVersion refuses stale replacement retries.",
   "certification/emission-zeros#recordEmissionZerosFn": "Reuses zero entries and checks the removal version.",
   "feedstock-types#importIsometricFeedstockTypeFn": "Refuses an already imported isometricFeedstockTypeId.",
-  "organizations#createOrganizationAction": "Platform admin creation is guarded by the unique slug.",
+  "organizations#createOrganizationAction": "platform create outside an org; replays through its own store keyed by parseCreateIntentKey",
   "invitation-bootstrap#bootstrapInvitationAccountAction": "Pre-sign-in bootstrap refuses an existing account.",
   "certification/create-removal-with-batches#createRemovalWithBatchesAction": "Rechecks ungrouped batches under row locks.",
   "certification/ghg-statements#createGhgStatementDraft": "External POST adopts or refuses a matching remote statement under a facility lock.",

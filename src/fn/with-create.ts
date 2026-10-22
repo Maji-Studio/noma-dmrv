@@ -25,7 +25,7 @@ export function withCreate<T, E extends MappedFailure = never>(
     let called = false;
     const parseIntent = () => {
       if (!parsed) {
-        parsedIntent = createIntentOptionsSchema.parse(intent);
+        parsedIntent = parseCreateIntent(intent);
         parsed = true;
       }
       return parsedIntent;
@@ -42,4 +42,20 @@ export function withCreate<T, E extends MappedFailure = never>(
     ) as KeyedCreate;
     return fn(ctx, create);
   }, options);
+}
+
+/**
+ * The parsed retry key for a create that runs outside an organization, so
+ * neither `withCreate` (it needs an OrgContext) nor the operation runner can
+ * hold it: the Platform's organization create, which keys its own replay by
+ * using the key as the new organization's id. Call it after the payload parse,
+ * like `withCreate` does, so a bad payload is refused before the key is read.
+ */
+export function parseCreateIntentKey(intent: CreateIntentOptions | undefined): string | undefined {
+  return parseCreateIntent(intent)?.intentKey;
+}
+
+/** The one parse of create retry options, shared by `withCreate` and `parseCreateIntentKey`. */
+function parseCreateIntent(intent: CreateIntentOptions | undefined): CreateIntentOptions {
+  return createIntentOptionsSchema.parse(intent);
 }
