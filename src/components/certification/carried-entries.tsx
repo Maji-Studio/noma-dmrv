@@ -9,20 +9,18 @@
 "use client";
 
 import Link from "next/link";
-import { FileIcon, PaperclipIcon } from "@phosphor-icons/react/dist/ssr";
+import { PaperclipIcon } from "@phosphor-icons/react/dist/ssr";
 import { DetailSection } from "@/components/ui/detail-panel";
 import { InfoHint } from "@/components/ui/tooltip";
 import { formatFigure } from "@/components/emissions/emission-line-display";
-import { useDocumentsForEntity } from "@/hooks/use-documents";
-import { ENTRY_ENTITY_TYPE } from "@/components/emissions/emission-entry-files";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { pluralize } from "@/lib/copy-utils";
 import { formatDayString } from "@/lib/format-utils";
 import { removalSheetHref } from "@/lib/removal-correction-copy";
 import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
 import { cn } from "@/lib/utils";
-import { EntryFileNames } from "./component-table";
-import { NewTabLink } from "./link-label";
+import { EntryFileNames } from "./new-removal-dialog/component-table";
+import { NewTabLink } from "./new-removal-dialog/link-label";
 
 export type CarriedEntry = NonNullable<RemovalEntryContributions["carriedEntries"]>[number];
 
@@ -47,7 +45,7 @@ function RecordedAfter({ entry, facilityId, newTab }: { entry: CarriedEntry; fac
       ) : (
         <Link href={href} className={cn(CODE_LINK, "text-[var(--color-text-primary)]")}>{entry.earlierRemovalCode}</Link>
       )}{" "}
-      was sent
+      was sent.
     </span>
   );
 }
@@ -119,22 +117,6 @@ export function CarriedEntriesPanel({ entries, facilityId }: { entries: readonly
   );
 }
 
-function FileNames({ entry }: { entry: CarriedEntry }) {
-  const { data } = useDocumentsForEntity(ENTRY_ENTITY_TYPE, entry.entryId);
-  const names = (data ?? []).filter((document) => document.uploadStatus === "uploaded");
-  if (names.length === 0) return null;
-  return (
-    <>
-      {names.map((document) => (
-        <span key={document.id} className="inline-flex items-center gap-4 body-caption text-[var(--color-text-secondary)]">
-          <FileIcon size={ICON_SIZE} aria-hidden className="shrink-0" />
-          {document.fileName}
-        </span>
-      ))}
-    </>
-  );
-}
-
 /** The Removal sheet: its own section with the same facts and one state line. */
 export function CarriedEntriesSection({ entries, facilityId, sent }: { entries: readonly CarriedEntry[] | undefined; facilityId: string; sent: boolean }) {
   if (!entries?.length) return null;
@@ -149,7 +131,7 @@ export function CarriedEntriesSection({ entries, facilityId, sent }: { entries: 
               From <BatchLink entry={entry} facilityId={facilityId} newTab={false} />, {formatDayString(entry.occurredOn)}.
             </span>
             <span className="col-span-2"><RecordedAfter entry={entry} facilityId={facilityId} newTab={false} /></span>
-            <span className="col-span-2 flex flex-col gap-2"><FileNames entry={entry} /></span>
+            <span className="col-span-2 flex flex-col gap-2 body-caption text-[var(--color-text-secondary)] empty:hidden"><EntryFileNames entryId={entry.entryId} /></span>
           </li>
         ))}
       </ul>

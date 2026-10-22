@@ -29,6 +29,7 @@ describe("CarriedEntriesPanel", () => {
     expect(container.textContent).toContain("1 manual entry");
     expect(container.textContent).toContain("1 file");
     expect(panel.getAllByRole("link", { name: "CB-26-009" })[0].getAttribute("href")).toBe("/credit-batches/cb-9?facility=f1");
+    expect(container.textContent).toContain("Recorded after RM-26-009 was sent.");
     expect(panel.getByRole("link", { name: "RM-26-009" }).getAttribute("href")).toBe("/certification/removals?facility=f1&removal=rm-9");
   });
 
