@@ -102,7 +102,7 @@ function createColumns(
     {
       accessorKey: "deliveryCode",
       meta: { nowrap: true },
-      header: "Delivery code",
+      header: "Delivery",
       cell: ({ row }) => <span>{row.original.deliveryCode}</span>,
     },
     {
@@ -152,12 +152,12 @@ function createColumns(
     {
       accessorKey: "cropType",
       header: "Crop type",
-      cell: ({ row }) => <span>{row.original.cropType ?? MISSING_VALUE.notRecorded}</span>,
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.cropType ?? MISSING_VALUE.notRecorded}</span>,
     },
     {
       accessorKey: "fieldIdentifier",
       header: "Field identifier",
-      cell: ({ row }) => <span>{row.original.fieldIdentifier ?? MISSING_VALUE.notRecorded}</span>,
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.fieldIdentifier ?? MISSING_VALUE.notRecorded}</span>,
     },
     {
       accessorKey: "applicationMethodType",

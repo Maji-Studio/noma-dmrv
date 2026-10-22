@@ -110,7 +110,7 @@ function createColumns(
       accessorKey: "address",
       header: "Address",
       cell: ({ row }) => (
-        <span className="text-[var(--color-text-secondary)]">
+        <span className="block max-w-xs truncate text-[var(--color-text-secondary)]">
           {row.original.address || MISSING_VALUE.notRecorded}
         </span>
       ),
@@ -119,13 +119,14 @@ function createColumns(
       accessorKey: "contactEmail",
       header: "Contact email",
       cell: ({ row }) => (
-        <span className="text-[var(--color-text-secondary)]">
+        <span className="block max-w-xs truncate text-[var(--color-text-secondary)]">
           {row.original.contactEmail || MISSING_VALUE.notRecorded}
         </span>
       ),
     },
     {
       accessorKey: "contactPhone",
+      meta: { nowrap: true },
       header: "Contact phone",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">

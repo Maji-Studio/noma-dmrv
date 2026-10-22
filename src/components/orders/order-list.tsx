@@ -88,13 +88,17 @@ function createColumns(
       id: "customerLocation",
       header: "Customer location",
       accessorFn: (row) => row.customerLocationName ?? "",
-      cell: ({ row }) => row.original.customerLocationName || MISSING_VALUE.notSet,
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate">{row.original.customerLocationName || MISSING_VALUE.notSet}</span>
+      ),
     },
     {
       id: "formulation",
       header: "Formulation",
       accessorFn: (row) => row.formulationName ?? "",
-      cell: ({ row }) => row.original.formulationName || MISSING_VALUE.notRecorded,
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate">{row.original.formulationName || MISSING_VALUE.notSet}</span>
+      ),
     },
     {
       accessorKey: "quantityKg",

@@ -774,7 +774,7 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
           id={menuId}
           role="dialog"
           aria-label="Column visibility"
-          className="absolute right-0 top-[calc(100%+4px)] z-[var(--z-layer-popover)] min-w-[160px] border border-[var(--color-border-primary)] bg-[var(--color-background-white)]"
+          className="absolute right-0 top-[calc(100%+4px)] z-[var(--z-layer-popover)] max-h-320 w-max min-w-[160px] overflow-y-auto border border-[var(--color-border-primary)] bg-[var(--color-background-white)]"
         >
           {hideableColumns.map((column) => (
             <label
@@ -795,7 +795,7 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
                 onChange={column.getToggleVisibilityHandler()}
                 className="sr-only"
               />
-              <span>{columnLabel(column)}</span>
+              <span className="whitespace-nowrap">{columnLabel(column)}</span>
             </label>
           ))}
           {hasVisibilityChanges && (

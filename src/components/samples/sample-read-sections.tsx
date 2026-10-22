@@ -10,9 +10,9 @@ import type { SampleWithRelations } from "@/data-access/samples";
 
 const LAB_PERCENT_FRACTION_DIGITS = 2;
 /** Atomic ratios (H:C org, O:C org) read at four decimals. */
-const RATIO_DIGITS = 4;
+export const RATIO_DIGITS = 4;
 
-function formatLabPercent(value: number | null | undefined): string {
+export function formatLabPercent(value: number | null | undefined): string {
   return formatPercent(value, { digits: LAB_PERCENT_FRACTION_DIGITS });
 }
 

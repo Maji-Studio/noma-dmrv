@@ -62,7 +62,7 @@ import {
 } from "@/schemas/production-runs";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatMoisturePercent, MOISTURE_FIELD_LABEL, qualifyMassLabel } from "@/lib/mass-moisture";
+import { formatMoisturePercent, MASS_MOISTURE_LABELS, qualifyMassLabel } from "@/lib/mass-moisture";
 import { ILLUSTRATION_SIZE, ReactorArt } from "@/components/ui/illustrations";
 
 function productionRunDetailHref(run: ProductionRunWithRelations) {
@@ -77,6 +77,10 @@ function productionRunDetailHref(run: ProductionRunWithRelations) {
 // Status Badge
 // ============================================
 
+// ============================================
+// Column Definitions
+// ============================================
+
 /** Run details start hidden and are added from the Columns menu. */
 const PRODUCTION_RUN_COLUMNS_HIDDEN_BY_DEFAULT = {
   operator: false,
@@ -87,9 +91,6 @@ const PRODUCTION_RUN_COLUMNS_HIDDEN_BY_DEFAULT = {
   dieselGensetLiters: false,
 };
 
-// ============================================
-// Column Definitions
-// ============================================
 
 function createColumns(
   onEdit: (run: ProductionRunWithRelations) => void,
@@ -141,11 +142,11 @@ function createColumns(
       id: "operator",
       header: "Operator",
       accessorFn: (row) => row.operatorName ?? "",
-      cell: ({ row }) => <span>{row.original.operatorName || MISSING_VALUE.notRecorded}</span>,
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.operatorName || MISSING_VALUE.notSet}</span>,
     },
     {
       accessorKey: "biocharMoisturePercent",
-      header: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"),
+      header: qualifyMassLabel(MASS_MOISTURE_LABELS.moisture, "Biochar"),
       cell: ({ row }) => (
         <span className="font-mono">{formatMoisturePercent(row.original.biocharMoisturePercent)}</span>
       ),

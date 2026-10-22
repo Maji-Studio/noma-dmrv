@@ -155,16 +155,16 @@ function createColumns(
     {
       accessorKey: "vehiclePlateNumber",
       header: "Vehicle",
-      cell: ({ row }) => <span>{row.original.vehiclePlateNumber || MISSING_VALUE.notSet}</span>,
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.vehiclePlateNumber || MISSING_VALUE.notSet}</span>,
     },
     {
       id: "distance",
       header: DISTANCE_FIELD_LABEL,
       // An override wins; otherwise the leg derived from the supplier location.
       accessorFn: (row) => row.distanceKmOverride ?? row.transportDistanceKm,
-      cell: ({ row }) => (
+      cell: ({ getValue }) => (
         <span className="font-mono">
-          {formatDistanceKm(row.original.distanceKmOverride ?? row.original.transportDistanceKm)}
+          {formatDistanceKm(getValue<number | null>())}
         </span>
       ),
     },

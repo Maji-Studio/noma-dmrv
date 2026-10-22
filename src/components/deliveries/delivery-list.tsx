@@ -148,8 +148,8 @@ function createColumns(
     },
     {
       accessorKey: "destinationName",
-      header: "Destination",
-      cell: ({ row }) => <span>{row.original.destinationName || MISSING_VALUE.notSet}</span>,
+      header: "Customer location",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.destinationName || MISSING_VALUE.notSet}</span>,
     },
     // Every mass on this surface — these two columns, the KPI strip, the detail
     // sheet's wet-mass row and composition preview go through `formatMassKg`:
@@ -186,12 +186,12 @@ function createColumns(
     {
       accessorKey: "driverName",
       header: "Driver",
-      cell: ({ row }) => <span>{row.original.driverName || MISSING_VALUE.notSet}</span>,
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.driverName || MISSING_VALUE.notSet}</span>,
     },
     {
       accessorKey: "vehicleName",
       header: "Vehicle",
-      cell: ({ row }) => <span>{row.original.vehicleName || MISSING_VALUE.notSet}</span>,
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.vehicleName || MISSING_VALUE.notSet}</span>,
     },
     {
       accessorKey: "effectiveDistanceKm",
