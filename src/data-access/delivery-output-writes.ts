@@ -1,6 +1,6 @@
 import { liveOutputMovementPredicate } from './output-stock-active-movements';
 import { readRecordDependents } from './record-lock-dependents';
-import { assertRecordLockFields, recordFieldEqual } from '@/lib/record-lock-fields';
+import { assertRecordLockFields, recordFieldEqual, withLockedFieldIssues } from '@/lib/record-lock-fields';
 import { recordLocks } from '@/lib/record-lock';
 import type { CaptureActivity } from "@/lib/activity-changes";
 import { deliveryDistanceSnapshot } from "./delivery-distance-snapshot";
@@ -177,6 +177,13 @@ export async function createDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
   }, { shortage: ['deliveredWetMassKg'], validation: ['storageLocationId'] });
 }
 
+/** Both refusal comparisons and stock edits use the latest unreversed movement. */
+function currentDeliveryMovement(rows: Awaited<ReturnType<typeof getOutputStockAllocationProjection>>) {
+  const isLive = liveOutputMovementPredicate(rows.map(row => row.movement));
+  return rows.filter(row => isLive(row.movement))
+    .sort((a, b) => a.movement.postingSequence > b.movement.postingSequence ? -1 : 1)[0]?.movement;
+}
+
 export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransaction, deliveryId: string, raw: Omit<z.input<typeof updateDeliverySchema>, 'deliveryId'>, capture?: CaptureActivity): Promise<UpdatedDelivery> {
   requireOrgScope(ctx);
   return withUniqueCodeGuard(ctx, deliveries, deliveries.code, CODE_CONFLICT_MESSAGES.delivery, async () => {
@@ -189,7 +196,14 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
     if (!snapshot || snapshot.archivedAt) throw deliveryReferenceNotFound(['deliveryId'], 'Delivery');
     // Topology, request, bin, artifacts, active facility, delivery.
     await lockBinStock(ctx, tx, snapshot.storageLocationId, { allowArchived: true });
-    await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: deliveryId }, 'update'), 'certification_locked', ['deliveryId']);
+    await withLockedFieldIssues(() => withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: deliveryId }, 'update'), 'certification_locked', ['deliveryId']), async () => {
+      const rows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
+      return { ...snapshot, sources: currentDeliveryMovement(rows)?.inputSnapshot?.sources };
+    }, {
+      ...data, deliveryId: undefined,
+      distanceSource: resolveDeliveryDistanceSource(data.distanceKmOverride === undefined && data.distanceSource !== undefined ? snapshot.distanceKmOverride : data.distanceKmOverride, data.distanceSource),
+      distanceNote: data.distanceNote === '' ? null : data.distanceNote,
+    });
     await withFeedstockErrors(() => lockActiveFacilityReference(ctx, tx, snapshot.facilityId), 'not_found', ['deliveryId']);
     const [existing] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).for('update');
     if (!existing || existing.archivedAt) throw deliveryReferenceNotFound(['deliveryId'], 'Delivery');
@@ -204,9 +218,7 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
     }
     assertRecordLockFields(lock, existing, fields);
     const rows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
-    const isLive = liveOutputMovementPredicate(rows.map(row => row.movement));
-    const current = rows.filter(r => isLive(r.movement))
-      .sort((a, b) => a.movement.postingSequence > b.movement.postingSequence ? -1 : 1)[0]?.movement;
+    const current = currentDeliveryMovement(rows);
     const massChanged = data.deliveredWetMassKg !== undefined && !recordFieldEqual('deliveredWetMassKg', existing.deliveredWetMassKg, data.deliveredWetMassKg);
     const moistureChanged = data.moistureContentPercent !== undefined && data.moistureContentPercent !== existing.moistureContentPercent;
     const dateChanged = data.deliveryDate !== undefined && data.deliveryDate.getTime() !== existing.deliveryDate.getTime();

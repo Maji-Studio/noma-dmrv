@@ -6,7 +6,7 @@
 import { isActionError } from "./action-error";
 
 /** What a locked field says; the lock's reason is shown once in the footer. */
-export const LOCKED_FIELD_MESSAGE = "Locked";
+export const LOCKED_FIELD_MESSAGE = "Locked. Your change was not saved.";
 
 const LOCK_CODE = "certification_locked";
 const STALE_VERSION_CODE = "stale_version";
@@ -55,6 +55,11 @@ function formField(path: readonly (string | number)[], aliases: Readonly<Record<
     }
   }
   return (path[0] !== undefined ? aliases[String(path[0])] : undefined) ?? whole;
+}
+
+/** The refusal holds a lock issue: the edit was refused whole, not partly saved. */
+export function isLockRefusal(error: unknown): boolean {
+  return isActionError(error) && error.issues.some((issue) => issue.code === LOCK_CODE);
 }
 
 /**

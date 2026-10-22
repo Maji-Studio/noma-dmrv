@@ -197,10 +197,18 @@ describe("delivery metadata PATCH on the runner", { timeout: SUITE_TIMEOUT_MS },
     } catch (error) {
       expect(error).toBeInstanceOf(DomainError);
       if (!(error instanceof DomainError)) throw error;
-      expect(error).toMatchObject({ code: "certification_locked", issues: [{ path: ["deliveryId"] }] });
+      expect(error.code).toBe("certification_locked");
+      expect(error.message).toBeTruthy();
+      expect(error.issues).toEqual(["deliveryId", "code"].map(field => ({
+        path: [field], code: "certification_locked", message: error.message,
+      })));
       const response = actionFailureResponse({ success: false, error: error.message, code: error.code, issues: error.issues }, "/deliveries", randomUUID());
       expect(response.status).toBe(409);
-      expect(await response.json()).toMatchObject({ code: "certification_locked", errors: [{ pointer: "/deliveryId", code: "certification_locked" }] });
+      const problem = await response.json();
+      expect(problem).toMatchObject({ code: "certification_locked", detail: error.message });
+      expect(problem.errors).toEqual(["/deliveryId", "/code"].map(pointer => ({
+        pointer, code: "certification_locked", detail: error.message,
+      })));
     }
     expect(await rows(f)).toEqual(beforeRows);
     expect(await movements(f)).toEqual(beforeMovements);

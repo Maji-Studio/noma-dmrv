@@ -1,3 +1,4 @@
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 /**
  * Facilities React Query Hooks
  * Client-side state management for facility operations
@@ -229,6 +230,7 @@ export function useUpdateFacility(
   const { optimistic = true } = options ?? {};
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.facility, { onRefusalOnly: true }),
     mutationFn: async (data: UpdateFacilityData) => {
       const result = await updateFacilityFn(data);
       // Keeps an expected-version refusal typed so the open edit form can show
