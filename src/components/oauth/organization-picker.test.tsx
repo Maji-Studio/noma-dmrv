@@ -11,6 +11,7 @@ vi.mock("@/hooks/use-oauth-flow", () => ({
 vi.mock("@/components/forms", async () => ({
   ...await import("@/components/forms/choice-card-group"),
   ...await import("@/components/forms/server-error"),
+  ...await import("@/components/forms/form-error"),
 }));
 vi.mock("@/components/ui", async () => ({
   ...await import("@/components/ui/button"),
@@ -121,4 +122,43 @@ it("clears busy when the pick fails", async () => {
   await screen.findByText("Start again from the app.");
   expect(continueButton().getAttribute("aria-busy")).toBeNull();
   expect(continueButton().disabled).toBe(false);
+});
+
+const nonePicked = (overrides = {}) => data({ preselectedOrganizationId: null, ...overrides });
+
+it("keeps Continue enabled with nothing preselected", () => {
+  mocks.choices.mockReturnValue(nonePicked());
+  render(<OrganizationPicker />);
+  expect(continueButton().disabled).toBe(false);
+});
+
+it("asks for a choice, focuses the group and does not submit when nothing is picked", () => {
+  mocks.choices.mockReturnValue(nonePicked());
+  render(<OrganizationPicker />);
+  fireEvent.click(continueButton());
+  expect(screen.getByRole("alert").textContent).toBe("Choose an organization.");
+  expect(mocks.mutateAsync).not.toHaveBeenCalled();
+  expect(document.activeElement).toBe(screen.getByRole("radio", { name: /E2E Mafinga Biochar/ }));
+  expect(screen.getByRole("group").getAttribute("aria-invalid")).toBe("true");
+});
+
+it("clears the error when an organization is picked, then submits it", async () => {
+  mocks.choices.mockReturnValue(nonePicked());
+  mocks.mutateAsync.mockResolvedValue("/oauth/consent?sig=next");
+  render(<OrganizationPicker />);
+  fireEvent.click(continueButton());
+  fireEvent.click(screen.getByRole("radio", { name: /E2E Second Organization/ }));
+  expect(screen.queryByRole("alert")).toBeNull();
+  fireEvent.click(continueButton());
+  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith("org-2"));
+});
+
+it("keeps Continue enabled when every organization is unavailable and says why nothing can be chosen", () => {
+  const closed = memberships.map(membership => ({ ...membership, disabledReason: "API access is disabled for this organization." }));
+  mocks.choices.mockReturnValue(nonePicked({ memberships: closed }));
+  render(<OrganizationPicker />);
+  expect(continueButton().disabled).toBe(false);
+  fireEvent.click(continueButton());
+  expect(screen.getByRole("alert").textContent).toBe("No organization is available. Each one above says why.");
+  expect(mocks.mutateAsync).not.toHaveBeenCalled();
 });
