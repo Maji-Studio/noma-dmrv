@@ -35,7 +35,6 @@ import { deleteDocumentInTransaction } from "@/data-access/document-mutations";
 import { createTransportLeg } from "@/data-access/transport-legs";
 import { loadFacilityEmissionsOverview } from "@/lib/read-models/facility-emissions-overview";
 import { loadBatchEmissionLines } from "@/lib/read-models/batch-emission-lines";
-import { removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 import {
   createLineageFixture,
   cleanupLineageFixture,
@@ -751,12 +750,13 @@ it("allows document lists for claimed entries", async () => {
 });
 
 it("uses the read model blocker for an unpinned batch", async () => {
+  const storedEntries = await listEmissionEntries(ctx, lineage.batchId);
   await db.update(creditBatches).set({ removalTemplateId: null })
     .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, lineage.batchId)));
   try {
     await expect(create()).rejects.toThrow("Set a Removal template in Settings, Removal templates.");
     await expect(loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId)).resolves.toEqual({
-      status: "blocked", blocker: removalTemplateBlocker("unpinnedTemplate"),
+      status: "blocked", blocker: "unpinnedTemplate", storedEntries,
     });
   } finally {
     await db.update(creditBatches).set({ removalTemplateId: templateId })

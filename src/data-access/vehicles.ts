@@ -18,6 +18,7 @@ import {
   type Vehicle,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { DomainError } from "@/lib/domain-errors";
 import { formatFleetDeleteBlocker } from "@/lib/fleet/messages";
 import {
@@ -325,7 +326,7 @@ export async function deleteVehicle(
         locked.code,
         await countVehicleUsage(ctx, tx, vehicleId),
       );
-      if (blocker) throw new DomainError("conflict", blocker);
+      if (blocker) throw inUseDeleteRefusal(blocker, ["vehicleId"]);
 
       await tx
         .delete(vehicles)
@@ -333,7 +334,7 @@ export async function deleteVehicle(
     });
   } catch (error) {
     if (VEHICLE_FK_CONSTRAINTS.some((constraint) => isPgForeignKeyViolation(error, constraint))) {
-      throw new DomainError("conflict", VEHICLE_IN_USE);
+      throw inUseDeleteRefusal(VEHICLE_IN_USE, ["vehicleId"]);
     }
     throw error;
   }

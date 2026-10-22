@@ -5,7 +5,6 @@
  * Server-side functions for delivery CRUD operations
  */
 
-import { DomainError } from "@/lib/domain-errors";
 import {
   getDeliveries as getDeliveriesData,
   getDeliveryWithRelations as getDeliveryWithRelationsData,
@@ -23,7 +22,6 @@ import { requireOrgFacility } from "@/data-access/utils";
 import {
   createDeliverySchema,
   deliveryOperationInput,
-  deliveryOperationFieldAliases,
   deleteDeliverySchema,
   deliveryFilterSchema,
   resolveDeliveryDistanceSource,
@@ -118,18 +116,7 @@ export async function createDeliveryFn(
   data: z.infer<typeof createDeliverySchema>
 ): Promise<ActionResult<CreatedDelivery>> {
   return withAction(async (ctx) => {
-    let delivery: CreatedDelivery;
-    try {
-      ({ delivery } = await runOperationInProcess(recordDeliveryForUi, ctx, deliveryOperationInput(createDeliverySchema.parse(data))));
-    } catch (error) {
-      if (error instanceof DomainError) {
-        throw new DomainError(error.code, error.message, {
-          ...error,
-          issues: error.issues.map(issue => ({ ...issue, path: issue.path.map((part, index) => index === 0 && typeof part === "string" ? (deliveryOperationFieldAliases as Readonly<Record<string, string>>)[part] ?? part : part) })),
-        });
-      }
-      throw error;
-    }
+    const { delivery } = await runOperationInProcess(recordDeliveryForUi, ctx, deliveryOperationInput(createDeliverySchema.parse(data)));
 
     return delivery;
   }, {

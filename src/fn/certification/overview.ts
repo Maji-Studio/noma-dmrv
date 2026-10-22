@@ -419,6 +419,7 @@ export async function loadCreditBatchHealthSummaries(
       const ghgStatementSubmission = ghgStatementId
         ? (ghgStatementSubmissions.get(ghgStatementId) ?? null)
         : null;
+      const emissionDisplay = emissionDisplayByBatch.get(batchId);
       summaries[batchId] = {
         recordLock: locksById.get(batchId)!,
         state: health.state,
@@ -430,7 +431,7 @@ export async function loadCreditBatchHealthSummaries(
           canManage: orgCtx.isPlatformAdmin || orgCtx.orgRole === "admin",
           health,
           durability: durabilityByBatch.get(batchId),
-          emissionLines: emissionDisplayByBatch?.get(batchId)?.lines,
+          emissionLines: emissionDisplay?.status === "ready" ? emissionDisplay.lines : undefined,
         }).check.length,
         removalId,
         removalCode: batchRow?.removalCode ?? null,

@@ -384,9 +384,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     setError: setCreateError,
     setUpdateError,
     getCreateErrorMessage: (error, { onRefusal }) => {
-      const shown = onRefusal(error);
-      if (shown) return shown.footer;
-      return error instanceof Error ? error.message : "Application was not created. Check the form.";
+      return onRefusal(error, error instanceof Error ? error.message : "Application was not created. Check the form.");
     },
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this application.",
@@ -467,8 +465,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         );
       }
     } catch (error) {
-      const shown = onRefusal(error);
-      setUpdateError(shown ? shown.footer : toSaveErrorMessage(error, "Application was not saved. Try again."));
+      setUpdateError(onRefusal(error, toSaveErrorMessage(error, "Application was not saved. Try again.")));
     }
   };
 

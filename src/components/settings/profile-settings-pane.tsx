@@ -140,12 +140,10 @@ function PasswordForm() {
         if (otherDevicesSignedOut) toast.success(PASSWORD_CHANGED);
         else toast.warning("Password changed. Other devices are still signed in, so sign out on each of them.");
       } catch (error) {
-        const refusal = refuseSave(error);
-        if (refusal) {
-          setServerError(refusal.footer ?? "");
-          return;
-        }
-        setServerError(error instanceof Error ? error.message : "Your password was not changed. Try again.");
+        setServerError(refuseSave(
+          error,
+          error instanceof Error ? error.message : "Your password was not changed. Try again.",
+        ) ?? "");
       }
     }),
   );
