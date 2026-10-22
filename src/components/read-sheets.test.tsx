@@ -56,6 +56,8 @@ import { applicationSheetSections } from "@/components/applications/application-
 import { customerSheetSections } from "@/components/customers/customer-read-sections";
 import { deliverySheetSections } from "@/components/deliveries/delivery-read-sections";
 import { facilitySheetSections } from "@/components/facilities/facility-read-sections";
+import type { FacilityOutputStockGroup } from "@/data-access/facility-output-stock";
+import { LOAD_FAILED } from "@/lib/copy-utils";
 import { feedstockTypeSheetSections } from "@/components/feedstock-types/feedstock-type-read-sections";
 import { feedstockSheetSections } from "@/components/feedstocks/feedstock-read-sections";
 import { formulationSheetSections } from "@/components/formulations/formulation-read-sections";
@@ -114,7 +116,7 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
   { file: "components/facilities/facility-read-sections.tsx", name: "facility", sections: facilitySheetSections(as({
     id: "facility", name: "Mafinga", ...TEST_SITE_POSITION, country: "TZ", timezone: "Africa/Dar_es_Salaam", location: "Mafinga", address: null,
     contactEmail: null, contactPhone: null, durabilityOption: "200_year", reactorCount: 2,
-    storageSummary: { feedstockBinCount: 2, biocharBinCount: 1, productBinCount: 3 }, inventorySummary: { feedstockWetKg: 1200, biocharKg: 800, productKg: 400 },
+    storageSummary: { feedstockBinCount: 2, biocharBinCount: 1, productBinCount: 3 }, inventorySummary: { feedstockWetKg: 1200 },
   })) },
   { file: "components/feedstock-types/feedstock-type-read-sections.tsx", name: "feedstock type", sections: feedstockTypeSheetSections(as({
     id: "type", name: "Maize cobs", code: "FT-001", category: "agricultural", usage: "pyrolysis", archivedAt: null, isometricFeedstockTypeId: null, registryUrl: null, description: null,
@@ -152,6 +154,57 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
 afterEach(cleanup);
 
 describe("read sheets", () => {
+  const facilityWithStock = (stock?: Parameters<typeof facilitySheetSections>[1]) => facilitySheetSections(as({
+    id: "facility", timezone: "UTC", durabilityOption: "200_year", reactorCount: 0,
+    storageSummary: { feedstockBinCount: 0, biocharBinCount: 0, productBinCount: 0 },
+    inventorySummary: { feedstockWetKg: 1200 },
+  }), stock).find(section => section.title === "Inventory snapshot")!;
+  const settled = (biochar: FacilityOutputStockGroup | null, product: FacilityOutputStockGroup | null) => ({ data: { biochar, product }, isPending: false, isError: false });
+
+  it.each([
+    { name: "wet mass with a dry line", biochar: { wetKg: 800, dryBiocharKg: 640 }, product: { wetKg: 400, dryBiocharKg: 200 }, figures: ["800 kg wet mass", "400 kg wet mass"], dry: ["640 kg", "200 kg"] },
+    { name: "known dry biochar as the headline", biochar: { wetKg: null, dryBiocharKg: 640 }, product: { wetKg: null, dryBiocharKg: 200 }, figures: ["640 kg dry biochar", "200 kg dry biochar"], dry: [undefined, undefined] },
+    { name: "large masses, still in kg", biochar: { wetKg: 2500, dryBiocharKg: 2000 }, product: { wetKg: null, dryBiocharKg: 1200 }, figures: ["2,500 kg wet mass", "1,200 kg dry biochar"], dry: ["2,000 kg", undefined] },
+    { name: "empty groups", biochar: { wetKg: 0, dryBiocharKg: 0 }, product: { wetKg: 0, dryBiocharKg: 0 }, figures: ["0 kg wet mass", "0 kg wet mass"], dry: ["0 kg", "0 kg"] },
+  ])("shows the facility inventory with $name", ({ biochar, product, figures, dry }) => {
+    const snapshot = facilityWithStock(settled(biochar, product));
+    expect(snapshot.fields.map(field => [field.label, field.value])).toEqual([
+      ["Feedstock in bins", "1,200 kg wet mass"], ["Biochar in bins", figures[0]], ["Products in bins", figures[1]],
+    ]);
+    expect(snapshot.fields.slice(1).map(field => field.secondary?.value)).toEqual(dry);
+    expect(snapshot.fields.slice(1).map(field => field.hint)).toEqual([
+      figures[0].endsWith("wet mass") ? "Estimated wet mass at each batch's moisture. Sum of this facility's biochar bins, archived bins included." : "A bin here has no wet estimate, so this is the dry biochar sum of this facility's biochar bins, archived bins included.",
+      figures[1].endsWith("wet mass") ? "Estimated wet mass at each batch's moisture. Sum of this facility's product bins, archived bins included." : "A bin here has no wet estimate, so this is the dry biochar sum of this facility's product bins, archived bins included.",
+    ]);
+    const { container } = render(<EntitySideSheetSections sections={[snapshot]} />);
+    expect(container.textContent).toContain(figures[0]);
+    expect(container.textContent).not.toContain("Not recorded");
+    expect(container.textContent).not.toMatch(/[\u2013\u2014]/);
+  });
+
+  it("leaves out a settled group with no derivable figure and keeps the other", () => {
+    const snapshot = facilityWithStock(settled(null, { wetKg: 400, dryBiocharKg: 200 }));
+    expect(snapshot.fields.map(field => field.label)).toEqual(["Feedstock in bins", "Products in bins"]);
+  });
+
+  it("shows the skeleton while the first read is pending, not a token", () => {
+    const snapshot = facilityWithStock({ isPending: true, isError: false });
+    expect(snapshot.fields.slice(1)).toMatchObject([{ label: "Biochar in bins", value: null, pending: true }, { label: "Products in bins", value: null, pending: true }]);
+    const { container } = render(<EntitySideSheetSections sections={[snapshot]} />);
+    expect(container.textContent).not.toContain("Not recorded");
+  });
+
+  it("says the stock could not load when the first read fails", () => {
+    const snapshot = facilityWithStock({ isPending: false, isError: true });
+    expect(snapshot.fields.slice(1).map(field => field.value)).toEqual([LOAD_FAILED, LOAD_FAILED]);
+    expect(snapshot.fields.slice(1).every(field => !field.pending)).toBe(true);
+  });
+
+  it("keeps the last figures when a refetch fails", () => {
+    const snapshot = facilityWithStock({ ...settled({ wetKg: 800, dryBiocharKg: 640 }, { wetKg: 400, dryBiocharKg: 200 }), isError: true });
+    expect(snapshot.fields[1].value).toBe("800 kg wet mass");
+  });
+
   it.each([
     { name: "formulation", keys: ["name", "Blend composition by volume", "description"], first: "Formulation name", last: "Description" },
     { name: "reactor", keys: ["identifier", "Reactor configuration"], first: "Identifier", last: "Nominal throughput (tph)" },
