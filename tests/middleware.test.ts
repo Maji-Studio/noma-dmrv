@@ -148,3 +148,21 @@ describe("OAuth login continuation", () => {
     },
   );
 });
+
+describe("Home after signing in", () => {
+  it.each([
+    { role: "admin", home: "/admin/organizations" },
+    { role: "user", home: "/dashboard" },
+    { role: undefined, home: "/dashboard" },
+  ])("sends a $role session from / and the auth pages to $home", async ({ role, home }) => {
+    const { updateSession } = await import("@/lib/auth/middleware");
+    for (const path of ["/", "/login", "/forgot-password"]) {
+      for (const activeOrganizationId of [null, "org-1"]) {
+        getSessionMock.mockResolvedValue({ user: { role, emailVerified: true }, session: { activeOrganizationId } });
+        const response = await updateSession(new NextRequest(`http://localhost:3100${path}`));
+        expect(response.status).toBe(307);
+        expect(new URL(response.headers.get("location")!).pathname).toBe(home);
+      }
+    }
+  });
+});

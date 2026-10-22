@@ -6,7 +6,10 @@ import type { ViewerOrg } from "./viewer-org-rules";
 
 const state = vi.hoisted(() => ({
   sessionOrganizationId: null as string | null,
+  pathname: "/dashboard",
 }));
+
+vi.mock("next/navigation", () => ({ usePathname: () => state.pathname }));
 
 vi.mock("next/link", () => ({
   default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a>,
@@ -38,6 +41,7 @@ function render(viewer: ViewerOrg | null) {
 
 beforeEach(() => {
   state.sessionOrganizationId = null;
+  state.pathname = "/dashboard";
 });
 
 describe("PlatformAdminBar", () => {
@@ -59,6 +63,12 @@ describe("PlatformAdminBar", () => {
   it("is absent for members and without a viewer", () => {
     expect(render({ ...outsider, orgRole: "member", isPlatformAdmin: false })).toBe("");
     expect(render(null)).toBe("");
+  });
+
+  it("is absent on the Platform home it links back to", () => {
+    state.pathname = "/admin/organizations";
+
+    expect(render(outsider)).toBe("");
   });
 
   it("claims nothing while another tab has switched the session organization", () => {

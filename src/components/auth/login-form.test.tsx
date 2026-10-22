@@ -27,11 +27,18 @@ async function submit() {
   fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
   await waitFor(() => expect(mocks.signIn).toHaveBeenCalled());
 }
-it.each(["/settings", "//evil.test", "https://evil.test"])("keeps normal sign-in navigation safe for %s", async from => {
+it("navigates to the server-selected home when from is absent", async () => {
+  mocks.search = new URLSearchParams();
+  mocks.signIn.mockResolvedValue({ success: true });
+  await submit();
+  await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/"));
+  expect(mocks.assign).not.toHaveBeenCalled();
+});
+it.each(["/settings", "", "settings", "//evil.test", "https://evil.test", "/path?next=https://evil.test", "/\\evil.test"])("keeps normal sign-in navigation safe for %s", async from => {
   mocks.search = new URLSearchParams({ from });
   mocks.signIn.mockResolvedValue({ success: true });
   await submit();
-  await waitFor(() => expect(mocks.push).toHaveBeenCalledWith(from === "/settings" ? from : "/dashboard"));
+  await waitFor(() => expect(mocks.push).toHaveBeenCalledWith(from === "/settings" ? from : "/"));
   expect(mocks.assign).not.toHaveBeenCalled();
 });
 it("fully navigates to the provider continuation after OAuth sign-in", async () => {
