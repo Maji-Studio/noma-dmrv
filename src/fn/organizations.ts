@@ -14,6 +14,7 @@ import { db } from "@/db";
 import { organizations, sessions } from "@/db/schema";
 import { auth } from "@/lib/auth/better-auth";
 import {
+  isAdmin,
   requireOrgContext,
   requireOrgRole,
   requirePlatformAdmin,
@@ -244,13 +245,6 @@ export async function removeMemberAction(
 
 // --- Org switching --------------------------------------------------------
 
-/**
- * Switch the session's active organization. Members go through the plugin
- * (which refreshes the cookie-cached session). A Platform Admin entering an org
- * they are not a member of writes `activeOrganizationId` directly and clears
- * the cached session snapshot so the next read reflects the switch.
- */
-// Callers must pair a successful switch with resetAfterOrgSwitch() from useResetAfterOrgSwitch.
 // The switch toast reads "<Org> did not open. <reason>", so each reason says
 // why in the switcher's own words. Better Auth's texts are system language.
 const SWITCH_ACCESS_LOST = "You no longer have access to it.";
@@ -284,6 +278,13 @@ function apiErrorCode(error: unknown): string | null {
   return null;
 }
 
+/**
+ * Switch the session's active organization. Members go through the plugin
+ * (which refreshes the cookie-cached session). A Platform Admin entering an org
+ * they are not a member of writes `activeOrganizationId` directly and clears
+ * the cached session snapshot so the next read reflects the switch.
+ */
+// Callers must pair a successful switch with resetAfterOrgSwitch() from useResetAfterOrgSwitch.
 export async function setActiveOrganizationAction(
   input: unknown
 ): Promise<ActionResult<{ organizationId: string }>> {
@@ -302,6 +303,9 @@ export async function setActiveOrganizationAction(
       // Target-org member: let the plugin verify membership and refresh cookie.
       await setActiveOrganizationAsMember(organizationId);
     } else {
+      // No membership row: a removed member looks the same as a stranger. Say
+      // the same thing for every id, existing or not, so nothing leaks.
+      if (!(await isAdmin())) throw new SafeError(SWITCH_ACCESS_LOST);
       await requirePlatformAdmin();
       await setActiveOrgForPlatformAdmin(sessionId, organizationId);
     }

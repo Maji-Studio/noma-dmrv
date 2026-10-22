@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   persistLastActiveOrganization: vi.fn(),
   setActiveOrganization: vi.fn(),
   requirePlatformAdmin: vi.fn(),
+  isAdmin: vi.fn(),
   loggerError: vi.fn(),
 }));
 
@@ -35,6 +36,7 @@ vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn(),
   requireOrgRole: vi.fn(),
   requirePlatformAdmin: mocks.requirePlatformAdmin,
+  isAdmin: mocks.isAdmin,
 }));
 
 vi.mock("@/data-access/organizations", () => ({
@@ -133,6 +135,18 @@ describe("setActiveOrganizationAction", () => {
     const result = await setActiveOrganizationAction({ organizationId: ORGANIZATION_ID });
 
     expect(result).toEqual({ success: false, error: reason });
+    expect(mocks.persistLastActiveOrganization).not.toHaveBeenCalled();
+  });
+
+  it("tells a removed member they no longer have access, without asking for admin rights", async () => {
+    mocks.findMembershipRole.mockResolvedValue(null);
+    mocks.isAdmin.mockResolvedValue(false);
+
+    const result = await setActiveOrganizationAction({ organizationId: ORGANIZATION_ID });
+
+    expect(result).toEqual({ success: false, error: "You no longer have access to it." });
+    expect(mocks.requirePlatformAdmin).not.toHaveBeenCalled();
+    expect(mocks.setActiveOrganization).not.toHaveBeenCalled();
     expect(mocks.persistLastActiveOrganization).not.toHaveBeenCalled();
   });
 

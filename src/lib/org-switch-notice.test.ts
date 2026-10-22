@@ -87,8 +87,8 @@ describe("org switch failure message", () => {
   });
 
   it("closes a reason that comes without a period", () => {
-    expect(orgSwitchFailedMessage("Mafinga Biochar", "User is not a member of the organization")).toBe(
-      "Mafinga Biochar did not open. User is not a member of the organization.",
+    expect(orgSwitchFailedMessage("Mafinga Biochar", "Ask an administrator for access")).toBe(
+      "Mafinga Biochar did not open. Ask an administrator for access.",
     );
   });
 

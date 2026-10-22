@@ -24,6 +24,15 @@ describe("FormActions", () => {
     expect(markup).toContain("Action failed");
   });
 
+  it("keeps the submit label and marks it busy and disabled while submitting", () => {
+    const markup = renderToStaticMarkup(<FormActions isSubmitting submitLabel="Save record" />);
+    const button = markup.match(/<button[^>]*type="submit"[^>]*>/)?.[0] ?? "";
+
+    expect(button).toContain('aria-busy="true"');
+    expect(button).toContain("disabled");
+    expect(markup).toContain("Save record");
+  });
+
   it("does not render an alert without an action error", () => {
     const markup = renderToStaticMarkup(<FormActions submitLabel="Save record" />);
 
