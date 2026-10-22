@@ -49,7 +49,7 @@ function matchedOn(basis: ProductionRunCreditBatchPreviewBasis): string {
 const START_DAY_STANDS_IN =
   "This run has no end time yet, so its start day stands in. Once it is completed, it joins the batch that covers its end day, which can be another one.";
 
-/** The window as its own field, so a phone can hide it (#1059). */
+/** " (Sep 1 to Sep 30, 2026)": the `window` field, hidden on phones, except where a warning is about the window. */
 function windowLabel(batch: CreditBatchPreviewBatch): string {
   return ` (${formatDateRange(batch.startDate, batch.endDate)})`;
 }
