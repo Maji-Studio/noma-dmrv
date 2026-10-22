@@ -1,8 +1,8 @@
 /**
  * InviteMemberDialog: the Admin-only invite form, opened from the Members pane.
  * Same fields, schema and action as the inline form it replaced. On success it
- * closes and hands the accept link back to the pane, which shows it until the
- * next invitation (email delivery is best-effort, the link is the reliable path).
+ * closes and hands the accept link and the delivery result back to the pane,
+ * which shows them until the next invitation.
  */
 "use client";
 
@@ -16,6 +16,7 @@ import { FormDialog } from "@/components/ui/form-dialog";
 import { useToast } from "@/components/ui/toast";
 import { useInviteMember } from "@/hooks/use-organizations";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
+import type { InvitationDelivery } from "./invitation-link-notice";
 import { ORG_ROLE_OPTIONS } from "./organization-roles";
 
 type InviteForm = InviteMemberInput;
@@ -29,8 +30,8 @@ export function InviteMemberDialog({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  /** Called with the accept link after the invitation is created. */
-  onInvited: (acceptUrl: string) => void;
+  /** Called with the accept link and whether the email went out, after the invitation is saved. */
+  onInvited: (invitation: InvitationDelivery) => void;
 }) {
   const titleId = useId();
   const formId = useId();
@@ -57,7 +58,7 @@ export function InviteMemberDialog({
     setServerError("");
     try {
       const result = await inviteMember.mutateAsync(values);
-      onInvited(result.acceptUrl);
+      onInvited({ email: values.email, acceptUrl: result.acceptUrl, emailSent: result.emailSent });
       reset(EMPTY_INVITE);
       toast.success("Invitation created.");
       onClose();

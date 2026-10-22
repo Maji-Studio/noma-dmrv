@@ -79,3 +79,22 @@ it("validates reply-to as an email even outside production", async () => {
     expect.objectContaining({ path: ["RESEND_REPLY_TO"] }),
   ]) });
 });
+
+it.each([
+  "noma <noreply@noma.maji.studio>",
+  "Noma DMRV <noreply@noma.maji.studio>",
+  "noreply@noma.maji.studio",
+])("accepts the sender %j", async (from) => {
+  vi.stubEnv("RESEND_FROM_EMAIL", from);
+  expect((await import("./env")).env.RESEND_FROM_EMAIL).toBe(from);
+});
+
+it.each(["noma <not-an-email>", "noma noreply@noma.maji.studio", "noma <>", "<>", "just a name"])(
+  "rejects the sender %j",
+  async (from) => {
+    vi.stubEnv("RESEND_FROM_EMAIL", from);
+    await expect(import("./env")).rejects.toMatchObject({ issues: expect.arrayContaining([
+      expect.objectContaining({ path: ["RESEND_FROM_EMAIL"] }),
+    ]) });
+  },
+);
