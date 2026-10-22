@@ -6,7 +6,7 @@
  * delivery has left. Locks are covered with the shared hook.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Application } from "@/db/schema/application";
 import { ActionError } from "@/lib/action-error";
@@ -66,7 +66,7 @@ const OPEN_LOCK: RecordLockView = { level: "open", heldBy: [], usedBy: [], freeF
 const refusal = (path: string, message: string) =>
   new ActionError({ error: message, code: "validation_failed", issues: [{ path: [path], code: "validation_failed", message }] });
 
-const LOCK_REASON = "This application is in a Removal sent to Isometric. Undo the change to save.";
+const LOCK_REASON = "This application is in a Removal sent to Isometric. Correct the Removal first."
 const lockRefusal = (path: string) =>
   new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [{ path: [path], code: "certification_locked", message: LOCK_REASON }] });
 
@@ -122,15 +122,16 @@ describe("ApplicationForm server refusals", () => {
       edit: () => fireEvent.change(screen.getByLabelText(/Field size/), { target: { value: "3" } }),
     });
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect(await screen.findByText("Not saved. 1 field is locked.")).toBeTruthy();
-    expect(screen.getAllByText("Locked").length).toBeGreaterThanOrEqual(1);
+    expect(await screen.findAllByText("Not saved. 1 field is locked.")).toHaveLength(1);
+    expect(screen.getAllByText("Locked. Your change was not saved.").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText(LOCK_REASON)).toBeNull();
+    expect((screen.getByLabelText(/Field size/) as HTMLInputElement).value).toBe("2");
   });
 
   it("leaves a whole-record lock on the unchanged delivery to the footer", async () => {
     const onSubmit = renderRefused(lockRefusal("deliveryId"), { footer: LOCK_REASON });
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect(screen.queryByText("Locked")).toBeNull();
+    expect(screen.queryByText("Locked. Your change was not saved.")).toBeNull();
     expect(screen.queryByText(/Not saved\./)).toBeNull();
   });
 });
@@ -139,3 +140,56 @@ vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({ facilityId: "facility-1" }),
   useFacilityClock: () => ({ timeZone: "UTC", hint: "" }),
 }));
+
+it("restores the committed baseline after an update whose attachment upload failed", async () => {
+  const client = new QueryClient();
+  let saved = APPLICATION;
+  const onSubmit = vi.fn();
+  const form = () => <QueryClientProvider client={client}><ApplicationForm application={saved} lock={OPEN_LOCK} deliveries={[DELIVERY]} onSubmit={onSubmit} errorMessage="Application updated, but 1 attachment failed to upload." /></QueryClientProvider>;
+  const view = render(form());
+  const size = () => screen.getByLabelText(/Field size/) as HTMLInputElement;
+  fireEvent.change(size(), { target: { value: "3" } });
+  fireEvent.submit(view.container.querySelector("form")!);
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+  // The partial-save handler explicitly advances the baseline while the
+  // failed upload keeps this same form mounted. Preserve later typed input too.
+  saved = { ...APPLICATION, fieldSizeHa: 3, version: 2 };
+  fireEvent.change(size(), { target: { value: "3.5" } });
+  act(() => onSubmit.mock.calls[0][2](saved));
+  view.rerender(form());
+  expect(size().value).toBe("3.5");
+  onSubmit.mockImplementation((_data, onRefusal) => onRefusal(lockRefusal("fieldSizeHa"), LOCK_REASON));
+  // No further typing: the value typed during upload must remain dirty.
+  fireEvent.submit(view.container.querySelector("form")!);
+  await waitFor(() => expect(screen.getByText("Locked. Your change was not saved.")).toBeTruthy());
+  expect(size().value).toBe("3");
+});
+
+
+it("keeps typed input when the same application is refetched while editing", () => {
+  const client = new QueryClient();
+  const form = (application: Application) => (
+    <QueryClientProvider client={client}>
+      <ApplicationForm application={application} lock={OPEN_LOCK} deliveries={[DELIVERY]} onSubmit={vi.fn()} />
+    </QueryClientProvider>
+  );
+  const view = render(form(APPLICATION));
+  const size = () => screen.getByLabelText(/Field size/) as HTMLInputElement;
+  fireEvent.change(size(), { target: { value: "4" } });
+  view.rerender(form({ ...APPLICATION, fieldSizeHa: 3, version: 2 }));
+  expect(size().value).toBe("4");
+});
+
+it("scrolls to the partial-save message again after a second committed update", async () => {
+  const client = new QueryClient();
+  const message = "Application updated, but 1 attachment failed to upload.";
+  const onSubmit = vi.fn((_data, _onRefusal, onCommitted) => onCommitted(APPLICATION));
+  const view = render(<QueryClientProvider client={client}><ApplicationForm application={APPLICATION} lock={OPEN_LOCK} deliveries={[DELIVERY]} onSubmit={onSubmit} errorMessage={message} /></QueryClientProvider>);
+  for (const attempt of [1, 2]) {
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+    fireEvent.submit(view.container.querySelector("form")!);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(attempt));
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
+    expect(screen.getByText(message)).toBeTruthy();
+  }
+});

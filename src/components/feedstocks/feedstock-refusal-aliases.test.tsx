@@ -23,10 +23,10 @@ type Values = { totalWetMassKg: string; allocations: Array<{ allocatedWetMassKg:
 
 function Harness({ edited }: { edited: boolean }) {
   const [blockers, setBlockers] = useState<string | null>(null);
-  const { control, register, handleSubmit, setError, formState: { errors } } = useForm<Values>({
+  const { control, register, handleSubmit, setError, resetField, formState: { errors } } = useForm<Values>({
     defaultValues: { totalWetMassKg: "400", allocations: [{ allocatedWetMassKg: "400" }] },
   });
-  const refuse = useSaveRefusal({ control, setError, formId: FORM_ID, aliases: feedstockRefusalAliases(edited) });
+  const refuse = useSaveRefusal({ control, setError, resetField, formId: FORM_ID, aliases: feedstockRefusalAliases(edited) });
   const submit = handleSubmit(() => {
     setBlockers(null);
     const refusal = new ActionError({

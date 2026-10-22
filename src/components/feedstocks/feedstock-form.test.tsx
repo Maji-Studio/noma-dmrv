@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { ActionError } from "@/lib/action-error";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentProps, ReactNode } from "react";
@@ -221,6 +224,59 @@ describe("FeedstockForm single-bin mass editing", () => {
     massWetKg: 100,
     moistureContentPercent: 25,
   } as FeedstockWithRelations;
+
+  it.each(["totalWetMassKg", "allocations.0.allocatedWetMassKg"])("reverts both mass controls after a lock refusal on %s", async field => {
+    const onSubmit = vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+      error: "Sent to a Removal.", code: "certification_locked",
+      issues: [{ path: ["massWetKg"], code: "certification_locked", message: "Sent to a Removal." }],
+    }), "Feedstock was not saved."));
+    const view = render(<FeedstockForm feedstock={feedstock} onSubmit={onSubmit} />);
+    const input = (name: string) => view.container.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
+    try {
+      // An allocation-only edit must stay within the unchanged delivery total.
+      const editedMass = field === "totalWetMassKg" ? "120" : "80";
+      fireEvent.change(input(field), { target: { value: editedMass } });
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      await waitFor(() => expect(input("totalWetMassKg").value).toBe("100"));
+      expect(input("allocations.0.allocatedWetMassKg").value).toBe("100");
+    } finally { cleanup(); }
+  });
+
+  it("closes a newly opened transport override after a Sent refusal restores the saved distance", async () => {
+    const onSubmit = vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+      error: "Sent to a Removal.", code: "certification_locked",
+      issues: [{ path: ["transportDistanceKm"], code: "certification_locked", message: "Sent to a Removal." }],
+    }), "Feedstock was not saved."));
+    const view = render(<FeedstockForm feedstock={feedstock} onSubmit={onSubmit} />);
+    try {
+      fireEvent.click(view.getByRole("button", { name: "Override the one-way distance" }));
+      const input = () => view.container.querySelector<HTMLInputElement>('input[name="transportDistanceKm"]');
+      fireEvent.change(input()!, { target: { value: "60" } });
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      await waitFor(() => expect(input()).toBeNull());
+      expect(view.getByRole("button", { name: "Override the one-way distance" })).toBeTruthy();
+    } finally { cleanup(); }
+  });
+
+  it("restores a saved override cleared before a Sent refusal", async () => {
+    const saved = { ...feedstock, distanceKmOverride: 60, distanceSource: "document", distanceNote: "Detour" } as FeedstockWithRelations;
+    const onSubmit = vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+      error: "Sent to a Removal.", code: "certification_locked",
+      issues: [{ path: ["transportDistanceKm"], code: "certification_locked", message: "Sent to a Removal." }],
+    }), "Feedstock was not saved."));
+    const view = render(<FeedstockForm feedstock={saved} onSubmit={onSubmit} />);
+    const input = () => view.container.querySelector<HTMLInputElement>('input[name="transportDistanceKm"]');
+    try {
+      fireEvent.click(view.getByRole("button", { name: "Reset to the location default" }));
+      expect(input()?.value).not.toBe("60");
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      await waitFor(() => expect(input()?.value).toBe("60"));
+      expect(view.getByRole("button", { name: "Reset to the location default" })).toBeTruthy();
+    } finally { cleanup(); }
+  });
 
   it.each([150, 80])("submits an edited total of %s kg as its bin allocation", async (mass) => {
     const onSubmit = vi.fn();

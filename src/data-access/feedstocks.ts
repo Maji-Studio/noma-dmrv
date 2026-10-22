@@ -1,5 +1,5 @@
 import { readRecordDependents } from "./record-lock-dependents";
-import { assertRecordLockFields } from "@/lib/record-lock-fields";
+import { assertRecordLockFields, withLockedFieldIssues } from "@/lib/record-lock-fields";
 import { recordLocks } from "@/lib/record-lock";
 import { partyArchived } from "@/lib/party-domain-errors";
 import { lockSupplierReference } from "./party-reference-guards";
@@ -609,10 +609,6 @@ function feedstockDistanceColumns(
   previous?: Pick<FeedstockWithRelations, "distanceKmOverride" | "distanceSource">,
   routeAnchorChanged = false,
 ) {
-  if (previous && input.transportDistanceKm === undefined && input.transportDistanceSource != null
-    && (previous.distanceKmOverride == null || routeAnchorChanged)) {
-    throw new DomainError("validation_failed", "The feedstock distance source was not changed. Set transportDistanceKm to change its source.");
-  }
   // The v1 input contract accepts zero; it means derived, never a stored override.
   const distanceKmOverride = input.transportDistanceKm !== undefined
     ? input.transportDistanceKm === 0 ? null : input.transportDistanceKm
@@ -682,26 +678,39 @@ export async function updateFeedstockInTransaction(
   }
   const transportBefore = capture ? await readFeedstockTransportSnapshot(ctx, tx, feedstockId) : undefined;
 
-  await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
-    ctx,
-    tx,
-    { entityType: "feedstock", entityId: feedstockId },
-    "update",
-  ), "certification_locked");
-
-  assertRecordLockFields(recordLocks.feedstock({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "feedstock", entityId: feedstockId }) }), locked, feedstockData);
-  // Derive before anything reads the new masses: the status, the stock-lane
-  // check, and the write below must all see the same dry figure.
-  const derivedMassDryKg = resolveFeedstockDryMass(locked, feedstockData);
-  const effectiveChanges = { ...feedstockData, massDryKg: derivedMassDryKg };
-
-  const status = determineFeedstockStatus({ ...locked, ...effectiveChanges });
   const routeAnchorChanged =
     (feedstockData.supplierId !== undefined &&
       feedstockData.supplierId !== locked.supplierId) ||
     (feedstockData.facilityId !== undefined &&
       feedstockData.facilityId !== locked.facilityId);
   const distanceColumns = feedstockDistanceColumns({ transportDistanceKm, transportDistanceSource, distanceNote }, locked, routeAnchorChanged);
+
+  // Compare operation names, including overrides stripped from feedstockData.
+  // Zero distance and an empty note both mean clearing the saved override.
+  await withLockedFieldIssues(() => withFeedstockErrors(() => assertCanMutateCertifiedLineage(
+    ctx, tx, { entityType: "feedstock", entityId: feedstockId }, "update",
+  ), "certification_locked"), {
+    ...locked,
+    transportDistanceKm: locked.distanceKmOverride,
+    transportDistanceSource: locked.distanceKmOverride == null ? null : locked.distanceSource,
+  }, {
+    ...data,
+    transportDistanceKm: distanceColumns.distanceKmOverride,
+    transportDistanceSource: distanceColumns.distanceSource,
+    distanceNote: distanceColumns.distanceNote,
+  });
+
+  assertRecordLockFields(recordLocks.feedstock({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "feedstock", entityId: feedstockId }) }), locked, feedstockData);
+  if (transportDistanceKm === undefined && transportDistanceSource != null
+    && (locked.distanceKmOverride == null || routeAnchorChanged)) {
+    throw new DomainError("validation_failed", "The feedstock distance source was not changed. Set transportDistanceKm to change its source.");
+  }
+  // Derive before anything reads the new masses: the status, the stock-lane
+  // check, and the write below must all see the same dry figure.
+  const derivedMassDryKg = resolveFeedstockDryMass(locked, feedstockData);
+  const effectiveChanges = { ...feedstockData, massDryKg: derivedMassDryKg };
+
+  const status = determineFeedstockStatus({ ...locked, ...effectiveChanges });
   const effectiveStorageLocationId =
     feedstockData.storageLocationId !== undefined
       ? feedstockData.storageLocationId

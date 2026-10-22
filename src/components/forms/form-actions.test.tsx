@@ -1,6 +1,11 @@
+// @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useForm } from "react-hook-form";
+import { LOCK_REFUSAL_ROOT } from "./use-save-refusal";
 import { MapControls } from "@/components/map";
+import { RefusalSlotContext } from "@/components/ui/refusal-slot-context";
 import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-block-context";
 import { FormActions, reserveStickyFooterSpace } from "./form-actions";
 
@@ -199,5 +204,76 @@ describe("reserveStickyFooterSpace", () => {
     const footer = node(node(null));
 
     expect(reserveStickyFooterSpace(footer as unknown as HTMLElement)).toBeUndefined();
+  });
+});
+
+/** FormActions with a form whose lock refusal is filed, as `useSaveRefusal` does. */
+function LockRefused({ message }: { message: string }) {
+  const { control } = useForm({ errors: { root: { lockRefusal: { type: "locked" } } } });
+  return <div data-testid="form"><FormActions control={control} errorMessage={message} submitLabel="Save record" /></div>;
+}
+
+describe("FormActions refusal on a read-only form", () => {
+  const SENT: SubmitBlock = { reason: "Sent", tone: "error", readOnly: true };
+  afterEach(cleanup);
+
+  it("portals the error box into the sheet's refusal slot", () => {
+    const slot = document.createElement("div");
+    document.body.append(slot);
+    render(
+      <RefusalSlotContext.Provider value={slot}>
+        <SubmitBlockContext.Provider value={SENT}>
+          <LockRefused message="Locked. Its Removal was sent." />
+        </SubmitBlockContext.Provider>
+      </RefusalSlotContext.Provider>,
+    );
+    // A lock refusal says what happened to the edit; the lock line keeps the reason.
+    expect(slot.textContent).toBe("Your changes were not saved.");
+    expect(slot.textContent).not.toContain("Its Removal was sent.");
+    expect(screen.getByTestId("form").textContent).not.toContain("Its Removal was sent.");
+    const box = slot.querySelector<HTMLElement>("[data-top-refusal]");
+    expect(document.activeElement).toBe(box);
+    expect(box?.getAttribute("role")).toBe("group");
+    expect(box?.getAttribute("aria-labelledby")).toBe(box?.querySelector("[data-tone]")?.id);
+    expect(slot.querySelector('[role="alert"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save record" })).toBeNull();
+    slot.remove();
+  });
+
+  it("shows a refusal that is not a lock as the server worded it", () => {
+    const slot = document.createElement("div");
+    document.body.append(slot);
+    function Plain() {
+      const { control } = useForm();
+      return <FormActions control={control} errorMessage="Updated the application. The photo was not uploaded." />;
+    }
+    render(
+      <RefusalSlotContext.Provider value={slot}>
+        <SubmitBlockContext.Provider value={SENT}><Plain /></SubmitBlockContext.Provider>
+      </RefusalSlotContext.Provider>,
+    );
+    expect(slot.textContent).toContain("Updated the application.");
+    expect(slot.textContent).toContain("The photo was not uploaded.");
+    expect(slot.textContent).not.toContain("Your changes were not saved.");
+    slot.remove();
+  });
+
+  it("renders the box inline without a slot instead of vanishing", () => {
+    render(
+      <SubmitBlockContext.Provider value={SENT}>
+        <LockRefused message="Locked. Its Removal was sent." />
+      </SubmitBlockContext.Provider>,
+    );
+    expect(screen.getByTestId("form").textContent).toContain("Your changes were not saved.");
+    expect(screen.queryByRole("button", { name: "Save record" })).toBeNull();
+  });
+
+  it("shows nothing for a read-only form with no refusal", () => {
+    render(
+      <SubmitBlockContext.Provider value={SENT}>
+        <div data-testid="form"><FormActions submitLabel="Save record" /></div>
+      </SubmitBlockContext.Provider>,
+    );
+    expect(screen.getByTestId("form").textContent).toBe("");
   });
 });

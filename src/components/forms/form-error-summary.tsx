@@ -14,7 +14,7 @@
  */
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   useFormState,
   type Control,
@@ -32,11 +32,11 @@ import {
 
 /** Read once per refused save; the visible title keeps the live count. */
 const ANNOUNCEMENT = "Not saved. Fix the fields that show an error.";
-/** "Not saved. 1 field is locked. Undo that change to save." */
+/** "Not saved. 1 field is locked." */
 function lockedAnnouncement(count: number): string {
   return count === 1
-    ? "Not saved. 1 field is locked. Undo that change to save."
-    : `Not saved. ${count} ${pluralize(count, "field")} are locked. Undo those changes to save.`;
+    ? "Not saved. 1 field is locked."
+    : `Not saved. ${count} ${pluralize(count, "field")} are locked.`;
 }
 
 /** `setError` type of a lock refusal (see `useSaveRefusal`): worded apart from a fix. */
@@ -174,8 +174,12 @@ export function FormErrorSummary<
   const firstPath = visible ? items[0].path : null;
   const focusedAttempt = useRef(submitCount);
   const boxRef = useRef<HTMLDivElement>(null);
+  const detailId = useId();
   const focusedBox = useRef(submitCount);
   const messageOnly = !visible && Boolean(message);
+  const allLocked = items.length > 0 && items.every((item) => item.locked);
+  // A locked field is about to be disabled: focus goes to the first field to fix.
+  const focusPath = items.find((item) => !item.locked)?.path ?? null;
 
   // Sanctioned useEffect: moving focus after a refused save is imperative DOM
   // work. Once per attempt, and after react-hook-form's own focus (it runs a
@@ -188,10 +192,21 @@ export function FormErrorSummary<
     focusedBox.current = submitCount;
     const timer = setTimeout(() => {
       focusedAttempt.current = submitCount;
-      focusField(getForm(), firstPath);
+      // Every item a lock: the field turns disabled once the lock re-read
+      // lands, so it is not focused. The box takes focus, whether or not a
+      // reason sits beside the count, so the reason is read from it. If the
+      // record then turns read-only, this box goes and the top refusal takes
+      // focus and says something else, so nothing is read twice.
+      if (focusPath === null) {
+        const box = boxRef.current;
+        box?.scrollIntoView({ block: "nearest" });
+        box?.focus({ preventScroll: true });
+        return;
+      }
+      focusField(getForm(), focusPath);
     }, 0);
     return () => clearTimeout(timer);
-  }, [firstPath, submitCount, getForm]);
+  }, [firstPath, focusPath, submitCount, getForm]);
 
   // Sanctioned useEffect: a refusal with no field to focus (a whole-record
   // lock) leaves the message in a box at the end of the form, possibly below
@@ -219,55 +234,65 @@ export function FormErrorSummary<
   const lockedOnly = items.length > 0 && items.every((item) => item.locked) ? items.length : 0;
   if (visible && announced.attempt !== submitCount) setAnnounced({ attempt: submitCount, lockedOnly });
   const announcedAttempt = announced.attempt;
-  const announcement = announcedAttempt === submitCount && submitCount > 0 && !isSubmitSuccessful ? (
+  // A lock-only refusal moves focus to the box, which is read from there: no
+  // second line for it (see the focus effect).
+  const focusReadsBox = announced.lockedOnly > 0;
+  const announcement = announcedAttempt === submitCount && submitCount > 0 && !isSubmitSuccessful && !focusReadsBox ? (
     <p key={submitCount} role="alert" className="sr-only">
       {announced.lockedOnly > 0 ? lockedAnnouncement(announced.lockedOnly) : ANNOUNCEMENT}
     </p>
   ) : null;
 
-  if (!visible) {
-    return (
-      <>
-        {announcement}
-        {message && (
-          <div ref={boxRef} tabIndex={-1}>
-            <ServerError message={message} action={action} />
-          </div>
-        )}
-      </>
-    );
-  }
-
+  // One wrapper for both branches, so focus on it survives the list clearing.
   return (
     <>
       {announcement}
+      <div
+        ref={boxRef}
+        tabIndex={-1}
+        className="empty:hidden"
+        // Focus reads a named group (the count, then the reason and the fields);
+        // the message-only box is an alert already. A label that held the field
+        // names would also match the fields' own label lookups.
+        role={visible ? "group" : undefined}
+        aria-label={visible ? countLabel(items) : undefined}
+        aria-describedby={visible ? detailId : undefined}
+      >
+      {!visible ? (
+        message && <ServerError message={message} action={action} />
+      ) : (
       <Notice tone="error" live={false} title={countLabel(items)} data-form-error-summary="">
-        {message && <p className="body-small">{" "}{message}</p>}
-        <ul className="mt-4 flex flex-col">
-          {items.map((item) => (
-            <li key={item.path}>
-              {item.located ? (
-                <a
-                  href={`#${item.path}`}
-                  className="flex min-h-44 items-center py-4 text-[var(--color-text-primary)] underline underline-offset-2"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    focusField(getForm(), item.path);
-                  }}
-                >
-                  {/* One span keeps the label and message flowing as text. */}
-                  <span>
-                    <ItemText item={item} />
-                  </span>
-                </a>
-              ) : (
-                <p className="body-small flex min-h-44 items-center py-4">{item.message}</p>
-              )}
-            </li>
-          ))}
-        </ul>
+        <div id={detailId}>
+          {message && <p className="body-small">{" "}{message}</p>}
+          <ul className="mt-4 flex flex-col">
+            {items.map((item) => (
+              <li key={item.path}>
+                {item.located ? (
+                  <a
+                    href={`#${item.path}`}
+                    className="flex min-h-44 items-center py-4 text-[var(--color-text-primary)] underline underline-offset-2"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      // A locked field is disabled, so its link only scrolls to it.
+                      focusField(getForm(), item.path, { focus: !item.locked });
+                    }}
+                  >
+                    {/* One span keeps the label and message flowing as text. */}
+                    <span>
+                      <ItemText item={item} />
+                    </span>
+                  </a>
+                ) : (
+                  <p className="body-small flex min-h-44 items-center py-4">{item.message}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
         {action && <div className="mt-8">{action}</div>}
       </Notice>
+      )}
+      </div>
     </>
   );
 }

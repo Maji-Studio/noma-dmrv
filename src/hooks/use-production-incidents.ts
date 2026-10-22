@@ -1,3 +1,4 @@
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { useIntentMutation } from "./use-create-intent-key";
 import { patchArrayListCachesByPrefixWithSavedRow } from "./list-cache-utils";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
@@ -51,6 +52,7 @@ export function useCreateProductionIncident(
   const queryClient = useQueryClient();
 
   return useIntentMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.productionRun, { onRefusalOnly: true }),
     mutationFn: async (data: CreateProductionIncidentData, intentKey) =>
       unwrap(await createProductionIncidentFn(data, { intentKey })),
     onSuccess: (data, variables) => {
@@ -76,6 +78,7 @@ export function useUpdateProductionIncident(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.productionRun, { onRefusalOnly: true }),
     mutationFn: async (data: UpdateProductionIncidentData) => {
       const result = await updateProductionIncidentFn(data);
       if (!result.success) throwActionError(result);
@@ -103,6 +106,7 @@ export function useDeleteProductionIncident(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.productionRun, { onRefusalOnly: true }),
     mutationFn: async (data: DeleteProductionIncidentData) => {
       const result = await deleteProductionIncidentFn(data);
       if (!result.success) throwActionError(result);

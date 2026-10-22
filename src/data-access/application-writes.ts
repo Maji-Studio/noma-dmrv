@@ -1,3 +1,4 @@
+import { canonicalJson } from "@/lib/canonical-json";
 import { assertRecordLockFields } from '@/lib/record-lock-fields';
 import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
 import type { CaptureActivity } from "@/lib/activity-changes";
@@ -106,7 +107,18 @@ export async function createApplicationInTransaction(ctx: OrgContext, tx: DbTran
 export async function updateApplicationInTransaction(ctx: OrgContext, tx: DbTransaction, input: UpdateApplicationInput, capture?: CaptureActivity) {
   requireOrgScope(ctx);
   const { applicationId, expectedVersion, appliedWetMassKg, applicationMethod, ...fields } = input;
-  const scope = await lockApplicationWriteScope(ctx, tx, { applicationId, expectedVersion, deliveryId: fields.deliveryId, mutation: "update" });
+  const scope = await lockApplicationWriteScope(ctx, tx, {
+    applicationId, expectedVersion, deliveryId: fields.deliveryId, mutation: "update",
+    updateComparison: saved => ({
+      previous: { ...saved, appliedWetMassKg: tonnesToKg(saved.biocharAppliedTons), applicationMethod: saved.applicationMethodType, gisBoundary: canonicalJson(saved.gisBoundary ?? null) },
+      changes: {
+        ...fields, appliedWetMassKg, applicationMethod,
+        fieldIdentifier: fields.fieldIdentifier === undefined ? undefined : optionalText(fields.fieldIdentifier),
+        cropType: fields.cropType === undefined ? undefined : optionalText(fields.cropType),
+        gisBoundary: fields.gisBoundary === undefined ? undefined : canonicalJson(reparseBoundaryEnvelope(fields.gisBoundary)),
+      },
+    }),
+  });
   const existing = scope.application!;
   const previousAllocations = await readApplicationAllocations(ctx, tx, existing.id);
   const previousActivityScopes = await resolveWriteActivityScopes(ctx, tx, "application", existing.id);

@@ -1,5 +1,5 @@
 import { readRecordDependents } from "./record-lock-dependents";
-import { assertRecordLockFields, recordFieldEqual } from "@/lib/record-lock-fields";
+import { assertRecordLockFields, recordFieldEqual, withLockedFieldIssues } from "@/lib/record-lock-fields";
 import { recordLocks } from "@/lib/record-lock";
 import type { CaptureActivity } from "@/lib/activity-changes";
 import { db, type DbTransaction } from "@/db";
@@ -57,7 +57,15 @@ export async function updateBiocharProductInTransaction(ctx: OrgContext, tx: DbT
   if (!product || product.archivedAt) throw productNotFound();
   await lockBinStocks(ctx, tx, [product.storageLocationId, product.sourceBiocharStorageLocationId]);
   // Application allocation FKs take product KEY SHARE after artifact locks.
-  await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: "biocharProduct", entityId: productId }, "update"), "certification_locked");
+  await withLockedFieldIssues(() => withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: "biocharProduct", entityId: productId }, "update"), "certification_locked"), {
+    ...product,
+    placedAt: product.placedAt.toISOString(),
+  }, {
+    ...data,
+    placedAt: data.placedAt === undefined ? undefined : new Date(data.placedAt).toISOString(),
+    composition: data.composition && !compositionAllocationChanged(product.composition as Record<string, unknown>, data.composition)
+      ? product.composition : data.composition,
+  });
   const [locked] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).for("update");
   if (!locked || locked.archivedAt) throw productNotFound();
   assertRowVersion({ entity: "biocharProduct", id: productId, expectedVersion: data.expectedVersion, actualVersion: locked.version });

@@ -53,7 +53,7 @@ import { useFacility } from "@/hooks/use-facilities";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import { DistanceOverrideField } from "@/components/transport-legs/distance-override-field";
 import { DistanceDriftAction, SAVE_BEFORE_REFRESH_REASON } from "@/components/transport-legs/transport-distance-drift";
-import { distanceOverridePatch, emptyToNullSource, hasSavedOverride, overrideDistanceError } from "@/components/transport-legs/distance-override";
+import { distanceOverridePatch, emptyToNullSource, hasSavedOverride, isOverrideLockRefusal, overrideDistanceError } from "@/components/transport-legs/distance-override";
 import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { feedstockRefusalAliases } from "./feedstock-update-payload";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
@@ -64,6 +64,8 @@ const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: t
 const isFeedstockCertifyField = (field: string) =>
   isCertifyFormField("feedstock", field);
 
+/** The override fields: reset together on a refusal, cleared together with the override. */
+const OVERRIDE_FIELDS = ["transportDistanceKm", "transportDistanceSource", "distanceNote"] as const;
 const ROUTE_EMPTY = "Select a supplier and enter the wet mass to see the route.";
 
 const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = FEEDSTOCK_BIN_TYPES.join(",");
@@ -273,7 +275,7 @@ export function FeedstockForm({
   };
   const clearOverride = () => {
     setOverriding(false);
-    clearErrors(["transportDistanceKm", "transportDistanceSource", "distanceNote"]);
+    clearErrors([...OVERRIDE_FIELDS]);
     setValue("transportDistanceKm", null, { shouldDirty: true });
     setValue("transportDistanceSource", null, { shouldDirty: true });
     setValue("distanceNote", "", { shouldDirty: true });
@@ -326,7 +328,26 @@ export function FeedstockForm({
     }
   }, [fields.length, getValues, hasEditedAllocationMass, isEditMode, setValue, watchWetMass, dirtyFields.allocations]);
 
-  const refuseSave = useSaveRefusal({ control, setError, formId, aliases: feedstockRefusalAliases(hasEditedAllocationMass) });
+  // A refused override edit goes back to the saved override as a whole, and the panel follows it.
+  const restoreSavedOverride = () => {
+    setOverriding(hasSavedOverride(savedOverride));
+    for (const name of OVERRIDE_FIELDS) resetField(name);
+  };
+  const refuseWithFields = useSaveRefusal({ control, setError, formId, aliases: feedstockRefusalAliases(hasEditedAllocationMass),
+    resetField: (field) => {
+      if ((OVERRIDE_FIELDS as readonly string[]).includes(field)) restoreSavedOverride();
+      // Both controls describe the same saved row in edit mode.
+      else if (isEditMode && (field === "totalWetMassKg" || String(field) === "allocations.0.allocatedWetMassKg")) {
+        resetField("totalWetMassKg");
+        resetField("allocations.0.allocatedWetMassKg");
+        setHasEditedAllocationMass(false);
+      } else resetField(field);
+    },
+  });
+  const refuseSave: SaveRefusalHandler = (error, fallback) => {
+    if (isOverrideLockRefusal(error, OVERRIDE_FIELDS)) restoreSavedOverride();
+    return refuseWithFields(error, fallback);
+  };
   const handleFormSubmit = latched(handleSubmit((data) => {
     const submitted = {
       overriding,
