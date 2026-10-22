@@ -201,6 +201,7 @@ export function ReactorList() {
   };
 
   const handleDelete = (reactorId: string) => {
+    setDeleteError(null);
     setDeletingReactor((reactorsData?.items ?? []).find((row) => row.id === reactorId) ?? null);
   };
 
@@ -347,19 +348,21 @@ export function ReactorList() {
       </DataTable>
 
       {/* Delete Error */}
-      {deleteError && <ServerError message={deleteError} />}
+      {deleteError && !deletingReactor && <ServerError message={deleteError} />}
 
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog
         isOpen={!!deletingReactor}
         title="Delete reactor"
-        message="Are you sure you want to delete this reactor? This action cannot be undone. Note: Reactors with associated production runs cannot be deleted."
+        // Once the server refuses, its reason says the rule; the Note would repeat it.
+        message={deleteError ? "Are you sure you want to delete this reactor? This action cannot be undone." : "Are you sure you want to delete this reactor? This action cannot be undone. Note: Reactors with associated production runs cannot be deleted."}
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
           setDeletingReactor(null);
           setDeleteError(null);
         }}
         isPending={deleteReactor.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       {/* Unified Side Sheet */}

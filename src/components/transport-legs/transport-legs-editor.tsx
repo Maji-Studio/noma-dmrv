@@ -7,7 +7,6 @@ import { PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react/dis
 import { Button } from "@/components/ui";
 import { RowActionsMenu } from "@/components/ui/row-actions-menu";
 import { useToast } from "@/components/ui/toast";
-import { ServerError } from "@/components/forms";
 import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import {
@@ -292,7 +291,6 @@ export function TransportLegsEditor({
       {/* Delete Confirmation */}
       {!readOnly && (
         <>
-          {deleteError && <ServerError message={deleteError} />}
           <DeleteConfirmDialog
             isOpen={deleteTarget !== null}
             title="Delete transport leg"
@@ -303,6 +301,7 @@ export function TransportLegsEditor({
               setDeleteError(null);
             }}
             isPending={deleteMutation.isPending}
+            errorMessage={deleteError ?? undefined}
           />
         </>
       )}

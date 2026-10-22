@@ -190,7 +190,6 @@ export function TransportEvidenceDocuments({
         />
       )}
 
-      {deleteError && <ServerError message={deleteError} />}
       {!readOnly && (
         <DeleteConfirmDialog
           isOpen={!!deletingId}
@@ -202,6 +201,7 @@ export function TransportEvidenceDocuments({
             setDeleteError(null);
           }}
           isPending={deleteMutation.isPending}
+          errorMessage={deleteError ?? undefined}
         />
       )}
     </div>

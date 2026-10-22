@@ -232,7 +232,6 @@ export function ProductionReadingsDocuments({
         />
       )}
 
-      {deleteError && <ServerError message={deleteError} />}
       {!readOnly && (
         <DeleteConfirmDialog
           isOpen={!!deletingId}
@@ -244,6 +243,7 @@ export function ProductionReadingsDocuments({
             setDeleteError(null);
           }}
           isPending={deleteMutation.isPending}
+          errorMessage={deleteError ?? undefined}
         />
       )}
     </section>
