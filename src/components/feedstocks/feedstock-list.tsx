@@ -329,8 +329,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     } catch (error) {
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      const shown = onRefusal?.(error);
-      setUpdateError(shown ? shown.footer : toSaveErrorMessage(error, "Feedstock was not saved. Try again."));
+      const fallback = toSaveErrorMessage(error, "Feedstock was not saved. Try again.");
+      setUpdateError(onRefusal ? onRefusal(error, fallback) : fallback);
       const refused = getConflict(error);
       if (refused?.conflict.entity === STOCK_CONFLICT_ENTITY.storageLocation) {
         setUpdateBlockers(refused.blockers ?? []);

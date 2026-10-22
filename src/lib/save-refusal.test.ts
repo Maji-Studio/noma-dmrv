@@ -83,6 +83,49 @@ describe("planSaveRefusal", () => {
     expect(seen).toContain("moisturePercent");
   });
 
+  it.each([0, 12, "selected"])("captures one wildcard segment (%s) in an alias", (segment) => {
+    const plan = planSaveRefusal(refusal([issue(["ingredients", segment, "wetMassKg"])]), {
+      ...everything, aliases: { "ingredients.*.wetMassKg": "ingredientBins.*.massKg" },
+    });
+    expect(plan?.fieldErrors).toEqual([{ field: `ingredientBins.${segment}.massKg`, message: "Refused", locked: false }]);
+    expect(plan?.footer).toBeNull();
+  });
+
+  it("maps a supplier quick-add location field to its flat form name", () => {
+    const plan = planSaveRefusal(refusal([issue(["locations", 0, "gpsLatitude"])]), {
+      ...everything, aliases: { "locations.0.*": "*" },
+    });
+    expect(plan?.fieldErrors).toEqual([{ field: "gpsLatitude", message: "Refused", locked: false }]);
+  });
+
+  it.each([
+    ["ingredients", "wetMassKg"],
+    ["ingredients", 0, "nested", "wetMassKg"],
+    ["ingredients", 0, "moisturePercent"],
+    ["other", 0, "wetMassKg"],
+  ])("does not match wildcard aliases against a different path %j", (...path) => {
+    const plan = planSaveRefusal(refusal([issue(path)]), {
+      ...everything, aliases: { "ingredients.*.wetMassKg": "ingredientBins.*.massKg" },
+    });
+    expect(plan?.fieldErrors[0].field).toBe(path.join("."));
+  });
+
+  it("prefers a whole-path alias over a wildcard, then a wildcard over a first-segment alias", () => {
+    const plan = planSaveRefusal(refusal([
+      issue(["ingredients", 0, "wetMassKg"]),
+      issue(["ingredients", 1, "wetMassKg"]),
+      issue(["ingredients", 2, "moisturePercent"]),
+    ]), {
+      ...everything,
+      aliases: {
+        ingredients: "allIngredients",
+        "ingredients.*.wetMassKg": "ingredientBins.*.massKg",
+        "ingredients.0.wetMassKg": "firstMassKg",
+      },
+    });
+    expect(plan?.fieldErrors.map(({ field }) => field)).toEqual(["firstMassKg", "ingredientBins.1.massKg", "allIngredients"]);
+  });
+
   it("joins numeric path parts with dots", () => {
     const plan = planSaveRefusal(refusal([issue(["allocations", 0, "storageLocationId"])]), everything);
     expect(plan?.fieldErrors[0].field).toBe("allocations.0.storageLocationId");

@@ -27,7 +27,7 @@ export interface SaveRefusalPlan {
 }
 
 export interface SaveRefusalOptions {
-  /** Server path to form field, matched on the whole dotted path, then its first segment. */
+  /** Server path to form field, matched by whole path, one-segment wildcards, then first segment. */
   aliases?: Readonly<Record<string, string>>;
   /** The field is rendered and editable in the form. */
   isShown: (field: string) => boolean;
@@ -37,7 +37,22 @@ export interface SaveRefusalOptions {
 
 function formField(path: readonly (string | number)[], aliases: Readonly<Record<string, string>>): string {
   const whole = path.join(".");
-  return aliases[whole] ?? (path[0] !== undefined ? aliases[String(path[0])] : undefined) ?? whole;
+  if (aliases[whole] !== undefined) return aliases[whole];
+  for (const [pattern, target] of Object.entries(aliases)) {
+    const parts = pattern.split(".");
+    if (!parts.includes("*") || parts.length !== path.length) continue;
+    const captures: string[] = [];
+    const matches = parts.every((part, index) => {
+      if (part !== "*") return part === String(path[index]);
+      captures.push(String(path[index]));
+      return true;
+    });
+    if (matches) {
+      let captureIndex = 0;
+      return target.split(".").map((part) => part === "*" ? captures[captureIndex++] : part).join(".");
+    }
+  }
+  return (path[0] !== undefined ? aliases[String(path[0])] : undefined) ?? whole;
 }
 
 /**
