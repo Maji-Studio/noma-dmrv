@@ -142,3 +142,8 @@ describe("application evidence panels and the certification lock", () => {
     expect(sections.flatMap((section) => section.fields).some((field) => field.label === "Certification")).toBe(false);
   });
 });
+
+vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityContext: () => ({ facilityId: "facility-1" }),
+  useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }),
+}));

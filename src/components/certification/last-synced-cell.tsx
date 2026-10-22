@@ -1,4 +1,4 @@
-import { formatDateTime } from "@/lib/format-utils";
+import { formatFacilityDateTime } from "@/lib/format-utils";
 import { undatedLastSortingFn } from "./undated-last-sort";
 
 /** Shown for a GHG Statement that has never been synced from the registry. */
@@ -7,8 +7,8 @@ export const NEVER_SYNCED_LABEL = "Never";
 type SyncedAt = Date | string | null;
 
 /** One line: the sync time, or "Never". */
-export function lastSyncedText(value: SyncedAt): string {
-  return value === null ? NEVER_SYNCED_LABEL : formatDateTime(value);
+export function lastSyncedText(value: SyncedAt, timeZone: string): string {
+  return value === null ? NEVER_SYNCED_LABEL : formatFacilityDateTime(value, timeZone);
 }
 
 /** Chronological sort for the "Last synced" column; never-synced rows stay last in both directions. */
@@ -19,7 +19,7 @@ export function lastSyncedSortingFn<T extends { lastSyncedAt: SyncedAt }>(descen
   );
 }
 
-export function LastSyncedCell({ value }: { value: SyncedAt }) {
+export function LastSyncedCell({ value, timeZone }: { value: SyncedAt; timeZone: string }) {
   const synced = value !== null;
   return (
     <span
@@ -30,7 +30,7 @@ export function LastSyncedCell({ value }: { value: SyncedAt }) {
           : "body-small text-[var(--color-text-tertiary)] whitespace-nowrap"
       }
     >
-      {lastSyncedText(value)}
+      {lastSyncedText(value, timeZone)}
     </span>
   );
 }

@@ -353,3 +353,8 @@ describe("FacilityCertifierSection", () => {
     expect(markup).toContain("prj_gone");
   });
 });
+
+vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityContext: () => ({ facilityId: "facility-1" }),
+  useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }),
+}));

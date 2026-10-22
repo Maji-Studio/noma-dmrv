@@ -2,6 +2,7 @@
 import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }) }));
 import type { RemovalEmptyComponents } from "@/lib/certification/empty-components-state";
 
 const mocks = vi.hoisted(() => ({
@@ -186,4 +187,9 @@ describe("EmptyComponentsStep", () => {
     renderStep({ removalVersion: 1, editable: true, batches: [batch({ lines: ["A"] })] });
     expect(screen.getByRole("alert").textContent).toContain("This record changed since you opened it.");
   });
+});
+
+it("shows the recorded time on the facility clock", () => {
+  renderStep({ batches: [batch({ zeros: [{ name: "A" }] })] });
+  expect(screen.getByText("Recorded Oct 20, 2026, 13:00")).toBeDefined();
 });

@@ -7,6 +7,7 @@
  */
 "use client";
 
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -22,7 +23,7 @@ import { InfoHint } from "@/components/ui/tooltip";
 import { emissionsBatchHref } from "@/components/emissions/emissions-overview-query";
 import { MAX_NOTE_LENGTH } from "@/components/emissions/emission-line-display";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
-import { formatDateRange, formatDateTime } from "@/lib/format-utils";
+import { formatDateRange, formatFacilityDateTime } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import type { EmptyComponentsActions } from "@/hooks/use-removal-empty-components";
 import {
@@ -173,6 +174,7 @@ function BatchCard({
   actions: EmptyComponentsActions;
   focusNonce: number | null;
 }) {
+  const { timeZone } = useFacilityClock(facilityId);
   const [note, setNote] = useState("");
   const handledFocus = useRef<number | null>(null);
   const open = batch.lines.length;
@@ -312,7 +314,7 @@ function BatchCard({
           <span className="flex min-w-0 flex-col gap-2">
             {savedAt && (
               <span className="body-caption text-[var(--color-text-tertiary)]">
-                Recorded {formatDateTime(savedAt)}
+                Recorded {formatFacilityDateTime(savedAt, timeZone)}
               </span>
             )}
             {savedNote && (

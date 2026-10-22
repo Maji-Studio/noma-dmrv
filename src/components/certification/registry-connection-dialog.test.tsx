@@ -10,6 +10,9 @@ vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: () => null,
   Tooltip: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
+vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }),
+}));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn() }) }));
 vi.mock("@/hooks/use-organizations", () => ({
   useActiveOrganizationProfile: () => ({ data: { id: "org-1", name: "Organization" }, isLoading: false }),
