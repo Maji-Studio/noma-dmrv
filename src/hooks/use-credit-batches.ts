@@ -183,7 +183,7 @@ export function useCreateCreditBatch() {
     // not load with it (issue #769).
     mutationFn: async (data: CreditBatchFormData, intentKey) => {
       const result = await createCreditBatchFn(data, { intentKey });
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return { creditBatch: result.data, warning: result.warning };
     },
     onSuccess: ({ creditBatch }) => {

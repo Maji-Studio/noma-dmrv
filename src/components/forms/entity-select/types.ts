@@ -104,6 +104,11 @@ interface EntitySelectBaseProps {
   excludeIds?: readonly string[];
   /** Auto-select when there is exactly one option available */
   autoSelectSingle?: boolean;
+  /**
+   * Receives the only option's id when `autoSelectSingle` picks it, instead of
+   * `onChange`, so a form can treat the pick as a default rather than an edit.
+   */
+  onAutoSelect?: (id: string) => void;
   /** Always show the search input while dropdown is open */
   alwaysShowSearch?: boolean;
   /** Hide the search input entirely */

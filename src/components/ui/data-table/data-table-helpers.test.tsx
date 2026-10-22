@@ -2,7 +2,7 @@
 import { createPortal } from "react-dom";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { handleRowActivationClick } from "./data-table-helpers";
+import { handleRowActivationClick, isSingleLineValue } from "./data-table-helpers";
 
 afterEach(cleanup);
 
@@ -50,5 +50,16 @@ describe("row activation", () => {
     const activate = setup();
     fireEvent.click(screen.getByRole("button", { name: "Row control" }));
     expect(activate).not.toHaveBeenCalled();
+  });
+});
+
+describe("isSingleLineValue", () => {
+  it("is true for figures and record codes, false for names and empties", () => {
+    expect(isSingleLineValue(1000)).toBe(true);
+    expect(isSingleLineValue("OR-26-002")).toBe(true);
+    expect(isSingleLineValue("Demo Mbeya Coffee Farm")).toBe(false);
+    expect(isSingleLineValue("Forestry waste")).toBe(false);
+    expect(isSingleLineValue(null)).toBe(false);
+    expect(isSingleLineValue(undefined)).toBe(false);
   });
 });

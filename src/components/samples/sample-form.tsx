@@ -29,7 +29,7 @@ import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-conte
 import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 
 import { useEffect, useId } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, useController, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FlaskIcon, FireIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, MoistureField, makeCertFieldStatus } from "@/components/forms";
@@ -118,7 +118,8 @@ export function SampleForm({
       samplingTime: sample?.samplingTime ? new Date(sample.samplingTime).toISOString() : "",
       labName: sample?.labName ?? "",
       labAccreditation: sample?.labAccreditation ?? "",
-      analysisDate: sample?.analysisDate ?? "",
+      // null, not "": the field reads an empty date as null, so "" would read as an edit.
+      analysisDate: sample?.analysisDate ?? null,
       weightGrams: sample?.weightGrams ?? undefined,
       volumeMl: sample?.volumeMl ?? undefined,
       totalCarbonPercent: sample?.totalCarbonPercent ?? undefined,
@@ -159,6 +160,7 @@ export function SampleForm({
     trigger,
     watch,
     setValue,
+    resetField,
     setError,
     formState: { errors, dirtyFields },
   } = useForm({
@@ -209,8 +211,12 @@ export function SampleForm({
     placeholderTimeZone: contextClock.timeZone,
     cue: facilityTimeCue,
   });
+  // resetField only acts on a registered field; this one has no input of its own.
+  useController({ name: "durabilityOption", control });
   useEffect(() => {
-    setValue("durabilityOption", batchDurabilityOption ?? null);
+    // Derived from the batch, not typed: it becomes the form's baseline, so an
+    // untouched form stays clean (no discard prompt on Cancel).
+    resetField("durabilityOption", { defaultValue: batchDurabilityOption ?? null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batchDurabilityOption]);
 
@@ -351,6 +357,8 @@ export function SampleForm({
                       entityType="creditBatch"
                       value={field.value}
                       onChange={field.onChange}
+                      // The select's own pick of a facility's only batch is a default, not an edit.
+                      onAutoSelect={(id) => resetField("creditBatchId", { defaultValue: id })}
                       placeholder={contextFacilityId ? "Select a credit batch..." : "Select a facility first"}
                       disabled={isSubmitting || !!preselectedCreditBatchId || !contextFacilityId}
                       error={!!errors.creditBatchId}

@@ -7,11 +7,13 @@
  * an honest value is left out, never shown as zero or as a placeholder.
  */
 import { DRY_BIOCHAR_LABEL, ingredientSolidsLabel } from "@/components/biochar-products/product-composition-components";
+import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import { STOCK_PART_MIN_KG } from "@/config/output-stock";
-import { formatFacilityDay, massKgRoundsToZero } from "@/lib/format-utils";
+import { formatFacilityDay, formatMassKg } from "@/lib/format-utils";
 import { ESTIMATED_WATER_LABEL } from "@/lib/output-stock/labels";
 import { replayStock, stockWaterKg, type StockState } from "@/lib/output-stock/stock-replay";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
+import { formatWetEstimate } from "./stock-preview-shared";
 
 /** Wet mass as the parts table's total row. */
 export const WET_MASS_LABEL = "Wet mass";
@@ -23,6 +25,39 @@ export interface HistoryPart {
   afterKg: number;
   /** Water by the records: an estimate, read like the wet mass it is part of. */
   estimated?: boolean;
+}
+
+/** A change with a real minus sign, and a plus for stock in. Never "-0": a change that shows as zero reads as zero. */
+export function signedKg(kg: number, format: (kg: number) => string = formatMassKg): string {
+  const magnitude = format(Math.abs(kg));
+  if (magnitude === format(0)) return magnitude;
+  return `${kg > 0 ? "+" : "−"}${magnitude}`;
+}
+
+/** Wet mass and the water in it are estimates, read in whole kg as the bin's headline reads them. */
+export function estimateKg(kg: number): string {
+  return `${formatWetEstimate(kg)} kg`;
+}
+
+/**
+ * The Change and After figures of one part. Estimates read in whole kg and
+ * other parts in one decimal, but a change those would round to nothing (2 kg
+ * of wet mass at 10% moisture takes 0.2 kg of water) is shown with the one
+ * decimal `formatMassKg` keeps, and below that with the decimals a mass is
+ * stored at (`MASS_KG_STORAGE_DECIMALS`). Both columns use the same precision,
+ * so the row still adds up and a change is never hidden.
+ */
+export function formatPartFigures(part: HistoryPart): { change: string | null; after: string } {
+  const formats = [
+    ...(part.estimated ? [estimateKg] : []),
+    formatMassKg,
+    (kg: number) => formatMassKg(kg, { digits: MASS_KG_STORAGE_DECIMALS }),
+  ];
+  const change = part.changeKg;
+  const format = change === null || change === 0
+    ? formats[0]
+    : formats.find((candidate) => candidate(Math.abs(change)) !== candidate(0)) ?? formats[formats.length - 1];
+  return { change: change === null ? null : signedKg(change, format), after: format(part.afterKg) };
 }
 
 export type HistoryRowStatus = "counts" | "replaced" | "reversed";
@@ -55,6 +90,9 @@ export interface HistoryDay {
   rows: HistoryRow[];
 }
 
+/** Half a storage step: the smallest change worth a row. */
+const MIN_SHOWN_CHANGE_KG = 0.5 * 10 ** -MASS_KG_STORAGE_DECIMALS;
+
 /** Rounding left over after a bin empties reads as nothing, never as a negative mass. */
 function settled(kg: number): number {
   return Math.abs(kg) < STOCK_PART_MIN_KG ? 0 : kg;
@@ -62,7 +100,8 @@ function settled(kg: number): number {
 
 /** What one counting entry changed per part, in the order the bin is made up; a part it left unchanged is left out. */
 export function entryParts(before: StockState, after: StockState, entry: OutputStockHistoryEntry): HistoryPart[] {
-  const changed = (part: HistoryPart) => part.changeKg === null || !massKgRoundsToZero(part.changeKg);
+  // A part is left out only when its change is below what a mass is stored at.
+  const changed = (part: HistoryPart) => part.changeKg === null || Math.abs(part.changeKg) >= MIN_SHOWN_CHANGE_KG;
   const ingredients = (entry.ingredientSolidsDeltas ?? []).map((part) => ({
     label: ingredientSolidsLabel(part.name), changeKg: part.solidsKg, afterKg: settled(after.ingredients.get(part.name) ?? 0),
   }));

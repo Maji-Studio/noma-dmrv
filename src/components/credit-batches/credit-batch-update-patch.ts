@@ -1,3 +1,4 @@
+import { isActionError } from "@/lib/action-error";
 import { formatUtcDate } from "@/lib/date-utils";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import type { CreditBatchFormData, UpdateCreditBatchData } from "@/schemas/credit-batches";
@@ -66,6 +67,15 @@ export function creditBatchUpdatePatch(
 
 const NOT_SAVED_MESSAGE = "Credit batch was not saved. Try again.";
 
+/**
+ * Logs a save failure unless it is a refusal. A refused action (dates outside
+ * the entries, a stale version) is an expected answer shown beside the form, so
+ * it must not light the dev error badge; anything else is a real failure.
+ */
+export function logUnexpectedSaveError(label: string, err: unknown) {
+  if (!isActionError(err)) console.error(label, err);
+}
+
 /** What one edit save came to: saved (maybe with a warning), or the error to show beside the form. */
 export type CreditBatchSaveOutcome =
   | { status: "saved"; warning?: string }
@@ -104,7 +114,7 @@ export async function saveCreditBatchEdit({
     if (!result.success) return { status: "error", message: result.error || NOT_SAVED_MESSAGE };
     return result.warning ? { status: "saved", warning: result.warning } : { status: "saved" };
   } catch (err) {
-    console.error("Credit batch update error:", err);
+    logUnexpectedSaveError("Credit batch update error:", err);
     return { status: "error", message: err instanceof Error ? err.message : NOT_SAVED_MESSAGE };
   }
 }
