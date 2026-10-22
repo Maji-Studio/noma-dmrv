@@ -28,7 +28,7 @@ import {
 } from "@/lib/isometric/transformers/datapoint";
 
 const ENTRY_CONTRIBUTION_MAPPING_REVISION =
-  "aae8bf4ca33b82c169deba82bf534fef7de3dcf71161739173fcaac2877abae4";
+  "5a3efe8bc7a2e4df87734f1935646e7d1fd62f93e07859dbfe84e382e51c2705";
 
 const PRE_CATALOG_INPUT_MAPPING = {
   "co2-stored": {

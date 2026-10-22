@@ -8,7 +8,7 @@ import { SEQUESTRATION_COMPONENT_INPUT_BINDINGS } from "@/lib/isometric/transfor
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 
 const PRE_NORMALIZATION_MAPPING_REVISION =
-  "aae8bf4ca33b82c169deba82bf534fef7de3dcf71161739173fcaac2877abae4";
+  "5a3efe8bc7a2e4df87734f1935646e7d1fd62f93e07859dbfe84e382e51c2705";
 
 describe("Isometric payload hash", () => {
   it("keeps GHG statement semantic hashes stable across property ordering", () => {
