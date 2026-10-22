@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { Notice } from "@/components/ui/notice";
@@ -18,6 +18,7 @@ import {
   type FleetRecords,
 } from "@/hooks/use-fleet";
 import type { FleetKind } from "@/lib/fleet/messages";
+import { ENTITY_DEEP_LINK_EDIT_MODE } from "@/lib/entity-deep-link";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 import { FLEET_KIND_COPY, fleetRecordCode, fleetRecordLabel, fleetSheetSections } from "./fleet-kinds";
 import { FleetSheetForm } from "./fleet-sheet-forms";
@@ -61,15 +62,17 @@ function useFleetDelete(kind: FleetKind) {
 }
 
 export interface FleetKindManagerOptions {
-  /** A record id from a deep link (`?record=`); once the list has loaded, its view sheet opens. */
+  /** A record id from a deep link (`?driver=<id>`); once the list has loaded, its sheet opens. */
   linkedId?: string | null;
-  /** Called when the sheet closes, so the page can drop the link from the URL. */
+  /** The link's `mode`: "edit" opens the edit sheet, anything else the view sheet. */
+  linkedMode?: string | null;
+  /** Called when the sheet closes or the link cannot be opened, so the page can drop it from the URL. */
   onLinkClear?: () => void;
 }
 
 export function useFleetKindManager<K extends FleetKind>(
   kind: K,
-  { linkedId = null, onLinkClear }: FleetKindManagerOptions = {},
+  { linkedId = null, linkedMode = null, onLinkClear }: FleetKindManagerOptions = {},
 ): FleetKindManager<K> {
   const copy = FLEET_KIND_COPY[kind];
   const query = useFleetList(kind);
@@ -95,8 +98,22 @@ export function useFleetKindManager<K extends FleetKind>(
   const linked = linkedId ? records.find((record) => record.id === linkedId) : undefined;
   if (linked && !sheet && openedLinkId !== linkedId) {
     setOpenedLinkId(linkedId);
-    setSheet({ record: linked, mode: "view" });
+    setSheet({ record: linked, mode: linkedMode === ENTITY_DEEP_LINK_EDIT_MODE ? "edit" : "view" });
   }
+
+  // A link to a record that is gone (deleted, other organization) says so once.
+  const handledMissingRef = useRef<string | null>(null);
+  const listLoaded = !query.isLoading && !query.error && query.data !== undefined;
+  useEffect(() => {
+    if (!linkedId) {
+      handledMissingRef.current = null;
+      return;
+    }
+    if (!listLoaded || linked || handledMissingRef.current === linkedId) return;
+    handledMissingRef.current = linkedId;
+    toast.error(`Linked ${copy.noun} could not be opened`);
+    onLinkClear?.();
+  }, [linkedId, listLoaded, linked, toast, copy.noun, onLinkClear]);
 
   const openCreate = () => setSheet({ record: null, mode: "create" });
   const openView = (record: FleetRecords[K]) => setSheet({ record, mode: "view" });

@@ -16,6 +16,7 @@ const state = vi.hoisted(() => ({
   removeOperator: vi.fn(),
   openCreate: null as null | (() => void),
   toastSuccess: vi.fn(),
+  toastError: vi.fn(),
 }));
 
 vi.mock("nuqs", async () => {
@@ -42,7 +43,7 @@ vi.mock("@/hooks/use-open-create-intent", () => ({
   },
 }));
 vi.mock("@/components/ui/toast", () => ({
-  useToast: () => ({ success: state.toastSuccess, error: vi.fn() }),
+  useToast: () => ({ success: state.toastSuccess, error: state.toastError }),
 }));
 vi.mock("@/hooks/use-fleet", () => ({
   useFleetList: (kind: string) => ({
@@ -72,13 +73,15 @@ beforeEach(() => {
   state.lists = { vehicle: [vehicle], driver: [driver], operator: [operator] };
   state.loading = {};
   state.toastSuccess.mockReset();
+  state.toastError.mockReset();
   state.removeVehicle.mockReset().mockResolvedValue(undefined);
   state.removeDriver.mockReset().mockResolvedValue(undefined);
   state.removeOperator.mockReset().mockResolvedValue(undefined);
 });
 afterEach(cleanup);
 
-const tab = (name: RegExp) => screen.getByRole("tab", { name });
+// `hidden`: an open sheet hides the rest of the page from the accessibility tree.
+const tab = (name: RegExp) => screen.getByRole("tab", { name, hidden: true });
 
 function rowMenu(label: string, item: string) {
   // The table renders a card list beside it that CSS hides; use the first.
@@ -104,13 +107,13 @@ describe("VehiclesAndCrewPage", () => {
     expect(screen.queryByRole("button", { name: "New vehicle" })).toBeNull();
   });
 
-  it("switches tab on click, keeps the choice in the URL and drops a record link", () => {
-    state.query.record = "drv-1";
+  it("switches tab on click, keeps the choice in the URL and drops a kind link", () => {
+    state.query.driver = "drv-1";
     render(<VehiclesAndCrewPage />);
     fireEvent.click(tab(/^Operators/));
     expect(state.query.tab).toBe("operator");
-    expect(state.query.record).toBeNull();
-    expect(screen.getByRole("button", { name: "New operator" })).toBeTruthy();
+    expect(state.query.driver).toBeNull();
+    expect(screen.getByRole("button", { name: "New operator", hidden: true })).toBeTruthy();
   });
 
   it("moves between tabs with the arrow keys, Home and End", () => {
@@ -164,17 +167,36 @@ describe("VehiclesAndCrewPage", () => {
     state.query.tab = "operator";
     render(<VehiclesAndCrewPage />);
     expect(screen.getAllByRole("link", { name: "Joseph Banda" })[0]!.getAttribute("href")).toBe(
-      "/vehicles-and-crew?tab=operator&record=opr-1",
+      "/vehicles-and-crew?operator=opr-1",
     );
   });
 
-  it("opens the sheet of a linked record and clears the link on close", () => {
-    state.query = { tab: "driver", record: "drv-1" };
+  it("opens a linked record's view sheet on its own tab and keeps the tab on close", () => {
+    state.query = { driver: "drv-1" };
     render(<VehiclesAndCrewPage />);
+    expect(tab(/^Drivers/).getAttribute("aria-selected")).toBe("true");
     const sheet = screen.getByRole("dialog");
     expect(within(sheet).getByText("Amina Okoye")).toBeTruthy();
+    expect(within(sheet).getByRole("button", { name: "Edit driver" })).toBeTruthy();
     fireEvent.keyDown(sheet, { key: "Escape" });
-    expect(state.query.record).toBeNull();
+    expect(state.query.driver).toBeNull();
+    expect(state.query.tab).toBe("driver");
+  });
+
+  it("opens the edit sheet for mode=edit", () => {
+    state.query = { vehicle: "veh-1", mode: "edit" };
+    render(<VehiclesAndCrewPage />);
+    expect(screen.getByRole("form", { name: "vehicle form" }).textContent).toBe("editing Feedstock truck");
+  });
+
+  it("says so and clears the link when the record is gone", () => {
+    state.query = { driver: "drv-gone", mode: "edit" };
+    render(<VehiclesAndCrewPage />);
+    expect(state.toastError).toHaveBeenCalledWith("Linked driver could not be opened");
+    expect(state.toastError).toHaveBeenCalledTimes(1);
+    expect(state.query.driver).toBeNull();
+    expect(state.query.mode).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("deletes through the row menu and confirmation", async () => {
