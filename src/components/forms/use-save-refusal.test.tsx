@@ -19,8 +19,10 @@ const LOCK_REASON = "This record is sent to a Removal. Correct the Removal first
 
 const issue = (path: string[], message: string, code = "validation_failed") => ({ path, code, message });
 
-function Harness({ refusal }: { refusal: ActionError }) {
-  const [footer, setFooter] = useState<string | undefined>();
+const FALLBACK = "Sample was not saved.";
+
+function Harness({ refusal }: { refusal: unknown }) {
+  const [footer, setFooter] = useState<string | null>(null);
   const { control, register, handleSubmit, setError, formState: { errors } } = useForm<Values>({
     defaultValues: { labName: "", massKg: "5", notes: "" },
   });
@@ -29,8 +31,7 @@ function Harness({ refusal }: { refusal: ActionError }) {
     try {
       throw refusal;
     } catch (error) {
-      const shown = refuse(error);
-      setFooter(shown ? shown.footer ?? undefined : (error as Error).message);
+      setFooter(refuse(error, FALLBACK));
     }
   });
   return (
@@ -43,7 +44,7 @@ function Harness({ refusal }: { refusal: ActionError }) {
           <FormInput id="massKg" {...register("massKg")} />
         </FormField>
       </form>
-      <FormActions control={control} formId={FORM_ID} submitLabel="Save sample" errorMessage={footer} />
+      <FormActions control={control} formId={FORM_ID} submitLabel="Save sample" errorMessage={footer ?? undefined} />
     </>
   );
 }
@@ -73,6 +74,7 @@ describe("useSaveRefusal", () => {
     expect(await screen.findByText("Not saved. Fix 1 field.")).toBeTruthy();
     // The reason shows once, at the field; the summary names the field only.
     expect(screen.getAllByText(/Lab was not found\./)).toHaveLength(1);
+    expect(screen.queryByText(FALLBACK)).toBeNull();
     expect(screen.getByRole("link", { name: "Lab name" })).toBeTruthy();
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Lab name")));
   });
@@ -104,9 +106,14 @@ describe("useSaveRefusal", () => {
     expect(screen.queryByText(/Not saved\./)).toBeNull();
   });
 
-  it("leaves other errors to the caller", async () => {
-    render(<Harness refusal={new ActionError({ error: "Boom", issues: [] })} />);
+  it.each([
+    ["a stale version", new ActionError({ error: "Changed", code: "stale_version", issues: [issue(["labName"], "Reload first.")] })],
+    ["a non-ActionError", new Error("Unexpected failure")],
+    ["an issue-less refusal", new ActionError({ error: "Boom", issues: [] })],
+  ])("returns the caller's fallback for %s", async (_name, refusal) => {
+    render(<Harness refusal={refusal} />);
     await save();
-    expect(await screen.findByText("Boom")).toBeTruthy();
+    expect(await screen.findByText(FALLBACK)).toBeTruthy();
+    expect(screen.queryByText("Not saved. Fix 1 field.")).toBeNull();
   });
 });
