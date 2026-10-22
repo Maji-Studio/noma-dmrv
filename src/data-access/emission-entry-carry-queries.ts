@@ -23,7 +23,7 @@ export async function listCarryCandidates(ctx: OrgContext, facilityId: string, e
     .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId),
       scope.entryIds ? inArray(emissionEntries.id, scope.entryIds) : undefined,
       eq(emissionEntries.kind, "value"), eq(emissionEntries.lineRule, "additive"), isNull(emissionEntries.deletedAt),
-      isNull(emissionEntries.sentByRemovalId), isNull(emissionEntries.sendReservedBySubmissionId),
+      isNull(emissionEntries.sentByRemovalId),
       sql`jsonb_array_length(${emissionEntries.inputShape}) = 1`,
       sql`${creditBatches.endDate} < (current_timestamp at time zone ${facilities.timezone})::date`,
       sql`not exists (select 1 from ${emissionEntries} as ${sql.identifier("carry_original")} where ${original.organizationId} = ${ctx.organizationId}
@@ -64,8 +64,8 @@ export async function listOwnedCarryEntries(ctx: OrgContext, facilityId: string,
           and ${certificationSubmissions.submissionType} = 'removal' and ${certificationSubmissions.localEntityId} = ${scope.ownedRemovalId})`) : undefined)));
 }
 
-/** Persisted drafts only. This path deliberately has no record-lock lineage or registry refresh. */
-export async function listCarryDraftMembers(ctx: OrgContext, facilityId: string, executor: CarryExecutor) {
+/** Draft receivers, or all members of origin Removals for their correction windows. No registry reads. */
+export async function listCarryRemovalMembers(ctx: OrgContext, facilityId: string, executor: CarryExecutor, originBatchIds?: string[]) {
   requireOrgScope(ctx);
   return executor.select({ removal: certifierRemovals, batch: creditBatches, applicationDate: applications.applicationDate })
     .from(certifierRemovals)
@@ -73,7 +73,9 @@ export async function listCarryDraftMembers(ctx: OrgContext, facilityId: string,
     .innerJoin(creditBatches, and(eq(creditBatches.id, creditBatchApplications.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId)))
     .innerJoin(applications, and(eq(applications.id, creditBatchApplications.applicationId), eq(applications.organizationId, ctx.organizationId)))
     .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.facilityId, facilityId),
-      sql`not exists (select 1 from ${certificationSubmissions} where ${certificationSubmissions.organizationId} = ${ctx.organizationId}
+      originBatchIds ? inArray(certifierRemovals.id, executor.select({ id: creditBatchApplications.removalId }).from(creditBatchApplications).where(and(
+        eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.creditBatchId, originBatchIds),
+      ))) : sql`not exists (select 1 from ${certificationSubmissions} where ${certificationSubmissions.organizationId} = ${ctx.organizationId}
         and ${certificationSubmissions.provider} = 'isometric' and ${certificationSubmissions.localEntityType} = 'removal'
         and ${certificationSubmissions.submissionType} = 'removal' and ${certificationSubmissions.localEntityId} = ${certifierRemovals.id}
         and (${certificationSubmissions.submittedAt} is not null or ${certificationSubmissions.status} in ('submitted', 'accepted')))`));

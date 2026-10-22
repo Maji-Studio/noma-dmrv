@@ -556,14 +556,14 @@ export async function buildCreditBatchContexts(
   orgCtx: OrgContext,
   creditBatchIds: string[],
   facilityFacts: FacilityCertifierFacts,
-  options?: { unassignedOnly?: boolean },
+  options?: { unassignedOnly?: boolean; carryReads?: Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>> },
 ): Promise<CreditBatchContextSet> {
   const accountingByBatch = options?.unassignedOnly
     ? await loadCreditBatchRollups(orgCtx, creditBatchIds, {
         unassignedOnly: true,
       })
     : await loadCreditBatchRollups(orgCtx, creditBatchIds);
-  const carryReads = new Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>();
+  const carryReads = options?.carryReads ?? new Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>();
   const contextEntries: Array<
     readonly [string, RemovalCertifyContext]
   > = [];

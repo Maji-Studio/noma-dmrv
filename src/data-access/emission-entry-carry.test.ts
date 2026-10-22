@@ -34,3 +34,14 @@ it("a batch display read with no candidates or retained owners does not load con
   expect(mocks.rollups).not.toHaveBeenCalled();
   expect(mocks.registry).not.toHaveBeenCalled();
 });
+
+
+it("a per-Removal ownership read skips facility candidate discovery entirely", async () => {
+  mocks.where.mockResolvedValueOnce([]);
+  expect((await loadFacilityEmissionEntryCarry(makeTestOrgContext(), "facility", undefined, undefined,
+    { ownedRemovalId: "removal" }, true)).entries).toEqual([]);
+  expect(mocks.select).toHaveBeenCalledTimes(1);
+  expect(mocks.rollups).not.toHaveBeenCalled();
+  expect(mocks.contenders).not.toHaveBeenCalled();
+  expect(mocks.registry).not.toHaveBeenCalled();
+});

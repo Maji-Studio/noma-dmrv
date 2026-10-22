@@ -324,3 +324,22 @@ it("shares one carry discovery across concurrent batch contexts within a request
   await loadBatchEmissionContext(ctx, "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts);
   expect(loadFacilityEmissionEntryCarry).toHaveBeenCalledTimes(2);
 });
+
+
+it("shares discovery across different Removals but reads each Removal's retained owners separately", async () => {
+  const ctx = makeTestOrgContext();
+  const cache = new Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>();
+  const waiting = { ...deriveEmissionEntryFacts([storedEntry("origin")], observation as never, new Map())[0],
+    reservedByRemovalId: null, reservationKnownInactive: true,
+    carry: { receiver: null, waitingReason: "noDraft" as const }, reportedIn: null,
+    earlierRemovalCode: undefined, creditBatchCode: "CB-origin", entryObservation: observation as never };
+  vi.mocked(loadFacilityEmissionEntryCarry).mockImplementation(async (_ctx, _facility, _executor, _claim, _scope, ownedOnly) =>
+    ({ entries: ownedOnly ? [] : [waiting], contenders: [], ownContenders: [], batches: [] }));
+  const removalIds = ["first", "second", "third"];
+  const loaded = await Promise.all(removalIds.map(ownedRemovalId => loadBatchEmissionContext(ctx, "facility",
+    [{ id: "one", removalTemplateId: "template" }], facilityFacts, undefined, false, cache, ownedRemovalId)));
+  const calls = vi.mocked(loadFacilityEmissionEntryCarry).mock.calls;
+  expect(calls.filter(call => !call[5])).toHaveLength(1);
+  expect(calls.filter(call => call[5]).map(call => call[4]?.ownedRemovalId).sort()).toEqual([...removalIds].sort());
+  for (const facts of loaded) expect(facts.one.carryContext?.entries).toEqual([waiting]);
+});

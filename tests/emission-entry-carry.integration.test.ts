@@ -4,6 +4,9 @@ import { and, eq, inArray } from "drizzle-orm";
 import { integer, pgSchema, text } from "drizzle-orm/pg-core";
 import type { PoolClient } from "pg";
 import { recordEmissionZeros } from "@/data-access/emission-zeros";
+import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
+import { loadRemovalEntryContext, frozenEntriesForAttempt } from "@/fn/certification/removal-entry-context";
+import { resolveScopeForRemoval } from "@/fn/certification/removal-scope";
 import { loadBatchEmissionContext } from "@/fn/certification/batch-emission-context";
 import { applications, creditBatchApplications, facilities } from "@/db/schema";
 import { facilityToday } from "@/lib/date-utils";
@@ -209,4 +212,92 @@ it("fails closed when the origin production mass is unknown", async () => {
   await db.update(productionRuns).set({ biocharDryMassKg: null }).where(eq(productionRuns.id, origin.productionRunId));
   expect((await loadFacilityEmissionEntryCarry(ctx, origin.facilityId)).entries.find(item => item.id === entry.id)?.carry)
     .toEqual({ receiver: null, waitingReason: null });
+});
+
+
+it("keeps an expired carried reservation in the resumed frozen compilation and revalidates it", async () => {
+  const row = await attempt();
+  await reserve(row);
+  await db.update(certificationSubmissions).set({ lockedAt: new Date(Date.now() - LOCK_TTL_MS) })
+    .where(eq(certificationSubmissions.id, row.id));
+  const facility = { templatesById: { [observation.externalTemplateId]: { observation } } };
+  const scope = await resolveScopeForRemoval(ctx, receiving.removalId);
+  const facts = await loadBatchEmissionContext(ctx, origin.facilityId, scope.memberBatches, facility,
+    { removalId: receiving.removalId }, false, undefined, receiving.removalId);
+  const frozen = frozenEntriesForAttempt(row, facts);
+  expect(frozen).toEqual([{ entryId: entry.id, contentRevision: entry.contentRevision }]);
+  const compiled = await loadRemovalEntryContext(ctx, scope, facts, facility, frozen);
+  expect(compiled?.contributions.selectedEntryIds).toContain(entry.id);
+  expect(compiled?.contributions.blockers.some(blocker => blocker.message.includes("Emissions entries changed"))).toBe(false);
+  const discovery = await loadFacilityEmissionEntryCarry(ctx, origin.facilityId);
+  expect(discovery.entries.find(item => item.id === entry.id)).toMatchObject({
+    reservationKnownInactive: true, reservedByRemovalId: receiving.removalId,
+    carry: { receiver: { removalId: receiving.removalId } },
+  });
+  await reserve(row);
+  expect((await getEmissionEntry(ctx, entry.id)).sendReservedBySubmissionId).toBe(row.id);
+});
+
+it("allows a known inactive terminal reservation back into candidate discovery", async () => {
+  const row = await attempt();
+  await reserve(row);
+  await db.update(certificationSubmissions).set({ status: "rejected", lockedAt: null, metadata: { externalMutation: "none" } })
+    .where(eq(certificationSubmissions.id, row.id));
+  const discovery = await loadFacilityEmissionEntryCarry(ctx, origin.facilityId);
+  expect(discovery.entries.find(item => item.id === entry.id)).toMatchObject({
+    reservationKnownInactive: true, reservedByRemovalId: null, carry: { receiver: { removalId: receiving.removalId } },
+  });
+});
+
+it.each(["FAILED_VERIFICATION", null])("keeps an in-window late entry with a returned or unknown own statement (%s)", async remoteStatus => {
+  const [statement] = await db.insert(certifierGhgStatements).values({ organizationId: ctx.organizationId,
+    facilityId: origin.facilityId, reportingPeriodEndOn: "2026-06-30" }).returning();
+  origin.ghgStatementId = statement.id;
+  await db.update(certifierRemovals).set({ ghgStatementId: statement.id }).where(eq(certifierRemovals.id, origin.removalId));
+  await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId, provider: "isometric", submissionType: "ghg_statement",
+    localEntityType: "ghgStatement", localEntityId: statement.id, version: 1, status: "submitted", externalId: "returned-origin", submittedAt: new Date(),
+    metadata: { remoteStatus, submittedToVerifierAt: "2026-07-01T00:00:00Z", removalIds: ["origin-sent"] } });
+  registry.getGhgStatement.mockClear();
+  registry.resolveClient.mockClear();
+  const own = await loadFacilityEmissionEntryCarry(ctx, origin.facilityId);
+  expect(own.entries.find(item => item.id === entry.id)?.carry).toEqual({ receiver: null, waitingReason: null });
+  expect(own.ownContenders).toContainEqual(expect.objectContaining({ removalId: origin.removalId, contenderKind: "correction" }));
+  // Past the own window there is no own contender, even if its statement returned.
+  await db.update(applications).set({ applicationDate: new Date("2026-10-06T00:00:00Z") }).where(eq(applications.id, receiving.applicationId));
+  await db.update(emissionEntries).set({ occurredOn: "2026-10-05" }).where(eq(emissionEntries.id, entry.id));
+  const carried = await loadFacilityEmissionEntryCarry(ctx, origin.facilityId);
+  expect(carried.entries.find(item => item.id === entry.id)?.carry.receiver?.removalId).toBe(receiving.removalId);
+  expect(registry.getGhgStatement).not.toHaveBeenCalled();
+  expect(registry.resolveClient).not.toHaveBeenCalled();
+});
+
+
+it("does not give an expired resumable carry to a better-ranked rival Removal", async () => {
+  const row = await attempt();
+  await reserve(row);
+  await db.update(certificationSubmissions).set({ lockedAt: new Date(Date.now() - LOCK_TTL_MS) })
+    .where(eq(certificationSubmissions.id, row.id));
+  const rival = await createLineageFixture("none");
+  const [process] = await db.insert(productionProcesses).values({ organizationId: ctx.organizationId,
+    facilityId: origin.facilityId, feedstockTypeId: rival.feedstockTypeId }).returning();
+  try {
+    await db.update(creditBatches).set({ facilityId: origin.facilityId, productionProcessId: process.id,
+      removalTemplateId: observation.externalTemplateId }).where(eq(creditBatches.id, rival.batchId));
+    await db.update(certifierRemovals).set({ facilityId: origin.facilityId, createdAt: new Date(0) }).where(eq(certifierRemovals.id, rival.removalId));
+    const discovered = await loadFacilityEmissionEntryCarry(ctx, origin.facilityId);
+    expect(discovered.contenders.map(item => item.removalId)).toContain(rival.removalId);
+    expect(discovered.entries.find(item => item.id === entry.id)?.carry.receiver?.removalId).toBe(receiving.removalId);
+    const [rivalAttempt] = await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId,
+      provider: "isometric", submissionType: "removal", localEntityType: "removal", localEntityId: rival.removalId,
+      version: 1, status: "draft", lockedAt: new Date() }).returning();
+    await expect(reserveProductionEmissionsClaims(ctx, { removalId: rival.removalId, submissionId: rivalAttempt.id,
+      creditBatchIds: [], entryClaim: { memberBatchIds: [rival.batchId], frozenEntrySet: [{ entryId: entry.id, contentRevision: entry.contentRevision }] },
+    })).rejects.toThrow("Emissions entries changed");
+    expect((await getEmissionEntry(ctx, entry.id)).sendReservedBySubmissionId).toBe(row.id);
+  } finally {
+    await db.update(creditBatches).set({ facilityId: rival.facilityId, productionProcessId: rival.productionProcessId }).where(eq(creditBatches.id, rival.batchId));
+    await db.update(certifierRemovals).set({ facilityId: rival.facilityId }).where(eq(certifierRemovals.id, rival.removalId));
+    await db.delete(productionProcesses).where(eq(productionProcesses.id, process.id));
+    await cleanupLineageFixture(rival);
+  }
 });

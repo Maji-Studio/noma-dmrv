@@ -54,13 +54,19 @@ export async function loadBatchEmissionContext(
     listEmissionEntryDraftContenders(ctx, ids, undefined, claimedAttempt),
     listEmissionEntryAvailableApplications(ctx, ids),
   ]);
-  const carryKey = JSON.stringify([ctx.organizationId, facilityId, claimedAttempt, ownedRemovalId]);
+  const carryKey = JSON.stringify([ctx.organizationId, facilityId, claimedAttempt]);
   let carryRead = carryReads?.get(carryKey);
   if (!carryRead) {
-    carryRead = loadFacilityEmissionEntryCarry(ctx, facilityId, undefined, claimedAttempt, { ownedRemovalId });
+    carryRead = loadFacilityEmissionEntryCarry(ctx, facilityId, undefined, claimedAttempt, carryReads ? {} : { ownedRemovalId });
     carryReads?.set(carryKey, carryRead);
   }
-  const carryContext = await carryRead;
+  const discovered = await carryRead;
+  const owned = carryReads && ownedRemovalId
+    ? await loadFacilityEmissionEntryCarry(ctx, facilityId, undefined, claimedAttempt, { ownedRemovalId }, true) : null;
+  const carryContext = owned ? { ...discovered,
+    entries: [...new Map([...owned.entries, ...discovered.entries].map(entry => [entry.id, entry])).values()],
+    batches: [...new Map([...owned.batches, ...discovered.batches].map(batch => [batch.id, batch])).values()],
+  } : discovered;
   const reservations = await loadEmissionEntryReservations(ctx, [...new Set(storedEntries.flatMap((entry) => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []))]);
   const liveReservationIds = new Set(reservations.filter((row) => isLiveEntryReservation(row, Date.now())).map((row) => row.submissionId));
   const observationsById = new Map(readableBatches.map(({ observation }) => [observation.id, observation]));

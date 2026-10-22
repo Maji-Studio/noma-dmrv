@@ -41,7 +41,7 @@ export interface RemovalEntryFact {
   heldForRemovalId?: string | null;
   confirmedForRemovalId: string | null;
   sendReservedBySubmissionId: string | null;
-  /** Resolved only for a live reservation ledger row. */
+  /** Resolved for a live reservation or a retained resumable carry attempt. */
   reservedByRemovalId?: string | null;
   reservationKnownInactive?: boolean;
   counts: boolean; unitMismatch?: boolean; reason?: string | null;

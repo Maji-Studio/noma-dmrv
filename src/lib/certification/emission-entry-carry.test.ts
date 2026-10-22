@@ -106,3 +106,11 @@ describe("late manual entry ownership", () => {
     expect(result.selectedEntryIds).toEqual([entry.id]);
   });
 });
+
+
+it("gives an own-batch correction priority over carry, only inside its window", () => {
+  const own: CarryContender = { ...draft, contenderKind: "correction", removalId: "origin-removal",
+    creditBatchIds: [entry.creditBatchId], window: { start: "2026-09-01", end: "2026-09-15" } };
+  expect(decide({ ownContenders: [own] })).toEqual({ receiver: null, waitingReason: null });
+  expect(decide({ ownContenders: [{ ...own, window: { ...own.window, end: "2026-09-13" } }] }).receiver?.removalId).toBe(draft.removalId);
+});
