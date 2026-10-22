@@ -300,7 +300,7 @@ describe("order DELETE", { timeout: TIMEOUT_MS }, () => {
     const order = await saved();
     const delivery = await insertReadDelivery(a, order.id, ALLOCATED_KG, archived);
     const refusal = await problem(await remove(a, order.id, INITIAL_ETAG, null), 409, "certification_locked", "/orderId");
-    expect(refusal.detail).toBe(`Order ${order.code} was not deleted because delivery ${delivery.code} still uses it. Delete delivery ${delivery.code} first, or keep this order.`);
+    expect(refusal.detail).toBe(`Order ${order.code} was not deleted because delivery ${delivery.code} still uses it. Delete that delivery first, or keep this order.`);
     expect(refusal.errors[0].meta).toEqual({ reason: "in_use", deliveryCode: delivery.code, deliveryId: delivery.id });
     expect(await rows(a)).toHaveLength(1);
   });
@@ -312,7 +312,7 @@ describe("order DELETE", { timeout: TIMEOUT_MS }, () => {
     const code = `E2E-A-${a.tag}`;
     await db.update(deliveries).set({ code }).where(eq(deliveries.id, firstCode.id));
     const refusal = await problem(await remove(a, order.id, INITIAL_ETAG, null), 409, "certification_locked", "/orderId");
-    expect(refusal.detail).toBe(`Order ${order.code} was not deleted because delivery ${code} still uses it. Delete delivery ${code} first, or keep this order.`);
+    expect(refusal.detail).toBe(`Order ${order.code} was not deleted because delivery ${code} still uses it. Delete that delivery first, or keep this order.`);
     expect(refusal.errors[0].meta).toEqual({ reason: "in_use", deliveryCode: code, deliveryId: firstCode.id });
     expect(await rows(a)).toHaveLength(1);
   });

@@ -36,8 +36,6 @@ import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { InUseDeleteDialog, InUseReference } from "@/components/ui/in-use-delete-dialog";
-import { useQueryClient } from "@tanstack/react-query";
-import { recordLockKeys } from "@/hooks/record-lock-query-keys";
 import { ActionError } from "@/lib/action-error";
 import { biocharProductDeepLinkHref } from "@/lib/biochar-product-links";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
@@ -319,7 +317,6 @@ export function ProductionRunList() {
   const createRun = useCreateProductionRun();
   const updateRun = useUpdateProductionRun();
   const deleteRun = useDeleteProductionRun();
-  const queryClient = useQueryClient();
   const toast = useToast();
 
   const runs = runsData?.items ?? [];
@@ -419,8 +416,6 @@ export function ProductionRunList() {
             ? { href: creditBatchDeepLinkHref(blocker.id, deleting.facilityId), code: blocker.code, kind: "credit batch" }
             : undefined;
         setInUseRefusal({ code: deleting.code, message, reference });
-        // The row learned it is in use: drop Delete from its menu.
-        void queryClient.invalidateQueries({ queryKey: recordLockKeys.kind("productionRun") });
         setDeletingRunId(null);
         return;
       }

@@ -29,7 +29,7 @@ interface InUseDeleteDialogProps {
 export function InUseReference({ href, code, kind }: { href: string; code: string; kind: string }) {
   return (
     <SheetLinkRows>
-      <SheetLinkRow href={href} primary={code} secondary={kind} ariaLabel={`Open ${kind} ${code}`} />
+      <SheetLinkRow href={href} primary={code} ariaLabel={`Open ${kind} ${code}`} />
     </SheetLinkRows>
   );
 }

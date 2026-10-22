@@ -414,8 +414,8 @@ describe("FeedstockList refresh from location", () => {
 describe("FeedstockList in-use delete refusal", () => {
   const inUse = () => new ActionError({
     error: "Feedstock FS-001 was not deleted because production runs still use it.",
-    code: "conflict",
-    issues: [{ path: ["feedstockId"], code: "conflict", message: "in use", meta: { reason: "in_use" } }],
+    code: "certification_locked",
+    issues: [{ path: ["feedstockId"], code: "certification_locked", message: "in use", meta: { reason: "in_use" } }],
   });
 
   it("replaces the confirm dialog with the in-use dialog for the row", async () => {

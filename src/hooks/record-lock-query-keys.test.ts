@@ -39,6 +39,16 @@ it("refreshes every declared kind after a certification lock refusal", () => {
   for (const kind of RECORD_LOCK_TOUCHES.transport) expect(invalidate).toHaveBeenCalledWith({ queryKey: recordLockKeys.kind(kind) });
 });
 
+it("refreshes the declared kinds after an in-use delete refusal that carries the conflict code", () => {
+  const { queryClient, invalidate } = client();
+  const refusal = new ActionError({ error: "In use", code: "conflict", issues: [{ path: ["productionRunId"], code: "conflict", message: "In use", meta: { reason: "in_use" } }] });
+  invalidateRecordLocksAfter(queryClient, undefined, refusal, { meta: recordLockMeta(RECORD_LOCK_TOUCHES.productionRun, { onRefusalOnly: true }) });
+  expect(invalidate).toHaveBeenCalledTimes(RECORD_LOCK_TOUCHES.productionRun.length);
+  invalidate.mockClear();
+  invalidateRecordLocksAfter(queryClient, undefined, new ActionError({ error: "Name taken", code: "conflict", issues: [] }), { meta: recordLockMeta(RECORD_LOCK_TOUCHES.productionRun, { onRefusalOnly: true }) });
+  expect(invalidate).not.toHaveBeenCalled();
+});
+
 it.each([{ touch: RECORD_LOCK_TOUCHES.transport }, { touch: RECORD_LOCK_TOUCHES.registry }])("refreshes refusal-only meta only for lock refusals ($touch)", ({ touch }) => {
   const { queryClient, invalidate } = client();
   const mutation = { meta: recordLockMeta(touch, { onRefusalOnly: true }) };

@@ -37,7 +37,7 @@ export function orderQuantityBelowAllocated(allocatedWetKg: number): DomainError
 
 export function orderHasDeliveries(delivery: { id: string; code: string }, orderCode?: string): DomainError {
   return inUseDeleteRefusal(
-    `Order${orderCode ? ` ${orderCode}` : ""} ${IN_USE_DELETE_MARKER} delivery ${delivery.code} still uses it. Delete delivery ${delivery.code} first, or keep this order.`,
+    `Order${orderCode ? ` ${orderCode}` : ""} ${IN_USE_DELETE_MARKER} delivery ${delivery.code} still uses it. Delete that delivery first, or keep this order.`,
     ["orderId"], { code: "certification_locked", meta: { deliveryCode: delivery.code, deliveryId: delivery.id } },
   );
 }

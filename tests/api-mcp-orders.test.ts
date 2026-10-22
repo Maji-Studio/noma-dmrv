@@ -246,7 +246,7 @@ describe("customer and order MCP tools", { timeout: TIMEOUT_MS }, () => {
     const row = await saved();
     const delivery = await insertReadDelivery(a, row.id, DELIVERED_KG, archived);
     expect(await write("delete_order", { orderId: row.id, expectedVersion: row.version }, a.deleteKey)).toMatchObject({ isError: true, structuredContent: { code: "certification_locked",
-      detail: `Order ${row.code} was not deleted because delivery ${delivery.code} still uses it. Delete delivery ${delivery.code} first, or keep this order.`,
+      detail: `Order ${row.code} was not deleted because delivery ${delivery.code} still uses it. Delete that delivery first, or keep this order.`,
       issues: [{ pointer: "/orderId", code: "certification_locked", meta: { reason: "in_use", deliveryCode: delivery.code, deliveryId: delivery.id } }] } });
     for (const [field, value] of Object.entries({ facilityId: a.otherFacility.id, customerId: a.otherCustomer.id, formulationId: a.pure.id, customerLocationId: a.otherLocation.id })) {
       expect(await write("update_order", { orderId: row.id, expectedVersion: row.version, [field]: value })).toMatchObject({ isError: true, structuredContent: { code: "certification_locked", issues: [{ pointer: `/${field}` }] } });

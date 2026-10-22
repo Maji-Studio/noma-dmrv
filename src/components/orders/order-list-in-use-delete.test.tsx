@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ActionError } from "@/lib/action-error";
 
 const ORDER = { id: "order-1", code: "OR-001", version: 3, facilityId: "f1" };
-const IN_USE_MESSAGE = "Order OR-001 was not deleted because delivery DL-001 still uses it. Delete delivery DL-001 first, or keep this order.";
+const IN_USE_MESSAGE = "Order OR-001 was not deleted because delivery DL-001 still uses it. Delete that delivery first, or keep this order.";
 const harness = vi.hoisted(() => ({ remove: vi.fn() }));
 
 vi.mock("nuqs", () => ({ parseAsString: { withOptions: () => ({}) }, useQueryState: () => [null, vi.fn()] }));
@@ -70,8 +70,8 @@ async function confirmDelete() {
 describe("Order in-use delete refusal", () => {
   it("opens the in-use dialog with the server's reason and no Delete button", async () => {
     harness.remove.mockRejectedValue(new ActionError({
-      error: IN_USE_MESSAGE, code: "conflict",
-      issues: [{ path: ["orderId"], code: "conflict", message: IN_USE_MESSAGE, meta: { reason: "in_use", deliveryCode: "DL-001", deliveryId: "delivery-1" } }],
+      error: IN_USE_MESSAGE, code: "certification_locked",
+      issues: [{ path: ["orderId"], code: "certification_locked", message: IN_USE_MESSAGE, meta: { reason: "in_use", deliveryCode: "DL-001", deliveryId: "delivery-1" } }],
     }));
     render(<OrderList />);
     await confirmDelete();

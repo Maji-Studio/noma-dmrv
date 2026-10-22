@@ -30,7 +30,7 @@ it.each([ProductionRunOverlapError, ProductionRunDependencyError])("preserves %s
 });
 
 it("marks only dependency conflicts as in-use while preserving the class and conflict reference", async () => {
-  const refusal = new ProductionRunDependencyError("Production run PR-26-001 was not deleted because credit batches still use it. Remove those batches first, or keep this run.", conflict);
+  const refusal = new ProductionRunDependencyError("Production run PR-26-001 was not deleted because credit batches still use it. Remove those credit batches first, or keep this run.", conflict);
   expect(refusal).toBeInstanceOf(ProductionRunDependencyError);
   expect(refusal.name).toBe("ProductionRunDependencyError");
   expect(refusal.conflict).toBe(conflict);

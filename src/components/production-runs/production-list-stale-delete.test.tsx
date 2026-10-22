@@ -7,7 +7,7 @@ import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError, 
 
 const INITIAL_VERSION = 1;
 const REFRESHED_VERSION = 2;
-const state = vi.hoisted(() => ({ row: { id: "record", code: "RECORD-1", version: 1 }, remove: vi.fn(), invalidate: vi.fn() }));
+const state = vi.hoisted(() => ({ row: { id: "record", code: "RECORD-1", version: 1 }, remove: vi.fn() }));
 vi.mock("nuqs", () => ({ parseAsString: { withOptions: () => ({}) }, useQueryState: () => [null, vi.fn()] }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: "facility", facilities: [] }) }));
 vi.mock("@/hooks/use-production-runs", () => ({
@@ -61,10 +61,6 @@ vi.mock("@/components/ui/delete-confirm-dialog", () => ({
         {errorMessage && <p data-testid="dialog-delete-error">{errorMessage}</p>}
       </div>
     ) : null,
-}));
-vi.mock("@tanstack/react-query", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@tanstack/react-query")>()),
-  useQueryClient: () => ({ invalidateQueries: state.invalidate }),
 }));
 vi.mock("@/components/ui/in-use-delete-dialog", () => ({
   InUseDeleteDialog: ({ label, children }: { label: string; children?: ReactNode }) => (
@@ -149,7 +145,6 @@ describe("Production run in-use delete refusal", () => {
       expect(dialog).toContain("RECORD-1");
       expect(dialog).toContain("dependent credit batches still use it");
       expect(dialog).toContain("/credit-batches/batch-1");
-      expect(state.invalidate).toHaveBeenCalledWith({ queryKey: ["record-locks", "productionRun"] });
     } finally { await act(async () => renderer.unmount()); }
   });
 });
