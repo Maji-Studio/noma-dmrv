@@ -37,13 +37,14 @@ export function CreateOrganizationForm({ onCreated, onCancel }: CreateOrganizati
     control,
     register,
     handleSubmit,
+    resetField,
     setError,
     formState: { errors },
   } = useForm<CreateOrganizationInput>({
     resolver: zodResolver(createOrganizationSchema),
     defaultValues: { name: "", adminEmail: "" },
   });
-  const refuseSave = useSaveRefusal({ control, setError, formId });
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
 
   const onSubmit = latched(handleSubmit(async (values) => {
     setServerError("");
