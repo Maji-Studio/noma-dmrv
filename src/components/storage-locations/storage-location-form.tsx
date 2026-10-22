@@ -4,7 +4,7 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -34,6 +34,17 @@ import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 import type { StorageLocation } from "@/db/schema/facilities";
 import { isBinFormulationLocked, type RecordLockView } from "@/lib/record-lock-view";
 import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/**
+ * The form's own values: no storage type is chosen until the operator picks
+ * one, which the type radios read as null. The schema still requires it.
+ */
+type StorageLocationFormValues = Omit<StorageLocationFormData, "type"> & { type: StorageLocationType | null };
+
+const schemaResolver = zodResolver(storageLocationFormSchema);
+/** The schema reads the draft, null type included, and refuses a missing type. */
+const resolveStorageLocation: Resolver<StorageLocationFormValues, unknown, StorageLocationFormData> = (values, context, options) =>
+  schemaResolver(values as StorageLocationFormData, context, options as Parameters<typeof schemaResolver>[2]);
 
 /** Native min, max and step for each number input, read from the schema. */
 const numberBounds = numberInputConstraintsFor(storageLocationFormSchema);
@@ -110,13 +121,17 @@ export function StorageLocationForm({
     setValue,
     setError,
     formState: { errors },
-  } = useForm<StorageLocationFormData>({
-    resolver: zodResolver(storageLocationFormSchema),
+  } = useForm<StorageLocationFormValues, unknown, StorageLocationFormData>({
+    resolver: resolveStorageLocation,
     defaultValues: {
       name: storageLocation?.name ?? "",
-      type: storageLocation?.type ?? defaultType ?? fixedType,
+      // null, not undefined: the type radios read "none chosen" as null, so
+      // undefined would read as an edit.
+      type: storageLocation?.type ?? defaultType ?? fixedType ?? null,
       facilityId: storageLocation?.facilityId ?? defaultFacilityId ?? contextFacilityId ?? "",
-      capacityKg: storageLocation?.capacityKg ?? undefined,
+      // null, as nullableNumericValue reads an empty capacity: undefined would
+      // read as an edit.
+      capacityKg: storageLocation?.capacityKg ?? null,
       feedstockTypeId: storageLocation?.feedstockTypeId ?? defaultFeedstockTypeId ?? "",
       formulationId: storageLocation?.formulationId ?? defaultFormulationId ?? "",
       stockMode: storageLocation?.stockMode ?? "split",

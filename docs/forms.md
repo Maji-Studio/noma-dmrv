@@ -566,6 +566,10 @@ storageLocationId: emptyToNull.or(z.uuid()).optional().nullable(),
 
 The underlying `useClearOnDependencyChange` (`@/hooks/use-clear-on-dependency-change`) is standalone — use it directly in custom form components that are not `FormEntitySelect`.
 
+**A select's own pick is a default on an untouched form** (#1360). When `autoSelectSingle` picks the only option, or `dependsOn` clears the field, while the form is still clean, `FormEntitySelect` moves the field's default with its value (`useSelectDefault`), so Cancel closes without "Discard unsaved changes?". Once the operator has edited anything, the same change is an edit and stays in `dirtyFields`, so a dirty-fields patch still sends it. The caller's `onChange` side effect also runs on the pick, with `change.asDefault`: a side effect that sets other fields sets them with `resetField(name, { defaultValue })` when `asDefault` is true (the credit batch month window). A plain `EntitySelect` under a `Controller` passes `onAutoSelect={(id) => setSelectDefault(name, id, field.onChange)}` with `const setSelectDefault = useSelectDefault(control)`.
+
+**Default each registered field to the value its input produces when empty.** RHF fills a field whose default is `undefined` from its input, and `isDirty` compares every value with the defaults, so a mismatch makes the untouched form read as edited the next time anything recomputes it. That is `""` for a text or picker input and for a number input with no `setValueAs` (facility `timezone`, order `quantityKg`, production run `residenceTimeMinutes`), `null` for an input whose `setValueAs` gives `null` such as `nullableNumericValue` (storage bin `capacityKg`) and for radios with none chosen (storage bin `type`), and `undefined` only where `setValueAs` maps empty to `undefined` (`numericValue`, `integerValue`).
+
 ## Explanations behind an (i)
 
 There is one view of every form and read sheet. Explanation does not switch on
