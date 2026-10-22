@@ -1,8 +1,8 @@
 "use server";
 import { recordProductionIncident } from "@/lib/operations/production-incidents";
-import { runOperationInProcess } from "@/lib/operations/runner";
-import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 
 /**
  * Production Incidents Server Actions
@@ -61,12 +61,11 @@ export async function createProductionIncidentFn(
   data: z.infer<typeof createProductionIncidentSchema>,
   options?: CreateIntentOptions,
 ): Promise<ActionResult<ProductionIncidentWithRelations>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const validated = createProductionIncidentSchema.parse(data);
 
-    const parsedOptions = createIntentOptionsSchema.parse(options);
-    return runOperationInProcess(recordProductionIncident, ctx, validated, parsedOptions);
-  }, {
+    return create(recordProductionIncident, validated);
+  }, options, {
     fallbackMessage: CREATE_FAILURE,
     log: { message: "createProductionIncidentFn failed", context: { op: "production-incident:create" } },
     mapError: (error) =>

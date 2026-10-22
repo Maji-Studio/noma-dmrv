@@ -1,9 +1,9 @@
 "use server";
 
 import { createCreditBatch } from "@/lib/operations/credit-batches";
-import { runOperationInProcess } from "@/lib/operations/runner";
-import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 
 import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
@@ -117,15 +117,14 @@ export async function createCreditBatchFn(
   data: z.infer<typeof createCreditBatchSchema>,
   options?: CreateIntentOptions,
 ): Promise<ActionResult<SavedCreditBatch>> {
-  const result = await withAction(async (ctx) => {
+  const result = await withCreate(async (ctx, create) => {
     const { facilityId } = creditBatchFacilitySchema.parse(data);
     const certifier = await getCreditBatchCertifierForFacility(ctx, facilityId);
     const validated = creditBatchFormSchemaForCertifier(certifier).parse(data);
 
-    const parsedOptions = createIntentOptionsSchema.parse(options);
-    const committed = await runOperationInProcess(createCreditBatch, ctx, validated, parsedOptions);
+    const committed = await create(createCreditBatch, validated);
     return describeSavedCreditBatch(ctx, committed);
-  }, {
+  }, options, {
     fallbackMessage: "Failed to create credit batch",
     log: { message: "Failed to create credit batch", context: { op: "credit-batch:create" } },
   });

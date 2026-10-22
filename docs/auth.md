@@ -164,8 +164,10 @@ records the reason, and no application action can re-enable it. Only creation
 returns plaintext. Lists select safe fields explicitly and never return the
 key hash or plugin metadata.
 
-The create dialog sends a per-draft intent key (docs/forms.md, "Double
-submit"). A retry with the same key, after a response that never reached the
+The create dialog sends a per-draft intent key ([forms.md](./forms.md#double-submit)).
+The action reads `create.key` from the shared
+[`withCreate` wrapper](./architecture.md#layers), which validates the key lazily
+after the API key payload. A retry with the same key, after a response that never reached the
 browser, deletes the key recorded under it (its secret was never shown) and
 issues a fresh one, so the list keeps one key. The idempotency record holds
 only the key id, never the plaintext. The transaction runs on a dedicated

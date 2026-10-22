@@ -1,8 +1,7 @@
 "use server";
 
 import { recordTransportLeg } from "@/lib/operations/transport-legs";
-import { runOperationInProcess } from "@/lib/operations/runner";
-import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 import {
   deleteTransportLeg,
   getTransportLegsForEntity,
@@ -11,6 +10,7 @@ import {
   type TransportEntityType,
 } from "@/data-access/transport-legs";
 import { withAction } from "@/fn/with-action";
+import { withCreate } from "./with-create";
 import {
   createTransportLegSchema,
   deleteTransportLegSchema,
@@ -44,16 +44,15 @@ export async function createTransportLegFn(
   input: CreateTransportLegData,
   options?: CreateIntentOptions,
 ): Promise<ActionResult<TransportLeg>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const parsed = createTransportLegSchema.parse(input);
-    const parsedOptions = createIntentOptionsSchema.parse(options);
-    return runOperationInProcess(recordTransportLeg, ctx, {
+    return create(recordTransportLeg, {
       ...parsed,
       // Explicit/manual legs own their distance + provenance; a leg saved
       // without one was hand-typed.
       distanceSource: resolveDistanceSource(parsed.distanceKm, parsed.distanceSource) ?? null,
-    }, parsedOptions);
-  });
+    });
+  }, options);
 }
 
 export async function updateTransportLegFn(

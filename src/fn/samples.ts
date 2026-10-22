@@ -1,6 +1,7 @@
 "use server";
 
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 
 /**
  * Samples Server Actions
@@ -26,7 +27,7 @@ import {
   sampleFilterSchema,
 } from "@/schemas/samples";
 import type { ActionResult } from "@/types/actions";
-import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 
 /** Keep the per-operation log context the legacy actions emitted. */
 function logFor(op: string) {
@@ -118,9 +119,9 @@ export async function createSampleFn(
   data: z.infer<typeof createSampleSchema>,
   options?: CreateIntentOptions
 ): Promise<ActionResult<SampleWithRelations>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const validated = createSampleSchema.parse(data);
-    const result = await runOperationInProcess(recordLabSample, ctx, {
+    const result = await create(recordLabSample, {
       creditBatchId: validated.creditBatchId,
       samplingTime: validated.samplingTime,
       labName: validated.labName || null,
@@ -153,9 +154,9 @@ export async function createSampleFn(
       magnesiumPercent: validated.magnesiumPercent ?? null,
       calciumPercent: validated.calciumPercent ?? null,
       ironPercent: validated.ironPercent ?? null,
-    }, createIntentOptionsSchema.parse(options));
+    });
     return result.sample;
-  }, { fallbackMessage: "Failed to create sample", log: logFor("sample:create") });
+  }, options, { fallbackMessage: "Failed to create sample", log: logFor("sample:create") });
 }
 
 // ============================================

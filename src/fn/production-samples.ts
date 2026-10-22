@@ -1,8 +1,8 @@
 "use server";
 import { recordProductionSample } from "@/lib/operations/production-samples";
-import { runOperationInProcess } from "@/lib/operations/runner";
-import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 
 /**
  * Production Samples Server Actions
@@ -75,12 +75,11 @@ export async function createProductionSampleFn(
   data: z.infer<typeof createProductionSampleSchema>,
   options?: CreateIntentOptions,
 ): Promise<ActionResult<ProductionSampleWithRelations>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const validated = createProductionSampleSchema.parse(data);
 
-    const parsedOptions = createIntentOptionsSchema.parse(options);
-    return runOperationInProcess(recordProductionSample, ctx, validated, parsedOptions);
-  }, {
+    return create(recordProductionSample, validated);
+  }, options, {
     fallbackMessage: CREATE_FAILURE,
     log: { message: "createProductionSampleFn failed", context: { op: "production-sample:create" } },
     mapError: (error) =>
