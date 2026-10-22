@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-vi.mock("./send", () => ({ sendEmail: vi.fn() }));
+vi.mock("./send", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./send")>()),
+  sendEmail: vi.fn(),
+}));
 import { env } from "@/config/env";
 import { sendEmail } from "./send";
 import { sendAuthEmail } from "./auth-email";

@@ -62,7 +62,10 @@ vi.mock("@/lib/log", () => ({
   sanitizeErrorMessage: () => "Unexpected failure.",
 }));
 
-vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn() }));
+vi.mock("@/lib/email/send", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/email/send")>()),
+  sendEmail: vi.fn(),
+}));
 
 import { sendEmail } from "@/lib/email/send";
 import { auth } from "@/lib/auth/better-auth";

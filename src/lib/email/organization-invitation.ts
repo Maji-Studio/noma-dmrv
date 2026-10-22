@@ -1,8 +1,10 @@
+import { INVITATION_EXPIRES_IN_SECONDS } from "@/config/auth";
 import { env } from "@/config/env";
 import { escapeHtml } from "./escape-html";
-import { sendEmail } from "./send";
+import { logLocalFallbackLink, sendEmail } from "./send";
 
 const INVITATION_IDEMPOTENCY_KEY_PREFIX = "org-invite/";
+const SECONDS_PER_DAY = 60 * 60 * 24;
 
 /** Call only after the authorized invitation write has committed. */
 export async function sendOrganizationInvitation(input: {
@@ -25,11 +27,9 @@ export async function sendOrganizationInvitation(input: {
               <p>Hello,</p>
               <p>Join <strong>${escapeHtml(input.organizationName)}</strong> as ${escapeHtml(input.role)}.</p>
               <p><a href="${acceptUrl}">Accept invitation</a></p>
-              <p>This invitation expires in 7 days.</p>
+              <p>This invitation expires in ${INVITATION_EXPIRES_IN_SECONDS / SECONDS_PER_DAY} days.</p>
             `,
   });
-  if (!result.sent && result.reason === "not-configured" && env.NODE_ENV !== "production") {
-    console.log(`[auth:org-invite] acceptUrl=${acceptUrl}`);
-  }
+  logLocalFallbackLink(result, "[auth:org-invite] acceptUrl", acceptUrl);
   return { acceptUrl, emailSent: result.sent };
 }

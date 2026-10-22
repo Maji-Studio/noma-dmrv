@@ -1,5 +1,4 @@
-import { env } from "@/config/env";
-import { sendEmail } from "./send";
+import { logLocalFallbackLink, sendEmail } from "./send";
 
 export async function sendAuthEmail(input: {
   type: "reset-password" | "verify-email";
@@ -10,9 +9,7 @@ export async function sendAuthEmail(input: {
   url: string;
 }): Promise<void> {
   const result = await sendEmail(input);
-  if (!result.sent && result.reason === "not-configured" && env.NODE_ENV !== "production") {
-    console.log(`[auth:${input.type}] userId=${input.userId} fullUrl=${input.url}`);
-  }
+  logLocalFallbackLink(result, `[auth:${input.type}] userId=${input.userId} fullUrl`, input.url);
   // Reset must return the same response for existing and nonexistent accounts,
   // including when Resend is down. Verification retains failure propagation,
   // but never exposes the provider's potentially identifying error text.

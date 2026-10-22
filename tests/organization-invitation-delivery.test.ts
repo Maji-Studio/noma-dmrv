@@ -10,7 +10,10 @@ vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn(), requireOrgRole: vi.fn(), requirePlatformAdmin: vi.fn(),
 }));
 vi.mock("@/db/org-defaults", () => ({ seedOrgDefaults: vi.fn() }));
-vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn() }));
+vi.mock("@/lib/email/send", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/email/send")>()),
+  sendEmail: vi.fn(),
+}));
 
 import { inviteMemberAction, createOrganizationAction } from "@/fn/organizations";
 import { requireOrgContext, requirePlatformAdmin } from "@/lib/auth/server";

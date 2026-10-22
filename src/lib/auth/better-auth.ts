@@ -23,7 +23,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
 import { asc, eq } from "drizzle-orm";
-import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
+import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH, INVITATION_EXPIRES_IN_SECONDS, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
 import { env } from "@/config/env";
 import { escapeHtml } from "@/lib/email/escape-html";
 import { sendAuthEmail } from "@/lib/email/auth-email";
@@ -33,9 +33,6 @@ import { seedOrgDefaults } from "@/db/org-defaults";
 import * as schema from "@/db/schema";
 import { selectActiveOrganizationId } from "@/lib/auth/organization-selection";
 import { logger } from "@/lib/log";
-
-/** Pending invitations expire after 7 days. */
-const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
 
 /**
  * Build the list of origins Better Auth accepts on auth requests.

@@ -11,6 +11,7 @@ import { oauthRolePolicy } from "@/lib/auth/oauth-role-policy";
 import { canOwnApiKey } from "@/lib/auth/api-scopes";
 import { LAST_ADMIN_MESSAGE, rethrowLastAdmin } from "@/lib/auth/organization-role-policy";
 import { randomUUID } from "node:crypto";
+import { INVITATION_EXPIRES_IN_SECONDS } from "@/config/auth";
 import { and, count, desc, eq, like, ne, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
@@ -29,8 +30,6 @@ import { isSlugForBase, organizationSlugBase, organizationSlugCandidate } from "
 import { logger } from "@/lib/log";
 import { uuidSchema } from "@/schemas/helpers";
 
-// Mirrors Better Auth's organization plugin configuration in better-auth.ts.
-const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
 const MILLISECONDS_PER_SECOND = 1_000;
 const ORGANIZATION_SLUG_MAX_ATTEMPTS = 3;
 const CREATE_INTENT_LOCK_HASH_SEED = 0;

@@ -20,6 +20,13 @@ type EmailInput = {
 
 const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
 
+/** Preserve local fallback links only when delivery is unconfigured. */
+export function logLocalFallbackLink(result: EmailResult, label: string, url: string): void {
+  if (!result.sent && result.reason === "not-configured" && env.NODE_ENV !== "production") {
+    console.log(`${label}=${url}`);
+  }
+}
+
 /** Provider messages and exception text may contain addresses. Log only status. */
 function errorStatus(error: unknown): number | undefined {
   if (!error || typeof error !== "object" || !("statusCode" in error)) return;

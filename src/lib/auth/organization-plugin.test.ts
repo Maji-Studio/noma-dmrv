@@ -36,7 +36,10 @@ vi.mock("next/headers", () => ({ headers: () => sessionHeaders(), cookies: () =>
 vi.mock("@/data-access/organizations", () => ({
   getActiveOrganization: async () => memory.organization[0],
 }));
-vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn() }));
+vi.mock("@/lib/email/send", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/email/send")>()),
+  sendEmail: vi.fn(),
+}));
 import { sendEmail } from "@/lib/email/send";
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: async () => ({ userId: "actor", organizationId: "org", orgRole: "admin", isPlatformAdmin: false }),
