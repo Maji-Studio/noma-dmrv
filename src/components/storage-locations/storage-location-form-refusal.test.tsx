@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ActionError } from "@/lib/action-error";
 import { LOCKED_FIELD_MESSAGE } from "@/lib/save-refusal";
 import type { StorageLocation } from "@/db/schema/facilities";
+import type { RecordLockView } from "@/lib/record-lock-view";
 import { StorageLocationForm } from "./storage-location-form";
 
 const FACILITY_ID = "00000000-0000-4000-8000-000000000001";
@@ -31,18 +32,21 @@ const saved = {
   storageMethod: null, storageDescription: null,
 } as unknown as StorageLocation;
 
+const OPEN_LOCK: RecordLockView = { level: "open", heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [] };
 const LOCK_MESSAGE = "This bin has stock history.";
 const fieldRefusal = new ActionError({ error: "Name is taken", code: "validation_failed", issues: [{ path: ["name"], code: "validation_failed", message: "Name is taken" }] });
-const lockRefusal = new ActionError({ error: LOCK_MESSAGE, code: "certification_locked", issues: [{ path: ["name"], code: "certification_locked", message: LOCK_MESSAGE }] });
+const lockRefusal = new ActionError({ error: LOCK_MESSAGE, code: "certification_locked", issues: [{ path: ["type"], code: "certification_locked", message: LOCK_MESSAGE }] });
 
 /** A parent like the bin sheet: it passes the handler's footer through, null included. */
 function Parent({ refusal, storageLocation }: { refusal: ActionError; storageLocation?: StorageLocation }) {
+  const allowedTypes = storageLocation ? (["biochar_bin", "product_bin"] as const) : (["biochar_bin"] as const);
   const [footer, setFooter] = useState<string | null>(null);
   return (
     <>
       <StorageLocationForm
         storageLocation={storageLocation}
-        allowedTypes={["biochar_bin"]}
+        lock={OPEN_LOCK}
+        allowedTypes={allowedTypes}
         defaultFacilityId={FACILITY_ID}
         onSubmit={(_data, onRefusal) => setFooter(onRefusal(refusal, "Storage bin was not saved. Try again."))}
         onCancel={vi.fn()}
@@ -72,11 +76,14 @@ describe("StorageLocationForm refused save", () => {
     expect(screen.getByTestId("footer").textContent).toBe("none");
   });
 
-  it("puts a changed locked field back to its saved value", async () => {
+  it("puts a changed locked storage type back to its saved value", async () => {
     renderParent({ refusal: lockRefusal, storageLocation: saved });
-    fireEvent.change(nameInput(), { target: { value: "Renamed bin" } });
+    const radio = (value: string) => document.querySelector<HTMLInputElement>(`input[name="type"][value="${value}"]`)!;
+    fireEvent.click(radio("product_bin"));
+    expect(radio("product_bin").checked).toBe(true);
     fireEvent.submit(nameInput().closest("form")!);
-    await waitFor(() => expect(nameInput().value).toBe("North bin"));
+    await waitFor(() => expect(radio("product_bin").checked).toBe(false));
+    expect(radio("biochar_bin").checked).toBe(true);
     expect(screen.getAllByText(LOCKED_FIELD_MESSAGE).length).toBeGreaterThan(0);
     expect(screen.getByTestId("footer").textContent).toBe(LOCK_MESSAGE);
   });

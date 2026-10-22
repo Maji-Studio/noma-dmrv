@@ -35,9 +35,18 @@ import { requireOrgScope } from "./utils";
  * Field labels, exactly as the storage bin form shows them, so the refusal
  * names the control the operator just changed.
  */
-const STORAGE_TYPE_FIELD = "Storage type";
-const FEEDSTOCK_TYPE_FIELD = "Feedstock type";
-const FACILITY_FIELD = "Facility";
+const STORAGE_TYPE_FIELD = { label: "Storage type", key: "type" };
+const FEEDSTOCK_TYPE_FIELD = { label: "Feedstock type", key: "feedstockTypeId" };
+const FACILITY_FIELD = { label: "Facility", key: "facilityId" };
+
+/** The control the operator changed: its label for the message, its form key for the issue path. */
+type IdentityField = typeof STORAGE_TYPE_FIELD;
+
+function lockedIdentityError(field: IdentityField, message: string): DomainError {
+  return new DomainError("certification_locked", message, {
+    issues: [{ path: [field.key], code: "certification_locked", message }],
+  });
+}
 
 /** The bin identity columns a stock derivation reads. */
 interface BinIdentity {
@@ -73,7 +82,7 @@ function historyBlocksMessage(changedField: string): string {
 function changedIdentityField(
   current: BinIdentity,
   next: BinIdentity,
-): string | null {
+): IdentityField | null {
   if (current.type !== next.type) return STORAGE_TYPE_FIELD;
   if (current.feedstockTypeId !== next.feedstockTypeId) {
     return FEEDSTOCK_TYPE_FIELD;
@@ -107,11 +116,11 @@ export async function assertBinIdentityChangeAllowed(
     laneForStorageType(bin.type),
   );
   if (hasNonZeroStock(availableKg)) {
-    throw new DomainError("certification_locked", withRecordLockGuidance(stockBlocksMessage(changedField), lock));
+    throw lockedIdentityError(changedField, withRecordLockGuidance(stockBlocksMessage(changedField.label), lock));
   }
 
   const references = await countStorageLocationReferences(ctx, tx, bin.id);
   if (hasStorageLocationReferences(references)) {
-    throw new DomainError("certification_locked", withRecordLockGuidance(historyBlocksMessage(changedField), lock));
+    throw lockedIdentityError(changedField, withRecordLockGuidance(historyBlocksMessage(changedField.label), lock));
   }
 }

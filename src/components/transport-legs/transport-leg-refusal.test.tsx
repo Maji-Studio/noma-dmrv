@@ -56,6 +56,7 @@ describe("TransportLegForm refused save", () => {
     expect(screen.getByTestId("footer").textContent).toBe("none");
   });
 
+  // A contract test of the form: the server's lineage lock names no field today, so this is not a server shape.
   it("puts a changed locked field back to its saved value and says so", async () => {
     const refusal = new ActionError({ error: "Leg is locked", code: "certification_locked", issues: [{ path: ["loadMassKg"], code: "certification_locked", message: "Leg is locked" }] });
     const { container } = render(<Parent refusal={refusal} />);

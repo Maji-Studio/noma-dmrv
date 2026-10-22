@@ -50,4 +50,7 @@ it("shows a refused create at its field inside the dialog, with no footer line",
   await waitFor(() => expect(screen.getAllByText("Name is taken").length).toBeGreaterThan(0));
   // Once at the field and once in the error summary; none as a footer message.
   expect(document.querySelector("#name-error")?.textContent).toContain("Name is taken");
+  // No footer alert repeats the message: the only alerts are the field error and the summary.
+  const footerAlerts = screen.queryAllByRole("alert").filter((node) => node.id !== "name-error" && node.textContent?.includes("Name is taken"));
+  expect(footerAlerts).toEqual([]);
 });
