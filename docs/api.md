@@ -859,7 +859,7 @@ formulations and feedstock types, as well as these delete refusals:
 |---|---|---|---|
 | Feedstock | Production runs | `/feedstockId` | None |
 | Production run | Biochar products, credit batches, or both | `/productionRunId` | None; the top-level `conflict` retains the dependent record reference |
-| Order | Deliveries, including archived deliveries | `/orderId` | `deliveryCode` |
+| Order | Deliveries, including archived deliveries | `/orderId` | `deliveryCode`, `deliveryId` (delivery selected by code in ascending order) |
 
 For feedstock and order dependency refusals, the REST problem `code` and `type`
 and the MCP error `code` change from `certification_locked` to `conflict`.

@@ -10,6 +10,9 @@ import { conflictCode } from "@/lib/conflict-ref";
 import { DomainError } from "@/lib/domain-errors";
 import { ActionError } from "@/lib/action-error";
 import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
+import { actionFailureResponse } from "@/lib/api/problem";
+import type { ApiRouteContext } from "@/lib/api/route";
+import { toolFailure } from "@/lib/mcp/results";
 import { SafeError } from "@/lib/errors";
 import { toActionFailure } from "@/fn/action-errors";
 import { withProductionRunErrors } from "./production-run-domain-errors";
@@ -26,13 +29,22 @@ it.each([ProductionRunOverlapError, ProductionRunDependencyError])("preserves %s
   });
 });
 
-it("marks only dependency conflicts as in-use while preserving the class and conflict reference", () => {
-  const refusal = new ProductionRunDependencyError("Production run PR-26-001 was not deleted because dependent credit batches still use it.", conflict);
+it("marks only dependency conflicts as in-use while preserving the class and conflict reference", async () => {
+  const refusal = new ProductionRunDependencyError("Production run PR-26-001 was not deleted because credit batches still use it. Remove those batches first, or keep this run.", conflict);
   expect(refusal).toBeInstanceOf(ProductionRunDependencyError);
   expect(refusal.name).toBe("ProductionRunDependencyError");
   expect(refusal.conflict).toBe(conflict);
   expect(refusal.issues).toEqual([{ path: ["productionRunId"], code: "conflict", message: refusal.message, meta: { reason: "in_use" } }]);
-  expect(isInUseDeleteRefusal(new ActionError(toActionFailure(refusal, failureOptions)))).toBe(true);
+  const failure = toActionFailure(refusal, failureOptions);
+  expect(isInUseDeleteRefusal(new ActionError(failure))).toBe(true);
+  const response = actionFailureResponse(failure, "/api/v1/production-runs/run-id", "request-id");
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ code: "conflict", detail: refusal.message, conflict,
+    errors: [{ pointer: "/productionRunId", code: "conflict", meta: { reason: "in_use" } }] });
+  const context = { instance: "/api/mcp", requestId: "request-id" } as ApiRouteContext;
+  expect(await toolFailure(refusal, context, "delete_production_run")).toMatchObject({ isError: true,
+    structuredContent: { code: "conflict", detail: refusal.message, conflict,
+      issues: [{ pointer: "/productionRunId", code: "conflict", meta: { reason: "in_use" } }] } });
   const overlap = new ProductionRunOverlapError("Overlap.", conflict);
   expect(isInUseDeleteRefusal(new ActionError(toActionFailure(overlap, failureOptions)))).toBe(false);
 });

@@ -148,8 +148,9 @@ export async function deleteProductionRunInTransaction(
       ? { entity: "biocharProduct", ...dependentProduct }
       : { entity: "creditBatch", ...dependentCreditBatch! };
     const conflict = { ...dependent, code: conflictCode(dependent.code) };
+    const records = dependentProduct && dependentCreditBatch ? "records" : dependentProduct ? "products" : "batches";
     throw new ProductionRunDependencyError(
-      `Production run ${locked.code} ${IN_USE_DELETE_MARKER} dependent ${dependentKinds.join(" and ")} still use it.`,
+      `Production run ${locked.code} ${IN_USE_DELETE_MARKER} ${dependentKinds.join(" and ")} still use it. Remove those ${records} first, or keep this run.`,
       conflict,
     );
   }

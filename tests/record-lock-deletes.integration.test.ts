@@ -96,7 +96,7 @@ it('allows deleting an archived order after its archived delivery is gone', asyn
   const f = await fixture();
   const delivery = await postDelivery(f, 100);
   await db.update(deliveries).set({ archivedAt: new Date() }).where(eq(deliveries.id, delivery.id));
-  await expect(runOperationInProcess(deleteOrder, f.ctx, { orderId: f.order.id, expectedVersion: f.order.version })).rejects.toMatchObject({ code: 'conflict', issues: [{ path: ['orderId'], code: 'conflict', meta: { reason: 'in_use', deliveryCode: delivery.code } }] });
+  await expect(runOperationInProcess(deleteOrder, f.ctx, { orderId: f.order.id, expectedVersion: f.order.version })).rejects.toMatchObject({ code: 'conflict', issues: [{ path: ['orderId'], code: 'conflict', meta: { reason: 'in_use', deliveryCode: delivery.code, deliveryId: delivery.id } }] });
   await deleteDelivery(f.ctx, delivery.id, delivery.version);
   await db.update(orders).set({ archivedAt: new Date() }).where(eq(orders.id, f.order.id));
   await expect(runOperationInProcess(deleteOrder, f.ctx, { orderId: f.order.id, expectedVersion: f.order.version })).resolves.toBeUndefined();

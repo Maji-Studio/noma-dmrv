@@ -201,11 +201,14 @@ describe("three-way order parity", { timeout: TIMEOUT_MS }, () => {
       const id = made?.data.id ?? randomUUID();
       let changes: Record<string, unknown> = {};
       let deliveryCode: string | undefined;
+      let deliveryId: string | undefined;
       if (setup === "foreign") changes = { customerId: fixtures.get(transport === "action" ? "rest" : "action")!.customer.id };
       else if (setup === "location") changes = { customerId: f.otherCustomer.id };
       else if (setup === "archive") await archiveReadOrder(f, id);
       else {
-        deliveryCode = (await insertReadDelivery(f, id, DELIVERED_KG)).code;
+        const delivery = await insertReadDelivery(f, id, DELIVERED_KG);
+        deliveryCode = delivery.code;
+        deliveryId = delivery.id;
         if (setup === "quantity") changes = { quantityKg: BELOW_ALLOCATED_KG };
         else if (setup !== "delivery") changes = { [setup]: ({ facilityId: f.otherFacility.id, customerId: f.otherCustomer.id, customerLocationId: f.otherLocation.id, formulationId: f.pure.id })[setup] };
       }
@@ -216,9 +219,9 @@ describe("three-way order parity", { timeout: TIMEOUT_MS }, () => {
       expect(failure).toMatchObject({ code, issues: [{ code, pointer }] });
       if (setup === "quantity") expect(failure.issues[0].meta).toEqual({ allocatedWetKg: DELIVERED_KG, unit: "kg" });
       if (setup === "delivery") {
-        expect(failure.issues[0].meta).toEqual({ reason: "in_use", deliveryCode });
-        // Each transport fixture generates its own delivery code; compare after checking the exact value.
-        failure.issues[0].meta = { ...failure.issues[0].meta, deliveryCode: "<delivery>" };
+        expect(failure.issues[0].meta).toEqual({ reason: "in_use", deliveryCode, deliveryId });
+        // Each transport fixture generates its own delivery code and id; compare after checking the exact values.
+        failure.issues[0].meta = { ...failure.issues[0].meta, deliveryCode: "<delivery>", deliveryId: "<delivery-id>" };
       }
       failures.set(transport, failure);
       expect(await orderRows(f)).toEqual(beforeRows);
