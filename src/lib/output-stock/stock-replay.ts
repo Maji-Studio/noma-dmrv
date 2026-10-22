@@ -2,8 +2,8 @@
  * The output bin's stock replayed from its history: the one rule the stock
  * chart and history both read. Live entries replay current wet and frozen
  * solids changes in physical time; correction pairs cancel out. Unknown wet
- * can recover from a recomputed after-value. Frozen after-balances recover
- * unknown figures only when no earlier-dated entry was recorded after them.
+ * and solids can recover from after-balances only when no earlier-dated
+ * entry was recorded after them, including recomputed posting-order balances.
  */
 import { STOCK_PART_MIN_KG } from "@/config/output-stock";
 import { stockOrder } from "./stock-order";
@@ -70,7 +70,7 @@ export function applyStockEntry(state: StockState, entry: OutputStockHistoryEntr
   const rebase = (value: number | null | undefined) => (frozenIsCurrent ? frozenAfter(entry, value) : null);
   let solidsKg = runningKg(state.solidsKg, entry.solidsDeltaKg) ?? rebase(entry.afterSolidsKg);
   let wetKg = runningKg(state.wetKg, entry.wetDeltaKg)
-    ?? frozenAfter(entry, entry.currentAfterWetKg) ?? rebase(entry.afterWetKg);
+    ?? rebase(entry.currentAfterWetKg) ?? rebase(entry.afterWetKg);
   // An emptied bin holds nothing, whatever the batches it held were missing.
   if (Math.abs(dryKg) < STOCK_PART_MIN_KG) {
     solidsKg ??= 0;

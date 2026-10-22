@@ -115,7 +115,7 @@ it('uses recomputed wet changes despite stale frozen preview balances', () => {
   expect(last([loss, lateRun, measured])).toMatchObject({ wetKg: 250, solidsKg: 135, dryKg: 135 });
 });
 
-it('recovers current counted wet after a late intake makes the saved balance stale', () => {
+it('keeps counted wet unknown after a late intake makes the posting balance stale', () => {
   const bases: LayerMoistureBasis[] = [
     { layerId: 'legacy', placedAt: AT(9), remainingSolidsKg: decimal('80'), recorded: null, removals: [],
       readings: [{ moisturePercent: 20, solidsKg: decimal('80'), occurredAt: AT(12), sequence: BigInt(1) }] },
@@ -130,8 +130,11 @@ it('recovers current counted wet after a late intake makes the saved balance sta
     entry({ id: 'count', kind: 'count', occurredAt: AT(12), recordedAt: AT(12), solidsDeltaKg: 0,
       wetDeltaKg: change.deltaKg, currentAfterWetKg: change.afterKg, afterWetKg: 100 }),
   ];
-  expect(last(history)?.wetKg).toBe(300);
-  expect(last(history)?.wetKg).toBe(estimateStock(bases, AT(16)).wetKg);
+  // The posting balance is known, but cannot safely rebase physical-order history.
+  expect(estimateStock(bases, AT(16)).wetKg).toBe(300);
+  expect(last(history)?.wetKg).toBeNull();
+  // Once recorded after the intake, the count can safely recover current wet.
+  expect(last(history.map(row => row.kind === 'count' ? { ...row, recordedAt: AT(16) } : row))?.wetKg).toBe(300);
 });
 
 it('counts a loss from a later-placed layer in both history and balance', () => {
@@ -149,4 +152,27 @@ it('counts a loss from a later-placed layer in both history and balance', () => 
   ];
   expect(last(history)?.wetKg).toBe(80);
   expect(last(history)?.wetKg).toBe(estimateStock(bases, AT(16)).wetKg);
+});
+
+it.each(['mix', 'split'] as const)('keeps wet unknown after a %s loss posted after an earlier-recorded count', (stockMode) => {
+  const bases: LayerMoistureBasis[] = [{ layerId: 'legacy', placedAt: AT(9), remainingSolidsKg: decimal('64'),
+    recorded: null,
+    readings: [{ moisturePercent: 20, solidsKg: decimal('80'), occurredAt: AT(12), sequence: BigInt(1) }],
+    removals: [{ wetKg: decimal('20'), solidsKg: decimal('64'), moisturePercent: 20,
+      occurredAt: AT(11), sequence: BigInt(2), kind: 'loss', stockMode }] }];
+  const changes = postingWetSteps(bases, [
+    { id: 'count', occurredAt: AT(12), sequence: BigInt(1) },
+    { id: 'loss', occurredAt: AT(11), sequence: BigInt(2) },
+  ]);
+  expect(changes.get('count')).toEqual({ deltaKg: null, afterKg: 100 });
+  expect(changes.get('loss')).toEqual({ deltaKg: -20, afterKg: 80 });
+  expect(estimateStock(bases, AT(16)).wetKg).toBe(80);
+  const history = [
+    entry({ id: 'legacy', kind: 'intake', dryMassKg: -80, solidsDeltaKg: 80, wetDeltaKg: null }),
+    entry({ id: 'count', kind: 'count', occurredAt: AT(12), recordedAt: AT(12), solidsDeltaKg: 0,
+      wetDeltaKg: changes.get('count')!.deltaKg, currentAfterWetKg: changes.get('count')!.afterKg, afterWetKg: 100 }),
+    entry({ id: 'loss', kind: 'loss', occurredAt: AT(11), recordedAt: AT(15), dryMassKg: 16, solidsDeltaKg: -16,
+      wetDeltaKg: changes.get('loss')!.deltaKg, currentAfterWetKg: changes.get('loss')!.afterKg, afterWetKg: 80 }),
+  ];
+  expect(last(history)).toMatchObject({ dryKg: 64, solidsKg: 64, wetKg: null });
 });
