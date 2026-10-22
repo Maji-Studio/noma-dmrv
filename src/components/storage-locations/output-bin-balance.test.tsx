@@ -98,10 +98,12 @@ it("filters named ingredients by the drawing threshold before working out the re
 
 it("pins a mix pile of 160 kg dry, 80 kg ingredient solids and 400 kg wet: 160 kg water, bands add up to the wet", () => {
   const layers: OutputSubBin[] = [
-    { ...subBin, layerId: "A", code: "A-1", dryMassKg: 100, solidsKg: 150, wetEstimateKg: null, moisturePercent: null, ingredients: [{ name: "Compost", solidsKg: 50 }] },
+    { ...subBin, layerId: "A", code: "A-1", dryMassKg: 100, solidsKg: 150, wetEstimateKg: 250, moisturePercent: null, ingredients: [{ name: "Compost", solidsKg: 50 }] },
     { ...subBin, layerId: "B", code: "B-1", dryMassKg: 60, solidsKg: 90, wetEstimateKg: null, moisturePercent: null, ingredients: [{ name: "Compost", solidsKg: 30 }] },
   ];
   const bands = mixPileBands(layers, 160, 400, 40, "UTC");
+  // A batch in a pile has no wet estimate of its own, even when its record holds one.
+  expect(bands[0].details?.some((row) => row.label === "Water, estimated")).toBe(false);
   expect(bands.map(({ label, kg }) => ({ label, kg }))).toEqual([
     { label: "A-1", kg: 100 }, { label: "B-1", kg: 60 }, { label: "Compost solids", kg: 80 }, { label: "Water, estimated", kg: 160 },
   ]);

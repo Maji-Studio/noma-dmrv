@@ -98,8 +98,7 @@ function BinParts({ rows, label }: { rows: PartRow[]; label: string }) {
 }
 
 /** One sub-bin as a bin: water on top, then ingredient solids, then its dry biochar. */
-function SubBinBay({ subBin, index, percent, nextOut, timeZone }: { subBin: OutputSubBin; index: number; percent: number; nextOut: boolean; timeZone: string }) {
-  const parts = bayParts(subBin);
+function SubBinBay({ subBin, parts, index, percent, nextOut, timeZone }: { subBin: OutputSubBin; parts: ReturnType<typeof bayParts>; index: number; percent: number; nextOut: boolean; timeZone: string }) {
   const totalKg = parts.sizeKg;
   const waterKg = parts.waterKg ?? 0;
   const ingredientsKg = parts.ingredientSolidsKg ?? 0;
@@ -141,7 +140,7 @@ export function SubBinBays({ subBins, timeZone, label, capacityKg }: { subBins: 
     const [subBin] = subBins;
     return (
       <div className="flex flex-wrap items-center gap-x-16 gap-y-12">
-        <ul aria-label={label} className="tabular-nums"><li><SubBinBay subBin={subBin} index={0} percent={capacityKg && capacityKg > 0 ? Math.min(allParts[0].sizeKg / capacityKg, 1) * PERCENT : PERCENT} nextOut={false} timeZone={timeZone} /></li></ul>
+        <ul aria-label={label} className="tabular-nums"><li><SubBinBay subBin={subBin} parts={allParts[0]} index={0} percent={capacityKg && capacityKg > 0 ? Math.min(allParts[0].sizeKg / capacityKg, 1) * PERCENT : PERCENT} nextOut={false} timeZone={timeZone} /></li></ul>
         <BinParts label={`${subBin.code} contents`} rows={allParts[0].rows.map((part) => ({ label: partLabel(part), kg: part.kg, ...partSwatch(part) }))} />
       </div>
     );
@@ -157,7 +156,7 @@ export function SubBinBays({ subBins, timeZone, label, capacityKg }: { subBins: 
       <ul aria-label={label} className="flex flex-wrap gap-x-8 gap-y-16 tabular-nums">
         {subBins.map((subBin, index) => (
           <li key={subBin.layerId} className="flex min-w-0">
-            <SubBinBay subBin={subBin} index={index} percent={largestKg > 0 ? (allParts[index].sizeKg / largestKg) * PERCENT : 0} nextOut={index === 0} timeZone={timeZone} />
+            <SubBinBay subBin={subBin} parts={allParts[index]} index={index} percent={largestKg > 0 ? (allParts[index].sizeKg / largestKg) * PERCENT : 0} nextOut={index === 0} timeZone={timeZone} />
           </li>
         ))}
       </ul>
