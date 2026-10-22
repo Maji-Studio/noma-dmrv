@@ -31,6 +31,7 @@ describe("organization creation slug retry", () => {
       .toMatchObject({ name: "New org", firstAdmin: { kind: "member" } });
     expect(first.values).toHaveBeenCalledWith(expect.objectContaining({ slug: "new-org" }));
     expect(second.values).toHaveBeenCalledWith(expect.objectContaining({ slug: "new-org-2" }));
+    expect(second.values.mock.calls[0][0].id).toBe(first.values.mock.calls[0][0].id);
     expect(mocks.transaction).toHaveBeenCalledTimes(2);
     expect(mocks.seed).toHaveBeenCalledOnce();
   });

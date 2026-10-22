@@ -27,11 +27,13 @@ import {
 import { SafeError } from "@/lib/errors";
 import { isSlugForBase, organizationSlugBase, organizationSlugCandidate } from "@/lib/organizations/organization-slug";
 import { logger } from "@/lib/log";
+import { uuidSchema } from "@/schemas/helpers";
 
 // Mirrors Better Auth's organization plugin configuration in better-auth.ts.
 const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
 const MILLISECONDS_PER_SECOND = 1_000;
 const ORGANIZATION_SLUG_MAX_ATTEMPTS = 3;
+const CREATE_INTENT_LOCK_HASH_SEED = 0;
 const ORGANIZATION_SLUG_CONSTRAINT = "organizations_slug_unique";
 
 export type OrgMemberRow = {
@@ -396,14 +398,41 @@ export type CreatedOrganizationWithAdmin = {
 export async function createOrganizationWithAdmin(input: {
   name: string;
   adminEmail: string;
+  organizationId?: string;
 }): Promise<CreatedOrganizationWithAdmin> {
   const admin = await requirePlatformAdmin();
-  const organizationId = randomUUID();
+  const organizationId = input.organizationId === undefined ? randomUUID() : uuidSchema().parse(input.organizationId);
+  let replayed = false;
   const email = input.adminEmail.trim().toLowerCase();
   let created: CreatedOrganizationWithAdmin | undefined;
   for (let attempt = 0; attempt < ORGANIZATION_SLUG_MAX_ATTEMPTS; attempt++) {
     try {
       created = await db.transaction(async (tx): Promise<CreatedOrganizationWithAdmin> => {
+        if (input.organizationId !== undefined) {
+          // Serialize the absent-row check too: concurrent retries share one identity.
+          await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`create-organization:${organizationId}`}, ${CREATE_INTENT_LOCK_HASH_SEED}))`);
+          const [existing] = await tx.select({ id: organizations.id, name: organizations.name })
+            .from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+          if (existing) {
+            if (existing.name !== input.name) {
+              throw new SafeError("This form was already used to create another organization. Reload and try again.");
+            }
+            replayed = true;
+            const [member] = await tx.select({ id: members.id }).from(members)
+              .innerJoin(users, eq(users.id, members.userId))
+              .where(and(eq(members.organizationId, organizationId), eq(members.role, "admin"),
+                sql`lower(${users.email}) = ${email}`)).limit(1);
+            if (member) return { ...existing, firstAdmin: { kind: "member" } };
+            const [invitation] = await tx.select({ id: invitations.id }).from(invitations)
+              .where(and(eq(invitations.organizationId, organizationId), eq(invitations.email, email),
+                eq(invitations.role, "admin"), eq(invitations.status, "pending")))
+              .orderBy(desc(invitations.createdAt)).limit(1);
+            if (!invitation) {
+              throw new SafeError("The organization already exists. Open it to manage its Admins.");
+            }
+            return { ...existing, firstAdmin: { kind: "invited", invitationId: invitation.id } };
+          }
+        }
         const slug = await allocateOrganizationSlug(tx, organizationSlugBase(input.name));
         const [adminUser] = await tx.select({ id: users.id }).from(users)
           .where(sql`lower(${users.email}) = ${email}`).limit(1);
@@ -426,6 +455,7 @@ export async function createOrganizationWithAdmin(input: {
     }
   }
   if (!created) throw new SafeError("Couldn't create the organization. Try again.");
+  if (replayed) return created;
   try {
     await seedOrgDefaults(db, organizationId);
   } catch (error) {

@@ -159,6 +159,20 @@ describe("createOrganizationAction", () => {
     expect(mockCreateOrganizationWithAdmin).not.toHaveBeenCalled();
   });
 
+  it("validates and passes the intent key as the organization identity", async () => {
+    const intentKey = "A1234567-1234-4123-8123-123456789ABC";
+    await createOrganizationAction(VALID_INPUT, { intentKey });
+    expect(mockCreateOrganizationWithAdmin).toHaveBeenCalledWith({
+      ...VALID_INPUT, organizationId: intentKey.toLowerCase(),
+    });
+  });
+
+  it("refuses an invalid intent key before creating anything", async () => {
+    const result = await createOrganizationAction(VALID_INPUT, { intentKey: "invalid" });
+    expect(result.success).toBe(false);
+    expect(mockCreateOrganizationWithAdmin).not.toHaveBeenCalled();
+  });
+
   it("passes normalized name and email to the transaction", async () => {
     const result = await createOrganizationAction({
       ...VALID_INPUT,
@@ -171,6 +185,7 @@ describe("createOrganizationAction", () => {
     expect(mockCreateOrganizationWithAdmin).toHaveBeenCalledWith({
       name: "Example Organization",
       adminEmail: "admin@example.com",
+      organizationId: undefined,
     });
     expect(result).toEqual({
       success: true,

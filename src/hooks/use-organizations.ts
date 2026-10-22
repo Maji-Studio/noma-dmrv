@@ -21,6 +21,7 @@ import { getActiveOrganizationRead } from "@/lib/read-api/client";
 import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
 import { authClient } from "@/lib/auth/client";
 import type { CreateOrganizationInput, RenameOrganizationInput } from "@/schemas/organizations";
+import { useIntentMutation } from "@/hooks/use-create-intent-key";
 import { unwrap } from "@/hooks/types";
 import { NO_ORGANIZATION_MESSAGE } from "@/lib/errors";
 import { stashPendingWarning } from "@/lib/pending-warning";
@@ -229,9 +230,9 @@ export function useRemoveMember() {
 
 export function useCreateOrganization() {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: CreateOrganizationInput) =>
-      unwrap(await createOrganizationAction(input)),
+  return useIntentMutation({
+    mutationFn: async (input: CreateOrganizationInput, intentKey) =>
+      unwrap(await createOrganizationAction(input, { intentKey })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.directory() });
       queryClient.invalidateQueries({ queryKey: organizationKeys.platformDirectory() });
