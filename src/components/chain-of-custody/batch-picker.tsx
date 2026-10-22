@@ -131,7 +131,7 @@ export function BatchPicker({
                     "text-[var(--color-text-primary)]"
                   )}
                 >
-                  {creditBatchOptionLabel(selected)}
+                  {selected.code}
                 </span>
                 <span className="min-w-0 truncate body-caption text-[var(--color-text-tertiary)]">
                   {countLabel(selected.productionRunCount, "run")} ·{" "}
