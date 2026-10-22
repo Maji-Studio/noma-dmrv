@@ -45,8 +45,7 @@ Read these first. Each one fails quietly rather than loudly.
   gets it: members, pending invitations, vehicles, drivers and operators,
   connected apps, API keys and the platform-admin organization rows. Text
   buttons need nothing extra; two 32px icon buttons side by side need a 12px
-  gap or their hit areas overlap. The Members role select stays a known 40px
-  control, because a select cannot take `::after`.
+  gap or their hit areas overlap.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
   the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),
