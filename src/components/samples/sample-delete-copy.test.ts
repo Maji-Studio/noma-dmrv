@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SAMPLE_DELETE_MESSAGE } from "./sample-delete-copy";
 
 describe("Sample delete confirmation", () => {
-  it("states what is deleted and when deleting is refused", () => {
+  it("states what is deleted with it", () => {
     expect(SAMPLE_DELETE_MESSAGE).toContain("transport legs and documents");
   });
 

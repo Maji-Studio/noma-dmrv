@@ -8,4 +8,4 @@
  * message.
  */
 export const SAMPLE_DELETE_MESSAGE =
-  "Delete this Sample? Its transport legs and documents, including the lab report, are deleted with it. This action cannot be undone.";
+  "Delete this Sample? This also deletes its transport legs and documents, such as the lab report. This action cannot be undone.";
