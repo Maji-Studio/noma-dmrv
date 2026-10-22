@@ -25,6 +25,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { PackageIcon, MapPinIcon, FileIcon, MapTrifoldIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
+import { applicationCreditBatchPreview } from "@/components/credit-batches/record-credit-batch-preview-input";
 import { EntitySelect, FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
@@ -225,6 +226,9 @@ export function ApplicationForm({
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
   const { field: deliveryField } = useController({ control, name: "deliveryId" });
   const watchedAppliedKg = useWatch({ control, name: "biocharAppliedKg" });
+  // A saved application reads its saved shares until another delivery is chosen.
+  const creditBatchPreview = isEditMode && selectedDeliveryId === application?.deliveryId ? undefined
+    : applicationCreditBatchPreview(selectedDeliveryId, watchedAppliedKg, application?.id ?? null);
   // A refused over-draw named the old delivery's remaining mass; another delivery voids it.
   useClearOnDependencyChange(selectedDeliveryId, () => {
     if (getFieldState("biocharAppliedKg").error?.type === SERVER_ERROR_TYPE) clearErrors("biocharAppliedKg");
@@ -682,7 +686,7 @@ export function ApplicationForm({
         errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
-        preview={<RecordCreditBatchLine kind="application" id={application?.id} />}
+        preview={<RecordCreditBatchLine kind="application" id={application?.id} preview={creditBatchPreview} />}
       />
     </form>
   );

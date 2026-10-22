@@ -12,6 +12,7 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 
 import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
+import { outputDrawCreditBatchPreview } from "@/components/credit-batches/record-credit-batch-preview-input";
 import { EntitySelect, FormActions, FormField, FormInput, FormSection, FormSpine, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
 import { EventTimeInput } from "@/components/forms/event-time-input";
@@ -281,7 +282,7 @@ export function BiocharProductForm({
     occurredAt: watchedPlacedAt ? String(watchedPlacedAt) : null, wetKg: requestedBiocharKg,
   });
   const [attempted, setAttempted] = useState(false);
-  const { preview: sourcePreview, estimate: sourceMoistureEstimate, readingsReady, gate, beginSubmit } = useOutputDrawDraft({
+  const { preview: sourcePreview, input: sourceDrawInput, estimate: sourceMoistureEstimate, readingsReady, gate, beginSubmit } = useOutputDrawDraft({
     draw, bypass: isEditMode,
     singleMoistureReady: watchedMoisture != null,
     moisturePercent: Number(watchedMoisture),
@@ -295,6 +296,9 @@ export function BiocharProductForm({
       if (split) setValue("moistureContentPercent", undefined);
     },
   });
+  // A saved product keeps its source bin, so only a new one previews its batches.
+  const creditBatchPreview = isEditMode ? undefined
+    : outputDrawCreditBatchPreview("biochar-product", { storageLocationId: sourceBiocharStorageLocationId, facilityId: selectedFacilityId, occurredAt: watchedPlacedAt }, sourceDrawInput);
   // A split draw's biochar moisture is its overall 1 − solids ÷ wet, from the preview.
   const biocharMoisture = draw.active ? sourcePreview.data?.movementMoisturePercent ?? null : watchedMoisture;
   const ingredientMassesComplete = (watchedIngredientBins ?? []).every(
@@ -703,7 +707,7 @@ export function BiocharProductForm({
         submitDisabled={hasZeroSourceBiochar || submitDisabled}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
-        preview={<RecordCreditBatchLine kind="biochar-product" id={product?.id} />}
+        preview={<RecordCreditBatchLine kind="biochar-product" id={product?.id} preview={creditBatchPreview} facilityId={selectedFacilityId} />}
       />
     </div>
   );
