@@ -15,7 +15,7 @@ import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { MoistureResetChange } from "./moisture-reset-change";
-import { entryAmount, entrySentence, formatPartFigures, MIN_SHOWN_CHANGE_KG, WET_MASS_LABEL, type HistoryRow } from "./output-stock-history-days";
+import { entryAmount, entrySentence, formatPartFigures, WET_MASS_LABEL, type HistoryRow } from "./output-stock-history-days";
 import { LEDGER_SUMMARY_CLASS, LedgerCaret, LedgerFacts } from "./stock-ledger";
 import { StockChip } from "./stock-figures";
 import { StockSourceLink } from "./stock-source-link";
@@ -110,14 +110,14 @@ function PartsTable({ row, subject }: { row: HistoryRow; subject: string }) {
   );
 }
 
-/** The wet change the entry was saved with, when the history now recomputes it to a different figure. Null when the shown figures match. */
+/** The wet change the entry was saved with, when the history now shows a different one or none. Null when there is no saved figure or the shown figures match. */
 export function savedWetChange(row: HistoryRow): string | null {
   const { savedWetDeltaKg, wetDeltaKg } = row.entry;
-  if (row.status !== "counts" || savedWetDeltaKg == null || wetDeltaKg == null) return null;
+  if (row.status !== "counts" || savedWetDeltaKg == null) return null;
   const figureOf = (changeKg: number) => formatPartFigures({ label: WET_MASS_LABEL, changeKg, afterKg: 0, estimated: true }).change;
   const saved = figureOf(savedWetDeltaKg);
-  if (saved === figureOf(wetDeltaKg)) return null;
-  return `${WET_MASS_LABEL} ${saved}. Re-estimated with the entries known now.`;
+  if (wetDeltaKg != null && saved === figureOf(wetDeltaKg)) return null;
+  return `${WET_MASS_LABEL} ${saved}.`;
 }
 
 function facts(row: HistoryRow, timeZone: string, linked: boolean) {
@@ -169,7 +169,7 @@ export function HistoryEntry({ row, defaultOpen, linked, timeZone, facilityId, o
           </p>
         )}
         <PartsTable row={row} subject={subject} />
-        {row.moistureEntry?.moistureReset && <MoistureResetChange reset={row.moistureEntry.moistureReset} />}
+        {row.moistureEntry?.moistureReset && <MoistureResetChange reset={row.moistureEntry.moistureReset} saved={savedWetChange(row) !== null} />}
         <LedgerFacts facts={facts(row, timeZone, linked)} />
         {row.kind === "loss" && !struck && (entry.editLockedReason === null
           ? <div className="flex flex-wrap gap-8">

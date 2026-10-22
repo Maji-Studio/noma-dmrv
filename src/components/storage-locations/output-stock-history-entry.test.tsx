@@ -11,7 +11,7 @@ import { HistoryEntry } from "./output-stock-history-entry";
 
 const AT = "2026-09-15T12:00:00.000Z";
 const FACILITY_ID = "00000000-0000-4000-8000-000000000002";
-const SAVED_LINE = "Wet mass +10 kg. Re-estimated with the entries known now.";
+const SAVED_LINE = "Wet mass +10 kg.";
 
 function entry(values: Partial<OutputStockHistoryEntry> & Pick<OutputStockHistoryEntry, "id" | "kind">): OutputStockHistoryEntry {
   return { occurredAt: AT, recordedAt: AT, actorName: "Asha", reason: "", wetMassKg: null, moisturePercent: 50, dryMassKg: 0,
@@ -21,10 +21,12 @@ function text(node: ReactTestInstance | string): string { return typeof node ===
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
 
 /** A bin of 300 kg wet, then a Lost mass of 50 kg wet whose recomputed change is `wetDeltaKg`. */
-async function renderLoss(loss: Partial<OutputStockHistoryEntry>): Promise<string> {
+async function renderLoss(loss: Partial<OutputStockHistoryEntry>, withReading = false): Promise<string> {
   const placed = entry({ id: "p1", kind: "intake", occurredAt: "2026-09-14T12:00:00.000Z", wetMassKg: 300, dryMassKg: -150, wetDeltaKg: 300, solidsDeltaKg: 150 });
   const lost = entry({ id: "l1", kind: "loss", eventKind: "loss", wetMassKg: 50, dryMassKg: 25, solidsDeltaKg: -25, ...loss });
-  const row = buildHistoryDays([placed, lost], "UTC").flatMap((day) => day.rows).find((candidate) => candidate.entry.id === "l1")!;
+  const reading = entry({ id: "l1:moisture", kind: "moisture_update", measuredByMovementId: "l1", occurredAt: AT, moistureReset: {
+    layerCodes: ["B1"], before: { moisturePercent: 40, wetKg: 100 }, after: { moisturePercent: 50, wetKg: 110 } } } as Partial<OutputStockHistoryEntry> & Pick<OutputStockHistoryEntry, "id" | "kind">);
+  const row = buildHistoryDays(withReading ? [placed, lost, reading] : [placed, lost], "UTC").flatMap((day) => day.rows).find((candidate) => candidate.entry.id === "l1")!;
   let renderer!: ReactTestRenderer;
   await act(async () => {
     renderer = create(<HistoryEntry row={row} defaultOpen linked timeZone="UTC" facilityId={FACILITY_ID} onEdit={vi.fn()} onDelete={vi.fn()} />);
@@ -37,6 +39,26 @@ describe("HistoryEntry when saved", () => {
     const output = await renderLoss({ wetDeltaKg: -50, savedWetDeltaKg: 10 });
     expect(output).toContain("Saved change");
     expect(output).toContain(SAVED_LINE);
+  });
+
+  it("keeps the saved figure when the current change is unknown", async () => {
+    expect(await renderLoss({ wetDeltaKg: null, savedWetDeltaKg: 10 })).toContain(SAVED_LINE);
+  });
+
+  it("shows nothing when both changes are unknown", async () => {
+    expect(await renderLoss({ wetDeltaKg: null, savedWetDeltaKg: null })).not.toContain("Saved change");
+  });
+
+  it("labels the moisture block as saved when the change was recomputed", async () => {
+    const output = await renderLoss({ wetDeltaKg: -50, savedWetDeltaKg: 10 }, true);
+    expect(output).toContain("When saved: moisture updated");
+    expect(output).toContain("110 kg wet mass");
+  });
+
+  it("leaves the moisture block as it was when the change was not recomputed", async () => {
+    const output = await renderLoss({ wetDeltaKg: 10, savedWetDeltaKg: 10 }, true);
+    expect(output).toContain("Moisture updated");
+    expect(output).not.toContain("When saved");
   });
 
   it("shows nothing when the figures round to the same text", async () => {

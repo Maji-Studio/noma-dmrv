@@ -183,14 +183,13 @@ keeps its recorded wet mass. Past days and chart points update to end at the cur
 its saved preview change in `savedWetDeltaKg` for details; measurements and
 saved allocations never change. For example, adding a late 200 kg wet run to
 100 kg wet before a 50 kg loss removes the earlier re-estimate: history ends
-at 250 kg instead of 310 kg, while the saved change remains +10 kg.
+at 250 kg instead of 310 kg, while the saved change remains +10 kg. A row keeps that saved figure ("Saved change: Wet mass +10 kg.") even when the recompute is unknown, and the moisture block saved with the movement is labelled "When saved".
 
 Water is display only; no balance, guard, preview or posting reads it. The
-replay first re-bases unknown wet on `currentAfterWetKg`, the recomputed
-after-value, even when a late intake made the saved balance stale. Otherwise,
-it re-bases an unknown wet or solids figure on a movement's saved
-after-balance only while no earlier-dated entry was recorded after that balance
-was saved. A run intake counts as recorded when its output was posted (the
+replay re-bases an unknown wet or solids figure on a movement's saved or
+recomputed (`currentAfterWetKg`) after-balance only while no earlier-dated entry
+was recorded after that balance was saved; a stale value is refused and wet stays
+unknown (`src/lib/output-stock/stock-replay.ts`). A run intake counts as recorded when its output was posted (the
 run's last save as complete, `updatedAt`), not when the run was created. Bay, pile-band and chart
 point details open on hover, keyboard focus or tap. A product bin's bays and
 pile bands name their parts as the product composition does (dry biochar,
