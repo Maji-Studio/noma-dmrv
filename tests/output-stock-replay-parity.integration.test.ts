@@ -119,13 +119,16 @@ it('5: deleted pure product and corrected loss retain parity', async () => {
   await db.update(storageLocations).set({ formulationId: f.pure.id }).where(and(eq(storageLocations.organizationId, f.ctx.organizationId), eq(storageLocations.id, f.bin.id)));
   await postProduct(f, { massKg: 40 });
   const removed = await postProduct(f, { massKg: 60 });
-  const interleaved = await postProduct(f, { massKg: 20 });
   await deleteBiocharProduct(f.ctx, removed.id, removed.version);
   const loss = await postMeasurement(f, { kind: 'loss', wetMassKg: 10, moisturePercent: 0 });
-  await postMeasurement(f, { kind: 'loss', wetMassKg: 5, moisturePercent: 0, correctsMovementId: loss.movementId });
+  // This receipt draws from the source bin, so it does not lock the product-bin loss.
+  // The loss reversal uses the corrected time, straddling this live intake in replay.
+  const interleaved = await postProduct(f, { massKg: 20, placedAt: COUNT_AT });
+  await postMeasurement(f, { kind: 'loss', wetMassKg: 5, moisturePercent: 0,
+    occurredAt: '2026-09-16T12:00:00.000Z', correctsMovementId: loss.movementId });
   const { end, history } = await parity(f, f.bin.id);
   expect(end).toMatchObject({ dryKg: 55, wetKg: 55 });
-  expect(history.find(entry => entry.id.endsWith(':placement'))).toMatchObject({ beforeDryKg: 120, afterDryKg: 60 });
+  expect(history.find(entry => entry.id.endsWith(':placement'))).toMatchObject({ beforeDryKg: 100, afterDryKg: 40 });
   expect(history.find(entry => entry.id === interleaved.id)).toMatchObject({ beforeDryKg: 40, afterDryKg: 60 });
 });
 
