@@ -22,6 +22,7 @@ import type {
 import { hasAcceptedTransportEvidence } from "@/lib/certification/transport-evidence";
 import type { TransportLeg } from "@/db/schema";
 import { TransportLegForm } from "./transport-leg-form";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { TransportRoute } from "./transport-route";
 import {
   deriveTransportLegCertStatuses,
@@ -117,7 +118,7 @@ export function TransportLegsEditor({
     setDialog((current) => ({ ...current, open: false }));
   };
 
-  const handleSubmit = async (data: TransportLegFormData) => {
+  const handleSubmit = async (data: TransportLegFormData, onRefusal: SaveRefusalHandler) => {
     if (disabled) return;
     setFormError(null);
 
@@ -147,7 +148,7 @@ export function TransportLegsEditor({
       closeDialog();
     } catch (err) {
       setFormError(
-        err instanceof Error ? err.message : "Transport leg was not saved. Try again.",
+        onRefusal(err, err instanceof Error ? err.message : "Transport leg was not saved. Try again."),
       );
     }
   };

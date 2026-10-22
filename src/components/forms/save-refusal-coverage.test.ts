@@ -7,19 +7,9 @@ const COMPONENTS_DIR = resolve(process.cwd(), "src/components");
 /** Parent submit seams the component-form scan cannot see; remove when migrated. */
 const PENDING_SEAMS = [
   {
-    file: "src/components/feedstocks/feedstock-list.tsx",
-    reason: "PR H: feedstock create getCreateErrorMessage ignores onRefusal",
-    pending: /getCreateErrorMessage:\s*\(error\)\s*=>/,
-  },
-  {
     file: "src/hooks/use-picker-edit-submit.ts",
     reason: "PR E: usePickerEditSubmit catches without the form's refusal handler",
     pending: /setError\(toSaveErrorMessage\(cause,/,
-  },
-  {
-    file: "src/hooks/use-quick-add-submit.ts",
-    reason: "PR H: useQuickAddSubmit reduces action failures to their message",
-    pending: /setError\(result\.error\)/,
   },
 ];
 
@@ -32,10 +22,6 @@ const PENDING: Record<string, string> = {
   "production-runs/production-incident-form.tsx": "PR F: incident child editor",
   "production-runs/production-sample-form.tsx": "PR F: in-process sample child editor",
   "biochar-products/biochar-product-form.tsx": "PR G: replace inline stock routing with aliases",
-  "storage-locations/storage-location-form.tsx": "PR H: storage bin sheet and quick-add",
-  "storage-locations/output-stock-form.tsx": "PR H: output stock refusal",
-  "storage-locations/feedstock-loss-form.tsx": "PR H: feedstock loss refusal",
-  "transport-legs/transport-leg-form.tsx": "PR H: transport child editor",
   "customers/customer-form.tsx": "PR I: nested customer aliases",
   "customers/customer-location-form.tsx": "PR I: registered location refusals",
   "suppliers/supplier-form.tsx": "PR I: nested supplier aliases",

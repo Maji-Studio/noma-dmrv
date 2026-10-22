@@ -74,6 +74,16 @@ describe.each(cases)("$name quick add intent key", ({ Dialog, create, label }) =
     client.clear();
   });
 
+  it("keeps the footer message of a refused create while the form is not on the shared refusal handler", async () => {
+    create.mockReset();
+    create.mockResolvedValue({ success: false, error: "Asha is already registered.", code: "validation_failed", issues: [{ path: ["name"], code: "validation_failed", message: "Asha is already registered." }] });
+    const client = new QueryClient();
+    render(<QueryClientProvider client={client}><Dialog isOpen onClose={() => undefined} onSuccess={() => undefined} /></QueryClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: label }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Asha is already registered.");
+    client.clear();
+  });
+
   it("starts a new key when the dialog opens again after a failed save", async () => {
     create.mockReset();
     create.mockResolvedValue({ success: false, error: "Save again" });

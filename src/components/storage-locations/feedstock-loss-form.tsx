@@ -27,8 +27,9 @@ import {
 import { toNumberOrNull } from "@/schemas/helpers";
 import type { FeedstockLedgerEntry } from "@/types/feedstock-bin-ledger";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { FeedstockLossChange } from "./feedstock-loss-change";
 import { LossReasonChips } from "./loss-reason-chips";
 import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
@@ -80,6 +81,7 @@ export function FeedstockLossForm({
     lossMassKg: number;
   } | null>(null);
   const recordLoss = useRecordLoss();
+  const formId = useId();
   // One key per open form instance, so a double submit replays the saved
   // movement instead of posting a second deduction.
   const [idempotencyKey, setIdempotencyKey] = useState(() =>
@@ -97,6 +99,7 @@ export function FeedstockLossForm({
     trigger,
     setValue,
     setError,
+    resetField,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(recordLossFormSchema),
@@ -108,6 +111,7 @@ export function FeedstockLossForm({
         }
       : { reason: "", occurredAt: new Date().toISOString() },
   });
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const lossInput = useWatch({ control, name: "lossMassKg" });
   const reasonInput = useWatch({ control, name: "reason" });
   const lossMassKg = previewNumber(lossInput);
@@ -172,15 +176,18 @@ export function FeedstockLossForm({
         return;
       }
       setServerError(
-        error instanceof Error
-          ? error.message
-          : "The loss was not recorded. Check the form and try again.",
+        refuseSave(
+          error,
+          error instanceof Error
+            ? error.message
+            : "The loss was not recorded. Check the form and try again.",
+        ),
       );
     }
   });
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-1 flex-col space-y-20">
+    <form id={formId} onSubmit={onSubmit} className="flex flex-1 flex-col space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormField
         id="occurredAt"
