@@ -55,9 +55,24 @@ it("cannot select or submit a write-only request without its read", () => {
   expect(screen.queryByRole("checkbox", { name: "Feedstocks, write" })).toBeNull();
   expect(screen.queryByRole("checkbox", { name: "All areas, write" })).toBeNull();
   const allow = screen.getByRole("button", { name: "Allow" }) as HTMLButtonElement;
-  expect(allow.disabled).toBe(true);
+  expect(allow.disabled).toBe(false);
   fireEvent.click(allow);
+  expect(screen.getByRole("alert").textContent).toBe("Choose at least one permission.");
   expect(mocks.mutateAsync).not.toHaveBeenCalled();
+});
+
+it("asks for a permission, focuses the first tick box and does not submit when nothing is ticked", () => {
+  mocks.view.mockReturnValue(view());
+  render(<ConsentForm />);
+  choose("Choose per area");
+  fireEvent.click(box("All areas, read"));
+  expect(box("All areas, read").checked).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Allow" }));
+  expect(mocks.mutateAsync).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert").textContent).toBe("Choose at least one permission.");
+  expect(document.activeElement).toBe(box("All areas, read"));
+  fireEvent.click(box("All areas, read"));
+  expect(screen.queryByRole("alert")).toBeNull();
 });
 
 it("submits only writes with pegs for Read and write and All areas", async () => {
@@ -330,12 +345,12 @@ it("offers a fresh choice on forced re-consent when every requested scope is alr
 });
 
 
-it("disables Allow when a first consent ticks nothing", () => {
+it("keeps Allow enabled when a first consent ticks nothing", () => {
   mocks.view.mockReturnValue(view());
   render(<ConsentForm />);
   choose("Choose per area");
   fireEvent.click(box("All areas, read"));
-  expect((screen.getByRole("button", { name: "Allow" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Allow" }) as HTMLButtonElement).disabled).toBe(false);
 });
 
 it("keeps the already allowed scopes and ticks a refused write on a discovery re-ask", async () => {
