@@ -55,12 +55,15 @@ describe("Reactor delete refusal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Row Delete" }));
     expect(within(screen.getByRole("dialog")).queryByText(REFUSAL)).toBeNull();
+    expect(within(screen.getByRole("dialog")).getByText(/Note: Reactors/)).toBeTruthy();
 
     await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" })); });
 
     expect(harness.remove).toHaveBeenCalledWith({ reactorId: REACTOR.id, expectedVersion: 4 });
     expect(within(screen.getByRole("dialog")).getByText(REFUSAL)).toBeTruthy();
     expect(screen.getAllByText(REFUSAL)).toHaveLength(1);
+    // The rule is stated once: the grey Note gives way to the refusal.
+    expect(within(screen.getByRole("dialog")).queryByText(/Note: Reactors/)).toBeNull();
 
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
     fireEvent.click(screen.getByRole("button", { name: "Row Delete" }));

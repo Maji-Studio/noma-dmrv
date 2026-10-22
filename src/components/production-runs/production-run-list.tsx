@@ -663,7 +663,8 @@ export function ProductionRunList() {
       <DeleteConfirmDialog
         isOpen={!!deletingRunId}
         title="Delete production run"
-        message="Are you sure you want to delete this production run? This action cannot be undone. Note: Production runs with dependent biochar products or credit batches cannot be deleted."
+        // Once the server refuses, its reason says the rule; the Note would repeat it.
+        message={deleteError ? "Are you sure you want to delete this production run? This action cannot be undone." : "Are you sure you want to delete this production run? This action cannot be undone. Note: Production runs with dependent biochar products or credit batches cannot be deleted."}
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingRunId(null); setDeleteError(null); }}
         isPending={deleteRun.isPending}
