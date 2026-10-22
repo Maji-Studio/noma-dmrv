@@ -43,7 +43,7 @@ import {
   CreditBatchTimeline,
   type NewBatchRequest,
 } from "./credit-batch-timeline";
-import { isCreditBatchMembershipLocked, saveCreditBatchEdit } from "./credit-batch-update-patch";
+import { isCreditBatchMembershipLocked, logUnexpectedSaveError, saveCreditBatchEdit } from "./credit-batch-update-patch";
 import { RecordUsedBy, recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordEditable } from "@/lib/record-lock-view";
@@ -317,7 +317,7 @@ export function CreditBatchList({
         err instanceof Error
           ? err.message
           : "Credit batch was not created. Check the form.";
-      console.error("Credit batch create error:", err);
+      logUnexpectedSaveError("Credit batch create error:", err);
       setCreateError(message);
     }
   };

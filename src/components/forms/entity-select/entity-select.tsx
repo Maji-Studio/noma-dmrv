@@ -234,6 +234,7 @@ function EntitySelectView({
   dependsOn,
   excludeIds,
   autoSelectSingle = false,
+  onAutoSelect,
   alwaysShowSearch = false,
   hideSearch = false,
   showRemainingMass = true,
@@ -486,9 +487,9 @@ function EntitySelectView({
   useEffect(() => {
     if (userClearedSource.current !== optionsSource) userClearedSource.current = null;
     if (autoSelectSingle && userClearedSource.current === null && !disabled && !selectionLocked && !value && options.length === 1 && !options[0].disabled && !isLoading && !fetchError && !searchQuery) {
-      onChange(options[0].id);
+      (onAutoSelect ?? onChange)(options[0].id);
     }
-  }, [autoSelectSingle, disabled, selectionLocked, value, options, isLoading, fetchError, searchQuery, onChange, optionsSource]);
+  }, [autoSelectSingle, disabled, selectionLocked, value, options, isLoading, fetchError, searchQuery, onChange, onAutoSelect, optionsSource]);
 
   const activateRow = (row: SelectRow, byPointer = false) => {
     if (row.kind === "option" && row.option.disabled) return;
