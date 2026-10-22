@@ -105,63 +105,62 @@ export function MethodBPrerequisitesSetup({
         testId="method-b-prerequisites-dialog"
         dismissible={!recordPrerequisites.isPending}
       >
-        <div id={formId} className="flex flex-col gap-24">
-        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
-          <FormField
-            id="method-b-moisture-pathway"
-            label="Moisture pathway"
-            error={errors.moisturePathway?.message}
-            required
-          >
-            <FormSelect
+        <form id={formId} onSubmit={submit} className="flex flex-col gap-24">
+          <div className="grid grid-cols-1 gap-x-16 gap-y-20">
+            <FormField
               id="method-b-moisture-pathway"
-              options={MOISTURE_OPTIONS}
-              error={!!errors.moisturePathway}
-              disabled={recordPrerequisites.isPending}
-              {...register("moisturePathway")}
-            />
-          </FormField>
+              label="Moisture pathway"
+              error={errors.moisturePathway?.message}
+              required
+            >
+              <FormSelect
+                id="method-b-moisture-pathway"
+                options={MOISTURE_OPTIONS}
+                error={!!errors.moisturePathway}
+                disabled={recordPrerequisites.isPending}
+                {...register("moisturePathway")}
+              />
+            </FormField>
+            <FormField
+              id="method-b-agreed-baseline"
+              label="Agreed baseline size"
+              error={errors.agreedBaselineSize?.message}
+              required
+            >
+              <FormInput
+                id="method-b-agreed-baseline"
+                type="number"
+                {...numberBounds("agreedBaselineSize")}
+                error={!!errors.agreedBaselineSize}
+                disabled={recordPrerequisites.isPending}
+                {...register("agreedBaselineSize")}
+              />
+            </FormField>
+          </div>
           <FormField
-            id="method-b-agreed-baseline"
-            label="Agreed baseline size"
-            error={errors.agreedBaselineSize?.message}
+            id="method-b-random-plan"
+            label="Random sampling plan reference"
+            error={errors.randomSamplingPlanRef?.message}
             required
+            helperText="Reference the agreed PDD or sampling-plan section."
           >
             <FormInput
-              id="method-b-agreed-baseline"
-              type="number"
-              {...numberBounds("agreedBaselineSize")}
-              error={!!errors.agreedBaselineSize}
+              id="method-b-random-plan"
+              placeholder="e.g., PDD §8.3 sampling plan"
+              error={!!errors.randomSamplingPlanRef}
               disabled={recordPrerequisites.isPending}
-              {...register("agreedBaselineSize")}
+              {...register("randomSamplingPlanRef")}
             />
           </FormField>
-        </div>
-        <FormField
-          id="method-b-random-plan"
-          label="Random sampling plan reference"
-          error={errors.randomSamplingPlanRef?.message}
-          required
-          helperText="Reference the agreed PDD or sampling-plan section."
-        >
-          <FormInput
-            id="method-b-random-plan"
-            placeholder="e.g., PDD §8.3 sampling plan"
-            error={!!errors.randomSamplingPlanRef}
-            disabled={recordPrerequisites.isPending}
-            {...register("randomSamplingPlanRef")}
+          <FormActions
+            control={control}
+            sticky={false}
+            submitLabel="Record prerequisites"
+            onCancel={() => setOpen(false)}
+            isSubmitting={recordPrerequisites.isPending}
+            errorMessage={serverError ?? undefined}
           />
-        </FormField>
-        </div>
-        <FormActions
-          sticky={false}
-          submitType="button"
-          onSubmitClick={submit}
-          submitLabel="Record prerequisites"
-          onCancel={() => setOpen(false)}
-          isSubmitting={recordPrerequisites.isPending}
-          errorMessage={serverError ?? undefined}
-        />
+        </form>
       </QuickAddDialogShell>
     </>
   );

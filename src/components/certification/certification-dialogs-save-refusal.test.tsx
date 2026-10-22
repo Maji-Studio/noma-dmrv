@@ -42,7 +42,7 @@ vi.mock("@/hooks/use-certification", async (importOriginal) => ({
 }));
 vi.mock("@/components/forms/entity-select/entity-select", () => ({
   EntitySelect: ({ id, value }: { id: string; value?: string }) => (
-    <button type="button" id={id} role="combobox" aria-expanded={false}>{value}</button>
+    <button type="button" id={id} role="combobox" aria-controls={`${id}-options`} aria-expanded={false}>{value}</button>
   ),
 }));
 vi.mock("./removal-batches-accordion", () => ({ RemovalBatchesAccordion: () => null }));
@@ -57,6 +57,20 @@ const FACILITY_ID = "11111111-1111-4111-8111-111111111111";
 
 const refusal = (path: string, message: string) =>
   new ActionError({ error: message, code: "validation_failed", issues: [{ path: [path], code: "validation_failed", message }] });
+
+/**
+ * The message sits once, in the field's own error line (not the dialog's
+ * footer box): `FormField` gives that line the id `<field id>-error`, and the
+ * production checkbox's `FormError` has none, so it is told by its role.
+ */
+async function expectAtField(message: string, errorId?: string) {
+  const hits = await screen.findAllByText(message);
+  expect(hits).toHaveLength(1);
+  const line = hits[0]!;
+  expect(line.getAttribute("role")).toBe("alert");
+  expect(line.className).toContain("body-caption");
+  if (errorId) expect(line.id).toBe(errorId);
+}
 
 const wrap = (node: React.ReactNode) => <QueryClientProvider client={new QueryClient()}>{node}</QueryClientProvider>;
 
@@ -78,7 +92,11 @@ describe("MethodBPrerequisitesSetup refusals", () => {
     mocks.recordPrerequisites.mockRejectedValue(refusal("agreedBaselineSize", message));
     await open();
     fireEvent.click(screen.getByRole("button", { name: "Record prerequisites" }));
-    expect(await screen.findAllByText(message)).toHaveLength(1);
+    await expectAtField(message, "method-b-agreed-baseline-error");
+    // The error summary links to the field and focus moves into the dialog.
+    expect(screen.getByText("Not saved. Fix 1 field.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Agreed baseline size/ })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(document.getElementById("method-b-agreed-baseline")));
   });
 
   it("keeps the server's text in the footer when no field is named", async () => {
@@ -111,7 +129,7 @@ describe("FacilityCertifierForm refusals", () => {
     mocks.saveMapping.mockRejectedValue(refusal("externalFacilityId", message));
     const view = renderForm();
     fireEvent.submit(view.container.querySelector("form")!);
-    expect(await screen.findAllByText(message)).toHaveLength(1);
+    await expectAtField(message, "externalFacilityId-error");
   });
 
   it("keeps a registry failure in the footer with its exact text", async () => {
@@ -139,7 +157,7 @@ describe("GhgStatementCreateDialog refusals", () => {
     mocks.createStatement.mockRejectedValue(refusal("confirmProduction", message));
     await toLastStep();
     fireEvent.click(screen.getByRole("button", { name: "Create GHG Statement" }));
-    expect(await screen.findAllByText(message)).toHaveLength(1);
+    await expectAtField(message);
   });
 
   it("keeps a refusal about a field on another step in the footer", async () => {
@@ -175,7 +193,7 @@ describe("GhgStatementSubmitDialog refusals", () => {
     renderDialog();
     fireEvent.click(await screen.findByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(await screen.findAllByText(message)).toHaveLength(1);
+    await expectAtField(message);
   });
 
   it("keeps a registry failure in the footer with its exact text", async () => {
