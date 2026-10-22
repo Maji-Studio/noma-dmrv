@@ -36,8 +36,10 @@ function followsCurrentManifest(candidate: CandidateSourceDocument): boolean {
 export function filterCandidateSourcesForSubmissionLifecycle(
   candidates: CandidateSourceDocument[],
   latestSubmission: CertificationSubmissionRow | null,
+  correctionWindowOpen = false,
 ): CandidateSourceDocument[] {
   if (
+    correctionWindowOpen ||
     !latestSubmission ||
     !FROZEN_SNAPSHOT_STATUSES.has(latestSubmission.status)
   ) {

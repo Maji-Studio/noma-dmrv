@@ -96,6 +96,7 @@ export async function buildRemovalContext(
   facilityFacts: FacilityCertifierFacts,
   claimedSubmissionId?: string,
   submissionRead = false,
+  correctionRead = false,
 ): Promise<RemovalSubmissionContext> {
   // Load removal-owned facts up-front so every short-circuit carries them.
   const [latestSubmission, hasFinalized, linkedGhgStatement] =
@@ -119,7 +120,11 @@ export async function buildRemovalContext(
       loadLinkedGhgStatementStatus(orgCtx, scope.removal),
     ]);
   const batchEmissionFacts = await loadBatchEmissionContext(orgCtx, scope.facilityId, scope.memberBatches, facilityFacts,
-    (claimedSubmissionId || submissionRead) && scope.removalId ? { removalId: scope.removalId, submissionId: claimedSubmissionId } : undefined);
+    (claimedSubmissionId || submissionRead) && scope.removalId ? { removalId: scope.removalId, submissionId: claimedSubmissionId } : undefined, !correctionRead);
+  // Entry recovery may exclude its own draft from eligibility. Evidence retries
+  // must still retain the operator files frozen when that draft was claimed.
+  const correctionWindowOpen = latestSubmission?.status !== "draft" && Object.values(batchEmissionFacts).some(batch => batch.contenders?.some(
+    contender => contender.removalId === scope.removalId && contender.contenderKind === "correction"));
   const frozenEntrySet = frozenEntriesForAttempt(latestSubmission, batchEmissionFacts);
   const loadedRemovalEntries = await loadRemovalEntryContext(orgCtx, scope, batchEmissionFacts, facilityFacts, frozenEntrySet);
   const removalEntryContext = loadedRemovalEntries && { contributions: loadedRemovalEntries.contributions,
@@ -157,10 +162,11 @@ export async function buildRemovalContext(
   const registryBoundaryOpened = removalMayHaveExternalMutation(
     scope.removal?.metadata ?? null,
   );
-  const supportingDocuments = await loadEvidenceMirrorSummaryForScope(
+  const supportingDocuments = correctionRead ? { total: 0, mirrored: 0 } : await loadEvidenceMirrorSummaryForScope(
     orgCtx,
     scope,
     latestSubmission,
+    correctionWindowOpen,
   );
 
   // Walk every member batch's production-run applications into one deduped run union.
@@ -256,6 +262,7 @@ export async function buildRemovalContext(
       project: facilityFacts.project,
       ...templateFacts,
       removalEntryContext,
+      correctionWindowOpen,
       memberBatches: memberBatchesWithSubmissionGates,
       feedstockTypeMappingGaps,
       transportCoverage: EMPTY_TRANSPORT_COVERAGE,
@@ -390,6 +397,7 @@ export async function buildRemovalContext(
     project: facilityFacts.project,
     ...templateFacts,
     removalEntryContext,
+    correctionWindowOpen,
     entryCorrectionsByBatchId: Object.fromEntries(Object.entries(batchEmissionFacts).map(([id, batch]) => [id, batch.corrections ?? []])),
     requiredTransportCategories,
     memberBatches: memberBatchesWithSubmissionGates,

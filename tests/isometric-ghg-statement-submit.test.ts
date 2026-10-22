@@ -53,6 +53,10 @@ import type { GhgStatement } from "@/lib/isometric";
 // Module mocks — declared before the system under test imports.
 // ---------------------------------------------------------------------------
 
+// The member-Removal guard has its own tests; these cover the submit steps.
+vi.mock("@/fn/certification/statement-removal-correction-core", () => ({
+  assertStatementRemovalsCurrent: vi.fn(async () => undefined),
+}));
 vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-ghg-statements");

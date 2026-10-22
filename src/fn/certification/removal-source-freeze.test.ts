@@ -154,3 +154,17 @@ it.each([
   // Deletion, a date outside the window, or ownership by another draft all remove the candidate.
   expect(filterCandidateSourcesForSubmissionLifecycle([], row)).toEqual([frozenOperatorCandidate]);
 });
+
+it.each(["submitted", "accepted"] as const)("uses all current operator evidence in an open correction window for %s", status => {
+  const row = submission({ status });
+  const before = JSON.stringify(row.payloadSnapshot);
+  expect(filterCandidateSourcesForSubmissionLifecycle(currentCandidates, row, true)).toEqual(currentCandidates);
+  expect(filterCandidateSourcesForSubmissionLifecycle(currentCandidates, row, false))
+    .toEqual([frozenOperatorCandidate, currentTransportLedgerCandidate]);
+  expect(JSON.stringify(row.payloadSnapshot)).toBe(before);
+});
+
+it("keeps a sent document on correction resubmit while it is still attached", () => {
+  const attached = [frozenOperatorCandidate, ...currentCandidates.slice(1)];
+  expect(filterCandidateSourcesForSubmissionLifecycle(attached, submission(), true)).toEqual(attached);
+});
