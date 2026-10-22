@@ -7,6 +7,9 @@ import type {
 } from "@/fn/certification/certify-context";
 import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { SubmissionSummary } from "./submission-summary";
+import type { ComponentTable } from "./component-table-model";
+
+const NO_ROWS: ComponentTable = { loading: false, batches: [], rows: [], groups: [] };
 
 vi.mock("next/link", () => ({
   default: ({ children, ...props }: React.ComponentProps<"a">) => (
@@ -97,6 +100,7 @@ function render(overrides: {
       checks={overrides.checks ?? PASSING_CHECKS}
       readiness={{ state: "ready", reasons: [], advisories: overrides.advisories ?? [], transportVehicleAdvisories: overrides.transportVehicleAdvisories ?? [] }}
       rejectionMessage={null}
+      table={NO_ROWS}
     />,
   );
 }
@@ -170,15 +174,15 @@ describe("SubmissionSummary", () => {
     expect(html).not.toContain("What to fix");
   });
 
-  it("states the tonnage exactly once, as the subject of the panel", () => {
+  it("leads with the totals, then the quieter facts, each said once", () => {
     const html = render();
 
-    expect(html).toContain("You are sending");
+    for (const label of ["Estimated CO₂e stored", "Biochar dry mass", "Reporting window", "Files to upload", "Destination", "Facility", "Durability", "Sampling"]) {
+      expect(html.split(`>${label}<`).length - 1, label).toBe(1);
+    }
     expect(html.split("8.5 t")).toHaveLength(2);
-    expect(html).toContain("Biochar, dry mass");
-    expect(html).toContain(
-      "Isometric calculates stored and net CO₂e after submission.",
-    );
+    expect(html).toContain("Jul 1 to Jul 31, 2026");
+    expect(html).toContain("1000-year (R₀ reflectance)");
     expect(html).toContain("Biochar project (Sandbox)");
     expect(html).toContain("Tanzania facility");
     expect(html).toContain(
@@ -187,14 +191,20 @@ describe("SubmissionSummary", () => {
     expect(html).toContain(
       "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/facilities/fcl_1KST05ZW3SBXZCM7",
     );
-    expect(html).toContain(
-      "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/storage-sites?tab=sites",
-    );
-    expect(html).toContain("Storage sites");
-    expect(html).toContain("View in Isometric");
-    expect(html).toContain("Jul 1 to Jul 31, 2026");
-    expect(html).toContain("CB-26-001");
-    expect(html).toContain("1000-year (R₀ reflectance)");
+    // The component table names the credit batches; the totals do not.
+    expect(html).not.toContain("CB-26-001");
+    expect(html).not.toContain("You are sending");
+  });
+
+  it("gives the estimate its figure, and Not yet computed until the review has one", () => {
+    expect(render({ compilation: { ...COMPILATION, estimatedStoredCo2eTonnes: 12.34 } as unknown as RemovalCompilationView })).toContain("≈ 12.34 t CO₂e");
+    expect(render()).toContain("Not yet computed");
+  });
+
+  it("counts the files to upload, and says None when there are none", () => {
+    const withFiles = render({ compilation: { ...COMPILATION, review: { ...COMPILATION.review, pendingSourceCount: 5 } } as unknown as RemovalCompilationView });
+    expect(withFiles).toContain("5 files");
+    expect(render()).toContain(">None<");
   });
 
   it("renders no checks list when every check passes", () => {

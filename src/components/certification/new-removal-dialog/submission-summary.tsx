@@ -10,23 +10,20 @@
  */
 "use client";
 
-import Link from "next/link";
 import {
   ArrowSquareOutIcon,
   CheckCircleIcon,
   SpinnerGapIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import type { MemberCreditBatch } from "@/fn/certification/certify-context";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { isometricRegistry } from "@/lib/isometric/links";
-import { DerivedHeadline } from "@/components/forms/derived-headline";
 import { DetailField } from "@/components/ui/detail-panel";
-import { InfoHint } from "@/components/ui/tooltip";
 import { EnvBanner } from "../env-banner";
-import { CompilationWarnings, RemovalAdvisoryList, RemovalBlockerList } from "./compilation-notices";
+import { CompilationWarnings, RemovalAdvisoryList } from "./compilation-notices";
+import { BlockedComponentsNotice } from "./blocked-components-notice";
+import type { ComponentTable } from "./component-table-model";
+import { formatTonnes } from "@/lib/format-utils";
 import {
-  batchDryTons,
   buildSubmissionFacts,
   countLabel,
   type SubmissionFactsInput,
@@ -36,11 +33,13 @@ import { SubmissionChecks } from "./submission-checks";
 import { Notice } from "@/components/ui/notice";
 
 const STATE_ICON_SIZE = 20;
-const BATCH_LINK_ICON_SIZE = 12;
+const LINK_ICON_SIZE = 12;
 
 type SubmissionSummaryProps = SubmissionFactsInput & {
   facilityId: string;
   facilityName: string;
+  /** The component table's rows, to name each blocked component in the Notice. */
+  table: ComponentTable;
 };
 
 function StateIcon({ state }: { state: SubmitState }) {
@@ -74,27 +73,6 @@ function StateIcon({ state }: { state: SubmitState }) {
   );
 }
 
-function BatchLink({
-  batch,
-  facilityId,
-}: {
-  batch: MemberCreditBatch;
-  facilityId: string;
-}) {
-  return (
-    <Link
-      href={creditBatchDeepLinkHref(batch.id, facilityId)}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={`Open credit batch ${batch.code} in a new tab`}
-      className="inline-flex items-center gap-4 font-mono text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-    >
-      {batch.code}
-      <ArrowSquareOutIcon size={BATCH_LINK_ICON_SIZE} aria-hidden />
-    </Link>
-  );
-}
-
 function RegistryFactLink({
   href,
   label,
@@ -113,43 +91,32 @@ function RegistryFactLink({
       className="inline-flex items-center gap-4 text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
     >
       {label}
-      <ArrowSquareOutIcon size={BATCH_LINK_ICON_SIZE} aria-hidden />
+      <ArrowSquareOutIcon size={LINK_ICON_SIZE} aria-hidden />
     </a>
   );
 }
 
-const CALCULATION_NOTE =
-  "Isometric calculates stored and net CO₂e after submission.";
+const ESTIMATE_NOTE =
+  "Estimated before project emissions and registry verification. Isometric calculates the final net value.";
+const FILES_NOTE = "noma uploads these files to Isometric when you submit.";
+const TOTAL_UNIT = "t CO₂e";
 
 export function SubmissionSummary({
   facilityId,
   facilityName,
+  table,
   ...factsInput
 }: SubmissionSummaryProps) {
   const facts = buildSubmissionFacts(factsInput);
   const { checks } = factsInput;
   const memberBatchIds = facts.batches.map((batch) => batch.id);
+  const estimate = factsInput.compilation?.estimatedStoredCo2eTonnes ?? null;
   const environment = facts.isProduction ? "production" : "sandbox";
   const externalProjectId = factsInput.ctx.mapping?.externalProjectId ?? null;
   const externalFacilityId = factsInput.ctx.mapping?.externalFacilityId ?? null;
   const destinationLabel = facts.projectLabel
     ? `${facts.projectLabel} (${facts.environmentLabel})`
     : "Not linked";
-
-  const batchesValue = (
-    <span className="flex flex-col gap-2">
-      {facts.batches.map((batch) => (
-        <span key={batch.id} className="inline-flex items-center gap-8">
-          {facts.batchCount > 1 && (
-            <span className="font-mono text-[var(--color-text-tertiary)]">
-              {batchDryTons(batch)}
-            </span>
-          )}
-          <BatchLink batch={batch} facilityId={facilityId} />
-        </span>
-      ))}
-    </span>
-  );
 
   return (
     <div className="flex flex-col gap-24">
@@ -172,20 +139,44 @@ export function SubmissionSummary({
         </div>
       </div>
 
-      <RemovalBlockerList blockers={facts.blockers} facilityId={facilityId} memberBatchIds={memberBatchIds} />
-
-      <DerivedHeadline
-        label={
-          <>
-            You are sending
-            <InfoHint label="About the CO₂e figures">{CALCULATION_NOTE}</InfoHint>
-          </>
-        }
-        value={facts.dryTons}
-        sub="Biochar, dry mass"
+      <BlockedComponentsNotice
+        blockers={facts.blockers}
+        // The verdict is still being prepared: the Notice waits for it, the rows already say Blocked.
+        blockedRows={facts.state === "loading" ? [] : table.rows.filter((row) => row.state === "blocked")}
+        facilityId={facilityId}
+        memberBatchIds={memberBatchIds}
       />
 
-      <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
+      {facts.checksAttention > 0 && (
+        <SubmissionChecks checks={checks} facilityId={facilityId} creditBatches={facts.batches} />
+      )}
+
+      {/* The totals: what Isometric will be sent, at a glance. */}
+      <div className="grid grid-cols-2 gap-16 md:grid-cols-4">
+        <DetailField
+          label="Estimated CO₂e stored"
+          hint={ESTIMATE_NOTE}
+          value={
+            estimate == null ? null : `≈ ${formatTonnes(estimate, { unit: TOTAL_UNIT })}`
+          }
+          emptySituation="notYetComputed"
+        />
+        <DetailField label="Biochar dry mass" value={facts.dryTons} />
+        <DetailField
+          label="Reporting window"
+          value={facts.reportingWindowLabel}
+          emptySituation="notYetComputed"
+        />
+        <DetailField
+          label="Files to upload"
+          hint={FILES_NOTE}
+          value={facts.pendingDocuments > 0 ? countLabel(facts.pendingDocuments, "file") : null}
+          emptySituation="none"
+        />
+      </div>
+
+      {/* Read data stays visible in both modes (R1): the quieter facts sit under the totals. */}
+      <div className="grid grid-cols-2 gap-16 md:grid-cols-4">
         <DetailField
           label="Destination"
           value={
@@ -222,52 +213,9 @@ export function SubmissionSummary({
             )
           }
         />
-        <DetailField
-          label="Reporting window"
-          value={facts.reportingWindowLabel ?? "Not compiled yet"}
-          valuePresent={facts.reportingWindowLabel != null}
-        />
-        <DetailField
-          label={facts.batchCount === 1 ? "Credit batch" : "Credit batches"}
-          value={batchesValue}
-        />
-      </div>
-
-      {/* Read data stays visible in both modes (R1): the remaining facts sit
-          under the four lead facts as a quieter group, without row rules. */}
-      <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
-        {externalProjectId && (
-          <DetailField
-            label="Storage sites"
-            value={
-              <RegistryFactLink
-                href={isometricRegistry.storageSites({
-                  environment,
-                  externalProjectId,
-                })}
-                label="View in Isometric"
-                ariaLabel="Open storage sites in Isometric in a new tab"
-              />
-            }
-          />
-        )}
-        <DetailField
-          label="Traced back to"
-          value={`${countLabel(facts.runCount, "production run")}, ${countLabel(facts.applicationCount, "application")}`}
-        />
         <DetailField label="Durability" value={facts.durabilityLabel} />
         <DetailField label="Sampling" value={facts.samplingLabel} />
-        {facts.pendingDocuments > 0 && (
-          <DetailField
-            label="Registry value sources"
-            value={`The app uploads ${countLabel(facts.pendingDocuments, "file")} when you submit`}
-          />
-        )}
       </div>
-
-      {facts.checksAttention > 0 && (
-        <SubmissionChecks checks={checks} facilityId={facilityId} creditBatches={facts.batches} />
-      )}
 
       {factsInput.readiness.transportVehicleAdvisories.map((advisory) => (
         <Notice key={advisory} tone="warning">{advisory}</Notice>

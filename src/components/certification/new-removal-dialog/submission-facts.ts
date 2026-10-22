@@ -277,7 +277,3 @@ export function buildSubmissionFacts({
     ].filter((warning) => !advisoryMessages.has(warning)),
   };
 }
-
-export function batchDryTons(batch: MemberCreditBatch): string {
-  return formatTonnes(batch.appliedDryWeightTons, { digits: TONNE_DIGITS });
-}

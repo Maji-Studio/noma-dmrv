@@ -185,7 +185,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       );
       // ...and the submission summary renders (not the loading/error fallback) —
       // proof the removal context resolved against the real project.
-      await expect(dialog.getByText("You are sending")).toBeVisible({
+      await expect(dialog.getByText("Biochar dry mass", { exact: true })).toBeVisible({
         timeout: COLD_COMPILE_TIMEOUT_MS,
       });
 
@@ -193,7 +193,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       // confirmed above reads as a recorded zero.
       if (confirmedEmptyComponents) {
         await expect(
-          dialog.getByRole("region", { name: "Components sent" }),
+          dialog.getByRole("region", { name: "Components" }),
         ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
         await expect(dialog.getByText("Recorded zero").first()).toBeVisible();
       }
