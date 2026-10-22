@@ -8,20 +8,23 @@ vi.mock("@/lib/read-models/batch-emission-lines", () => ({ loadBatchEmissionLine
 vi.mock("@/lib/read-models/facility-emissions-overview", () => ({ loadFacilityEmissionsOverview: vi.fn() }));
 import { restoreEmissionEntry, replaceEmissionEntry } from "@/data-access/emission-entries";
 import { loadBatchEmissionLines } from "@/lib/read-models/batch-emission-lines";
-import { removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 import { restoreEmissionEntryFn, replaceEmissionEntryFn, getBatchEmissionLinesFn } from "./emission-entries";
 
 const input = { id: "00000000-0000-4000-8000-000000000001", expectedVersion: 2 };
 beforeEach(() => vi.clearAllMocks());
 
 it.each([
-  { status: "ready", lines: [] },
-  { status: "blocked", blocker: removalTemplateBlocker("unpinnedTemplate") },
+  { status: "ready", lines: [], storedEntries: [] },
+  { status: "blocked", blocker: "unpinnedTemplate", storedEntries: [] },
+  { status: "blocked", blocker: "templateNotFullyRead", storedEntries: [] },
 ] satisfies Awaited<ReturnType<typeof loadBatchEmissionLines>>[])(
-  "preserves the $status emission lines result through the action wrapper", async (data) => {
+  "returns the $status emission lines payload without stored entries", async (data) => {
     const scope = { facilityId: input.id, creditBatchId: input.id };
     vi.mocked(loadBatchEmissionLines).mockResolvedValue(data);
-    await expect(getBatchEmissionLinesFn(scope)).resolves.toEqual({ success: true, data });
+    const payload = data.status === "ready"
+      ? { status: "ready", lines: data.lines }
+      : { status: "blocked", blocker: data.blocker };
+    await expect(getBatchEmissionLinesFn(scope)).resolves.toEqual({ success: true, data: payload });
     expect(loadBatchEmissionLines).toHaveBeenCalledExactlyOnceWith(makeTestOrgContext(), scope.facilityId, scope.creditBatchId);
   },
 );

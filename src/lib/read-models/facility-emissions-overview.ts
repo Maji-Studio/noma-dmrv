@@ -43,14 +43,15 @@ export async function loadFacilityEmissionsOverview(
   // Compare local calendar months, including the timestamp's year and zone offset.
   const month = formatFacilityDate(new Date(), timezone).slice(0, MONTH_PREFIX_LENGTH);
   return { batches: batches.map((batch) => {
-    const { lines, storedEntries: stored } = displayByBatch.get(batch.id)!;
+    const display = displayByBatch.get(batch.id)!;
+    const stored = display.storedEntries;
     return {
       creditBatchId: batch.id, code: batch.code, startDate: batch.startDate,
       endDate: batch.endDate, status: batch.status,
       // Template observations retain component names, but no template-level name.
       templateName: null,
       // One setup item represents an unread or unpinned template until its lines are known.
-      lineCounts: lineCounts(lines ?? [{ state: "needsSetup" }]),
+      lineCounts: lineCounts(display.status === "ready" ? display.lines : [{ state: "needsSetup" }]),
       entriesThisMonth: stored.filter((entry) =>
         entry.kind === "value" &&
         formatFacilityDate(entry.createdAt, timezone).slice(0, MONTH_PREFIX_LENGTH) === month,
