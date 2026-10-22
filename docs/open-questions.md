@@ -629,6 +629,8 @@ before allowing confirmation to convert stored entry values to the new unit.
   keep the bottom line. Also left: re-reading locks after a lock refusal (Kenji left it
   out of #1298) and per-field detail for feedstock lineage locks.
 - Delivery update posting refusals at `occurredAt` and `wetMassKg` show in the footer and need aliases (follow-up PR).
+- Registered customer locations have no lock-read kind; their refusal-specific
+  disabling belongs to the customer forms migration.
 
 ## Creates without a retry key (#1302) - **deferred**
 

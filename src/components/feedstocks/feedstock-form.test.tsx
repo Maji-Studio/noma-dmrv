@@ -260,6 +260,24 @@ describe("FeedstockForm single-bin mass editing", () => {
     } finally { cleanup(); }
   });
 
+  it("restores a saved override cleared before a Sent refusal", async () => {
+    const saved = { ...feedstock, distanceKmOverride: 60, distanceSource: "document", distanceNote: "Detour" } as FeedstockWithRelations;
+    const onSubmit = vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+      error: "Sent to a Removal.", code: "certification_locked",
+      issues: [{ path: ["transportDistanceKm"], code: "certification_locked", message: "Sent to a Removal." }],
+    }), "Feedstock was not saved."));
+    const view = render(<FeedstockForm feedstock={saved} onSubmit={onSubmit} />);
+    const input = () => view.container.querySelector<HTMLInputElement>('input[name="transportDistanceKm"]');
+    try {
+      fireEvent.click(view.getByRole("button", { name: "Reset to the location default" }));
+      expect(input()?.value).not.toBe("60");
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      await waitFor(() => expect(input()?.value).toBe("60"));
+      expect(view.getByRole("button", { name: "Reset to the location default" })).toBeTruthy();
+    } finally { cleanup(); }
+  });
+
   it.each([150, 80])("submits an edited total of %s kg as its bin allocation", async (mass) => {
     const onSubmit = vi.fn();
     let renderer: ReactTestRenderer;

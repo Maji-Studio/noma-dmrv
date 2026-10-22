@@ -130,7 +130,7 @@ describe("a refusal once the record is Sent", () => {
       </EntitySideSheet>,
     );
     const box = document.querySelector<HTMLElement>("[data-top-refusal]");
-    expect(box?.textContent).toContain("This record is locked.");
+    expect(box?.textContent).toContain("Your changes were not saved.");
     expect(document.activeElement).toBe(box);
     // Above the lock line, not at the end of the form.
     const lockLine = screen.getByText("Lock line");

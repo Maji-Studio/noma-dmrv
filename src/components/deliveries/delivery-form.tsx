@@ -29,7 +29,7 @@ import type { Delivery } from "@/db/schema";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { DistanceOverrideField } from "@/components/transport-legs/distance-override-field";
 import { DistanceDriftAction, SAVE_BEFORE_REFRESH_REASON } from "@/components/transport-legs/transport-distance-drift";
-import { distanceOverridePatch, emptyToNullSource, hasSavedOverride, overrideDistanceError } from "@/components/transport-legs/distance-override";
+import { distanceOverridePatch, emptyToNullSource, hasSavedOverride, isOverrideLockRefusal, overrideDistanceError } from "@/components/transport-legs/distance-override";
 import { customerLocationDistanceLink } from "@/lib/location-distance-links";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { useFacility } from "@/hooks/use-facilities";
@@ -57,6 +57,8 @@ const SET_VALUE_OPTS = {
   shouldValidate: true,
 } as const;
 
+/** The override fields: reset together on a refusal, cleared together with the override. */
+const OVERRIDE_FIELDS = ["distanceKmOverride", "distanceSource", "distanceNote"] as const;
 const ROUTE_EMPTY = "Select an order and enter the delivered wet mass to see the route.";
 
 const isDeliveryCertifyField = (field: string) =>
@@ -194,7 +196,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   };
   const clearOverride = () => {
     setOverriding(false);
-    clearErrors(["distanceKmOverride", "distanceSource", "distanceNote"]);
+    clearErrors([...OVERRIDE_FIELDS]);
     setValue("distanceKmOverride", null, { shouldDirty: true });
     setValue("distanceSource", null, { shouldDirty: true });
     setValue("distanceNote", "", { shouldDirty: true });
@@ -247,11 +249,24 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
   const defaultSubmitLabel = isEditMode ? "Update delivery" : "Create delivery";
 
-  const refuseSave = useSaveRefusal({
-    control, setError, resetField, formId, aliases: DELIVERY_REFUSAL_ALIASES,
+  // A refused override edit goes back to the saved override as a whole, and the panel follows it.
+  const restoreSavedOverride = () => {
+    setOverriding(hasSavedOverride(savedOverride));
+    for (const name of OVERRIDE_FIELDS) resetField(name);
+  };
+  const refuseWithFields = useSaveRefusal({
+    control, setError, formId, aliases: DELIVERY_REFUSAL_ALIASES,
+    resetField: (field) => {
+      if ((OVERRIDE_FIELDS as readonly string[]).includes(field)) restoreSavedOverride();
+      else resetField(field);
+    },
     // The single moisture field is only on screen for a load with one reading.
     isEnabled: (field) => field !== "moistureContentPercent" || stockLocked || draw.usesSingleMoisture,
   });
+  const refuseSave: SaveRefusalHandler = (error, fallback) => {
+    if (isOverrideLockRefusal(error, OVERRIDE_FIELDS)) restoreSavedOverride();
+    return refuseWithFields(error, fallback);
+  };
   const submitDelivery = latched(handleSubmit(async (data) => {
     if (!canSave || (stockLocked && (massChanged || dateChanged))) return;
     const submitted = { overriding, distanceKm: data.distanceKmOverride, source: data.distanceSource, note: data.distanceNote };

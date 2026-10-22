@@ -219,9 +219,15 @@ describe("FormActions refusal on a read-only form", () => {
         </SubmitBlockContext.Provider>
       </RefusalSlotContext.Provider>,
     );
-    expect(slot.textContent).toContain("Its Removal was sent.");
+    // It says what happened to the edit; the lock line keeps the reason.
+    expect(slot.textContent).toContain("Your changes were not saved. The fields show what is saved.");
+    expect(slot.textContent).not.toContain("Its Removal was sent.");
     expect(screen.getByTestId("form").textContent).not.toContain("Its Removal was sent.");
-    expect(document.activeElement).toBe(slot.querySelector("[data-top-refusal]"));
+    const box = slot.querySelector<HTMLElement>("[data-top-refusal]");
+    expect(document.activeElement).toBe(box);
+    expect(box?.getAttribute("role")).toBe("group");
+    expect(box?.getAttribute("aria-labelledby")).toBe(box?.querySelector("[data-tone]")?.id);
+    expect(slot.querySelector('[role="alert"]')).toBeNull();
     expect(screen.queryByRole("button", { name: "Save record" })).toBeNull();
     slot.remove();
   });
@@ -232,7 +238,7 @@ describe("FormActions refusal on a read-only form", () => {
         <div data-testid="form"><FormActions errorMessage="Locked. Its Removal was sent." submitLabel="Save record" /></div>
       </SubmitBlockContext.Provider>,
     );
-    expect(screen.getByTestId("form").textContent).toContain("Its Removal was sent.");
+    expect(screen.getByTestId("form").textContent).toContain("Your changes were not saved.");
     expect(screen.queryByRole("button", { name: "Save record" })).toBeNull();
   });
 

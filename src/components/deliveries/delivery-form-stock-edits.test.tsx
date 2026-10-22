@@ -60,8 +60,7 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); client.clear(); });
 
-async function open(record = delivery, onDistanceRefreshed?: () => Promise<void>) {
-  const save = vi.fn();
+async function open(record = delivery, onDistanceRefreshed?: () => Promise<void>, save = vi.fn()) {
   const view = render(<QueryClientProvider client={client}><DeliveryForm delivery={record} onSubmit={save} onDistanceRefreshed={onDistanceRefreshed} /></QueryClientProvider>);
   const reading = await screen.findByRole("spinbutton", { name: /^P1 moisture/ });
   await waitFor(() => expect((reading as HTMLInputElement).value).toBe("20"));
@@ -180,6 +179,34 @@ it("clears a saved override with null and returns to the derived distance", asyn
   expect(save).toHaveBeenCalledWith(expect.objectContaining({
     distanceKmOverride: null, distanceSource: undefined, distanceNote: null,
   }), expect.any(Function), undefined);
+});
+
+// A Sent refusal puts the saved override back, the open panel included.
+const sentRefusal = () => vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+  error: "Sent to a Removal.", code: "certification_locked",
+  issues: [{ path: ["distanceKmOverride"], code: "certification_locked", message: "Sent to a Removal." }],
+}), "Delivery was not saved."));
+
+it("closes a newly opened override after a Sent refusal restores the saved distance", async () => {
+  const { form } = await open({ ...delivery, recordedDistanceKm: 42, recordedDistanceSource: "manual" } as Delivery, undefined, sentRefusal());
+  fireEvent.click(screen.getByRole("button", { name: OVERRIDE }));
+  fireEvent.change(distanceInput(), { target: { value: "60" } });
+  await act(async () => { fireEvent.submit(form); });
+  await waitFor(() => expect(distanceInput().readOnly).toBe(true));
+  expect(distanceInput().value).toBe("42");
+  expect(screen.queryByRole("combobox", { name: /Distance source/ })).toBeNull();
+  expect(screen.getByRole("button", { name: OVERRIDE })).toBeTruthy();
+});
+
+it("restores a saved override the operator cleared before a Sent refusal", async () => {
+  const { form } = await open({ ...overridden, recordedDistanceKm: 42, recordedDistanceSource: "manual" } as Delivery, undefined, sentRefusal());
+  fireEvent.click(screen.getByRole("button", { name: RESET }));
+  expect(distanceInput().value).toBe("42");
+  await act(async () => { fireEvent.submit(form); });
+  await waitFor(() => expect(distanceInput().value).toBe("60"));
+  expect(screen.getByRole("button", { name: RESET })).toBeTruthy();
+  expect((screen.getByRole("combobox", { name: /Distance source/ }) as HTMLSelectElement).value).toBe("document");
+  expect((screen.getByRole("textbox", { name: /Distance note/ }) as HTMLInputElement).value).toBe("Detour");
 });
 
 // Edit mode: a compact refresh from location under the derived distance.

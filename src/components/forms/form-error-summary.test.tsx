@@ -363,12 +363,16 @@ describe("FormActions error box", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Save locked" }));
     });
-    // Every item a lock, with the reason beside it: the record may turn
-    // read-only and its top box read the reason, so this box takes no focus and
-    // the count is spoken once, by the alert. The field is not focused either.
+    // Every item a lock, with the reason beside it: the box takes focus, so the
+    // reason is read from it and the alert stays silent. The field is not focused.
     await screen.findByText("Not saved. 1 field is locked.", { selector: "[data-form-error-summary] *" });
+    await waitFor(() => expect(document.activeElement?.querySelector("[data-form-error-summary]")).not.toBeNull());
+    const box = document.activeElement as HTMLElement;
+    expect(box.getAttribute("role")).toBe("group");
+    expect(box.getAttribute("aria-label")).toBe("Not saved. 1 field is locked.");
+    expect(document.getElementById(box.getAttribute("aria-describedby")!)?.textContent).toContain("Locked by a Removal.");
     expect(document.activeElement?.id).not.toBe("labName");
-    expect(screen.getAllByRole("alert").filter((node) => node.textContent === "Not saved. 1 field is locked.")).toHaveLength(1);
+    expect(screen.queryAllByRole("alert").some((node) => node.textContent === "Not saved. 1 field is locked.")).toBe(false);
     expect(screen.queryByText(/Undo that change to save/)).toBeNull();
     const scrolls = vi.mocked(Element.prototype.scrollIntoView).mock.calls.filter(([arg]) => (arg as ScrollIntoViewOptions)?.block === "nearest").length;
 

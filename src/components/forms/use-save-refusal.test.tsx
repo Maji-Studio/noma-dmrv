@@ -92,8 +92,9 @@ describe("useSaveRefusal", () => {
     fireEvent.change(screen.getByLabelText("Wet mass"), { target: { value: "9" } });
     await save();
     await screen.findAllByText("Not saved. 1 field is locked.");
-    // Spoken once: the alert; the visible title is not a live region and the box takes no focus.
-    expect(screen.getAllByRole("alert").filter((node) => node.textContent === "Not saved. 1 field is locked.")).toHaveLength(1);
+    // Spoken once, from focus: the box takes focus, so the alert stays silent.
+    expect(screen.queryAllByRole("alert").some((node) => node.textContent === "Not saved. 1 field is locked.")).toBe(false);
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Not saved. 1 field is locked.");
     expect(screen.getAllByText("Locked. Your change was not saved.").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(LOCK_REASON)).toHaveLength(1);
     expect((screen.getByLabelText("Wet mass") as HTMLInputElement).value).toBe("5");

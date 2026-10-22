@@ -299,7 +299,7 @@ describe("RecordLockFormFrame refusal slot", () => {
       </RecordLockFormFrame>,
     );
     const box = document.querySelector<HTMLElement>("[data-top-refusal]");
-    expect(box?.textContent).toContain("Its Removal was sent.");
+    expect(box?.textContent).toContain("Your changes were not saved.");
     expect(document.activeElement).toBe(box);
     expect(screen.queryByRole("button", { name: "Save record" })).toBeNull();
     const lockLine = screen.getByRole("status");

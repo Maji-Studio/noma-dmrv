@@ -170,8 +170,8 @@ export function FormActions<
         got it there moves to the top of the sheet, where Save used to be. */}
     {block?.readOnly && errorMessage && (
       refusalSlot
-        ? createPortal(<TopRefusal message={errorMessage} action={errorAction} />, refusalSlot)
-        : <TopRefusal message={errorMessage} action={errorAction} />
+        ? createPortal(<TopRefusal action={errorAction} />, refusalSlot)
+        : <TopRefusal action={errorAction} />
     )}
     {/* The error box scrolls with the form, after its last field. */}
     {!block?.readOnly && (
@@ -242,22 +242,32 @@ export function FormActions<
   );
 }
 
+/** What happened to the edit; the lock line below says why and how to free the record. */
+const TOP_REFUSAL_TITLE = "Your changes were not saved.";
+const TOP_REFUSAL_DETAIL = "The fields show what is saved.";
+
 /**
  * The refusal of a record that turned read-only. The Save button that held
- * focus is gone, so the box takes it; it is not a live region, so a screen
- * reader hears it once, from focus.
+ * focus is gone, so the box takes it. A focused box needs a role and a name to
+ * be read, so it is a named group and not a live region: a screen reader
+ * hears it once, from focus. The lock line under it keeps the reason, so the
+ * server's message is not repeated here.
  */
-function TopRefusal({ message, action }: { message: string; action?: React.ReactNode }) {
+function TopRefusal({ action }: { action?: React.ReactNode }) {
   const boxRef = React.useRef<HTMLDivElement>(null);
+  const textId = React.useId();
   // Sanctioned useEffect: focus and scroll are imperative DOM work.
   React.useEffect(() => {
     const box = boxRef.current;
     box?.scrollIntoView?.({ block: "nearest" });
     box?.focus({ preventScroll: true });
-  }, [message]);
+  }, []);
   return (
-    <div ref={boxRef} tabIndex={-1} data-top-refusal="">
-      <ServerError message={message} action={action} live={false} />
+    <div ref={boxRef} tabIndex={-1} role="group" aria-labelledby={textId} data-top-refusal="">
+      <Notice tone="error" live={false} id={textId} title={TOP_REFUSAL_TITLE}>
+        <p className="body-small">{" "}{TOP_REFUSAL_DETAIL}</p>
+        {action && <div className="mt-8">{action}</div>}
+      </Notice>
     </div>
   );
 }

@@ -148,6 +148,8 @@ test.describe("Record locks on screen", () => {
       await expect(applied).toBeDisabled();
       await expect(applied).toHaveValue("100");
       await expect(sheet.getByText("Locked. Your change was not saved.")).toBeVisible();
+      // The summary box takes focus, so the reason is read from it.
+      await expect(sheet.getByRole("group", { name: "Not saved. 1 field is locked." })).toBeFocused();
     } finally {
       await pool.end();
       await removal.cleanup();
@@ -194,6 +196,8 @@ test.describe("Record locks on screen", () => {
       const refusal = sheet.locator("[data-top-refusal]");
       await expect(refusal).toBeVisible();
       await expect(refusal).toBeFocused();
+      await expect(refusal).toHaveAttribute("role", "group");
+      await expect(refusal).toContainText("Your changes were not saved. The fields show what is saved.");
       await expect(sheet.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
       // The header arrow and the footer both go back to the view.
       await expect(sheet.getByRole("button", { name: "Back to view" })).toHaveCount(2);
