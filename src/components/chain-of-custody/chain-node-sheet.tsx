@@ -94,12 +94,10 @@ export function ChainNodeSheet({
           )}
         </SlideOverPanel.Body>
 
-        {(drillable && onTrace) || (href && onViewRecord) ? (
-          <SlideOverPanel.Footer className="justify-stretch">
+        <SlideOverPanel.Footer>
             {drillable && onTrace ? (
               <Button
                 variant="primary"
-                className="flex-1"
                 onClick={() => {
                   onOpenChange(false);
                   onTrace();
@@ -112,7 +110,6 @@ export function ChainNodeSheet({
             {href && onViewRecord ? (
               <Button
                 variant="default"
-                className="flex-1"
                 onClick={() => {
                   onOpenChange(false);
                   onViewRecord();
@@ -122,8 +119,10 @@ export function ChainNodeSheet({
                 View full record
               </Button>
             ) : null}
-          </SlideOverPanel.Footer>
-        ) : null}
+            <SlideOverPanel.Close>
+              <Button variant="default">Close</Button>
+            </SlideOverPanel.Close>
+        </SlideOverPanel.Footer>
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
   );

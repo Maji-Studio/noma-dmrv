@@ -347,8 +347,7 @@ export function RemovalDetailSheet({
             )}
           </SlideOverPanel.Body>
 
-          {(isActionable || canDelete || correction?.resubmitNeeded) && (
-            <SlideOverPanel.Footer>
+          <SlideOverPanel.Footer>
               <ResubmitRemovalAction correction={correction} facilityId={facilityId} />
               <RemovalReviewAction
                 isActionable={isActionable}
@@ -363,8 +362,10 @@ export function RemovalDetailSheet({
                   {deleteCopy.actionLabel}
                 </Button>
               )}
+              <SlideOverPanel.Close>
+                <Button variant="default">Close</Button>
+              </SlideOverPanel.Close>
             </SlideOverPanel.Footer>
-          )}
         </SlideOverPanel.Content>
       </SlideOverPanel.Root>
       {/* Sibling of the sheet, not a child, so Base UI does not treat the

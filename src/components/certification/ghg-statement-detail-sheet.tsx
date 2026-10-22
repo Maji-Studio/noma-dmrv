@@ -126,6 +126,7 @@ function DetailState({
             Loading statement…
           </p>
         </SlideOverPanel.Body>
+        <CloseFooter />
       </>
     );
   }
@@ -139,6 +140,7 @@ function DetailState({
             again.
           </p>
         </SlideOverPanel.Body>
+        <CloseFooter />
       </>
     );
   }
@@ -389,8 +391,8 @@ function DetailState({
         generationUnavailableReason={generationUnavailableReason}
       />
 
-      {statementSubmission && (
-        <SlideOverPanel.Footer>
+      <SlideOverPanel.Footer>
+        {statementSubmission && (
           <Button
             variant="primary"
             onClick={handleRefresh}
@@ -401,8 +403,21 @@ function DetailState({
             )}
             Refresh
           </Button>
-        </SlideOverPanel.Footer>
-      )}
+        )}
+        <SlideOverPanel.Close>
+          <Button variant="default">Close</Button>
+        </SlideOverPanel.Close>
+      </SlideOverPanel.Footer>
     </>
+  );
+}
+
+function CloseFooter() {
+  return (
+    <SlideOverPanel.Footer>
+      <SlideOverPanel.Close>
+        <Button variant="default">Close</Button>
+      </SlideOverPanel.Close>
+    </SlideOverPanel.Footer>
   );
 }
