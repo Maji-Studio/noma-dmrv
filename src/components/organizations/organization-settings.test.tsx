@@ -117,6 +117,7 @@ describe("OrganizationSettings invite dialog", () => {
       screen.getByText("The invitation is saved. Copy the link and send it another way, or check the address."),
     ).toBeTruthy();
     expect(screen.queryByText(/Invitation emailed/)).toBeNull();
+    expect(toast.success).not.toHaveBeenCalledWith("Invitation created.");
     expect((screen.getByRole("textbox", { name: "Invitation link" }) as HTMLInputElement).value).toBe(
       "https://app.test/accept-invitation/t",
     );

@@ -60,7 +60,8 @@ export function InviteMemberDialog({
       const result = await inviteMember.mutateAsync(values);
       onInvited({ email: values.email, acceptUrl: result.acceptUrl, emailSent: result.emailSent });
       reset(EMPTY_INVITE);
-      toast.success("Invitation created.");
+      // A not-sent invitation is reported by the warning notice; a second green toast would contradict it.
+      if (result.emailSent) toast.success("Invitation created.");
       onClose();
     } catch (error) {
       setServerError(

@@ -26,6 +26,7 @@ describe("InvitationLinkNotice", () => {
 
     expect(screen.getByText("Invitation emailed to amina@example.com")).toBeTruthy();
     expect(screen.queryByText(/did not send/)).toBeNull();
+    expect(screen.queryByText(/send it yourself/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(URL_));
     expect(toast.success).toHaveBeenCalledWith("Invitation link copied.");
@@ -42,6 +43,17 @@ describe("InvitationLinkNotice", () => {
     expect((screen.getByRole("textbox", { name: "Invitation link" }) as HTMLInputElement).value).toBe(URL_);
     fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(URL_));
+  });
+
+  it("resets Copied when a new invitation replaces the old one", async () => {
+    const { rerender } = render(
+      <InvitationLinkNotice key={URL_} invitation={{ email: "a@example.com", acceptUrl: URL_, emailSent: true }} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeTruthy();
+    const next = `${URL_}2`;
+    rerender(<InvitationLinkNotice key={next} invitation={{ email: "b@example.com", acceptUrl: next, emailSent: true }} />);
+    expect(screen.getByRole("button", { name: "Copy link" })).toBeTruthy();
   });
 
   it("tells the Admin to copy by hand when the clipboard refuses", async () => {

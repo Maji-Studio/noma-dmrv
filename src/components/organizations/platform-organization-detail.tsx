@@ -56,7 +56,7 @@ export function PlatformOrganizationDetail({ organization, current, switching, o
         )}
       </header>
 
-      {invitation && <div className="border-b border-[var(--color-border-secondary)] p-24"><InvitationLinkNotice invitation={invitation} /></div>}
+      {invitation && <div className="border-b border-[var(--color-border-secondary)] p-24"><InvitationLinkNotice key={invitation.acceptUrl} invitation={invitation} /></div>}
 
       <section aria-labelledby={`org-keys-${id}`} className="flex flex-col gap-12 border-b border-[var(--color-border-secondary)] p-24">
         <div className="flex flex-wrap items-center justify-between gap-12">

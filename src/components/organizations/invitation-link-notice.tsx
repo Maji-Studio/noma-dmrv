@@ -43,9 +43,8 @@ export function InvitationLinkNotice({ invitation }: { invitation: InvitationDel
           : `The email to ${invitation.email} did not send`
       }
     >
-      {invitation.emailSent
-        ? "You can also copy the link and send it yourself."
-        : "The invitation is saved. Copy the link and send it another way, or check the address."}
+      {!invitation.emailSent &&
+        "The invitation is saved. Copy the link and send it another way, or check the address."}
       <div className="mt-8 flex items-center gap-8">
         <input
           readOnly

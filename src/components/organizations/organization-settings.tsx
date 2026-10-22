@@ -115,7 +115,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
 
   return (
     <div className="flex flex-col gap-32">
-      {canManage && lastInvitation && <InvitationLinkNotice invitation={lastInvitation} />}
+      {canManage && lastInvitation && <InvitationLinkNotice key={lastInvitation.acceptUrl} invitation={lastInvitation} />}
 
       {/* The roster. Named "Current members" rather than "Members" because the
           pane it sits in is already titled Members. The invite button sits in
