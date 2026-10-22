@@ -21,15 +21,13 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet } from "@/components/ui/entity-side-sheet";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
 import { useToast } from "@/components/ui/toast";
-import { useBatchDurabilitySummary, useBatchHealth } from "@/hooks/use-certification";
-import { batchLinesToDecide } from "@/lib/certification/batch-health";
+import { useCreditBatchTodos } from "@/hooks/use-certification";
 import {
   useCreditBatch,
   useCreditBatchPageModel,
   useDeleteCreditBatch,
   useUpdateCreditBatch,
 } from "@/hooks/use-credit-batches";
-import { useBatchEmissionLines } from "@/hooks/use-emission-entries";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useNavigateWithToast } from "@/hooks/use-navigate-with-toast";
 import { useRecordLock } from "@/hooks/use-record-locks";
@@ -50,7 +48,7 @@ import {
   type CreditBatchPrimaryAction,
 } from "@/lib/credit-batches/batch-page";
 import {
-  buildCreditBatchOpenItems,
+  buildCreditBatchWaitingItems,
   CREDIT_BATCH_DETAILS_ROW,
   type CreditBatchOpenItem,
 } from "@/lib/credit-batches/open-items";
@@ -191,15 +189,13 @@ export function CreditBatchPage({
   const { facilityId: contextFacilityId, isResolving } = useFacilityContext();
   const batchQuery = useCreditBatch(creditBatchId);
   const pageModel = useCreditBatchPageModel(creditBatchId);
-  const health = useBatchHealth(creditBatchId);
-  const durability = useBatchDurabilitySummary(creditBatchId);
   const { lock, status: lockStatus, retry: retryLock, retrying: lockRetrying } = useRecordLock("creditBatch", creditBatchId);
   const updateCreditBatch = useUpdateCreditBatch();
   const deleteCreditBatch = useDeleteCreditBatch();
   const toList = useNavigateWithToast();
 
   const batch = batchQuery.data;
-  const emissionLines = useBatchEmissionLines(batch
+  const todos = useCreditBatchTodos(batch
     ? { facilityId: batch.facilityId, creditBatchId: batch.id }
     : null);
   if (!batch || (contextFacilityId && !isResolving && contextFacilityId !== batch.facilityId)) {
@@ -212,16 +208,13 @@ export function CreditBatchPage({
     );
   }
 
-  const openItems = buildCreditBatchOpenItems({
-    facilityId: batch.facilityId,
-    creditBatchId: batch.id,
-    health: health.data,
-    emissionLines: emissionLines.data,
-    durability: durability.data ?? undefined,
-    pageModel: pageModel.data,
-    canManage,
-  });
-  const blocking = health.data ? openItems.blocking : undefined;
+  // A failed to-do read shows no list at all, not a partial one.
+  // React Query keeps old data on a failed refetch, so ignore it on error.
+  const current = todos.isError ? undefined : todos.data;
+  const openItems = current
+    ? { blocking: current.blocking, check: current.check, waiting: buildCreditBatchWaitingItems(pageModel.data) }
+    : { blocking: [], check: [], waiting: [] as ReturnType<typeof buildCreditBatchWaitingItems> };
+  const blocking = current ? openItems.blocking : undefined;
   const editable = isRecordEditable(lock);
   const membershipLocked = isCreditBatchMembershipLocked(lock);
   const primary = creditBatchPrimaryAction({ blocking, pageModel: pageModel.data, lock });
@@ -294,10 +287,10 @@ export function CreditBatchPage({
     retryingPageModel: pageModel.isFetching,
     openItems,
     blockingCount: blocking ? blocking.length : null,
-    healthError: health.error,
-    linesToDecide: batchLinesToDecide(health.data),
-    retryHealth: () => void health.refetch(),
-    retryingHealth: health.isFetching,
+    todosError: todos.error,
+    linesToDecide: current?.linesToDecide ?? 0,
+    retryTodos: () => void todos.refetch(),
+    retryingTodos: todos.isFetching,
     lock,
     lockStatus,
     canManage,

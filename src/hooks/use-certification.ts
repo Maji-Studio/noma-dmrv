@@ -19,7 +19,7 @@ import {
   createRemovalWithBatchesAction,
   deleteRemovalAction,
   deleteFacilityCertifierMapping,
-  loadBatchHealth,
+  loadCreditBatchTodosFn,
   loadCreditBatchDurabilitySummary,
   loadCertificationHealth,
   loadCertificationOverview,
@@ -140,8 +140,8 @@ export const certificationKeys = {
       "credit-batch",
       creditBatchId,
     ] as const,
-  batchHealth: (creditBatchId: string) =>
-    [...certificationKeys.all, "batch-health", creditBatchId] as const,
+  batchTodos: (facilityId: string, creditBatchId: string) =>
+    [...certificationKeys.all, "batch-todos", facilityId, creditBatchId] as const,
   batchDurabilitySummary: (creditBatchId: string) =>
     [
       ...certificationKeys.all,
@@ -481,16 +481,16 @@ export function useCertifyContextForCreditBatch(
   });
 }
 
-// Per-batch data-completeness verdict for the credit-batch detail page's
-// health-check panel. Reuses the single-batch certify context server-side and
-// runs the shared classifier. Mutations to the batch / its lineage invalidate
-// `certificationKeys.all`, which covers this key.
-export function useBatchHealth(creditBatchId: string, enabled = true) {
+// The credit batch page's to-dos (Blocking and Check items), built on the
+// server from the same core the batch list counts from. Refetched on every mount
+// (`staleTime: 0`), like the emission lines it replaced. Mutations that affect readiness invalidate `certificationKeys.all`,
+// which covers this key.
+export function useCreditBatchTodos(scope: { facilityId: string; creditBatchId: string } | null) {
   return useQuery({
-    queryKey: certificationKeys.batchHealth(creditBatchId),
-    queryFn: async () => unwrap(await loadBatchHealth(creditBatchId)),
-    enabled: enabled && !!creditBatchId,
-    staleTime: DEFAULT_STALE_MS,
+    queryKey: certificationKeys.batchTodos(scope?.facilityId ?? "", scope?.creditBatchId ?? ""),
+    queryFn: async () => unwrap(await loadCreditBatchTodosFn(scope!.facilityId, scope!.creditBatchId)),
+    enabled: !!scope,
+    staleTime: 0,
   });
 }
 
