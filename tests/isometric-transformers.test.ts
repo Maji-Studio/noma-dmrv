@@ -1,3 +1,4 @@
+import { resolveRemovalReportingWindow } from "@/fn/certification/removal-reporting-window";
 import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
 import { describe, expect, it } from "vitest";
 import type { components } from "@/lib/isometric/generated/certify";
@@ -987,5 +988,29 @@ describe("buildCreateGhgEntryRequest", () => {
 
     expect(result.started_on).toBe("2026-03-15");
     expect(result.completed_on).toBe("2026-04-02");
+  });
+
+  it("sends the facility's calendar days for a west-of-UTC run that ends after UTC midnight (issue #1282)", () => {
+    const tmpl = template([
+      { id: "rtc_A", blueprint_key: "mass_blueprint", inputs: [{ input_key: "mass" }] },
+    ]);
+    // Bogota (UTC-5): run 14 Mar 09:00 to 21:30 local = 14:00Z to 02:30Z next day.
+    const reportingWindow = resolveRemovalReportingWindow({
+      earliestProductionStartTime: new Date("2026-03-14T14:00:00Z"),
+      latestProductionEndTime: new Date("2026-03-15T02:30:00Z"),
+      latestApplicationTime: new Date("2026-03-14T00:00:00Z"),
+      facilityTimezone: "America/Bogota",
+    });
+    const result = buildCreateGhgEntryRequest({
+      template: tmpl,
+      blueprintsByKey: new Map([["mass_blueprint", blueprintMass]]),
+      datapointIdsByRtcInput: new Map([["rtc_A::mass", ["dtp_1"]]]),
+      reportingWindow,
+      projectId: PROJECT_ID,
+      supplierRefId: SUPPLIER_REF,
+    });
+
+    expect(result.started_on).toBe("2026-03-14");
+    expect(result.completed_on).toBe("2026-03-14");
   });
 });

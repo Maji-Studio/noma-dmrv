@@ -598,7 +598,7 @@ interface RunRemovalSubmissionArgs {
   fixed: ResolvedFixedInput[];
   template: IsometricGhgEntryTemplate;
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
-  // §8.6.2 window: production start → latest application date (issue #320).
+  // Facility calendar dates: production start → latest application (issue #1282).
   reportingWindow: Parameters<
     typeof buildCreateGhgEntryRequest
   >[0]["reportingWindow"];
@@ -647,9 +647,8 @@ async function runRemovalSubmission({
   // On resume the datapoint bodies and fixed bindings are snapshot truth, so
   // the removal body's reporting window must also come from the snapshot — not
   // the live window, whose lineage/run set may have shifted while the draft
-  // was locked (a pre-#320 draft correctly resumes with its locked
-  // production-end window). On create, the snapshot was just built from this
-  // same window, so the override is a no-op.
+  // was locked. Resume preserves the saved dates. On create, the snapshot was
+  // just built from this same window, so the override is a no-op.
   const effectiveWindow = resumed
     ? readRemovalReportingWindow(row)
     : reportingWindow;

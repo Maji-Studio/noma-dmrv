@@ -16,12 +16,12 @@ import { Skeleton } from "@/components/ui/loading-skeleton";
 import { FormActions, FormField, FormInput } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import {
-  ORG_SWITCH_FAILED_MESSAGE,
   useAllOrganizations,
   useAllOrganizationApiAccess,
   useCreateOrganization,
   useEnterOrganization,
 } from "@/hooks/use-organizations";
+import { orgSwitchFailedMessage } from "@/lib/org-switch-notice";
 import { createOrganizationSchema } from "@/schemas/organizations";
 import { useViewerOrg } from "@/components/navigation";
 import { OrganizationAdminRow } from "./organization-admin-row";
@@ -71,7 +71,7 @@ export function OrganizationsAdmin() {
       }
     } catch {
       entering.release();
-      toast.error(ORG_SWITCH_FAILED_MESSAGE);
+      toast.error(orgSwitchFailedMessage(organizationName));
     }
   }
 
