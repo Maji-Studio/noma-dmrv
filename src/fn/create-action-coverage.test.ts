@@ -68,8 +68,14 @@ const EXCEPTION: Record<string, string> = {
 };
 
 const NOT_CREATE: Record<string, string> = {
+  "applications#getApplicationStatsFn": "Reads application totals without creating a domain record.",
+  "customers#getCustomerStatsFn": "Reads customer totals without creating a domain record.",
+  "facilities#getFacilityStatsFn": "Reads facility totals without creating a domain record.",
+  "formulations#getFormulationStatsFn": "Reads formulation totals without creating a domain record.",
+  "reactors#getReactorStatsFn": "Reads reactor totals without creating a domain record.",
+  "suppliers#getSupplierStatsFn": "Reads supplier totals without creating a domain record.",
+  "record-credit-batches#previewRecordCreditBatchesFn": "Previews credit batch membership without saving the record or creating batches.",
   "production-processes#recordMethodBPrerequisitesFn": "Updates an existing process prerequisite record.",
-  "certification/removal-template-setup#startRemovalTemplateSetup": "Checks template setup facts and returns void.",
   "documents#confirmUpload": "Promotes an existing pending upload.",
   "bin-movements#removeLossFn": "Removes an existing loss.",
   "output-stock#removeOutputLossFn": "Removes an existing output loss.",
@@ -79,8 +85,6 @@ const NOT_CREATE: Record<string, string> = {
   "certification/ghg-statement-reports#approveGhgStatementReport": "Approves an existing report version.",
   "certification/ghg-statements#refreshGhgStatementStatus": "Refreshes an existing registry statement's state.",
   "certification/removal-evidence-refresh#refreshInterruptedRemovalEvidence": "Updates metadata on an existing interrupted submission under its artifact lock.",
-  "certification/removal-template-review#reviewRemovalTemplateLines": "Reviews contracts on an existing template observation.",
-  "certification/removal-template-review#switchCreditBatchRemovalTemplate": "Changes the template pinned to an existing credit batch.",
   "certification/removal-template-setup#applyRemovalTemplateSetup": "Applies settings and template assignments to existing facilities and batches.",
   "certification/source-visibility#saveRegistrySourceVisibility": "Updates organization Source visibility defaults.",
   "emission-entries#confirmEmissionEntryFn": "Confirms an existing emission entry.",
