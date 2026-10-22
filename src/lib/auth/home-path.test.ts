@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { homePathFor, MEMBER_HOME_HREF, PLATFORM_HOME_HREF } from "./home-path";
+import { homePathFor, isPlatformPath, MEMBER_HOME_HREF, PLATFORM_HOME_HREF } from "./home-path";
 
 describe("homePathFor", () => {
   it("sends Platform Admins to the Platform home", () => {
@@ -14,4 +14,16 @@ describe("homePathFor", () => {
       expect(MEMBER_HOME_HREF).toBe("/dashboard");
     },
   );
+});
+
+describe("isPlatformPath", () => {
+  it.each([
+    ["/admin", true],
+    ["/admin/organizations", true],
+    ["/administration", false],
+    ["/dashboard", false],
+    [null, false],
+  ])("%s -> %s", (path, expected) => {
+    expect(isPlatformPath(path)).toBe(expected);
+  });
 });

@@ -5,3 +5,8 @@ export const MEMBER_HOME_HREF = "/dashboard";
 export function homePathFor(user: { role?: string | null } | null | undefined): string {
   return user?.role === "admin" ? PLATFORM_HOME_HREF : MEMBER_HOME_HREF;
 }
+
+/** True on the Platform pages themselves (`/admin` and below). */
+export function isPlatformPath(pathname: string | null | undefined): boolean {
+  return pathname === "/admin" || Boolean(pathname?.startsWith("/admin/"));
+}

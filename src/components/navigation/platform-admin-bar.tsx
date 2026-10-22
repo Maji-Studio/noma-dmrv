@@ -9,13 +9,15 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { PLATFORM_HOME_HREF } from "@/lib/auth/home-path";
 import { useViewerOrg } from "./viewer-org";
 import { shouldShowPlatformAdminBar } from "./viewer-org-rules";
 
 export function PlatformAdminBar() {
   const viewer = useViewerOrg();
-  if (!viewer || !shouldShowPlatformAdminBar(viewer)) return null;
+  const pathname = usePathname();
+  if (!viewer || !shouldShowPlatformAdminBar(viewer, pathname)) return null;
   return (
     <div
       role="region"
