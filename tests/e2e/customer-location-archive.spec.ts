@@ -6,7 +6,6 @@
  *
  * Rows are seeded through DB helpers; every assertion runs against the live UI.
  */
-import type { Page } from "@playwright/test";
 import { eq } from "drizzle-orm";
 import * as crypto from "node:crypto";
 import { DEC_ORG_ID } from "@/db/org-defaults";

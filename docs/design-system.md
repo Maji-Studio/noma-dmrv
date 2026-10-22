@@ -554,9 +554,12 @@ Always use `Button`; never a raw `<button>` with manual styling.
   `isPending={mutation.isPending || navigation.isPending}`. Never toast, close
   the dialog and then push. Deletes that stay on the page toast as the request
   returns.
-- **Quiet icon button:** `size="icon"` with `variant="noOutline"` (or
-  `variant="destructive"` for a delete row action), plus an `aria-label`. Use
-  this rather than `width="square"`, which yields a differently-sized control.
+- **Quiet icon button:** spread `ICON_BUTTON_TOUCH_PROPS`
+  (`src/components/ui/touch-target.ts`; see the touch-target bullet under
+  "The invariants that break code silently") with `variant="noOutline"` (or `variant="destructive"` for a
+  delete row action) and an `aria-label`. The bundle carries `size="icon"`,
+  `width="square"` and the 44px hit area; `width="square"` stays in it until
+  the `ui/button-icon-width` open question drops the `w-auto` default.
 - There is **no `asChild` / Slot polymorphism** — `Button` is a plain
   `forwardRef` over `<button>`. To style a link, style the `<Link>` directly.
 - Disabled is `disabled:opacity-40`, handled by the component.

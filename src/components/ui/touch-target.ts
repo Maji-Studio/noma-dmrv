@@ -12,11 +12,8 @@ export const PHONE_TOUCH_TARGET = "max-sm:h-auto max-sm:min-h-44";
 export const CENTRED_HIT_AREA =
   "relative before:absolute before:left-1/2 before:top-1/2 before:-translate-x-1/2 before:-translate-y-1/2 before:h-44 before:w-full before:min-w-44 before:content-['']";
 
-/**
- * The 44px hit area for an icon-only `Button`, without its width fix. Prefer
- * `ICON_BUTTON_TOUCH_PROPS`; use this only where the button cannot take the props.
- */
-export const ICON_BUTTON_HIT_AREA = `shrink-0 ${CENTRED_HIT_AREA}`;
+/** The icon button's hit area; callers use `ICON_BUTTON_TOUCH_PROPS`. `shrink-0` stops a flex row squeezing it. */
+const ICON_BUTTON_HIT_AREA = `shrink-0 ${CENTRED_HIT_AREA}`;
 
 /**
  * Spread on an icon-only `Button` to keep its 32px square and give it the 44px
