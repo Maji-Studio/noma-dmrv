@@ -1,3 +1,5 @@
+import { postingWetSteps } from '@/lib/output-stock/moisture-estimate';
+import { stockOrder } from '@/lib/output-stock/stock-order';
 import { deletedProductReversals } from './output-stock-active-movements';
 import { db, type DbTransaction } from '@/db';
 import { applications, binMovements, biocharProducts, biocharProductSourceAllocations, productionRuns, productIngredientSnapshots, storageLocations, users } from '@/db/schema';
@@ -7,7 +9,7 @@ import { ALREADY_CORRECTED_MESSAGE, ALREADY_DELETED_MESSAGE } from '@/lib/loss-c
 import { orderedSourcesSchema } from '@/schemas/output-stock';
 import type { OutputMoistureReset, OutputStockHistoryEntry, OutputStockPreview } from '@/types/output-stock';
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { getOutputStockAllocationProjection, readOutputBinAllLayers, UnresolvedOutputStockError } from './output-stock';
+import { getLayerMoistureBases, getOutputStockAllocationProjection, readOutputBinAllLayers, UnresolvedOutputStockError } from './output-stock';
 import { getOutputMovementCertificationLocks, outputMovementLockReason } from './output-stock-edit-lock';
 import { requireOrgScope } from './utils';
 import { deliveryAppliedLockedReason } from '@/lib/output-stock/labels';
@@ -71,6 +73,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
       correctsMovementId: m.correctsMovementId, deliveryId,
       source: deliveryId ? { entity: 'delivery', id: deliveryId }
         : typeof targetProductId === 'string' ? { entity: 'biocharProduct', id: targetProductId } : undefined,
+      savedWetDeltaKg: difference(preview?.afterEstimatedWetKg, preview?.beforeEstimatedWetKg),
       wetDeltaKg: difference(preview?.afterEstimatedWetKg, preview?.beforeEstimatedWetKg),
       solidsDeltaKg: difference(preview?.afterSolidsKg, preview?.beforeSolidsKg),
       afterWetKg: typeof preview?.afterEstimatedWetKg === 'number' ? preview.afterEstimatedWetKg : null,
@@ -127,7 +130,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   }
   history.sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
   let balance = 0;
-  for (const entry of history) {
+  for (const entry of [...history].sort(stockOrder)) {
     if (entry.kind === 'intake' || entry.id.endsWith(':placement')) { entry.beforeDryKg = balance; entry.afterDryKg = balance - entry.dryMassKg; }
     balance -= entry.dryMassKg;
   }
@@ -141,6 +144,12 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     ({ layers } = await readOutputBinAllLayers(ctx, storageLocationId, reader, { includeArchived: true }));
   } catch (error) {
     if (!(error instanceof UnresolvedOutputStockError)) throw error;
+  }
+  if (layers) {
+    const bases = await getLayerMoistureBases(ctx, bin, layers, reader);
+    const changes = postingWetSteps(bases, movements.flatMap(({ movement }) => movement.occurredAt
+      ? [{ id: movement.id, sequence: movement.postingSequence, occurredAt: movement.occurredAt.toISOString() }] : []));
+    for (const entry of history) if (changes.has(entry.id)) entry.wetDeltaKg = changes.get(entry.id)!;
   }
   const editableIds = history.filter(entry => entry.kind !== 'reversal' && ['loss', 'delivery'].includes(entry.eventKind ?? entry.kind)).map(entry => entry.id);
   const certificationLocks = await getOutputMovementCertificationLocks(ctx, reader, editableIds, rows);

@@ -97,7 +97,7 @@ it('replays the saved re-estimate delta to the same stock as the live estimate',
   const live = estimateStock([{ layerId: 'b1', placedAt: AT(9), remainingSolidsKg: decimal('55'),
     recorded: { solidsKg: decimal('80'), wetKg: decimal('100') }, readings: [],
     removals: [{ wetKg: decimal('50'), solidsKg: decimal('55'), moisturePercent: 50, occurredAt: AT(10), kind: 'loss', sequence: BigInt(1) }] }], AT(11));
-  // getOutputStockHistory uses the frozen preview's after minus before,
+  // getOutputStockHistory uses the current model's after minus before,
   // including the re-estimate, rather than negating the physical 50 kg lost.
   const loss = entry({ id: 'loss', kind: 'loss', occurredAt: AT(10), recordedAt: AT(10), wetMassKg: 50, moisturePercent: 50,
     dryMassKg: 25, wetDeltaKg: live.wetKg! - 100, solidsDeltaKg: -25, afterWetKg: live.wetKg, afterSolidsKg: 55 });
@@ -105,4 +105,14 @@ it('replays the saved re-estimate delta to the same stock as the live estimate',
   const count = entry({ id: 'count', kind: 'count', occurredAt: AT(11), recordedAt: AT(11), dryMassKg: 10,
     wetDeltaKg: -50, solidsDeltaKg: -10, afterWetKg: 60, afterSolidsKg: 45 });
   expect(last([measured, loss, count])).toMatchObject({ wetKg: 60, solidsKg: 45, dryKg: 45 });
+});
+
+
+it('uses recomputed wet changes despite stale frozen preview balances', () => {
+  const lateRun = entry({ id: 'late', kind: 'intake', occurredAt: AT(10), recordedAt: AT(15),
+    dryMassKg: -80, wetDeltaKg: 200, solidsDeltaKg: 80 });
+  const loss = entry({ id: 'loss', kind: 'loss', occurredAt: AT(11), recordedAt: AT(11),
+    dryMassKg: 25, wetDeltaKg: -50, savedWetDeltaKg: 10, solidsDeltaKg: -25,
+    afterWetKg: 110, afterSolidsKg: 55 });
+  expect(last([loss, lateRun, measured])).toMatchObject({ wetKg: 250, solidsKg: 135, dryKg: 135 });
 });

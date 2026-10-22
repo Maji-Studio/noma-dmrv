@@ -1,16 +1,17 @@
 /**
  * The output bin's stock replayed from its history: the one rule the stock
- * chart and the history both read. Live entries replay their frozen changes
+ * chart and the history both read. Live entries replay their current wet and frozen solids changes
  * in physical time, so a back-dated entry lands where it happened, and a
  * correction pair cancels out. Dry biochar always has a figure, and so does
  * every intake's wet mass (a run must carry moisture to complete). Solids,
- * and the wet mass of a movement whose saved snapshot has no figure for it,
+ * and wet mass without a resolved movement change,
  * turn unknown at that entry, and become known again when the bin is emptied
  * or a movement's own frozen balance after it gives one. A frozen balance only
  * counts while it is current: once an earlier-dated entry was recorded after
  * it was saved, the balance never saw that entry and the figure stays unknown.
  */
 import { STOCK_PART_MIN_KG } from "@/config/output-stock";
+import { stockOrder } from "./stock-order";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 
 /** Kinds that move no stock: a mode change, or a reading's row that folds into its movement. */
@@ -29,17 +30,6 @@ export interface StockState {
 
 export const EMPTY_STOCK: StockState = { dryKg: 0, solidsKg: 0, wetKg: 0, ingredients: new Map() };
 
-/**
- * The water in the stock: wet mass less solids. With no wet or solids figure,
- * or less wet mass than solids, there is no honest figure and the chart and
- * the history leave water out. Display only: no balance, guard, preview or
- * posting reads it (the planner's guards check solids against the layers).
- */
-export function stockWaterKg(state: Pick<StockState, "wetKg" | "solidsKg">): number | null {
-  if (state.wetKg === null || state.solidsKg === null || state.wetKg < state.solidsKg - STOCK_PART_MIN_KG) return null;
-  return Math.max(state.wetKg - state.solidsKg, 0);
-}
-
 /** One entry of the replay, in physical time, with the stock either side of it. */
 export interface StockStep {
   entry: OutputStockHistoryEntry;
@@ -49,11 +39,6 @@ export interface StockStep {
   moves: boolean;
   before: StockState;
   after: StockState;
-}
-
-/** Physical time, then the order the entries were recorded in. */
-export function stockOrder(a: OutputStockHistoryEntry, b: OutputStockHistoryEntry): number {
-  return a.occurredAt.localeCompare(b.occurredAt) || a.recordedAt.localeCompare(b.recordedAt);
 }
 
 /** Cancel each reversal with its target when present, keeping unmatched reversals for the totals. */

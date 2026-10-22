@@ -161,7 +161,25 @@ keeps every row. Unmatched reversals remain in the chart replay so totals add up
 Explanatory moisture rows are not counted twice. Missing
 historical wet or solids bases leave water unknown. Wet mass below the solids
 (removals wetter than the bin) has no water figure either: the chart and history
-leave water out rather than show 0 kg (`stockWaterKg` in `stock-replay.ts`).
+leave water out rather than show 0 kg (`stockWaterKg` in `stock-parts.ts`).
+The recorded wet total remains visible even when it is below solids; only water
+is hidden. `stock-parts.ts` owns unrounded display composition: `subBinFigures`
+reads a split layer's wet figure and `pileFigures` takes the pile's own wet total.
+`stockParts` exposes raw dry biochar, ingredient solids, water and wet mass, plus
+layout rows (water, named ingredients, unnamed remainder, dry biochar). Only
+layout rows use `STOCK_PART_MIN_KG`; history changes keep their own display
+threshold. A split bay's size is wet when water is known, otherwise solids,
+otherwise dry biochar, without rounding even a tiny remaining sub-bin.
+
+Late-recorded intake can change earlier wet estimates in a mix pile. History
+recomputes each movement's wet change through the balance's posting-order
+moisture model (`postingWetSteps`); intake keeps its recorded wet mass. Past
+days and chart points update to end at the current balance. The row retains
+its saved preview change in `savedWetDeltaKg` for details; measurements and
+saved allocations never change. For example, adding a late 200 kg wet run to
+100 kg wet before a 50 kg loss removes the earlier re-estimate: history ends
+at 250 kg instead of 310 kg, while the saved change remains +10 kg.
+
 Water is display only; no balance, guard, preview or posting reads it. The
 replay re-bases an unknown wet or solids figure on a movement's saved
 after-balance only while no earlier-dated entry was recorded after that balance
@@ -253,6 +271,22 @@ and ETag contract. A read reserves no stock; use the loss dry run's
 The pure planner lives in `src/lib/output-stock/`. Scoped projections, preview,
 posting, correction, and history modules live in `src/data-access/output-stock*`.
 `src/data-access/delivery-allocation-provenance.ts` owns saved downstream shares.
+
+`stock-order.ts` owns physical history order independently of the display replay.
+Intake dry before/after balances use that order; movements retain their saved
+posting-order balances. Cancelled pairs remain in these audit balances, while
+the display replay excludes both entries.
+
+`stock-parts.test.ts`, `stock-replay.test.ts` and `moisture-estimate.test.ts`
+cover composition, stale saved balances and posting wet changes. The six
+scenarios in `tests/output-stock-replay-parity.integration.test.ts` compare
+history end with preview and sub-bin balances at one evaluation instant,
+including a late mix run, corrections and ingredient solids by name. Dry
+parity allows 1e-3 kg; solids, wet and ingredient parity allow 1e-6 kg.
+ESLint's two `import/no-restricted-paths` zones keep replay/parts in display
+readers and block server paths from importing storage-location components.
+The display behavior test and planner type fence remain in
+`water-display-only.test.ts`.
 
 Migration 0115 introduces the immutable allocations and required formulation and
 placement facts. Existing disposable development data with missing facts needs a

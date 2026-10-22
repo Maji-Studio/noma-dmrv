@@ -1,3 +1,4 @@
+import { stockWaterKg } from "@/lib/output-stock/stock-parts";
 /**
  * The output bin's history as days: each day with the stock at its end, each
  * entry with what it changed per part (dry biochar, each ingredient's solids,
@@ -11,7 +12,7 @@ import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import { STOCK_PART_MIN_KG } from "@/config/output-stock";
 import { formatFacilityDay, formatMassKg } from "@/lib/format-utils";
 import { ESTIMATED_WATER_LABEL } from "@/lib/output-stock/labels";
-import { replayStock, stockWaterKg, type StockState } from "@/lib/output-stock/stock-replay";
+import { replayStock, type StockState } from "@/lib/output-stock/stock-replay";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { formatWetEstimate } from "./stock-preview-shared";
 
