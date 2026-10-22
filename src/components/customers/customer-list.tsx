@@ -55,6 +55,13 @@ import { ILLUSTRATION_SIZE, CustomerArt } from "@/components/ui/illustrations";
 /** Shown when the orders deleted with a customer changed after the dialog listed them. */
 const CASCADE_CHANGED_MESSAGE = "The orders deleted with this customer changed. Review the list and delete again.";
 
+/** Contact details an operator can add from the Columns menu. */
+const CUSTOMER_COLUMNS_HIDDEN_BY_DEFAULT = {
+  address: false,
+  contactEmail: false,
+  contactPhone: false,
+};
+
 // ============================================
 // Column Definitions
 // ============================================
@@ -96,6 +103,33 @@ function createColumns(
       cell: ({ row }) => (
         <span className="inline-flex items-center justify-center min-w-[28px] px-8 py-2 bg-[var(--color-surface-light)] border border-[var(--color-border-tertiary)] text-[var(--text-s)] font-medium">
           {row.original.locationCount}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "address",
+      header: "Address",
+      cell: ({ row }) => (
+        <span className="text-[var(--color-text-secondary)]">
+          {row.original.address || MISSING_VALUE.notRecorded}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "contactEmail",
+      header: "Contact email",
+      cell: ({ row }) => (
+        <span className="text-[var(--color-text-secondary)]">
+          {row.original.contactEmail || MISSING_VALUE.notRecorded}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "contactPhone",
+      header: "Contact phone",
+      cell: ({ row }) => (
+        <span className="text-[var(--color-text-secondary)]">
+          {row.original.contactPhone || MISSING_VALUE.notRecorded}
         </span>
       ),
     },
@@ -459,6 +493,7 @@ export function CustomerList() {
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={CUSTOMER_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={customers}
         enableSorting={false}

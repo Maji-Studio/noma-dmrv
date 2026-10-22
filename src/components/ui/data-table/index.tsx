@@ -774,7 +774,7 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
           id={menuId}
           role="dialog"
           aria-label="Column visibility"
-          className="absolute right-0 top-[calc(100%+4px)] z-10 min-w-[160px] border border-[var(--color-border-primary)] bg-[var(--color-background-white)]"
+          className="absolute right-0 top-[calc(100%+4px)] z-[var(--z-layer-popover)] min-w-[160px] border border-[var(--color-border-primary)] bg-[var(--color-background-white)]"
         >
           {hideableColumns.map((column) => (
             <label

@@ -56,7 +56,8 @@ import {
   ENTITY_DEEP_LINK_MODE_PARAM,
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
-import { formatDateRange, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
+import { formatDateRange, formatDistanceKm, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
+import { DISTANCE_FIELD_LABEL, DISTANCE_SOURCE_FIELD_LABEL, sourceLabel } from "@/components/transport-legs/distance-override";
 import { formatMoisturePercent, MASS_MOISTURE_LABELS, qualifyMassLabel } from "@/lib/mass-moisture";
 import type {
   CreateDeliveryData,
@@ -92,6 +93,15 @@ function deliveryDetailToRelations(
     vehicleName: delivery.vehicle?.name ?? null,
   };
 }
+
+/** Record details an operator can add from the Columns menu. */
+const DELIVERY_COLUMNS_HIDDEN_BY_DEFAULT = {
+  destinationName: false,
+  driverName: false,
+  vehicleName: false,
+  effectiveDistanceKm: false,
+  effectiveDistanceSource: false,
+};
 
 // ============================================
 // Column Definitions
@@ -136,6 +146,11 @@ function createColumns(
         </span>
       ),
     },
+    {
+      accessorKey: "destinationName",
+      header: "Destination",
+      cell: ({ row }) => <span>{row.original.destinationName || MISSING_VALUE.notSet}</span>,
+    },
     // Every mass on this surface — these two columns, the KPI strip, the detail
     // sheet's wet-mass row and composition preview go through `formatMassKg`:
     // fixed kg, one decimal. Wet product and its tracked dry-biochar allocation
@@ -166,6 +181,30 @@ function createColumns(
         <span className="font-mono text-right">
           {formatMoisturePercent(row.original.moistureContentPercent)}
         </span>
+      ),
+    },
+    {
+      accessorKey: "driverName",
+      header: "Driver",
+      cell: ({ row }) => <span>{row.original.driverName || MISSING_VALUE.notSet}</span>,
+    },
+    {
+      accessorKey: "vehicleName",
+      header: "Vehicle",
+      cell: ({ row }) => <span>{row.original.vehicleName || MISSING_VALUE.notSet}</span>,
+    },
+    {
+      accessorKey: "effectiveDistanceKm",
+      header: DISTANCE_FIELD_LABEL,
+      cell: ({ row }) => (
+        <span className="font-mono">{formatDistanceKm(row.original.effectiveDistanceKm)}</span>
+      ),
+    },
+    {
+      accessorKey: "effectiveDistanceSource",
+      header: DISTANCE_SOURCE_FIELD_LABEL,
+      cell: ({ row }) => (
+        <span>{sourceLabel(row.original.effectiveDistanceSource) ?? MISSING_VALUE.notRecorded}</span>
       ),
     },
     {
@@ -553,6 +592,7 @@ export function DeliveryList() {
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={DELIVERY_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={deliveries}
         enableSorting={false}

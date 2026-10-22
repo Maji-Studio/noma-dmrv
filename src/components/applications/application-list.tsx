@@ -66,6 +66,13 @@ import { ApplicationForm } from "./application-form";
 import { applicationSheetSections } from "./application-read-sections";
 import { formatApplicationKgFromTons, formatFieldSizeHa, type ApplicationDeliveryOption } from "./mass-utils";
 
+/** Record details an operator can add from the Columns menu. */
+const APPLICATION_COLUMNS_HIDDEN_BY_DEFAULT = {
+  deliveryCode: false,
+  cropType: false,
+  fieldIdentifier: false,
+};
+
 // ============================================
 // Column Definitions
 // ============================================
@@ -91,6 +98,12 @@ function createColumns(
       cell: ({ row }) => (
         <span>{formatCalendarDate(row.original.applicationDate)}</span>
       ),
+    },
+    {
+      accessorKey: "deliveryCode",
+      meta: { nowrap: true },
+      header: "Delivery code",
+      cell: ({ row }) => <span>{row.original.deliveryCode}</span>,
     },
     {
       id: "customer",
@@ -135,6 +148,16 @@ function createColumns(
       cell: ({ row }) => (
         <span className="font-mono">{formatFieldSizeHa(row.original.fieldSizeHa)}</span>
       ),
+    },
+    {
+      accessorKey: "cropType",
+      header: "Crop type",
+      cell: ({ row }) => <span>{row.original.cropType ?? MISSING_VALUE.notRecorded}</span>,
+    },
+    {
+      accessorKey: "fieldIdentifier",
+      header: "Field identifier",
+      cell: ({ row }) => <span>{row.original.fieldIdentifier ?? MISSING_VALUE.notRecorded}</span>,
     },
     {
       accessorKey: "applicationMethodType",
@@ -610,6 +633,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={APPLICATION_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={items}
         enableSorting={false}

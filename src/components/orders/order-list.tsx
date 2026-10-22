@@ -11,7 +11,6 @@ import { EntitySelect, ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
-import { FACILITY_COLUMN_HIDDEN_BY_DEFAULT } from "@/components/ui/data-table/data-table-helpers";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
@@ -27,7 +26,7 @@ import {
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
 import { useCreateOrder, useDeleteOrder, useOrderWithRelations, useOrders, useOrderStats, useUpdateOrder } from "@/hooks/use-orders";
-import { FACILITY_NOT_FOUND, MISSING_VALUE, pluralize } from "@/lib/copy-utils";
+import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
 import { formatCalendarDate } from "@/lib/format-utils";
 import {
   ORDER_FULFILLMENT_DISPLAY,
@@ -49,6 +48,13 @@ import { ILLUSTRATION_SIZE, OrderArt } from "@/components/ui/illustrations";
 
 /** The customer filter also lists archived customers, so their orders stay findable. */
 const ORDER_CUSTOMER_FILTER_OPTIONS = { includeArchived: "true" };
+
+/** Record detail an operator can add from the Columns menu. */
+const ORDER_COLUMNS_HIDDEN_BY_DEFAULT = {
+  customerLocation: false,
+  formulation: false,
+  packaging: false,
+};
 
 // ============================================
 // Column Definitions
@@ -79,19 +85,26 @@ function createColumns(
       cell: ({ row }) => row.original.customerName || MISSING_VALUE.notRecorded,
     },
     {
-      id: "facility",
-      header: "Facility",
-      accessorFn: (row) => row.facilityName ?? "",
-      cell: ({ row }) => (
-        <span className="text-[var(--color-text-secondary)]">
-          {row.original.facilityName || FACILITY_NOT_FOUND}
-        </span>
-      ),
+      id: "customerLocation",
+      header: "Customer location",
+      accessorFn: (row) => row.customerLocationName ?? "",
+      cell: ({ row }) => row.original.customerLocationName || MISSING_VALUE.notSet,
+    },
+    {
+      id: "formulation",
+      header: "Formulation",
+      accessorFn: (row) => row.formulationName ?? "",
+      cell: ({ row }) => row.original.formulationName || MISSING_VALUE.notRecorded,
     },
     {
       accessorKey: "quantityKg",
       header: "Requested wet mass (kg)",
       cell: ({ row }) => row.original.quantityKg.toLocaleString(),
+    },
+    {
+      accessorKey: "packaging",
+      header: "Packaging",
+      cell: ({ row }) => <span className="capitalize">{row.original.packaging}</span>,
     },
     {
       accessorKey: "deliveryCount",
@@ -385,7 +398,7 @@ export function OrderList() {
       <RecordLockListNotice read={orderLocks} />
 
       <DataTable
-        defaultColumnVisibility={FACILITY_COLUMN_HIDDEN_BY_DEFAULT}
+        defaultColumnVisibility={ORDER_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={orders}
         enableSorting={false}

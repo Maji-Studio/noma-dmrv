@@ -43,7 +43,8 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDateRange } from "@/lib/format-utils";
+import { formatDate, formatDateRange, formatPercent } from "@/lib/format-utils";
+import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
@@ -95,6 +96,19 @@ function DurabilityBadge({ durability }: { durability: "200_year" | "1000_year" 
     </span>
   );
 }
+
+/** Matches the H:C org ratio column. */
+const RATIO_FRACTION_DIGITS = 3;
+
+/** Lab details an operator can add from the Columns menu. */
+const SAMPLE_COLUMNS_HIDDEN_BY_DEFAULT = {
+  labName: false,
+  analysisDate: false,
+  oToCOrgRatio: false,
+  moistureContentPercent: false,
+  ph: false,
+  ashContentPercent: false,
+};
 
 // ============================================
 // Column Definitions
@@ -148,7 +162,39 @@ function createColumns(
       accessorKey: "hToCOrgRatio",
       header: "H:C org ratio",
       cell: ({ row }) =>
-        row.original.hToCOrgRatio?.toFixed(3) ?? MISSING_VALUE.notRecorded,
+        row.original.hToCOrgRatio?.toFixed(RATIO_FRACTION_DIGITS) ?? MISSING_VALUE.notRecorded,
+    },
+    {
+      accessorKey: "labName",
+      header: "Lab",
+      cell: ({ row }) => <span>{row.original.labName || MISSING_VALUE.notRecorded}</span>,
+    },
+    {
+      accessorKey: "analysisDate",
+      meta: { nowrap: true },
+      header: "Analysis date",
+      cell: ({ row }) => formatDate(row.original.analysisDate),
+    },
+    {
+      accessorKey: "oToCOrgRatio",
+      header: "O:C org ratio",
+      cell: ({ row }) =>
+        row.original.oToCOrgRatio?.toFixed(RATIO_FRACTION_DIGITS) ?? MISSING_VALUE.notRecorded,
+    },
+    {
+      accessorKey: "moistureContentPercent",
+      header: MOISTURE_FIELD_LABEL,
+      cell: ({ row }) => formatMoisturePercent(row.original.moistureContentPercent),
+    },
+    {
+      accessorKey: "ph",
+      header: "pH",
+      cell: ({ row }) => (row.original.ph == null ? MISSING_VALUE.notRecorded : String(row.original.ph)),
+    },
+    {
+      accessorKey: "ashContentPercent",
+      header: "Ash content",
+      cell: ({ row }) => formatPercent(row.original.ashContentPercent),
     },
     {
       accessorKey: "durabilityOption",
@@ -546,6 +592,7 @@ export function SampleList({
       <RecordLockListNotice read={sampleLocks} />
 
       <DataTable
+        defaultColumnVisibility={SAMPLE_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={samples}
         enableSorting={false}
