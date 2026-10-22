@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import { BuildingsIcon } from "@phosphor-icons/react/dist/ssr";
-import { ChoiceCardGroup } from "@/components/forms";
+import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
+import { FormError } from "@/components/forms/form-error";
 import { Button, EmptyState } from "@/components/ui";
+import { Notice } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import { useOAuthOrganizationChoices, useSelectOAuthOrganization } from "@/hooks/use-oauth-flow";
@@ -16,6 +18,8 @@ const EMPTY_ICON_SIZE = 32;
 const TITLE = "Choose an organization";
 const EMPTY_TITLE = "No organizations yet";
 const EMPTY_DESCRIPTION = "Ask an Admin to invite you.";
+const CHOOSE_ERROR = "Choose an organization.";
+const NONE_AVAILABLE = "None of your organizations can connect apps. Ask an Admin to turn on API access, then connect again.";
 const EMPTY_ADMIN_TITLE = "Join an organization first";
 const EMPTY_ADMIN_DESCRIPTION = "Apps connect as a member of an organization. Platform Admins are not members, so invite yourself to one in Settings, then connect again.";
 
@@ -26,6 +30,9 @@ export function OrganizationPicker() {
   const select = useSelectOAuthOrganization(oauthQuery ?? "");
   const [picked, setPicked] = useState<string | null>(null);
   const [refused, setRefused] = useState(false);
+  const [missing, setMissing] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const errorId = useId();
   // Busy from the click until the page leaves for the app; only a failure clears it.
   const busy = useBusyUntilUnload();
 
@@ -33,8 +40,19 @@ export function OrganizationPicker() {
   if (!choices.data) return <OAuthCard title={TITLE}><Skeleton className="h-160 w-full" /></OAuthCard>;
 
   const { clientName, clientHost, memberships, preselectedOrganizationId, isPlatformAdmin } = choices.data;
-  const selected = picked ?? preselectedOrganizationId;
   const usable = memberships.some(membership => !membership.disabledReason);
+  // Only an available organization counts as chosen: a refetch can disable the pick or the suggestion.
+  const available = (id: string | null) => (id && memberships.some(m => m.organizationId === id && !m.disabledReason) ? id : null);
+  // A pick that went stale stays stale: never fall back to a suggestion the person did not click.
+  const selected = picked ? available(picked) : available(preselectedOrganizationId);
+  const showError = missing && !selected;
+
+  function submitChosen() {
+    if (selected) { void submit(selected); return; }
+    setMissing(true);
+    // The radios are one tab stop, so focusing the first available one lands on the group.
+    formRef.current?.querySelector<HTMLInputElement>("input[type=radio]:not(:disabled)")?.focus();
+  }
 
   async function submit(organizationId: string) {
     if (busy.held) return;
@@ -55,25 +73,33 @@ export function OrganizationPicker() {
         <EmptyState icon={<BuildingsIcon size={EMPTY_ICON_SIZE} />} padding="sm"
           title={isPlatformAdmin ? EMPTY_ADMIN_TITLE : EMPTY_TITLE}
           description={isPlatformAdmin ? EMPTY_ADMIN_DESCRIPTION : EMPTY_DESCRIPTION} />
+      ) : !usable ? (
+        // Every membership has API access off (the only disabledReason the server sets), so there is nothing to choose.
+        <Notice tone="warning">{NONE_AVAILABLE}</Notice>
       ) : (
-        <form className="flex flex-col gap-24" onSubmit={event => { event.preventDefault(); if (selected) void submit(selected); }}>
-          <ChoiceCardGroup
-            legend="Organization"
-            className="grid-cols-1!"
-            value={selected ?? ""}
-            onValueChange={setPicked}
-            disabled={!!busy.held}
-            options={memberships.map(membership => ({
-              value: membership.organizationId,
-              title: membership.name,
-              description: membership.disabledReason
-                ? `${oauthRoleLabel(membership.role)}. ${membership.disabledReason}` : oauthRoleLabel(membership.role),
-              disabled: !!membership.disabledReason,
-            }))}
-          />
+        <form ref={formRef} className="flex flex-col gap-24" onSubmit={event => { event.preventDefault(); submitChosen(); }}>
+          <div>
+            <ChoiceCardGroup
+              legend="Organization"
+              className="grid-cols-1!"
+              value={selected ?? ""}
+              onValueChange={value => { setMissing(false); setPicked(value); }}
+              error={showError}
+              aria-describedby={showError ? errorId : undefined}
+              disabled={!!busy.held}
+              options={memberships.map(membership => ({
+                value: membership.organizationId,
+                title: membership.name,
+                description: membership.disabledReason
+                  ? `${oauthRoleLabel(membership.role)}. ${membership.disabledReason}` : oauthRoleLabel(membership.role),
+                disabled: !!membership.disabledReason,
+              }))}
+            />
+            <FormError id={errorId} message={showError ? CHOOSE_ERROR : undefined} />
+          </div>
           {refused && <OAuthRestartNotice />}
           <div className="flex justify-start">
-            <Button type="submit" variant="primary" size="large" busy={!!busy.held} disabled={!usable || !selected}>Continue</Button>
+            <Button type="submit" variant="primary" size="large" busy={!!busy.held}>Continue</Button>
           </div>
         </form>
       )}

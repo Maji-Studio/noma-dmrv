@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import Link from "next/link";
+import { FormError } from "@/components/forms/form-error";
 import { Button } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
@@ -17,6 +18,7 @@ import { OAuthAppIdentity, OAuthCard, OAuthRestartNotice } from "./oauth-card";
 import { oauthAppName } from "./oauth-labels";
 
 const OFFLINE_ACCESS = "offline_access";
+const NO_PERMISSION_ERROR = "Choose at least one permission.";
 const TITLE_FALLBACK = "Allow this app to use noma?";
 
 export function ConsentForm() {
@@ -48,6 +50,9 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
     : seed.ticked);
   const [preset, setPreset] = useState<ConsentPreset>(stepUp ? "read" : seed.preset);
   const [failed, setFailed] = useState(false);
+  const [missing, setMissing] = useState(false);
+  const choicesRef = useRef<HTMLDivElement>(null);
+  const errorId = useId();
   const decision = useOAuthConsentDecision(oauthQuery);
   // Busy from the click until the page leaves for the app, not just until the request returns; only a failure clears it.
   const busy = useBusyUntilUnload<"allow" | "deny">();
@@ -64,6 +69,14 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
 
   async function decide(accept: boolean) {
     if (deciding) return;
+    if (accept && submittedScopes.length === 0) {
+      setMissing(true);
+      // Focus the first permission control: a tick box on the board, else the first choice.
+      const field = choicesRef.current;
+      (field?.querySelector<HTMLInputElement>("input[type=checkbox]:not(:disabled)") ?? field?.querySelector<HTMLInputElement>("input:not(:disabled)"))?.focus();
+      return;
+    }
+    setMissing(false);
     setFailed(false);
     busy.hold(accept ? "allow" : "deny");
     // Accepting replaces the stored consent: a step-up keeps the allowed scopes, a fresh choice submits only what is ticked.
@@ -80,6 +93,7 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
     // The card names the app and its host, so the intro only adds where it will act.
     <OAuthCard title={`Allow ${clientName} to use noma?`} intro={`It wants to act for you in ${organization.name}.`}>
       <OAuthAppIdentity name={view.clientName} host={clientHost} redirectHost={redirectHost} />
+      <div ref={choicesRef} className="flex flex-col gap-24">
       {!stepUp && (
         <ConsentChoices clientName={clientName} readAreas={areas.filter((area) => area.read && undecidedReads.includes(area.read)).length}
           writeAreas={writeAreas} value={preset} onChange={choose} disabled={deciding} />
@@ -88,6 +102,8 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
         <ConsentPegBoard areas={areas} allowed={allowed} undecided={undecided} newAreas={newAreas} ticked={ticked}
           onChange={setTicked} clientName={clientName} disabled={deciding} />
       )}
+      {missing && submittedScopes.length === 0 && <div className="-mt-18"><FormError id={errorId} message={NO_PERMISSION_ERROR} /></div>}
+      </div>
       {offlineAccessRequested && (
         <p className="body-caption text-[var(--color-text-secondary)]">
           Stay connected: {clientName} can keep working without asking you to sign in again
@@ -95,7 +111,7 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
       )}
       {failed && <OAuthRestartNotice />}
       <div className="flex justify-start gap-16">
-        <Button variant="primary" size="large" busy={busy.held === "allow"} disabled={submittedScopes.length === 0 || deciding} onClick={() => void decide(true)}>Allow</Button>
+        <Button variant="primary" size="large" busy={busy.held === "allow"} disabled={busy.held === "deny"} onClick={() => void decide(true)}>Allow</Button>
         <Button size="large" busy={busy.held === "deny"} disabled={deciding} onClick={() => void decide(false)}>Deny</Button>
       </div>
       <p className="body-caption text-[var(--color-text-tertiary)]">
