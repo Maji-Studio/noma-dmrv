@@ -7,6 +7,7 @@
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { useState } from "react";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   useProductionSamples,
@@ -133,7 +134,7 @@ export function ProductionSampleTable({
     if (failedBefore === 1) setFormError(null);
   };
 
-  const handleSubmit = async (data: ProductionSampleFormData) => {
+  const handleSubmit = async (data: ProductionSampleFormData, onRefusal?: SaveRefusalHandler) => {
     setFormError(null);
     if (!formDialog.open || !formDialog.sample) {
       await createWithEvidence.handleCreate(data);
@@ -149,7 +150,8 @@ export function ProductionSampleTable({
       toast.success("In-process measurement updated.");
       closeForm();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "In-process measurement was not saved. Try again.");
+      const fallback = err instanceof Error ? err.message : "In-process measurement was not saved. Try again.";
+      setFormError(onRefusal ? onRefusal(err, fallback) : fallback);
     }
   };
 

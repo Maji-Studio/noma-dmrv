@@ -49,6 +49,7 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
 import { StaleVersionError, toDeleteErrorMessage, toSaveErrorMessage } from "@/lib/stale-version";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
@@ -352,7 +353,7 @@ export function ProductionRunList() {
 
   const handleCreate = createWithEvidence.handleCreate;
 
-  const handleUpdate = async (data: ProductionRunSubmitData) => {
+  const handleUpdate = async (data: ProductionRunSubmitData, onRefusal?: SaveRefusalHandler) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     if (createWithEvidence.guardUpdate()) return;
@@ -380,7 +381,8 @@ export function ProductionRunList() {
       if (getRunConflict(error)) throw error;
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      setUpdateError(toSaveErrorMessage(error, "Production run was not saved. Try again."));
+      const fallback = toSaveErrorMessage(error, "Production run was not saved. Try again.");
+      setUpdateError(onRefusal ? onRefusal(error, fallback) : fallback);
     }
   };
 

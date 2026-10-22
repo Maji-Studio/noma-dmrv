@@ -7,6 +7,7 @@
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { useState } from "react";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   useProductionIncidents,
@@ -75,7 +76,7 @@ export function ProductionIncidentTable({
     setFormError(null);
   };
 
-  const handleSubmit = async (data: ProductionIncidentFormData) => {
+  const handleSubmit = async (data: ProductionIncidentFormData, onRefusal: SaveRefusalHandler) => {
     setFormError(null);
     try {
       if (formDialog.open && formDialog.incident) {
@@ -91,7 +92,7 @@ export function ProductionIncidentTable({
       }
       closeForm();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Incident was not saved. Try again.");
+      setFormError(onRefusal(err, err instanceof Error ? err.message : "Incident was not saved. Try again."));
     }
   };
 

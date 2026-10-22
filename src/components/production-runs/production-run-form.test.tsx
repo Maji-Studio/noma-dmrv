@@ -35,6 +35,7 @@ vi.mock("./production-readings-field", () => ({ ProductionReadingsField: () => n
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null, Tooltip: ({ children }: { children: ReactNode }) => children }));
 
 import { ProductionRunForm } from "./production-run-form";
+import { ActionError } from "@/lib/action-error";
 import { OPEN_LOCK } from "../../../tests/helpers/record-lock-mocks";
 
 const savedRun = {
@@ -117,7 +118,7 @@ describe("ProductionRunForm reopening", () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       status: "running", endTime: null, expectedVersion: savedRun.version,
-    }));
+    }), expect.any(Function));
     expect(endDate.value).toBe("2026-07-15");
     expect(endTime.value).toBe("12:00");
   });
@@ -129,5 +130,41 @@ describe("ProductionRunForm reopening", () => {
     fireEvent.click(screen.getByRole("button", { name: "Update production run" }));
     await screen.findByText("Choose Complete or clear the end time for a Running run.");
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+describe("ProductionRunForm refused saves", () => {
+  const refusalOf = (code: string, path: string, message: string) =>
+    new ActionError({ error: message, code: code as never, issues: [{ path: [path], code: code as never, message }] });
+  const LOCK_REASON = "This run feeds a Removal sent to Isometric. Correct the Removal first.";
+
+  function submitRefused(error: ActionError, edit: () => void = () => {}) {
+    const footers: Array<string | null> = [];
+    const onSubmit = vi.fn((_data, onRefusal) => { footers.push(onRefusal(error, "Production run was not saved. Try again.")); });
+    render(<ProductionRunForm productionRun={{ ...savedRun, status: "complete" } as ProductionRunWithRelations} onSubmit={onSubmit} lock={OPEN_LOCK} />);
+    edit();
+    fireEvent.click(screen.getByRole("button", { name: "Update production run" }));
+    return { onSubmit, footers };
+  }
+
+  it("shows a field refusal at its field and leaves the footer empty", async () => {
+    const message = "Enter the biochar moisture for a complete run.";
+    const { onSubmit, footers } = submitRefused(refusalOf("validation_failed", "biocharMoisturePercent", message));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(await screen.findAllByText(message)).toHaveLength(1);
+    expect(footers).toEqual([null]);
+  });
+
+  it("brings the saved value back into a field that became locked", async () => {
+    const field = () => document.querySelector<HTMLInputElement>('input[name="feedstockMoisturePercent"]')!;
+    const { onSubmit, footers } = submitRefused(
+      refusalOf("certification_locked", "feedstockMoisturePercent", LOCK_REASON),
+      () => fireEvent.change(field(), { target: { value: "35" } }),
+    );
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ feedstockMoisturePercent: 35 });
+    await screen.findByText("Locked. Your change was not saved.");
+    expect(field().value).toBe("20");
+    expect(footers).toEqual([LOCK_REASON]);
   });
 });

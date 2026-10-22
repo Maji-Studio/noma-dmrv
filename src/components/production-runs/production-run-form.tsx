@@ -21,6 +21,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useFieldArray, useForm, useWatch, Controller, type Resolver } from "react-hook-form";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
@@ -94,8 +95,8 @@ export type ProductionRunSubmitData = Omit<ProductionRunFormData, "endTime"> & {
 interface ProductionRunFormProps {
   /** Existing production run data for editing (undefined for create mode) */
   productionRun?: ProductionRunWithRelations;
-  /** Form submission handler */
-  onSubmit: (data: ProductionRunSubmitData) => Promise<void> | void;
+  /** Form submission handler; an edit hands `onRefusal` on so a refused save shows at its fields (#1298). */
+  onSubmit: (data: ProductionRunSubmitData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -323,6 +324,8 @@ export function ProductionRunForm({
 
   const defaultSubmitLabel = isEditMode ? "Update production run" : "Create production run";
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
+
   const handleFormSubmit = latched(handleSubmit(async (data) => {
     // A touched value or newly entered physical outcome submits that Date;
     // otherwise undefined means "unchanged", so a no-op edit of an already
@@ -359,7 +362,7 @@ export function ProductionRunForm({
     setOverlapConflict(null);
     clearErrors("startTime");
     try {
-      await onSubmit(combined);
+      await onSubmit(combined, refuseSave);
     } catch (error) {
       const conflict = getRunConflict(error);
       if (conflict) {
