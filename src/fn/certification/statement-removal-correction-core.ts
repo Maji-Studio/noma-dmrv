@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { OrgContext } from "@/lib/auth/server";
-import { getSentRemovalForComparison, listStatementRemovalExternalIds, listStatementRemovalIdentities } from "@/data-access/removal-entry-correction";
+import { getSentRemovalForComparison, listNomaSentRemovalsForRemoteEntries, listStatementRemovalIdentities } from "@/data-access/removal-entry-correction";
 import { getCreditBatchesByRemovalId } from "@/data-access/certifier-removals";
 import { getLatestTemplateObservation } from "@/data-access/removal-template-observations";
 import { logger } from "@/lib/log";
@@ -22,9 +22,13 @@ class ComparisonUnavailable extends Error {
  */
 export async function assertStatementRemovalsCurrent(ctx: OrgContext, statementId: string, remoteEntryIds?: readonly string[], compareMembers = true): Promise<void> {
   if (remoteEntryIds) {
-    const known = new Set((await listStatementRemovalExternalIds(ctx, statementId)).map(row => row.externalId));
-    if (remoteEntryIds.some(id => !known.has(id))) throw new SafeError(
-      "This GHG Statement has Removals noma does not know about. Use Sync from registry on the GHG Statements page, then try again.");
+    const mapped = await listNomaSentRemovalsForRemoteEntries(ctx, statementId, remoteEntryIds);
+    const missing = mapped.filter(row => row.ghgStatementId !== statementId);
+    if (missing.length) {
+      const codes = missing.map(row => row.code).sort().join(", ");
+      const subject = missing.length === 1 ? `Removal ${codes} is` : `Removals ${codes} are`;
+      throw new SafeError(`${subject} in this GHG Statement at Isometric but not in noma yet. Use Sync from registry on the GHG Statements page, then try again.`);
+    }
   }
   if (!compareMembers) return;
   const removals = await listStatementRemovalIdentities(ctx, statementId);

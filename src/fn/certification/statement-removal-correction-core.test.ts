@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
-import { getSentRemovalForComparison, listStatementRemovalExternalIds, listStatementRemovalIdentities } from "@/data-access/removal-entry-correction";
+import { getSentRemovalForComparison, listNomaSentRemovalsForRemoteEntries, listStatementRemovalIdentities } from "@/data-access/removal-entry-correction";
 import { getCreditBatchesByRemovalId } from "@/data-access/certifier-removals";
 import { getLatestTemplateObservation } from "@/data-access/removal-template-observations";
 import { compileRemovalCorrectionContent } from "./removal-correction-core";
@@ -8,7 +8,7 @@ import { assertStatementRemovalsCurrent } from "./statement-removal-correction-c
 import { logger } from "@/lib/log";
 import { SafeError } from "@/lib/errors";
 
-vi.mock("@/data-access/removal-entry-correction", () => ({ getSentRemovalForComparison: vi.fn(), listStatementRemovalExternalIds: vi.fn(), listStatementRemovalIdentities: vi.fn() }));
+vi.mock("@/data-access/removal-entry-correction", () => ({ getSentRemovalForComparison: vi.fn(), listNomaSentRemovalsForRemoteEntries: vi.fn(), listStatementRemovalIdentities: vi.fn() }));
 vi.mock("@/data-access/certifier-removals", () => ({ getCreditBatchesByRemovalId: vi.fn() }));
 vi.mock("@/data-access/removal-template-observations", () => ({ getLatestTemplateObservation: vi.fn() }));
 vi.mock("./removal-correction-core", () => ({ compileRemovalCorrectionContent: vi.fn(),
@@ -19,7 +19,7 @@ const semantic = { inputs: [{ rtcId: "energy", value: 12 }] };
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(listStatementRemovalIdentities).mockResolvedValue([{ id: "removal", code: "R-12" }]);
-  vi.mocked(listStatementRemovalExternalIds).mockResolvedValue([{ externalId: "remote" }]);
+  vi.mocked(listNomaSentRemovalsForRemoteEntries).mockResolvedValue([{ id: "removal", code: "R-12", ghgStatementId: "statement" }]);
   vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { templateObservationId: "observation", semantic } } as never);
   vi.mocked(getCreditBatchesByRemovalId).mockResolvedValue([{ id: "batch", removalTemplateId: "template" }] as never);
   const observation = { definition: { groups: [{ components: [{ id: "energy" }] }] } };
@@ -44,14 +44,31 @@ it.each(["missing-attempt", "missing-snapshot", "missing-observation", "invalid-
   await expect(assertStatementRemovalsCurrent(ctx, "statement")).rejects.toEqual(
     new SafeError("noma could not compare Removal R-12 with what it sent, so the GHG Statement was not sent. Open Removal R-12, then try again."));
 });
-it("refuses unknown remote membership before compiling or mutating", async () => {
-  await expect(assertStatementRemovalsCurrent(ctx, "statement", ["remote", "unknown"])).rejects.toThrow(
-    "This GHG Statement has Removals noma does not know about. Use Sync from registry on the GHG Statements page, then try again.");
+it.each(["elsewhere", null])("refuses a noma-sent Removal linked to %s before compiling", async ghgStatementId => {
+  vi.mocked(listNomaSentRemovalsForRemoteEntries).mockResolvedValue([{ id: "removal", code: "R-12", ghgStatementId }]);
+  await expect(assertStatementRemovalsCurrent(ctx, "statement", ["remote"])).rejects.toThrow(
+    "Removal R-12 is in this GHG Statement at Isometric but not in noma yet. Use Sync from registry on the GHG Statements page, then try again.");
   expect(compileRemovalCorrectionContent).not.toHaveBeenCalled();
+});
+it("ignores registry-only entries alongside correctly linked local members", async () => {
+  await expect(assertStatementRemovalsCurrent(ctx, "statement", ["remote", "rmv_registry_only"])).resolves.toBeUndefined();
+  expect(listNomaSentRemovalsForRemoteEntries).toHaveBeenCalledWith(ctx, "statement", ["remote", "rmv_registry_only"]);
+});
+it("allows a statement containing only registry-only entries", async () => {
+  vi.mocked(listNomaSentRemovalsForRemoteEntries).mockResolvedValue([]);
+  vi.mocked(listStatementRemovalIdentities).mockResolvedValue([]);
+  await expect(assertStatementRemovalsCurrent(ctx, "statement", ["rmv_registry_only"])).resolves.toBeUndefined();
+});
+it("lists all noma-sent Removals missing from the local statement", async () => {
+  vi.mocked(listNomaSentRemovalsForRemoteEntries).mockResolvedValue([
+    { id: "b", code: "R-13", ghgStatementId: null }, { id: "a", code: "R-12", ghgStatementId: "elsewhere" },
+  ]);
+  await expect(assertStatementRemovalsCurrent(ctx, "statement", ["a", "b"])).rejects.toThrow(
+    "Removals R-12, R-13 are in this GHG Statement at Isometric but not in noma yet. Use Sync from registry on the GHG Statements page, then try again.");
 });
 it("skips remote membership checking when no remote statement exists", async () => {
   await assertStatementRemovalsCurrent(ctx, "statement");
-  expect(listStatementRemovalExternalIds).not.toHaveBeenCalled();
+  expect(listNomaSentRemovalsForRemoteEntries).not.toHaveBeenCalled();
 });
 it("lists every changed Removal, excluding unchanged members", async () => {
   vi.mocked(listStatementRemovalIdentities).mockResolvedValue([{ id: "a", code: "R-12" }, { id: "b", code: "R-13" }, { id: "c", code: "R-14" }]);
@@ -61,11 +78,12 @@ it("lists every changed Removal, excluding unchanged members", async () => {
 
 it("checks membership but skips member compilation on a first submission", async () => {
   await assertStatementRemovalsCurrent(ctx, "statement", ["remote"], false);
-  expect(listStatementRemovalExternalIds).toHaveBeenCalledWith(ctx, "statement");
+  expect(listNomaSentRemovalsForRemoteEntries).toHaveBeenCalledWith(ctx, "statement", ["remote"]);
   expect(listStatementRemovalIdentities).not.toHaveBeenCalled();
   expect(compileRemovalCorrectionContent).not.toHaveBeenCalled();
 });
-it("still refuses unknown remote membership on a first submission", async () => {
+it("still refuses an unlinked noma-sent Removal on a first submission", async () => {
+  vi.mocked(listNomaSentRemovalsForRemoteEntries).mockResolvedValue([{ id: "removal", code: "R-12", ghgStatementId: null }]);
   await expect(assertStatementRemovalsCurrent(ctx, "statement", ["unknown"], false)).rejects.toThrow("Use Sync from registry");
   expect(compileRemovalCorrectionContent).not.toHaveBeenCalled();
 });

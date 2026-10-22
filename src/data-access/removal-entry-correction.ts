@@ -63,9 +63,11 @@ export async function getSentRemovalForComparison(ctx: OrgContext, removalId: st
 }
 
 /** Use the same ledger identities and statuses as reconcileStatementRemovals. */
-export async function listStatementRemovalExternalIds(ctx: OrgContext, statementId: string) {
+export async function listNomaSentRemovalsForRemoteEntries(ctx: OrgContext, statementId: string, externalIds: readonly string[]) {
   requireOrgScope(ctx);
-  return db.select({ externalId: certificationSubmissions.externalId }).from(certificationSubmissions)
+  if (!externalIds.length) return [];
+  return db.selectDistinct({ id: certifierRemovals.id, code: certifierRemovals.code,
+    ghgStatementId: certifierRemovals.ghgStatementId }).from(certificationSubmissions)
     .innerJoin(certifierRemovals, and(eq(certifierRemovals.organizationId, ctx.organizationId),
       eq(certifierRemovals.id, certificationSubmissions.localEntityId)))
     .innerJoin(certifierGhgStatements, and(eq(certifierGhgStatements.organizationId, ctx.organizationId),
@@ -74,5 +76,5 @@ export async function listStatementRemovalExternalIds(ctx: OrgContext, statement
       eq(certificationSubmissions.provider, "isometric"), eq(certificationSubmissions.submissionType, "removal"),
       eq(certificationSubmissions.localEntityType, "removal"),
       inArray(certificationSubmissions.status, ["submitted", "accepted", "superseded"]),
-      eq(certifierRemovals.ghgStatementId, statementId)));
+      inArray(certificationSubmissions.externalId, [...externalIds])));
 }
