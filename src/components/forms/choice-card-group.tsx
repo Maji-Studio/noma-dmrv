@@ -157,7 +157,7 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
                       STACK_CLASSES[columns],
                       stackArt && "flex-col items-start",
                       "bg-[var(--color-background-white)]",
-                      // One border colour per state: two arbitrary border-color classes tie, so the error colour is chosen here, not layered on top.
+                      // The hover variants (hover:, peer-disabled:hover:) outrank a base error colour, so the hover colours are left off while in error.
                       error
                         ? "border-[var(--color-signal-red)]"
                         : "border-[var(--color-border-secondary)] hover:border-[var(--color-border-primary)] peer-disabled:hover:border-[var(--color-border-secondary)]",

@@ -174,3 +174,24 @@ it("ignores a picked organization that becomes unavailable and shows the error o
   expect(mocks.mutateAsync).not.toHaveBeenCalled();
   expect(screen.getByRole("alert").textContent).toBe("None of these organizations can connect apps. Each one says why.");
 });
+
+it("does not fall back to the suggestion when the picked organization becomes unavailable", () => {
+  mocks.choices.mockReturnValue(data());
+  const { rerender } = render(<OrganizationPicker />);
+  fireEvent.click(screen.getByRole("radio", { name: /E2E Mafinga Biochar/ }));
+  const org1Closed = memberships.map(membership => membership.organizationId === "org-1" ? { ...membership, disabledReason: "API access is disabled for this organization." } : membership);
+  mocks.choices.mockReturnValue(data({ memberships: org1Closed, preselectedOrganizationId: "org-2" }));
+  rerender(<OrganizationPicker />);
+  fireEvent.click(continueButton());
+  expect(mocks.mutateAsync).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert").textContent).toBe("Choose an organization.");
+});
+
+it("drops the error line once an organization is chosen again", () => {
+  mocks.choices.mockReturnValue(nonePicked());
+  render(<OrganizationPicker />);
+  fireEvent.click(continueButton());
+  expect(screen.getByRole("alert")).toBeTruthy();
+  fireEvent.click(screen.getByRole("radio", { name: /E2E Mafinga Biochar/ }));
+  expect(screen.queryByRole("alert")).toBeNull();
+});

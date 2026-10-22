@@ -41,7 +41,9 @@ export function OrganizationPicker() {
   const usable = memberships.some(membership => !membership.disabledReason);
   // Only an available organization counts as chosen: a refetch can disable the pick or the suggestion.
   const available = (id: string | null) => (id && memberships.some(m => m.organizationId === id && !m.disabledReason) ? id : null);
-  const selected = available(picked) ?? available(preselectedOrganizationId);
+  // A pick that went stale stays stale: never fall back to a suggestion the person did not click.
+  const selected = picked ? available(picked) : available(preselectedOrganizationId);
+  const showError = missing && !selected;
 
   function submitChosen() {
     if (selected) { void submit(selected); return; }
@@ -77,8 +79,8 @@ export function OrganizationPicker() {
               className="grid-cols-1!"
               value={selected ?? ""}
               onValueChange={value => { setMissing(false); setPicked(value); }}
-              error={missing}
-              aria-describedby={missing ? errorId : undefined}
+              error={showError}
+              aria-describedby={showError ? errorId : undefined}
               disabled={!!busy.held}
               options={memberships.map(membership => ({
                 value: membership.organizationId,
@@ -88,7 +90,7 @@ export function OrganizationPicker() {
                 disabled: !!membership.disabledReason,
               }))}
             />
-            <FormError id={errorId} message={missing ? (usable ? CHOOSE_ERROR : NONE_AVAILABLE_ERROR) : undefined} />
+            <FormError id={errorId} message={showError ? (usable ? CHOOSE_ERROR : NONE_AVAILABLE_ERROR) : undefined} />
           </div>
           {refused && <OAuthRestartNotice />}
           <div className="flex justify-start">
