@@ -20,7 +20,7 @@ export async function loadRemovalCorrectionFacts(ctx: OrgContext, removalId: str
   if (!submitted) return null;
   const batches = await getCreditBatchesByRemovalId(ctx, removalId);
   const ids = batches.map((batch) => batch.id);
-  const contenders = suppliedContenders ?? await listEmissionEntryDraftContenders(ctx, ids, undefined, undefined, true);
+  const contenders = suppliedContenders ?? await listEmissionEntryDraftContenders(ctx, ids);
   const correction = contenders.find((item) => item.removalId === removalId && item.contenderKind === "correction");
   if (!correction) return null;
   const pin = batches[0]?.removalTemplateId;
@@ -44,7 +44,7 @@ export async function loadRemovalCorrectionFacts(ctx: OrgContext, removalId: str
 export async function removalCorrectionWindowOpen(ctx: OrgContext, removalId: string): Promise<boolean> {
   requireOrgScope(ctx);
   const batches = await getCreditBatchesByRemovalId(ctx, removalId);
-  const contenders = await listEmissionEntryDraftContenders(ctx, batches.map(batch => batch.id), undefined, undefined, true);
+  const contenders = await listEmissionEntryDraftContenders(ctx, batches.map(batch => batch.id));
   return contenders.some(item => item.removalId === removalId && item.contenderKind === "correction");
 }
 

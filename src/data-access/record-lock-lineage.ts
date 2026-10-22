@@ -84,7 +84,6 @@ async function readStatement(ctx: OrgContext, tx: Pick<DbTransaction, "select">,
   const savedSubmitted = getMetadataValue(row.metadata, "submittedToVerifierAt");
   const fact: RecordLockStatement = { id: row.localEntityId,
     status: typeof savedStatus === "string" ? savedStatus : null,
-    returnedAt: typeof savedSubmitted === "string" ? savedSubmitted : null,
     fresh: false, submittedToVerifier: typeof savedSubmitted === "string" && Number.isFinite(Date.parse(savedSubmitted)),
     removalExternalIds: Array.isArray(getMetadataValue(row.metadata, "removalIds")) ? getMetadataValue(row.metadata, "removalIds") as string[] : [],
     inFlight: isLockedInFlight(row) || !isTerminalAttemptStatus(row.status),

@@ -569,7 +569,8 @@ A covering statement must be read fresh from Certify to reopen: FAILED_VERIFICAT
 While the correction window is open, changed submission content (entries, lineage
 values, reporting dates or attached evidence) marks the Removal **Resubmit needed**.
 Advisory comparisons recompile from the stored template observation and current
-DB records, without registry calls. Descriptive fields do not count. Resubmission
+DB records, without template fetches or storage I/O. Existing live statement-status
+refreshes still determine whether the window is open. Descriptive fields do not count. Resubmission
 uses the current attached operator evidence and restores Sent. Statement submission
 checks member Removals under its artifact lock and refuses until their corrections
 have been resubmitted; advisory status alone never authorizes that write.

@@ -21,8 +21,9 @@ import { prepareRemovalSubmission } from "./removal-submission-prepare";
 const snapshotSchema = z.object({ semantic: z.record(z.string(), z.unknown()), templateObservationId: z.string().optional() });
 const entriesSchema = z.array(entryInputManifestSchema);
 
-/** DB-only read. The caller must hold the statement artifact lock when using
- * this result to authorize verifier submission. No registry or storage I/O.
+/** Compare current DB content using the stored template, without storage I/O.
+ * Contender reads retain live statement refresh. The caller must hold the statement
+ * artifact lock when using this result to authorize verifier submission.
  */
 export async function loadRemovalEntryCorrection(orgCtx: OrgContext, removalId: string, suppliedContenders?: EntryContender[]): Promise<EntryCorrectionState> {
   const loaded = await loadRemovalCorrectionFacts(orgCtx, removalId, suppliedContenders);
