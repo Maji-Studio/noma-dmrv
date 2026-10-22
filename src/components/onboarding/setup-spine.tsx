@@ -13,7 +13,7 @@
 "use client";
 
 import { CheckIcon } from "@phosphor-icons/react/dist/ssr";
-import { SetupStepAction } from "./setup-step-action";
+import { SetupStepAction, useStepNavigation } from "./setup-step-action";
 import type { SetupActions } from "./setup-actions";
 import type { SetupStep } from "./use-setup-steps";
 
@@ -57,6 +57,7 @@ export function SetupSpine({
   activeIndex,
   actions,
 }: SetupSpineProps) {
+  const navigation = useStepNavigation();
 
   return (
     <ol className="flex flex-col">
@@ -115,7 +116,7 @@ export function SetupSpine({
                 )}
 
                 {state !== "done" && (
-                  <SetupStepAction step={step} active={state === "active"} actions={actions} />
+                  <SetupStepAction step={step} active={state === "active"} actions={actions} navigation={navigation} />
                 )}
 
               </div>

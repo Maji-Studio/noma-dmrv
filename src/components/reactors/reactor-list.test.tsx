@@ -12,6 +12,7 @@ vi.mock("@/hooks/use-open-create-intent", () => ({
   useOpenCreateIntent: () => undefined,
 }));
 vi.mock("@/hooks/use-reactors", () => ({
+  useReactorStats: () => ({ data: undefined, isLoading: false, isError: false }),
   useReactors: () => ({
     data: { items: [], total: 0 },
     isLoading: false,

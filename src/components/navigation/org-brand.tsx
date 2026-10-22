@@ -15,8 +15,11 @@ import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { CaretDownIcon, CheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { authClient } from "@/lib/auth/client";
+import { useToast } from "@/components/ui/toast";
+import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import {
+  ORG_SWITCH_FAILED_MESSAGE,
   useActiveOrganizationProfile,
   useAllOrganizations,
   useEnterOrganization,
@@ -80,7 +83,9 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
   const listboxId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [isSwitching, setIsSwitching] = useState(false);
+  const toast = useToast();
+  const switching = useBusyUntilUnload();
+  const isSwitching = !!switching.held;
 
   // Override-aware active-org lookup: the plugin's useActiveOrganization() is
   // members-only, so it never resolves for Platform Admins inside an org they
@@ -136,20 +141,23 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
       : memberOrgsQuery.isPending && !memberOrgsQuery.error);
 
   async function handleSelect(organizationId: string, organizationName: string) {
+    if (switching.held) return;
     if (organizationId === activeOrganizationId) {
       setIsOpen(false);
       return;
     }
-    setIsSwitching(true);
+    // Stay "Switching" until the page reloads into the new organization; only a failure clears it.
+    switching.hold(true);
     try {
       const result = await enterOrganization(organizationId, organizationName);
       if (!result.success) {
-        setIsSwitching(false);
+        switching.release();
         return;
       }
       setIsOpen(false);
-    } finally {
-      setIsSwitching(false);
+    } catch {
+      switching.release();
+      toast.error(ORG_SWITCH_FAILED_MESSAGE);
     }
   }
 
@@ -225,10 +233,11 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
                     role="option"
                     aria-selected={isSelected}
                     onClick={() => handleSelect(org.id, org.name)}
-                    className={`w-full h-40 px-16 flex items-center justify-between gap-8 body-caption text-left transition-colors duration-150 ${
+                    disabled={isSwitching}
+                    className={`w-full h-40 px-16 flex items-center justify-between gap-8 body-caption text-left transition-colors duration-150 disabled:cursor-default disabled:opacity-40 ${
                       isSelected
                         ? "text-white bg-[var(--color-white-100)]/[0.08]"
-                        : "text-[var(--color-white-75)] hover:text-white hover:bg-[var(--color-white-100)]/[0.06]"
+                        : "text-[var(--color-white-75)] enabled:hover:text-white enabled:hover:bg-[var(--color-white-100)]/[0.06]"
                     }`}
                   >
                     <span className="truncate">{org.name}</span>

@@ -48,6 +48,16 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
   bar a few pixels wide. Needs a design decision for bars whose 44px hit areas
   would overlap.
 
+## Answering components for a kept batch's older template - **open**
+
+- `src/components/credit-batches/credit-batch-removal-template.tsx:CreditBatchRemovalTemplate`
+  hides the "Answer in Settings" link when the batch's pinned template is not the
+  facility's current one: the setup's Check step makes the answered template the
+  facility's and switches every open batch (`src/data-access/removal-template-setup.ts:applySetupInTransaction`).
+  A returned Removal on an older template that gains a component therefore has no
+  decisions-only path. Options: a decisions-only apply that records the answers
+  without changing the facility template, or moving the batch to the current template.
+
 ## Late production runs after submission (`credit-batches/late-runs`) - **parked**
 
 - `src/data-access/credit-batch-membership.ts:assertNoOverlappingCreditBatchCohort`
@@ -227,20 +237,6 @@ Pure starter residue; org scoping came later via ADR 0010.
   of scope? Neither feeds credit math today.
 - **To resolve:** stakeholder call; if yes, add columns via the `percent`
   numeric family and re-add the fields end-to-end (reseed, not migrate).
-
-### Mix pile wet stock floors each batch at zero on its own (`output-stock/wet-stock-mix-floor`, opened 2026-10-05)
-
-- **Context:** `layerWet` in `src/lib/output-stock/moisture-estimate.ts` floors
-  each batch's wet stock at zero before `estimateStock` sums the pile. A mix
-  removal takes wet shares pro rata to solids, so a removal wetter than a dry
-  batch can take more wet mass from that batch than it holds. Its negative
-  remainder is dropped, not netted against the other batches.
-- **Example:** batches of 100 kg wet with 60 kg and 90 kg solids; a 175 kg
-  removal at 60% takes 70 kg and 105 kg wet. The pile shows 30 kg wet, while
-  wet in less wet out is 25 kg. Split bins are unaffected: their batches are
-  separate sub-bins.
-- **To resolve:** decide whether a mix pile floors its total once instead of
-  each batch, and whether a batch's wet stock can then read negative.
 
 ## Architecture
 

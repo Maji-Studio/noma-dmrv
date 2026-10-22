@@ -10,6 +10,7 @@ import { archiveCustomerLocation, restoreCustomerLocation, addCustomerLocation, 
 import { runWithCascadePreview } from "@/lib/operations/cascade-preview";
 import { keylessOutcomeUnknown, runOperation, runOperationInProcess } from "@/lib/operations/runner";
 import { z } from "zod";
+import { getCustomerStats as getCustomerStatsData, type CustomerStats } from "@/data-access/customer-stats";
 import { type Customer, type CustomerLocation } from "@/db/schema";
 import {
   getCustomers as getCustomersData,
@@ -57,6 +58,23 @@ export async function getCustomersFn(
     fallbackMessage: "Failed to load customers",
     zodErrorPrefix: "Invalid filter parameters",
     log: { message: LOG_MESSAGE, context: { op: "customer:list" } },
+  });
+}
+
+const customerStatsFilterSchema = z.object({
+  archived: z.boolean().optional(),
+}).optional();
+
+export async function getCustomerStatsFn(
+  filters?: { archived?: boolean },
+): Promise<ActionResult<CustomerStats>> {
+  return withAction(async (ctx) => {
+    const validatedFilters = customerStatsFilterSchema.parse(filters);
+    return getCustomerStatsData(ctx, validatedFilters);
+  }, {
+    fallbackMessage: "Failed to load customer stats",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: LOG_MESSAGE, context: { op: "customer:stats" } },
   });
 }
 

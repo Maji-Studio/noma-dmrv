@@ -11,7 +11,8 @@ import {
   APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS,
   isApplicationVisualEvidenceRole,
 } from "@/lib/certification/application-evidence";
-import { formatDate, formatFileSize } from "@/lib/format-utils";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
+import { formatFacilityDay, formatFileSize } from "@/lib/format-utils";
 
 function metadataRecord(value: unknown): Record<string, unknown> {
   return value !== null && !Array.isArray(value) && typeof value === "object"
@@ -31,6 +32,8 @@ export function ApplicationEvidenceDocumentList({
   deleteMutationPending: boolean;
   onDelete?: (id: string) => void;
 }) {
+  const { facilityId } = useFacilityContext();
+  const { timeZone } = useFacilityClock(facilityId);
   if (docs.length === 0) {
     return (
       <EmptyState
@@ -73,7 +76,7 @@ export function ApplicationEvidenceDocumentList({
               <span className="body-caption text-[var(--color-text-tertiary)]">
                 {[
                   doc.fileSizeBytes == null ? null : formatFileSize(doc.fileSizeBytes),
-                  doc.capturedAt ? formatDate(doc.capturedAt) : null,
+                  doc.capturedAt ? formatFacilityDay(doc.capturedAt, timeZone) : null,
                   evidenceRole ? APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS[evidenceRole] : null,
                 ].filter(Boolean).join(" · ")}
               </span>

@@ -37,7 +37,7 @@ interface CheckCreditBatch {
 interface SubmissionChecksProps {
   checks: RemovalRequirementCheck[];
   facilityId: string;
-  /** The Removal's credit batches. Template pin blockers link to each one. */
+  /** The Removal's credit batches. Emissions blockers link to each one. */
   creditBatches?: readonly CheckCreditBatch[];
 }
 
@@ -57,7 +57,6 @@ function perBatchLinks(
 function templateFixLinks(
   codes: readonly RemovalBlockerCode[],
   facilityId: string,
-  creditBatches: readonly CheckCreditBatch[],
   targets?: readonly TemplateFixTarget[],
 ): { label: string; href: string }[] {
   const destinations = new Set(targets ?? codes.filter(isTemplateRoutedCode).map(templateFixTarget));
@@ -68,9 +67,8 @@ function templateFixLinks(
   if (destinations.has("templateLineReview")) destinations.delete("templateLines");
   return [...destinations].flatMap((fixTarget) => {
     const target = { key: "templateLines", fixTarget } as const;
-    return fixTarget === "creditBatchTemplate" || fixTarget === "templateReplacement"
-      ? perBatchLinks(target, facilityId, creditBatches)
-      : [batchHealthFixLinkFor(target, facilityId)];
+    // One facility Removal template now: setup and replacement go to the same Settings dialog for every batch.
+    return [batchHealthFixLinkFor(target, facilityId)];
   }).filter((link, index, links) => links.findIndex((item) => item.href === link.href) === index);
 }
 
@@ -113,7 +111,7 @@ function fixLinksFor(
     case "templateLines":
       return check.key === "templateSet" && !check.templateBlockerCodes?.length
         ? [{ label: "Open settings", href: facilityCertificationSettingsHref(facilityId) }]
-        : templateFixLinks(check.templateBlockerCodes ?? [], facilityId, creditBatches, check.templateFixTargets);
+        : templateFixLinks(check.templateBlockerCodes ?? [], facilityId, check.templateFixTargets);
     case "emissions":
       return perBatchLinks({ key: "emissions" }, facilityId, creditBatches);
     case "measurementDates":

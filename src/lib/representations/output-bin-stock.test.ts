@@ -71,3 +71,18 @@ it("publishes draw order without reordering sub-bins and includes it in the body
   expect(bodyHashEtag(OUTPUT_BIN_STOCK_REPRESENTATION_REVISION, newest)).not.toBe(bodyHashEtag(OUTPUT_BIN_STOCK_REPRESENTATION_REVISION, oldest));
   expect(representOutputBinStock({ ...stock, stockMode: "mix", drawOrder: null }).drawOrder).toBeNull();
 });
+
+
+it('publishes the draw kind and date for both the bin and held sub-bin', () => {
+  const moistureBasis = { source: 'draw' as const, at: AT, kind: 'loss' };
+  const data = representOutputBinStock({ ...stock, totals: { ...figures, moistureBasis },
+    subBins: [{ ...stock.subBins[0], moistureBasis }] });
+  expect(data.totals?.moistureBasis).toEqual(moistureBasis);
+  expect(data.subBins[0].moistureBasis).toEqual(moistureBasis);
+});
+
+
+it('rejects moisture basis kinds that cannot re-estimate stock', () => {
+  expect(() => representOutputBinStock({ ...stock, totals: { ...figures,
+    moistureBasis: { source: 'draw', at: AT, kind: 'count' } } })).toThrow();
+});

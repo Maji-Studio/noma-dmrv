@@ -12,7 +12,7 @@ import { Button, Modal } from "@/components/ui";
 import { formatFacilityDateTime } from "@/lib/format-utils";
 import { moveSubBin } from "@/lib/output-stock/sub-bin-draw";
 import type { OutputSubBin } from "@/types/output-stock";
-import { SubBinInfo, subBinMoistureText, subBinWetText } from "./sub-bin-card";
+import { SubBinInfo, subBinMoistureCaption, subBinWetText } from "./sub-bin-card";
 
 interface Props {
   isOpen: boolean;
@@ -151,10 +151,7 @@ function SubBinChoice({ id, subBin, checked, onToggle, timeZone }: { id: string;
         <span className="flex flex-wrap items-baseline gap-x-8">
           <span className="body-small font-medium">{subBin.code}</span>
           <span className="body-small tabular-nums">{subBinWetText(subBin)}</span>
-          {/* Without a moisture reading the wet text already says so. */}
-          {subBin.moisturePercent !== null && (
-            <span className="body-caption text-[var(--color-text-secondary)] tabular-nums">{subBinMoistureText(subBin)} moisture</span>
-          )}
+          <span className="body-caption text-[var(--color-text-secondary)] tabular-nums">{subBinMoistureCaption(subBin)}</span>
         </span>
         <span className="block body-caption text-[var(--color-text-tertiary)] tabular-nums">Added {formatFacilityDateTime(subBin.placedAt, timeZone)}</span>
       </span>

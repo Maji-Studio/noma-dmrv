@@ -20,6 +20,7 @@ function formulation(code: string, archivedAt: Date | null): FormulationWithIngr
 vi.mock("@/hooks/use-formulations", () => {
   const mutation = () => ({ mutateAsync: vi.fn(), isPending: false });
   return {
+    useFormulationStats: () => ({ data: undefined, isLoading: false, isError: false }),
     useFormulations: (filters: { archived?: boolean }) => {
       state.filters.push(filters);
       const items = state.items.filter((item) => Boolean((item as FormulationWithIngredients).archivedAt) === Boolean(filters.archived));

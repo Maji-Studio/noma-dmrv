@@ -64,16 +64,16 @@ export function setupGapCopy(gap: FacilitySetupGap): {
           "The organization's registry connection credentials are not set, so the registry cannot be reached. Ask an Admin to add them before linking this facility.",
         action: null,
       };
-    case "default_template":
+    case "removal_template":
       return {
         message:
-          "This facility is linked, but no default Removal template is set for it.",
-        action: { label: "Choose a default in Removal templates", target: "removalTemplates" },
+          "This facility is linked, but no Removal template is set for it.",
+        action: { label: "Set the template in Settings", target: "removalTemplates" },
       };
     case "template_resolution":
       return {
-        message: `The default Removal template (${gap.templateId}) is no longer available in the registry. Choose another default.`,
-        action: { label: "Choose a default in Removal templates", target: "removalTemplates" },
+        message: `The Removal template (${gap.templateId}) is no longer available in the registry. Choose another one in Settings.`,
+        action: { label: "Set the template in Settings", target: "removalTemplates" },
       };
     case "template_unbindable": {
       const { lead, lines } = formatUnbindableTemplateInputs(gap.inputs);
@@ -90,7 +90,7 @@ export function setupGapCopy(gap: FacilitySetupGap): {
         message:
           `The selected Removal template uses ${gap.keys.length} ` +
           `${gap.keys.length === 1 ? "component" : "components"} the registry cannot load: ` +
-          `${labels.join(", ")}. Choose another default in Removal templates.`,
+          `${labels.join(", ")}. Choose another Removal template in Settings.`,
         action: { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, target: "removalTemplates" },
       };
     }

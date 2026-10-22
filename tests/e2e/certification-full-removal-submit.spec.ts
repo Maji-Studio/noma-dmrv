@@ -88,7 +88,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
     const mapping: SeededMapping = await seedCertifierMapping(facilityId, {
       externalProjectId: projectId,
       externalFacilityId: SANDBOX_FACILITY_ID || undefined,
-      defaultRemovalTemplateId: defaultRemovalTemplate?.id,
+      removalTemplateId: defaultRemovalTemplate?.id,
     });
 
     // The sandbox project's only fully-bound template is the 1000-year one;

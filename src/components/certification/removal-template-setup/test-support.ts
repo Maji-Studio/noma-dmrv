@@ -56,6 +56,7 @@ export const startupDefault: SetupDefault = {
 export function template(id: string, name: string, plan: Partial<RemovalTemplateSetupPlan> = {}, blockedReason: string | null = null): SetupTemplate {
   const full: RemovalTemplateSetupPlan = { decided: [], defaults: [], decisions: [], ...plan };
   return {
+    batchesThatSwitch: [], batchesKept: [],
     id, name, componentCount: full.decided.length + full.defaults.length + full.decisions.reduce((sum, decision) => sum + decision.components.length, 0),
     plan: full, ready: full.decisions.length === 0, toDecideCount: full.decisions.length,
     semanticFingerprint: `${id}-semantic`, fullFingerprint: `${id}-full`, planFingerprint: `${id}-plan`, blockedReason,
@@ -66,11 +67,13 @@ export function setupData(overrides: Partial<SetupData> = {}): SetupData {
   return {
     facility: { id: "11111111-1111-4111-8111-111111111111", name: "Mafinga Facility" },
     projectName: "Tanzania biochar", tier: "1000_year", fitting: [], notFitting: [],
-    defaultRemovalTemplateId: null, defaultToDecideCount: 0,
-    batchesWithoutTemplate: [
-      { id: "22222222-2222-4222-8222-222222222222", code: "CB-26-001", version: 3 },
-      { id: "33333333-3333-4333-8333-333333333333", code: "CB-26-002", version: 1 },
+    removalTemplateId: null, currentToDecideCount: 0,
+    currentTemplateName: null,
+    batchesThatSwitch: [], batchesKept: [],
+    batchVersions: [
+      { id: "22222222-2222-4222-8222-222222222222", expectedVersion: 3, removalTemplateId: null },
+      { id: "33333333-3333-4333-8333-333333333333", expectedVersion: 1, removalTemplateId: null },
     ],
-    batchesOnOtherTemplates: [], viewerCanManage: true, ...overrides,
+    viewerCanManage: true, ...overrides,
   } as SetupData;
 }

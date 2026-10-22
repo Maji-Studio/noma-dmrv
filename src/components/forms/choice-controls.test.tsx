@@ -67,6 +67,14 @@ describe("radio structure", () => {
     expect(markup).not.toMatch(/checked=""[^>]*value="c"/);
   });
 
+  it("draws a radio circle per card instead of the check glyph when radioIndicator is set", () => {
+    const markup = renderToStaticMarkup(<ChoiceCardGroup legend="Pick" name="pick" value="a" options={OPTIONS} radioIndicator singleColumn />);
+    expect(markup.match(/rounded-full border/g)).toHaveLength(OPTIONS.length);
+    expect(markup).not.toContain("right-8 top-8");
+    expect(markup).toContain("group-has-[input:checked]:opacity-100");
+    expect(markup.match(/type="radio"/g)).toHaveLength(OPTIONS.length);
+  });
+
   it("disables an option without disabling its siblings", () => {
     const r = mount(<ChoiceCardGroup legend="Pick" name="pick" value="a" options={OPTIONS} />);
     expect(radios(r.root).map((i) => Boolean(i.props.disabled))).toEqual([false, true, false]);

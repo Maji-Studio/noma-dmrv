@@ -39,6 +39,7 @@ import {
   STICKY_END_HEADER_CLASSES,
   columnLabel,
   handleRowActivationClick,
+  cellKeepsOneLine,
 } from "./data-table-helpers";
 import {
   RowLink,
@@ -489,8 +490,7 @@ function DataTableRoot<TData, TValue>({
                         key={cell.id}
                         className={cn(
                           "py-8 px-12 body-small",
-                          cell.column.columnDef.meta?.nowrap &&
-                            "whitespace-nowrap",
+                          cellKeepsOneLine(cell) && "whitespace-nowrap",
                           cell.column.columnDef.meta?.stickyEnd &&
                             STICKY_END_CELL_CLASSES
                         )}
@@ -555,7 +555,7 @@ function DataTableRoot<TData, TValue>({
                           {label}
                         </span>
                       )}
-                      <div className="body-small min-w-0 break-words text-right">
+                      <div className={cn("body-small min-w-0 break-words text-right", cellKeepsOneLine(cell) && "whitespace-nowrap")}>
                         {renderCell(cell, row.original)}
                       </div>
                     </div>

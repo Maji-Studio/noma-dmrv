@@ -55,8 +55,8 @@ describe("createRemovalWithBatchesAction", () => {
       facilityTimezone: "UTC",
       hasOrgCredentials: false,
       mapping: null,
-      defaultTemplate: null,
-      missingDefaultTemplateId: null,
+      currentTemplate: null,
+      missingCurrentTemplateId: null,
       unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
     });
@@ -84,8 +84,8 @@ describe("createRemovalWithBatchesAction", () => {
 
 const CONNECTED = {
   facilityTimezone: "UTC",
-  hasOrgCredentials: true, mapping: { externalFacilityId: "fcl-1" }, defaultTemplate: null,
-  missingDefaultTemplateId: null, unresolvedBlueprintKeys: [], unbindableTemplateInputs: [],
+  hasOrgCredentials: true, mapping: { externalFacilityId: "fcl-1" }, currentTemplate: null,
+  missingCurrentTemplateId: null, unresolvedBlueprintKeys: [], unbindableTemplateInputs: [],
 };
 function batchContext() {
   return {
@@ -100,8 +100,8 @@ function contexts(context = batchContext()) {
 }
 
 it.each([
-  { defaultTemplate: null },
-  { missingDefaultTemplateId: "deleted-default" },
+  { currentTemplate: null },
+  { missingCurrentTemplateId: "deleted-default" },
   { unbindableTemplateInputs: findUnbindableTemplateInputs(unsupportedTemplate()) },
   { unresolvedBlueprintKeys: ["unknown_default_blueprint"] },
 ])("groups a ready pin regardless of default-template advice (%j)", async (advice) => {
@@ -124,7 +124,7 @@ it("rejects an unready pin even when the facility default is clean", async () =>
   vi.clearAllMocks();
   mocks.requireOrgContext.mockResolvedValue(ORG_CONTEXT);
   const context = { ...batchContext(), templateBlockers: [removalTemplateBlocker("templateLinesNeedReview")] };
-  mocks.loadFacilityCertifierFacts.mockResolvedValue({ ...CONNECTED, defaultTemplate: { id: "clean-default" } });
+  mocks.loadFacilityCertifierFacts.mockResolvedValue({ ...CONNECTED, currentTemplate: { id: "clean-default" } });
   mocks.buildCreditBatchContexts.mockResolvedValue(contexts(context));
   const result = await createRemovalWithBatchesAction({ facilityId: FACILITY_ID, creditBatchIds: [CREDIT_BATCH_ID] });
   expect(result.success).toBe(false);

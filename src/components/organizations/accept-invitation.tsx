@@ -7,6 +7,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import { acceptInvitationAction } from "@/fn/organizations";
 import { useResetAfterOrgSwitch } from "@/hooks/use-organizations";
 import { Notice } from "@/components/ui/notice";
@@ -19,16 +20,17 @@ export function AcceptInvitation({
   userEmail: string;
 }) {
   const resetAfterOrgSwitch = useResetAfterOrgSwitch();
-  const [status, setStatus] = useState<"idle" | "accepting" | "error">("idle");
+  // Busy from the click until the page reloads into the new organization; only a failure clears it.
+  const busy = useBusyUntilUnload();
   const [error, setError] = useState<string | null>(null);
 
   async function accept() {
-    setStatus("accepting");
+    busy.hold(true);
     setError(null);
     try {
       const result = await acceptInvitationAction({ invitationId });
       if (!result.success) {
-        setStatus("error");
+        busy.release();
         setError(result.error);
         return;
       }
@@ -37,7 +39,7 @@ export function AcceptInvitation({
       resetAfterOrgSwitch(result.warning);
     } catch {
       // Rejected request (network/server): don't leave the button stuck.
-      setStatus("error");
+      busy.release();
       setError("The invitation was not accepted. Check your connection and try again.");
     }
   }
@@ -59,9 +61,9 @@ export function AcceptInvitation({
         variant="primary"
         width="full"
         onClick={accept}
-        disabled={status === "accepting"}
+        busy={!!busy.held}
       >
-        {status === "accepting" ? "Accepting…" : "Accept invitation"}
+        Accept invitation
       </Button>
     </div>
   );

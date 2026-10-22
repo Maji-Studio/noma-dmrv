@@ -11,6 +11,7 @@ import { runOperationInProcess } from "@/lib/operations/runner";
 import { recordApplication, updateApplication, deleteApplication } from "@/lib/operations/applications";
 import { recordApplicationInput, updateApplicationInput, deleteApplicationInput } from "@/schemas/application-input";
 import { requireOrgFacility } from "@/data-access/utils";
+import { getApplicationStats as getApplicationStatsData, type ApplicationStats } from "@/data-access/application-stats";
 import {
   getApplications as getApplicationsData,
   getApplicationDeliveryOptions as getApplicationDeliveryOptionsData,
@@ -56,6 +57,26 @@ export async function getApplicationsFn(
   }, {
     fallbackMessage: "Failed to get applications",
     log: { message: "application action failed", context: { op: "application:list" } },
+  });
+}
+
+const applicationStatsFilterSchema = z.object({
+  facilityId: z.string().uuid().optional(),
+}).optional();
+
+export async function getApplicationStatsFn(
+  filters?: { facilityId?: string },
+): Promise<ActionResult<ApplicationStats>> {
+  return withAction(async (ctx) => {
+    const validatedFilters = applicationStatsFilterSchema.parse(filters);
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
+    return getApplicationStatsData(ctx, validatedFilters);
+  }, {
+    fallbackMessage: "Failed to load application stats",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: "application action failed", context: { op: "application:stats" } },
   });
 }
 

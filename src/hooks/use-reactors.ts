@@ -12,6 +12,7 @@ import type { Reactor } from "@/db/schema";
 import type { ReactorFilterData, CreateReactorData, UpdateReactorData } from "@/schemas/reactors";
 import type { PaginatedReactors, ReactorWithRelations } from "@/data-access/reactors";
 import {
+  getReactorStatsFn,
   getReactorsFn,
   createReactorFn,
   updateReactorFn,
@@ -20,7 +21,7 @@ import {
 import { facilityKeys } from "@/hooks/use-facilities";
 
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
-import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { unwrap, type MutationCallbacks, type OptimisticUpdateOptions } from "./types";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 
 // ============================================
@@ -32,6 +33,9 @@ export const reactorKeys = {
   lists: () => [...reactorKeys.all, "list"] as const,
   list: (filters?: Partial<ReactorFilterData>) =>
     [...reactorKeys.lists(), filters] as const,
+  stats: (filters?: { facilityId?: string }) =>
+    [...reactorKeys.all, "stats", filters] as const,
+  statsPrefix: () => [...reactorKeys.all, "stats"] as const,
   details: () => [...reactorKeys.all, "detail"] as const,
   detail: (id: string) => [...reactorKeys.details(), id] as const,
   byFacility: (facilityId: string) =>
@@ -44,6 +48,15 @@ export const reactorKeys = {
 // ============================================
 // Query Hooks
 // ============================================
+
+export function useReactorStats(facilityId?: string, options?: { enabled?: boolean }) {
+  const filters = { facilityId };
+  return useQuery({
+    queryKey: reactorKeys.stats(filters),
+    queryFn: async () => unwrap(await getReactorStatsFn(filters)),
+    enabled: options?.enabled,
+  });
+}
 
 /**
  * Hook to fetch paginated list of reactors with filtering
@@ -97,6 +110,8 @@ export function useCreateReactor(
 
       // Invalidate all reactor lists
       queryClient.invalidateQueries({ queryKey: reactorKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: reactorKeys.statsPrefix() });
+      queryClient.invalidateQueries({ queryKey: facilityKeys.statsPrefix() });
       // Invalidate types in case a new type was added
       queryClient.invalidateQueries({ queryKey: reactorKeys.types() });
       // Invalidate facility reactors
@@ -210,6 +225,8 @@ export function useUpdateReactor(
 
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: reactorKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: reactorKeys.statsPrefix() });
+      queryClient.invalidateQueries({ queryKey: facilityKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: reactorKeys.types() });
       // Invalidate facility reactors (in case facility changed)
       queryClient.invalidateQueries({
@@ -327,6 +344,8 @@ export function useDeleteReactor(
       queryClient.removeQueries({ queryKey: reactorKeys.detail(reactorId) });
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: reactorKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: reactorKeys.statsPrefix() });
+      queryClient.invalidateQueries({ queryKey: facilityKeys.statsPrefix() });
       // Invalidate facility reactors
       if (facilityId) {
         queryClient.invalidateQueries({
@@ -372,6 +391,8 @@ export function useDeleteReactor(
     onSettled: async (data, error, variables) => {
             // Refetch lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: reactorKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: reactorKeys.statsPrefix() });
+      queryClient.invalidateQueries({ queryKey: facilityKeys.statsPrefix() });
 
       await callbacks?.onSettled?.(data, error, variables);
     },

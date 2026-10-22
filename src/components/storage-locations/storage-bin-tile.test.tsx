@@ -1,5 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { describe, expect, it, vi } from 'vitest';
+vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }) }));
 import type { StorageLocationWithFacility } from '@/data-access/storage-locations';
 const preview = vi.hoisted(() => vi.fn(() => ({ data: undefined, error: undefined })));
 vi.mock('@/hooks/use-output-stock', () => ({ useOutputStockBalance: preview }));
@@ -106,4 +107,14 @@ describe('archived storage board tile', () => {
     expect(await textFor('inUse')).not.toContain('data-record-lock');
     expect(await textFor('sent')).toContain('"data-record-lock":"sent"');
   });
+});
+
+it("shows bin activity on its facility calendar and clock", async () => {
+  const lastActivity = { type: "in" as const, date: new Date("2026-10-21T21:30:00Z"), massKg: 50, massDryKg: 40, label: "Added" };
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, lastActivity }} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+  const activity = renderer.root.findAllByType("p").find(node => node.props.title?.includes("Added"));
+  expect(activity?.props.title).toContain("Oct 22, 2026, 00:30");
+  expect(activity?.children.join("")).toBe("Last activity: Oct 22, 2026");
+  await act(async () => renderer.unmount());
 });

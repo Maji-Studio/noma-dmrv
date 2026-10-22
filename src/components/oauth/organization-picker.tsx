@@ -5,6 +5,7 @@ import { BuildingsIcon } from "@phosphor-icons/react/dist/ssr";
 import { ChoiceCardGroup } from "@/components/forms";
 import { Button, EmptyState } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
+import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import { useOAuthOrganizationChoices, useSelectOAuthOrganization } from "@/hooks/use-oauth-flow";
 import { useOAuthQuery } from "@/hooks/use-oauth-query";
 import { followOAuthContinuation } from "@/lib/auth/oauth-continuation";
@@ -25,6 +26,8 @@ export function OrganizationPicker() {
   const select = useSelectOAuthOrganization(oauthQuery ?? "");
   const [picked, setPicked] = useState<string | null>(null);
   const [refused, setRefused] = useState(false);
+  // Busy from the click until the page leaves for the app; only a failure clears it.
+  const busy = useBusyUntilUnload();
 
   if (oauthQuery === "" || choices.isError) return <OAuthCard title={TITLE}><OAuthRestartNotice /></OAuthCard>;
   if (!choices.data) return <OAuthCard title={TITLE}><Skeleton className="h-160 w-full" /></OAuthCard>;
@@ -34,11 +37,15 @@ export function OrganizationPicker() {
   const usable = memberships.some(membership => !membership.disabledReason);
 
   async function submit(organizationId: string) {
+    if (busy.held) return;
     setRefused(false);
+    busy.hold(true);
     try {
       const url = await select.mutateAsync(organizationId);
-      if (!followOAuthContinuation(url, new URLSearchParams(oauthQuery ?? ""))) setRefused(true);
-    } catch { setRefused(true); }
+      if (followOAuthContinuation(url, new URLSearchParams(oauthQuery ?? ""))) return;
+    } catch { /* The restart notice below covers a refused request. */ }
+    busy.release();
+    setRefused(true);
   }
 
   return (
@@ -55,7 +62,7 @@ export function OrganizationPicker() {
             className="grid-cols-1!"
             value={selected ?? ""}
             onValueChange={setPicked}
-            disabled={select.isPending}
+            disabled={!!busy.held}
             options={memberships.map(membership => ({
               value: membership.organizationId,
               title: membership.name,
@@ -66,7 +73,7 @@ export function OrganizationPicker() {
           />
           {refused && <OAuthRestartNotice />}
           <div className="flex justify-start">
-            <Button type="submit" variant="primary" size="large" busy={select.isPending} disabled={!usable || !selected}>Continue</Button>
+            <Button type="submit" variant="primary" size="large" busy={!!busy.held} disabled={!usable || !selected}>Continue</Button>
           </div>
         </form>
       )}
