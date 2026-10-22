@@ -10,7 +10,7 @@ import {
   E2E_CERTIFIER_CLIENT_SECRET,
   maskedCertifierAccessToken,
 } from "./fixtures/certifier-credentials";
-import { saveCertifierKeysInAdminDirectory } from "./fixtures/certifier-credentials-ui";
+import { openCertifierKeys, saveCertifierKeysInAdminDirectory } from "./fixtures/certifier-credentials-ui";
 
 const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const ORG_ID = `e2e-onboarding-org-${RUN_TAG}`;
@@ -125,7 +125,7 @@ test.describe("First-run onboarding", () => {
       await expect(registry).not.toBeVisible();
       await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
 
-      // Save the keys through the Platform Admin directory so the app server
+      // Save the keys on the Platform Organizations page so the app server
       // encrypts them (#1010). The fixture secret cannot form an HTTP header,
       // so the post-save connection check fails offline and the journey stays
       // hermetic. Then reload to read the stored status back.
@@ -136,15 +136,10 @@ test.describe("First-run onboarding", () => {
       await expect(
         keys.getByText(CERTIFIER_VERIFICATION_MESSAGES.network, { exact: true }),
       ).toBeVisible();
-      await adminPage.reload();
-      const organization = adminPage
-        .getByRole("listitem")
-        .filter({ hasText: ORG_NAME });
-      await expect(organization).toBeVisible();
-      await expect(organization.getByText("Keys saved")).toBeVisible();
-      await organization.getByRole("button", { name: "Isometric keys" }).click();
+      const storedKeys = await openCertifierKeys(adminPage, ORG_NAME);
+      await expect(storedKeys.getByText("Saved", { exact: true })).toBeVisible();
       await expect(
-        adminPage.getByRole("dialog").getByText(maskedCertifierAccessToken(ACCESS_TOKEN), { exact: false }),
+        storedKeys.getByText(maskedCertifierAccessToken(ACCESS_TOKEN), { exact: false }),
       ).toBeVisible();
 
       await expect(guide.getByText("Build your first traceability chain")).toBeVisible();

@@ -32,8 +32,7 @@ describe("createOrganizationWithAdmin authorization", () => {
     await expect(
       createOrganizationWithAdmin({
         name: "Example Organization",
-        slug: "example-organization",
-        adminUserId: "admin-user-123",
+        adminEmail: "admin@example.test",
       }),
     ).rejects.toBe(authorizationError);
 

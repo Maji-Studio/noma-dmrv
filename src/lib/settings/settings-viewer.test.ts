@@ -62,9 +62,8 @@ describe("loadSettingsViewer", () => {
 describe("assertSettingsPaneVisible", () => {
   it("answers 404 for a pane outside the viewer's audience", () => {
     expect(() => assertSettingsPaneVisible(viewer, "developers")).toThrow("notFound");
-    expect(() => assertSettingsPaneVisible(viewer, "diagnostics")).toThrow("notFound");
     expect(() => assertSettingsPaneVisible({ ...viewer, canManageApiKeys: true }, "developers")).not.toThrow();
-    expect(() => assertSettingsPaneVisible({ ...viewer, isPlatformAdmin: true }, "template-mapping")).not.toThrow();
+    expect(() => assertSettingsPaneVisible({ ...viewer, isPlatformAdmin: true }, "developers")).not.toThrow();
   });
 
   it("answers a pane that waits on registry keys with Registry, keeping the facility", () => {

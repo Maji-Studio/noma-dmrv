@@ -1,17 +1,11 @@
-/**
- * Settings, Diagnostics (Platform Admins): read-only environment, credential
- * and allowlist status. The health action checks the platform role again.
- */
-import { CertificationHealthPanel } from "@/components/certification/certification-health-panel";
-import { SettingsConsole } from "@/components/settings";
-import { assertSettingsPaneVisible, loadSettingsViewer } from "@/lib/settings/settings-viewer";
+/** `/settings/diagnostics` moved next to Organizations under Platform (#1373). */
+import { permanentRedirect } from "next/navigation";
+import { PLATFORM_DIAGNOSTICS_HREF, redirectPreservingQuery, type SettingsSearchParams } from "@/lib/settings/links";
 
-export default async function DiagnosticsSettingsPage() {
-  const { viewer } = await loadSettingsViewer();
-  assertSettingsPaneVisible(viewer, "diagnostics");
-  return (
-    <SettingsConsole pane="diagnostics" viewer={viewer}>
-      <CertificationHealthPanel />
-    </SettingsConsole>
-  );
+export default async function RetiredSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<SettingsSearchParams>;
+}) {
+  permanentRedirect(redirectPreservingQuery(PLATFORM_DIAGNOSTICS_HREF, await searchParams));
 }

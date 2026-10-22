@@ -1,5 +1,5 @@
 /**
- * Save an organization's Isometric keys through the Platform Admin directory,
+ * Save an organization's Isometric keys on the Platform Organizations page,
  * so the app server encrypts them with its own key. A Playwright worker must
  * never encrypt credentials itself: locally it holds the dummy key from
  * tests/setup.ts while the dev server holds the real one (#1010).
@@ -21,18 +21,32 @@ export function certifierKeyInput(scope: Locator, label: CertifierKeyLabel): Loc
   });
 }
 
-/** Opens the organization's keys dialog in the admin directory and returns it. */
-export async function openCertifierKeysDialog(
+/**
+ * Picks an organization on the Platform page (`/admin/organizations`) and
+ * returns its panel, the right-hand side that names the organization.
+ */
+export async function openPlatformOrganization(
   page: Page,
   organizationName: string,
 ): Promise<Locator> {
   await page.goto("/admin/organizations");
-  const organization = page
-    .getByRole("listitem")
-    .filter({ hasText: organizationName });
-  await expect(organization).toBeVisible();
-  await organization.getByRole("button", { name: "Isometric keys" }).click();
-  return page.getByRole("dialog");
+  await page
+    .getByRole("navigation", { name: "Organizations" })
+    .getByRole("button")
+    .filter({ has: page.getByText(organizationName, { exact: true }) })
+    .click();
+  const panel = page.getByRole("article", { name: organizationName });
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
+/** The organization's Isometric keys section on the Platform page. */
+export async function openCertifierKeys(
+  page: Page,
+  organizationName: string,
+): Promise<Locator> {
+  const panel = await openPlatformOrganization(page, organizationName);
+  return panel.getByRole("region", { name: "Isometric keys" });
 }
 
 /**
@@ -44,7 +58,7 @@ export async function saveCertifierKeysInAdminDirectory(
   organizationName: string,
   credentials: { accessToken: string; clientSecret: string },
 ): Promise<Locator> {
-  const keys = await openCertifierKeysDialog(page, organizationName);
+  const keys = await openCertifierKeys(page, organizationName);
   const fields: [CertifierKeyLabel, string][] = [
     ["Access token", credentials.accessToken],
     ["Client secret", credentials.clientSecret],

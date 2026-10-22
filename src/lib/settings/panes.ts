@@ -3,20 +3,18 @@
  * route guards and the tests read one list.
  *
  * The rail groups panes by whose setting it is (#1277, variant A): You, the
- * Organization, its Certification, and the Platform. A pane is a route.
+ * Organization and its Certification. A pane is a route. Platform pages
+ * (Organizations, Diagnostics, Template mapping) live under `/admin` (#1373).
  */
 import {
-  ADMIN_ORGANIZATIONS_HREF,
   SETTINGS_CONNECTED_APPS_HREF,
   SETTINGS_DEVELOPERS_HREF,
-  SETTINGS_DIAGNOSTICS_HREF,
   SETTINGS_FACILITIES_HREF,
   SETTINGS_GENERAL_HREF,
   SETTINGS_MEMBERS_HREF,
   SETTINGS_PROFILE_HREF,
   SETTINGS_REGISTRY_HREF,
   SETTINGS_REMOVAL_TEMPLATES_HREF,
-  SETTINGS_TEMPLATE_MAPPING_HREF,
 } from "./links";
 
 /**
@@ -29,23 +27,20 @@ export const SETTINGS_ACCESS = {
   organization: `${ORGANIZATION_SETTINGS_ROLES} can change these.`,
   self: "Only you can change your name and password.",
   you: `You and organization ${ORGANIZATION_SETTINGS_ROLES} can change these.`,
-  platformReadOnly: "Read-only for Platform Admins.",
 } as const;
 
-export type SettingsGroupKey = "you" | "organization" | "certification" | "platform";
+export type SettingsGroupKey = "you" | "organization" | "certification";
 
 export const SETTINGS_GROUP_ORDER: readonly SettingsGroupKey[] = [
   "you",
   "organization",
   "certification",
-  "platform",
 ];
 
 export const SETTINGS_GROUP_LABELS: Record<SettingsGroupKey, string> = {
   you: "You",
   organization: "Organization",
   certification: "Certification",
-  platform: "Platform",
 };
 
 export type SettingsPaneKey =
@@ -56,15 +51,12 @@ export type SettingsPaneKey =
   | "developers"
   | "registry"
   | "removal-templates"
-  | "facilities"
-  | "organizations"
-  | "diagnostics"
-  | "template-mapping";
+  | "facilities";
 
 /** What a pane's settings apply to. Drives the scope line at the top of the pane. */
-export type SettingsPaneScope = "you" | "organization" | "facility" | "platform";
+export type SettingsPaneScope = "you" | "organization" | "facility";
 
-type SettingsPaneAudience = "everyone" | "api-key-owners" | "platform-admins";
+type SettingsPaneAudience = "everyone" | "api-key-owners";
 
 export interface SettingsPaneMeta {
   key: SettingsPaneKey;
@@ -80,8 +72,6 @@ export interface SettingsPaneMeta {
   audience: SettingsPaneAudience;
   /** Hidden until the organization has registry keys saved. */
   needsRegistryKeys?: boolean;
-  /** A link to a page outside the console (it has no pane of its own). */
-  external?: boolean;
 }
 
 export const SETTINGS_PANES: readonly SettingsPaneMeta[] = [
@@ -167,37 +157,6 @@ export const SETTINGS_PANES: readonly SettingsPaneMeta[] = [
     audience: "everyone",
     needsRegistryKeys: true,
   },
-  {
-    key: "organizations",
-    group: "platform",
-    label: "Organizations",
-    href: ADMIN_ORGANIZATIONS_HREF,
-    scope: "platform",
-    caption: "",
-    access: "",
-    audience: "platform-admins",
-    external: true,
-  },
-  {
-    key: "diagnostics",
-    group: "platform",
-    label: "Diagnostics",
-    href: SETTINGS_DIAGNOSTICS_HREF,
-    scope: "platform",
-    caption: "Read-only environment, credential and allowlist status. Never exposes tokens.",
-    access: SETTINGS_ACCESS.platformReadOnly,
-    audience: "platform-admins",
-  },
-  {
-    key: "template-mapping",
-    group: "platform",
-    label: "Template mapping",
-    href: SETTINGS_TEMPLATE_MAPPING_HREF,
-    scope: "facility",
-    caption: "Read-only mapping and Removal compilation traces for this facility's active Isometric Removal template.",
-    access: SETTINGS_ACCESS.platformReadOnly,
-    audience: "platform-admins",
-  },
 ];
 
 /** What decides which panes a viewer sees. */
@@ -231,7 +190,6 @@ export function settingsPaneHiddenReason(
   pane: SettingsPaneMeta,
   access: SettingsPaneAccess,
 ): "audience" | "registry-keys" | null {
-  if (pane.audience === "platform-admins" && !access.isPlatformAdmin) return "audience";
   if (pane.audience === "api-key-owners" && !(access.canManageApiKeys || access.isPlatformAdmin)) {
     return "audience";
   }

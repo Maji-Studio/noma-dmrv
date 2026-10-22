@@ -133,25 +133,21 @@ test.describe("Organization foundation UI", () => {
     await expect(pendingInvitation).toHaveCount(0);
   });
 
-  test("admin directory lists the seeded organization and enters its dashboard", async ({
+  test("Platform Organizations lists the seeded organization and enters its dashboard", async ({
     adminPage,
   }) => {
     const page = adminPage;
     await page.goto("/admin/organizations");
 
-    const organizationsSection = sectionWithHeading(page, "Organizations");
-    const organization = organizationsSection
-      .getByRole("listitem")
-      .filter({ hasText: ORGANIZATION_NAME });
+    const list = page.getByRole("navigation", { name: "Organizations" });
+    const organization = list
+      .getByRole("button")
+      .filter({ has: page.getByText(ORGANIZATION_NAME, { exact: true }) });
     await expect(organization).toBeVisible();
     await expect(organization).toContainText(/\d+ members?/);
+    await expect(list.getByRole("button", { name: "New organization" })).toBeVisible();
 
-    const createSection = sectionWithHeading(page, "Create organization");
-    await expect(
-      createSection.getByRole("button", { name: "Create organization" }),
-    ).toBeEnabled();
-
-    // Opens it, or recognizes it as current when an earlier test already did.
+    // Switches to it, or recognizes it as current when an earlier test already did.
     await enterDefaultOrganization(page);
 
     // A Platform Admin without a membership works under the Platform Admin bar.
@@ -162,13 +158,12 @@ test.describe("Organization foundation UI", () => {
       "/admin/organizations",
     );
 
-    // The organization the admin is in carries "Current" and no Open button.
+    // The organization the admin is in says so and offers no switch.
     await page.goto("/admin/organizations");
-    const current = sectionWithHeading(page, "Organizations")
-      .getByRole("listitem")
-      .filter({ hasText: ORGANIZATION_NAME });
-    await expect(current).toContainText("Current");
-    await expect(current.getByRole("button", { name: "Open" })).toHaveCount(0);
+    await organization.click();
+    const panel = page.getByRole("article", { name: ORGANIZATION_NAME });
+    await expect(panel).toContainText(`You're working in ${ORGANIZATION_NAME}.`);
+    await expect(panel.getByRole("button", { name: /^Switch to/ })).toHaveCount(0);
   });
 
   test("single-organization sidebar renders the active organization as a dashboard link", async ({

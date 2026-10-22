@@ -8,6 +8,8 @@ import RetiredApiKeysPage from "./api-keys/page";
 import RetiredDefaultsPage from "./defaults/page";
 import RetiredOrganizationPage from "./organization/page";
 import RetiredVehiclesPage from "./vehicles-and-crew/page";
+import RetiredDiagnosticsPage from "./diagnostics/page";
+import RetiredTemplateMappingPage from "./template-mapping/page";
 import CertificationSettingsPage from "../certification/settings/page";
 
 const context = vi.hoisted(() => vi.fn());
@@ -34,6 +36,8 @@ describe("settings redirects", () => {
     ["defaults", RetiredDefaultsPage, "/settings/general"],
     ["api-keys", RetiredApiKeysPage, "/settings/developers"],
     ["vehicles-and-crew", RetiredVehiclesPage, "/vehicles-and-crew"],
+    ["diagnostics", RetiredDiagnosticsPage, "/admin/diagnostics"],
+    ["template-mapping", RetiredTemplateMappingPage, "/admin/template-mapping"],
   ])("moves /settings/%s permanently, keeping the facility", async (_name, page, target) => {
     await expect(page(params({ facility: "fac-1" }))).rejects.toThrow(`permanent:${target}?facility=fac-1`);
   });
@@ -49,7 +53,7 @@ describe("settings redirects", () => {
     );
     context.mockResolvedValue({ isPlatformAdmin: true });
     await expect(CertificationSettingsPage(params({ section: "diagnostics" }))).rejects.toThrow(
-      "permanent:/settings/diagnostics",
+      "permanent:/admin/diagnostics",
     );
   });
 });

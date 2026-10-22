@@ -29,12 +29,9 @@ import {
   CertificateIcon,
   CodeIcon,
   FactoryIcon,
-  GlobeIcon,
   ListChecksIcon,
   PlugsConnectedIcon,
-  PulseIcon,
   SlidersHorizontalIcon,
-  TreeStructureIcon,
   UserCircleIcon,
   UserIcon,
   UsersIcon,
@@ -68,16 +65,12 @@ const PANE_ICONS: Record<SettingsPaneKey, Icon> = {
   registry: CertificateIcon,
   "removal-templates": ListChecksIcon,
   facilities: FactoryIcon,
-  organizations: BuildingsIcon,
-  diagnostics: PulseIcon,
-  "template-mapping": TreeStructureIcon,
 };
 
 const SCOPE_ICONS: Record<SettingsPaneScope, Icon> = {
   you: UserCircleIcon,
   organization: BuildingsIcon,
   facility: FactoryIcon,
-  platform: GlobeIcon,
 };
 
 /** The facility panes configure the working facility, chosen in the sidebar (Q14). */
@@ -129,7 +122,7 @@ export function SettingsConsole({ pane: paneKey, viewer, subtitle, children }: S
     items: group.panes.map((item) => ({
       key: item.key,
       label: item.label,
-      href: item.external ? item.href : withFacilityParam(item.href, facilityId),
+      href: withFacilityParam(item.href, facilityId),
       icon: PANE_ICONS[item.key],
       needsAttention: needsAttention(item.key),
     })),
@@ -197,9 +190,7 @@ function ScopeLine({
       ? "You"
       : pane.scope === "organization"
         ? organizationName
-        : pane.scope === "platform"
-          ? "Platform"
-          : (facilityName ?? "No facility selected");
+        : (facilityName ?? "No facility selected");
 
   return (
     <div className="flex items-start gap-8 border-b-[1px] border-[var(--clr-dark-purple-10)] px-16 py-12 sm:px-24">

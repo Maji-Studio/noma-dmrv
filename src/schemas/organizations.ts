@@ -31,20 +31,12 @@ export const renameOrganizationSchema = z.object({
 export type RenameOrganizationInput = z.infer<typeof renameOrganizationSchema>;
 
 export const createOrganizationSchema = z.object({
-  name: z.string().trim().min(2, "Name must be at least 2 characters."),
-  slug: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(
-      /^[a-z0-9-]+$/,
-      "Slug may only contain lowercase letters, numbers, and hyphens."
-    ),
+  name: renameOrganizationSchema.shape.name,
   adminEmail: z
     .string()
     .trim()
     .toLowerCase()
-    .pipe(z.email("Enter a valid admin email.")),
+    .pipe(z.email("Enter an email address.")),
 });
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 
