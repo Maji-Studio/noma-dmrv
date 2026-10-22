@@ -68,7 +68,27 @@ export async function withFacilityDurabilityLock<T>(
   });
 }
 
-/** Acquire boundary before durability on the same dedicated transaction. */
+/**
+ * Acquire the certification boundary lock, then durability, on `tx`. Every
+ * certification submit path takes them in this order. Pass
+ * `boundaryLockHeld` when the caller already holds boundary, on this
+ * transaction or as a session lock on another connection: requesting it again
+ * from a different connection would wait on the caller itself.
+ */
+export async function acquireFacilityCertificationLocks(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  facilityId: string,
+  options: { boundaryLockHeld?: true } = {},
+): Promise<void> {
+  requireOrgScope(ctx);
+  if (!options.boundaryLockHeld) {
+    await acquireFacilityCertificationBoundaryLock(ctx, tx, facilityId);
+  }
+  await acquireFacilityDurabilityLock(ctx, tx, facilityId);
+}
+
+/** Run work on a dedicated transaction holding boundary, then durability. */
 export async function withFacilityCertificationLocks<T>(
   ctx: OrgContext,
   facilityId: string,
@@ -77,11 +97,9 @@ export async function withFacilityCertificationLocks<T>(
 ): Promise<T> {
   requireOrgScope(ctx);
   return withDedicatedLockConnection(async (tx) => {
-    // A session lock on another connection must not be requested again here.
-    if (!options.boundaryLockHeldBySession) {
-      await acquireFacilityCertificationBoundaryLock(ctx, tx, facilityId);
-    }
-    await acquireFacilityDurabilityLock(ctx, tx, facilityId);
+    await acquireFacilityCertificationLocks(ctx, tx, facilityId, {
+      boundaryLockHeld: options.boundaryLockHeldBySession,
+    });
     return fn(tx);
   });
 }

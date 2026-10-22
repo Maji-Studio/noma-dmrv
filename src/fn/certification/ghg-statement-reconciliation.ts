@@ -349,7 +349,7 @@ async function reconcileRegistryGhgStatement(
           facilityId: args.facilityId,
           provider: ISOMETRIC_PROVIDER,
           expectedExternalProjectId: args.externalProjectId,
-          facilityCertificationBoundaryLockHeldBySession: args.boundaryLockHeld,
+          facilityCertificationBoundaryLockHeld: args.boundaryLockHeld,
         },
         policy: { onSubmittedHashChanged: "invalid-changed-hash" },
         tentativeInputs: semanticPayload,

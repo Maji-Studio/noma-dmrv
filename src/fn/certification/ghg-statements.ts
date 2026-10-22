@@ -309,7 +309,7 @@ async function createGhgStatementDraftLocked(
       facilityId: parsed.facilityId,
       provider: ISOMETRIC_PROVIDER,
       expectedExternalProjectId: project.externalProjectId,
-      facilityCertificationBoundaryLockHeldBySession: true as const,
+      facilityCertificationBoundaryLockHeld: true as const,
     };
 
     // Reporting periods are consecutive and non-overlapping — Isometric
