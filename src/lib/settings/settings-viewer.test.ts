@@ -26,7 +26,6 @@ vi.mock("@/lib/read-models/organization-registry-status", () => ({
 const viewer: SettingsViewer = {
   organizationId: "org-1",
   organizationName: "Org One",
-  organizationSlug: "org-one",
   isPlatformAdmin: false,
   canManage: false,
   canManageApiKeys: false,
