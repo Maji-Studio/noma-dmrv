@@ -169,7 +169,6 @@ export function SubmitStep({
           : undefined
       }
       confirmLabel={deleteCopy.actionLabel}
-      pendingLabel={deleteCopy.pendingLabel}
     />
   );
 

@@ -525,6 +525,15 @@ Always use `Button`; never a raw `<button>` with manual styling.
   `router.push` is wrapped in `startTransition` and holds until the route
   renders. Only a failure clears it. The clicked button carries the spinner and
   its siblings are disabled.
+- **A confirm dialog keeps its label.** `DeleteConfirmDialog` and
+  `ConfirmActionDialog` show the spinner through `busy` and never swap the text
+  ("Deleting...", "Submitting…"); Cancel is disabled and Escape, the backdrop
+  and the X are held while it runs. A delete that returns to a list stays open
+  and busy until that list has rendered, and its success toast arrives with the
+  list: call `useNavigateWithToast().navigate(href, message)` and pass
+  `isPending={mutation.isPending || navigation.isPending}`. Never toast, close
+  the dialog and then push. Deletes that stay on the page toast as the request
+  returns.
 - **Quiet icon button:** `size="icon"` with `variant="noOutline"` (or
   `variant="destructive"` for a delete row action), plus an `aria-label`. Use
   this rather than `width="square"`, which yields a differently-sized control.

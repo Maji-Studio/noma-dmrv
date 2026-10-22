@@ -26,11 +26,9 @@ interface ConfirmActionDialogProps {
   body: ReactNode;
   /** Primary button label. */
   confirmLabel: string;
-  /** Label while the action is in flight. Defaults to `confirmLabel` + "…". */
-  busyLabel?: string;
   /** Irreversible actions (delete) get red; reversible actions can stay neutral. */
   variant?: "default" | "neutral" | "destructive";
-  /** Disables both buttons and shows the spinner on the primary. */
+  /** Disables both buttons and shows the spinner on the primary; the label stays. */
   isPending?: boolean;
   /** Renders the inline production EnvBanner above the title. */
   isProduction?: boolean;
@@ -51,7 +49,6 @@ export function ConfirmActionDialog({
   title,
   body,
   confirmLabel,
-  busyLabel,
   variant = "default",
   isPending = false,
   isProduction = false,
@@ -91,7 +88,7 @@ export function ConfirmActionDialog({
             disabled={confirmDisabled}
             busy={isPending}
           >
-            {isPending ? (busyLabel ?? `${confirmLabel}…`) : confirmLabel}
+            {confirmLabel}
           </Button>
           <Button
             size="large"
