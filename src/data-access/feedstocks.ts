@@ -682,6 +682,13 @@ export async function updateFeedstockInTransaction(
   }
   const transportBefore = capture ? await readFeedstockTransportSnapshot(ctx, tx, feedstockId) : undefined;
 
+  const routeAnchorChanged =
+    (feedstockData.supplierId !== undefined &&
+      feedstockData.supplierId !== locked.supplierId) ||
+    (feedstockData.facilityId !== undefined &&
+      feedstockData.facilityId !== locked.facilityId);
+  const distanceColumns = feedstockDistanceColumns({ transportDistanceKm, transportDistanceSource, distanceNote }, locked, routeAnchorChanged);
+
   // Compare operation names, including overrides stripped from feedstockData.
   // Zero distance and an empty note both mean clearing the saved override.
   await withLockedFieldIssues(() => withFeedstockErrors(() => assertCanMutateCertifiedLineage(
@@ -692,8 +699,9 @@ export async function updateFeedstockInTransaction(
     transportDistanceSource: locked.distanceKmOverride == null ? null : locked.distanceSource,
   }, {
     ...data,
-    transportDistanceKm: transportDistanceKm === 0 ? null : transportDistanceKm,
-    distanceNote: distanceNote === "" ? null : distanceNote,
+    transportDistanceKm: distanceColumns.distanceKmOverride,
+    transportDistanceSource: distanceColumns.distanceSource,
+    distanceNote: distanceColumns.distanceNote,
   });
 
   assertRecordLockFields(recordLocks.feedstock({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "feedstock", entityId: feedstockId }) }), locked, feedstockData);
@@ -703,12 +711,6 @@ export async function updateFeedstockInTransaction(
   const effectiveChanges = { ...feedstockData, massDryKg: derivedMassDryKg };
 
   const status = determineFeedstockStatus({ ...locked, ...effectiveChanges });
-  const routeAnchorChanged =
-    (feedstockData.supplierId !== undefined &&
-      feedstockData.supplierId !== locked.supplierId) ||
-    (feedstockData.facilityId !== undefined &&
-      feedstockData.facilityId !== locked.facilityId);
-  const distanceColumns = feedstockDistanceColumns({ transportDistanceKm, transportDistanceSource, distanceNote }, locked, routeAnchorChanged);
   const effectiveStorageLocationId =
     feedstockData.storageLocationId !== undefined
       ? feedstockData.storageLocationId

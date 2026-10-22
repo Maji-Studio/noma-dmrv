@@ -64,7 +64,7 @@ export function useCreateTransportLeg(
 ) {
   const queryClient = useQueryClient();
   return useIntentMutation({
-    meta: recordLockMeta(RECORD_LOCK_TOUCHES.transport),
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.transport, { onRefusalOnly: true }),
     // A pending Sample leg brings its own key; the dialog draft uses the hook's.
     mutationFn: async ({ intentKey, ...input }: CreateTransportLegData & { intentKey?: string }, draftKey): Promise<TransportLeg> =>
       unwrap(await createTransportLegFn(input, { intentKey: intentKey ?? draftKey })),
@@ -95,7 +95,7 @@ export function useUpdateTransportLeg(
 ) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: recordLockMeta(RECORD_LOCK_TOUCHES.transport),
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.transport, { onRefusalOnly: true }),
     mutationFn: async (input: UpdateTransportLegData): Promise<TransportLeg> => {
       const result = await updateTransportLegFn(input);
       if (!result.success) {
@@ -128,7 +128,7 @@ export function useDeleteTransportLeg(
 ) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: recordLockMeta(RECORD_LOCK_TOUCHES.transport),
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.transport, { onRefusalOnly: true }),
     mutationFn: async (input: DeleteTransportLegData): Promise<void> => {
       const result = await deleteTransportLegFn(input);
       if (!result.success) {

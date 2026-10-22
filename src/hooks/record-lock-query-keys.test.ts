@@ -38,3 +38,14 @@ it("refreshes every declared kind after a certification lock refusal", () => {
   expect(invalidate).toHaveBeenCalledTimes(RECORD_LOCK_TOUCHES.transport.length);
   for (const kind of RECORD_LOCK_TOUCHES.transport) expect(invalidate).toHaveBeenCalledWith({ queryKey: recordLockKeys.kind(kind) });
 });
+
+it.each([{ touch: RECORD_LOCK_TOUCHES.transport }, { touch: RECORD_LOCK_TOUCHES.registry }])("refreshes refusal-only meta only for lock refusals ($touch)", ({ touch }) => {
+  const { queryClient, invalidate } = client();
+  const mutation = { meta: recordLockMeta(touch, { onRefusalOnly: true }) };
+  invalidateRecordLocksAfter(queryClient, { success: true }, null, mutation);
+  invalidateRecordLocksAfter(queryClient, undefined, new Error("offline"), mutation);
+  invalidateRecordLocksAfter(queryClient, undefined, new ActionError({ error: "Reload", code: "stale_version" }), mutation);
+  expect(invalidate).not.toHaveBeenCalled();
+  invalidateRecordLocksAfter(queryClient, undefined, new ActionError({ error: "Locked", code: "certification_locked" }), mutation);
+  expect(invalidate).toHaveBeenCalledTimes(touch === "all" ? 1 : touch.length);
+});

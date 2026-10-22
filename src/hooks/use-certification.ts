@@ -123,6 +123,7 @@ export const certificationKeys = {
   removalTemplateReview: (facilityId: string) => ["certification", "removal-template-review", facilityId] as const,
   all: ["certification"] as const,
   /** Whether a submitted Removal or GHG statement freezes the record's files. */
+  recordLocks: () => [...certificationKeys.all, "record-lock"] as const,
   recordLock: (entityType: string, entityId?: string) =>
     [...certificationKeys.all, "record-lock", entityType, entityId] as const,
   facilityMapping: (facilityId: string) =>
@@ -434,7 +435,7 @@ export function useIsometricFeedstockTypes(enabled = true) {
 export function useSaveFacilityCertifierMapping() {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry, { onRefusalOnly: true }),
     mutationFn: async (input: SaveMappingInput) =>
       unwrap(await saveFacilityCertifierMapping(input)),
     onSuccess: (_data, variables) => {
@@ -710,7 +711,7 @@ export function useDeleteRemoval() {
 export function useDeleteFacilityCertifierMapping() {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry, { onRefusalOnly: true }),
     mutationFn: async (facilityId: string) =>
       unwrap(await deleteFacilityCertifierMapping(facilityId)),
     onSuccess: (_data, facilityId) => {

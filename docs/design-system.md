@@ -152,12 +152,13 @@ and an optional `action` (a link or button); no eyebrow, no uppercase.
 | `success` | An action completed and the page stays | green icon, no tint | `status` |
 | `error` | The task is blocked or a save failed | red icon, **tinted** | `alert` |
 
-The role column is the default. `live={false}` drops the role; its one
-sanctioned use is `FormErrorSummary` (`@/components/forms`), the error Notice
+The role column is the default. `live={false}` drops the role.
+`FormErrorSummary` (`@/components/forms`) is the error Notice
 above Save that holds the links to refused fields. Its list changes as the
 user fixes fields, so it is not a live region and announces each refused save
-through its own sr-only `role="alert"` line instead. Every other Notice keeps
-its role.
+through its own sr-only `role="alert"` line instead. `TopRefusal` also uses
+`live={false}`: when a lock hides Save, focus announces the refusal above the
+lock line. Other Notices keep their role.
 
 Only `error` is tinted red, so one blocker stands out on a page of advisories.
 `boxed` is an opt-in quiet neutral card (`--color-surface-light`, 8px/12px

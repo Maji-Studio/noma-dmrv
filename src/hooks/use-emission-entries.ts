@@ -84,7 +84,7 @@ export function invalidateEmissionEntryReads(queryClient: QueryClient, scope: Em
 function useEntryMutation<TInput, TData>(scope: EmissionBatchScope, run: (input: TInput) => Promise<ActionResult<TData>>) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: recordLockMeta(RECORD_LOCK_TOUCHES.emission),
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.emission, { onRefusalOnly: true }),
     mutationFn: async (input: TInput) => unwrapEntry(await run(input)),
     // Refresh after failures too: a stale version means the lines moved.
     onSettled: () => invalidateEmissionEntryReads(queryClient, scope),

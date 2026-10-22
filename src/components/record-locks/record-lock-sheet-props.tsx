@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, type ReactNode } from "react";
 import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-block-context";
 import { RECORD_LOCK_RETRY_LABEL, recordLockSaveBlock, type RecordLockStatus, type RecordLockView } from "@/lib/record-lock-view";

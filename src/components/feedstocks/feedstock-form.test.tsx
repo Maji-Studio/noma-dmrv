@@ -243,6 +243,23 @@ describe("FeedstockForm single-bin mass editing", () => {
     } finally { cleanup(); }
   });
 
+  it("closes a newly opened transport override after a Sent refusal restores the saved distance", async () => {
+    const onSubmit = vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+      error: "Sent to a Removal.", code: "certification_locked",
+      issues: [{ path: ["transportDistanceKm"], code: "certification_locked", message: "Sent to a Removal." }],
+    }), "Feedstock was not saved."));
+    const view = render(<FeedstockForm feedstock={feedstock} onSubmit={onSubmit} />);
+    try {
+      fireEvent.click(view.getByRole("button", { name: "Override" }));
+      const input = () => view.container.querySelector<HTMLInputElement>('input[name="transportDistanceKm"]');
+      fireEvent.change(input()!, { target: { value: "60" } });
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      await waitFor(() => expect(input()).toBeNull());
+      expect(view.getByRole("button", { name: "Override" })).toBeTruthy();
+    } finally { cleanup(); }
+  });
+
   it.each([150, 80])("submits an edited total of %s kg as its bin allocation", async (mass) => {
     const onSubmit = vi.fn();
     let renderer: ReactTestRenderer;

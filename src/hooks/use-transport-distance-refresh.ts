@@ -32,7 +32,7 @@ export function useRefreshTransportDistance(
 ) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: recordLockMeta(RECORD_LOCK_TOUCHES.transport),
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.transport, { onRefusalOnly: true }),
     mutationFn: async (input: RefreshTransportDistanceInput) => {
       const result = await (entityType === "feedstock" ? refreshFeedstockDistanceFn(input) : refreshDeliveryDistanceFn(input));
       if (!result.success) throwActionError(result);

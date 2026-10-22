@@ -28,6 +28,8 @@
  * Production-run auto-attachment retains the recorded row-before-artifact residual.
  */
 
+import type { Application } from "@/db/schema";
+import { withLockedFieldIssues } from "@/lib/record-lock-fields";
 import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { applications, applicationOutputAllocations, creditBatchApplications, creditBatchProductionRuns, creditBatches, deliveries, facilities, outputStockAllocations, outputStockRunAllocations, productionRuns } from "@/db/schema";
@@ -64,6 +66,7 @@ async function discover(ctx: OrgContext, tx: DbTransaction, deliveryIds: string[
   return { applicationBatchIds, deliveryRows, facilityIds: sorted(deliveryRows.map(row => row.facilityId)), runIds, batchIds: sorted([...links, ...slices].map(row => row.id)) };
 }
 export async function lockApplicationWriteScope(ctx: OrgContext, tx: DbTransaction, input: {
+  updateComparison?: (saved: Application) => { previous: object; changes: object };
   mutation: "create" | "update" | "delete"; applicationId?: string; deliveryId?: string; expectedVersion?: number;
 }) {
   requireOrgScope(ctx);
@@ -75,7 +78,12 @@ export async function lockApplicationWriteScope(ctx: OrgContext, tx: DbTransacti
   const checks: CertifiedLineageCheck[] = snapshot ? [{ target: { entityType: "application", entityId: snapshot.id }, mutation: input.mutation }] : [];
   if (input.deliveryId && input.deliveryId !== snapshot?.deliveryId) checks.push({ target: { entityType: "delivery", entityId: input.deliveryId }, mutation: input.mutation, subjectEntityType: "application", ...(snapshot ? { lineageRelationship: "selected" as const } : {}) });
   const path = [snapshot ? "applicationId" : "deliveryId"];
-  const artifacts = await withFeedstockErrors(() => lockCertifiedLineageArtifacts(ctx, tx, checks.map(check => check.target)), "certification_locked", path);
+  const checkLineage = <T>(work: () => Promise<T>, saved = snapshot) => {
+    if (input.mutation !== "update" || !saved || !input.updateComparison) return work();
+    const { previous, changes } = input.updateComparison(saved);
+    return withLockedFieldIssues(work, previous, changes);
+  };
+  const artifacts = await checkLineage(() => withFeedstockErrors(() => lockCertifiedLineageArtifacts(ctx, tx, checks.map(check => check.target)), "certification_locked", path));
   const facilityRows = await tx.select().from(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), inArray(facilities.id, discovered.facilityIds))).orderBy(facilities.id).for("share");
   if (discovered.runIds.length) await tx.select({ id: productionRuns.id }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.id, discovered.runIds))).orderBy(productionRuns.id).for("share");
   const batches = discovered.batchIds.length ? await tx.select().from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), inArray(creditBatches.id, discovered.batchIds))).orderBy(creditBatches.id).for("share") : [];
@@ -86,10 +94,10 @@ export async function lockApplicationWriteScope(ctx: OrgContext, tx: DbTransacti
     assertRowVersion({ entity: "application", id: application.id, expectedVersion: input.expectedVersion!, actualVersion: application.version });
     if (application.deliveryId !== snapshot?.deliveryId) changed("applicationId");
   }
-  for (const check of checks) await withFeedstockErrors(async () => {
+  for (const check of checks) await checkLineage(() => withFeedstockErrors(async () => {
     try { await assertLockedLineagesAllowMutation(ctx, tx, artifacts, [check]); }
     catch (error) { if (error instanceof CertificationLineageChangedError) changed(check.target.entityType === "delivery" ? "deliveryId" : "applicationId"); throw error; }
-  }, "certification_locked", [check.target.entityType === "delivery" ? "deliveryId" : "applicationId"]);
+  }, "certification_locked", [check.target.entityType === "delivery" ? "deliveryId" : "applicationId"]), application);
   const current = await discover(ctx, tx, deliveryIds, input.applicationId);
   for (const key of ["facilityIds", "runIds", "batchIds", "applicationBatchIds"] as const) if (JSON.stringify(current[key]) !== JSON.stringify(discovered[key])) changed(path[0]);
   if (deliveryRows.some(row => row.facilityId !== discovered.deliveryRows.find(before => before.id === row.id)?.facilityId)) changed("deliveryId");

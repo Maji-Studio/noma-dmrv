@@ -412,7 +412,7 @@ export function ApplicationForm({
     await onSubmit({
       ...data,
       gisBoundary: data.evidenceMethod === "boundary" ? data.gisBoundary : null,
-    }, refuseSave, (record) => reset(valuesForRecord(record), { keepValues: true }));
+    }, refuseSave, (record) => reset(valuesForRecord(record), { keepValues: true, keepSubmitCount: true, keepIsSubmitted: true, keepDirty: true }));
   }));
 
   return (

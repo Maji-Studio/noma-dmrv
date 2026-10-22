@@ -1,6 +1,6 @@
 import { liveOutputMovementPredicate } from './output-stock-active-movements';
 import { readRecordDependents } from './record-lock-dependents';
-import { assertRecordLockFields, recordFieldEqual } from '@/lib/record-lock-fields';
+import { assertRecordLockFields, recordFieldEqual, withLockedFieldIssues } from '@/lib/record-lock-fields';
 import { recordLocks } from '@/lib/record-lock';
 import type { CaptureActivity } from "@/lib/activity-changes";
 import { deliveryDistanceSnapshot } from "./delivery-distance-snapshot";
@@ -189,7 +189,17 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
     if (!snapshot || snapshot.archivedAt) throw deliveryReferenceNotFound(['deliveryId'], 'Delivery');
     // Topology, request, bin, artifacts, active facility, delivery.
     await lockBinStock(ctx, tx, snapshot.storageLocationId, { allowArchived: true });
-    await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: deliveryId }, 'update'), 'certification_locked', ['deliveryId']);
+    const snapshotRows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
+    const snapshotIsLive = liveOutputMovementPredicate(snapshotRows.map(row => row.movement));
+    const snapshotMovement = snapshotRows.filter(row => snapshotIsLive(row.movement))
+      .sort((a, b) => a.movement.postingSequence > b.movement.postingSequence ? -1 : 1)[0]?.movement;
+    await withLockedFieldIssues(() => withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: deliveryId }, 'update'), 'certification_locked', ['deliveryId']), {
+      ...snapshot, sources: snapshotMovement?.inputSnapshot?.sources,
+    }, {
+      ...data, deliveryId: undefined,
+      distanceSource: resolveDeliveryDistanceSource(data.distanceKmOverride === undefined && data.distanceSource !== undefined ? snapshot.distanceKmOverride : data.distanceKmOverride, data.distanceSource),
+      distanceNote: data.distanceNote === '' ? null : data.distanceNote,
+    });
     await withFeedstockErrors(() => lockActiveFacilityReference(ctx, tx, snapshot.facilityId), 'not_found', ['deliveryId']);
     const [existing] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).for('update');
     if (!existing || existing.archivedAt) throw deliveryReferenceNotFound(['deliveryId'], 'Delivery');

@@ -1,4 +1,3 @@
-import { deriveSourceBiocharMassKg, fromCompositionMassJsonb } from "@/lib/biochar-composition/composition";
 import { readRecordDependents } from "./record-lock-dependents";
 import { assertRecordLockFields, recordFieldEqual, withLockedFieldIssues } from "@/lib/record-lock-fields";
 import { recordLocks } from "@/lib/record-lock";
@@ -60,7 +59,6 @@ export async function updateBiocharProductInTransaction(ctx: OrgContext, tx: DbT
   // Application allocation FKs take product KEY SHARE after artifact locks.
   await withLockedFieldIssues(() => withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: "biocharProduct", entityId: productId }, "update"), "certification_locked"), {
     ...product,
-    massKg: deriveSourceBiocharMassKg(product.massKg, fromCompositionMassJsonb(product.composition)),
     placedAt: product.placedAt.toISOString(),
   }, {
     ...data,

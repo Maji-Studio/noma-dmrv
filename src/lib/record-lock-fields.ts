@@ -11,9 +11,9 @@ export function recordFieldEqual(field: string, previous: unknown, next: unknown
 }
 
 /** Shared comparison for dependency locks and lineage refusals. */
-function changedRecordFields(previous: object, changes: object, freeFields: readonly string[] = []) {
+function changedRecordFields(previous: object, changes: object, freeFields: readonly string[] = [], includeSources = false) {
   const before = new Map(Object.entries(previous));
-  return Object.entries(changes).filter(([field, value]) => !RECORD_LOCK_CONTROL_FIELDS.has(field) && value !== undefined &&
+  return Object.entries(changes).filter(([field, value]) => (!RECORD_LOCK_CONTROL_FIELDS.has(field) || (includeSources && field === "sources")) && value !== undefined &&
     !freeFields.includes(field) && !recordFieldEqual(field, before.get(field), value));
 }
 
@@ -23,7 +23,7 @@ export async function withLockedFieldIssues<T>(work: () => Promise<T>, previous:
     return await work();
   } catch (error) {
     if (!(error instanceof DomainError) || error.code !== 'certification_locked') throw error;
-    const issues = changedRecordFields(previous, changes).map(([field]) => ({ path: [field], code: 'certification_locked', message: error.message }));
+    const issues = changedRecordFields(previous, changes, [], true).map(([field]) => ({ path: [field], code: 'certification_locked', message: error.message }));
     throw new DomainError(error.code, error.message, { ...error, issues: [...error.issues, ...issues], cause: error });
   }
 }

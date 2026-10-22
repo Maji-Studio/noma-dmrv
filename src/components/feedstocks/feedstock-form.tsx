@@ -328,6 +328,9 @@ export function FeedstockForm({
 
   const refuseSave = useSaveRefusal({ control, setError, formId, aliases: feedstockRefusalAliases(hasEditedAllocationMass),
     resetField: (field) => {
+      if (["transportDistanceKm", "transportDistanceSource", "distanceNote"].includes(field)) {
+        setOverriding(hasSavedOverride(savedOverride));
+      }
       // Both controls describe the same saved row in edit mode.
       if (isEditMode && (field === "totalWetMassKg" || String(field) === "allocations.0.allocatedWetMassKg")) {
         resetField("totalWetMassKg");

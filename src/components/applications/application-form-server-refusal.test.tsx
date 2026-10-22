@@ -159,7 +159,7 @@ it("restores the committed baseline after an update whose attachment upload fail
   view.rerender(form());
   expect(size().value).toBe("3.5");
   onSubmit.mockImplementation((_data, onRefusal) => onRefusal(lockRefusal("fieldSizeHa"), LOCK_REASON));
-  fireEvent.change(size(), { target: { value: "4" } });
+  // No further typing: the value typed during upload must remain dirty.
   fireEvent.submit(view.container.querySelector("form")!);
   await waitFor(() => expect(screen.getByText("Locked. Your change was not saved.")).toBeTruthy());
   expect(size().value).toBe("3");
@@ -178,4 +178,18 @@ it("keeps typed input when the same application is refetched while editing", () 
   fireEvent.change(size(), { target: { value: "4" } });
   view.rerender(form({ ...APPLICATION, fieldSizeHa: 3, version: 2 }));
   expect(size().value).toBe("4");
+});
+
+it("scrolls to the partial-save message again after a second committed update", async () => {
+  const client = new QueryClient();
+  const message = "Application updated, but 1 attachment failed to upload.";
+  const onSubmit = vi.fn((_data, _onRefusal, onCommitted) => onCommitted(APPLICATION));
+  const view = render(<QueryClientProvider client={client}><ApplicationForm application={APPLICATION} lock={OPEN_LOCK} deliveries={[DELIVERY]} onSubmit={onSubmit} errorMessage={message} /></QueryClientProvider>);
+  for (const attempt of [1, 2]) {
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+    fireEvent.submit(view.container.querySelector("form")!);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(attempt));
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
+    expect(screen.getByText(message)).toBeTruthy();
+  }
 });

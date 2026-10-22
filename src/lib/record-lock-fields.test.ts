@@ -30,3 +30,14 @@ it('preserves non-lock failures and successful results', async () => {
   await expect(withLockedFieldIssues(async () => { throw error; }, {}, { notes: 'new' })).rejects.toBe(error);
   await expect(withLockedFieldIssues(async () => 'saved', {}, {})).resolves.toBe('saved');
 });
+
+it('compares source selections for Sent refusals without changing dependency-lock policy', async () => {
+  const sources = [{ layerId: 'layer-1', moisturePercent: 10 }];
+  const error = new DomainError('certification_locked', 'Sent.');
+  const refuse = async () => { throw error; };
+  await expect(withLockedFieldIssues(refuse, { sources }, { sources: [...sources] })).rejects.toMatchObject({ issues: [] });
+  await expect(withLockedFieldIssues(refuse, { sources }, { sources: [{ ...sources[0], moisturePercent: 20 }] }))
+    .rejects.toMatchObject({ issues: [{ path: ['sources'] }] });
+  const lock = recordLocks.delivery({ removals: [], dependents: [{ kind: 'application', id: 'dependent' }] });
+  expect(() => assertRecordLockFields(lock, { sources }, { sources: [] })).not.toThrow();
+});

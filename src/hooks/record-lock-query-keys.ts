@@ -38,8 +38,8 @@ export const RECORD_LOCK_TOUCHES = {
 } as const satisfies Record<string, RecordLockTouch>;
 
 /** `meta` for a mutation hook: its writes and lock refusals refresh these lock reads. */
-export function recordLockMeta(touch: RecordLockTouch) {
-  return { recordLocks: touch };
+export function recordLockMeta(touch: RecordLockTouch | ((variables: unknown) => RecordLockTouch), options?: { onRefusalOnly?: boolean }) {
+  return { recordLocks: touch, recordLocksOnRefusalOnly: options?.onRefusalOnly };
 }
 
 function failedResult(data: unknown): boolean {
@@ -49,7 +49,7 @@ function failedResult(data: unknown): boolean {
 /**
  * MutationCache hook: after a write, refetch only the mounted lock reads of
  * the kinds it declared. Ordinary writes also refresh after a certification
- * lock refusal. Registry
+ * lock refusal. Refusal-only meta leaves every other outcome alone. Registry
  * writes (`"all"`) refresh on failure too: a failed or interrupted submission
  * can still leave a Removal holding its lineage.
  */
@@ -58,14 +58,18 @@ export function invalidateRecordLocksAfter(
   data: unknown,
   error: unknown,
   mutation: Pick<Mutation<unknown, unknown, unknown, unknown>, "meta">,
+  variables?: unknown,
 ) {
-  const touch = (mutation.meta as { recordLocks?: RecordLockTouch } | undefined)?.recordLocks;
+  const meta = mutation.meta as ReturnType<typeof recordLockMeta> | undefined;
+  const touch = typeof meta?.recordLocks === "function" ? meta.recordLocks(variables) : meta?.recordLocks;
   if (!touch) return;
+  const refused = isActionError(error) && error.code === "certification_locked";
+  if (meta?.recordLocksOnRefusalOnly && !refused) return;
   if (touch === "all") {
     void queryClient.invalidateQueries({ queryKey: recordLockKeys.all });
     return;
   }
-  if (isActionError(error) && error.code === "certification_locked") {
+  if (refused) {
     for (const kind of touch) void queryClient.invalidateQueries({ queryKey: recordLockKeys.kind(kind) });
     return;
   }
