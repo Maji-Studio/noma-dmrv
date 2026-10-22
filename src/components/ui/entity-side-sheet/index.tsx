@@ -307,9 +307,7 @@ function EntitySideSheet({
                 {editLabel}
               </Button>
             )}
-            <SlideOverPanel.Close>
-              <Button variant="default">Close</Button>
-            </SlideOverPanel.Close>
+            <SlideOverPanel.FooterClose />
           </SlideOverPanel.Footer>
         )}
 

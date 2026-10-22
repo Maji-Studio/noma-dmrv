@@ -9,7 +9,7 @@ vi.mock("@/components/ui/slide-over-panel", () => {
   const Wrapper = ({ children }: { children: ReactNode }) => <div>{children}</div>;
   return { SlideOverPanel: {
     Root: Wrapper, Content: Wrapper, Title: Wrapper, Description: Wrapper, Footer: Wrapper, Body: Wrapper, Header: Wrapper,
-    Close: ({ children }: { children: ReactNode }) => <span data-close onClick={onCloseClick}>{children}</span>,
+    FooterClose: () => <span data-close onClick={onCloseClick}><button data-variant="default">Close</button></span>,
   } };
 });
 vi.mock("@/components/ui/button", () => ({

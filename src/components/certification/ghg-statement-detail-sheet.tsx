@@ -404,9 +404,7 @@ function DetailState({
             Refresh
           </Button>
         )}
-        <SlideOverPanel.Close>
-          <Button variant="default">Close</Button>
-        </SlideOverPanel.Close>
+        <SlideOverPanel.FooterClose />
       </SlideOverPanel.Footer>
     </>
   );
@@ -415,9 +413,7 @@ function DetailState({
 function CloseFooter() {
   return (
     <SlideOverPanel.Footer>
-      <SlideOverPanel.Close>
-        <Button variant="default">Close</Button>
-      </SlideOverPanel.Close>
+      <SlideOverPanel.FooterClose />
     </SlideOverPanel.Footer>
   );
 }

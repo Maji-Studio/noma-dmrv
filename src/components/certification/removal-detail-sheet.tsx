@@ -362,9 +362,7 @@ export function RemovalDetailSheet({
                 {deleteCopy.actionLabel}
               </Button>
             )}
-            <SlideOverPanel.Close>
-              <Button variant="default">Close</Button>
-            </SlideOverPanel.Close>
+            <SlideOverPanel.FooterClose />
           </SlideOverPanel.Footer>
         </SlideOverPanel.Content>
       </SlideOverPanel.Root>

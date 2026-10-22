@@ -502,9 +502,7 @@ function EntityDetailPanel({
               {editLabel}
             </Button>
           )}
-          <SlideOverPanel.Close>
-            <Button variant="default">Close</Button>
-          </SlideOverPanel.Close>
+          <SlideOverPanel.FooterClose />
         </SlideOverPanel.Footer>
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
