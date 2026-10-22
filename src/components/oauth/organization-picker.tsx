@@ -75,7 +75,7 @@ export function OrganizationPicker() {
           description={isPlatformAdmin ? EMPTY_ADMIN_DESCRIPTION : EMPTY_DESCRIPTION} />
       ) : !usable ? (
         // Every membership has API access off (the only disabledReason the server sets), so there is nothing to choose.
-        <Notice tone="warning">{NONE_AVAILABLE}</Notice>
+        <Notice tone="error">{NONE_AVAILABLE}</Notice>
       ) : (
         <form ref={formRef} className="flex flex-col gap-24" onSubmit={event => { event.preventDefault(); submitChosen(); }}>
           <div>

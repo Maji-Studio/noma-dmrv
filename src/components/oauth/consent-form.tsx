@@ -59,6 +59,11 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
   const deciding = busy.held !== null;
 
   const submittedScopes = [...new Set<string>([...allowed, ...ticked])].filter((scope) => scope !== OFFLINE_ACCESS);
+  const showError = missing && submittedScopes.length === 0;
+  const showBoard = stepUp || preset === "custom";
+  const hasPegs = areas.some((area) => [area.read, area.write].some((scope) => scope && undecided.includes(scope)));
+  // A request with no readable area leaves the board without pegs, so the cards carry the error then.
+  const cardsInvalid = showError && (!showBoard || !hasPegs);
   const newAreas = new Set(stepUp ? areas.filter((area) => [area.read, area.write].some((scope) => scope && stepUpScopes.includes(scope))).map((area) => area.entity) : []);
 
   function choose(next: ConsentPreset) {
@@ -93,16 +98,19 @@ function ConsentBody({ view, oauthQuery }: { view: OAuthConsentView; oauthQuery:
     // The card names the app and its host, so the intro only adds where it will act.
     <OAuthCard title={`Allow ${clientName} to use noma?`} intro={`It wants to act for you in ${organization.name}.`}>
       <OAuthAppIdentity name={view.clientName} host={clientHost} redirectHost={redirectHost} />
-      <div ref={choicesRef} className="flex flex-col gap-24">
-      {!stepUp && (
-        <ConsentChoices clientName={clientName} readAreas={areas.filter((area) => area.read && undecidedReads.includes(area.read)).length}
-          writeAreas={writeAreas} value={preset} onChange={choose} disabled={deciding} />
-      )}
-      {(stepUp || preset === "custom") && (
-        <ConsentPegBoard areas={areas} allowed={allowed} undecided={undecided} newAreas={newAreas} ticked={ticked}
-          onChange={setTicked} clientName={clientName} disabled={deciding} />
-      )}
-      {missing && submittedScopes.length === 0 && <div className="-mt-18"><FormError id={errorId} message={NO_PERMISSION_ERROR} /></div>}
+      <div ref={choicesRef}>
+        <div className="flex flex-col gap-24">
+          {!stepUp && (
+            <ConsentChoices clientName={clientName} readAreas={areas.filter((area) => area.read && undecidedReads.includes(area.read)).length}
+              writeAreas={writeAreas} value={preset} onChange={choose} disabled={deciding}
+              error={cardsInvalid} errorId={cardsInvalid ? errorId : undefined} />
+          )}
+          {showBoard && (
+            <ConsentPegBoard areas={areas} allowed={allowed} undecided={undecided} newAreas={newAreas} ticked={ticked}
+              onChange={setTicked} clientName={clientName} disabled={deciding} invalid={showError} errorId={errorId} />
+          )}
+        </div>
+        <FormError id={errorId} message={showError ? NO_PERMISSION_ERROR : undefined} />
       </div>
       {offlineAccessRequested && (
         <p className="body-caption text-[var(--color-text-secondary)]">
