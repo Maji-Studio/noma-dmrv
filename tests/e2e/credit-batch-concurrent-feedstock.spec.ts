@@ -79,7 +79,7 @@ test("concurrent same-month credit batches keep separate feedstock cohorts and r
   try {
     const mapping = await seedCertifierMapping(seededData.facility.id, {
       externalProjectId: `e2e-concurrent-project-${tag}`,
-      defaultRemovalTemplateId: `e2e-concurrent-template-${tag}`,
+      removalTemplateId: `e2e-concurrent-template-${tag}`,
     });
     cleanups.push(mapping.cleanup);
 

@@ -181,31 +181,31 @@ function CertifierMappingFields({
           View on Isometric ↗
         </a>
       </Field>
-      <Field label="Default Removal template">
+      <Field label="Removal template">
         {resolvesNames ? (
           <>
             <span className="body-small">
               {templateName ??
                 // A selected ID with no name is not among Isometric's templates; no ID means no relation was chosen.
-                (mapping.defaultRemovalTemplateId
+                (mapping.removalTemplateId
                   ? NOT_FOUND_ON_ISOMETRIC
                   : MISSING_VALUE.notSet)}
             </span>
-            {mapping.defaultRemovalTemplateId && (
+            {mapping.removalTemplateId && (
               <span className="body-caption text-[var(--color-text-tertiary)]">
-                {mapping.defaultRemovalTemplateId}
+                {mapping.removalTemplateId}
               </span>
             )}
           </>
         ) : (
           <span
             className={
-              mapping.defaultRemovalTemplateId
+              mapping.removalTemplateId
                 ? "body-small font-mono"
                 : "body-small text-[var(--color-text-tertiary)]"
             }
           >
-            {mapping.defaultRemovalTemplateId ?? MISSING_VALUE.notSet}
+            {mapping.removalTemplateId ?? MISSING_VALUE.notSet}
           </span>
         )}
         {/* Chosen with its lines in Removal templates; shown here read-only. */}
@@ -304,9 +304,9 @@ function FacilityCertifierManage({
       )?.name ?? null)
     : null;
 
-  const templateName = data?.mapping?.defaultRemovalTemplateId
+  const templateName = data?.mapping?.removalTemplateId
     ? (data.availableTemplates.find(
-        (t) => t.id === data.mapping?.defaultRemovalTemplateId,
+        (t) => t.id === data.mapping?.removalTemplateId,
       )?.display_name ?? null)
     : null;
 

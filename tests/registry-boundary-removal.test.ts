@@ -246,7 +246,7 @@ async function createFixture(): Promise<Fixture> {
     facilityId: facility.id,
     provider: "isometric",
     externalProjectId,
-    defaultRemovalTemplateId: TEMPLATE_ID,
+    removalTemplateId: TEMPLATE_ID,
   });
   const [removal] = await insertRemovalFixture(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, provider: "isometric" });
   createdRemovalIds.push(removal.id);
@@ -311,7 +311,7 @@ function makeMapping(fixture: Fixture): CertifierProjectRow {
     externalProjectId: fixture.externalProjectId,
     protocolSlug: "biochar",
     protocolVersion: "1.2",
-    defaultRemovalTemplateId: TEMPLATE_ID,
+    removalTemplateId: TEMPLATE_ID,
     webhookSecret: null,
     metadata: null,
     defaultSoilTemperatureC: 24.2,

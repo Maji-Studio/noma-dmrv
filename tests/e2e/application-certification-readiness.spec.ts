@@ -105,7 +105,7 @@ async function expectRemovalReadyWithoutApplicationEvidence(
     checklist.getByRole("region", { name: /^Blocking/ }).getByRole("listitem"),
   ).toHaveCount(1, { timeout: COLD_COMPILE_TIMEOUT_MS });
   await expect(
-    checklist.getByText("Choose a Removal template for this credit batch."),
+    checklist.getByText("Set a Removal template in Settings, Removal templates."),
   ).toBeVisible();
   await expect(
     checklist.getByText("Application evidence", { exact: true }),

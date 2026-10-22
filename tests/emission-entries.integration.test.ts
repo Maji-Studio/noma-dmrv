@@ -754,7 +754,7 @@ it("uses the read model blocker for an unpinned batch", async () => {
   await db.update(creditBatches).set({ removalTemplateId: null })
     .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, lineage.batchId)));
   try {
-    await expect(create()).rejects.toThrow("Choose a Removal template for this credit batch.");
+    await expect(create()).rejects.toThrow("Set a Removal template in Settings, Removal templates.");
     await expect(loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId)).resolves.toEqual({
       status: "blocked", blocker: removalTemplateBlocker("unpinnedTemplate"),
     });

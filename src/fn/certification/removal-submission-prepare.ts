@@ -1,4 +1,5 @@
 import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
+import { removalTemplateTypeBlocker } from "@/lib/certification/listed-removal-template";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 /**
  * Removal submission preparation: the template and registry-connection gates
@@ -141,8 +142,9 @@ export function prepareRemovalSubmission(
   );
   // The template lives on Isometric and can change credit_type after binding;
   // a REDUCTION template must never mislabel a GHG entry.
-  if (removalTemplate.credit_type !== "REMOVAL") {
-    blockers.push(blocker("notRemovalTemplate"));
+  const typeBlocker = removalTemplateTypeBlocker(removalTemplate);
+  if (typeBlocker) {
+    blockers.push(blocker(typeBlocker));
   }
   if (ctx.unresolvedBlueprintKeys.length > 0) {
     blockers.push(blocker("templateOutOfDate"));

@@ -9,7 +9,7 @@ import {
 
 export type TemplateFixTarget = RemovalTemplateBlockerDestination;
 const TEMPLATE_FIX_TARGETS: ReadonlySet<string> = new Set<TemplateFixTarget>([
-  "creditBatchTemplate", "templateLineReview", "templateLines", "templateReplacement",
+  "templateSetup", "templateLineReview", "templateLines", "templateReplacement",
 ]);
 
 /** Delegates to the one routing table in `removal-template-blockers.ts`. */

@@ -198,7 +198,7 @@ describe("setupGapCopy", () => {
 
     expect(copy.message).toContain("1,000-year biochar sequestration");
     expect(copy.message).not.toContain("biochar_sequestration_1000_year");
-    expect(copy.message).toContain("Choose another default in Removal templates.");
+    expect(copy.message).toContain("Choose another Removal template in Settings.");
     expect(copy.action).toEqual({ label: "Open Removal templates", target: "removalTemplates" });
   });
 });
@@ -212,15 +212,15 @@ it("renders the unbindable component guidance and settings action", () => {
   for (const line of lines) expect(html).toContain(`<li>${line}</li>`);
   expect(html).not.toContain('class="whitespace-pre-line"');
   expect(html).toContain(removalTemplatesSettingsHref("facility-1").replaceAll("&", "&amp;"));
-  expect(html).toContain("Decide components");
+  expect(html).toContain("Answer in Settings");
   expect(html).not.toContain("Review certification settings");
 });
 
-it("sends template gaps about components to decide to Decide components", () => {
+it("sends template gaps about components to decide to Answer in Settings", () => {
   const inputs = findUnbindableTemplateInputs(unsupportedTemplate());
   const toDecide = [{ ...inputs[0], reason: "unassigned" as const }];
   expect(setupGapCopy({ kind: "template_unbindable", inputs: toDecide }).action)
-    .toEqual({ label: "Decide components", target: "removalTemplates" });
+    .toEqual({ label: "Answer in Settings", target: "removalTemplates" });
   expect(setupGapCopy({ kind: "template_unbindable", inputs: [{ ...inputs[0], reason: "unmapped" as const }] }).action)
     .toEqual({ label: "Open Removal templates", target: "removalTemplates" });
 });
@@ -232,7 +232,7 @@ it("directs a missing external facility ID to certification settings", () => {
   expect(copy.action?.target).toBe("certifier");
 });
 
-it("sends a missing default Removal template to Removal templates", () => {
-  const copy = setupGapCopy({ kind: "default_template" });
-  expect(copy.action).toEqual({ label: "Choose a default in Removal templates", target: "removalTemplates" });
+it("sends a missing Removal template to Settings", () => {
+  const copy = setupGapCopy({ kind: "removal_template" });
+  expect(copy.action).toEqual({ label: "Set the template in Settings", target: "removalTemplates" });
 });

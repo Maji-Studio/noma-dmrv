@@ -428,7 +428,7 @@ export interface SeededReadyBatch {
 /** createCreditBatch pins new batches to the facility default; raw inserts must too. */
 async function facilityDefaultRemovalTemplateId(tx: DbTransaction, facilityId: string): Promise<string | null> {
   const [project] = await tx
-    .select({ id: schema.certifierProjects.defaultRemovalTemplateId })
+    .select({ id: schema.certifierProjects.removalTemplateId })
     .from(schema.certifierProjects)
     .where(and(eq(schema.certifierProjects.organizationId, DEC_ORG_ID), eq(schema.certifierProjects.facilityId, facilityId)));
   return project?.id || null;

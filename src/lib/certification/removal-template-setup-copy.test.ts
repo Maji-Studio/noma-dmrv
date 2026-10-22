@@ -21,7 +21,7 @@ describe("removal template setup copy", () => {
 
   it("never falls back to another template when an explicit one is not offered", () => {
     const only = template("a", "A", { defaults: [startupDefault] });
-    expect(startState({ fitting: [only], templateId: "missing", step: "decisions" })).toEqual({ templateId: null, stepIndex: 0 });
+    expect(startState({ fitting: [only], templateId: "missing", step: "check" })).toEqual({ templateId: null, stepIndex: 0 });
   });
 
   it("tracks open decisions and the entries each answer creates", () => {
@@ -39,7 +39,7 @@ describe("removal template setup copy", () => {
     expect(startState({ fitting: [ready], templateId: null, step: null })).toEqual({ templateId: "a", stepIndex: 0 });
     expect(startState({ fitting: [asking], templateId: null, step: null })).toEqual({ templateId: "b", stepIndex: 0 });
     expect(startState({ fitting: [ready, asking], templateId: null, step: null })).toEqual({ templateId: null, stepIndex: 0 });
-    expect(startState({ fitting: [ready, asking], templateId: "b", step: "decisions" })).toEqual({ templateId: "b", stepIndex: 1 });
+    expect(startState({ fitting: [ready, asking], templateId: "b", step: "check" })).toEqual({ templateId: "b", stepIndex: 1 });
   });
 
   it("explains a linked template only when the list cannot show it", () => {

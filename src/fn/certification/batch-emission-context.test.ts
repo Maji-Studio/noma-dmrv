@@ -32,7 +32,7 @@ const template = {
     id: "line", display_name: "Lab electricity EU", blueprint_key: "grid_electricity_use",
     inputs: [{ input_key: "electricity_use", type: "monitored", quantity_kind: "energy" }],
   }] }],
-} as unknown as NonNullable<FacilityCertifierFacts["defaultTemplate"]>;
+} as unknown as NonNullable<FacilityCertifierFacts["currentTemplate"]>;
 const observation = { id: "current", externalTemplateId: template.id, definition: normalizeTemplateDefinition(template),
   enrichment: { line: { electricity_use: { unit: "kWh" } } },
   lineSources: { line: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } } };

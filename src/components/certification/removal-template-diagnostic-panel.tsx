@@ -116,7 +116,7 @@ const AVAILABILITY_COPY: Record<
   "template-not-selected": {
     title: "No active Removal template",
     description:
-      "Choose a default Removal template in Removal templates.",
+      "Choose a Removal template in Settings.",
   },
   "template-not-found": {
     title: "Active Removal template is missing",

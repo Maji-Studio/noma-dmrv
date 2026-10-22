@@ -43,7 +43,7 @@ export interface UpsertCertifierProjectInput {
   externalProjectId: string;
   protocolSlug?: string;
   protocolVersion?: string | null;
-  defaultRemovalTemplateId?: string | null;
+  removalTemplateId?: string | null;
   // Operator-pasted Isometric facility id (fcl_…).
   externalFacilityId: string;
   metadata?: Record<string, unknown> | null;
@@ -213,7 +213,7 @@ export async function upsertCertifierProject(
     externalProjectId: input.externalProjectId,
     protocolSlug: input.protocolSlug ?? DEFAULT_PROTOCOL_SLUG,
     protocolVersion: input.protocolVersion ?? null,
-    defaultRemovalTemplateId: input.defaultRemovalTemplateId ?? null,
+    removalTemplateId: input.removalTemplateId ?? null,
     externalFacilityId: input.externalFacilityId,
     metadata: input.metadata ?? null,
   };
@@ -327,11 +327,11 @@ export async function upsertCertifierProject(
                     else null
                   end`
                 : values.protocolVersion,
-            defaultRemovalTemplateId: input.defaultRemovalTemplateId === undefined
+            removalTemplateId: input.removalTemplateId === undefined
               ? existing?.externalProjectId === values.externalProjectId
-                ? existing.defaultRemovalTemplateId
+                ? existing.removalTemplateId
                 : null
-              : values.defaultRemovalTemplateId,
+              : values.removalTemplateId,
             externalFacilityId: values.externalFacilityId,
             metadata: values.metadata,
             updatedAt: sql`now()`,
@@ -359,16 +359,7 @@ export async function upsertCertifierProject(
   );
 }
 
-export async function updateFacilityDefaultRemovalTemplate(
-  ctx: OrgContext,
-  input: { facilityId: string; externalProjectId: string; removalTemplateId: string },
-): Promise<CertifierProjectRow> {
-  requireOrgScope(ctx);
-  requireOrgRole(ctx, "admin");
-  return db.transaction((tx) => updateFacilityDefaultRemovalTemplateInTransaction(ctx, tx, input));
-}
-
-export async function updateFacilityDefaultRemovalTemplateInTransaction(
+export async function updateFacilityRemovalTemplateInTransaction(
   ctx: OrgContext, tx: DbTransaction,
   input: { facilityId: string; externalProjectId: string; removalTemplateId: string },
 ): Promise<CertifierProjectRow> {
@@ -381,7 +372,7 @@ export async function updateFacilityDefaultRemovalTemplateInTransaction(
   )).for("share");
   if (!facility) throw new SafeError("Facility not found or archived.");
   const [row] = await tx.update(certifierProjects).set({
-    defaultRemovalTemplateId: input.removalTemplateId, updatedAt: sql`now()`,
+    removalTemplateId: input.removalTemplateId, updatedAt: sql`now()`,
   }).where(and(
     eq(certifierProjects.organizationId, ctx.organizationId),
     eq(certifierProjects.facilityId, input.facilityId),

@@ -44,7 +44,7 @@ type Source = "fixture" | "db";
 const facilityFixtureSchema = z.object({
   label: z.string().min(1),
   externalProjectId: z.string().min(1),
-  defaultRemovalTemplateId: z.string().min(1),
+  removalTemplateId: z.string().min(1),
 });
 
 const fixtureFileSchema = z.object({
@@ -101,17 +101,17 @@ async function loadFromDb(): Promise<FacilityFixtureEntry[]> {
       facilityId: certifierProjects.facilityId,
       facilityCode: facilities.code,
       externalProjectId: certifierProjects.externalProjectId,
-      defaultRemovalTemplateId: certifierProjects.defaultRemovalTemplateId,
+      removalTemplateId: certifierProjects.removalTemplateId,
     })
     .from(certifierProjects)
     .innerJoin(facilities, eq(certifierProjects.facilityId, facilities.id));
 
-  const usableProjects = projects.filter((p) => p.defaultRemovalTemplateId);
+  const usableProjects = projects.filter((p) => p.removalTemplateId);
 
   return usableProjects.map((p) => ({
     label: p.facilityCode ?? p.facilityId,
     externalProjectId: p.externalProjectId,
-    defaultRemovalTemplateId: p.defaultRemovalTemplateId!,
+    removalTemplateId: p.removalTemplateId!,
   }));
 }
 
@@ -140,14 +140,14 @@ async function main(): Promise<void> {
 
   for (const facility of facilities) {
     console.log(
-      `\n[${facility.label}] project=${facility.externalProjectId} template=${facility.defaultRemovalTemplateId}`,
+      `\n[${facility.label}] project=${facility.externalProjectId} template=${facility.removalTemplateId}`,
     );
 
     let template;
     try {
       const templates = await listGhgEntryTemplates(client, facility.externalProjectId);
       template = templates.find(
-        (t) => t.id === facility.defaultRemovalTemplateId,
+        (t) => t.id === facility.removalTemplateId,
       );
     } catch (err) {
       console.error(
@@ -159,7 +159,7 @@ async function main(): Promise<void> {
     }
     if (!template) {
       console.error(
-        `  ✗ Template ${facility.defaultRemovalTemplateId} not found in project.`,
+        `  ✗ Template ${facility.removalTemplateId} not found in project.`,
       );
       failed += 1;
       printSummary(0, 0, 0, 1);

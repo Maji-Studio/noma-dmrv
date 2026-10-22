@@ -166,6 +166,16 @@ export async function getCertifiedLineage(
   return lineageQuery(ctx, tx, target, true);
 }
 
+/** Advisory read from saved registry facts only: no registry calls, so it stays cheap inside an open transaction. */
+export async function getSavedCertifiedLineage(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  target: CertifiedLineageTarget,
+) {
+  requireOrgScope(ctx);
+  return lineageQuery(ctx, tx, target, false);
+}
+
 type LineageRow = Awaited<ReturnType<ReturnType<typeof lineageQueryWhere>["execute"]>>[number];
 export type LockedCertifiedLineageRow = LineageRow & { recordLockRemoval: RecordLockRemoval };
 

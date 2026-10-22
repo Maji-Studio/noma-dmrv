@@ -128,21 +128,21 @@ describe("SubmissionSummary", () => {
     const html = render({
       compilation: {
         ...COMPILATION,
-        blockers: ["Choose a Removal template for this credit batch.", "Complete these fields before submitting the Removal:\nRecord Sample moisture"],
+        blockers: ["Set a Removal template in Settings, Removal templates.", "Complete these fields before submitting the Removal:\nRecord Sample moisture"],
         removalBlockers: [
-          { code: "unpinnedTemplate", message: "Choose a Removal template for this credit batch.", fixTarget: "creditBatchTemplate" },
+          { code: "unpinnedTemplate", message: "Set a Removal template in Settings, Removal templates.", fixTarget: "templateSetup" },
           { code: "entityReadiness", message: "Complete these fields before submitting the Removal:\nRecord Sample moisture", fixTarget: null },
         ],
         snapshot: null,
         compilationHash: null,
       } as unknown as RemovalCompilationView,
     });
-    expect(html).toContain("Choose a Removal template for this credit batch.");
-    expect(html).toContain("Switch template");
+    expect(html).toContain("Set a Removal template in Settings, Removal templates.");
+    expect(html).toContain("Set template");
     expect(html).toContain("Record Sample moisture");
-    expect(html.split("Switch template")).toHaveLength(2);
+    expect(html.split("Set template")).toHaveLength(2);
     expect(html).not.toContain("#batch-details");
-    expect(html).not.toContain("Decide components");
+    expect(html).not.toContain("Answer in Settings");
   });
 
   it("sends a per-record blocker to the records list, not a create intent, with one member batch", () => {

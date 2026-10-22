@@ -127,7 +127,7 @@ function mapping(
     externalProjectId: EXTERNAL_PROJECT_ID,
     protocolSlug: "biochar",
     protocolVersion: "1.2",
-    defaultRemovalTemplateId: null,
+    removalTemplateId: null,
     webhookSecret: null,
     metadata: null,
     createdAt: new Date(),
@@ -180,12 +180,12 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     mockedLoadAccounting.mockImplementation(async (...args) => {
       const rows = await loadRollups(...args);
       const project = await mockedGetMapping(args[0], FACILITY_ID, "isometric");
-      for (const row of Object.values(rows)) row.batch.removalTemplateId = project?.defaultRemovalTemplateId ?? null;
+      for (const row of Object.values(rows)) row.batch.removalTemplateId = project?.removalTemplateId ?? null;
       return rows;
     });
     vi.mocked(listPinnedRemovalTemplateIds).mockImplementation(async () => {
       const project = await mockedGetMapping(makeTestOrgContext(USER_ID), FACILITY_ID, "isometric");
-      return project?.defaultRemovalTemplateId ? [project.defaultRemovalTemplateId] : [];
+      return project?.removalTemplateId ? [project.removalTemplateId] : [];
     });
     vi.mocked(observeRemovalTemplate).mockImplementation(async (_ctx, input) => ({
       definition: normalizeTemplateDefinition(input.template), lineSources: reviewedTemplateSources(input.template),
@@ -311,7 +311,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
 
   it("returns an unpinned blocker without remote calls when the default and batch pin are absent", async () => {
     mockedGetMapping.mockResolvedValue(
-      mapping({ defaultRemovalTemplateId: null }),
+      mapping({ removalTemplateId: null }),
     );
     mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
     mockedListTemplates.mockResolvedValue([template("rvt_1")]);
@@ -340,7 +340,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(
-      mapping({ defaultRemovalTemplateId: null }),
+      mapping({ removalTemplateId: null }),
     );
     mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
     mockedListTemplates.mockResolvedValue([template("rvt_1")]);
@@ -414,7 +414,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(
-      mapping({ defaultRemovalTemplateId: null }),
+      mapping({ removalTemplateId: null }),
     );
     mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
     mockedListTemplates.mockResolvedValue([template("rvt_1")]);
@@ -473,7 +473,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       id: CREDIT_BATCH_ID, code: "CB-1", facilityId: FACILITY_ID,
       productionRunIds: ["pr-1"], durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
-    mockedGetMapping.mockResolvedValue(mapping({ defaultRemovalTemplateId: "tpl_ready" }));
+    mockedGetMapping.mockResolvedValue(mapping({ removalTemplateId: "tpl_ready" }));
     mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
     mockedListTemplates.mockResolvedValue([template("tpl_ready")]);
     mockedListBlueprints.mockResolvedValue([]);
@@ -511,9 +511,9 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     for (const fn of readingsFunctions) expect(fn).not.toHaveBeenCalled();
   });
 
-  it("flags missingDefaultTemplateId when the saved template is not in the list (drift)", async () => {
+  it("flags missingCurrentTemplateId when the saved template is not in the list (drift)", async () => {
     mockedGetMapping.mockResolvedValue(
-      mapping({ defaultRemovalTemplateId: "rvt_stale" }),
+      mapping({ removalTemplateId: "rvt_stale" }),
     );
     mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
     mockedListTemplates.mockResolvedValue([template("rvt_other")]);
@@ -532,7 +532,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
 
   it("reports unresolvedBlueprintKeys when the catalog is missing keys referenced by the template", async () => {
     mockedGetMapping.mockResolvedValue(
-      mapping({ defaultRemovalTemplateId: "rvt_resolved" }),
+      mapping({ removalTemplateId: "rvt_resolved" }),
     );
     mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
     mockedListTemplates.mockResolvedValue([
@@ -555,7 +555,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
 
   it("accepts the explicitly-bound 1000-year sequestration component when its exact key is absent from the catalog", async () => {
     mockedGetMapping.mockResolvedValue(
-      mapping({ defaultRemovalTemplateId: "rvt_resolved" }),
+      mapping({ removalTemplateId: "rvt_resolved" }),
     );
     mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
     mockedListTemplates.mockResolvedValue([
@@ -580,7 +580,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
 
   it("returns the fully-resolved shape when project, template, and blueprints all resolve", async () => {
     mockedGetMapping.mockResolvedValue(
-      mapping({ defaultRemovalTemplateId: "rvt_resolved" }),
+      mapping({ removalTemplateId: "rvt_resolved" }),
     );
     mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
     mockedListTemplates.mockResolvedValue([
@@ -625,7 +625,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       productionRunIds: ["pr-1"],
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(
-      mapping({ defaultRemovalTemplateId: "rvt_resolved" }),
+      mapping({ removalTemplateId: "rvt_resolved" }),
     );
     mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
     const resolvedTemplate = template("rvt_resolved", [storageKey]);
@@ -733,12 +733,12 @@ describe("requiredTransportCategories", () => {
     mockedLoadAccounting.mockImplementation(async (...args) => {
       const rows = await loadRollups(...args);
       const project = await mockedGetMapping(args[0], FACILITY_ID, "isometric");
-      for (const row of Object.values(rows)) row.batch.removalTemplateId = project?.defaultRemovalTemplateId ?? null;
+      for (const row of Object.values(rows)) row.batch.removalTemplateId = project?.removalTemplateId ?? null;
       return rows;
     });
     vi.mocked(listPinnedRemovalTemplateIds).mockImplementation(async () => {
       const project = await mockedGetMapping(makeTestOrgContext(USER_ID), FACILITY_ID, "isometric");
-      return project?.defaultRemovalTemplateId ? [project.defaultRemovalTemplateId] : [];
+      return project?.removalTemplateId ? [project.removalTemplateId] : [];
     });
     vi.mocked(observeRemovalTemplate).mockImplementation(async (_ctx, input) => ({
       definition: normalizeTemplateDefinition(input.template), lineSources: reviewedTemplateSources(input.template),
@@ -768,7 +768,7 @@ describe("requiredTransportCategories", () => {
 
   it("collects only feedstock and biochar when the template also requests sample shipping", async () => {
     mockedGetMapping.mockResolvedValue(
-      mapping({ defaultRemovalTemplateId: "tpl_full" }),
+      mapping({ removalTemplateId: "tpl_full" }),
     );
     mockedListTemplates.mockResolvedValue([transportTemplate("tpl_full")]);
 
@@ -784,7 +784,7 @@ describe("requiredTransportCategories", () => {
 
   it("returns a subset when the template omits a transport group", async () => {
     mockedGetMapping.mockResolvedValue(
-      mapping({ defaultRemovalTemplateId: "tpl_no_sample" }),
+      mapping({ removalTemplateId: "tpl_no_sample" }),
     );
     mockedListTemplates.mockResolvedValue([
       transportTemplate("tpl_no_sample", ["sample"]),
@@ -809,7 +809,7 @@ describe("requiredTransportCategories", () => {
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(
-      mapping({ defaultRemovalTemplateId: "tpl_no_sample" }),
+      mapping({ removalTemplateId: "tpl_no_sample" }),
     );
     mockedListTemplates.mockResolvedValue([
       transportTemplate("tpl_no_sample", ["sample"]),
@@ -892,7 +892,7 @@ describe("requiredTransportCategories", () => {
       durabilityOption: "1000_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(
-      mapping({ defaultRemovalTemplateId: "tpl_ready" }),
+      mapping({ removalTemplateId: "tpl_ready" }),
     );
     mockedListTemplates.mockResolvedValue([transportTemplate("tpl_ready", [])]);
     mockedListBlueprints.mockResolvedValue([]);
@@ -971,7 +971,7 @@ describe("requiredTransportCategories", () => {
 
   it("returns an empty list when the template has no transport inputs", async () => {
     mockedGetMapping.mockResolvedValue(
-      mapping({ defaultRemovalTemplateId: "tpl_none" }),
+      mapping({ removalTemplateId: "tpl_none" }),
     );
     mockedListTemplates.mockResolvedValue([
       transportTemplate("tpl_none", ["feedstock", "biochar", "sample"]),
@@ -986,7 +986,7 @@ describe("requiredTransportCategories", () => {
 
   it("returns an empty list when there is no resolved template", async () => {
     mockedGetMapping.mockResolvedValue(
-      mapping({ defaultRemovalTemplateId: null }),
+      mapping({ removalTemplateId: null }),
     );
     mockedListTemplates.mockResolvedValue([]);
 

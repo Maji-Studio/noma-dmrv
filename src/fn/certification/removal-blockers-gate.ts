@@ -14,7 +14,7 @@ import { assertEntityReadinessGapsResolved, buildRemovalSubmissionBuild } from "
 
 function preparationBlocker(blocker: RemovalPreparationBlocker): RemovalBlocker {
   if (blocker.code === "noTemplate") {
-    return { code: "unpinnedTemplate", message: blocker.message, fixTarget: "creditBatchTemplate" };
+    return { code: "unpinnedTemplate", message: blocker.message, fixTarget: "templateSetup" };
   }
   if (Object.hasOwn(REMOVAL_TEMPLATE_BLOCKERS, blocker.code)) {
     const code = blocker.code as RemovalTemplateBlockerCode;
@@ -47,11 +47,11 @@ export function collectContextRemovalBlockers(
   }
   const { prepared } = preparation;
   if (!prepared) {
-    blockers.push(...(preparation.blockers.length ? preparation.blockers.map(preparationBlocker) : [legacyBlocker(REMOVAL_PREPARATION_BLOCKERS.noTemplate, "creditBatchTemplate")]));
+    blockers.push(...(preparation.blockers.length ? preparation.blockers.map(preparationBlocker) : [legacyBlocker(REMOVAL_PREPARATION_BLOCKERS.noTemplate, "templateSetup")]));
   } else {
     blockers.push(...preparation.blockers.filter((blocker) => blocker.code !== "durabilityUnavailable").map(preparationBlocker));
     const tierBlocker = removalTemplateTierCompatibilityBlocker(ctx, prepared.removalTemplate);
-    if (tierBlocker) blockers.push({ code: "durabilityTier", message: tierBlocker, fixTarget: "creditBatchTemplate" });
+    if (tierBlocker) blockers.push({ code: "durabilityTier", message: tierBlocker, fixTarget: "templateSetup" });
     blockers.push(...preparation.blockers.filter((blocker) => blocker.code === "durabilityUnavailable").map(preparationBlocker));
     if (prepared.hasDurabilityComponents) {
       blockers.push(...durabilityConfigurationBlockers(ctx.batchesWithSamples).map((message) => ({ code: "durabilityConfiguration" as const, message, fixTarget: "batchDetails" as const })));
@@ -74,7 +74,7 @@ export async function evaluateRemovalBlockers(args: {
   // this attempt. Keep its existing first-failure semantics only on a clear prefix.
   if (blockers.length) return blockers;
   const { prepared } = prepareRemovalSubmission(args.ctx);
-  if (!prepared) return [legacyBlocker(REMOVAL_PREPARATION_BLOCKERS.noTemplate, "creditBatchTemplate")];
+  if (!prepared) return [legacyBlocker(REMOVAL_PREPARATION_BLOCKERS.noTemplate, "templateSetup")];
   const inputs = await getProductionBatchRegistryInputs(args.orgCtx, args.ctx.memberBatches.map(batch => batch.id));
   const undeletableHolders = await getCreditBatchUndeletableRemovalCodes(
     args.orgCtx, inputs.map(input => input.creditBatchId),

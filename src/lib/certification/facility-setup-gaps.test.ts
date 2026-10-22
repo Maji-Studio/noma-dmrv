@@ -10,8 +10,8 @@ import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/st
 const COMPLETE = {
   hasOrgCredentials: true,
   mapping: { id: "map_1", externalFacilityId: "fcl_1" },
-  defaultTemplate: { id: "rvt_1" },
-  missingDefaultTemplateId: null,
+  currentTemplate: { id: "rvt_1" },
+  missingCurrentTemplateId: null,
   unbindableTemplateInputs: [],
   unresolvedBlueprintKeys: [] as string[],
 };
@@ -26,7 +26,7 @@ describe("deriveFacilitySetupGaps", () => {
       deriveFacilitySetupGaps({
         ...COMPLETE,
         mapping: null,
-        defaultTemplate: null,
+        currentTemplate: null,
       }),
     ).toEqual([{ kind: "project_link" }]);
   });
@@ -36,7 +36,7 @@ describe("deriveFacilitySetupGaps", () => {
       deriveFacilitySetupGaps({
         ...COMPLETE,
         hasOrgCredentials: false,
-        defaultTemplate: null,
+        currentTemplate: null,
       }),
     ).toEqual([{ kind: "credentials" }]);
   });
@@ -49,7 +49,7 @@ describe("deriveFacilitySetupGaps", () => {
         ...COMPLETE,
         hasOrgCredentials: false,
         mapping: null,
-        defaultTemplate: null,
+        currentTemplate: null,
       }),
     ).toEqual([{ kind: "credentials" }]);
   });
@@ -58,22 +58,22 @@ describe("deriveFacilitySetupGaps", () => {
     expect(deriveFacilitySetupGaps({
       ...COMPLETE,
       mapping: { externalFacilityId },
-      defaultTemplate: null,
+      currentTemplate: null,
     })).toEqual([{ kind: "external_facility_id" }]);
   });
 
   it("reports an unset default template", () => {
     expect(
-      deriveFacilitySetupGaps({ ...COMPLETE, defaultTemplate: null }),
-    ).toEqual([{ kind: "default_template" }]);
+      deriveFacilitySetupGaps({ ...COMPLETE, currentTemplate: null }),
+    ).toEqual([{ kind: "removal_template" }]);
   });
 
   it("reports a configured template that no longer resolves, with its id", () => {
     expect(
       deriveFacilitySetupGaps({
         ...COMPLETE,
-        defaultTemplate: null,
-        missingDefaultTemplateId: "rvt_gone",
+        currentTemplate: null,
+        missingCurrentTemplateId: "rvt_gone",
       }),
     ).toEqual([{ kind: "template_resolution", templateId: "rvt_gone" }]);
   });
@@ -112,8 +112,8 @@ it("reports unbindable inputs after blueprint resolution", () => {
 
 describe("grouping connection prerequisites", () => {
   it.each([
-    { defaultTemplate: null },
-    { missingDefaultTemplateId: "deleted" },
+    { currentTemplate: null },
+    { missingCurrentTemplateId: "deleted" },
     { unresolvedBlueprintKeys: ["unknown"] },
     { unbindableTemplateInputs: findUnbindableTemplateInputs(unsupportedTemplate()) },
   ])("ignores default-template setup advice (%j)", (override) => {

@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { db } from "@/db";
+import { createCreditBatch } from "@/data-access/credit-batches";
 import { activityEvents, certifierProjects, creditBatches, facilities, feedstockTypes, productionProcesses, removalTemplateObservations, users } from "@/db/schema";
 import { applyRemovalTemplateSetup, loadRemovalTemplateSetup } from "@/fn/certification/removal-template-setup";
 import { requireOrgContext } from "@/lib/auth/server";
@@ -27,7 +28,11 @@ let productionProcessId: string;
 let template: ReturnType<typeof protocolDefaultFixture>;
 let secondAdminId: string | null;
 const scope = () => and(eq(certifierProjects.organizationId, ctx.organizationId), eq(certifierProjects.facilityId, facilityId));
-beforeAll(async () => { await ensureTestOrg(); });
+beforeAll(async () => {
+  await ensureTestOrg();
+  // Apply records who reviewed the decisions; the reviewer must exist even when this file runs alone.
+  await db.insert(users).values({ id: ctx.userId, email: `${ctx.userId}@example.test` }).onConflictDoNothing();
+});
 beforeEach(async () => {
   vi.clearAllMocks();
   secondAdminId = null;
@@ -71,14 +76,14 @@ async function input(): Promise<ApplyRemovalTemplateSetupInput> {
   if (!result.success) throw new Error(result.error);
   const entry = result.data.fitting[0];
   return { facilityId, removalTemplateId: template.id, fingerprints: { semanticFingerprint: entry.semanticFingerprint, fullFingerprint: entry.fullFingerprint },
-    planFingerprint: entry.planFingerprint, answers: Object.fromEntries(entry.plan.decisions.map((decision) => [decision.id, decision.options[0].id])), overrides: {}, makeDefault: true, batches: [] };
+    planFingerprint: entry.planFingerprint, answers: Object.fromEntries(entry.plan.decisions.map((decision) => [decision.id, decision.options[0].id])), overrides: {}, batchVersions: result.data.batchVersions };
 }
 async function batch() {
   const [row] = await db.insert(creditBatches).values({ organizationId: ctx.organizationId, facilityId, feedstockTypeId, productionProcessId, code: `CB-${randomUUID()}`, startDate: "2026-01-01", endDate: "2026-01-31" }).returning();
   return row;
 }
 async function expectUnapplied() {
-  expect((await db.select().from(certifierProjects).where(scope()))[0].defaultRemovalTemplateId).toBeNull();
+  expect((await db.select().from(certifierProjects).where(scope()))[0].removalTemplateId).toBeNull();
   const rows = await db.select().from(removalTemplateObservations).where(and(eq(removalTemplateObservations.organizationId, ctx.organizationId), eq(removalTemplateObservations.externalTemplateId, template.id)));
   expect(rows.every((row) => !Object.values(row.lineSources).some((source) => source.origin === "reviewed"))).toBe(true);
   expect(await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.facilityId, facilityId)))).toHaveLength(0);
@@ -119,7 +124,6 @@ it("refuses a stale default-only preview after a second Admin changes a choice, 
   pyrolysis.components = [electricity];
   const row = await batch();
   const planned = await input();
-  planned.batches = [{ id: row.id, expectedVersion: row.version }];
   expect(planned.answers).toEqual({});
   const observationScope = and(eq(removalTemplateObservations.organizationId, ctx.organizationId), eq(removalTemplateObservations.externalTemplateId, template.id));
   // The first preview has no stored observation to use as a version precondition.
@@ -135,7 +139,7 @@ it("refuses a stale default-only preview after a second Admin changes a choice, 
   expect(reviewed.lineSources[electricity.id]).toMatchObject({ scope: "operating", entryPolicy: "additive", origin: "reviewed" });
   expect(reviewed.lineSources[electricity.id].automaticSource).toBeUndefined();
   const [mapping] = await db.select().from(certifierProjects).where(scope());
-  expect(mapping.defaultRemovalTemplateId).toBe(template.id);
+  expect(mapping.removalTemplateId).toBe(template.id);
 
   vi.mocked(requireOrgContext).mockResolvedValue({ ...ctx, orgRole: "admin" });
   expect(await applyRemovalTemplateSetup(planned)).toMatchObject({ success: false, code: "stale_version", conflict: { entity: "removal_template_observation" } });
@@ -144,23 +148,43 @@ it("refuses a stale default-only preview after a second Admin changes a choice, 
   expect(after.version).toBe(reviewed.version);
   expect((await db.select().from(certifierProjects).where(scope()))[0]).toEqual(mapping);
   const [unpinned] = await db.select().from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, row.id)));
-  expect(unpinned.removalTemplateId).toBeNull();
-  expect(unpinned.version).toBe(row.version);
-  expect(await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.facilityId, facilityId)))).toHaveLength(0);
+  expect(unpinned.removalTemplateId).toBe(template.id);
+  expect(unpinned.version).toBe(row.version + 1);
+  expect(await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.facilityId, facilityId)))).toHaveLength(1);
 });
-it("a batch held by a Removal rolls back default and decisions", async () => {
+it("keeps a sent Removal's batch and switches both an unassigned and an older-template batch", async () => {
   await withLineageFixture(async (fixture) => {
     const originalFacility = facilityId;
     facilityId = fixture.facilityId;
     await db.insert(certifierProjects).values({ organizationId: ctx.organizationId, facilityId, provider: "isometric", externalProjectId: template.project_id, externalFacilityId: `fcl_${randomUUID()}` });
+    const extraIds: string[] = [];
     try {
-      await db.update(creditBatches).set({ removalTemplateId: null }).where(eq(creditBatches.id, fixture.batchId));
+      await db.update(creditBatches).set({ removalTemplateId: "sent-template" }).where(eq(creditBatches.id, fixture.batchId));
       const [held] = await db.select().from(creditBatches).where(eq(creditBatches.id, fixture.batchId));
+      const rows = await db.insert(creditBatches).values([null, "older-template"].map((removalTemplateId) => ({
+        organizationId: ctx.organizationId, facilityId, feedstockTypeId: fixture.feedstockTypeId,
+        productionProcessId: fixture.productionProcessId, code: `CB-${randomUUID()}`,
+        startDate: "2026-01-01", endDate: "2026-01-31", removalTemplateId,
+      }))).returning();
+      extraIds.push(...rows.map((row) => row.id));
       const planned = await input();
-      planned.batches = [{ id: held.id, expectedVersion: held.version }];
-      expect(await applyRemovalTemplateSetup(planned)).toMatchObject({ success: false, code: "certification_locked" });
-      await expectUnapplied();
+      const preview = await loadRemovalTemplateSetup(facilityId);
+      if (!preview.success) throw new Error(preview.error);
+      expect(preview.data.fitting[0].batchesThatSwitch.map((row) => row.id).sort()).toEqual([...extraIds].sort());
+      expect(preview.data.fitting[0].batchesKept).toEqual([{ id: held.id, code: held.code, templateName: null, reason: "removalSent" }]);
+      expect(await applyRemovalTemplateSetup(planned)).toMatchObject({ success: true, data: {
+        batchesUpdated: 2, batchesKept: [{ id: held.id, code: held.code, reason: "removalSent" }],
+      } });
+      expect((await db.select().from(certifierProjects).where(scope()))[0].removalTemplateId).toBe(template.id);
+      const stored = await db.select().from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId)));
+      expect(stored.find((row) => row.id === held.id)).toEqual(held);
+      for (const row of rows) expect(stored.find((batch) => batch.id === row.id)).toMatchObject({ removalTemplateId: template.id, version: row.version + 1 });
+      const events = await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.facilityId, facilityId)));
+      expect(events).toHaveLength(2);
+      expect(events.every((event) => extraIds.includes(event.entityId) && event.changedFields?.includes("removalTemplateId"))).toBe(true);
     } finally {
+      await db.delete(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.facilityId, facilityId)));
+      for (const id of extraIds) await db.delete(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, id)));
       await db.delete(certifierProjects).where(scope());
       facilityId = originalFacility;
     }
@@ -169,7 +193,6 @@ it("a batch held by a Removal rolls back default and decisions", async () => {
 it("a pin added after load is stale even when the version was not incremented", async () => {
   const row = await batch();
   const planned = await input();
-  planned.batches = [{ id: row.id, expectedVersion: row.version }];
   await db.update(creditBatches).set({ removalTemplateId: "other-template" }).where(eq(creditBatches.id, row.id));
   expect(await applyRemovalTemplateSetup(planned)).toMatchObject({ success: false, code: "stale_version", conflict: { id: row.id } });
   await expectUnapplied();
@@ -177,9 +200,8 @@ it("a pin added after load is stale even when the version was not incremented", 
 it("makes the template ready, sets the default and pins N batches with N events", async () => {
   const rows = [await batch(), await batch()];
   const planned = await input();
-  planned.batches = rows.map(({ id, version }) => ({ id, expectedVersion: version }));
   expect(await applyRemovalTemplateSetup(planned)).toMatchObject({ success: true, data: { batchesUpdated: rows.length } });
-  expect((await db.select().from(certifierProjects).where(scope()))[0].defaultRemovalTemplateId).toBe(template.id);
+  expect((await db.select().from(certifierProjects).where(scope()))[0].removalTemplateId).toBe(template.id);
   const [observation] = await db.select().from(removalTemplateObservations).where(and(eq(removalTemplateObservations.organizationId, ctx.organizationId), eq(removalTemplateObservations.externalTemplateId, template.id)));
   expect(validateLineSources(observation.definition, observation.lineSources)).toEqual([]);
   expect(Object.values(observation.lineSources).every((source) => source.origin === "reviewed")).toBe(true);
@@ -191,4 +213,60 @@ it("makes the template ready, sets the default and pins N batches with N events"
   const events = await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.facilityId, facilityId)));
   expect(events).toHaveLength(rows.length);
   expect(new Set(events.map((event) => event.entityId))).toEqual(new Set(rows.map((row) => row.id)));
+});
+it("rolls back setup for a stale mutable batch version", async () => {
+  const row = await batch();
+  const planned = await input();
+  await db.update(creditBatches).set({ version: row.version + 1 }).where(eq(creditBatches.id, row.id));
+  expect(await applyRemovalTemplateSetup(planned)).toMatchObject({ success: false, code: "stale_version", conflict: { id: row.id } });
+  await expectUnapplied();
+});
+
+it("keeps archived and already-current batches without activity or version changes", async () => {
+  const archived = await batch();
+  const current = await batch();
+  await db.update(creditBatches).set({ archivedAt: new Date(), removalTemplateId: "older-template" }).where(eq(creditBatches.id, archived.id));
+  await db.update(creditBatches).set({ removalTemplateId: template.id }).where(eq(creditBatches.id, current.id));
+  const planned = await input();
+  expect(await applyRemovalTemplateSetup(planned)).toMatchObject({ success: true, data: {
+    batchesUpdated: 0, batchesKept: [{ id: archived.id, reason: "archived" }],
+  } });
+  const rows = await db.select().from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId)));
+  expect(rows.find((row) => row.id === archived.id)).toMatchObject({ removalTemplateId: "older-template", version: archived.version });
+  expect(rows.find((row) => row.id === current.id)).toMatchObject({ removalTemplateId: template.id, version: current.version });
+  expect(await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.facilityId, facilityId)))).toHaveLength(0);
+});
+
+it("a credit batch created while Set template holds the project row waits and ends on the new template", async () => {
+  // Setup's UPDATE of certifier_projects is simulated by a held update on the same row; the
+  // create must queue behind it (FOR SHARE) and then read the committed template.
+  let release!: () => void;
+  let locked!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  const lockTaken = new Promise<void>((resolve) => { locked = resolve; });
+  const setup = db.transaction(async (tx) => {
+    await tx.update(certifierProjects).set({ removalTemplateId: template.id }).where(scope());
+    locked();
+    await held;
+  });
+  await lockTaken;
+  const creating = createCreditBatch(ctx, { code: `CB-RACE-${randomUUID()}`, facilityId, feedstockTypeId,
+    startDate: new Date("2026-02-01T00:00:00.000Z"), endDate: new Date("2026-02-28T00:00:00.000Z"), productionRunIds: [] });
+  let waiting = false;
+  try {
+    for (let attempt = 0; attempt < 100 && !waiting; attempt++) {
+      const rows = await db.execute<{ n: number }>(sql`select count(*)::int as n from pg_stat_activity
+        where wait_event_type = 'Lock' and query ilike '%certifier_projects%' and datname = current_database()`);
+      waiting = Number((rows as unknown as { rows?: { n: number }[] }).rows?.[0]?.n ?? (rows as unknown as { n: number }[])[0]?.n) > 0;
+      if (!waiting) await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  } finally {
+    // Release on every exit so a failed assertion never leaves the held transaction open for teardown.
+    release();
+  }
+  const [setupResult, createResult] = await Promise.allSettled([setup, creating]);
+  expect(waiting).toBe(true);
+  expect(setupResult.status).toBe("fulfilled");
+  if (createResult.status === "rejected") throw createResult.reason;
+  expect(createResult.value.removalTemplateId).toBe(template.id);
 });

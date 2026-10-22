@@ -5,6 +5,9 @@ import { recordMembershipActivity } from "./write-activity";
  * 1. Discover the batch's facility (update/delete) without row locks.
  * 2. Facilities FOR SHARE, sorted, before reading facility-local dates or
  *    taking any other locks. Facility UPDATE holders take the facility first.
+ *    Then their certifier_projects rows FOR SHARE, sorted: Set template
+ *    updates that row before it locks batches and artifacts, so a batch
+ *    writer must hold it before step 3 or the two wait on each other.
  * 3. Discover current/prospective runs and lock the batch's certification
  *    artifacts. Both helpers use acquireCertificationArtifactLocksSorted
  *    with one global key order.
@@ -56,6 +59,7 @@ import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
+import { certifierProjects } from "@/db/schema/certification";
 import { feedstocks } from "@/db/schema/feedstock";
 import {
   productionRuns,
@@ -199,6 +203,9 @@ async function lockMembershipFacilities(ctx: OrgContext, tx: DbTransaction, ids:
   await tx.select({ id: facilities.id }).from(facilities)
     .where(and(inArray(facilities.id, [...new Set(ids)].sort()), eq(facilities.organizationId, ctx.organizationId)))
     .orderBy(facilities.id).for("share");
+  await tx.select({ id: certifierProjects.id }).from(certifierProjects)
+    .where(and(inArray(certifierProjects.facilityId, [...new Set(ids)]), eq(certifierProjects.organizationId, ctx.organizationId)))
+    .orderBy(certifierProjects.id).for("share");
 }
 
 const batchMembershipFields = {

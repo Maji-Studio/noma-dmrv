@@ -1,12 +1,13 @@
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { SafeError } from "@/lib/errors";
 import { expectedSequestrationBlueprintKeys, isSequestrationBlueprintFamily, isStorageBlueprintKey, type DurabilityTier } from "@/lib/isometric/storage-blueprints";
-import { assertSequestrationTemplateSelectable } from "@/lib/isometric/transformers/sequestration-binding";
+import { sequestrationTemplateSelectionError } from "@/lib/isometric/sequestration-template-selection";
 import { catalogCandidates, hasCatalogDisambiguation, type AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
 import { allowedEntryPolicies } from "@/lib/isometric/template-observations/entry-policies";
 import { isAcceptableProposal, lineNeedsReview, type LineContract, type LineSources, type LineSourceProblem } from "@/lib/isometric/template-observations/line-sources";
 import type { TemplateComponent, TemplateDefinition } from "@/lib/isometric/template-observations";
 import { SOURCE_LABELS } from "./removal-template-source-labels";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "./removal-template-blockers";
 
 export type SetupAssignment = Pick<LineContract, "scope" | "automaticSource" | "entryPolicy">;
 export interface SetupOption { id: string; label: string; assignments: Record<string, SetupAssignment> }
@@ -17,8 +18,7 @@ export interface RemovalTemplateSetupPlan { decided: SetupComponent[]; defaults:
 
 export function templateFitsFacility(template: IsometricGhgEntryTemplate, durabilityOption: DurabilityTier | null): { fits: true } | { reason: string } {
   if (template.credit_type !== "REMOVAL") return { reason: "This is not a Removal template." };
-  try { assertSequestrationTemplateSelectable(template); }
-  catch (error) { if (error instanceof SafeError) return { reason: "This template uses an unsupported storage component." }; throw error; }
+  if (sequestrationTemplateSelectionError(template)) return { reason: REMOVAL_TEMPLATE_BLOCKERS.unsupportedSequestration };
   const keys = template.groups.flatMap((group) => group.components.map((component) => component.blueprint_key));
   if (!keys.some(isStorageBlueprintKey)) return { reason: "This template has no storage component." };
   if (durabilityOption && keys.some((key) => isSequestrationBlueprintFamily(key) && !expectedSequestrationBlueprintKeys(durabilityOption).has(key))) {

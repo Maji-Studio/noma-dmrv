@@ -4,9 +4,9 @@
  *
  * The dialog reads the facility's templates live from the Isometric sandbox, so
  * the spec is skipped without `ISOMETRIC_DEMO_PROJECT_ID` and is tagged @live.
- * It walks the steps and stops before Apply: which sandbox templates are fully
- * bound changes with the project, and Apply is covered by the component and
- * integration tests.
+ * It walks the steps and stops before Set template: which sandbox templates are
+ * fully bound changes with the project, and saving is covered by the component
+ * and integration tests.
  */
 import { expect, test } from "./fixtures";
 import {
@@ -37,10 +37,10 @@ test.describe("Removal template setup", { tag: "@live" }, () => {
 
     await page.goto(`${SETTINGS_PATH}?facility=${facilityId}`);
     await expect(page.getByText("No Removal template set")).toBeVisible({ timeout: LIVE_READ_TIMEOUT_MS });
-    await page.getByRole("button", { name: "Set up template" }).click();
+    await page.getByRole("button", { name: "Set template" }).click();
 
     // The dialog sits over the pane: same page, params mark it open.
-    const dialog = page.getByRole("dialog", { name: "Set up Removal template" });
+    const dialog = page.getByRole("dialog", { name: "Set Removal template" });
     await expect(dialog).toBeVisible();
     await expect(page).toHaveURL(/\/settings\/removal-templates/);
     await expect(page).toHaveURL(/setup=template/);
@@ -57,13 +57,10 @@ test.describe("Removal template setup", { tag: "@live" }, () => {
     }
     await dialog.getByRole("button", { name: "Next" }).click();
 
-    // A template with questions opens Decisions, one with none goes straight to Apply.
-    const heading = dialog.getByRole("heading", { name: /^(Decide what noma cannot|Apply the setup)$/ });
-    await expect(heading).toBeAttached();
-    if ((await heading.textContent()) === "Decide what noma cannot") {
-      await dialog.getByRole("button", { name: "Next" }).click();
-      await expect(dialog.getByText(/to decide:/)).toBeVisible();
-    }
+    // Check comes next for every template: questions first when it has any, then Now to After.
+    await expect(dialog.getByRole("heading", { name: "Check what changes" })).toBeAttached();
+    await expect(dialog.getByText("Removal template now")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Set template" })).toBeVisible();
     await dialog.getByRole("button", { name: "Back" }).click();
 
     // Cancel leaves nothing behind: the dialog closes and the params go with it.
@@ -80,8 +77,8 @@ test.describe("Removal template setup", { tag: "@live" }, () => {
 
     await page.goto(`${SETTINGS_PATH}?facility=${facilityId}&setup=template`);
     await expect(page.getByText("No Removal template set")).toBeVisible({ timeout: LIVE_READ_TIMEOUT_MS });
-    await expect(page.getByRole("button", { name: "Set up template" })).toHaveCount(0);
-    await expect(page.getByRole("dialog", { name: "Set up Removal template" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Set template" })).toHaveCount(0);
+    await expect(page.getByRole("dialog", { name: "Set Removal template" })).toHaveCount(0);
     await expect(page.getByText("Admins can change these.")).toBeVisible();
   });
 });

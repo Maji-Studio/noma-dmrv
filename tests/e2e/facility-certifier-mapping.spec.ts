@@ -78,7 +78,7 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
             externalProjectId: sharedProjectId,
             protocolSlug: "biochar",
             protocolVersion: "1.2",
-            defaultRemovalTemplateId: null,
+            removalTemplateId: null,
           },
           {
             externalFacilityId: `fcl_test_${facilityF2.id}`,
@@ -88,7 +88,7 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
             externalProjectId: sharedProjectId,
             protocolSlug: "biochar",
             protocolVersion: "1.2",
-            defaultRemovalTemplateId: null,
+            removalTemplateId: null,
           },
         ]);
       });
@@ -150,7 +150,7 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
           externalProjectId: sandboxProjectId,
           protocolSlug: "biochar",
           protocolVersion: "1.2",
-          defaultRemovalTemplateId: null,
+          removalTemplateId: null,
         });
         // The unlink guard (hasBlockingFacilitySubmission) matches a
         // facility-scoped Removal: a certifierRemovals row carrying facilityId

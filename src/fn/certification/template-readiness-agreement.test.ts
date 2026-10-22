@@ -9,6 +9,10 @@ import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-c
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import { deriveBatchHealth } from "@/lib/certification/batch-health";
+import { removalTemplateVerdict } from "@/lib/certification/removal-template-verdict";
+import { removalTemplateReviewEntry } from "@/lib/certification/removal-template-review-entry";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR, UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib/certification/readiness";
 
 function templateFacts(sources: LineSources = {}) {
@@ -102,4 +106,78 @@ it("excludes removed components retained only to show stale entries", () => {
   const resolved = resolveRemovalTemplate([{ id: "batch", removalTemplateId: template.id }], facility, { batch: entryFacts });
   expect(resolved.emissionLinesByBatchId.batch.map((line) => line.componentId)).toContain("removed");
   expect(resolved.undecidedLineIds).toEqual(["one", "two"]);
+});
+
+const decidedSources: LineSources = Object.fromEntries(["one", "two"].map((id) => [id, {
+  scope: "operating", origin: "reviewed", entryPolicy: "none",
+}]));
+
+it.each([
+  { shape: "fixed input without datapoint", code: "missingFixedDatapoint", key: "templateSet" },
+  { shape: "components to decide", code: "templateLinesNeedReview", key: "templateLines" },
+] as const)("agrees across the switch dialog, batch health and verdict for $shape", ({ code, key }) => {
+  const { template, facility } = templateFacts(code === "missingFixedDatapoint" ? decidedSources : {});
+  if (code === "missingFixedDatapoint") {
+    template.groups[0].components[0].inputs.find((input) => input.type === "fixed")!.datapoint_id = null;
+  }
+  const facts = facility.templatesById[template.id]!;
+  const entry = removalTemplateReviewEntry({
+    templateId: template.id, ...facts, definition: normalizeTemplateDefinition(template),
+  });
+  const verdict = removalTemplateVerdict(entry);
+  expect(verdict.blocker).toBe(code);
+  expect(facts.lineSourceProblems.length > 0).toBe(verdict.toDecideCount > 0);
+  const resolved = resolveRemovalTemplate([{ id: "batch", removalTemplateId: template.id }], facility);
+  expect(resolved.templateBlockers).toEqual([{ code, message: REMOVAL_TEMPLATE_BLOCKERS[code] }]);
+  const health = deriveBatchHealth(toBatchHealthFacts(context(resolved), "batch"));
+  const check = health.checks.find((check) => check.key === key)!;
+  expect(check).toMatchObject({
+    status: "unmet", detail: REMOVAL_TEMPLATE_BLOCKERS[code],
+    fixTarget: code === "missingFixedDatapoint" ? "templateSetup" : "templateLineReview",
+  });
+  if (code !== "missingFixedDatapoint") expect(check.unmetLabel).toBe("2 components to decide");
+});
+
+it("keeps every batch blocker in the original order", () => {
+  const { template, facility } = templateFacts();
+  template.groups[0].components[0].inputs.find((input) => input.type === "fixed")!.datapoint_id = null;
+  facility.templatesById[template.id]!.observation = null;
+  const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], facility);
+  expect(resolved.templateBlockers).toEqual([
+    { code: "templateNotFullyRead", message: REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead },
+    { code: "missingFixedDatapoint", message: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint },
+    { code: "templateLinesNeedReview", message: REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview },
+  ]);
+});
+
+it.each([DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR, UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR])(
+  "keeps an existing %s pin's batch health while refusing selection", (blueprintKey) => {
+    const { template, facility } = templateFacts(decidedSources);
+    template.groups[0].components[0].blueprint_key = blueprintKey;
+    const entry = removalTemplateReviewEntry({ templateId: template.id, ...facility.templatesById[template.id]! });
+    expect(removalTemplateVerdict(entry).blocker).toBe("unsupportedSequestration");
+    expect(resolveRemovalTemplate([{ removalTemplateId: template.id }], facility).templateBlockers).toEqual([]);
+  },
+);
+
+it("preserves the batch facts rule when a caller supplies no source problems", () => {
+  const { template, facility } = templateFacts();
+  const facts = facility.templatesById[template.id]!;
+  facts.lineSourceProblems = [];
+  const entry = removalTemplateReviewEntry({ templateId: template.id, ...facts });
+  expect(removalTemplateVerdict(entry).toDecideCount).toBe(2);
+  expect(resolveRemovalTemplate([{ removalTemplateId: template.id }], facility).templateBlockers).toEqual([]);
+});
+
+it("builds setup readiness from preview sources while retaining the matching observation", () => {
+  const { template, facility } = templateFacts(decidedSources);
+  const facts = facility.templatesById[template.id]!;
+  const definition = normalizeTemplateDefinition(template);
+  const entry = removalTemplateReviewEntry({
+    templateId: template.id, ...facts, definition, lineSources: {},
+    lineSourceProblems: validateLineSources(definition, {}),
+  });
+  expect(entry.observation?.lineSources).toEqual(decidedSources);
+  expect(entry.lines.every((line) => line.contract.scope === "unassigned")).toBe(true);
+  expect(removalTemplateVerdict(entry).toDecideCount).toBe(2);
 });

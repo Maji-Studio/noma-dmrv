@@ -54,7 +54,7 @@ export type BatchHealthCheckKey =
 export type BatchHealthFixTarget =
   | "emissions"
   | "certificationTemplates"
-  | "creditBatchTemplate"
+  | "templateSetup"
   | "templateLineReview"
   | "templateLines"
   | "templateReplacement"
@@ -511,7 +511,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
     .map((line) => [line.componentId, line]));
   const linesToDecide = new Set(facts.undecidedLineIds).size;
   const pinBlockers = (facts.templateBlockers ?? []).filter(
-    (blocker) => removalTemplateBlockerDestination(blocker.code) === "creditBatchTemplate",
+    (blocker) => removalTemplateBlockerDestination(blocker.code) === "templateSetup",
   );
   const onlyUnpinned = pinBlockers.length > 0 &&
     pinBlockers.every((blocker) => blocker.code === "unpinnedTemplate");
@@ -523,7 +523,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
       // A pin problem is fixed on the batch; a line problem in the template review.
       ...templateBlockers.map((blocker): BatchHealthCheckBase => {
         const fixTarget = templateLineFixTarget(blocker);
-        const key = fixTarget === "creditBatchTemplate" ? "templateSet" : "templateLines";
+        const key = fixTarget === "templateSetup" ? "templateSet" : "templateLines";
         return {
           key, label: CERT_REQUIREMENT_META[key].requirementLabel, status: "unmet",
           detail: blocker.message, fixTarget,
