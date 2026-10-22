@@ -639,3 +639,14 @@ before allowing confirmation to convert stored entry values to the new unit.
   Each needs a writer that takes `tx` plus an app-only runner operation, so the key
   and the record of the save commit together. They sit in the PENDING table of
   `src/fn/create-action-coverage.test.ts` until then (#1302).
+
+## In-use delete refusals on the remaining lists - **deferred**
+
+- The rule: an "in use" delete refusal opens `InUseDeleteDialog` (`src/components/ui/in-use-delete-dialog.tsx`), with no Delete button and "Archive instead" where archiving exists. Customers, suppliers, formulations and feedstock types already follow it: their data-access deletes throw `inUseDeleteRefusal(...)` and the callers branch on `isInUseDeleteRefusal` (`src/lib/delete-refusal.ts`), as `customer-list.tsx` does.
+- The lists below show the refusal reason inside `DeleteConfirmDialog` (the delete-refusals PR), but the dialog keeps an active Delete that fails again, because the server refusal is untagged. Grep-checked refusals that are really "in use":
+  - `src/data-access/feedstocks.ts:837` (feedstock used in production runs, `certification_locked`), caller `feedstock-list`.
+  - `src/data-access/reactors.ts:398` (reactor with production runs, plain `SafeError`), caller `reactor-list`.
+  - `src/data-access/production-runs/delete.ts:149` (dependent biochar products or credit batches, `ProductionRunDependencyError`), caller `production-run-list`.
+  - `src/lib/order-domain-errors.ts:39` (`orderHasDeliveries`, raised from `src/data-access/orders.ts:418`), caller `order-list`.
+- Not in-use refusals, so they stay in `DeleteConfirmDialog`: `biochar-product-delete.ts:52,59` and `production-runs/delete.ts:159` (certification lock or stock history, already `certification_locked` with record-lock guidance), `document-mutations.ts:35,37` (certification-owned documents). `deleteApplicationInTransaction` and `deleteTransportLeg` have no in-use refusal.
+- Fix: tag each real one with `inUseDeleteRefusal(...)`, then switch its caller to `InUseDeleteDialog` like `customer-list.tsx`. Reword the advice at that point: "Remove production run associations first" and "Remove the production runs first" should say what the operator can do instead, and offer Archive where the record can be archived.
