@@ -18,7 +18,7 @@ import {
 import { Collapsible } from "@base-ui/react/collapsible";
 import { FormSection, ServerError } from "@/components/forms";
 import { Button } from "@/components/ui/button";
-import { ICON_BUTTON_HIT_AREA } from "@/components/ui/touch-target";
+import { ICON_BUTTON_TOUCH_PROPS } from "@/components/ui/touch-target";
 import { DefaultLocationBadge } from "@/components/ui/default-location-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
@@ -214,9 +214,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                 <div className="flex shrink-0 items-center gap-12">
                   <Button
                     variant="noOutline"
-                    size="icon"
-                    width="square"
-                    className={ICON_BUTTON_HIT_AREA}
+                    {...ICON_BUTTON_TOUCH_PROPS}
                     onClick={() => {
                       setEditingLocation(loc);
                       setIsLocationDialogOpen(true);
@@ -227,9 +225,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                   </Button>
                   <Button
                     variant="noOutline"
-                    size="icon"
-                    width="square"
-                    className={ICON_BUTTON_HIT_AREA}
+                    {...ICON_BUTTON_TOUCH_PROPS}
                     onClick={() => handleArchive(loc)}
                     disabled={isOnlyActive || archiveLocation.isPending}
                     aria-description={isOnlyActive ? ONLY_ACTIVE_REASON : undefined}
@@ -239,9 +235,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                   </Button>
                   <Button
                     variant="destructive"
-                    size="icon"
-                    width="square"
-                    className={ICON_BUTTON_HIT_AREA}
+                    {...ICON_BUTTON_TOUCH_PROPS}
                     onClick={() => setDeletingLocation(loc)}
                     aria-label={`Delete ${loc.name || loc.country}`}
                   >
@@ -273,9 +267,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                       <div className="flex shrink-0 items-center gap-12">
                         <Button
                           variant="noOutline"
-                          size="icon"
-                          width="square"
-                          className={ICON_BUTTON_HIT_AREA}
+                          {...ICON_BUTTON_TOUCH_PROPS}
                           onClick={() => handleRestore(loc)}
                           disabled={restoreLocation.isPending}
                           aria-label={`Restore ${loc.name || loc.country}`}
@@ -284,9 +276,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                         </Button>
                         <Button
                           variant="destructive"
-                          size="icon"
-                          width="square"
-                          className={ICON_BUTTON_HIT_AREA}
+                          {...ICON_BUTTON_TOUCH_PROPS}
                           onClick={() => setDeletingLocation(loc)}
                           aria-label={`Delete ${loc.name || loc.country}`}
                         >

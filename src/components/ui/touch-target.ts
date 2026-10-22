@@ -13,12 +13,23 @@ export const CENTRED_HIT_AREA =
   "relative before:absolute before:left-1/2 before:top-1/2 before:-translate-x-1/2 before:-translate-y-1/2 before:h-44 before:w-full before:min-w-44 before:content-['']";
 
 /**
- * An icon-only `Button` (`size="icon"`, `width="square"`) keeps its 32px square
- * and gains the 44px hit area. `width="square"` is required: the default
- * `width` variant (`w-auto`) beats the icon size's `w-[32px]` and collapses the
- * button to its glyph. `shrink-0` stops a flex row squeezing it.
+ * The 44px hit area for an icon-only `Button`, without its width fix. Prefer
+ * `ICON_BUTTON_TOUCH_PROPS`; use this only where the button cannot take the props.
  */
 export const ICON_BUTTON_HIT_AREA = `shrink-0 ${CENTRED_HIT_AREA}`;
+
+/**
+ * Spread on an icon-only `Button` to keep its 32px square and give it the 44px
+ * hit area: `<Button variant="noOutline" {...ICON_BUTTON_TOUCH_PROPS} />`.
+ * `width="square"` is part of the bundle because the default `width` variant
+ * (`w-auto`) beats the icon size's `w-[32px]` and collapses the button to its
+ * glyph. To add classes, merge: `cn(ICON_BUTTON_TOUCH_PROPS.className, "...")`.
+ */
+export const ICON_BUTTON_TOUCH_PROPS = {
+  size: "icon",
+  width: "square",
+  className: ICON_BUTTON_HIT_AREA,
+} as const;
 
 /**
  * A 44px tall hit area for an inline text link or button, as an `::after` that

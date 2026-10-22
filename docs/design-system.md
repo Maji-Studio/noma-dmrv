@@ -47,8 +47,8 @@ Read these first. Each one fails quietly rather than loudly.
   buttons need nothing extra; two 32px icon buttons side by side need a 12px
   gap or their hit areas overlap.
 - **Other controls use the shared recipes in `touch-target.ts`.**
-  `ICON_BUTTON_HIT_AREA` for a standalone icon-only `Button` (pass
-  `size="icon" width="square"`; row menus, location rows; keep 12px between
+  `ICON_BUTTON_TOUCH_PROPS` for a standalone icon-only `Button` (spread it:
+  size, `width="square"` and the hit area in one; row menus, location rows; keep 12px between
   neighbours). `CENTRED_HIT_AREA` (`::before`) for chips and badges.
   `INLINE_HIT_AREA` (`::after`, `_FROM_SM` variant) for inline links.
   `PHONE_TOUCH_TARGET` for a footer button or a select that must be 44px tall

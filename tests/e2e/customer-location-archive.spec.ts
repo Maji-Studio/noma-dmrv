@@ -13,38 +13,12 @@ import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
 import { test, expect, waitForSideSheet } from "./fixtures";
 import { createDbConnection } from "./fixtures/db";
+import { deleteLocation, openCustomerSheet, SECOND_LOCATION_NAME, seedSecondLocation } from "./fixtures/customer-sheet-helpers";
 import { clickRowMenuItem } from "./fixtures/page-helpers";
 
 const SEARCH_TIMEOUT_MS = 15_000;
-const SECOND_LOCATION_NAME = "E2E North Block";
 const DEFAULT_MOVED = `${SECOND_LOCATION_NAME} is now the default location.`;
 const LAST_ACTIVE_REASON = "This is the only active location, so it cannot be archived. Add or restore another location first.";
-
-async function openCustomerSheet(page: Page, facilityId: string, code: string) {
-  await page.goto(`/customers?facility=${facilityId}`);
-  await page.waitForLoadState("networkidle");
-  await page.getByRole("textbox", { name: "Search customers" }).fill(code);
-  const rows = page.locator("table tbody tr");
-  await expect(rows.filter({ hasText: code }).first()).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
-  await expect(rows.filter({ hasNotText: code })).toHaveCount(0, { timeout: SEARCH_TIMEOUT_MS });
-  await page.waitForLoadState("networkidle");
-  await clickRowMenuItem(page, page.getByRole("button", { name: `Actions for ${code}` }).first(), "Edit");
-  await waitForSideSheet(page);
-  return page.getByRole("dialog");
-}
-
-async function seedSecondLocation(customerId: string) {
-  const { db, pool } = createDbConnection();
-  try {
-    const [second] = await db.insert(schema.customerLocations).values({
-      organizationId: DEC_ORG_ID, customerId, name: SECOND_LOCATION_NAME, country: "Tanzania",
-      gpsLatitude: -6.9, gpsLongitude: 39.3, address: "E2E north field",
-    }).returning({ id: schema.customerLocations.id });
-    return second!.id;
-  } finally {
-    await pool.end();
-  }
-}
 
 async function seedOrder(seeded: { facility: { id: string }; customer: { id: string }; formulation: { id: string } }, locationId: string, code: string) {
   const { db, pool } = createDbConnection();
@@ -116,8 +90,7 @@ test.describe("Customer location archive", () => {
       // The restored location does not take the default back from the one that holds it.
       expect(await readLocation(customerLocation.id)).toMatchObject({ isDefault: false });
     } finally {
-      const { db, pool } = createDbConnection();
-      await db.delete(schema.customerLocations).where(eq(schema.customerLocations.id, secondId)).finally(() => pool.end());
+      await deleteLocation(secondId);
     }
   });
 
@@ -136,8 +109,7 @@ test.describe("Customer location archive", () => {
       await expect(sheet.getByRole("group", { name: "Archived locations" }).getByText(customerLocation.name)).toBeVisible();
       await expect(page.getByRole("dialog").getByText(`${customerLocation.name} is in use`)).toHaveCount(0);
     } finally {
-      const { db, pool } = createDbConnection();
-      await db.delete(schema.customerLocations).where(eq(schema.customerLocations.id, secondId)).finally(() => pool.end());
+      await deleteLocation(secondId);
     }
   });
 
@@ -180,8 +152,7 @@ test.describe("Customer location archive", () => {
       await expect(page.getByTestId(`entity-option-${secondId}`)).toBeVisible();
       await page.keyboard.press("Escape");
     } finally {
-      const { db, pool } = createDbConnection();
-      await db.delete(schema.customerLocations).where(eq(schema.customerLocations.id, secondId)).finally(() => pool.end());
+      await deleteLocation(secondId);
     }
   });
 });

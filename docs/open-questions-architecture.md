@@ -59,10 +59,13 @@ these areas; the entry rules and invariants live in
   `w-[32px]`, but the `width` variant default `w-auto` wins the class merge, so every
   icon-only `Button` is as wide as its glyph (16px) and a flex row can shrink it
   further. 51 call sites use `size="icon"`; the touch-target fix works around it with
-  `ICON_BUTTON_HIT_AREA` (`touch-target.ts`) on the row menu trigger and the location rows
-  only (they pass `width="square"`). Fix at the source (drop `w-auto`
+  `ICON_BUTTON_TOUCH_PROPS` (`touch-target.ts`) on the row menu trigger and the location
+  rows only. Fix at the source (drop `w-auto`
   from the `width` default) and check the 51 sites.
-- `src/components/ui/slide-over-panel/index.tsx:Body` (`fillHeight`) and
+
+### Sheet footer pinning on short forms (`ui/sheet-footer-fill-height`, opened 2026-10-22)
+
+- **Anchor:** `src/components/ui/slide-over-panel/index.tsx:Body` (`fillHeight`) and
   `src/components/ui/entity-side-sheet/index.tsx:EntitySideSheet`: the `mt-auto!` footer
   pinning in `src/components/forms/form-actions.tsx:FormActions` never reaches the
   footer, because the form inside the sheet's fieldset does not fill the sheet. At 1440px
