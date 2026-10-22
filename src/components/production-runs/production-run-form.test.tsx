@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
-import { FormDialogContext, type DialogFormState } from "@/components/ui/form-dialog-context";
+import { expectStayedClean, renderReportingDirty } from "../../../tests/helpers/form-dialog-dirty";
 
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({
@@ -13,7 +13,10 @@ vi.mock("@/hooks/use-facility-context", () => ({
 }));
 vi.mock("@/hooks/use-entities", () => ({ useEntityById: () => ({ data: undefined }) }));
 const pickers = vi.hoisted(() => [] as Array<Record<string, unknown>>);
-vi.mock("@/components/forms/entity-select", () => ({
+vi.mock("@/components/forms/entity-select", async () => ({
+  useSelectDefault: (await vi.importActual<typeof import("@/components/forms/entity-select/use-select-default")>(
+    "@/components/forms/entity-select/use-select-default",
+  )).useSelectDefault,
   EntitySelect: (props: Record<string, unknown>) => { pickers.push(props); return null; },
   StorageLocationQuickAddDialog: () => null,
   useQuickAddDialog: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() }),
@@ -64,16 +67,7 @@ describe("ProductionRunForm reactor picker", () => {
 
 describe("ProductionRunForm unsaved changes", () => {
   const REACTOR_ID = "22222222-2222-4222-8222-222222222222";
-  const dirtyStates = () => {
-    const states: boolean[] = [];
-    const actions = {
-      report: (_id: object, state: DialogFormState | null) => { if (state) states.push(state.dirty); },
-      cancel: vi.fn(),
-      markSaved: vi.fn(),
-    };
-    render(<FormDialogContext.Provider value={actions}><ProductionRunForm onSubmit={vi.fn()} onCancel={vi.fn()} /></FormDialogContext.Provider>);
-    return states;
-  };
+  const dirtyStates = () => renderReportingDirty(<ProductionRunForm onSubmit={vi.fn()} onCancel={vi.fn()} />).states;
   const reactor = () => pickers.findLast((props) => props.entityType === "reactor") as {
     value: string; onChange: (id: string) => void; onAutoSelect?: (id: string) => void;
   };
@@ -83,8 +77,7 @@ describe("ProductionRunForm unsaved changes", () => {
     // What the real select does with autoSelectSingle and one option.
     act(() => { (reactor().onAutoSelect ?? reactor().onChange)(REACTOR_ID); });
     await waitFor(() => expect(reactor().value).toBe(REACTOR_ID));
-    expect(states.length).toBeGreaterThan(0);
-    expect(states.every((dirty) => !dirty)).toBe(true);
+    expectStayedClean(states);
   });
 
   it("turns dirty once the operator picks a reactor", async () => {

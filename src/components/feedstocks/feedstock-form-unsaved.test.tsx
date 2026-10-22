@@ -7,10 +7,10 @@
  */
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
-import { FormDialogContext, type DialogFormState } from "@/components/ui/form-dialog-context";
+import { expectStayedClean, renderReportingDirty } from "../../../tests/helpers/form-dialog-dirty";
 import { FeedstockForm } from "./feedstock-form";
 
 const state = vi.hoisted(() => ({
@@ -68,30 +68,21 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function dirtyStates() {
-  const states: boolean[] = [];
-  const actions = {
-    report: (_id: object, formState: DialogFormState | null) => { if (formState) states.push(formState.dirty); },
-    cancel: vi.fn(),
-    markSaved: vi.fn(),
+// The quick-add dialogs the selects mount (closed) read the query client.
+function queryWrapper() {
+  const client = new QueryClient();
+  return function QueryWrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   };
-  render(
-    <QueryClientProvider client={new QueryClient()}>
-      <FormDialogContext.Provider value={actions}>
-        <FeedstockForm onSubmit={vi.fn()} onCancel={vi.fn()} />
-      </FormDialogContext.Provider>
-    </QueryClientProvider>,
-  );
-  return states;
 }
+const dirtyStates = () => renderReportingDirty(<FeedstockForm onSubmit={vi.fn()} onCancel={vi.fn()} />, { wrapper: queryWrapper() }).states;
 const select = (name: RegExp) => screen.getByRole("combobox", { name });
 
 describe("FeedstockForm unsaved changes", () => {
   it("stays clean when the only feedstock type is picked for the operator", async () => {
     const states = dirtyStates();
     await waitFor(() => expect(select(/^Feedstock type/).textContent).toBe("Wood chips"));
-    expect(states.length).toBeGreaterThan(0);
-    expect(states.every((dirty) => !dirty)).toBe(true);
+    expectStayedClean(states);
   });
 
   it("stays clean when the only facility is picked too, outside a facility context", async () => {
@@ -99,7 +90,7 @@ describe("FeedstockForm unsaved changes", () => {
     const states = dirtyStates();
     await waitFor(() => expect(select(/^Facility/).textContent).toBe("North site"));
     await waitFor(() => expect(select(/^Feedstock type/).textContent).toBe("Wood chips"));
-    expect(states.every((dirty) => !dirty)).toBe(true);
+    expectStayedClean(states);
   });
 
   it("turns dirty once the operator picks a feedstock type", async () => {

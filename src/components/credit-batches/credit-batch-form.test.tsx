@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
 import type { CreditBatch } from "@/db/schema/credits";
-import { FormDialogContext, type DialogFormState } from "@/components/ui/form-dialog-context";
+import { expectStayedClean, renderReportingDirty } from "../../../tests/helpers/form-dialog-dirty";
 import { CreditBatchForm } from "./credit-batch-form";
 
 const mocks = vi.hoisted(() => ({
@@ -273,32 +273,21 @@ describe("CreditBatchForm certifier period policy", () => {
 
 describe("CreditBatchForm unsaved changes", () => {
   const SEPTEMBER = { startDate: "2026-09-01", endDate: "2026-09-30" };
-  const dirtyStates = (ui: ReactNode) => {
-    const states: boolean[] = [];
-    const actions = {
-      report: (_id: object, state: DialogFormState | null) => { if (state) states.push(state.dirty); },
-      cancel: vi.fn(),
-      markSaved: vi.fn(),
-    };
-    const view = render(<FormDialogContext.Provider value={actions}>{ui}</FormDialogContext.Provider>);
-    return { states, ...view };
-  };
   const dateValue = (container: HTMLElement, name: string) => container.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.value;
 
   it("stays clean when the only feedstock type and its month are picked for the operator", async () => {
     mocks.realPicker = true;
     mocks.autoPick = true;
-    const { states, container } = dirtyStates(<CreditBatchForm onSubmit={vi.fn()} onCancel={vi.fn()} windowForFeedstock={() => SEPTEMBER} />);
+    const { states, container } = renderReportingDirty(<CreditBatchForm onSubmit={vi.fn()} onCancel={vi.fn()} windowForFeedstock={() => SEPTEMBER} />);
     await waitFor(() => expect(dateValue(container, "startDate")).toBe(SEPTEMBER.startDate));
     expect(dateValue(container, "endDate")).toBe(SEPTEMBER.endDate);
     expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Feedstock type" }).value).toBe(FEEDSTOCK_TYPE_ID);
-    expect(states.length).toBeGreaterThan(0);
-    expect(states.every((dirty) => !dirty)).toBe(true);
+    expectStayedClean(states);
   });
 
   it("turns dirty once the operator picks the feedstock type", async () => {
     mocks.realPicker = true;
-    const { states, container } = dirtyStates(<CreditBatchForm onSubmit={vi.fn()} onCancel={vi.fn()} windowForFeedstock={() => SEPTEMBER} />);
+    const { states, container } = renderReportingDirty(<CreditBatchForm onSubmit={vi.fn()} onCancel={vi.fn()} windowForFeedstock={() => SEPTEMBER} />);
     fireEvent.change(screen.getByRole("combobox", { name: "Feedstock type" }), { target: { value: FEEDSTOCK_TYPE_ID } });
     await waitFor(() => expect(states.at(-1)).toBe(true));
     expect(dateValue(container, "startDate")).toBe(SEPTEMBER.startDate);

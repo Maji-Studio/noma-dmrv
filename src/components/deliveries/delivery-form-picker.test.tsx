@@ -8,7 +8,7 @@ import { ActionError } from "@/lib/action-error";
 import { DeliveryForm } from "./delivery-form";
 import { useCreateCustomerLocation, useUpdateCustomerLocation, useDeleteCustomerLocation } from "@/hooks/use-customers";
 import { orderKeys } from "@/hooks/use-orders";
-import { FormDialogContext, type DialogFormState } from "@/components/ui/form-dialog-context";
+import { expectStayedClean, renderReportingDirty } from "../../../tests/helpers/form-dialog-dirty";
 
 const BOTH_ORDERS = [{ id: "order-one", code: "ORD-1", name: "Order one" }, { id: "order-two", code: "ORD-2", name: "Order two" }];
 const state = vi.hoisted(() => ({ refreshed: undefined as Delivery | undefined, locked: false, distance: 12, save: vi.fn(), read: vi.fn(), options: [] as { id: string; code: string; name: string }[] }));
@@ -221,23 +221,13 @@ it("refreshes a missing snapshot after a nested repair without discarding the de
   ));
 });
 
-function dirtyStates() {
-  const states: boolean[] = [];
-  const actions = {
-    report: (_id: object, formState: DialogFormState | null) => { if (formState) states.push(formState.dirty); },
-    cancel: vi.fn(),
-    markSaved: vi.fn(),
-  };
-  render(<FormDialogContext.Provider value={actions}><DeliveryForm onSubmit={vi.fn()} onCancel={vi.fn()} /></FormDialogContext.Provider>, { wrapper });
-  return states;
-}
+const dirtyStates = () => renderReportingDirty(<DeliveryForm onSubmit={vi.fn()} onCancel={vi.fn()} />, { wrapper }).states;
 
 it("stays clean when the facility's only order is picked for the operator", async () => {
   state.options = [BOTH_ORDERS[0]];
   const states = dirtyStates();
   await waitFor(() => expect(screen.getByRole("combobox", { name: /Order/ }).textContent).toContain("Order one"));
-  expect(states.length).toBeGreaterThan(0);
-  expect(states.every((dirty) => !dirty)).toBe(true);
+  expectStayedClean(states);
 });
 
 it("turns dirty once the operator picks an order", async () => {

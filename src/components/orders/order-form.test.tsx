@@ -15,7 +15,7 @@ import type { CustomerLocation, Facility, Order } from "@/db/schema";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { OPEN_LOCK } from "../../../tests/helpers/record-lock-mocks";
-import { FormDialogContext, type DialogFormState } from "@/components/ui/form-dialog-context";
+import { expectStayedClean, renderReportingDirty } from "../../../tests/helpers/form-dialog-dirty";
 
 const state = vi.hoisted(() => ({
   /** Every entity list request the form issues, in order. */
@@ -484,18 +484,11 @@ describe("OrderForm unsaved changes", () => {
   const SOIL_MIX: EntityOption = { id: "formulation-1", code: "F-1", name: "Soil mix" };
   const COMPOST_MIX: EntityOption = { id: "formulation-2", code: "F-2", name: "Compost mix" };
   const dirtyStates = () => {
-    const states: boolean[] = [];
-    const actions = {
-      report: (_id: object, state: DialogFormState | null) => { if (state) states.push(state.dirty); },
-      cancel: vi.fn(),
-      markSaved: vi.fn(),
-    };
-    render(<QueryClientProvider client={new QueryClient()}>
-      <FormDialogContext.Provider value={actions}>
-        <OrderForm onSubmit={noop} onCancel={noop} lock={OPEN_LOCK} />
-      </FormDialogContext.Provider>
-    </QueryClientProvider>);
-    return states;
+    // The quick-add dialogs EntitySelect mounts (closed) read the query client.
+    const client = new QueryClient();
+    return renderReportingDirty(<OrderForm onSubmit={noop} onCancel={noop} lock={OPEN_LOCK} />, {
+      wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    }).states;
   };
   const formulation = () => screen.getByRole("combobox", { name: /^Formulation/ });
 
@@ -503,8 +496,7 @@ describe("OrderForm unsaved changes", () => {
     state.formulationOptions = [SOIL_MIX];
     const states = dirtyStates();
     await waitFor(() => expect(formulation().textContent).toBe("Soil mix"));
-    expect(states.length).toBeGreaterThan(0);
-    expect(states.every((dirty) => !dirty)).toBe(true);
+    expectStayedClean(states);
   });
 
   it("turns dirty once the operator picks a formulation", async () => {

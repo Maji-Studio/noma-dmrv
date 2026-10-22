@@ -6,9 +6,9 @@
  * form's starting state while the operator has edited nothing. They then move
  * the field's default along with its value, so an untouched form stays clean
  * and Cancel closes without "Discard unsaved changes?" (#1360). Once the form
- * is dirty they are edits like any other: they stay in `dirtyFields`, so a
- * patch built from it still sends them, and undoing the operator's edit
- * leaves the form clean again.
+ * is dirty they are edits like any other and leave the defaults alone: they
+ * stay in `dirtyFields`, so a patch built from it still sends them, and the
+ * field reads as clean again only when its value matches its default again.
  */
 import { set, useFormState, type Control, type FieldPath, type FieldValues } from "react-hook-form";
 
