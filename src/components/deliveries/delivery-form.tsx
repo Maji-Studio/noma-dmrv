@@ -145,6 +145,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     handleSubmit,
     setValue,
     setError,
+    resetField,
     clearErrors,
     formState: { errors, isDirty },
   } = useForm({
@@ -247,7 +248,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const defaultSubmitLabel = isEditMode ? "Update delivery" : "Create delivery";
 
   const refuseSave = useSaveRefusal({
-    control, setError, formId, aliases: DELIVERY_REFUSAL_ALIASES,
+    control, setError, resetField, formId, aliases: DELIVERY_REFUSAL_ALIASES,
     // The single moisture field is only on screen for a load with one reading.
     isEnabled: (field) => field !== "moistureContentPercent" || stockLocked || draw.usesSingleMoisture,
   });

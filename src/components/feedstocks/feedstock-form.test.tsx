@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { ActionError } from "@/lib/action-error";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentProps, ReactNode } from "react";
@@ -221,6 +224,22 @@ describe("FeedstockForm single-bin mass editing", () => {
     massWetKg: 100,
     moistureContentPercent: 25,
   } as FeedstockWithRelations;
+
+  it.each(["totalWetMassKg", "allocations.0.allocatedWetMassKg"])("reverts both mass controls after a lock refusal on %s", async field => {
+    const onSubmit = vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+      error: "Sent to a Removal.", code: "certification_locked",
+      issues: [{ path: ["massWetKg"], code: "certification_locked", message: "Sent to a Removal." }],
+    }), "Feedstock was not saved."));
+    const view = render(<FeedstockForm feedstock={feedstock} onSubmit={onSubmit} />);
+    const input = (name: string) => view.container.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
+    try {
+      fireEvent.change(input(field), { target: { value: "120" } });
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      await waitFor(() => expect(input("totalWetMassKg").value).toBe("100"));
+      expect(input("allocations.0.allocatedWetMassKg").value).toBe("100");
+    } finally { cleanup(); }
+  });
 
   it.each([150, 80])("submits an edited total of %s kg as its bin allocation", async (mass) => {
     const onSubmit = vi.fn();

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { ActionError } from "@/lib/action-error";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -260,4 +261,19 @@ it("locks the date with the mass and explains why once", async () => {
   expect(await screen.findAllByText(LOCKED_REASON)).toHaveLength(1);
   expect(dateInput().disabled).toBe(true);
   expect((screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }) as HTMLInputElement).disabled).toBe(true);
+});
+
+it("restores the saved delivery mass after a lineage refusal", async () => {
+  const { save, form, button } = await open();
+  save.mockImplementation((_data, onRefusal) => onRefusal(new ActionError({
+    error: "Sent to a Removal.", code: "certification_locked",
+    issues: [{ path: ["sources"], code: "certification_locked", message: "Sent to a Removal." }],
+  }), "Delivery was not saved."));
+  const mass = screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }) as HTMLInputElement;
+  fireEvent.change(mass, { target: { value: "120" } });
+  await waitFor(() => expect(state.preview).toHaveBeenCalled());
+  await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
+  await act(async () => { fireEvent.submit(form); });
+  await waitFor(() => expect(mass.value).toBe("100"));
+  expect(screen.getByText("Locked. Your change was not saved.")).toBeTruthy();
 });

@@ -1,3 +1,4 @@
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -111,6 +112,7 @@ export function useDocumentsForEntity(
 export function useRequestUpload() {
   const qc = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.document),
     mutationFn: async (
       input: Parameters<typeof requestUpload>[0]
     ): Promise<RequestUploadResult> => unwrap(await requestUpload(input)),
@@ -122,6 +124,7 @@ export function useRequestUpload() {
 export function useConfirmUpload() {
   const qc = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.document),
     mutationFn: async (documentId: string) => unwrap(await confirmUpload({ documentId })),
     onSuccess: (row) => {
       qc.invalidateQueries({
@@ -135,6 +138,7 @@ export function useConfirmUpload() {
 export function useSetDocumentVisibility(invalidateKey?: readonly unknown[]) {
   const qc = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.document),
     mutationFn: async (input: {
       documentId: string;
       visibility: DocumentVisibility;
@@ -157,6 +161,7 @@ export function useDeleteDocument(
 ) {
   const qc = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.document),
     mutationFn: async (input: { documentId: string; expectedVersion: number }) => unwrap(await deleteDocument(input)),
     onError: (error) => {
       if (error instanceof StaleVersionError && invalidateKey) qc.invalidateQueries({ queryKey: invalidateKey });
@@ -179,6 +184,7 @@ export function useCanChangeDocumentVisibility() {
 export function useReclassifyApplicationEvidence() {
   const qc = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.document),
     mutationFn: async (input: z.infer<typeof updateApplicationEvidenceMetadataSchema> & { expectedVersion: number }) => unwrap(await updateApplicationEvidenceMetadata(input)),
     onSuccess: (row) => {
       qc.invalidateQueries({ queryKey: documentKeys.forEntity(row.entityType, row.entityId) });

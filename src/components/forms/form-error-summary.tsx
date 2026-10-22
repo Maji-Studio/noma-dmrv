@@ -32,11 +32,11 @@ import {
 
 /** Read once per refused save; the visible title keeps the live count. */
 const ANNOUNCEMENT = "Not saved. Fix the fields that show an error.";
-/** "Not saved. 1 field is locked. Undo that change to save." */
+/** "Not saved. 1 field is locked." */
 function lockedAnnouncement(count: number): string {
   return count === 1
-    ? "Not saved. 1 field is locked. Undo that change to save."
-    : `Not saved. ${count} ${pluralize(count, "field")} are locked. Undo those changes to save.`;
+    ? "Not saved. 1 field is locked."
+    : `Not saved. ${count} ${pluralize(count, "field")} are locked.`;
 }
 
 /** `setError` type of a lock refusal (see `useSaveRefusal`): worded apart from a fix. */

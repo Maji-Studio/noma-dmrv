@@ -1,3 +1,4 @@
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 /**
  * Emissions entries on one credit batch (epic #1058): the batch's emission
  * lines and the manual entry writes. Every write refreshes the lines, the
@@ -78,6 +79,7 @@ export function invalidateEmissionEntryReads(queryClient: QueryClient, scope: Em
 function useEntryMutation<TInput, TData>(scope: EmissionBatchScope, run: (input: TInput) => Promise<ActionResult<TData>>) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.emission),
     mutationFn: async (input: TInput) => unwrapEntry(await run(input)),
     // Refresh after failures too: a stale version means the lines moved.
     onSettled: () => invalidateEmissionEntryReads(queryClient, scope),

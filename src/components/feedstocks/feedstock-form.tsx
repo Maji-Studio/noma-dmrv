@@ -326,7 +326,16 @@ export function FeedstockForm({
     }
   }, [fields.length, getValues, hasEditedAllocationMass, isEditMode, setValue, watchWetMass, dirtyFields.allocations]);
 
-  const refuseSave = useSaveRefusal({ control, setError, formId, aliases: feedstockRefusalAliases(hasEditedAllocationMass) });
+  const refuseSave = useSaveRefusal({ control, setError, formId, aliases: feedstockRefusalAliases(hasEditedAllocationMass),
+    resetField: (field) => {
+      // Both controls describe the same saved row in edit mode.
+      if (isEditMode && (field === "totalWetMassKg" || field === "allocations.0.allocatedWetMassKg")) {
+        resetField("totalWetMassKg");
+        resetField("allocations.0.allocatedWetMassKg");
+        setHasEditedAllocationMass(false);
+      } else resetField(field);
+    },
+  });
   const handleFormSubmit = latched(handleSubmit((data) => {
     const submitted = {
       overriding,

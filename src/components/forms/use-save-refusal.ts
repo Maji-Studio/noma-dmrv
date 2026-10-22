@@ -10,7 +10,7 @@
  * plan's footer (including null when every issue sits at a field), or the
  * caller's fallback when there is no plan.
  */
-import { get, useFormState, type Control, type FieldValues, type Path, type UseFormSetError } from "react-hook-form";
+import { get, useFormState, type Control, type FieldValues, type Path, type UseFormResetField, type UseFormSetError } from "react-hook-form";
 import { planSaveRefusal } from "@/lib/save-refusal";
 import { LOCKED_ERROR_TYPE } from "./form-error-summary";
 import { locateInDirectory, readFieldDirectory } from "./form-error-summary-dom";
@@ -23,6 +23,7 @@ export type SaveRefusalHandler = (error: unknown, fallback: string) => string | 
 interface UseSaveRefusalOptions<TFieldValues extends FieldValues, TContext, TTransformed> {
   control: Control<TFieldValues, TContext, TTransformed>;
   setError: UseFormSetError<TFieldValues>;
+  resetField: UseFormResetField<TFieldValues>;
   /** The `<form>` element's id; its controls say which fields are on screen. */
   formId: string;
   /** Server path to form field name, kept next to the form's payload builder. */
@@ -45,6 +46,7 @@ function isRendered(form: HTMLElement | null, field: string): boolean {
 export function useSaveRefusal<TFieldValues extends FieldValues, TContext, TTransformed>({
   control,
   setError,
+  resetField,
   formId,
   aliases,
   isEnabled,
@@ -59,6 +61,7 @@ export function useSaveRefusal<TFieldValues extends FieldValues, TContext, TTran
     });
     if (!plan) return fallback;
     for (const { field, message, locked } of plan.fieldErrors) {
+      if (locked) resetField(field as Path<TFieldValues>);
       setError(field as Path<TFieldValues>, { type: locked ? LOCKED_ERROR_TYPE : SERVER_ERROR_TYPE, message });
     }
     return plan.footer;

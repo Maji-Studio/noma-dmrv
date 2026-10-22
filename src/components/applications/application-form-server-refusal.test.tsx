@@ -66,7 +66,7 @@ const OPEN_LOCK: RecordLockView = { level: "open", heldBy: [], usedBy: [], freeF
 const refusal = (path: string, message: string) =>
   new ActionError({ error: message, code: "validation_failed", issues: [{ path: [path], code: "validation_failed", message }] });
 
-const LOCK_REASON = "This application is in a Removal sent to Isometric. Undo the change to save.";
+const LOCK_REASON = "This application is in a Removal sent to Isometric. Correct the Removal first."
 const lockRefusal = (path: string) =>
   new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [{ path: [path], code: "certification_locked", message: LOCK_REASON }] });
 
@@ -122,15 +122,16 @@ describe("ApplicationForm server refusals", () => {
       edit: () => fireEvent.change(screen.getByLabelText(/Field size/), { target: { value: "3" } }),
     });
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect(await screen.findByText("Not saved. 1 field is locked.")).toBeTruthy();
-    expect(screen.getAllByText("Locked").length).toBeGreaterThanOrEqual(1);
+    expect(await screen.findAllByText("Not saved. 1 field is locked.")).toHaveLength(2);
+    expect(screen.getAllByText("Locked. Your change was not saved.").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText(LOCK_REASON)).toBeNull();
+    expect((screen.getByLabelText(/Field size/) as HTMLInputElement).value).toBe("2");
   });
 
   it("leaves a whole-record lock on the unchanged delivery to the footer", async () => {
     const onSubmit = renderRefused(lockRefusal("deliveryId"), { footer: LOCK_REASON });
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect(screen.queryByText("Locked")).toBeNull();
+    expect(screen.queryByText("Locked. Your change was not saved.")).toBeNull();
     expect(screen.queryByText(/Not saved\./)).toBeNull();
   });
 });
@@ -139,3 +140,25 @@ vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({ facilityId: "facility-1" }),
   useFacilityClock: () => ({ timeZone: "UTC", hint: "" }),
 }));
+
+it("restores the committed baseline after an update whose attachment upload failed", async () => {
+  const client = new QueryClient();
+  let saved = APPLICATION;
+  const onSubmit = vi.fn();
+  const form = () => <QueryClientProvider client={client}><ApplicationForm application={saved} lock={OPEN_LOCK} deliveries={[DELIVERY]} onSubmit={onSubmit} errorMessage="Application updated, but 1 attachment failed to upload." /></QueryClientProvider>;
+  const view = render(form());
+  const size = () => screen.getByLabelText(/Field size/) as HTMLInputElement;
+  fireEvent.change(size(), { target: { value: "3" } });
+  fireEvent.submit(view.container.querySelector("form")!);
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+  // application-list's partial-save path supplies the committed row while
+  // the failed upload keeps this same form mounted.
+  saved = { ...APPLICATION, fieldSizeHa: 3, version: 2 };
+  view.rerender(form());
+  await waitFor(() => expect(size().value).toBe("3"));
+  onSubmit.mockImplementation((_data, onRefusal) => onRefusal(lockRefusal("fieldSizeHa"), LOCK_REASON));
+  fireEvent.change(size(), { target: { value: "4" } });
+  fireEvent.submit(view.container.querySelector("form")!);
+  await waitFor(() => expect(screen.getByText("Locked. Your change was not saved.")).toBeTruthy());
+  expect(size().value).toBe("3");
+});

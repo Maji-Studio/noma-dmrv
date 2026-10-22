@@ -1,4 +1,5 @@
 import type { Mutation, QueryClient } from "@tanstack/react-query";
+import { isActionError } from "@/lib/action-error";
 import type { RecordLockViewKind } from "@/lib/record-lock-view";
 
 /** Record locks follow almost every write, so one prefix covers every kind. */
@@ -29,10 +30,14 @@ export const RECORD_LOCK_TOUCHES = {
   creditBatch: ["creditBatch", "productionRun", "sample", "application"],
   storageLocation: ["storageLocation"],
   stock: ["storageLocation", "feedstock", "productionRun", "biocharProduct", "delivery"],
+  facility: ["creditBatch", "removal"],
+  emission: ["creditBatch", "removal"],
+  transport: ["feedstock", "biocharProduct", "delivery", "sample", "productionRun"],
+  document: ["feedstock", "productionRun", "biocharProduct", "delivery", "application", "sample", "creditBatch", "removal", "storageLocation", "order"],
   registry: "all",
 } as const satisfies Record<string, RecordLockTouch>;
 
-/** `meta` for a mutation hook: its successful writes refresh these lock reads. */
+/** `meta` for a mutation hook: its writes and lock refusals refresh these lock reads. */
 export function recordLockMeta(touch: RecordLockTouch) {
   return { recordLocks: touch };
 }
@@ -43,7 +48,8 @@ function failedResult(data: unknown): boolean {
 
 /**
  * MutationCache hook: after a write, refetch only the mounted lock reads of
- * the kinds it declared. Ordinary writes refresh on success only. Registry
+ * the kinds it declared. Ordinary writes also refresh after a certification
+ * lock refusal. Registry
  * writes (`"all"`) refresh on failure too: a failed or interrupted submission
  * can still leave a Removal holding its lineage.
  */
@@ -57,6 +63,10 @@ export function invalidateRecordLocksAfter(
   if (!touch) return;
   if (touch === "all") {
     void queryClient.invalidateQueries({ queryKey: recordLockKeys.all });
+    return;
+  }
+  if (isActionError(error) && error.code === "certification_locked") {
+    for (const kind of touch) void queryClient.invalidateQueries({ queryKey: recordLockKeys.kind(kind) });
     return;
   }
   if (error || failedResult(data)) return;

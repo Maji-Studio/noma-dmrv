@@ -23,10 +23,10 @@ const FALLBACK = "Sample was not saved.";
 
 function Harness({ refusal }: { refusal: unknown }) {
   const [footer, setFooter] = useState<string | null>(null);
-  const { control, register, handleSubmit, setError, formState: { errors } } = useForm<Values>({
+  const { control, register, handleSubmit, setError, resetField, formState: { errors } } = useForm<Values>({
     defaultValues: { labName: "", massKg: "5", notes: "" },
   });
-  const refuse = useSaveRefusal({ control, setError, formId: FORM_ID, aliases: { weight: "massKg" } });
+  const refuse = useSaveRefusal({ control, setError, resetField, formId: FORM_ID, aliases: { weight: "massKg" } });
   const save = handleSubmit(async () => {
     try {
       throw refusal;
@@ -91,9 +91,10 @@ describe("useSaveRefusal", () => {
     render(<Harness refusal={refusal} />);
     fireEvent.change(screen.getByLabelText("Wet mass"), { target: { value: "9" } });
     await save();
-    expect(await screen.findByText("Not saved. 1 field is locked.")).toBeTruthy();
-    expect(screen.getAllByText("Locked").length).toBeGreaterThanOrEqual(1);
+    expect(await screen.findAllByText("Not saved. 1 field is locked.")).toHaveLength(2);
+    expect(screen.getAllByText("Locked. Your change was not saved.").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(LOCK_REASON)).toHaveLength(1);
+    expect((screen.getByLabelText("Wet mass") as HTMLInputElement).value).toBe("5");
   });
 
   it("puts a lock on a field the operator did not change in the footer only", async () => {
@@ -102,7 +103,7 @@ describe("useSaveRefusal", () => {
     await save();
     expect(await screen.findByText("This record is sent to a Removal.")).toBeTruthy();
     expect(screen.getByText("Correct the Removal first.")).toBeTruthy();
-    expect(screen.queryByText("Locked")).toBeNull();
+    expect(screen.queryByText("Locked. Your change was not saved.")).toBeNull();
     expect(screen.queryByText(/Not saved\./)).toBeNull();
   });
 

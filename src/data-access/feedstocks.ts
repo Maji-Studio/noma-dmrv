@@ -1,5 +1,5 @@
 import { readRecordDependents } from "./record-lock-dependents";
-import { assertRecordLockFields } from "@/lib/record-lock-fields";
+import { assertRecordLockFields, withLockedFieldIssues } from "@/lib/record-lock-fields";
 import { recordLocks } from "@/lib/record-lock";
 import { partyArchived } from "@/lib/party-domain-errors";
 import { lockSupplierReference } from "./party-reference-guards";
@@ -682,12 +682,19 @@ export async function updateFeedstockInTransaction(
   }
   const transportBefore = capture ? await readFeedstockTransportSnapshot(ctx, tx, feedstockId) : undefined;
 
-  await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
-    ctx,
-    tx,
-    { entityType: "feedstock", entityId: feedstockId },
-    "update",
-  ), "certification_locked");
+  // Compare operation names, including overrides stripped from feedstockData.
+  // Zero distance and an empty note both mean clearing the saved override.
+  await withLockedFieldIssues(() => withFeedstockErrors(() => assertCanMutateCertifiedLineage(
+    ctx, tx, { entityType: "feedstock", entityId: feedstockId }, "update",
+  ), "certification_locked"), {
+    ...locked,
+    transportDistanceKm: locked.distanceKmOverride,
+    transportDistanceSource: locked.distanceKmOverride == null ? null : locked.distanceSource,
+  }, {
+    ...data,
+    transportDistanceKm: transportDistanceKm === 0 ? null : transportDistanceKm,
+    distanceNote: distanceNote === "" ? null : distanceNote,
+  });
 
   assertRecordLockFields(recordLocks.feedstock({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "feedstock", entityId: feedstockId }) }), locked, feedstockData);
   // Derive before anything reads the new masses: the status, the stock-lane

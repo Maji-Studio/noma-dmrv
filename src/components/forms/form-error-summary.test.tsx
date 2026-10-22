@@ -364,6 +364,8 @@ describe("FormActions error box", () => {
       fireEvent.click(screen.getByRole("button", { name: "Save locked" }));
     });
     await waitFor(() => expect(document.activeElement?.id).toBe("labName"));
+    expect(screen.getAllByRole("alert").some(node => node.textContent === "Not saved. 1 field is locked.")).toBe(true);
+    expect(screen.queryByText(/Undo that change to save/)).toBeNull();
     const scrolls = vi.mocked(Element.prototype.scrollIntoView).mock.calls.filter(([arg]) => (arg as ScrollIntoViewOptions)?.block === "nearest").length;
 
     await act(async () => {

@@ -6,7 +6,7 @@
 import { isActionError } from "./action-error";
 
 /** What a locked field says; the lock's reason is shown once in the footer. */
-export const LOCKED_FIELD_MESSAGE = "Locked";
+export const LOCKED_FIELD_MESSAGE = "Locked. Your change was not saved.";
 
 const LOCK_CODE = "certification_locked";
 const STALE_VERSION_CODE = "stale_version";

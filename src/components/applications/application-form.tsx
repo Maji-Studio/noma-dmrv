@@ -223,6 +223,10 @@ export function ApplicationForm({
     // onTouched so spine markers can flag errors on blur, not only on submit.
     mode: "onTouched",
     defaultValues,
+    // The parent keeps the opened snapshot until our own update commits.
+    // A failed attachment upload leaves it open with the newly saved record;
+    // RHF adopts that record as both values and resetField's saved baseline.
+    values: application ? defaultValues : undefined,
   });
 
   // CERT chips reflect the saved record (frozen), neutral while creating.
@@ -395,7 +399,7 @@ export function ApplicationForm({
     overdrawError: applicationStockError,
   });
 
-  const refuseSave = useSaveRefusal({ control, setError, formId, aliases: APPLICATION_REFUSAL_ALIASES });
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: APPLICATION_REFUSAL_ALIASES });
   const handleFormSubmit = latched(handleSubmit(async (data) => {
     if (applicationStockError) return;
 

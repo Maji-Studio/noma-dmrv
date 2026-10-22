@@ -434,6 +434,7 @@ export function useIsometricFeedstockTypes(enabled = true) {
 export function useSaveFacilityCertifierMapping() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (input: SaveMappingInput) =>
       unwrap(await saveFacilityCertifierMapping(input)),
     onSuccess: (_data, variables) => {
@@ -709,6 +710,7 @@ export function useDeleteRemoval() {
 export function useDeleteFacilityCertifierMapping() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (facilityId: string) =>
       unwrap(await deleteFacilityCertifierMapping(facilityId)),
     onSuccess: (_data, facilityId) => {

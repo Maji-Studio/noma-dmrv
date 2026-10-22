@@ -427,7 +427,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           );
           if (!flushResult.ok) {
             // The update itself committed, so the still-open sheet has to adopt
-            // the version it wrote. Leaving the opened-on snapshot in place
+            // the version and form defaults it wrote (ApplicationForm adopts this
+            // saved snapshot through RHF values). Leaving the opened-on snapshot in place
             // would get the operator's next Save refused as stale against
             // their own write (#768).
             const saved = result.data;
