@@ -180,7 +180,8 @@ export async function hasBlockingFacilitySubmission(
 // DB-level backstop for the (provider, external_facility_id) 1:1 anchor. The
 // serial in-transaction probe in upsertCertifierProject cannot see a concurrent
 // upsert (each only row-locks its own facility), so the unique index fires for
-// the loser. Relabel that one 23505 as a clear SafeError; every other error
+// the loser. Relabel that one 23505 as the `validation_failed` DomainError at
+// `externalFacilityId` (via `facilityIdInUse`); every other error
 // (including the entity-version 23505 handled elsewhere) propagates unchanged.
 const CERTIFIER_EXTERNAL_FACILITY_CONSTRAINT =
   "certifier_projects_provider_external_facility_unique";

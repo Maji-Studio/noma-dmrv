@@ -345,8 +345,8 @@ function GhgStatementSubmitDialogContent({
     }
   };
 
-  // The report step runs inside react-hook-form's submit cycle so a refused
-  // field (the production checkbox) is listed in the summary and focused.
+  // The report step runs inside react-hook-form's submit cycle, so a refused
+  // advance counts as a failed submit and its field error shows under the field.
   const onAdvance = handleSubmit(async () => {
     await advance();
   });
