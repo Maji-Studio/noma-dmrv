@@ -5,6 +5,7 @@ import { getCreditBatchesByRemovalId } from "@/data-access/certifier-removals";
 import { getLatestTemplateObservation, getTemplateObservationById } from "@/data-access/removal-template-observations";
 import { compileRemovalCorrectionContent } from "./removal-correction-compile-core";
 import { assertStatementRemovalsCurrent } from "./statement-removal-correction-core";
+import { loadBatchEmissionEntryFacts } from "@/data-access/emission-entry-facts";
 import { logger } from "@/lib/log";
 import { SafeError } from "@/lib/errors";
 
@@ -36,7 +37,9 @@ it("compares sent content independently of a missing or failed correction conten
   expect(compileRemovalCorrectionContent).toHaveBeenCalledWith(ctx, "removal", expect.any(Object), true);
 });
 it("allows unchanged content after resubmission even when the window is closed", async () => {
+  vi.mocked(loadBatchEmissionEntryFacts).mockRejectedValue(new SafeError("Presentation facts unavailable"));
   await expect(assertStatementRemovalsCurrent(ctx, "statement", ["remote"])).resolves.toBeUndefined();
+  expect(loadBatchEmissionEntryFacts).not.toHaveBeenCalled();
 });
 it.each(["missing-attempt", "missing-snapshot", "missing-observation", "invalid-compile", "failed-compile"])("refuses an unverifiable member: %s", async reason => {
   if (reason === "missing-attempt") vi.mocked(getSentRemovalForComparison).mockResolvedValue(null);

@@ -53,7 +53,9 @@ export function RemovalResubmitNotice({ correction, facilityId }: { correction: 
     return (
       // No title: the Status badge above already says "Resubmit needed".
       <Notice tone="warning" data-removal-correction="resubmit">
-        {correction.changed.length > 0 ? (
+        {correction.comparison === "unavailable" ? (
+          <>noma could not compare this Removal with what it sent.{correction.unavailableMessages?.[0] ? <> {correction.unavailableMessages[0]}</> : null}</>
+        ) : correction.changed.length > 0 ? (
           <>
             <JoinedParts parts={correction.changed.map((change) => ({
               key: `${change.batchId}:${change.componentId}`,

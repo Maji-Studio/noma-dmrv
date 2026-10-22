@@ -7,6 +7,10 @@ import { loadRemovalEntryCorrection } from "./removal-correction-core";
 import { compileRemovalCorrectionContent } from "./removal-correction-compile-core";
 import { assertStatementRemovalsCurrent } from "./statement-removal-correction-core";
 import { compareRemovalCurrentContent } from "./removal-content-comparison-core";
+import { z } from "zod";
+import { logger } from "@/lib/log";
+import { loadBatchEmissionEntryFacts } from "@/data-access/emission-entry-facts";
+import { RemovalComparisonBlockedError } from "./removal-comparison-blocked-error";
 import { SafeError } from "@/lib/errors";
 
 vi.mock("@/data-access/removal-entry-correction", () => ({ getSentRemovalForComparison: vi.fn(), loadRemovalCorrectionFacts: vi.fn(), listStatementRemovalIdentities: vi.fn() }));
@@ -25,7 +29,8 @@ beforeEach(() => {
   vi.mocked(getTemplateObservationById).mockResolvedValue(observation as never);
   vi.mocked(compileRemovalCorrectionContent).mockResolvedValue(semantic);
   vi.mocked(listStatementRemovalIdentities).mockResolvedValue([{ id: "removal", code: "R-12" }]);
-  vi.mocked(loadRemovalCorrectionFacts).mockResolvedValue({ batches: [{ id: "batch", code: "CB-1" }],
+  vi.mocked(loadRemovalCorrectionFacts).mockResolvedValue({ submitted: { payloadSnapshot: { templateObservationId: observation.id, semantic } },
+    batches: [{ id: "batch", code: "CB-1", removalTemplateId: "template" }],
     correction: { returnedStatement: { id: "statement", status: "FAILED_VERIFICATION" } },
     identity: { code: "R-12", reportingPeriodStartOn: "2026-04-01", reportingPeriodEndOn: "2026-06-30" },
   } as never);
@@ -47,6 +52,12 @@ it.each(["file-only", "entry-only", "compile-refusal", "missing-observation", "u
   expect(notice.correctionNeeded).toBe(!unchanged);
   expect(notice.correction?.resubmitNeeded).toBe(!unchanged);
   expect(notice.changedComponentIds).toEqual(comparison.state.changedComponentIds);
+  expect(notice.comparison).toBe(comparison.kind);
+  if (unavailable) {
+    expect(notice.message).toBe("Resubmit needed: noma could not compare this Removal with what it sent.");
+    expect(notice.unavailableMessages).toEqual([]);
+    expect(notice.unavailableReason).toBe(scenario === "compile-refusal" ? "compile_refused" : "missing_observation");
+  }
   if (scenario === "entry-only") {
     expect(notice.correction?.changed).toEqual([{ componentId: "energy", componentName: "Energy", batchId: "batch", batchCode: "CB-1" }]);
   }
@@ -63,4 +74,49 @@ it("uses the pin only for legacy snapshots without an observation id", async () 
   expect(await compareRemovalCurrentContent(ctx, "removal")).toMatchObject({ kind: "unchanged" });
   expect(getTemplateObservationById).not.toHaveBeenCalled();
   expect(getLatestTemplateObservation).toHaveBeenCalledWith(ctx, "isometric", "template");
+});
+
+it("reuses the notice facts and hydrates historical names only for its changed pairs", async () => {
+  vi.mocked(compileRemovalCorrectionContent).mockResolvedValue({ ...semantic, inputs: [{ rtcId: "historical", value: 12 }] });
+  vi.mocked(loadBatchEmissionEntryFacts).mockResolvedValue({ previousObservations: new Map([
+    ["old", { definition: { groups: [{ components: [{ id: "historical", displayName: "Historical name" }] }] } }],
+  ]) } as never);
+  const notice = await loadRemovalEntryCorrection(ctx, "removal");
+  expect(getSentRemovalForComparison).not.toHaveBeenCalled();
+  expect(getCreditBatchesByRemovalId).not.toHaveBeenCalled();
+  expect(loadBatchEmissionEntryFacts).toHaveBeenCalledExactlyOnceWith(ctx, "batch", observation);
+  expect(notice.correction?.changed).toEqual([{ componentId: "historical", componentName: "Historical name", batchId: "batch", batchCode: "CB-1" }]);
+  vi.mocked(loadBatchEmissionEntryFacts).mockClear();
+  vi.mocked(loadBatchEmissionEntryFacts).mockRejectedValue(new SafeError("Presentation unavailable"));
+  await expect(assertStatementRemovalsCurrent(ctx, "statement")).rejects.toThrow("Resubmit Removal R-12 first");
+  expect(loadBatchEmissionEntryFacts).not.toHaveBeenCalled();
+});
+
+it("carries compile blocker messages and reason through both notice projections and fails closed", async () => {
+  const messages = ["Add a file for each emissions entry with a value.", "Review this component's entry policy. Paired inputs require a single entry."];
+  vi.mocked(compileRemovalCorrectionContent).mockRejectedValue(new RemovalComparisonBlockedError(messages));
+  expect(await compareRemovalCurrentContent(ctx, "removal")).toMatchObject({
+    kind: "unavailable", reason: "compile_refused", unavailableMessages: messages,
+  });
+  const notice = await loadRemovalEntryCorrection(ctx, "removal");
+  expect(notice).toMatchObject({ comparison: "unavailable", unavailableReason: "compile_refused", unavailableMessages: messages,
+    correctionNeeded: true, message: "Resubmit needed: noma could not compare this Removal with what it sent.",
+    correction: { comparison: "unavailable", unavailableReason: "compile_refused", unavailableMessages: messages, resubmitNeeded: true, changed: [] },
+  });
+  await expect(assertStatementRemovalsCurrent(ctx, "statement")).rejects.toThrow("noma could not compare Removal R-12");
+});
+
+it.each(["invalid_snapshot", "invalid_compile"] as const)("logs notice %s with only id and reason", async reason => {
+  if (reason === "invalid_snapshot") {
+    const loaded = await loadRemovalCorrectionFacts(ctx, "removal");
+    vi.mocked(loadRemovalCorrectionFacts).mockResolvedValue({ ...loaded, submitted: { payloadSnapshot: { semantic: "private body" } } } as never);
+  } else {
+    const parsed = z.string().safeParse({ privateBody: "sensitive" });
+    if (parsed.success) throw new Error("Expected invalid test fixture");
+    vi.mocked(compileRemovalCorrectionContent).mockRejectedValue(parsed.error);
+  }
+  expect(await loadRemovalEntryCorrection(ctx, "removal")).toMatchObject({
+    comparison: "unavailable", unavailableReason: reason, unavailableMessages: [], correctionNeeded: true,
+  });
+  expect(logger.warn).toHaveBeenCalledExactlyOnceWith({ removalId: "removal", reason }, "Removal notice comparison failed");
 });

@@ -1,3 +1,4 @@
+import { RemovalComparisonBlockedError } from "./removal-comparison-blocked-error";
 import type { OrgContext } from "@/lib/auth/server";
 import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 import { getFacilityById } from "@/data-access/facilities";
@@ -28,7 +29,10 @@ export async function compileRemovalCorrectionContent(orgCtx: OrgContext, remova
   // compilation validation; invalid current records cannot equal sent content.
   const context = await buildRemovalContext(orgCtx, scope, facilityFacts, undefined, false, true);
   const { prepared, blockers } = prepareRemovalSubmission(context);
-  if (useCurrentEvidence && (blockers.length || context.removalEntryContext?.contributions.blockers.length)) return null;
+  const comparisonBlockers = [...blockers, ...(context.removalEntryContext?.contributions.blockers ?? [])];
+  if (useCurrentEvidence && comparisonBlockers.length) {
+    throw new RemovalComparisonBlockedError(comparisonBlockers.map(blocker => blocker.message));
+  }
   // The statement guard compares live attachments even when an eligibility read
   // failed or the last Removal resubmit has already closed the correction window.
   if (useCurrentEvidence) context.correctionWindowOpen = true;
