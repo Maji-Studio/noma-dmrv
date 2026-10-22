@@ -16,10 +16,13 @@ import { useState } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import Link from "next/link";
 import { PLATFORM_HOME_HREF } from "@/lib/auth/home-path";
+import { PLATFORM_DIAGNOSTICS_HREF, PLATFORM_TEMPLATE_MAPPING_HREF } from "@/lib/settings/links";
 import { usePathname } from "next/navigation";
 import {
   HouseIcon,
   TreeStructureIcon,
+  PulseIcon,
+  FlowArrowIcon,
   LeafIcon,
   FactoryIcon,
   HandshakeIcon,
@@ -168,11 +171,10 @@ const navSections: NavSection[] = [
 /**
  * Platform section — appended to the nav only for Platform Admins.
  *
- * One item, because the organization directory is the only surface that lives
- * under `/admin`. It used to point at an `/admin` hub whose other two tiles
- * were cross-links to pages already in this sidebar; the label now names the
- * destination instead of the gate. Cross-tenant by definition, so the
- * `?facility=` param is skipped.
+ * Organizations (the Platform home), Diagnostics and Template mapping, which
+ * moved here from Settings (#1373). Organizations and Diagnostics are not
+ * about one facility, so they skip the `?facility=` param; Template mapping
+ * shows the working facility, so it keeps it.
  */
 const adminSection: NavSection = {
   title: "Platform",
@@ -184,6 +186,13 @@ const adminSection: NavSection = {
       icon: BuildingsIcon,
       skipFacilityParam: true,
     },
+    {
+      href: PLATFORM_DIAGNOSTICS_HREF,
+      label: "Diagnostics",
+      icon: PulseIcon,
+      skipFacilityParam: true,
+    },
+    { href: PLATFORM_TEMPLATE_MAPPING_HREF, label: "Template mapping", icon: FlowArrowIcon },
   ],
 };
 

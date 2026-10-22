@@ -1,16 +1,11 @@
-/**
- * Settings, Template mapping (Platform Admins): the working facility's
- * Removal template mapping and compilation traces, read-only.
- */
-import { SettingsConsole, TemplateMappingSettingsPane } from "@/components/settings";
-import { assertSettingsPaneVisible, loadSettingsViewer } from "@/lib/settings/settings-viewer";
+/** `/settings/template-mapping` moved next to Organizations under Platform (#1373). */
+import { permanentRedirect } from "next/navigation";
+import { PLATFORM_TEMPLATE_MAPPING_HREF, redirectPreservingQuery, type SettingsSearchParams } from "@/lib/settings/links";
 
-export default async function TemplateMappingSettingsPage() {
-  const { viewer } = await loadSettingsViewer();
-  assertSettingsPaneVisible(viewer, "template-mapping");
-  return (
-    <SettingsConsole pane="template-mapping" viewer={viewer}>
-      <TemplateMappingSettingsPane />
-    </SettingsConsole>
-  );
+export default async function RetiredSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<SettingsSearchParams>;
+}) {
+  permanentRedirect(redirectPreservingQuery(PLATFORM_TEMPLATE_MAPPING_HREF, await searchParams));
 }

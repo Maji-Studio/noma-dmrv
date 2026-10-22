@@ -5,11 +5,11 @@
  */
 
 import {
-  SETTINGS_DIAGNOSTICS_HREF,
+  PLATFORM_DIAGNOSTICS_HREF,
+  PLATFORM_TEMPLATE_MAPPING_HREF,
   SETTINGS_FACILITIES_HREF,
   SETTINGS_REGISTRY_HREF,
   SETTINGS_REMOVAL_TEMPLATES_HREF,
-  SETTINGS_TEMPLATE_MAPPING_HREF,
   withFacilityParam,
 } from "@/lib/settings/links";
 
@@ -82,14 +82,14 @@ const LEGACY_CERTIFICATION_SECTION_ROUTES: Record<string, string> = {
   sources: SETTINGS_REGISTRY_HREF,
   "removal-templates": SETTINGS_REMOVAL_TEMPLATES_HREF,
   "emission-estimates": SETTINGS_FACILITIES_HREF,
-  diagnostics: SETTINGS_DIAGNOSTICS_HREF,
-  "template-mapping": SETTINGS_TEMPLATE_MAPPING_HREF,
+  diagnostics: PLATFORM_DIAGNOSTICS_HREF,
+  "template-mapping": PLATFORM_TEMPLATE_MAPPING_HREF,
 };
 
-/** Platform Admin panes; anyone else lands on Registry instead of a 404. */
+/** Platform Admin pages; anyone else lands on Registry instead of a 404. */
 const PLATFORM_ONLY_LEGACY_ROUTES: ReadonlySet<string> = new Set([
-  SETTINGS_DIAGNOSTICS_HREF,
-  SETTINGS_TEMPLATE_MAPPING_HREF,
+  PLATFORM_DIAGNOSTICS_HREF,
+  PLATFORM_TEMPLATE_MAPPING_HREF,
 ]);
 
 const LEGACY_SECTION_PARAM = "section";
