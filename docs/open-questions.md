@@ -628,10 +628,9 @@ before allowing confirmation to convert stored entry values to the new unit.
 
 ## Creates without a retry key (#1302) - **deferred**
 
-- Nine creates still run without `withCreate`: quick-add `createVehicleFn`,
-  `createFeedstockTypeFn` and `createStorageLocationFn`; `createStorageLocationFn`
+- Five creates still run without `withCreate`: `createStorageLocationFn`
   (storage-locations); `createFacilityFn`; `createReactorFn`; `createFeedstockTypeFn`
-  (feedstock-types); `createEmissionEntryFn`; `startNewProductionProcessFn`.
+  (feedstock-types); `startNewProductionProcessFn`. These remain for PR C.
   Each needs a writer that takes `tx` plus an app-only runner operation, so the key
   and the record of the save commit together. They sit in the PENDING table of
   `src/fn/create-action-coverage.test.ts` until then (#1302).

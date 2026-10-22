@@ -25,7 +25,7 @@ import { SafeError } from "@/lib/errors";
 import { guardStorageLocationName } from "./unique-name-guards";
 import { isPgUniqueViolation } from "@/db/errors";
 import { getStorageLocationById } from "./entities/storage-locations";
-import { createFeedstockType as createCanonicalFeedstockType } from "./feedstock-types";
+import { createFeedstockTypeInTransaction as createCanonicalFeedstockType } from "./feedstock-types";
 import type { FeedstockCategory } from "@/schemas/feedstock-types";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 
@@ -145,9 +145,16 @@ export interface CreateVehicleData {
  */
 export async function createVehicle(ctx: OrgContext, data: CreateVehicleData): Promise<EntityOption> {
   requireOrgScope(ctx);
+  return db.transaction((tx) => createVehicleInTransaction(ctx, tx, data));
+}
+
+export async function createVehicleInTransaction(
+  ctx: OrgContext, tx: DbTransaction, data: CreateVehicleData,
+): Promise<EntityOption> {
+  requireOrgScope(ctx);
 
   // Check for duplicate name (unique constraint)
-  const [existingName] = await db
+  const [existingName] = await tx
     .select({ id: vehicles.id })
     .from(vehicles)
     .where(
@@ -162,7 +169,7 @@ export async function createVehicle(ctx: OrgContext, data: CreateVehicleData): P
   }
 
   try {
-    const [vehicle] = await db
+    const [vehicle] = await tx
       .insert(vehicles)
       .values({
         organizationId: ctx.organizationId,
@@ -213,8 +220,15 @@ export async function createFeedstockType(
   data: CreateFeedstockTypeData
 ): Promise<EntityOption> {
   requireOrgScope(ctx);
+  return db.transaction((tx) => createFeedstockTypeInTransaction(ctx, tx, data));
+}
+
+export async function createFeedstockTypeInTransaction(
+  ctx: OrgContext, tx: DbTransaction, data: CreateFeedstockTypeData,
+): Promise<EntityOption> {
+  requireOrgScope(ctx);
   try {
-    const feedstockType = await createCanonicalFeedstockType(ctx, {
+    const feedstockType = await createCanonicalFeedstockType(ctx, tx, {
       ...data,
       usage: data.usage ?? "pyrolysis",
     });
@@ -261,38 +275,43 @@ export async function createStorageLocation(
   data: CreateStorageLocationData
 ): Promise<EntityOption> {
   requireOrgScope(ctx);
+  return db.transaction((tx) => createStorageLocationInTransaction(ctx, tx, data));
+}
 
-  return db.transaction(async (tx) => {
-    await lockActiveFacilityReference(ctx, tx, data.facilityId);
-    if (data.feedstockTypeId) {
-      await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId, tx);
-    }
-    if (data.formulationId) {
-      await lockFormulationReference(ctx, tx, data.formulationId);
-    }
+export async function createStorageLocationInTransaction(
+  ctx: OrgContext, tx: DbTransaction, data: CreateStorageLocationData,
+): Promise<EntityOption> {
+  requireOrgScope(ctx);
 
-    const [location] = await guardStorageLocationName(ctx, data.name, () =>
-      tx
-        .insert(storageLocations)
-        .values({
-          organizationId: ctx.organizationId,
-          code: data.code,
-          name: data.name,
-          type: data.type,
-          facilityId: data.facilityId,
-          capacityKg: data.capacityKg ?? null,
-          feedstockTypeId: data.feedstockTypeId ?? null,
-          formulationId: data.formulationId ?? null,
-          stockMode: initialStockMode(data.type, data.stockMode),
-          drawOrder: data.drawOrder ?? "oldest_first",
-        })
-        .returning(),
-    );
+  await lockActiveFacilityReference(ctx, tx, data.facilityId);
+  if (data.feedstockTypeId) {
+    await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId, tx);
+  }
+  if (data.formulationId) {
+    await lockFormulationReference(ctx, tx, data.formulationId);
+  }
 
-    const enriched = await getStorageLocationById(ctx, location.id, tx);
-    if (!enriched) {
-      throw new Error("Created storage location could not be read");
-    }
-    return enriched;
-  });
+  const [location] = await guardStorageLocationName(ctx, data.name, () =>
+    tx
+      .insert(storageLocations)
+      .values({
+        organizationId: ctx.organizationId,
+        code: data.code,
+        name: data.name,
+        type: data.type,
+        facilityId: data.facilityId,
+        capacityKg: data.capacityKg ?? null,
+        feedstockTypeId: data.feedstockTypeId ?? null,
+        formulationId: data.formulationId ?? null,
+        stockMode: initialStockMode(data.type, data.stockMode),
+        drawOrder: data.drawOrder ?? "oldest_first",
+      })
+      .returning(),
+  );
+
+  const enriched = await getStorageLocationById(ctx, location.id, tx);
+  if (!enriched) {
+    throw new Error("Created storage location could not be read");
+  }
+  return enriched;
 }

@@ -58,8 +58,16 @@ export async function createFeedstockType(
   data: CreateFeedstockTypeData & { code: string },
 ): Promise<FeedstockType> {
   requireOrgScope(ctx);
+  return db.transaction((tx) => createFeedstockTypeInTransaction(ctx, tx, data));
+}
+
+export async function createFeedstockTypeInTransaction(
+  ctx: OrgContext, tx: DbTransaction,
+  data: CreateFeedstockTypeData & { code: string },
+): Promise<FeedstockType> {
+  requireOrgScope(ctx);
   requireOrgRole(ctx, FEEDSTOCK_TYPE_MANAGE_ROLE);
-  const [created] = await db
+  const [created] = await tx
     .insert(feedstockTypes)
     .values({
       organizationId: ctx.organizationId,

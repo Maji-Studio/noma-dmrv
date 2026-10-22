@@ -46,8 +46,8 @@ components (UI)
   caller's `onSuccess`, or when `startDraft()` is called for a new draft. Equal values with
   a new key create a separate entry. App replay uses the store's existing
   retention period. Quick-add dialogs that submit through `useQuickAddSubmit`
-  (formulation, driver, operator) hold the same draft key with
-  `useCreateIntentKey` directly. API key creation is the one keyed create outside the runner: a retry
+  hold their draft key in that hook and call its `startDraft` on open or close.
+  API key creation is the one keyed create outside the runner: a retry
   replaces the unseen key instead of replaying it ([auth.md](./auth.md)).
   It reads the same lazily parsed key through `create.key`; only this adapter
   may use that property. The keyed action shape is

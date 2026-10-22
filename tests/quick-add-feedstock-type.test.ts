@@ -20,7 +20,7 @@ function input() {
 describe("feedstock type quick-add canonical policy", () => {
   it("rejects Members through the real canonical DAL without inserting", async () => {
     const data = input();
-    const spy = vi.spyOn(canonical, "createFeedstockType");
+    const spy = vi.spyOn(canonical, "createFeedstockTypeInTransaction");
     await expect(createFeedstockType({ ...makeTestOrgContext(), orgRole: "member" }, data))
       .rejects.toThrow("permission");
     expect(spy).toHaveBeenCalledOnce();
@@ -30,9 +30,9 @@ describe("feedstock type quick-add canonical policy", () => {
   it.each(["admin"] as const)("allows %s and persists registry selection with EntityOption", async (orgRole) => {
     const data = input();
     const ctx = { ...makeTestOrgContext(), orgRole };
-    const spy = vi.spyOn(canonical, "createFeedstockType");
+    const spy = vi.spyOn(canonical, "createFeedstockTypeInTransaction");
     const result = await createFeedstockType(ctx, { ...data, name: ` ${data.name} ` });
-    expect(spy).toHaveBeenCalledWith(ctx, expect.objectContaining({ isometricFeedstockTypeId: data.isometricFeedstockTypeId }));
+    expect(spy).toHaveBeenCalledWith(ctx, expect.anything(), expect.objectContaining({ isometricFeedstockTypeId: data.isometricFeedstockTypeId }));
     expect(result).toEqual({ id: expect.any(String), code: data.code, name: data.name, subtitle: "forestry · pyrolysis" });
     const [saved] = await db.select().from(feedstockTypes).where(eq(feedstockTypes.id, result.id));
     expect(saved).toMatchObject({ organizationId: ctx.organizationId, isometricFeedstockTypeId: data.isometricFeedstockTypeId });
