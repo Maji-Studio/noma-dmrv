@@ -18,9 +18,6 @@ import { creditBatchStateOf } from "@/lib/credit-batches/batch-state";
 import { loadCreditBatchTodos, type CreditBatchTodos } from "@/fn/certification/credit-batch-todos-core";
 import { loadCreditBatchTodosFn } from "@/fn/certification/credit-batch-todos";
 import { loadCreditBatchHealthSummaries, type CreditBatchHealthSummary } from "@/fn/certification/overview";
-import { loadBatchHealth } from "@/fn/certification/batch-health";
-import { loadCreditBatchDurabilitySummary } from "@/fn/certification/durability-batch-summary";
-import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
 import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/load-enrichment";
 import type { IsometricClient } from "@/lib/isometric/client";
 import * as batchSamples from "@/data-access/credit-batch-samples";
@@ -154,19 +151,6 @@ async function parity(
     assert(action.success, JSON.stringify(action));
     expect(action.data).toEqual(value);
     const single = await loadBatchEmissionLines(scope.ctx, scope.facilityId, row.id);
-    const pageHealth = await loadBatchHealth(row.id);
-    const pageDurability = await loadCreditBatchDurabilitySummary(row.id);
-    assert(pageHealth.success, JSON.stringify(pageHealth));
-    assert(pageDurability.success, JSON.stringify(pageDurability));
-    // The page model adds only Waiting items, outside Blocking and Check parity.
-    const pageItems = buildCreditBatchOpenItems({
-      facilityId: scope.facilityId, creditBatchId: row.id,
-      canManage: scope.ctx.isPlatformAdmin || scope.ctx.orgRole === "admin",
-      health: pageHealth.data, durability: pageDurability.data ?? undefined,
-      emissionLines: single.status === "ready" ? single.lines : undefined,
-    });
-    expect(pageItems.blocking.map(item => item.id).sort()).toEqual(value.blocking.map(item => item.id).sort());
-    expect(pageItems.check.map(item => item.id).sort()).toEqual(value.check.map(item => item.id).sort());
     const bulk = (await loadBatchesEmissionLines(scope.ctx, rows)).get(row.id)!;
     expect(single.status).toBe(bulk.status);
     if (single.status === "ready" && bulk.status === "ready") {

@@ -89,13 +89,13 @@ function OpenItemRow({ item }: { item: CreditBatchOpenItem }) {
 }
 
 function OpenItemGroups() {
-  const { openItems, blockingCount, healthError } = useCreditBatchPage();
+  const { openItems, blockingCount, todosError } = useCreditBatchPage();
   const shown = GROUP_ORDER.filter((group) => openItems[group].length > 0);
   if (shown.length === 0) {
-    // Until the batch health answers, "nothing open" would be a guess. A
-    // failed health says so in its own notice above, so nothing repeats it here.
+    // Until the to-do read answers, "nothing open" would be a guess. A
+    // failed read says so in its own notice above, so nothing repeats it here.
     if (blockingCount == null) {
-      return healthError ? null : <p className={cn("body-small", MUTED_TEXT)} aria-busy>Checking this credit batch…</p>;
+      return todosError ? null : <p className={cn("body-small", MUTED_TEXT)} aria-busy>Checking this credit batch…</p>;
     }
     return <EmptyState padding="sm" icon={<CheckCircleIcon size={32} weight="thin" />} title="Nothing is open on this credit batch" />;
   }
@@ -126,20 +126,20 @@ function OpenItemsPanel() {
   const { blockingCount } = useCreditBatchPage();
   return (
     <PagePanel title="Open to-dos" labelledBy="credit-batch-open-items">
-      {blockingCount == null && <HealthUnavailable />}
+      {blockingCount == null && <TodosUnavailable />}
       <OpenItemGroups />
     </PagePanel>
   );
 }
 
-/** The batch health failed: say so once, with a retry, instead of an empty list. */
-function HealthUnavailable() {
-  const { healthError, retryHealth, retryingHealth } = useCreditBatchPage();
-  if (!healthError) return null;
+/** The to-do read failed: say so once, with a retry, instead of an empty list. */
+function TodosUnavailable() {
+  const { todosError, retryTodos, retryingTodos } = useCreditBatchPage();
+  if (!todosError) return null;
   return (
     <Notice
       tone="warning"
-      action={<Button variant="weak" size="small" busy={retryingHealth} onClick={retryHealth}>Retry</Button>}
+      action={<Button variant="weak" size="small" busy={retryingTodos} onClick={retryTodos}>Retry</Button>}
     >
       Blocking items could not be checked. Retry to load them.
     </Notice>
