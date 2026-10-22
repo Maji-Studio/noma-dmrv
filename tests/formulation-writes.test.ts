@@ -129,13 +129,13 @@ describe("formulation runner writes", { timeout: TIMEOUT_MS }, () => {
     const row = (await runOperation(createFormulation, f.ctx, { name: "Ordered" }, { pool })).data;
     const order = (await runOperation(recordOrder, f.ctx, { ...orderInput(f), formulationId: row.id }, { pool })).data;
     if (archived) await db.update(orders).set({ archivedAt: new Date() }).where(eq(orders.id, order.id));
-    await expect(runOperation(deleteFormulation, f.ctx, { formulationId: row.id, expectedVersion: 1 }, { pool })).rejects.toMatchObject({ ...issue("conflict", ["formulationId"]), issues: [expect.objectContaining({ meta: { orderCodes: [order.code] } })] });
+    await expect(runOperation(deleteFormulation, f.ctx, { formulationId: row.id, expectedVersion: 1 }, { pool })).rejects.toMatchObject({ ...issue("conflict", ["formulationId"]), issues: [expect.objectContaining({ meta: { orderCodes: [order.code], reason: "in_use" } })] });
   });
 
   it("refuses bin and product references and snapshot-line removal with blocker metadata", async () => {
     const f = await fixture();
     await expect(runOperation(deleteFormulation, f.ctx, { formulationId: f.recipe.id, expectedVersion: 1 }, { pool })).rejects.toMatchObject({ code: "conflict", message: "Formulation was not deleted because product bins use it. Keep this formulation.",
-      issues: [expect.objectContaining({ path: ["formulationId"], meta: { binCodes: [f.bin.code] } })],
+      issues: [expect.objectContaining({ path: ["formulationId"], meta: { binCodes: [f.bin.code], reason: "in_use" } })],
     });
     const stock = await postedStockFixture(); stockFixtures.push(stock);
     await expect(runOperation(deleteFormulation, stock.ctx, { formulationId: stock.pure.id, expectedVersion: stock.pure.version }, { pool })).rejects.toMatchObject({ code: "conflict", message: "Formulation was not deleted because biochar products use it. Keep this formulation." });

@@ -1,6 +1,7 @@
 "use server";
 
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 
 import { SafeError } from "@/lib/errors";
 import { z } from "zod";
@@ -21,7 +22,7 @@ import {
   applicationEvidenceMethods,
   applicationStatuses,
 } from "@/schemas/applications";
-import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 
 const MAX_APPLICATION_LIST_SIZE = 100;
 
@@ -101,7 +102,7 @@ export async function createApplicationFn(
   data: z.input<typeof recordApplicationInput>,
   options?: CreateIntentOptions
 ): Promise<ActionResult<Application>> {
-  return withAction(async ctx => (await runOperationInProcess(recordApplication, ctx, recordApplicationInput.parse(data), createIntentOptionsSchema.parse(options))).application, {
+  return withCreate(async (_ctx, create) => (await create(recordApplication, recordApplicationInput.parse(data))).application, options, {
     fallbackMessage: "Failed to create application", log: { message: "application action failed", context: { op: "application:create" } },
   });
 }

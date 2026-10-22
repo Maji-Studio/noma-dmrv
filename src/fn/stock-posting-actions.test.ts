@@ -175,9 +175,9 @@ describe("delivery action field mapping and partial notes", () => {
     }
     expect(mocks.log).not.toHaveBeenCalled();
   });
-  it("maps the future instant issue to deliveryDate", async () => {
+  it("keeps the future instant issue at deliveredAt", async () => {
     mocks.run.mockRejectedValue(new DomainError("validation_failed", "Date and time cannot be in the future.", { issues: [{ path: ["deliveredAt"], code: "validation_failed", message: "Date and time cannot be in the future." }] }));
-    expect(await createDeliveryFn(delivery)).toMatchObject({ success: false, issues: [{ path: ["deliveryDate"] }] });
+    expect(await createDeliveryFn(delivery)).toMatchObject({ success: false, issues: [{ path: ["deliveredAt"] }] });
   });
   it("keeps an omitted note and lets an empty form field clear it", async () => {
     mocks.update.mockResolvedValue({ id });
@@ -188,13 +188,13 @@ describe("delivery action field mapping and partial notes", () => {
   });
 });
 
-it("preserves preview and unexpected cause when remapping delivery issues", async () => {
+it("preserves preview and unexpected cause with operation delivery issues", async () => {
   const preview = { basisFingerprint: "fresh", stockEffects: [] };
   mocks.run.mockRejectedValue(new DomainError("stock_basis_changed", "Refresh the preview.", {
     preview, cause: new Error("Unexpected cause"), retryable: true, retryAfterSeconds: 2,
     issues: [{ path: ["moisturePercent"], code: "validation_failed", message: "Enter moisture." }],
   }));
-  expect(await createDeliveryFn(delivery)).toMatchObject({ success: false, preview, issues: [{ path: ["moistureContentPercent"] }] });
+  expect(await createDeliveryFn(delivery)).toMatchObject({ success: false, preview, issues: [{ path: ["moisturePercent"] }] });
   expect(mocks.log).toHaveBeenCalledWith(expect.objectContaining({ op: "delivery:create", errorName: "Error" }), "delivery action failed");
 });
 

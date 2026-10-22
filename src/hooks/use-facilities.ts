@@ -12,6 +12,7 @@ import {
   getFacilityStatsFn,
   getFacilityCountriesFn,
   getFacilityArchiveImpactFn,
+  getFacilityOutputStockFn,
   createFacilityFn,
   updateFacilityFn,
   archiveFacilityFn,
@@ -56,6 +57,8 @@ export const facilityKeys = {
     [...facilityKeys.all, "codeCheck", code, excludeId] as const,
   archiveImpact: (id: string) =>
     [...facilityKeys.all, "archiveImpact", id] as const,
+  outputStock: (id: string) =>
+    [...facilityKeys.all, "outputStock", id] as const,
 };
 
 // Exact message thrown by the facility data-access reads
@@ -74,6 +77,16 @@ export function useFacilityStats(archived = false, options?: { enabled?: boolean
     queryKey: facilityKeys.stats(filters),
     queryFn: async () => unwrap(await getFacilityStatsFn(filters)),
     enabled: options?.enabled,
+  });
+}
+
+/** Load stock only for the facility whose read sheet is open. */
+export function useFacilityOutputStock(facilityId: string | null) {
+  return useQuery({
+    queryKey: facilityKeys.outputStock(facilityId ?? ""),
+    queryFn: async () => unwrap(await getFacilityOutputStockFn({ facilityId: facilityId! })),
+    enabled: !!facilityId,
+    staleTime: 0,
   });
 }
 

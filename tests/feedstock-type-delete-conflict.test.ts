@@ -18,7 +18,7 @@ import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { formulationIngredients, formulations } from "@/db/schema/products";
 import { deleteFeedstockType } from "@/data-access/feedstock-types";
-import { ActionConflictError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
 import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const ctx = makeTestOrgContext();
@@ -46,13 +46,14 @@ async function insertFeedstockType(tag: string): Promise<string> {
   return row.id;
 }
 
-async function refusal(feedstockTypeId: string): Promise<ActionConflictError> {
+async function refusal(feedstockTypeId: string): Promise<DomainError> {
   const error = await deleteFeedstockType(ctx, feedstockTypeId, await masterDataVersion(ctx, "feedstockTypes", feedstockTypeId)).then(
     () => null,
     (caught: unknown) => caught,
   );
-  expect(error).toBeInstanceOf(ActionConflictError);
-  return error as ActionConflictError;
+  expect(error).toBeInstanceOf(DomainError);
+  expect(error).toMatchObject({ code: "conflict", issues: [{ path: ["feedstockTypeId"], code: "conflict", meta: { reason: "in_use" } }] });
+  return error as DomainError;
 }
 
 beforeAll(async () => {

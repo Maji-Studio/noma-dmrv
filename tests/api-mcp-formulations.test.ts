@@ -236,7 +236,7 @@ describe("formulation refusal parity and MCP isolation", { timeout: TIMEOUT_MS }
     const orderRow = await saved();
     const order = await insertReadOrder(a, "FORMULATION-ORDER", { formulationId: orderRow.id, archivedAt: new Date() });
     const blocked = await refusal("delete", {}, orderRow, "conflict", "/formulationId");
-    expect(blocked.errors[0].meta).toEqual({ orderCodes: [order.code] });
+    expect(blocked.errors[0].meta).toEqual({ orderCodes: [order.code], reason: "in_use" });
     const made = await runOperation(makeBiocharProduct, a.ctx, {
       facilityId: a.facility.id, formulationId: a.recipe.id, placedAt: "2026-09-12T12:00:00.000Z",
       sourceBiocharStorageLocationId: a.source.id, storageLocationId: a.bin.id,
@@ -247,7 +247,7 @@ describe("formulation refusal parity and MCP isolation", { timeout: TIMEOUT_MS }
     const removal = await refusal("patch", { lines: [] }, recipe, "conflict", "/lines");
     expect(removal.errors[0].meta).toEqual({ formulationIngredientId: a.ingredient.id, feedstockTypeId: a.ingredientType.id, productCodes: [made.data.product.code] });
     const deletion = await refusal("delete", {}, recipe, "conflict", "/formulationId");
-    expect(deletion.errors[0].meta).toEqual({ productCodes: [made.data.product.code] });
+    expect(deletion.errors[0].meta).toEqual({ productCodes: [made.data.product.code], reason: "in_use" });
   });
 
   it("matches stale versions, archived PATCH before stale version and repeated archive", async () => {

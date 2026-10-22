@@ -26,8 +26,9 @@ import {
 import { logFeedstockDelivery, updateFeedstock, deleteFeedstock } from "@/lib/operations/feedstocks";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 import type { ActionResult } from "@/types/actions";
-import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 
 // ============================================
 // List/Query Operations
@@ -92,7 +93,7 @@ export async function createFeedstockFn(
   input: z.infer<typeof createFeedstockSchema>,
   options?: CreateIntentOptions
 ): Promise<ActionResult<CreateFeedstockResult>> {
-  return withAction((ctx) => runOperationInProcess(logFeedstockDelivery, ctx, input, createIntentOptionsSchema.parse(options)), {
+  return withCreate((_ctx, create) => create(logFeedstockDelivery, input), options, {
     fallbackMessage: "Failed to create feedstock",
     log: { message: "feedstock action failed", context: { op: "feedstock:create" } },
   });

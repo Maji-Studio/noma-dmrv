@@ -1,15 +1,12 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { assert, afterEach, beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
 
 vi.mock("@/data-access/facility-emissions-overview", () => ({ loadFacilityEmissionsOverviewScope: vi.fn() }));
+vi.mock("@/data-access/emission-line-comments", () => ({ listEmissionLineCommentsForBatches: vi.fn() }));
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntriesForBatches: vi.fn() }));
 vi.mock("@/data-access/removal-template-observations", () => ({ getLatestTemplateObservations: vi.fn(), getTemplateObservationsByIds: vi.fn() }));
 vi.mock("@/data-access/batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: vi.fn() }));
-// Prevent importing the detail loader's unused database dependencies in this unit suite.
-vi.mock("@/data-access/emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: vi.fn() }));
-vi.mock("@/data-access/credit-batches", () => ({ getCreditBatchById: vi.fn() }));
-vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn() }));
 import { loadFacilityEmissionsOverviewScope } from "@/data-access/facility-emissions-overview";
 import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
 import { getLatestTemplateObservations, getTemplateObservationsByIds } from "@/data-access/removal-template-observations";
@@ -75,7 +72,8 @@ it("derives all six states, facility-month counts and last occurrence with bulk 
 it("shows one setup item for an unpinned or unread template without failing other batches", async () => {
   vi.mocked(getLatestTemplateObservations).mockResolvedValue([]);
   const result = await loadFacilityEmissionsOverview(ctx, "facility");
-  expect(result.batches[0].lineCounts).toMatchObject({ total: 1, open: 1, needsSetup: 1 });
+  expect(result.batches[0]).toMatchObject({ entriesThisMonth: 3, lastEntryOn: "2026-10-16",
+    lineCounts: { total: 1, open: 1, needsSetup: 1 } });
 });
 
 it("authorizes the facility even when there are no batches and avoids other reads", async () => {
@@ -92,9 +90,11 @@ it("isolates unread and unpinned templates while deriving review lines for a sib
     batch, { ...batch, id: "unread", removalTemplateId: "unread-template" },
     { ...batch, id: "unpinned", removalTemplateId: null },
   ]);
-  expect(result.get("new")?.lines?.filter(line => line.state === "needsReview")).toHaveLength(1);
-  expect(result.get("unread")?.lines).toBeUndefined();
-  expect(result.get("unpinned")?.lines).toBeUndefined();
+  const ready = result.get("new")!;
+  assert(ready.status === "ready");
+  expect(ready.lines.filter(line => line.state === "needsReview")).toHaveLength(1);
+  expect(result.get("unread")).toEqual({ status: "blocked", blocker: "templateNotFullyRead", storedEntries: [] });
+  expect(result.get("unpinned")).toEqual({ status: "blocked", blocker: "unpinnedTemplate", storedEntries: [] });
   expect(getLatestTemplateObservations).toHaveBeenCalledExactlyOnceWith(ctx, "isometric", ["template", "unread-template"]);
-  expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledExactlyOnceWith(ctx, ["new", "unread", "unpinned"]);
+  expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledExactlyOnceWith(ctx, ["new"]);
 });
