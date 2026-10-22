@@ -1,7 +1,7 @@
 "use client";
 
 import { entityViewHref } from "@/lib/entity-deep-link";
-import { toDeleteErrorMessage } from "@/lib/stale-version";
+import { StaleVersionError, staleDeleteMessage, toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * SampleList component
  * Main sample listing with CRUD operations, stat cards, filters, and DataTable
@@ -43,7 +43,9 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
+import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
+import { SAMPLE_DELETE_MESSAGE } from "./sample-delete-copy";
 import { formatMoisturePercent, MASS_MOISTURE_LABELS } from "@/lib/mass-moisture";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
@@ -288,6 +290,8 @@ export function SampleList({
   const [deletingVersion, setDeletingVersion] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A stale refusal closes the dialog (its Delete would resubmit the same version), so it reads on the page.
+  const [staleDeleteNotice, setStaleDeleteNotice] = useState<string | null>(null);
 
   const filters: Partial<SampleFilterData> = {
     search: debouncedSearch || undefined,
@@ -452,6 +456,7 @@ export function SampleList({
   const handleDelete = (sampleId: string) => {
     const row = (samples).find((item) => item.id === sampleId);
     if (!row) return;
+    setStaleDeleteNotice(null);
     setDeletingVersion(row.version);
     setDeletingSampleId(sampleId);
   };
@@ -463,7 +468,12 @@ export function SampleList({
       setDeletingSampleId(null);
       toast.success("Sample deleted.");
     } catch (error) {
-      setDeleteError(toDeleteErrorMessage(error, "Sample", "Sample was not deleted. Try again."));
+      if (error instanceof StaleVersionError) {
+        setDeletingSampleId(null);
+        setStaleDeleteNotice(staleDeleteMessage("Sample"));
+      } else {
+        setDeleteError(toDeleteErrorMessage(error, "Sample", "Sample was not deleted. Try again."));
+      }
     }
   };
 
@@ -646,7 +656,7 @@ export function SampleList({
               <option value="">All credit batches</option>
               {creditBatchesData?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {formatDateRange(batch.startDate, batch.endDate)}
+                  {creditBatchOptionLabel(batch)}
                 </option>
               ))}
             </DataTable.FilterSelect>
@@ -662,14 +672,15 @@ export function SampleList({
         <DataTable.Pagination />
       </DataTable>
 
-      {deleteError && <ServerError message={deleteError} />}
+      {staleDeleteNotice && <ServerError message={staleDeleteNotice} />}
       <DeleteConfirmDialog
         isOpen={!!deletingSampleId}
         title="Delete Sample"
-        message="Delete this Sample? Samples linked to credit batches cannot be deleted. This action cannot be undone."
+        message={SAMPLE_DELETE_MESSAGE}
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingSampleId(null); setDeleteError(null); }}
         isPending={deleteSample.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       <EntitySideSheet

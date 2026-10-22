@@ -50,7 +50,8 @@ import {
   ENTITY_DEEP_LINK_MODE_PARAM,
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
-import { formatDayString, formatDateRange } from "@/lib/format-utils";
+import { formatDayString } from "@/lib/format-utils";
+import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
 import {
   formatMoisturePercent,
 } from "@/lib/mass-moisture";
@@ -570,7 +571,7 @@ export function BiocharProductList() {
               <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {formatDateRange(batch.startDate, batch.endDate)}
+                  {creditBatchOptionLabel(batch)}
                 </option>
               ))}
             </DataTable.FilterSelect>
