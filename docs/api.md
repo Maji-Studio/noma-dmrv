@@ -824,7 +824,7 @@ section shared with `llms.txt`, plus MCP grounding and retry guidance.
 
 ### Record-lock refusals
 
-Record dependencies and Sent certification lineage use `certification_locked`
+Record-lock guards and Sent certification lineage use `certification_locked`
 (HTTP 409), preserving the existing problem type and MCP error code. The message
 names what holds the record and how to free it; available conflict and blocker
 references remain in the structured error. REST and MCP execute the same
@@ -851,3 +851,20 @@ existing safe metadata. REST exposes it as `errors[].meta.reason`, MCP as
 `issues[].meta.reason`, and Server Actions as `issues[].meta.reason` on the
 client `ActionError`. Consumers use this discriminator instead of message text;
 other conflicts, such as name clashes, do not carry it.
+
+This contract covers supplier and customer dependencies, customer locations,
+formulations and feedstock types, as well as these delete refusals:
+
+| Record | Dependency | Issue pointer | Safe issue metadata besides `reason` |
+|---|---|---|---|
+| Feedstock | Production runs | `/feedstockId` | None |
+| Production run | Biochar products, credit batches, or both | `/productionRunId` | None; the top-level `conflict` retains the dependent record reference |
+| Order | Deliveries, including archived deliveries | `/orderId` | `deliveryCode` |
+
+For feedstock and order dependency refusals, the REST problem `code` and `type`
+and the MCP error `code` change from `certification_locked` to `conflict`.
+HTTP status remains 409. Production-run dependency refusals retain `conflict`
+and HTTP 409, adding the issue and reason. Certification-lineage guards and
+production-run retained-stock-history refusals still use `certification_locked`.
+Reactors used by production runs return the same in-use issue at `/reactorId`
+through Server Actions; reactors have no REST or MCP delete operation.

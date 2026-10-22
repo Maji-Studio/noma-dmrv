@@ -299,7 +299,8 @@ describe("order DELETE", { timeout: TIMEOUT_MS }, () => {
   it.each([false, true])("refuses orders with a delivery (archived: %s)", async (archived) => {
     const order = await saved();
     await insertReadDelivery(a, order.id, ALLOCATED_KG, archived);
-    await problem(await remove(a, order.id, INITIAL_ETAG, null), 409, "certification_locked");
+    const refusal = await problem(await remove(a, order.id, INITIAL_ETAG, null), 409, "conflict", "/orderId");
+    expect(refusal.errors[0].meta).toEqual({ reason: "in_use", deliveryCode: expect.any(String) });
     expect(await rows(a)).toHaveLength(1);
   });
   it("previews an archived order without deleting it, then allows a committed deletion", async () => {

@@ -191,7 +191,7 @@ describe("three-way order parity", { timeout: TIMEOUT_MS }, () => {
     ...["facilityId", "customerId", "customerLocationId", "formulationId"].map((field) => ({ name: `frozen ${field}`, operation: "update", setup: field, code: "certification_locked", pointer: `/${field}` })),
     { name: "quantity below allocated wet kg", operation: "update", setup: "quantity", code: "validation_failed", pointer: "/quantityKg" },
     { name: "archived order", operation: "update", setup: "archive", code: "not_found", pointer: "/orderId" },
-    { name: "delete with a delivery", operation: "delete", setup: "delivery", code: "certification_locked", pointer: "/orderId" },
+    { name: "delete with a delivery", operation: "delete", setup: "delivery", code: "conflict", pointer: "/orderId" },
   ] as const;
   it.each(refusalCases)("returns the same codes, issue paths and metadata for $name with no side effect", async ({ operation, setup, code, pointer }) => {
     const failures = new Map<Transport, Refusal>();
@@ -200,11 +200,12 @@ describe("three-way order parity", { timeout: TIMEOUT_MS }, () => {
       const made = operation === "create" ? null : await create(transport, f);
       const id = made?.data.id ?? randomUUID();
       let changes: Record<string, unknown> = {};
+      let deliveryCode: string | undefined;
       if (setup === "foreign") changes = { customerId: fixtures.get(transport === "action" ? "rest" : "action")!.customer.id };
       else if (setup === "location") changes = { customerId: f.otherCustomer.id };
       else if (setup === "archive") await archiveReadOrder(f, id);
       else {
-        await insertReadDelivery(f, id, DELIVERED_KG);
+        deliveryCode = (await insertReadDelivery(f, id, DELIVERED_KG)).code;
         if (setup === "quantity") changes = { quantityKg: BELOW_ALLOCATED_KG };
         else if (setup !== "delivery") changes = { [setup]: ({ facilityId: f.otherFacility.id, customerId: f.otherCustomer.id, customerLocationId: f.otherLocation.id, formulationId: f.pure.id })[setup] };
       }
@@ -214,6 +215,11 @@ describe("three-way order parity", { timeout: TIMEOUT_MS }, () => {
       const failure = await refuse(transport, f, operation as "create" | "update" | "delete", id, changes);
       expect(failure).toMatchObject({ code, issues: [{ code, pointer }] });
       if (setup === "quantity") expect(failure.issues[0].meta).toEqual({ allocatedWetKg: DELIVERED_KG, unit: "kg" });
+      if (setup === "delivery") {
+        expect(failure.issues[0].meta).toEqual({ reason: "in_use", deliveryCode });
+        // Each transport fixture generates its own delivery code; compare after checking the exact value.
+        failure.issues[0].meta = { ...failure.issues[0].meta, deliveryCode: "<delivery>" };
+      }
       failures.set(transport, failure);
       expect(await orderRows(f)).toEqual(beforeRows);
       expect(await orderAudits(f)).toEqual(beforeAudits);

@@ -44,6 +44,7 @@ import {
 import { resolveDistanceSource, type DistanceSourceValue } from "@/schemas/distance-source";
 import { SafeError } from "@/lib/errors";
 import { DomainError } from "@/lib/domain-errors";
+import { IN_USE_DELETE_MARKER, inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 import { retireDocumentsForEntities } from "./documents";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
@@ -804,6 +805,7 @@ export async function deleteFeedstockInTransaction(
   const [locked] = await tx
     .select({
       id: feedstocks.id,
+      code: feedstocks.code,
       facilityId: feedstocks.facilityId,
       version: feedstocks.version,
       status: feedstocks.status,
@@ -842,8 +844,9 @@ export async function deleteFeedstockInTransaction(
     .where(and(eq(productionRunFeedstocks.feedstockId, feedstockId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
 
   if (Number(usageCount.count) > 0) {
-    throw new DomainError("certification_locked",
-      "Cannot delete feedstock that is used in production runs. Remove production run associations first."
+    throw inUseDeleteRefusal(
+      `Feedstock ${locked.code} ${IN_USE_DELETE_MARKER} production runs still use it.`,
+      ["feedstockId"],
     );
   }
 

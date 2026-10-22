@@ -61,7 +61,7 @@ describe("order PATCH guards", { timeout: SUITE_TIMEOUT_MS }, () => {
     }
     const saved = await runOperation(updateOrder, f.ctx, { ...patch, customerId: undefined, customerLocationId: undefined, code: "OR-KEPT" });
     expect(saved.data).toMatchObject({ customerId: f.customer.id, customerLocationId: f.location.id, code: "OR-KEPT" });
-    await expect(runOperation(deleteOrder, f.ctx, { orderId: order.id, expectedVersion: 2 })).rejects.toMatchObject({ code: "certification_locked" });
+    await expect(runOperation(deleteOrder, f.ctx, { orderId: order.id, expectedVersion: 2 })).rejects.toMatchObject({ code: "conflict", issues: [{ path: ["orderId"], code: "conflict", meta: { reason: "in_use", deliveryCode: expect.any(String) } }] });
   });
 
   it("moves an order without deliveries to another facility", async () => {

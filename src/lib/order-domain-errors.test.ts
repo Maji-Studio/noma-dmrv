@@ -8,6 +8,10 @@ import { orders } from "@/db/schema";
 import { toActionFailure } from "@/fn/action-errors";
 import { actionFailureResponse, ACTION_STATUS, jsonPointer } from "@/lib/api/problem";
 import { DomainError } from "@/lib/domain-errors";
+import { ActionError } from "@/lib/action-error";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
+import { toolFailure } from "@/lib/mcp/results";
+import type { ApiRouteContext } from "@/lib/api/route";
 import { SafeError } from "@/lib/errors";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 import {
@@ -79,9 +83,23 @@ describe("order errors", () => {
     }
   });
 
-  it("refuses deletion with deliveries and mismatched customer locations", () => {
-    expect(orderHasDeliveries({ id: "delivery-id", code: "DL-1" })).toMatchObject({ code: "certification_locked", issues: [{ path: ["orderId"], code: "certification_locked" }] });
-    expect(orderHasDeliveries({ id: "delivery-id", code: "DL-1" }).message).not.toContain("Remove deliveries first");
+  it("marks a delivery delete refusal for the client and REST, retaining its delivery code", async () => {
+    const error = orderHasDeliveries({ id: "delivery-id", code: "DL-1" }, "OR-1");
+    expect(error.message).toBe("Order OR-1 was not deleted because delivery DL-1 still uses it.");
+    expect(error).toMatchObject({ code: "conflict", issues: [{ path: ["orderId"], code: "conflict", meta: { reason: "in_use", deliveryCode: "DL-1" } }] });
+    const failure = toActionFailure(error, options);
+    expect(isInUseDeleteRefusal(new ActionError(failure))).toBe(true);
+    const response = actionFailureResponse(failure, "/api/v1/orders/order-id", "request-id");
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "conflict", errors: [{ pointer: "/orderId", code: "conflict", meta: { reason: "in_use", deliveryCode: "DL-1" } }] });
+    const context = { ctx, instance: "/api/mcp", requestId: "request-id" } as ApiRouteContext;
+    expect(await toolFailure(error, context, "delete_order")).toMatchObject({ isError: true, structuredContent: {
+      code: "conflict", detail: error.message,
+      issues: [{ pointer: "/orderId", code: "conflict", meta: { reason: "in_use", deliveryCode: "DL-1" } }],
+    } });
+  });
+
+  it("refuses mismatched customer locations", () => {
     expect(orderCustomerLocationMismatch()).toMatchObject({ code: "validation_failed", issues: [{ path: ["customerLocationId"], code: "validation_failed" }] });
     expect(ACTION_STATUS.validation_failed).toBe(422);
   });
