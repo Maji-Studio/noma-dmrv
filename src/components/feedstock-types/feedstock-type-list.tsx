@@ -356,7 +356,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       toast.success("Feedstock type deleted.");
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Feedstock type ${deletingType.code}`, "Feedstock type was not deleted. Try again.");
-      if (isInUseDeleteRefusal(message)) {
+      if (isInUseDeleteRefusal(error)) {
         setDeleteConflict(deletingType);
       } else {
         toast.error(message);

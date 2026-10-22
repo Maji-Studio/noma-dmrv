@@ -1,3 +1,5 @@
+import { inUseDeleteRefusal } from "@/lib/delete-refusal";
+import { toActionFailure } from "@/fn/action-errors";
 import { env } from "@/config/env";
 import { beforeEach, expect, it, vi } from "vitest";
 import { actionFailureResponse, apiDenialResponse, oauthStepUpChallengeApplies, problemResponse } from "./problem";
@@ -271,4 +273,19 @@ it("does not offer scopes outside the role ceiling", () => {
   expect(apiDenialResponse("missing_scope", "/api/v1/feedstocks", "id", {
     oauth: true, role: "unknown", requiredScopes: ["feedstocks:write"],
   }).headers.has("www-authenticate")).toBe(false);
+});
+
+it("preserves in-use issue codes, metadata and conflict in a 409 problem", async () => {
+  const conflict = { entity: "formulation", id: "formulation-id", code: conflictCode("BCF-001") };
+  const message = "This record is still used.";
+  const error = inUseDeleteRefusal(message, ["feedstockTypeId"], { recordCodes: ["FS-001"] }, conflict);
+  const failure = toActionFailure(error, { fallbackMessage: "Delete failed.", log: { message: "delete failed" } });
+  const response = actionFailureResponse(failure, "/api/v1/feedstock-types/type-id", "request-id");
+  expect(response.status).toBe(409);
+  const body = await response.json();
+  expect(problemSchema.strict().parse(body)).toEqual(body);
+  expect(body).toMatchObject({
+    code: "conflict", type: "urn:noma:problem:conflict", detail: message, conflict,
+    errors: [{ pointer: "/feedstockTypeId", code: "conflict", detail: message, meta: { recordCodes: ["FS-001"], reason: "in_use" } }],
+  });
 });

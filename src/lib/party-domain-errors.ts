@@ -1,5 +1,5 @@
 import { DomainError, type DomainErrorCode, type DomainIssue } from "@/lib/domain-errors";
-import { IN_USE_DELETE_MARKER } from "@/lib/delete-refusal";
+import { IN_USE_DELETE_MARKER, inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { SafeError } from "@/lib/errors";
 
 type Party = "supplier" | "customer";
@@ -26,10 +26,10 @@ export function partyNameConflict(message: string, meta?: DomainIssue["meta"]): 
   return partyRefusal("conflict", message, ["name"], meta);
 }
 export function supplierHasIntakes(feedstockCodes: string[] = []): DomainError {
-  return partyRefusal("conflict", `Supplier ${IN_USE_DELETE_MARKER} feedstock intakes still use it. Review the linked intakes or keep this supplier.`, ["supplierId"], { feedstockCodes });
+  return inUseDeleteRefusal(`Supplier ${IN_USE_DELETE_MARKER} feedstock intakes still use it. Review the linked intakes or keep this supplier.`, ["supplierId"], { feedstockCodes });
 }
 export function customerHasStorageSites(locationIds: string[] = []): DomainError {
-  return partyRefusal("conflict", `Customer ${IN_USE_DELETE_MARKER} its locations are registered storage sites. Keep this customer.`, ["customerId"], { locationIds });
+  return inUseDeleteRefusal(`Customer ${IN_USE_DELETE_MARKER} its locations are registered storage sites. Keep this customer.`, ["customerId"], { locationIds });
 }
 
 export function partyLocationNotFound(kind: Party): DomainError {
@@ -37,10 +37,10 @@ export function partyLocationNotFound(kind: Party): DomainError {
 }
 
 export function customerLocationHasOrders(orderCodes: string[] = [], archived = false): DomainError {
-  return partyRefusal("conflict", `Customer location ${IN_USE_DELETE_MARKER} orders use it.${archived ? "" : " Archive it instead."}`, ["locationId"], { orderCodes });
+  return inUseDeleteRefusal(`Customer location ${IN_USE_DELETE_MARKER} orders use it.${archived ? "" : " Archive it instead."}`, ["locationId"], { orderCodes });
 }
 export function customerLocationHasStorageSite(archived = false): DomainError {
-  return partyRefusal("conflict", `Customer location ${IN_USE_DELETE_MARKER} it is registered with Isometric as a storage site.${archived ? "" : " Archive it instead."}`, ["locationId"]);
+  return inUseDeleteRefusal(`Customer location ${IN_USE_DELETE_MARKER} it is registered with Isometric as a storage site.${archived ? "" : " Archive it instead."}`, ["locationId"]);
 }
 export function customerLocationCertificationLocked(field: "name" | "gpsLatitude" | "gpsLongitude"): DomainError {
   return partyRefusal("certification_locked", "This location is registered with Isometric as a storage site, so its name and coordinates cannot change. Add a new location instead.", [field]);
@@ -64,7 +64,7 @@ export function customerLocationLastActive(name: string): DomainError {
 }
 
 export function customerHasDeliveries(deliveryCodes: string[] = []): DomainError {
-  return partyRefusal("conflict", `Customer ${IN_USE_DELETE_MARKER} deliveries were recorded on its orders. Archive it instead.`, ["customerId"], { deliveryCodes });
+  return inUseDeleteRefusal(`Customer ${IN_USE_DELETE_MARKER} deliveries were recorded on its orders. Archive it instead.`, ["customerId"], { deliveryCodes });
 }
 export function cascadeChanged(): DomainError {
   return partyRefusal("cascade_changed", "The orders this delete would remove changed since the preview. Review them and confirm again.", ["cascadeFingerprint"]);

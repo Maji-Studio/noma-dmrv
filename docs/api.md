@@ -831,3 +831,12 @@ references remain in the structured error. REST and MCP execute the same
 org-scoped data-access guards as Server Actions. See [Record locks](./database.md#record-locks)
 for all-version ledger and fresh reopening rules. Stock insufficiency,
 validation failures and stale versions retain their distinct error codes.
+
+### In-use delete refusals
+
+In-use delete refusals keep the top-level `conflict` code, HTTP 409 and issue
+`code: "conflict"`. Their issue metadata adds `meta.reason: "in_use"` alongside
+existing safe metadata. REST exposes it as `errors[].meta.reason`; Server Actions
+preserve it as `issues[].meta.reason` on the client `ActionError`. Consumers use
+this discriminator instead of message text; other conflicts, such as name clashes,
+do not carry it.

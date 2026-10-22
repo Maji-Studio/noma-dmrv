@@ -182,7 +182,9 @@ production process names its facility, one blocked by a formulation
 ingredient names its formulation. Mutation hooks re-throw a
 failure through `throwActionError` (`src/lib/stale-version.ts`) as an
 `ActionError` carrying `code`, `issues` (always an array), `conflict`, `blockers`
-and `preview`. A stale save becomes `StaleVersionError`; any other conflict
+and `preview`. In-use delete refusals keep `code: "conflict"` on the error
+and issue and add `issues[].meta.reason: "in_use"`; the UI checks that marker
+on the `ActionError` instead of matching message text. A stale save becomes `StaleVersionError`; any other conflict
 becomes `ConflictError`. Both extend `ActionError`. Forms are expected to honor
 both; the first list consumer is the feedstock edit sheet, which shows the runs
 and products a negative-stock refusal named.

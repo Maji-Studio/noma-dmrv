@@ -8,11 +8,12 @@
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
-import { IN_USE_DELETE_MARKER } from "@/lib/delete-refusal";
+import { isActionError } from "@/lib/action-error";
+import { IN_USE_REASON } from "@/lib/delete-refusal";
 
-/** True when `message` is the typed "in use" delete refusal. */
-export function isInUseDeleteRefusal(message: string): boolean {
-  return message.includes(IN_USE_DELETE_MARKER);
+/** True when the action carries an "in use" delete refusal issue. */
+export function isInUseDeleteRefusal(error: unknown): boolean {
+  return isActionError(error) && error.issues.some((issue) => issue.meta?.reason === IN_USE_REASON);
 }
 
 /** `children` says what an archived row of this kind can no longer be used for. */

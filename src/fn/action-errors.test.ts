@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { ActionError } from "@/lib/action-error";
+import { inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { DomainError } from "@/lib/domain-errors";
 import { validationFailed } from "@/lib/operations/errors";
 import { ActionConflictError, SafeError } from "@/lib/errors";
@@ -29,6 +31,19 @@ describe("toActionFailure", () => {
     expect(toActionFailure(new DomainError("insufficient_stock", "Stock is insufficient.", {
       issues, conflict, blockers: [conflict],
     }), options)).toEqual({ success: false, error: "Stock is insufficient.", code: "insufficient_stock", issues, conflict, blockers: [conflict] });
+    expect(logError).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, conflict])("preserves the in-use reason through serialization and the client throw (conflict=%j)", (ref) => {
+    const error = inUseDeleteRefusal("This record is still used.", ["feedstockTypeId"], { recordCodes: ["FS-001"] }, ref);
+    const failure = JSON.parse(JSON.stringify(toActionFailure(error, options)));
+    let caught: unknown;
+    try { throwActionError(failure); } catch (error) { caught = error; }
+    expect(caught).toBeInstanceOf(ActionError);
+    expect(caught).toMatchObject({
+      code: "conflict", conflict: ref,
+      issues: [{ code: "conflict", path: ["feedstockTypeId"], meta: { recordCodes: ["FS-001"], reason: "in_use" } }],
+    });
     expect(logError).not.toHaveBeenCalled();
   });
 

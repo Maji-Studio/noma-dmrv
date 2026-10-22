@@ -165,7 +165,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Location ${target.name}`, "Location was not deleted. Try again.");
       setDeletingLocation(null);
-      if (isInUseDeleteRefusal(message)) {
+      if (isInUseDeleteRefusal(error)) {
         // In use: the delete dialog gives way to the in-use dialog. It offers Archive
         // only while archiving can work: never for an archived location, and not for
         // the only active location.

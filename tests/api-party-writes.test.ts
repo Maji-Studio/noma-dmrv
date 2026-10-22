@@ -464,11 +464,11 @@ describe.each(["supplier", "customer"] as const)("%s REST writes", kind => {
     if (kind === "supplier") {
       const [intake] = await db.update(feedstocks).set({ supplierId: row.data.id, archivedAt: archived ? new Date() : null })
         .where(eq(feedstocks.organizationId, a.ctx.organizationId)).returning();
-      meta = { feedstockCodes: [intake.code] };
+      meta = { feedstockCodes: [intake.code], reason: "in_use" };
     } else {
       const order = await insertReadOrder(a, "PARTY-ORDER", { customerId: row.data.id, customerLocationId: row.locations[0].id, archivedAt: archived ? new Date() : null });
       const delivery = await insertReadDelivery(a, order.id, order.quantityKg, archived);
-      meta = { deliveryCodes: [delivery.code] };
+      meta = { deliveryCodes: [delivery.code], reason: "in_use" };
     }
     const before = await snapshot();
     const refusal = await problem(await mutate(kind, "delete", row.data.id), 409, "conflict", `/${kind}Id`);
@@ -545,7 +545,7 @@ it("refuses customer deletion for a registered storage-site location without rem
   });
   const before = await snapshot();
   const refusal = await problem(await mutate("customer", "delete", row.data.id), 409, "conflict", "/customerId");
-  expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/customerId", meta: { locationIds: [id] } }));
+  expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/customerId", meta: { locationIds: [id], reason: "in_use" } }));
   expect(await snapshot()).toEqual(before);
 }, TIMEOUT_MS);
 

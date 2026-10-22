@@ -300,7 +300,7 @@ export function SupplierList() {
       toast.success("Supplier deleted.");
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Supplier ${deletingSupplier.code}`, "Supplier was not deleted. Try again.");
-      if (isInUseDeleteRefusal(message) && !deletingSupplier.archivedAt) {
+      if (isInUseDeleteRefusal(error) && !deletingSupplier.archivedAt) {
         // In use: the dialog gives way to the in-use dialog that offers Archive instead.
         setDeleteConflict(deletingSupplier);
         setDeletingSupplier(null);
