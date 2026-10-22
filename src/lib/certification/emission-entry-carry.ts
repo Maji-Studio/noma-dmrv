@@ -52,16 +52,18 @@ export function removalEntryCarryOwner(args: {
     candidate.organizationId === args.organizationId && candidate.facilityId === args.facilityId &&
     !candidate.creditBatchIds.includes(entry.creditBatchId) && candidate.window.end >= entry.occurredOn)
     .sort((a, b) => a.window.end.localeCompare(b.window.end) || a.createdAt.localeCompare(b.createdAt) || a.removalId.localeCompare(b.removalId));
-  const receiver = candidates.find(candidate => {
-    if (!args.observation || !candidate.observation) return false;
-    const line = entryLine(candidate.observation, entry.componentId);
-    return line?.entryPolicy === "additive" &&
+  for (const receiver of candidates) {
+    if (!receiver.observation) return { receiver: null, waitingReason: "templateUnknown",
+      waitingFor: { removalId: receiver.removalId, removalCode: receiver.code } };
+    const line = entryLine(receiver.observation, entry.componentId);
+    if (line?.entryPolicy === "additive" &&
       line.component.inputs.filter(input => input.type === "monitored").length === 1 &&
-      emissionEntryCounts(args.observation, candidate.observation, entry.componentId).counts;
-  });
-  return receiver ? { receiver: { removalId: receiver.removalId, removalCode: receiver.code, creditBatchCodes: receiver.creditBatchCodes, creditBatchIds: [...receiver.creditBatchIds], anotherCreditBatch: true }, waitingReason: null }
-    : { receiver: null, waitingReason: candidates.length ? candidates[0].observation ? "incompatibleTemplate" : "templateUnknown" : "noDraft",
-      waitingFor: candidates.length && !candidates[0].observation ? { removalId: candidates[0].removalId, removalCode: candidates[0].code } : null };
+      emissionEntryCounts(args.observation, receiver.observation, entry.componentId).counts) {
+      return { receiver: { removalId: receiver.removalId, removalCode: receiver.code, creditBatchCodes: receiver.creditBatchCodes,
+        creditBatchIds: [...receiver.creditBatchIds], anotherCreditBatch: true }, waitingReason: null };
+    }
+  }
+  return { receiver: null, waitingReason: candidates.length ? "incompatibleTemplate" : "noDraft", waitingFor: null };
 }
 
 /** The sent Removal of the entry's own batch, when the entry was recorded after it was sent. */

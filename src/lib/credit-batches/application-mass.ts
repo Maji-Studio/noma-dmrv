@@ -1,5 +1,13 @@
 import { GRAMS_PER_KG, massGrams } from "@/lib/calculations/gram-allocation";
 
+// Five kg rounds up to the smallest visible amount at two-decimal tonne precision.
+export const MIN_VISIBLE_NOT_APPLIED_DRY_KG = 5;
+
+/** Match the batch page's remaining-stock threshold; unknown mass stays closed. */
+export function isCreditBatchFullyApplied(notAppliedDryKg: number | null) {
+  return notAppliedDryKg !== null && notAppliedDryKg < MIN_VISIBLE_NOT_APPLIED_DRY_KG;
+}
+
 /** Shared page and carry gate: saved application slices are the dry-mass authority. */
 export function creditBatchApplicationMass(
   runs: readonly { biocharDryMassKg: number | null }[],

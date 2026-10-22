@@ -1,3 +1,4 @@
+import { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "./application-mass";
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
@@ -36,7 +37,7 @@ import { lateEntryView, waitingDetail, waitingEntryTitle } from "@/lib/certifica
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
 
 // Five kg rounds up to the smallest visible amount at two-decimal tonne precision.
-export const MIN_VISIBLE_NOT_APPLIED_DRY_KG = 5;
+export { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "./application-mass";
 
 /** Overview rows a health check lands on: the Removal template block and the batch details. */
 export const CREDIT_BATCH_TEMPLATE_ROW = ENTITY_FOCUS_TARGETS.removalTemplate;

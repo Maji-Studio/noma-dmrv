@@ -101,7 +101,7 @@ it("loads three batches once per bulk loader and matches the per-batch entry fac
   vi.mocked(getTemplateObservationsByIds).mockResolvedValue([previous] as never);
   vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue(automatic);
 
-  const result = await loadBatchEmissionContext(ctx, "facility", batches, facts);
+  const { batchFacts: result } = await loadBatchEmissionContext(ctx, "facility", batches, facts);
 
   expect(result).toMatchObject(expected);
   expect(result.one.entriesWithoutRemoval).toEqual([]);
@@ -124,14 +124,14 @@ it("only loads batches with a readable observation, including batches without en
     { id: "unpinned", removalTemplateId: null },
     { id: "unreadable", removalTemplateId: "missing-template" },
   ];
-  expect(await loadBatchEmissionContext(ctx, "facility", batches, facilityFacts)).toMatchObject({
+  expect((await loadBatchEmissionContext(ctx, "facility", batches, facilityFacts)).batchFacts).toMatchObject({
     readable: { entries: [], previousObservations: new Map(), automaticFigures: {} },
   });
   expect(listEmissionEntriesForBatches).toHaveBeenCalledExactlyOnceWith(ctx, ["readable"]);
   expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledExactlyOnceWith(ctx, ["readable"]);
   expect(loadCreditBatchRollups).toHaveBeenCalledExactlyOnceWith(ctx, ["readable"]);
   vi.clearAllMocks();
-  expect(await loadBatchEmissionContext(ctx, "facility", batches.slice(1), facilityFacts)).toEqual({});
+  expect(await loadBatchEmissionContext(ctx, "facility", batches.slice(1), facilityFacts)).toEqual({ batchFacts: {} });
   expect(listEmissionEntriesForBatches).not.toHaveBeenCalled();
   expect(getTemplateObservationsByIds).not.toHaveBeenCalled();
   expect(loadBatchesEmissionAutomaticFacts).not.toHaveBeenCalled();
@@ -163,7 +163,7 @@ it("keeps the organization/facility guard before loading batch facts", async () 
 it.each([false, true])("health uses stored entries for each batch (grouped=%s)", async (grouped) => {
   const batches = ["one", ...(grouped ? ["two"] : [])].map(id => ({ id, removalTemplateId: "template" }));
   vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([storedEntry("one")]);
-  const facts = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facilityFacts);
+  const { batchFacts: facts } = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facilityFacts);
   const resolved = resolveRemovalTemplate(batches, facilityFacts, facts);
   expect(resolved.emissionLinesByBatchId.one[0].state).toBe("filled");
   if (grouped) expect(resolved.emissionLinesByBatchId.two[0].state).toBe("empty");
@@ -178,7 +178,7 @@ it("names missing-evidence lines, while a Removal-owned zero keeps its source bl
     storedEntry("missing", { documentCount: 0 }),
     storedEntry("zero", { documentCount: 0, kind: "zero", values: [], confirmedForRemovalId: "removal" }),
   ]);
-  const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facilityFacts);
+  const { batchFacts: loaded } = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facilityFacts);
   const resolved = resolveRemovalTemplate(batches, facilityFacts, loaded);
   const context = { ...resolved, memberBatches: batches, requiredTransportCategories: [], mapping: {},
     hasSubmittableRuns: true, entityReadinessGaps: [], submissionLineageBlockers: [], durabilityConfigurationBlockers: [] } as unknown as RemovalCertifyContext;
@@ -192,7 +192,7 @@ it("uses batch-wide automatic figures instead of empty placeholders", async () =
   facts.templatesById.template!.observation!.lineSources.line.automaticSource = "run-electricity";
   vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({ one: { automaticFigures: { "run-electricity": { magnitude: "3", unit: "kWh" } } } });
   const batches = [{ id: "one", removalTemplateId: "template" }];
-  const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facts);
+  const { batchFacts: loaded } = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facts);
   expect(resolveRemovalTemplate(batches, facts, loaded).emissionLinesByBatchId.one[0]).toMatchObject({ state: "filled", total: { magnitude: "3", unit: "kWh" } });
 });
 
@@ -208,7 +208,7 @@ it("keeps batch emissions unmet until a compatible changed entry is confirmed", 
   vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([stored]);
   vi.mocked(getTemplateObservationsByIds).mockResolvedValue([{ ...observation, id: "previous" }] as never);
   const emissionsCheck = async () => {
-    const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facts);
+    const { batchFacts: loaded } = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facts);
     const resolved = resolveRemovalTemplate(batches, facts, loaded);
     const context = { ...resolved, memberBatches: batches, requiredTransportCategories: [], mapping: {},
       hasSubmittableRuns: true, entityReadinessGaps: [], submissionLineageBlockers: [], durabilityConfigurationBlockers: [] } as unknown as RemovalCertifyContext;
@@ -229,7 +229,7 @@ it.each([false, true])("keeps removed-entry blockers in Removal readiness (group
     storedEntry("one", { observationId: "previous" }), storedEntry("one", { observationId: "previous" }),
   ]);
   vi.mocked(getTemplateObservationsByIds).mockResolvedValue([{ ...observation, id: "previous" }] as never);
-  const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facts);
+  const { batchFacts: loaded } = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facts);
   const resolved = resolveRemovalTemplate(batches, facts, loaded);
   expect(resolved.emissionLines).toHaveLength(1);
   expect(resolved.emissionLinesByBatchId.one[0]).toMatchObject({ displayName: "Lab electricity EU", state: "needsReview",
@@ -255,7 +255,7 @@ it.each([false, true])("keeps removed-entry blockers in Removal readiness (group
 it("blocks the batch when an entry is after every draft's application window", async () => {
   vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([storedEntry("one", { occurredOn: "2026-03-01" })]);
   const batches = [{ id: "one", removalTemplateId: "template" }];
-  const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facilityFacts);
+  const { batchFacts: loaded } = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facilityFacts);
   const resolved = resolveRemovalTemplate(batches, facilityFacts, loaded);
   expect(resolved.emissionLinesByBatchId.one[0].blocker).toMatchObject({ code: "entryHasNoRemoval", message: "No Removal can carry this entry yet. Change its date to fit the Removal period, or wait for a later Removal.", fixTarget: "emissions" });
 });
@@ -264,7 +264,7 @@ it.each(["2026-01-01", "2026-03-01"])("allows an entry before an available appli
   vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([]);
   vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([storedEntry("one", { occurredOn })]);
   vi.mocked(listEmissionEntryAvailableApplications).mockResolvedValue([{ creditBatchId: "one", applicationDate: new Date("2026-04-01") }]);
-  const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts);
+  const { batchFacts: loaded } = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts);
   expect(loaded.one.entriesWithoutRemoval).toEqual([]);
 });
 
@@ -272,7 +272,7 @@ it("retains production reservation ownership when the batch has no entries", asy
   vi.mocked(loadCreditBatchRollups).mockResolvedValue({ one: { batch: {
     facilityId: "facility", productionEmissionsClaimReservedBySubmissionId: "attempt",
   } } } as never);
-  const result = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts);
+  const { batchFacts: result } = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts);
   expect(result.one.productionReservationSubmissionId).toBe("attempt");
   expect(result.one.entries).toEqual([]);
 });
@@ -294,7 +294,7 @@ it.each([false, true])("reuses one correction read for all member batches and th
     components: [{ id: "line", displayName: "Electricity" }],
   });
   vi.mocked(loadRemovalEntryCorrection).mockResolvedValue({ ...state, removalId: "returned", removalCode: "RM-001", correction });
-  const loaded = await loadBatchEmissionContext(ctx, "facility", batches, facilityFacts);
+  const { batchFacts: loaded } = await loadBatchEmissionContext(ctx, "facility", batches, facilityFacts);
   expect(loadRemovalEntryCorrection).toHaveBeenCalledExactlyOnceWith(ctx, "returned", [contender]);
   expect(loaded.one.corrections?.[0].correction).toEqual(correction);
   expect(loaded.two.corrections?.[0].correction).toEqual({ ...correction, changed: [] });
@@ -341,5 +341,8 @@ it("shares discovery across different Removals but reads each Removal's retained
   const calls = vi.mocked(loadFacilityEmissionEntryCarry).mock.calls;
   expect(calls.filter(call => !call[5])).toHaveLength(1);
   expect(calls.filter(call => call[5]).map(call => call[4]?.ownedRemovalId).sort()).toEqual([...removalIds].sort());
-  for (const facts of loaded) expect(facts.one.carryContext?.entries).toEqual([waiting]);
+  for (const facts of loaded) {
+    expect(facts.carryContext?.entries).toEqual([waiting]);
+    expect(facts.batchFacts.one).not.toHaveProperty("carryContext");
+  }
 });

@@ -121,14 +121,15 @@ export async function buildRemovalContext(
         : Promise.resolve(false),
       loadLinkedGhgStatementStatus(orgCtx, scope.removal),
     ]);
-  const batchEmissionFacts = await loadBatchEmissionContext(orgCtx, scope.facilityId, scope.memberBatches, facilityFacts,
+  const emissionContext = await loadBatchEmissionContext(orgCtx, scope.facilityId, scope.memberBatches, facilityFacts,
     (claimedSubmissionId || submissionRead) && scope.removalId ? { removalId: scope.removalId, submissionId: claimedSubmissionId } : undefined, !correctionRead, carryReads, scope.removalId ?? undefined);
+  const batchEmissionFacts = emissionContext.batchFacts;
   // Entry recovery may exclude its own draft from eligibility. Evidence retries
   // must still retain the operator files frozen when that draft was claimed.
   const correctionWindowOpen = latestSubmission?.status !== "draft" && Object.values(batchEmissionFacts).some(batch => batch.contenders?.some(
     contender => contender.removalId === scope.removalId && contender.contenderKind === "correction"));
-  const frozenEntrySet = frozenEntriesForAttempt(latestSubmission, batchEmissionFacts);
-  const loadedRemovalEntries = await loadRemovalEntryContext(orgCtx, scope, batchEmissionFacts, facilityFacts, frozenEntrySet);
+  const frozenEntrySet = frozenEntriesForAttempt(latestSubmission, emissionContext);
+  const loadedRemovalEntries = await loadRemovalEntryContext(orgCtx, scope, emissionContext, facilityFacts, frozenEntrySet);
   const removalEntryContext = loadedRemovalEntries && { contributions: loadedRemovalEntries.contributions,
     observationId: loadedRemovalEntries.observationId, semanticFingerprint: loadedRemovalEntries.semanticFingerprint };
   const templateFacts = resolveRemovalTemplate(scope.memberBatches, facilityFacts, loadedRemovalEntries?.batchFacts ?? batchEmissionFacts, removalEntryContext?.contributions);

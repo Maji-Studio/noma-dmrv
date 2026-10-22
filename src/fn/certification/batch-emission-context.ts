@@ -22,7 +22,12 @@ export interface EntryTemplateContext {
 }
 
 export type BatchEmissionContext = Record<string,
-  Pick<BatchEmissionLineFacts, "automaticFigures" | "omittedAutomaticSources"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { carryContext?: Awaited<ReturnType<typeof loadFacilityEmissionEntryCarry>>; corrections?: EntryCorrectionState[]; productionReservationSubmissionId?: string | null; contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
+  Pick<BatchEmissionLineFacts, "automaticFigures" | "omittedAutomaticSources"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { corrections?: EntryCorrectionState[]; productionReservationSubmissionId?: string | null; contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
+
+export interface LoadedBatchEmissionContext {
+  batchFacts: BatchEmissionContext;
+  carryContext?: Awaited<ReturnType<typeof loadFacilityEmissionEntryCarry>>;
+}
 
 /** Batch-wide facts, even when the Removal carries only some applications. */
 export async function loadBatchEmissionContext(
@@ -33,14 +38,14 @@ export async function loadBatchEmissionContext(
   includeCorrections = true,
   carryReads?: Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>,
   ownedRemovalId?: string,
-): Promise<BatchEmissionContext> {
+): Promise<LoadedBatchEmissionContext> {
   const result: BatchEmissionContext = {};
   const readableBatches = batches.flatMap((batch) => {
     const observation = batch.removalTemplateId
       ? facilityFacts.templatesById[batch.removalTemplateId]?.observation : null;
     return observation ? [{ ...batch, observation }] : [];
   });
-  if (!readableBatches.length) return result;
+  if (!readableBatches.length) return { batchFacts: result };
   const ids = readableBatches.map((batch) => batch.id);
   // The automatic bulk loader enforces organization scope, but not facility scope.
   // Read the batches together to retain the single-batch loader's facility guard.
@@ -93,7 +98,6 @@ export async function loadBatchEmissionContext(
     result[id] = { productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
       entriesWithoutRemoval: entriesWithoutRemoval(entries, contenders, liveReservationIds, availableApplications) };
   }
-  result[readableBatches[0].id].carryContext = carryContext;
   for (const contender of contenders.filter((item) => includeCorrections && item.contenderKind === "correction")) {
     const correction = await loadRemovalEntryCorrection(ctx, contender.removalId, contenders);
     for (const id of correction.correction?.batches.map((batch) => batch.id) ?? correction.changedBatchIds ?? []) {
@@ -104,5 +108,5 @@ export async function loadBatchEmissionContext(
       });
     }
   }
-  return result;
+  return { batchFacts: result, carryContext };
 }

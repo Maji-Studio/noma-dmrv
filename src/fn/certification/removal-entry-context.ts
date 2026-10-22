@@ -8,14 +8,15 @@ import type { OrgContext } from "@/lib/auth/server";
 import { loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
 import { deriveRemovalEntryWindow, entryHoldingRemovalId } from "@/lib/certification/removal-emission-contributions";
 import { deriveRemovalEntryInputs } from "@/lib/certification/removal-entry-inputs";
-import type { BatchEmissionContext, EntryTemplateContext } from "./batch-emission-context";
+import type { BatchEmissionContext, LoadedBatchEmissionContext, EntryTemplateContext } from "./batch-emission-context";
 import type { RemovalScope } from "./removal-scope";
 
-export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalScope, facts: BatchEmissionContext, facility: EntryTemplateContext, frozenEntrySet?: { entryId: string; contentRevision: number }[]) {
+export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalScope, context: LoadedBatchEmissionContext, facility: EntryTemplateContext, frozenEntrySet?: { entryId: string; contentRevision: number }[]) {
+  const { batchFacts: facts, carryContext } = context;
   if (!scope.removalId) return undefined;
   const observation = facility.templatesById[scope.memberBatches[0]?.removalTemplateId ?? ""]?.observation;
   if (!observation) return undefined;
-  const carryEntries = Object.values(facts).find(batch => batch.carryContext)?.carryContext?.entries ?? [];
+  const carryEntries = carryContext?.entries ?? [];
   const memberIds = scope.memberBatches.map(batch => batch.id);
   const carriedEntries = carryEntries.filter(entry => !memberIds.includes(entry.creditBatchId) &&
     (entry.carry.receiver?.removalId === scope.removalId || entry.reservedByRemovalId === scope.removalId || entry.sentByRemovalId === scope.removalId))
@@ -41,9 +42,9 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   contributions.carriedEntries = carriedEntries.filter(entry => contributions.selectedEntryIds.includes(entry.id)).map(entry => ({
     entryId: entry.id, creditBatchCode: entry.creditBatchCode, creditBatchId: entry.creditBatchId, occurredOn: entry.occurredOn,
     componentId: entry.componentId, componentName: entryLine(observation, entry.componentId)?.component.displayName,
-    value: entry.values[0], evidenceDocumentIds: entry.evidenceDocumentIds,
+    value: entry.values[0], evidenceDocumentIds: [...entry.evidenceDocumentIds].sort(),
     earlierRemovalCode: entry.earlierRemovalCode, earlierRemovalId: entry.earlierRemovalId,
-  }));
+  })).sort((a, b) => a.entryId.localeCompare(b.entryId));
   if (frozenChanged) contributions.blockers.push({ code: "lineNeedsReview", message: EMISSION_ENTRIES_CHANGED,
     fixTarget: "emissions", creditBatchId: scope.memberBatches[0].id });
   const batchFacts: BatchEmissionContext = Object.fromEntries(Object.entries(facts).map(([id, batch]) => {
@@ -57,12 +58,13 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
 }
 
 /** A crashed, unreserved draft must not hide fresh facts from reads or the resume gate. */
-export function frozenEntriesForAttempt(submission: typeof certificationSubmissions.$inferSelect | null, facts: BatchEmissionContext) {
+export function frozenEntriesForAttempt(submission: typeof certificationSubmissions.$inferSelect | null, context: LoadedBatchEmissionContext) {
+  const { batchFacts: facts, carryContext } = context;
   if (!submission || submission.status !== "draft" || !submission.payloadSnapshot ||
     typeof submission.payloadSnapshot !== "object" || !("frozenEntrySet" in submission.payloadSnapshot)) return undefined;
   const frozen = readRemovalEntrySnapshot(submission).frozenEntrySet;
   const entries = [...Object.values(facts).flatMap((batch) => batch.entries),
-    ...(Object.values(facts).find(batch => batch.carryContext)?.carryContext?.entries ?? [])];
+    ...(carryContext?.entries ?? [])];
   // Both claim sets commit together, so production ownership also freezes an empty entry set.
   const productionReserved = Object.values(facts).some((batch) => batch.productionReservationSubmissionId === submission.id);
   const reserved = productionReserved || frozen.length > 0 && frozen.every((item) => entries.some((entry) =>

@@ -1,8 +1,9 @@
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db, type DbTransaction } from "@/db";
 import { applications, certificationSubmissions, certifierRemovals, creditBatchApplications, creditBatches, emissionEntries, facilities } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE, REMOVAL_SUBMISSION_TYPE } from "@/lib/isometric/utils/constants";
 import { requireOrgScope } from "./utils";
 
 export type CarryExecutor = typeof db | DbTransaction;
@@ -11,6 +12,23 @@ export interface CarryReadScope {
   entryIds?: string[];
   ownedBatchIds?: string[];
   ownedRemovalId?: string;
+}
+
+/** Organization-scoped ledger identity shared by sent and retained carry queries. */
+function carryRemovalSubmission(ctx: OrgContext, removalId: SQLWrapper | string) {
+  requireOrgScope(ctx);
+  return and(eq(certificationSubmissions.organizationId, ctx.organizationId),
+    eq(certificationSubmissions.provider, ISOMETRIC_PROVIDER),
+    eq(certificationSubmissions.localEntityType, REMOVAL_ENTITY_TYPE),
+    eq(certificationSubmissions.submissionType, REMOVAL_SUBMISSION_TYPE),
+    sql`${certificationSubmissions.localEntityId} = ${removalId}`);
+}
+
+function carryRemovalWasSent(ctx: OrgContext, removalId: SQLWrapper) {
+  requireOrgScope(ctx);
+  return sql`exists (select 1 from ${certificationSubmissions}
+    where ${carryRemovalSubmission(ctx, removalId)}
+      and (${certificationSubmissions.submittedAt} is not null or ${certificationSubmissions.status} in ('submitted', 'accepted')))`;
 }
 
 /** SQL prefilter only; exact remaining mass is checked with the shared roll-up calculation. */
@@ -37,14 +55,8 @@ export async function listCarryCandidates(ctx: OrgContext, facilityId: string, e
         where ${creditBatchApplications.organizationId} = ${ctx.organizationId}
           and ${creditBatchApplications.creditBatchId} = ${creditBatches.id}
           and ${applications.applicationDate} >= ${emissionEntries.occurredOn}
-          and not exists (select 1 from ${certificationSubmissions}
-            where ${certificationSubmissions.organizationId} = ${ctx.organizationId}
-              and ${certificationSubmissions.provider} = 'isometric'
-              and ${certificationSubmissions.localEntityType} = 'removal'
-              and ${certificationSubmissions.submissionType} = 'removal'
-              and ${certificationSubmissions.localEntityId} = ${creditBatchApplications.removalId}
-              and (${certificationSubmissions.submittedAt} is not null or ${certificationSubmissions.status} in ('submitted', 'accepted'))))`,
-    ));
+          and not ${carryRemovalWasSent(ctx, creditBatchApplications.removalId)})`,
+    )).orderBy(emissionEntries.id);
 }
 
 /** Retained owners are read only for the requested batches/Removal or frozen entry IDs. */
@@ -59,9 +71,8 @@ export async function listOwnedCarryEntries(ctx: OrgContext, facilityId: string,
       or(scope.entryIds?.length ? inArray(emissionEntries.id, scope.entryIds) : undefined,
         scope.ownedBatchIds?.length ? inArray(emissionEntries.creditBatchId, scope.ownedBatchIds) : undefined,
         scope.ownedRemovalId ? or(eq(emissionEntries.sentByRemovalId, scope.ownedRemovalId), sql`exists (select 1 from ${certificationSubmissions}
-          where ${certificationSubmissions.organizationId} = ${ctx.organizationId} and ${certificationSubmissions.id} = ${emissionEntries.sendReservedBySubmissionId}
-          and ${certificationSubmissions.provider} = 'isometric' and ${certificationSubmissions.localEntityType} = 'removal'
-          and ${certificationSubmissions.submissionType} = 'removal' and ${certificationSubmissions.localEntityId} = ${scope.ownedRemovalId})`) : undefined)));
+          where ${carryRemovalSubmission(ctx, scope.ownedRemovalId)} and ${certificationSubmissions.id} = ${emissionEntries.sendReservedBySubmissionId})`) : undefined)))
+    .orderBy(emissionEntries.id);
 }
 
 /** Draft receivers, or all members of origin Removals for their correction windows. No registry reads. */
@@ -75,8 +86,5 @@ export async function listCarryRemovalMembers(ctx: OrgContext, facilityId: strin
     .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.facilityId, facilityId),
       originBatchIds ? inArray(certifierRemovals.id, executor.select({ id: creditBatchApplications.removalId }).from(creditBatchApplications).where(and(
         eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.creditBatchId, originBatchIds),
-      ))) : sql`not exists (select 1 from ${certificationSubmissions} where ${certificationSubmissions.organizationId} = ${ctx.organizationId}
-        and ${certificationSubmissions.provider} = 'isometric' and ${certificationSubmissions.localEntityType} = 'removal'
-        and ${certificationSubmissions.submissionType} = 'removal' and ${certificationSubmissions.localEntityId} = ${certifierRemovals.id}
-        and (${certificationSubmissions.submittedAt} is not null or ${certificationSubmissions.status} in ('submitted', 'accepted')))`));
+      ))) : sql`not ${carryRemovalWasSent(ctx, certifierRemovals.id)}`));
 }

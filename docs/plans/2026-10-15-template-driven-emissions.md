@@ -40,7 +40,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | Empty lines | Shown as "Not recorded" on the batch sheet (`docs/ux-writing.md`, missing values; Kenji, 2026-10-15, replacing "0 so far"). They show 0 only once confirmed. In the Removal flow, the Empty components step records a zero per component with one note per credit batch. |
 | Extra fuel or electricity | Added on top of the run figures. The form shows the run total and the earlier entries, and the sum is sent. |
 | Meter readings | While a template asks for readings, the operator enters both. The form follows the template: two fields if it has two inputs, one if it has one. |
-| Late entries | Go on the next Removal from the same batch. If none is left, they go on the facility's next Removal covering their date (§7, deferred to #1059). |
+| Late entries | Go on the next Removal from the same batch. Once the batch is fully applied and its period has ended, they may go on the facility's next compatible draft ending on or after their date (§7, #1059). |
 | Evidence | Required, marked as a certification requirement, and the Removal cannot be submitted without it. Recorded zeros are exempt. |
 | #291 chain | Superseded. #639, #640, #641, #642, #893, #626 and #638 are folded in, and #894 is closed. |
 | Testing | Kenji copies Cula into the sandbox (not 1:1). Tests use a fixture of Cula as read on 2026-10-15. A read-only production key is needed before the first real submission. |
@@ -421,10 +421,7 @@ The CLI uses the existing Platform Admin bootstrap seam (`ALLOW_DEV_BOOTSTRAP`),
 
 ## 7. A late entry when its batch has no Removal left
 
-Decided by Kenji on 2026-10-15, and deferred to #1059, after PR 4:
-- The entry goes on the facility's next Removal whose window covers its date, even from another batch.
-- The entry keeps its own batch.
-- Until #1059 ships, the entry shows "Not sent" and blocks its batch.
+**Amendment, 2026-10-22 (Kenji on the answer page):** A late additive value entry moves only once its own credit batch is fully applied, its period has ended, and no own-batch Removal (draft or returned) can take it. The receiver is the facility's next draft, never a submitted, in-flight or returned Removal, whose window ends on or after the entry date and whose template takes the component. Rank drafts by earliest window end, then earliest creation, then lowest id. Skip a draft with a known incompatible template; an unread template makes the entry wait at that draft. An existing reservation or claim keeps its owner. The entry keeps its own credit batch and date, and Isometric receives a datapoint and Source note.
 
 ## 8. Risks and checks
 

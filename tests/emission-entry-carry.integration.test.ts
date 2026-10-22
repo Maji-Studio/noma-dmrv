@@ -1,3 +1,4 @@
+import { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "@/lib/credit-batches/application-mass";
 /** Real database contracts. Run only in the configured throwaway test database. */
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
@@ -186,8 +187,8 @@ it.each([true, false])("records a zero for an empty own draft when its late entr
   await db.update(applications).set({ applicationDate: new Date(hasReceiver ? "2026-10-06T00:00:00Z" : "2026-10-03T00:00:00Z") }).where(eq(applications.id, receiving.applicationId));
   const facts = await loadBatchEmissionContext(ctx, origin.facilityId, [{ id: origin.batchId, removalTemplateId: observation.externalTemplateId }],
     { templatesById: { [observation.externalTemplateId]: { observation } } });
-  expect(facts[origin.batchId].entriesWithoutRemoval).toEqual([]);
-  expect(facts[origin.batchId].entries.find(item => item.id === entry.id)?.carry).toMatchObject(hasReceiver
+  expect(facts.batchFacts[origin.batchId].entriesWithoutRemoval).toEqual([]);
+  expect(facts.batchFacts[origin.batchId].entries.find(item => item.id === entry.id)?.carry).toMatchObject(hasReceiver
     ? { receiver: { removalId: receiving.removalId }, waitingReason: null } : { receiver: null, waitingReason: "noDraft" });
   const saved = await recordEmissionZeros(ctx, { removalId: origin.removalId, creditBatchId: origin.batchId, componentIds: ["line"] });
   expect(saved.entryIds).toHaveLength(1);
@@ -301,3 +302,17 @@ it("does not give an expired resumable carry to a better-ranked rival Removal", 
     await cleanupLineageFixture(rival);
   }
 });
+
+it.each([0, MIN_VISIBLE_NOT_APPLIED_DRY_KG - 0.001, MIN_VISIBLE_NOT_APPLIED_DRY_KG, MIN_VISIBLE_NOT_APPLIED_DRY_KG + 0.001])(
+  "elects a carry receiver using the batch page threshold (%s dry kg remaining)", async remaining => {
+    const [slice] = await db.select().from(creditBatchApplications).where(and(
+      eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.creditBatchId, origin.batchId),
+    ));
+    await db.update(productionRuns).set({ biocharDryMassKg: slice.allocatedDryMassKg + remaining }).where(and(
+      eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, origin.productionRunId),
+    ));
+    const loaded = await loadFacilityEmissionEntryCarry(ctx, origin.facilityId);
+    expect(loaded.entries.find(item => item.id === entry.id)?.carry.receiver?.removalId ?? null)
+      .toBe(remaining < MIN_VISIBLE_NOT_APPLIED_DRY_KG ? receiving.removalId : null);
+  },
+);

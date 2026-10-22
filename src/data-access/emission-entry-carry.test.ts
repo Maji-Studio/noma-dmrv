@@ -14,10 +14,11 @@ beforeEach(() => {
   query.from.mockReturnValue(query);
   query.innerJoin.mockReturnValue(query);
   mocks.select.mockReturnValue(query);
+  mocks.where.mockImplementation(() => ({ orderBy: async () => [] }));
 });
 
 it("stops facility discovery after one narrow query when no candidates exist", async () => {
-  mocks.where.mockResolvedValueOnce([]);
+  mocks.where.mockReturnValueOnce({ orderBy: async () => [] });
   expect((await loadFacilityEmissionEntryCarry(makeTestOrgContext(), "facility")).entries).toEqual([]);
   expect(mocks.select).toHaveBeenCalledTimes(1);
   expect(mocks.contenders).not.toHaveBeenCalled();
@@ -26,7 +27,7 @@ it("stops facility discovery after one narrow query when no candidates exist", a
 });
 
 it("a batch display read with no candidates or retained owners does not load contenders or registry facts", async () => {
-  mocks.where.mockResolvedValueOnce([{ facilityId: "facility" }]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+  mocks.where.mockResolvedValueOnce([{ facilityId: "facility" }]).mockReturnValueOnce({ orderBy: async () => [] }).mockReturnValueOnce({ orderBy: async () => [] });
   expect(await loadBatchEmissionEntryCarry(makeTestOrgContext(), ["batch"])).toEqual([]);
   // Facility identity, candidate entries, and scoped retained ownership only.
   expect(mocks.select).toHaveBeenCalledTimes(3);
@@ -37,7 +38,7 @@ it("a batch display read with no candidates or retained owners does not load con
 
 
 it("a per-Removal ownership read skips facility candidate discovery entirely", async () => {
-  mocks.where.mockResolvedValueOnce([]);
+  mocks.where.mockReturnValueOnce({ orderBy: async () => [] });
   expect((await loadFacilityEmissionEntryCarry(makeTestOrgContext(), "facility", undefined, undefined,
     { ownedRemovalId: "removal" }, true)).entries).toEqual([]);
   expect(mocks.select).toHaveBeenCalledTimes(1);

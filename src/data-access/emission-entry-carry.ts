@@ -1,9 +1,10 @@
+import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE, REMOVAL_SUBMISSION_TYPE } from "@/lib/isometric/utils/constants";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { creditBatches, creditBatchApplications, certifierRemovals, certificationSubmissions } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { facilityToday } from "@/lib/date-utils";
-import { creditBatchApplicationMass } from "@/lib/credit-batches/application-mass";
+import { creditBatchApplicationMass, isCreditBatchFullyApplied } from "@/lib/credit-batches/application-mass";
 import { removalEntryCarryOwner, type CarryContender, type EntryCarryDestination } from "@/lib/certification/emission-entry-carry";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 import { deriveRemovalEntryWindow, isLiveEntryReservation } from "@/lib/certification/removal-emission-contributions";
@@ -49,9 +50,9 @@ export async function loadFacilityEmissionEntryCarry(
       .innerJoin(creditBatches, and(eq(creditBatches.id, creditBatchApplications.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId)))
       .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.removalId, removalIds))) : [],
     removalIds.length ? executor.select().from(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId),
-      eq(certificationSubmissions.provider, "isometric"), eq(certificationSubmissions.localEntityType, "removal"),
-      eq(certificationSubmissions.submissionType, "removal"), inArray(certificationSubmissions.localEntityId, removalIds))) : [],
-    getLatestTemplateObservations(ctx, "isometric", [...new Set(draftMembers.flatMap(row => row.batch.removalTemplateId ? [row.batch.removalTemplateId] : []))], executor),
+      eq(certificationSubmissions.provider, ISOMETRIC_PROVIDER), eq(certificationSubmissions.localEntityType, REMOVAL_ENTITY_TYPE),
+      eq(certificationSubmissions.submissionType, REMOVAL_SUBMISSION_TYPE), inArray(certificationSubmissions.localEntityId, removalIds))) : [],
+    getLatestTemplateObservations(ctx, ISOMETRIC_PROVIDER, [...new Set(draftMembers.flatMap(row => row.batch.removalTemplateId ? [row.batch.removalTemplateId] : []))], executor),
   ]);
   const nowMs = Date.now();
   const contenders: CarryContender[] = [...new Set(draftMembers.map(row => row.removal.id))].flatMap(id => {
@@ -96,7 +97,7 @@ export async function loadFacilityEmissionEntryCarry(
     const resolved = { ...fact, reservedByRemovalId: retained ? reservation.removalId : null, reservationKnownInactive: !entry.sendReservedBySubmissionId || !!reservation && !live };
     const mass = creditBatchApplicationMass(rollups[batch.id]?.lineageFacts.runs ?? [], slices.filter(slice => slice.creditBatchId === batch.id).map(slice => ({ dryKg: slice.allocatedDryMassKg })));
     const carry = removalEntryCarryOwner({ entry: resolved, organizationId: ctx.organizationId, facilityId,
-      fullyApplied: candidates.some(row => row.entry.id === entry.id) && !!batch.endDate && batch.endDate < facilityToday(timezone) && mass.notAppliedDryKg === 0,
+      fullyApplied: candidates.some(row => row.entry.id === entry.id) && !!batch.endDate && batch.endDate < facilityToday(timezone) && isCreditBatchFullyApplied(mass.notAppliedDryKg),
       ownContenders, contenders, observation });
     const holdingId = entry.sentByRemovalId ?? (retained ? reservation.removalId : null);
     const holding = removals.find(removal => removal.id === holdingId);

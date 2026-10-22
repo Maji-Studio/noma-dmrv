@@ -190,7 +190,7 @@ it.each(["empty", "future-application", "orphan", "sent-single", "automatic", "o
       blueprintsForTemplate: [], unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], requiredTransportCategories: [],
     } } } as unknown as FacilityCertifierFacts;
     const scope = { removalId, memberBatches: members, lineages: [{ application: { applicationDate: new Date("2026-02-01") } }] } as RemovalScope;
-    const loaded = await loadRemovalEntryContext(ctx, scope, facts, facility);
+    const loaded = await loadRemovalEntryContext(ctx, scope, { batchFacts: facts }, facility);
     const resolved = resolveRemovalTemplate(members, facility, loaded!.batchFacts, loaded!.contributions);
     mocks.context.mockResolvedValue({ ...resolved, memberBatches: members });
     mocks.entries.mockResolvedValue(entries);

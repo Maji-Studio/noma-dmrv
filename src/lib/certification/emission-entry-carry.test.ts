@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { removalEntryCarryOwner, type CarryContender } from "./emission-entry-carry";
 import { deriveRemovalEntryContributions, entriesWithoutRemoval, type RemovalEntryFact } from "./removal-emission-contributions";
 import type { EntryObservation } from "./emission-entry-rules";
-import { creditBatchApplicationMass } from "@/lib/credit-batches/application-mass";
+import { creditBatchApplicationMass, isCreditBatchFullyApplied, MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "@/lib/credit-batches/application-mass";
 
 const observation: EntryObservation = {
   externalTemplateId: "template", definition: { groups: [{ id: "g", key: "pyrolysis", displayName: "Group", description: "",
@@ -27,7 +27,7 @@ describe("late manual entry ownership", () => {
     expect(decide({ contenders: [{ ...draft, window: { ...draft.window, end: entry.occurredOn } }] }).receiver).not.toBeNull();
     expect(decide({ contenders: [{ ...draft, window: { start: "2026-09-01", end: "2026-09-13" } }] }).waitingReason).toBe("noDraft");
   });
-  it("requires all known dry mass to be applied, without the page's display threshold", () => {
+  it("keeps unknown mass closed and derives remaining mass from application slices", () => {
     const runs = [{ biocharDryMassKg: 285 }];
     expect(creditBatchApplicationMass(runs, [{ dryKg: 284.999 }]).notAppliedDryKg).toBe(0.001);
     expect(creditBatchApplicationMass(runs, [{ dryKg: 285 }]).notAppliedDryKg).toBe(0);
@@ -67,11 +67,13 @@ describe("late manual entry ownership", () => {
     transport.definition.groups[0].components[0].inputs.push({ key: "mass", type: "monitored", quantityKind: "mass" });
     expect(decide({ entry: { ...entry, values: [value] }, observation: transport }).receiver).toBeNull();
   });
-  it("distinguishes an unread template from an incompatible one and still selects a later compatible draft", () => {
+  it("waits at an unread template before a later compatible draft", () => {
     const unread = { ...draft, observation: null };
     expect(decide({ contenders: [unread] }).waitingReason).toBe("templateUnknown");
     expect(decide({ contenders: [unread] }).waitingFor).toEqual({ removalId: draft.removalId, removalCode: draft.code });
-    expect(decide({ contenders: [unread, { ...draft, removalId: "later", window: { ...draft.window, end: "2026-11-01" } }] }).receiver?.removalId).toBe("later");
+    expect(decide({ contenders: [{ ...draft, removalId: "later", window: { ...draft.window, end: "2026-11-01" } }, unread] })).toEqual({
+      receiver: null, waitingReason: "templateUnknown", waitingFor: { removalId: draft.removalId, removalCode: draft.code },
+    });
   });
   it("refuses paired receiving components", () => {
     const paired = structuredClone(observation);
@@ -114,4 +116,22 @@ it("gives an own-batch correction priority over carry, only inside its window", 
     creditBatchIds: [entry.creditBatchId], window: { start: "2026-09-01", end: "2026-09-15" } };
   expect(decide({ ownContenders: [own] })).toEqual({ receiver: null, waitingReason: null });
   expect(decide({ ownContenders: [{ ...own, window: { ...own.window, end: "2026-09-13" } }] }).receiver?.removalId).toBe(draft.removalId);
+});
+
+
+it.each([0, MIN_VISIBLE_NOT_APPLIED_DRY_KG - 0.001, MIN_VISIBLE_NOT_APPLIED_DRY_KG, MIN_VISIBLE_NOT_APPLIED_DRY_KG + 0.001, null])(
+  "uses the shared remaining-stock threshold for %s dry kg", remaining => {
+    const fullyApplied = isCreditBatchFullyApplied(remaining);
+    expect(fullyApplied).toBe(remaining !== null && remaining < MIN_VISIBLE_NOT_APPLIED_DRY_KG);
+    expect(decide({ fullyApplied }).receiver?.removalId ?? null).toBe(fullyApplied ? draft.removalId : null);
+  },
+);
+
+it("skips a known incompatible draft then waits for the first unread draft", () => {
+  const incompatible = { ...draft, observation: { ...observation, externalTemplateId: "different" } };
+  const unread = { ...draft, removalId: "unread", code: "RM-unread", observation: null, window: { ...draft.window, end: "2026-10-04" } };
+  const later = { ...draft, removalId: "later", window: { ...draft.window, end: "2026-11-01" } };
+  expect(decide({ contenders: [later, unread, incompatible] })).toEqual({
+    receiver: null, waitingReason: "templateUnknown", waitingFor: { removalId: unread.removalId, removalCode: unread.code },
+  });
 });

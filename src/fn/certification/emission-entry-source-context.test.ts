@@ -48,7 +48,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.scope.mockResolvedValue(scope);
   mocks.observations.mockResolvedValue([observation]);
-  mocks.facts.mockResolvedValue(structuredClone(facts));
+  mocks.facts.mockResolvedValue({ batchFacts: structuredClone(facts) });
   mocks.latest.mockResolvedValue(null);
   mocks.registry.mockRejectedValue(new TypeError("Registry unavailable"));
 });
@@ -64,13 +64,13 @@ it("uses persisted pinned observations while registry calls fail", async () => {
 });
 it("returns no entry contributions before a local observation exists", async () => {
   mocks.observations.mockResolvedValue([]);
-  mocks.facts.mockResolvedValue({});
+  mocks.facts.mockResolvedValue({ batchFacts: {} });
   expect(await loadEntrySourceContributions(ctx, "removal")).toBeUndefined();
   expect(mocks.registry).not.toHaveBeenCalled();
 });
 it("retains the reserved attempt's frozen set instead of adding a later entry", async () => {
   mocks.latest.mockResolvedValue({ id: "attempt", status: "draft", metadata: {}, payloadSnapshot: { frozenEntrySet: [] } });
-  mocks.facts.mockResolvedValue({ batch: { ...facts.batch, productionReservationSubmissionId: "attempt" } });
+  mocks.facts.mockResolvedValue({ batchFacts: { batch: { ...facts.batch, productionReservationSubmissionId: "attempt" } } });
   expect((await loadEntrySourceContributions(ctx, "removal"))?.manifest).toEqual([]);
 });
 it("does not freeze entries from a crashed unreserved draft", async () => {
