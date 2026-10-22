@@ -11,6 +11,7 @@ export { FacilitySelector } from "./facility-selector";
 export { OrgBrand } from "./org-brand";
 export { OrgSwitchToast } from "./org-switch-toast";
 export { PlatformAdminBar } from "./platform-admin-bar";
+export { PlatformAdminColumn } from "./platform-admin-column";
 export { ViewerOrgProvider, useViewerOrg } from "./viewer-org";
 export {
   FALLBACK_ORG_NAME,

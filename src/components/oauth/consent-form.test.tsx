@@ -68,6 +68,10 @@ it("submits only writes with pegs for Read and write and All areas", async () =>
   fireEvent.click(screen.getByRole("button", { name: "Allow" }));
   await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "orders:read orders:write offline_access" }));
   mocks.mutateAsync.mockClear();
+  // A decided page stays busy until it leaves, so the second choice starts from a fresh page.
+  cleanup();
+  render(<ConsentForm />);
+  choose("Read and write");
   choose("Choose per area");
   expect(screen.queryByRole("checkbox", { name: "Feedstocks, write" })).toBeNull();
   fireEvent.click(box("All areas, write"));
@@ -341,4 +345,49 @@ it("keeps the already allowed scopes and ticks a refused write on a discovery re
   render(<ConsentForm />);
   fireEvent.click(screen.getByRole("button", { name: "Allow" }));
   await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({ accept: true, scope: "feedstocks:read feedstocks:write offline_access" }));
+});
+
+const allow = () => screen.getByRole("button", { name: "Allow" }) as HTMLButtonElement;
+const deny = () => screen.getByRole("button", { name: "Deny" }) as HTMLButtonElement;
+const spinning = (button: HTMLButtonElement) => button.getAttribute("aria-busy") === "true";
+
+it("keeps Allow busy and the choices disabled after the decision resolves and the page is leaving", async () => {
+  mocks.view.mockReturnValue(view());
+  mocks.mutateAsync.mockResolvedValue("https://client.test/cb?code=c");
+  render(<ConsentForm />);
+  fireEvent.click(allow());
+  await waitFor(() => expect(mocks.assign).toHaveBeenCalledWith("https://client.test/cb?code=c"));
+  expect(allow().disabled).toBe(true);
+  expect(spinning(allow())).toBe(true);
+  expect(deny().disabled).toBe(true);
+  expect(spinning(deny())).toBe(false);
+  expect((screen.getByRole("radio", { name: /^Read only/ }) as HTMLInputElement).disabled).toBe(true);
+});
+
+it("shows Deny busy, and Allow only disabled, when Deny was clicked", async () => {
+  mocks.view.mockReturnValue(view());
+  mocks.mutateAsync.mockResolvedValue("https://client.test/cb?error=access_denied");
+  render(<ConsentForm />);
+  fireEvent.click(deny());
+  expect(spinning(deny())).toBe(true);
+  expect(allow().disabled).toBe(true);
+  expect(spinning(allow())).toBe(false);
+  await waitFor(() => expect(mocks.assign).toHaveBeenCalled());
+  expect(spinning(deny())).toBe(true);
+});
+
+it.each([
+  ["a rejected request", () => mocks.mutateAsync.mockRejectedValue(new Error("boom"))],
+  ["an unsafe continuation", () => mocks.mutateAsync.mockResolvedValue("https://evil.test/cb")],
+])("clears busy and shows the restart notice after %s", async (_name, arrange) => {
+  mocks.view.mockReturnValue(view());
+  arrange();
+  render(<ConsentForm />);
+  fireEvent.click(allow());
+  await screen.findByText("Start again from the app.");
+  expect(mocks.assign).not.toHaveBeenCalled();
+  expect(allow().disabled).toBe(false);
+  expect(spinning(allow())).toBe(false);
+  expect(deny().disabled).toBe(false);
+  expect((screen.getByRole("radio", { name: /^Read only/ }) as HTMLInputElement).disabled).toBe(false);
 });

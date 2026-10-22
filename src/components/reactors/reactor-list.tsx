@@ -41,9 +41,14 @@ import type { ReactorWithRelations } from "@/data-access/reactors";
 import type { Reactor } from "@/db/schema";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { formatThroughputTph } from "./reactor-throughput";
-import { FACILITY_NOT_FOUND } from "@/lib/copy-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { reactorSheetSections } from "./reactor-read-sections";
 import { ILLUSTRATION_SIZE, ReactorArt } from "@/components/ui/illustrations";
+
+/** Throughput is optional detail an operator can add from the Columns menu. */
+const REACTOR_COLUMNS_HIDDEN_BY_DEFAULT = {
+  nominalThroughputTph: false,
+};
 
 // ============================================
 // Column Definitions
@@ -68,16 +73,20 @@ function createColumns(
       cell: ({ row }) => <span>{row.original.identifier}</span>,
     },
     {
-      accessorKey: "facilityName",
-      header: "Facility",
-      cell: ({ row }) => (
-        <span>{row.original.facilityName || FACILITY_NOT_FOUND}</span>
-      ),
-    },
-    {
       accessorKey: "reactorType",
       header: "Type",
       cell: ({ row }) => <span>{formatReactorType(row.original.reactorType)}</span>,
+    },
+    {
+      accessorKey: "nominalThroughputTph",
+      header: "Nominal throughput (tph)",
+      cell: ({ row }) => (
+        <span>
+          {row.original.nominalThroughputTph === null
+            ? MISSING_VALUE.notRecorded
+            : row.original.nominalThroughputTph.toLocaleString()}
+        </span>
+      ),
     },
     {
       id: "actions",
@@ -289,6 +298,7 @@ export function ReactorList() {
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={REACTOR_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={reactors}
         onRowClick={openView}

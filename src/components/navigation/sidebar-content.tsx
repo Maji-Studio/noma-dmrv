@@ -15,6 +15,7 @@
 import { useState } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import Link from "next/link";
+import { PLATFORM_HOME_HREF } from "@/lib/auth/home-path";
 import { usePathname } from "next/navigation";
 import {
   HouseIcon,
@@ -178,7 +179,7 @@ const adminSection: NavSection = {
   accent: SECTION_ACCENTS.admin,
   items: [
     {
-      href: "/admin/organizations",
+      href: PLATFORM_HOME_HREF,
       label: "Organizations",
       icon: BuildingsIcon,
       skipFacilityParam: true,

@@ -383,7 +383,7 @@ The browser zone is never used. When the facility cannot be resolved, pass
 `UNKNOWN_FACILITY_TIMEZONE` (UTC) explicitly; `timeZone` parameters have no
 default, so the fallback is always visible at the call site.
 
-**Exception (pending confirmation).** Account security metadata that belongs to
+**Exception.** Account security metadata that belongs to
 no facility (API keys, connected apps: created, last used, expires) keeps the
 viewer's clock via `formatDateTime`.
 
@@ -518,6 +518,27 @@ Always use `Button`; never a raw `<button>` with manual styling.
 - **`busy` is the one sanctioned in-flight convention.** It disables the button
   and renders a leading spinner. Do not hand-roll `disabled={isPending}` plus a
   text swap or your own spinner — `busy` exists to replace exactly that mix.
+- **Busy lasts until the result is visible.** When the action ends in a
+  navigation, the button stays busy through it: a `window.location` navigation
+  holds until the page unloads (`useBusyUntilUnload`, which also drops the hold
+  when Back restores the page from the back-forward cache), an in-app
+  `router.push` is wrapped in `startTransition` and holds until the route
+  renders. Only a failure clears it. The clicked button carries the spinner and
+  its siblings are disabled.
+- **Exception: listbox rows.** The sidebar organization switcher's options are
+  `role="option"` rows (left-aligned text, a trailing icon, 40px, sentence
+  case). `Button` imposes `label-button` type, fixed heights and
+  `disabled:pointer-events-none`, so these keep a raw `<button>` with the same
+  spinner glyph and `aria-busy` as `busy`.
+- **A confirm dialog keeps its label.** `DeleteConfirmDialog` and
+  `ConfirmActionDialog` show the spinner through `busy` and never swap the text
+  ("Deleting...", "Submitting…"); Cancel is disabled and Escape, the backdrop
+  and the X are held while it runs. A delete that returns to a list stays open
+  and busy until that list has rendered, and its success toast arrives with the
+  list: call `useNavigateWithToast().navigate(href, message)` and pass
+  `isPending={mutation.isPending || navigation.isPending}`. Never toast, close
+  the dialog and then push. Deletes that stay on the page toast as the request
+  returns.
 - **Quiet icon button:** `size="icon"` with `variant="noOutline"` (or
   `variant="destructive"` for a delete row action), plus an `aria-label`. Use
   this rather than `width="square"`, which yields a differently-sized control.

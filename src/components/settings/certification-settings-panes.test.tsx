@@ -62,7 +62,6 @@ vi.mock("@/components/navigation", () => ({ SelectFacilityEmptyState: () => <div
 const viewer: SettingsViewer = {
   organizationId: "org-1",
   organizationName: "Org One",
-  organizationSlug: null,
   isPlatformAdmin: false,
   canManage: true,
   canManageApiKeys: true,

@@ -3,6 +3,7 @@
  * server layout can call them as well as the sidebar.
  */
 import type { OrgRole } from "@/lib/auth/server";
+import { isPlatformPath } from "@/lib/auth/home-path";
 import { orgRoleLabel } from "@/lib/org-role-label";
 
 /** Shown where no organization name is known yet. */
@@ -43,11 +44,13 @@ export function isOrgMismatch(
 /**
  * The Platform Admin bar shows only while a Platform Admin works in an
  * organization they do not belong to. A Platform Admin who is also a member
- * acts as that member and sees no bar. Never rank `orgRole` here: it is null
- * for a Platform Admin without a membership.
+ * acts as that member and sees no bar, and the Platform pages themselves are
+ * not inside an organization. Never rank `orgRole` here: it is null for a
+ * Platform Admin without a membership.
  */
 export function shouldShowPlatformAdminBar(
   viewer: Pick<ViewerOrg, "orgRole" | "isPlatformAdmin"> | null,
+  pathname: string | null,
 ): boolean {
-  return Boolean(viewer?.isPlatformAdmin && !viewer.orgRole);
+  return Boolean(viewer?.isPlatformAdmin && !viewer.orgRole && !isPlatformPath(pathname));
 }

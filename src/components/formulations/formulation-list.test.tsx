@@ -75,7 +75,7 @@ vi.mock("@/components/ui/data-table", () => {
           ))}
         </div>
       ),
-      { Toolbar: Slot, Controls: Slot, Search: () => null, ColumnVisibility: () => null, Pagination: () => null },
+      { Toolbar: Slot, Controls: Slot, Search: () => null, ColumnVisibility: () => <button type="button">Columns</button>, Pagination: () => null },
     ),
   };
 });
@@ -128,6 +128,11 @@ describe("FormulationList archive view", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
     await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(message));
     expect(screen.queryByRole("button", { name: "Archive instead" })).toBeNull();
+  });
+
+  it("shows no Columns control: every record field is already a column", () => {
+    render(<FormulationList />);
+    expect(screen.queryByRole("button", { name: "Columns" })).toBeNull();
   });
 
   it("explains an empty archived view", () => {

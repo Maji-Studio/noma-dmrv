@@ -100,6 +100,9 @@ export function IsometricLinkedBadge() {
   );
 }
 
+/** Description is optional detail an operator can add from the Columns menu. */
+const FEEDSTOCK_TYPE_COLUMNS_HIDDEN_BY_DEFAULT = { description: false };
+
 function createColumns(params: {
   canManage: boolean;
   onEdit: (feedstockType: FeedstockType) => void;
@@ -146,6 +149,18 @@ function createColumns(params: {
       cell: ({ row }) => (
         <MutedValue archived={!!row.original.archivedAt}>
           {row.original.usage === "blend" ? "Blend" : "Pyrolysis"}
+        </MutedValue>
+      ),
+    },
+    {
+      accessorKey: "description",
+      enableGlobalFilter: false,
+      header: "Description",
+      cell: ({ row }) => (
+        <MutedValue archived={!!row.original.archivedAt}>
+          <span className="block max-w-xs truncate">
+            {row.original.description || MISSING_VALUE.notRecorded}
+          </span>
         </MutedValue>
       ),
     },
@@ -470,6 +485,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       )}
 
       <DataTable
+        defaultColumnVisibility={FEEDSTOCK_TYPE_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={filteredFeedstockTypes}
         onRowClick={openView}
