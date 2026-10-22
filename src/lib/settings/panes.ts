@@ -160,8 +160,9 @@ export const SETTINGS_PANES: readonly SettingsPaneMeta[] = [
     label: "Organizations",
     href: ADMIN_ORGANIZATIONS_HREF,
     scope: "platform",
-    caption: "",
-    access: "",
+    // PROTOTYPE (#1373, variant D): a real pane needs a caption and footnote.
+    caption: "Every organization on noma: open one, its Isometric keys and its API access.",
+    access: "Platform Admins only.",
     audience: "platform-admins",
     external: true,
   },
