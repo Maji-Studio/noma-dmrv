@@ -35,3 +35,7 @@ export const ESTIMATED_WET_LABEL = "Wet, estimated";
 
 /** What an output bin's wet stock is, said once for every hint that needs it. */
 export const WET_STOCK_DEFINITION = "Estimated: the wet mass that went in, minus what was taken out. Drying isn't tracked, so the real figure may be lower.";
+
+/** The output bin history's hint: what an entry is, and what a later entry does to it. */
+export const STOCK_HISTORY_HINT =
+  "Each entry is one measurement. Wet stock is wet mass added less wet mass taken out. A later entry never changes what an earlier one measured; wet estimates update.";

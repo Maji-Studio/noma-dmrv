@@ -8,12 +8,15 @@ const PEG_ICON_SIZE = 14;
 const SETTLED_ICON_SIZE = 16;
 
 /** One peg: a 44px hit area around a 24px square that fills when on. A native checkbox carries the state. */
-export function Peg({ state, label, onChange, disabled = false }: {
+export function Peg({ state, label, onChange, disabled = false, invalid = false, describedBy }: {
   state: PegState;
   /** Accessible name that says the area and the access, e.g. "Feedstocks, write". */
   label: string;
   onChange: (on: boolean) => void;
   disabled?: boolean;
+  /** The board shows an error: red border while off, and the box points at the message. */
+  invalid?: boolean;
+  describedBy?: string;
 }) {
   const on = state !== "off";
   return (
@@ -24,6 +27,8 @@ export function Peg({ state, label, onChange, disabled = false }: {
         className="peer sr-only"
         checked={state === "on"}
         disabled={disabled}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         ref={(input) => { if (input) input.indeterminate = state === "mixed"; }}
         onChange={(event) => onChange(event.target.checked)}
       />
@@ -33,7 +38,9 @@ export function Peg({ state, label, onChange, disabled = false }: {
           "flex size-24 items-center justify-center border transition-colors duration-200",
           on
             ? "border-[var(--color-interaction)] bg-[var(--color-interaction)] text-[var(--color-text-white-primary)]"
-            : "border-[var(--color-border-secondary)] bg-[var(--color-background-white)] hover:border-[var(--color-border-primary)]",
+            : invalid
+              ? "border-[var(--color-signal-red)] bg-[var(--color-background-white)]"
+              : "border-[var(--color-border-secondary)] bg-[var(--color-background-white)] hover:border-[var(--color-border-primary)]",
           "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--color-interaction)]",
           "peer-disabled:opacity-60 forced-colors:border-2",
         )}

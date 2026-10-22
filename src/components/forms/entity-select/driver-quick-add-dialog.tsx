@@ -11,7 +11,6 @@ import { DriverForm } from "@/components/drivers/driver-form";
 import type { Driver } from "@/db/schema";
 import type { DriverFormData } from "@/schemas/drivers";
 import { useQuickAddSubmit } from "@/hooks/use-quick-add-submit";
-import { useCreateIntentKey } from "@/hooks/use-create-intent-key";
 import { useUpdateDriver } from "@/hooks/use-fleet";
 import { useOpenSnapshot } from "@/hooks/use-open-snapshot";
 import { toSaveErrorMessage } from "@/lib/stale-version";
@@ -44,14 +43,9 @@ export function DriverQuickAddDialog({
   driver: driverProp,
 }: DriverQuickAddDialogProps) {
   // One key per open draft: a retry after a lost response replays the first save.
-  const intent = useCreateIntentKey();
   const create = useQuickAddSubmit<DriverFormData>({
     entityType: "driver",
-    serverFn: async (data) => {
-      const result = await createDriverFn(toDriverPayload(data), { intentKey: intent.current() });
-      if (result.success) intent.rotate();
-      return result;
-    },
+    serverFn: (data, intentKey) => createDriverFn(toDriverPayload(data), { intentKey }),
     onSuccess: (entity) => onSuccess?.(entity),
     onClose,
   });
@@ -85,7 +79,7 @@ export function DriverQuickAddDialog({
       isOpen={isOpen}
       onClose={onClose}
       onOpen={() => {
-        intent.rotate();
+        create.startDraft();
         setEditError(null);
       }}
       title={isEdit ? "Edit driver" : "New driver"}

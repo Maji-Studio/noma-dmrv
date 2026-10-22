@@ -6,6 +6,8 @@
  */
 "use client";
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
+import { useIntentMutation } from "./use-create-intent-key";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   confirmEmissionEntryFn,
@@ -83,6 +85,7 @@ export function invalidateEmissionEntryReads(queryClient: QueryClient, scope: Em
 function useEntryMutation<TInput, TData>(scope: EmissionBatchScope, run: (input: TInput) => Promise<ActionResult<TData>>) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.emission, { onRefusalOnly: true }),
     mutationFn: async (input: TInput) => unwrapEntry(await run(input)),
     // Refresh after failures too: a stale version means the lines moved.
     onSettled: () => invalidateEmissionEntryReads(queryClient, scope),
@@ -90,7 +93,13 @@ function useEntryMutation<TInput, TData>(scope: EmissionBatchScope, run: (input:
 }
 
 export function useCreateEmissionEntry(scope: EmissionBatchScope) {
-  return useEntryMutation(scope, createEmissionEntryFn);
+  const queryClient = useQueryClient();
+  return useIntentMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.emission, { onRefusalOnly: true }),
+    mutationFn: async (input: Parameters<typeof createEmissionEntryFn>[0], intentKey) =>
+      unwrapEntry(await createEmissionEntryFn(input, { intentKey })),
+    onSettled: () => invalidateEmissionEntryReads(queryClient, scope),
+  });
 }
 export function useUpdateEmissionEntry(scope: EmissionBatchScope) {
   return useEntryMutation(scope, updateEmissionEntryFn);

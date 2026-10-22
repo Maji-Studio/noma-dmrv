@@ -11,7 +11,6 @@ import { OperatorForm } from "@/components/operators/operator-form";
 import type { Operator } from "@/db/schema";
 import type { OperatorFormData } from "@/schemas/operators";
 import { useQuickAddSubmit } from "@/hooks/use-quick-add-submit";
-import { useCreateIntentKey } from "@/hooks/use-create-intent-key";
 import { useUpdateOperator } from "@/hooks/use-fleet";
 import { useOpenSnapshot } from "@/hooks/use-open-snapshot";
 import { toSaveErrorMessage } from "@/lib/stale-version";
@@ -44,14 +43,9 @@ export function OperatorQuickAddDialog({
   operator: operatorProp,
 }: OperatorQuickAddDialogProps) {
   // One key per open draft: a retry after a lost response replays the first save.
-  const intent = useCreateIntentKey();
   const create = useQuickAddSubmit<OperatorFormData>({
     entityType: "operator",
-    serverFn: async (data) => {
-      const result = await createOperatorFn(toOperatorPayload(data), { intentKey: intent.current() });
-      if (result.success) intent.rotate();
-      return result;
-    },
+    serverFn: (data, intentKey) => createOperatorFn(toOperatorPayload(data), { intentKey }),
     onSuccess: (entity) => onSuccess?.(entity),
     onClose,
   });
@@ -85,7 +79,7 @@ export function OperatorQuickAddDialog({
       isOpen={isOpen}
       onClose={onClose}
       onOpen={() => {
-        intent.rotate();
+        create.startDraft();
         setEditError(null);
       }}
       title={isEdit ? "Edit operator" : "New operator"}

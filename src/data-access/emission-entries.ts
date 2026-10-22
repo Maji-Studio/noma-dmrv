@@ -226,14 +226,19 @@ export async function tombstoneEmissionZeros(
 }
 export async function createEmissionEntry(ctx: OrgContext, input: CreateEmissionEntryInput) {
   requireOrgScope(ctx);
+  return db.transaction((tx) => createEmissionEntryInTransaction(ctx, tx, input));
+}
+
+export async function createEmissionEntryInTransaction(
+  ctx: OrgContext, tx: DbTransaction, input: CreateEmissionEntryInput,
+) {
+  requireOrgScope(ctx);
   const data = createEmissionEntrySchema.parse(input);
-  return db.transaction(async (tx) => {
-    const { batch, facility, observation } = await lockedBatch(ctx, tx, data.creditBatchId);
-    return createEmissionEntryInTransaction(ctx, tx, data, { batch, facility, observation });
-  });
+  const context = await lockedBatch(ctx, tx, data.creditBatchId);
+  return writeEmissionEntryUnderLocks(ctx, tx, data, context);
 }
 /** Caller holds the facility and batch locks; replacement also holds its old entry. */
-async function createEmissionEntryInTransaction(
+async function writeEmissionEntryUnderLocks(
   ctx: OrgContext,
   tx: DbTransaction,
   data: CreateEmissionEntryInput,
@@ -308,7 +313,7 @@ export async function replaceEmissionEntry(ctx: OrgContext, input: ReplaceEmissi
       contentRevision: nextVersion(emissionEntries.contentRevision),
     }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id))).returning();
     await recordEmissionEntryActivity(ctx, tx, "deleted", entry, { ...deleted, values: entry.values });
-    const replacement = await createEmissionEntryInTransaction(ctx, tx, {
+    const replacement = await writeEmissionEntryUnderLocks(ctx, tx, {
       creditBatchId: entry.creditBatchId, componentId: entry.componentId,
       occurredOn: data.occurredOn, note: data.note, values: data.values,
     }, context, entry.sentByRemovalId || entry.heldForRemovalId ? {

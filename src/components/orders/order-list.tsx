@@ -503,8 +503,7 @@ export function OrderList() {
         />
       </EntitySideSheet>
 
-      {deleteError && <ServerError message={deleteError} />}
-      <DeleteConfirmDialog isOpen={!!deletingOrderId} title="Delete order" message="Are you sure you want to delete this order? This action cannot be undone. Note: Orders with deliveries cannot be deleted." onConfirm={handleDeleteConfirm} onCancel={() => { setDeletingOrderId(null); setDeleteError(null); }} isPending={deleteOrder.isPending} />
+      <DeleteConfirmDialog isOpen={!!deletingOrderId} title="Delete order" message={deleteError ? "Are you sure you want to delete this order? This action cannot be undone." : "Are you sure you want to delete this order? This action cannot be undone. Note: Orders with deliveries cannot be deleted."} onConfirm={handleDeleteConfirm} onCancel={() => { setDeletingOrderId(null); setDeleteError(null); }} isPending={deleteOrder.isPending} errorMessage={deleteError ?? undefined} />
     </div>
   );
 }

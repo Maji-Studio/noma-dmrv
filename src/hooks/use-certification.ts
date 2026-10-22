@@ -19,7 +19,7 @@ import {
   createRemovalWithBatchesAction,
   deleteRemovalAction,
   deleteFacilityCertifierMapping,
-  loadBatchHealth,
+  loadCreditBatchTodosFn,
   loadCreditBatchDurabilitySummary,
   loadCertificationHealth,
   loadCertificationOverview,
@@ -123,6 +123,7 @@ export const certificationKeys = {
   removalTemplateReview: (facilityId: string) => ["certification", "removal-template-review", facilityId] as const,
   all: ["certification"] as const,
   /** Whether a submitted Removal or GHG statement freezes the record's files. */
+  recordLocks: () => [...certificationKeys.all, "record-lock"] as const,
   recordLock: (entityType: string, entityId?: string) =>
     [...certificationKeys.all, "record-lock", entityType, entityId] as const,
   facilityMapping: (facilityId: string) =>
@@ -140,8 +141,8 @@ export const certificationKeys = {
       "credit-batch",
       creditBatchId,
     ] as const,
-  batchHealth: (creditBatchId: string) =>
-    [...certificationKeys.all, "batch-health", creditBatchId] as const,
+  batchTodos: (facilityId: string, creditBatchId: string) =>
+    [...certificationKeys.all, "batch-todos", facilityId, creditBatchId] as const,
   batchDurabilitySummary: (creditBatchId: string) =>
     [
       ...certificationKeys.all,
@@ -434,6 +435,7 @@ export function useIsometricFeedstockTypes(enabled = true) {
 export function useSaveFacilityCertifierMapping() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry, { onRefusalOnly: true }),
     mutationFn: async (input: SaveMappingInput) =>
       unwrap(await saveFacilityCertifierMapping(input)),
     onSuccess: (_data, variables) => {
@@ -481,16 +483,16 @@ export function useCertifyContextForCreditBatch(
   });
 }
 
-// Per-batch data-completeness verdict for the credit-batch detail page's
-// health-check panel. Reuses the single-batch certify context server-side and
-// runs the shared classifier. Mutations to the batch / its lineage invalidate
-// `certificationKeys.all`, which covers this key.
-export function useBatchHealth(creditBatchId: string, enabled = true) {
+// The credit batch page's to-dos (Blocking and Check items), built on the
+// server from the same core the batch list counts from. Refetched on every mount
+// (`staleTime: 0`), like the emission lines it replaced. Mutations that affect readiness invalidate `certificationKeys.all`,
+// which covers this key.
+export function useCreditBatchTodos(scope: { facilityId: string; creditBatchId: string } | null) {
   return useQuery({
-    queryKey: certificationKeys.batchHealth(creditBatchId),
-    queryFn: async () => unwrap(await loadBatchHealth(creditBatchId)),
-    enabled: enabled && !!creditBatchId,
-    staleTime: DEFAULT_STALE_MS,
+    queryKey: certificationKeys.batchTodos(scope?.facilityId ?? "", scope?.creditBatchId ?? ""),
+    queryFn: async () => unwrap(await loadCreditBatchTodosFn(scope!.facilityId, scope!.creditBatchId)),
+    enabled: !!scope,
+    staleTime: 0,
   });
 }
 
@@ -709,6 +711,7 @@ export function useDeleteRemoval() {
 export function useDeleteFacilityCertifierMapping() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry, { onRefusalOnly: true }),
     mutationFn: async (facilityId: string) =>
       unwrap(await deleteFacilityCertifierMapping(facilityId)),
     onSuccess: (_data, facilityId) => {
