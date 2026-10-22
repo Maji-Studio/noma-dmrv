@@ -10,7 +10,8 @@ export const LOCKED_FIELD_MESSAGE = "Locked. Your change was not saved.";
 
 const LOCK_CODE = "certification_locked";
 const STALE_VERSION_CODE = "stale_version";
-const INSUFFICIENT_STOCK_CODE = "insufficient_stock";
+/** Code of a refusal because a bin holds less than asked for. */
+export const INSUFFICIENT_STOCK_CODE = "insufficient_stock";
 const FOOTER_SEPARATOR = " ";
 
 export interface SaveRefusalFieldError {

@@ -45,4 +45,6 @@ export const BIOCHAR_PRODUCT_REFUSAL_ALIASES = {
   "ingredients.*.moisturePercent": "ingredientBins.*.moistureContentPercent",
   "ingredients.*.storageLocationId": "ingredientBins.*.storageLocationId",
   composition: "ingredientBins",
+  // A short sub-bin of a split biochar bin is a short draw of the biochar mass.
+  sources: "massKg",
 } as const;

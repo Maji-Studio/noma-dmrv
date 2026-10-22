@@ -17,6 +17,7 @@ import { EntitySelect, FormActions, FormField, FormInput, FormSection, FormSpine
 import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
 import { SERVER_ERROR_TYPE, useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { isActionError } from "@/lib/action-error";
+import { INSUFFICIENT_STOCK_CODE } from "@/lib/save-refusal";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import {
   StorageLocationQuickAddDialog,
@@ -66,8 +67,13 @@ import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
 const numberBounds = numberInputConstraintsFor(biocharProductEntrySchema);
 
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
-/** `ActionError` code of a short bin. */
-const INSUFFICIENT_STOCK_CODE = "insufficient_stock";
+/** The operation names the source biochar mass by this path. */
+const SOURCE_MASS_ISSUE_PATH = "biocharWetMassKg";
+
+/** The refusal says the source bin holds less than the biochar mass asked for. */
+function refusesSourceBinStock(error: unknown): boolean {
+  return isActionError(error) && error.issues.some((issue) => issue.code === INSUFFICIENT_STOCK_CODE && issue.path.join(".") === SOURCE_MASS_ISSUE_PATH);
+}
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 
 type MassMoistureFieldsProps = ComponentProps<typeof MassMoistureFields>;
@@ -223,8 +229,9 @@ export function BiocharProductForm({
     formState: { errors },
   } = form;
   const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: BIOCHAR_PRODUCT_REFUSAL_ALIASES });
-  // A short source bin is the one refusal that offers the stock reconciliation link.
-  const [sourceBinRefused, setSourceBinRefused] = useState(false);
+  // What the form held when a short source bin was refused; the refusal and its
+  // reconciliation link show only while the bin, formulation and masses are unchanged.
+  const [sourceBinRefusedFor, setSourceBinRefusedFor] = useState<string | null>(null);
 
   const selectedFacilityId = useWatch({ control, name: "facilityId" }) || contextFacilityId || "";
   const placementClock = useFacilityClock(selectedFacilityId);
@@ -321,20 +328,24 @@ export function BiocharProductForm({
   const affectedBinsUnavailable = !productStockPreview.data || productStockPreview.isFetching || !!productStockPreview.error || productStockPreview.data.some(bin => !!bin.blockingMessage);
   const { canSave, submitDisabled, basisFingerprint } = gate({ unavailable: affectedBinsUnavailable, basisFingerprint: productStockPreview.data?.[0]?.basisFingerprint });
   const biocharStockError = sourcePreview.data?.blockingMessage ?? sourcePreview.error?.message;
-  const refreshStockPreview = sourcePreview.refetch;
-  useEffect(() => {
-    if (errorMessage && !isEditMode) void refreshStockPreview();
-  }, [errorMessage, isEditMode, refreshStockPreview]);
-
-  const massKgError = errors.massKg?.message ?? biocharStockError;
-  const serverRefusedMass = sourceBinRefused && errors.massKg?.type === SERVER_ERROR_TYPE;
+  const massFieldFingerprint = [
+    sourceBiocharStorageLocationId,
+    selectedFormulationId,
+    watchedMassKg,
+    ...(watchedIngredientBins ?? []).map((ingredient) => ingredient.massKg),
+  ].join(":");
+  // A server error at the mass is the answer for the fields it was refused with.
+  const serverMassError = errors.massKg?.type === SERVER_ERROR_TYPE;
+  const staleServerMassError = serverMassError && sourceBinRefusedFor !== null && sourceBinRefusedFor !== massFieldFingerprint;
+  const massKgError = (staleServerMassError ? undefined : errors.massKg?.message) ?? biocharStockError;
+  const serverRefusedMass = serverMassError && sourceBinRefusedFor === massFieldFingerprint;
 
   const handleFormSubmit = latched(handleSubmit(async (data) => {
     if (!canSave) return;
     // A failed save needs no refetch here: the host reports the error and the
     // mutation hooks invalidate `outputStockKeys.all`, which refreshes both previews.
     const onRefusal: SaveRefusalHandler = (error, fallback) => {
-      setSourceBinRefused(isActionError(error) && error.code === INSUFFICIENT_STOCK_CODE);
+      setSourceBinRefusedFor(refusesSourceBinStock(error) ? massFieldFingerprint : null);
       return refuseSave(error, fallback);
     };
     await onSubmit({
@@ -565,6 +576,12 @@ export function BiocharProductForm({
           previews={productStockPreview.data}
           previewsAvailable={productPreviewsAvailable}
         />
+        {/* A refusal of the whole ingredient set, such as a lock, has no row of its own. */}
+        {errors.ingredientBins?.message && (
+          <p id="ingredientBins-error" role="alert" aria-live="polite" className="body-caption text-[var(--color-signal-red)]">
+            {errors.ingredientBins.message}
+          </p>
+        )}
       </FormSection>
 
       <FormSection

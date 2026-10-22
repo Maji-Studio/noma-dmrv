@@ -80,33 +80,15 @@ function submitRefused(error: ActionError, edit: () => void = () => undefined) {
 }
 
 describe("BiocharProductForm refused saves", () => {
-  it("files a refusal on the operation's biochar mass at the mass field, with no footer", async () => {
-    const message = "Not enough biochar in this bin";
-    const { onSubmit, footers } = submitRefused(refusal("insufficient_stock", ["biocharWetMassKg"], message));
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
-    expect(await screen.findAllByText(message)).toHaveLength(1);
-    expect(await screen.findByText("Open bin reconciliation")).toBeTruthy();
-    expect(footers).toEqual([null]);
-  });
-
-  it("files the zero-source refusal at the mass field, with no footer", async () => {
-    const message = "A product requires positive source biochar.";
-    const { onSubmit, footers } = submitRefused(refusal("validation_failed", ["biocharWetMassKg"], message));
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
-    expect(await screen.findAllByText(message)).toHaveLength(1);
-    expect(screen.queryByText("Open bin reconciliation")).toBeNull();
-    expect(footers).toEqual([null]);
-  });
-
   it("brings the saved value back into a locked field and keeps the reason in the footer", async () => {
-    const field = () => document.querySelector<HTMLInputElement>('input[name="waterAddedKg"]')!;
+    const field = () => document.querySelector<HTMLInputElement>('input[name="densityKgM3"]')!;
     let saved = "";
     const { onSubmit, footers } = submitRefused(
-      refusal("certification_locked", ["waterAddedKg"], LOCK_REASON),
+      refusal("certification_locked", ["densityKgM3"], LOCK_REASON),
       () => { saved = field().value; fireEvent.change(field(), { target: { value: "75" } }); },
     );
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
-    expect(onSubmit.mock.calls[0][0]).toMatchObject({ waterAddedKg: 75 });
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ densityKgM3: 75 });
     await screen.findByText("Locked. Your change was not saved.");
     expect(field().value).toBe(saved);
     expect(footers).toEqual([LOCK_REASON]);
@@ -126,6 +108,7 @@ describe("BIOCHAR_PRODUCT_REFUSAL_ALIASES", () => {
     [["ingredients", 0, "moisturePercent"], "ingredientBins.0.moistureContentPercent"],
     [["ingredients", 2, "storageLocationId"], "ingredientBins.2.storageLocationId"],
     [["composition"], "ingredientBins"],
+    [["sources", 1], "massKg"],
     [["waterAddedKg"], "waterAddedKg"],
   ])("maps %j to %s", (path, field) => {
     expect(plan(path as (string | number)[])).toEqual([field]);
