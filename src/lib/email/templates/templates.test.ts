@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { formatDuration, formatExpiryDate } from "./format-expiry";
+import { formatDays, formatDuration } from "./format-duration";
 import { invitationEmail } from "./invitation-email";
 import { resetPasswordEmail } from "./reset-password-email";
 import { verifyEmailEmail } from "./verify-email-email";
@@ -16,7 +16,7 @@ const reset = resetPasswordEmail({ to: TO, url: RESET_URL, appUrl: APP });
 const verify = verifyEmailEmail({ to: TO, url: VERIFY_URL, appUrl: APP });
 const invite = invitationEmail({
   to: TO, url: ACCEPT_URL, appUrl: APP, organizationName: "Dark Earth Carbon", roleLabel: "Admin",
-  inviterName: "Amani Mushi", expiresOn: "Oct 29, 2026",
+  inviterName: "Amani Mushi",
 });
 
 it.each([
@@ -43,7 +43,7 @@ it("serves drawings and logo from the app origin with a dark twin", () => {
   expect(reset.html).toContain(`src="${APP}/email/password-reset.png"`);
   expect(verify.html).toContain(`src="${APP}/email/verify-email-dark.png"`);
   expect(invite.html).toContain(`src="${APP}/email/invitation.png"`);
-  expect(invitationEmail({ to: TO, url: ACCEPT_URL, appUrl: `${APP}/`, organizationName: "O", roleLabel: "Member", expiresOn: "x" }).html)
+  expect(invitationEmail({ to: TO, url: ACCEPT_URL, appUrl: `${APP}/`, organizationName: "O", roleLabel: "Member" }).html)
     .toContain(`src="${APP}/email/logo.png"`);
 });
 
@@ -53,16 +53,22 @@ it("names the account, not an organization, in account email footers", () => {
   }
 });
 
-it("names the inviter, role and expiry date in the invitation", () => {
+it("names the inviter, role and lifetime in the invitation", () => {
   expect(invite.text).toContain("Amani Mushi invited you to join Dark Earth Carbon as an Admin.");
-  expect(invite.text).toContain("This invitation expires on Oct 29, 2026.");
-  expect(invite.text).toContain("Sent to invitee@example.test because Amani Mushi invited you to Dark Earth Carbon.");
-  expect(invite.preheader).toBe("Accept by Oct 29, 2026 to join as an Admin.");
+  expect(invite.text).toContain("This invitation expires in 7 days.");
+  expect(invite.html).toContain("This invitation expires in 7 days.");
+  expect(invite.text).toContain("Sent to invitee@example.test because you were invited to Dark Earth Carbon.");
+  expect(invite.preheader).toBe("Accept within 7 days to join as an Admin.");
+  for (const body of [invite.html, invite.text]) {
+    expect(body).toContain("Accept to join.");
+    expect(body).not.toContain("set your name and password");
+    expect(body).not.toMatch(/Oct \d|, 20\d\d/);
+  }
 });
 
 it("falls back to wording without a name when the inviter is unknown", () => {
   const email = invitationEmail({
-    to: TO, url: ACCEPT_URL, appUrl: APP, organizationName: "Dark Earth Carbon", roleLabel: "Member", expiresOn: "Oct 29, 2026",
+    to: TO, url: ACCEPT_URL, appUrl: APP, organizationName: "Dark Earth Carbon", roleLabel: "Member",
   });
   expect(email.subject).toBe("You are invited to join Dark Earth Carbon");
   expect(email.text).toContain("You are invited to join Dark Earth Carbon as a Member.");
@@ -71,7 +77,7 @@ it("falls back to wording without a name when the inviter is unknown", () => {
 
 it("escapes crafted organization and inviter names in html and the preheader", () => {
   const email = invitationEmail({
-    to: TO, url: ACCEPT_URL, appUrl: APP, organizationName: CRAFTED, roleLabel: "Admin", inviterName: CRAFTED, expiresOn: "Oct 29, 2026",
+    to: TO, url: ACCEPT_URL, appUrl: APP, organizationName: CRAFTED, roleLabel: "Admin", inviterName: CRAFTED,
   });
   expect(email.html).not.toContain("<img src=x");
   expect(email.html).not.toContain('onerror="alert(1)"');
@@ -86,9 +92,10 @@ it("escapes a crafted address in account emails", () => {
   expect(email.html).toContain("a&quot;&lt;b&gt;@example.test");
 });
 
-it("formats lifetimes and the expiry date", () => {
+it("formats lifetimes", () => {
   expect(formatDuration(60 * 60)).toBe("1 hour");
   expect(formatDuration(60 * 60 * 24)).toBe("24 hours");
   expect(formatDuration(60 * 60 * 5)).toBe("5 hours");
-  expect(formatExpiryDate(60 * 60 * 24 * 7, new Date("2026-10-22T23:00:00Z"))).toBe("Oct 29, 2026");
+  expect(formatDays(60 * 60 * 24 * 7)).toBe("7 days");
+  expect(formatDays(60 * 60 * 24)).toBe("1 day");
 });

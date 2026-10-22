@@ -1,6 +1,6 @@
 import { EMAIL_VERIFICATION_EXPIRES_IN_SECONDS } from "@/config/auth";
 import { composeEmail } from "./compose-email";
-import { formatDuration } from "./format-expiry";
+import { formatDuration } from "./format-duration";
 
 export function verifyEmailEmail(input: { to: string; url: string; appUrl: string }) {
   const expires = formatDuration(EMAIL_VERIFICATION_EXPIRES_IN_SECONDS);

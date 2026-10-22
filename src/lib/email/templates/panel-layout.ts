@@ -10,7 +10,7 @@
  * replacing this file; content, text and the email functions stay untouched.
  */
 import { escapeHtml } from "../escape-html";
-import type { EmailContent, Inline } from "./email-content";
+import { REPLY_LINE, sentToLine, type EmailContent, type Inline } from "./email-content";
 
 // Opaque twins of the app's plum alphas over white (globals.css two-greys rule).
 const LIGHT = {
@@ -21,6 +21,7 @@ const LIGHT = {
   text3: "#6f6776",
   hair: "#e7e6e8",
   panel: "#9f9aa3",
+  btnText: "#ffffff",
 } as const;
 const DARK = {
   field: "#140a1b",
@@ -111,7 +112,7 @@ const paragraph = (html: string) =>
 function button(label: string, url: string): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
 <td class="d-btn" bgcolor="${LIGHT.ink}" style="background:${LIGHT.ink};">
-<a href="${escapeHtml(url)}" style="display:inline-block;padding:16px 24px;font-family:${MONO};font-size:14px;line-height:16px;font-weight:500;letter-spacing:0.04em;text-transform:uppercase;color:#ffffff;text-decoration:none;">${escapeHtml(label)}</a>
+<a href="${escapeHtml(url)}" style="display:inline-block;padding:16px 24px;font-family:${MONO};font-size:14px;line-height:16px;font-weight:500;letter-spacing:0.04em;text-transform:uppercase;color:${LIGHT.btnText};text-decoration:none;">${escapeHtml(label)}</a>
 </td></tr></table>`;
 }
 
@@ -141,8 +142,8 @@ ${e.body.map((p) => paragraph(inline(p))).join("")}
 <p class="d-t3" style="margin:0;font-family:${SANS};font-size:14px;line-height:1.5;color:${LIGHT.text3};">${escapeHtml(e.small)}</p>
 </td></tr>
 <tr><td style="padding:24px 0 0 0;">
-<p class="d-t3" style="${footerStyle}">Sent to ${escapeHtml(e.to)} ${escapeHtml(e.reason)}</p>
-<p class="d-t3" style="${footerStyle}margin-bottom:0;">Questions? Reply to this email.</p>
+<p class="d-t3" style="${footerStyle}">${escapeHtml(sentToLine(e.to, e.reason))}</p>
+<p class="d-t3" style="${footerStyle}margin-bottom:0;">${escapeHtml(REPLY_LINE)}</p>
 </td></tr>
 </table>
 </td></tr></table>

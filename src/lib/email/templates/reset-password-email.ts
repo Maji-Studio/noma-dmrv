@@ -1,6 +1,6 @@
 import { PASSWORD_RESET_EXPIRES_IN_SECONDS } from "@/config/auth";
 import { composeEmail } from "./compose-email";
-import { formatDuration } from "./format-expiry";
+import { formatDuration } from "./format-duration";
 
 export function resetPasswordEmail(input: { to: string; url: string; appUrl: string }) {
   const expires = formatDuration(PASSWORD_RESET_EXPIRES_IN_SECONDS);
@@ -9,7 +9,7 @@ export function resetPasswordEmail(input: { to: string; url: string; appUrl: str
     preheader: `Choose a new password. The link expires in ${expires}.`,
     art: "password-reset",
     heading: "Reset your password",
-    body: [["We got a request to reset the password for ", { strong: input.to }, ". Use the button to choose a new one."]],
+    body: [["We got a request to reset the password for ", { strong: input.to }, "."]],
     action: { label: "Choose a new password", url: input.url },
     note: `This link expires in ${expires}.`,
     small: "If you did not ask for this, ignore this email. Your password stays the same.",

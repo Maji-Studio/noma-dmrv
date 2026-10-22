@@ -27,6 +27,10 @@ export type EmailContent = {
   appUrl: string;
 };
 
+/** Footer lines every email shares; both renderers use these. */
+export const sentToLine = (to: string, reason: string) => `Sent to ${to} ${reason}`;
+export const REPLY_LINE = "Questions? Reply to this email.";
+
 export type RenderedEmail = {
   subject: string;
   preheader: string;

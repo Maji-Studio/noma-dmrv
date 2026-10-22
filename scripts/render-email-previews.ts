@@ -24,11 +24,11 @@ const appUrl = process.argv[3] ?? pathToFileURL(resolve("public")).href;
 const emails = {
   invitation: invitationEmail({
     to: TO, url: `${APP_URL}/accept-invitation/Jx4nQ8wR2kLmV7pTz9cY`, appUrl,
-    organizationName: "Dark Earth Carbon", roleLabel: "Admin", inviterName: "Amani Mushi", expiresOn: "Oct 29, 2026",
+    organizationName: "Dark Earth Carbon", roleLabel: "Admin", inviterName: "Amani Mushi",
   }),
   "invitation-no-inviter": invitationEmail({
     to: TO, url: `${APP_URL}/accept-invitation/Jx4nQ8wR2kLmV7pTz9cY`, appUrl,
-    organizationName: "Dark Earth Carbon", roleLabel: "Member", expiresOn: "Oct 29, 2026",
+    organizationName: "Dark Earth Carbon", roleLabel: "Member",
   }),
   "password-reset": resetPasswordEmail({
     to: TO, appUrl, url: `${APP_URL}/api/auth/reset-password/9fK2mQ7xL4pR8vT1bN6s?callbackURL=%2Freset-password`,

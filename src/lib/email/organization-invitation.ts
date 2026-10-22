@@ -1,8 +1,6 @@
-import { INVITATION_EXPIRES_IN_SECONDS } from "@/config/auth";
 import { env } from "@/config/env";
 import type { OrgRole } from "@/lib/auth/server";
 import { orgRoleLabel } from "@/lib/org-role-label";
-import { formatExpiryDate } from "./templates/format-expiry";
 import { invitationEmail } from "./templates/invitation-email";
 import { logLocalFallbackLink, sendEmail } from "./send";
 
@@ -27,7 +25,6 @@ export async function sendOrganizationInvitation(input: {
     organizationName: input.organizationName,
     roleLabel: orgRoleLabel(input.role as OrgRole) ?? input.role,
     inviterName: input.inviterName?.trim() || undefined,
-    expiresOn: formatExpiryDate(INVITATION_EXPIRES_IN_SECONDS),
   });
   const result = await sendEmail({
     type: "org-invite",
