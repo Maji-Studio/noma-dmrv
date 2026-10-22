@@ -8,10 +8,6 @@ vi.mock("@/hooks/use-oauth-flow", () => ({
   useOAuthOrganizationChoices: () => mocks.choices(),
   useSelectOAuthOrganization: () => ({ mutateAsync: mocks.mutateAsync, isPending: false }),
 }));
-vi.mock("@/components/forms", async () => ({
-  ...await import("@/components/forms/choice-card-group"),
-  ...await import("@/components/forms/server-error"),
-}));
 vi.mock("@/components/ui", async () => ({
   ...await import("@/components/ui/button"),
   ...await import("@/components/ui/empty-state"),
@@ -121,4 +117,75 @@ it("clears busy when the pick fails", async () => {
   await screen.findByText("Start again from the app.");
   expect(continueButton().getAttribute("aria-busy")).toBeNull();
   expect(continueButton().disabled).toBe(false);
+});
+
+const nonePicked = (overrides = {}) => data({ preselectedOrganizationId: null, ...overrides });
+
+it("keeps Continue enabled with nothing preselected", () => {
+  mocks.choices.mockReturnValue(nonePicked());
+  render(<OrganizationPicker />);
+  expect(continueButton().disabled).toBe(false);
+});
+
+it("asks for a choice, focuses the group and does not submit when nothing is picked", () => {
+  mocks.choices.mockReturnValue(nonePicked());
+  render(<OrganizationPicker />);
+  fireEvent.click(continueButton());
+  expect(screen.getByRole("alert").textContent).toBe("Choose an organization.");
+  expect(mocks.mutateAsync).not.toHaveBeenCalled();
+  expect(document.activeElement).toBe(screen.getByRole("radio", { name: /E2E Mafinga Biochar/ }));
+  expect(screen.getByRole("group").getAttribute("aria-invalid")).toBe("true");
+});
+
+it("clears the error when an organization is picked, then submits it", async () => {
+  mocks.choices.mockReturnValue(nonePicked());
+  mocks.mutateAsync.mockResolvedValue("/oauth/consent?sig=next");
+  render(<OrganizationPicker />);
+  fireEvent.click(continueButton());
+  fireEvent.click(screen.getByRole("radio", { name: /E2E Second Organization/ }));
+  expect(screen.queryByRole("alert")).toBeNull();
+  fireEvent.click(continueButton());
+  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith("org-2"));
+});
+
+it("shows a notice instead of Continue when every organization is unavailable", () => {
+  const closed = memberships.map(membership => ({ ...membership, disabledReason: "API access is disabled for this organization." }));
+  mocks.choices.mockReturnValue(nonePicked({ memberships: closed }));
+  render(<OrganizationPicker />);
+  expect(screen.getByText("None of your organizations can connect apps. Ask an Admin to turn on API access, then connect again.")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+  expect(screen.queryByRole("radio")).toBeNull();
+});
+
+it("swaps to the notice when a refetch makes every organization unavailable after a pick", () => {
+  mocks.choices.mockReturnValue(nonePicked());
+  const { rerender } = render(<OrganizationPicker />);
+  fireEvent.click(screen.getByRole("radio", { name: /E2E Second Organization/ }));
+  const closed = memberships.map(membership => ({ ...membership, disabledReason: "API access is disabled for this organization." }));
+  mocks.choices.mockReturnValue(nonePicked({ memberships: closed }));
+  rerender(<OrganizationPicker />);
+  expect(screen.getByText("None of your organizations can connect apps. Ask an Admin to turn on API access, then connect again.")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+  expect(mocks.mutateAsync).not.toHaveBeenCalled();
+});
+
+it("does not fall back to the suggestion when the picked organization becomes unavailable", () => {
+  mocks.choices.mockReturnValue(data());
+  const { rerender } = render(<OrganizationPicker />);
+  fireEvent.click(screen.getByRole("radio", { name: /E2E Mafinga Biochar/ }));
+  const org1Closed = memberships.map(membership => membership.organizationId === "org-1" ? { ...membership, disabledReason: "API access is disabled for this organization." } : membership);
+  mocks.choices.mockReturnValue(data({ memberships: org1Closed, preselectedOrganizationId: "org-2" }));
+  rerender(<OrganizationPicker />);
+  fireEvent.click(continueButton());
+  expect(mocks.mutateAsync).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert").textContent).toBe("Choose an organization.");
+});
+
+it("drops the error line once an organization is chosen again", () => {
+  mocks.choices.mockReturnValue(nonePicked());
+  render(<OrganizationPicker />);
+  fireEvent.click(continueButton());
+  expect(screen.getByRole("alert")).toBeTruthy();
+  fireEvent.click(screen.getByRole("radio", { name: /E2E Mafinga Biochar/ }));
+  expect(screen.queryByRole("alert")).toBeNull();
 });
