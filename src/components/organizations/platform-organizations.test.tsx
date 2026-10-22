@@ -19,7 +19,6 @@ const DIRECTORY = [
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: state.push }) }));
 vi.mock("@/hooks/use-organizations", () => ({
-  ORG_SWITCH_FAILED_MESSAGE: "The organization did not open. Try again.",
   usePlatformOrganizations: () => ({ data: DIRECTORY, isLoading: false, isError: false }),
   useEnterOrganization: () => state.enter,
   useCreateOrganization: () => ({ mutateAsync: vi.fn(), isPending: false, startDraft: vi.fn() }),
@@ -106,7 +105,7 @@ describe("PlatformOrganizations", () => {
     state.enter.mockResolvedValue({ success: false, error: "No access" });
     renderAt("org-other");
     fireEvent.click(within(panel("Kilombero Carbon")).getByRole("button", { name: "Switch to Kilombero Carbon" }));
-    await waitFor(() => expect(state.toastError).toHaveBeenCalledWith("No access"));
+    await waitFor(() => expect(state.toastError).toHaveBeenCalledWith("Kilombero Carbon did not open. Try again."));
     expect(within(panel("Kilombero Carbon")).getByRole("button", { name: "Switch to Kilombero Carbon" })).toBeTruthy();
   });
 

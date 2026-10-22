@@ -396,7 +396,6 @@ export function RemovalDetailSheet({
             : undefined
         }
         confirmLabel={deleteCopy.actionLabel}
-        pendingLabel={deleteCopy.pendingLabel}
       />
     </>
   );

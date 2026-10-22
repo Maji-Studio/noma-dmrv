@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createElement, type ReactNode } from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { isUnloadWarningSuppressed, suppressUnloadWarning } from "@/lib/leave-guard";
 import { useCreateOrganization, useResetAfterOrgSwitch } from "./use-organizations";
 
 const mocks = vi.hoisted(() => ({ assign: vi.fn(), create: vi.fn() }));
@@ -26,7 +27,6 @@ it("still lands in the new organization when storage is blocked, without throwin
   expect(() => useResetAfterOrgSwitch()()).not.toThrow();
   expect(mocks.assign).toHaveBeenCalledWith("/dashboard");
 });
-
 
 it("keeps the organization intent on failure and rotates on success and new drafts", async () => {
   const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
@@ -59,4 +59,21 @@ it("keeps the organization intent on failure and rotates on success and new draf
   expect(restartedDraft).not.toBe(abandonedDraft);
   unmount();
   client.clear();
+});
+
+it("drops the unload prompt before the hard load, so the operator is not asked twice", () => {
+  mocks.assign.mockImplementation(() => {
+    expect(isUnloadWarningSuppressed()).toBe(true);
+  });
+  useResetAfterOrgSwitch()();
+  expect(mocks.assign).toHaveBeenCalledWith("/dashboard");
+});
+
+it("allows the unload prompt again after a back-forward-cache restore", () => {
+  suppressUnloadWarning();
+  expect(isUnloadWarningSuppressed()).toBe(true);
+  window.dispatchEvent(Object.assign(new Event("pageshow"), { persisted: false }));
+  expect(isUnloadWarningSuppressed()).toBe(true);
+  window.dispatchEvent(Object.assign(new Event("pageshow"), { persisted: true }));
+  expect(isUnloadWarningSuppressed()).toBe(false);
 });

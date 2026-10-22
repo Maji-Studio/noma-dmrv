@@ -93,6 +93,7 @@ export function ArchiveFacilityDialog({
     <Modal
       isOpen={!!facility}
       onClose={handleCancel}
+      dismissible={!isPending}
       ariaLabelledBy={titleId}
       ariaDescribedBy={descId}
       width="sm"
@@ -198,9 +199,10 @@ export function ArchiveFacilityDialog({
               setTypedCode("");
               onConfirm();
             }}
-            disabled={isPending || isLoading || !impact || !typedCodeMatches}
+            disabled={isLoading || !impact || !typedCodeMatches}
+            busy={isPending}
           >
-            {isPending ? "Archiving..." : "Archive"}
+            Archive
           </Button>
           <Button
             size="large"

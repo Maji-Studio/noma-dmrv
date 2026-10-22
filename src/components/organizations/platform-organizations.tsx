@@ -18,7 +18,8 @@ import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
 import { useViewerOrg } from "@/components/navigation";
 import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
-import { ORG_SWITCH_FAILED_MESSAGE, useEnterOrganization, usePlatformOrganizations } from "@/hooks/use-organizations";
+import { useEnterOrganization, usePlatformOrganizations } from "@/hooks/use-organizations";
+import { orgSwitchFailedMessage } from "@/lib/org-switch-notice";
 import { MEMBER_HOME_HREF } from "@/lib/auth/home-path";
 import { cn } from "@/lib/utils";
 import { CreateOrganizationForm, type CreatedOrganization } from "./create-organization-form";
@@ -61,11 +62,11 @@ export function PlatformOrganizations() {
       const result = await enterOrganization(organizationId, organizationName, landingHref);
       if (!result.success) {
         switching.release();
-        toast.error(result.error);
+        toast.error(orgSwitchFailedMessage(organizationName));
       }
     } catch {
       switching.release();
-      toast.error(ORG_SWITCH_FAILED_MESSAGE);
+      toast.error(orgSwitchFailedMessage(organizationName));
     }
   }
 
