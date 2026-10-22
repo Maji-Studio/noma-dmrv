@@ -63,6 +63,7 @@ export async function loadEvidenceMirrorSummaryForScope(
   orgCtx: OrgContext,
   scope: EvidenceRemovalScope,
   latestSubmission: CertificationSubmissionRow | null = null,
+  correctionWindowOpen = false,
 ): Promise<EvidenceMirrorSummary> {
   if (!scope.removalId) return { total: 0, mirrored: 0 };
 
@@ -134,6 +135,7 @@ export async function loadEvidenceMirrorSummaryForScope(
       filterCandidateSourcesForSubmissionLifecycle(
         liveCandidates,
         latestSubmission,
+        correctionWindowOpen,
       )
         .filter(isSummaryCandidate)
         .map(({ documentId }) => documentId),

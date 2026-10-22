@@ -124,4 +124,20 @@ describe("creditBatchRowActions", () => {
     expect(creditBatchRowActions({ creditBatch, lock: lockAt("sent"), ...handlers }).map(({ label }) => label)).toEqual(["Open details"]);
     expect(creditBatchRowActions({ creditBatch, lock: undefined, ...handlers }).map(({ label }) => label)).toEqual(["Open details"]);
   });
+
+  it("keeps Edit but hides Delete after Isometric returns the Removal", () => {
+    const lock = lockAt("inUse");
+    lock.returnedBy = [{
+      removal: { kind: "removal", id: "removal-1", label: "R-12", facilityId: creditBatch.facilityId },
+      statement: { kind: "ghgStatement", id: "statement-1", label: null, facilityId: creditBatch.facilityId },
+      statementStatus: "FAILED_VERIFICATION",
+    }];
+    expect(creditBatchRowActions({ creditBatch, lock, ...handlers }).map(({ label }) => label)).toEqual(["Open details", "Edit"]);
+  });
+
+  it("offers Delete when only a draft Removal uses the batch", () => {
+    const lock = lockAt("inUse");
+    lock.usedBy = [{ kind: "removal", id: "draft-removal", label: "R-13", facilityId: creditBatch.facilityId }];
+    expect(creditBatchRowActions({ creditBatch, lock, ...handlers }).map(({ label }) => label)).toEqual(["Open details", "Edit", "Delete"]);
+  });
 });

@@ -13,6 +13,10 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// The member-Removal guard has its own tests; these cover the submit steps.
+vi.mock("@/fn/certification/statement-removal-correction-core", () => ({
+  assertStatementRemovalsCurrent: vi.fn(async () => undefined),
+}));
 vi.mock("@/data-access/certifier-credentials", () => ({
   resolveIsometricClient: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
 }));

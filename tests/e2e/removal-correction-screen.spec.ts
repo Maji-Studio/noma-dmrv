@@ -105,7 +105,7 @@ test.describe("Returned Removal screens", () => {
         const openSheet = page.getByRole("dialog");
         if (CHECK_COPY) {
           await expect(openSheet).toContainText("Returned by Isometric");
-          await expect(openSheet).toContainText("is back in draft. Correct the sent entries on");
+          await expect(openSheet).toContainText("is back in draft. Correct the records or emissions entries on");
           await expect(openSheet.getByRole("link", { name: "Open GHG Statement" })).toBeVisible();
           await expect(openSheet.getByRole("link", { name: "Resubmit Removal" })).toHaveCount(0);
         } else {
@@ -125,7 +125,7 @@ test.describe("Returned Removal screens", () => {
         await page.goto(`/credit-batches/${open.creditBatch.id}?facility=${facilityId}`);
         if (CHECK_COPY) {
           await expect(page.getByText(`${open.removalCode}: Returned by Isometric`)).toBeVisible({ timeout: 30_000 });
-          await expect(page.getByText("is back in draft. You can correct the sent entries on the Emissions tab.")).toBeVisible();
+          await expect(page.getByText("is back in draft. You can correct this batch's records, and its emissions entries on the Emissions tab.")).toBeVisible();
         } else {
           await expect(page.getByText(open.creditBatch.code).first()).toBeVisible({ timeout: 30_000 });
         }

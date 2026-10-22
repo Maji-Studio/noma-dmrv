@@ -110,6 +110,7 @@ export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "e
   facilityTimezone: string;
   /** Datapoints fixed in the template, for the compiled review's value column. */
   fixedInputValues?: readonly FixedInputValue[];
+  correctionWindowOpen?: boolean;
   removalEntryContext?: Omit<NonNullable<Awaited<ReturnType<typeof loadRemovalEntryContext>>>, "batchFacts">;
   lineages: ChainOfCustodyData[];
   runs: ProductionRunForCertification[];

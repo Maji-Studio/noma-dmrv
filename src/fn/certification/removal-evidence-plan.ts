@@ -108,6 +108,7 @@ export async function planRemovalEvidence(args: {
             ),
           }),
           ctx.latestSubmission,
+          ctx.correctionWindowOpen,
         ));
   const sourceBindingCandidates =
     supplied.sourceBindingCandidates ??

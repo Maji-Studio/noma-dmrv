@@ -70,6 +70,7 @@ import { retireDocumentsForEntities, retireTombstonedEmissionEntryDocuments } fr
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import {
   assertCreditBatchSlicesAreUnassigned,
+  assertNoRemoteRemovalHoldsCreditBatch,
   assertRemovalAllowsCreditBatchMutation,
 } from "./credit-batch-certification-lock";
 import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-application-slices";
@@ -768,6 +769,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
     const batch = await lockCreditBatchForUpdate(ctx, tx, id, { expectedVersion });
 
     await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "delete", batch.lockedRemovals);
+    await assertNoRemoteRemovalHoldsCreditBatch(ctx, tx, batch);
 
     const [sample] = await tx.select({ id: samples.id, code: samples.sampleCode }).from(samples)
       .where(and(eq(samples.creditBatchId, id), eq(samples.organizationId, ctx.organizationId))).limit(1);

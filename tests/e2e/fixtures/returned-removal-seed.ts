@@ -49,6 +49,8 @@ export interface ReturnedRemovalOptions {
   statementStatus: "FAILED_VERIFICATION" | "DRAFT";
   periodStartOn: string;
   periodEndOn: string;
+  /** Fields merged into the sent snapshot's semantic content, to describe records as they were when it was sent. */
+  sentSemantic?: Record<string, unknown>;
 }
 
 export interface SeededReturnedRemoval extends SeededGroupedRemoval {
@@ -136,7 +138,7 @@ export async function seedReturnedRemoval(
         transport: { removalSupplierRef: `e2e-${tag}`, datapointBodies: [], omittedTemplateComponentIds: [] },
         semantic: {
           externalProjectId: "prj_e2e_returned", templateId, entryContributions: manifest,
-          inputs: [], candidateSources: [], biocharApplicationIntents: [],
+          inputs: [], candidateSources: [], biocharApplicationIntents: [], ...options.sentSemantic,
         },
       },
     });
