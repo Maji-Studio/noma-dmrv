@@ -114,9 +114,12 @@ export function StorageLocationForm({
     resolver: zodResolver(storageLocationFormSchema),
     defaultValues: {
       name: storageLocation?.name ?? "",
-      type: storageLocation?.type ?? defaultType ?? fixedType,
+      // null until the operator picks: the type radios read "none chosen" as
+      // null, so undefined would read as an edit. The schema refuses both alike.
+      type: storageLocation?.type ?? defaultType ?? fixedType ?? (null as unknown as StorageLocationType),
       facilityId: storageLocation?.facilityId ?? defaultFacilityId ?? contextFacilityId ?? "",
-      capacityKg: storageLocation?.capacityKg ?? undefined,
+      // null, as the input reads an empty capacity: undefined would read as an edit.
+      capacityKg: storageLocation?.capacityKg ?? null,
       feedstockTypeId: storageLocation?.feedstockTypeId ?? defaultFeedstockTypeId ?? "",
       formulationId: storageLocation?.formulationId ?? defaultFormulationId ?? "",
       stockMode: storageLocation?.stockMode ?? "split",

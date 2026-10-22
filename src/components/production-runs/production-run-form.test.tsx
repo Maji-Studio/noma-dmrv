@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
+import { FormDialogContext, type DialogFormState } from "@/components/ui/form-dialog-context";
 
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({
@@ -58,6 +59,38 @@ describe("ProductionRunForm reactor picker", () => {
       createHref: "/reactors?facility=11111111-1111-4111-8111-111111111111&create=true",
       emptyHint: { message: "This facility has no reactors yet." },
     });
+  });
+});
+
+describe("ProductionRunForm unsaved changes", () => {
+  const REACTOR_ID = "22222222-2222-4222-8222-222222222222";
+  const dirtyStates = () => {
+    const states: boolean[] = [];
+    const actions = {
+      report: (_id: object, state: DialogFormState | null) => { if (state) states.push(state.dirty); },
+      cancel: vi.fn(),
+      markSaved: vi.fn(),
+    };
+    render(<FormDialogContext.Provider value={actions}><ProductionRunForm onSubmit={vi.fn()} onCancel={vi.fn()} /></FormDialogContext.Provider>);
+    return states;
+  };
+  const reactor = () => pickers.findLast((props) => props.entityType === "reactor") as {
+    value: string; onChange: (id: string) => void; onAutoSelect?: (id: string) => void;
+  };
+
+  it("stays clean when the facility's only reactor is picked for the operator", async () => {
+    const states = dirtyStates();
+    // What the real select does with autoSelectSingle and one option.
+    act(() => { (reactor().onAutoSelect ?? reactor().onChange)(REACTOR_ID); });
+    await waitFor(() => expect(reactor().value).toBe(REACTOR_ID));
+    expect(states.length).toBeGreaterThan(0);
+    expect(states.every((dirty) => !dirty)).toBe(true);
+  });
+
+  it("turns dirty once the operator picks a reactor", async () => {
+    const states = dirtyStates();
+    act(() => { reactor().onChange(REACTOR_ID); });
+    await waitFor(() => expect(states.at(-1)).toBe(true));
   });
 });
 

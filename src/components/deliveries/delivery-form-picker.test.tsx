@@ -8,8 +8,10 @@ import { ActionError } from "@/lib/action-error";
 import { DeliveryForm } from "./delivery-form";
 import { useCreateCustomerLocation, useUpdateCustomerLocation, useDeleteCustomerLocation } from "@/hooks/use-customers";
 import { orderKeys } from "@/hooks/use-orders";
+import { FormDialogContext, type DialogFormState } from "@/components/ui/form-dialog-context";
 
-const state = vi.hoisted(() => ({ refreshed: undefined as Delivery | undefined, locked: false, distance: 12, save: vi.fn(), read: vi.fn() }));
+const BOTH_ORDERS = [{ id: "order-one", code: "ORD-1", name: "Order one" }, { id: "order-two", code: "ORD-2", name: "Order two" }];
+const state = vi.hoisted(() => ({ refreshed: undefined as Delivery | undefined, locked: false, distance: 12, save: vi.fn(), read: vi.fn(), options: [] as { id: string; code: string; name: string }[] }));
 vi.mock("@/fn/deliveries", () => ({ getDeliveryWithRelationsFn: async () => ({ success: true, data: state.refreshed }) }));
 vi.mock("@/fn/orders", () => ({
   getOrdersForSelectFn: () => {
@@ -42,7 +44,7 @@ vi.mock("@/components/transport-legs", () => ({ TransportRoutePreview: () => nul
 vi.mock("./delivery-stock-details", () => ({ DeliveryStockDetails: () => null }));
 vi.mock("./delivery-trailing-sections", () => ({ DeliveryEvidenceSection: () => null }));
 vi.mock("@/hooks/use-entities", () => ({
-  useEntityOptions: () => ({ data: [{ id: "order-one", code: "ORD-1", name: "Order one" }, { id: "order-two", code: "ORD-2", name: "Order two" }] }),
+  useEntityOptions: () => ({ data: state.options }),
   useEntityById: (entityType: string) => ({ data: entityType === "storageLocation"
     ? { id: "bin-one", code: "BIN-1", name: "Source bin" }
     : { id: "order-one", code: "ORD-1", name: "Order one" } }),
@@ -62,6 +64,7 @@ beforeEach(() => {
   state.refreshed = undefined;
   state.distance = 12;
   state.locked = false;
+  state.options = BOTH_ORDERS;
   vi.clearAllMocks();
   state.save.mockImplementation(async () => {
     state.distance = 34;
@@ -216,4 +219,30 @@ it("refreshes a missing snapshot after a nested repair without discarding the de
   await waitFor(() => expect(parentSave).toHaveBeenCalledWith(
     expect.objectContaining({ deliveredWetMassKg: 125 }), expect.any(Function), 4,
   ));
+});
+
+function dirtyStates() {
+  const states: boolean[] = [];
+  const actions = {
+    report: (_id: object, formState: DialogFormState | null) => { if (formState) states.push(formState.dirty); },
+    cancel: vi.fn(),
+    markSaved: vi.fn(),
+  };
+  render(<FormDialogContext.Provider value={actions}><DeliveryForm onSubmit={vi.fn()} onCancel={vi.fn()} /></FormDialogContext.Provider>, { wrapper });
+  return states;
+}
+
+it("stays clean when the facility's only order is picked for the operator", async () => {
+  state.options = [BOTH_ORDERS[0]];
+  const states = dirtyStates();
+  await waitFor(() => expect(screen.getByRole("combobox", { name: /Order/ }).textContent).toContain("Order one"));
+  expect(states.length).toBeGreaterThan(0);
+  expect(states.every((dirty) => !dirty)).toBe(true);
+});
+
+it("turns dirty once the operator picks an order", async () => {
+  const states = dirtyStates();
+  fireEvent.click(screen.getByRole("combobox", { name: /Order/ }));
+  fireEvent.click(await screen.findByTestId("entity-option-order-two"));
+  await waitFor(() => expect(states.at(-1)).toBe(true));
 });

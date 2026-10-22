@@ -566,6 +566,10 @@ storageLocationId: emptyToNull.or(z.uuid()).optional().nullable(),
 
 The underlying `useClearOnDependencyChange` (`@/hooks/use-clear-on-dependency-change`) is standalone — use it directly in custom form components that are not `FormEntitySelect`.
 
+**A select's own pick is a default on an untouched form** (#1360). When `autoSelectSingle` picks the only option, or `dependsOn` clears the field, while the form is still clean, `FormEntitySelect` moves the field's default with its value (`useSelectDefault`), so Cancel closes without "Discard unsaved changes?". Once the operator has edited anything, the same change is an edit and stays in `dirtyFields`, so a dirty-fields patch still sends it. The caller's `onChange` side effect also runs on the pick, with `change.asDefault`: a side effect that sets other fields sets them with `resetField(name, { defaultValue })` when `asDefault` is true (the credit batch month window). A plain `EntitySelect` under a `Controller` passes `onAutoSelect={(id) => setSelectDefault(name, id, field.onChange)}` with `const setSelectDefault = useSelectDefault(control)`.
+
+**Every registered input needs a defined default.** RHF fills a field whose default is `undefined` from its input (`""`, or the `setValueAs` result such as `null`), and the form's `isDirty` compares all values with the defaults, so the untouched form reads as edited the next time anything recomputes it. Default an empty number input to `null` and an empty text or picker input to `""`.
+
 ## Explanations behind an (i)
 
 There is one view of every form and read sheet. Explanation does not switch on

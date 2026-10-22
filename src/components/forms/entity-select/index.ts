@@ -5,6 +5,7 @@
 
 export { EntitySelect } from "./entity-select";
 export { FormEntitySelect } from "./form-entity-select";
+export { useSelectDefault } from "./use-select-default";
 export { QuickAddDialogShell } from "./quick-add-dialog-shell";
 export { QuickAddDialog, useQuickAddDialog } from "./quick-add-dialog";
 export { DriverQuickAddDialog } from "./driver-quick-add-dialog";

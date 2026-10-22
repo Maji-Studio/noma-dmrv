@@ -15,6 +15,7 @@ import type { CustomerLocation, Facility, Order } from "@/db/schema";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { OPEN_LOCK } from "../../../tests/helpers/record-lock-mocks";
+import { FormDialogContext, type DialogFormState } from "@/components/ui/form-dialog-context";
 
 const state = vi.hoisted(() => ({
   /** Every entity list request the form issues, in order. */
@@ -23,6 +24,7 @@ const state = vi.hoisted(() => ({
   detailRequests: [] as { entityType: EntityType; id: string | undefined }[],
   customersById: {} as Record<string, EntityOption>,
   locationOptions: [] as EntityOption[],
+  formulationOptions: [] as EntityOption[],
   locations: [] as CustomerLocation[],
   /** The selected customer's detail read; archived when `archivedAt` is set. */
   customer: undefined as { archivedAt: Date | null } | undefined,
@@ -67,12 +69,15 @@ vi.mock("@/hooks/use-entities", () => ({
     enabled?: boolean;
   }) => {
     state.optionRequests.push({ entityType, enabled });
-    return { data: enabled && entityType === "customerLocation" ? state.locationOptions : [], dataUpdatedAt: 0, isLoading: false, error: null };
+    const options = entityType === "customerLocation" ? state.locationOptions
+      : entityType === "formulation" ? state.formulationOptions : [];
+    return { data: enabled ? options : [], dataUpdatedAt: 0, isLoading: false, error: null };
   },
   useEntityById: (entityType: EntityType, id: string | undefined) => {
     state.detailRequests.push({ entityType, id });
     const data = entityType === "customerLocation"
       ? state.locationOptions.find((option) => option.id === id)
+      : entityType === "formulation" ? state.formulationOptions.find((option) => option.id === id)
       : entityType === "customer" && id ? state.customersById[id] : null;
     return { data: data ?? null, dataUpdatedAt: 1, isPending: false };
   },
@@ -103,6 +108,7 @@ beforeEach(() => {
   state.detailRequests = [];
   state.customersById = {};
   state.locationOptions = [];
+  state.formulationOptions = [];
   state.locations = [];
   state.customer = { archivedAt: null };
   state.customerIsError = false;
@@ -471,5 +477,41 @@ describe("OrderForm facility date default", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("OrderForm unsaved changes", () => {
+  const SOIL_MIX: EntityOption = { id: "formulation-1", code: "F-1", name: "Soil mix" };
+  const COMPOST_MIX: EntityOption = { id: "formulation-2", code: "F-2", name: "Compost mix" };
+  const dirtyStates = () => {
+    const states: boolean[] = [];
+    const actions = {
+      report: (_id: object, state: DialogFormState | null) => { if (state) states.push(state.dirty); },
+      cancel: vi.fn(),
+      markSaved: vi.fn(),
+    };
+    render(<QueryClientProvider client={new QueryClient()}>
+      <FormDialogContext.Provider value={actions}>
+        <OrderForm onSubmit={noop} onCancel={noop} lock={OPEN_LOCK} />
+      </FormDialogContext.Provider>
+    </QueryClientProvider>);
+    return states;
+  };
+  const formulation = () => screen.getByRole("combobox", { name: /^Formulation/ });
+
+  it("stays clean when the only formulation is picked for the operator", async () => {
+    state.formulationOptions = [SOIL_MIX];
+    const states = dirtyStates();
+    await waitFor(() => expect(formulation().textContent).toBe("Soil mix"));
+    expect(states.length).toBeGreaterThan(0);
+    expect(states.every((dirty) => !dirty)).toBe(true);
+  });
+
+  it("turns dirty once the operator picks a formulation", async () => {
+    state.formulationOptions = [SOIL_MIX, COMPOST_MIX];
+    const states = dirtyStates();
+    fireEvent.click(formulation());
+    fireEvent.click(screen.getByTestId("entity-option-formulation-2"));
+    await waitFor(() => expect(states.at(-1)).toBe(true));
   });
 });

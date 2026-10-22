@@ -125,7 +125,9 @@ export function OrderForm({
       customerLocationId: order?.customerLocationId ?? "",
       formulationId: order?.formulationId ?? "",
       orderDate: toDateInputValue(order?.orderDate, today),
-      quantityKg: order?.quantityKg ?? undefined,
+      // null, not undefined: an input registered without a default takes the
+      // DOM's "" as its value, so the untouched form would read as edited.
+      quantityKg: order?.quantityKg ?? null,
       packaging:
         (order?.packaging as PackagingType) ?? orgDefaults.defaultPackaging,
     },

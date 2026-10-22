@@ -77,8 +77,13 @@ export function FacilityForm({
       gpsLongitude: facility?.gpsLongitude ?? undefined,
       contactEmail: facility?.contactEmail ?? "",
       contactPhone: facility?.contactPhone ?? "",
+      // "", not undefined: the picker's input registers this field, and a
+      // field with no default takes the input's "" as its value, so a fresh
+      // form read as edited and Cancel asked to discard it. The schema reads
+      // "" as not chosen.
       timezone: resolveTimezone(facility?.timezone)
-        ?? resolveTimezone(orgDefaults.defaultTimezone),
+        ?? resolveTimezone(orgDefaults.defaultTimezone)
+        ?? "",
     },
   });
 
