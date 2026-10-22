@@ -2,10 +2,6 @@
 
 
 import { correctionForRemoval, type RemovalCorrection } from "@/lib/certification/removal-entry-correction";
-import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
-import { buildDurabilityBatchSummaries } from "@/lib/certification/durability-batch-summary";
-import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
-import { loadBatchesEmissionLines } from "@/lib/read-models/batches-emission-lines";
 import { getRemovalCodes } from "@/data-access/removal-codes";
 import { z } from "zod";
 import { getRecordLocksForTargets } from "@/data-access/record-certification-lock";
@@ -24,7 +20,6 @@ import {
   listUngroupedCreditBatches,
 } from "@/data-access/certifier-removals";
 import {
-  batchLinesToDecide,
   deriveBatchHealth,
   type BatchHealthState,
 } from "@/lib/certification/batch-health";
@@ -63,6 +58,8 @@ import {
   loadFacilityCertifierFacts,
   resolveScopeForRemoval,
 } from "./certify-context-core";
+
+import { loadCreditBatchTodos } from "./credit-batch-todos-core";
 
 import { logger } from "@/lib/log";
 import { refreshRemovalEvidenceLinks, type RemovalEvidenceLinks } from "./biochar-application-source-readback";
@@ -365,9 +362,9 @@ export async function loadCreditBatchHealthSummaries(
         ),
       ),
     );
-    const [facilityFacts, removalSubmissions, ghgStatementSubmissions] =
+    const [todosByBatch, removalSubmissions, ghgStatementSubmissions] =
       await Promise.all([
-        loadFacilityCertifierFacts(orgCtx, validFacilityId),
+        loadCreditBatchTodos(orgCtx, validFacilityId, ids.map((id) => batchRowById.get(id)!)),
         getLatestSubmissionsForEntities(
           orgCtx,
           {
@@ -389,27 +386,11 @@ export async function loadCreditBatchHealthSummaries(
           validFacilityId,
         ),
       ]);
-    const { contextsByBatch } = await buildCreditBatchContexts(
-      orgCtx,
-      ids,
-      facilityFacts,
-    );
-    const [batchesWithSamples, emissionDisplayByBatch] = await Promise.all([
-      getCreditBatchesWithSamples(orgCtx, ids),
-      loadBatchesEmissionLines(orgCtx, ids.map((id) => batchRowById.get(id)!)),
-    ]);
-    const durabilityByBatch = new Map(
-      buildDurabilityBatchSummaries(batchesWithSamples).map((summary) => [summary.creditBatchId, summary]),
-    );
     const locks = await getRecordLocksForTargets(orgCtx, ids.map(entityId => ({ entityType: "creditBatch", entityId })));
     const locksById = new Map(ids.map((id, index) => [id, locks[index]]));
     const summaries: Record<string, CreditBatchHealthSummary> = {};
     for (const batchId of ids) {
-      const ctx = contextsByBatch[batchId];
-      if (ctx.facilityId !== validFacilityId) {
-        throw new SafeError("Batch does not belong to requested facility");
-      }
-      const health = deriveBatchHealth(toBatchHealthFacts(ctx, batchId));
+      const todos = todosByBatch.get(batchId)!;
       const batchRow = batchRowById.get(batchId);
       const removalId = batchRow?.removalId ?? null;
       const ghgStatementId = batchRow?.ghgStatementId ?? null;
@@ -419,20 +400,12 @@ export async function loadCreditBatchHealthSummaries(
       const ghgStatementSubmission = ghgStatementId
         ? (ghgStatementSubmissions.get(ghgStatementId) ?? null)
         : null;
-      const emissionDisplay = emissionDisplayByBatch.get(batchId);
       summaries[batchId] = {
         recordLock: locksById.get(batchId)!,
-        state: health.state,
-        issueCount: health.issueCount,
-        linesToDecide: batchLinesToDecide(health),
-        checkCount: buildCreditBatchOpenItems({
-          facilityId: validFacilityId,
-          creditBatchId: batchId,
-          canManage: orgCtx.isPlatformAdmin || orgCtx.orgRole === "admin",
-          health,
-          durability: durabilityByBatch.get(batchId),
-          emissionLines: emissionDisplay?.status === "ready" ? emissionDisplay.lines : undefined,
-        }).check.length,
+        state: todos.state,
+        issueCount: todos.blocking.length,
+        linesToDecide: todos.linesToDecide,
+        checkCount: todos.check.length,
         removalId,
         removalCode: batchRow?.removalCode ?? null,
         productionEmissionsClaimedByRemovalCode: claimCodes.get(batchRow?.productionEmissionsClaimedByRemovalId ?? "") ?? null,

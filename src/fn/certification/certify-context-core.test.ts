@@ -1,4 +1,4 @@
-vi.mock("@/data-access/removal-entry-correction", () => ({ loadRemovalEntryCorrection: vi.fn(async () => ({ windowOpen: false, correctionNeeded: false, changedComponentIds: [], message: null })) }));
+vi.mock("./removal-correction-core", () => ({ loadRemovalEntryCorrection: vi.fn(async () => ({ windowOpen: false, correctionNeeded: false, changedComponentIds: [], message: null })) }));
 import { beforeEach, expect, it, vi } from "vitest";
 import { collectFutureDatedMeasurements } from "./future-dated-measurements";
 
@@ -151,5 +151,5 @@ it.each([undefined, "claimed-draft"])("forwards the submission read scope for co
   vi.mocked(loadFacilityCertifierFacts).mockResolvedValue(facilityFacts);
   await loadRemovalSubmissionContext(ctx, "removal-1", { claimedSubmissionId });
   expect(loadBatchEmissionContext).toHaveBeenCalledWith(ctx, scope.facilityId, scope.memberBatches, facilityFacts,
-    { removalId: "removal-1", submissionId: claimedSubmissionId });
+    { removalId: "removal-1", submissionId: claimedSubmissionId }, true);
 });

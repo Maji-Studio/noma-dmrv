@@ -127,14 +127,14 @@ function removalCorrectionItem(
       title: `${code}: ${RESUBMIT_NEEDED_LABEL}`,
       detail: names.length
         ? `${joinWithAnd(names)} changed here since ${code} was sent. Resubmit the Removal to send ${names.length === 1 ? "it" : "them"}.`
-        : `Entries changed on another credit batch since ${code} was sent. Resubmit the Removal to send them.`,
+        : `Records or files changed since ${code} was sent. Resubmit the Removal to send the changes.`,
       target: { href: removalSheetHref(correction.removalId, facilityId) },
     };
   }
   return {
     id: `correction:${correction.removalId}`,
     title: `${code}: ${RETURNED_BY_ISOMETRIC_LABEL}`,
-    detail: `${correctionStatementLabel(correction.statement)} ${returnedStatementPhrase(correction.statement.status)}. You can correct the sent entries on the Emissions tab.`,
+    detail: `${correctionStatementLabel(correction.statement)} ${returnedStatementPhrase(correction.statement.status)}. You can correct this batch's records, and its emissions entries on the Emissions tab.`,
     target: { tab: "emissions" },
   };
 }

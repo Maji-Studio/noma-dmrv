@@ -47,11 +47,11 @@ const ROW_GRID =
 export type FactsStatus = "loading" | "failed" | "ready";
 
 /**
- * Delete is refused once a Removal is Sent or a Sample uses the batch. A draft
- * Removal alone does not stop it: deleting the batch releases its slices.
+ * Delete is refused for Sent or returned Removals and Samples. A draft Removal
+ * that never reached Isometric does not stop it: deletion releases its slices.
  */
 export function isCreditBatchDeletable(lock: RecordLockView | undefined): boolean {
-  return !!lock && lock.level !== "sent" && !lock.usedBy.some((link) => link.kind === "sample");
+  return !!lock && lock.level !== "sent" && !lock.returnedBy.length && !lock.usedBy.some((link) => link.kind === "sample");
 }
 
 /**

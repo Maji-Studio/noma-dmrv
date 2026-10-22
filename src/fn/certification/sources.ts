@@ -1,5 +1,7 @@
 "use server";
 
+import { removalCorrectionWindowOpen } from "@/data-access/removal-entry-correction";
+
 import {
   canRefreshSubmissionEvidence,
   getMetadataValue,
@@ -48,6 +50,7 @@ export async function loadCandidateDocumentsForRemoval(
         biocharApplicationId: candidate.biocharApplicationId,
       })),
       latest,
+      await removalCorrectionWindowOpen(orgCtx, parsed.removalId),
     );
     const selectedById = new Map(selected.map((candidate) => [candidate.documentId, candidate]));
     const canReviewEvidence = latest?.status === "draft" &&

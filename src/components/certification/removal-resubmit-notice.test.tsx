@@ -35,18 +35,18 @@ describe("RemovalResubmitNotice", () => {
   it("falls back to a plain sentence when the Removal needs resubmitting but no component is listed", () => {
     render(<RemovalResubmitNotice correction={correction({ resubmitNeeded: true, changed: [] })} facilityId={FACILITY} />);
     expect(screen.getByRole("status").textContent).toBe(
-      "Entries changed since this Removal was sent. Resubmit it, then resubmit GHG Statement Jul 1 to Sep 30, 2026.",
+      "Records or files changed since this Removal was sent. Resubmit it, then resubmit GHG Statement Jul 1 to Sep 30, 2026.",
     );
   });
 
   it.each([
     ["FAILED_VERIFICATION", "failed verification"],
     ["DRAFT", "is back in draft"],
-  ] as const)("says the statement came back and where to correct the sent entries when nothing changed: %s", (status, phrase) => {
+  ] as const)("says the statement came back and where to correct records or entries when nothing changed: %s", (status, phrase) => {
     render(<RemovalResubmitNotice correction={correction({ statement: { ...correction().statement, status } })} facilityId={FACILITY} />);
     const notice = screen.getByRole("status");
     expect(notice.textContent).toContain("Returned by Isometric");
-    expect(notice.textContent).toContain(`GHG Statement Jul 1 to Sep 30, 2026 ${phrase}. Correct the sent entries on CB-26-001 and CB-26-002, then resubmit this Removal.`);
+    expect(notice.textContent).toContain(`GHG Statement Jul 1 to Sep 30, 2026 ${phrase}. Correct the records or emissions entries on CB-26-001 and CB-26-002, then resubmit this Removal.`);
     expect(screen.getByRole("link", { name: "CB-26-002" }).getAttribute("href")).toBe("/credit-batches/batch-2?facility=facility-1&tab=emissions");
     expect(screen.getByRole("link", { name: "Open GHG Statement" }).getAttribute("href"))
       .toBe("/certification/ghg-statements?facility=facility-1&statement=statement-1");
