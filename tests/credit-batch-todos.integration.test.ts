@@ -6,6 +6,7 @@ import {
   organizations, productionProcesses, removalTemplateObservations, samples,
 } from "@/db/schema";
 import { upsertCertifierCredentials } from "@/data-access/certifier-credentials";
+import { updateRemovalDates } from "@/data-access/certifier-removals";
 import { getLatestTemplateObservation } from "@/data-access/removal-template-observations";
 import { requireOrgContext } from "@/lib/auth/server";
 import { listComponentBlueprints, listGhgEntryTemplates, listProjects, type IsometricComponentBlueprint } from "@/lib/isometric";
@@ -176,7 +177,8 @@ it("keeps no observation separate from an incomplete observation", async () => {
   const electricity = unreadable.find(blueprint => blueprint.key === "grid_electricity_use")!;
   Object.defineProperty(electricity, "inputs", { get() { throw new Error("Unreadable registry blueprint inputs"); } });
   vi.mocked(listComponentBlueprints).mockResolvedValue(unreadable);
-  await parity([batch], [{ blocking: [READ_BLOCKER, ...DATA_BLOCKERS], check: MIXED_CHECKS.slice(0, -1) }]);
+  // Without an observation, the live template's empty line sources still require review.
+  await parity([batch], [{ blocking: [READ_BLOCKER, REVIEW_BLOCKER, ...DATA_BLOCKERS], check: MIXED_CHECKS.slice(0, -1) }]);
   expect(await getLatestTemplateObservation(ctx, "isometric", template.id)).toBeNull();
 });
 
@@ -241,6 +243,12 @@ it.each(["none", "removal"] as const)("keeps raw counts for a batch in a %s Remo
   await withLineageFixture(async (lineage) => {
     const lineageCtx = makeTestOrgContext();
     vi.mocked(requireOrgContext).mockResolvedValue(lineageCtx);
+    if (submission === "removal") {
+      // A submitted ledger row without its reporting window is an interrupted submission.
+      await updateRemovalDates(lineageCtx, lineage.removalId, {
+        startedOn: "2026-06-01", completedOn: "2026-06-30",
+      });
+    }
     const { summaries } = await parity([{ id: lineage.batchId, removalTemplateId: null }], [{
       blocking: [PIN_BLOCKER, "health:carbon:carbon+lab-samples", "health:entityReadiness:production-runs",
         "health:entityReadiness:submission-deliveryEvidence"],
@@ -250,8 +258,10 @@ it.each(["none", "removal"] as const)("keeps raw counts for a batch in a %s Remo
     expect(summary.removalId).toBe(lineage.removalId);
     expect(summary.checkCount).toBe(2);
     if (submission === "removal") {
+      expect(summary.removalStatus).toMatchObject({ kind: "submitted" });
       expect(creditBatchStateOf(summary)).toMatchObject({ state: "submitted", blockingCount: 0, openTodoCount: 0 });
     } else {
+      expect(summary.removalStatus).toMatchObject({ kind: "not-submitted" });
       expect(creditBatchStateOf(summary).openTodoCount).toBe(summary.issueCount + summary.checkCount);
     }
   }, submission);
