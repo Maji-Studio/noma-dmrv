@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   changePassword: vi.fn(),
   revokeOtherSessions: vi.fn(),
   loggerError: vi.fn(),
+  loggerWarn: vi.fn(),
   headers: vi.fn(),
 }));
 
@@ -17,7 +18,7 @@ vi.mock("@/lib/auth/server", () => ({ requireOrgContext: mocks.requireOrgContext
 vi.mock("@/lib/auth/better-auth", () => ({ auth: { api: { updateUser: mocks.updateUser, changePassword: mocks.changePassword, revokeOtherSessions: mocks.revokeOtherSessions } } }));
 vi.mock("next/headers", () => ({ headers: mocks.headers }));
 vi.mock("@/lib/log", () => ({
-  logger: { error: mocks.loggerError },
+  logger: { error: mocks.loggerError, warn: mocks.loggerWarn },
   sanitizeErrorMessage: (error: unknown) => error instanceof Error ? error.message : String(error),
 }));
 
@@ -66,8 +67,9 @@ describe("profile actions", () => {
   });
 
   it("reports a changed password whose sign-out of other devices failed", async () => {
-    mocks.revokeOtherSessions.mockRejectedValue(new Error("lost connection"));
+    mocks.revokeOtherSessions.mockRejectedValue(new Error("lost connection for someone@example.com"));
     expect(await changePasswordFn(PASSWORD_INPUT)).toEqual({ success: true, data: { otherDevicesSignedOut: false } });
+    expect(mocks.loggerWarn).toHaveBeenCalledExactlyOnceWith({ op: "change-password", userId: USER_ID }, "other sessions were not signed out");
   });
 
   it.each([

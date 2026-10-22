@@ -2,7 +2,7 @@
  * Organization React Query hooks — members, invitations, and the Platform
  * Admin org directory. Mutations invalidate the member/invitation lists.
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   changeMemberRoleAction,
   createOrganizationAction,
@@ -51,6 +51,11 @@ export function useActiveOrganizationProfile() {
       !(error instanceof Error && error.message === NO_ORGANIZATION_MESSAGE) &&
       failureCount < ACTIVE_ORGANIZATION_MAX_RETRIES,
   });
+}
+
+/** Refetch the member list, for a change made elsewhere (a member renaming themselves). */
+export function invalidateOrgMembers(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({ queryKey: organizationKeys.members() });
 }
 
 export function useResetAfterOrgSwitch() {

@@ -27,7 +27,7 @@ export const ORGANIZATION_SETTINGS_ROLES = "Admins";
 
 export const SETTINGS_ACCESS = {
   organization: `${ORGANIZATION_SETTINGS_ROLES} can change these.`,
-  self: "Only you can change these.",
+  self: "Only you can change your name and password.",
   you: `You and organization ${ORGANIZATION_SETTINGS_ROLES} can change these.`,
   platformReadOnly: "Read-only for Platform Admins.",
 } as const;

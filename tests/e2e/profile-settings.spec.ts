@@ -67,6 +67,8 @@ test.describe("Settings, Profile", () => {
       await login.fill('input[type="email"]', fixture.user.email);
       await login.fill('input[type="password"]', fixture.user.password);
       await login.click('button[type="submit"]');
+      // Wait for the refusal itself: the page is on /login before it answers.
+      await expect(login.getByRole("alert")).toBeVisible();
       await expect(login).toHaveURL(/\/login/);
       await login.fill('input[type="password"]', NEW_PASSWORD);
       await login.click('button[type="submit"]');

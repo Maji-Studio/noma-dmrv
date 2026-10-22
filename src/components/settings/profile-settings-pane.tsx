@@ -42,7 +42,7 @@ const EMPTY_PASSWORDS: ChangePasswordFormData = {
 
 export function ProfileSettingsPane({ name, email }: { name: string; email: string }) {
   return (
-    <div className="content-measure-preview flex flex-col gap-32">
+    <div className="content-measure-form flex flex-col gap-32">
       <NameForm name={name} email={email} />
       <PasswordForm />
     </div>
@@ -104,7 +104,7 @@ function NameForm({ name, email }: { name: string; email: string }) {
         isSubmitting={mutation.isPending}
         errorMessage={serverError}
         submitLabel="Save name"
-        submittingLabel="Saving..."
+        submittingLabel="Saving…"
         sticky={false}
       />
     </form>
@@ -193,7 +193,7 @@ function PasswordForm() {
         isSubmitting={mutation.isPending}
         errorMessage={serverError}
         submitLabel="Change password"
-        submittingLabel="Changing..."
+        submittingLabel="Changing…"
         sticky={false}
       />
     </form>
