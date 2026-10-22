@@ -451,6 +451,12 @@ local, and deployed builds remain on the stable default.
 
 ## Database Boundaries
 
+Certification submits acquire the boundary advisory lock, facility durability
+advisory lock, certifier mapping `FOR UPDATE`, artifacts, then mirror locks.
+GHG Statement reconciliation follows this order, taking boundary and durability
+on the same dedicated transaction. A caller already holding boundary as a session
+lock passes the held flag instead of requesting it again on another connection.
+
 Supplier and customer creates lock all named facilities `FOR SHARE` in id order,
 then insert the party, ordered locations and pairs inside the `withAutoCodes`
 savepoint and read back through `tx`. Last explicit default wins, otherwise the
