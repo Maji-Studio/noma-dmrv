@@ -384,7 +384,10 @@ export function ProductionRunList() {
     }
   };
 
-  const handleDelete = (runId: string) => setDeletingRunId(runId);
+  const handleDelete = (runId: string) => {
+    setDeleteError(null);
+    setDeletingRunId(runId);
+  };
 
   const handleDeleteConfirm = async () => {
     if (!deleting) return;
@@ -655,15 +658,17 @@ export function ProductionRunList() {
         <DataTable.Pagination />
       </DataTable>
 
-      {deleteError && <ServerError message={deleteError} />}
+      {deleteError && !deleting && <ServerError message={deleteError} />}
 
       <DeleteConfirmDialog
         isOpen={!!deletingRunId}
         title="Delete production run"
-        message="Are you sure you want to delete this production run? This action cannot be undone. Note: Production runs with dependent biochar products or credit batches cannot be deleted."
+        // Once the server refuses, its reason says the rule; the Note would repeat it.
+        message={deleteError ? "Are you sure you want to delete this production run? This action cannot be undone." : "Are you sure you want to delete this production run? This action cannot be undone. Note: Production runs with dependent biochar products or credit batches cannot be deleted."}
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingRunId(null); setDeleteError(null); }}
         isPending={deleteRun.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       <EntitySideSheet

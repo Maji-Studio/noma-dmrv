@@ -197,14 +197,15 @@ function revealControl(element: HTMLElement): void {
  * scroll container, so its label and message both show above the sticky
  * footer. Returns false when no control matches the path.
  */
-export function focusField(form: HTMLElement | null, path: string): boolean {
+export function focusField(form: HTMLElement | null, path: string, options: { focus?: boolean } = {}): boolean {
   if (!form) return false;
   const control = findControl(form, path);
   if (!control) return false;
   revealControl(control);
   // A just-opened <details> lays out on the next frame.
   requestAnimationFrame(() => {
-    control.focus({ preventScroll: true });
+    // A locked field is disabled, or about to be: scroll to it, leave focus alone.
+    if (options.focus !== false) control.focus({ preventScroll: true });
     control.scrollIntoView({ block: "center" });
   });
   return true;

@@ -490,8 +490,8 @@ function EntityDetailPanel({
           <DetailSpine sections={sections} />
         </SlideOverPanel.Body>
 
-        {onEdit && (
-          <SlideOverPanel.Footer>
+        <SlideOverPanel.Footer>
+          {onEdit && (
             <Button
               variant="primary"
               onClick={() => {
@@ -501,8 +501,9 @@ function EntityDetailPanel({
             >
               {editLabel}
             </Button>
-          </SlideOverPanel.Footer>
-        )}
+          )}
+          <SlideOverPanel.FooterClose />
+        </SlideOverPanel.Footer>
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
   );

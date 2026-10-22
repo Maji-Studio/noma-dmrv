@@ -44,6 +44,7 @@ export function InviteMemberDialog({
     register,
     handleSubmit,
     reset,
+    resetField,
     setError,
     formState: { errors },
   } = useForm<InviteForm>({
@@ -51,7 +52,7 @@ export function InviteMemberDialog({
     defaultValues: EMPTY_INVITE,
   });
 
-  const refuseSave = useSaveRefusal({ control, setError, formId });
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
 
   async function onInvite(values: InviteForm) {
     setServerError("");

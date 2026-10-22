@@ -160,12 +160,22 @@ and an optional `action` (a link or button); no eyebrow, no uppercase.
 | `success` | An action completed and the page stays | green icon, no tint | `status` |
 | `error` | The task is blocked or a save failed | red icon, **tinted** | `alert` |
 
-The role column is the default. `live={false}` drops the role; its one
-sanctioned use is `FormErrorSummary` (`@/components/forms`), the error Notice
-above Save that holds the links to refused fields. Its list changes as the
-user fixes fields, so it is not a live region and announces each refused save
-through its own sr-only `role="alert"` line instead. Every other Notice keeps
-its role.
+The role column is the default. `live={false}` drops the role and has exactly
+two sanctioned uses; every other Notice keeps its role:
+
+1. `FormErrorSummary` (`@/components/forms`), the error Notice above Save that
+   holds the links to refused fields. Its list changes as the user fixes fields,
+   so it is not a live region. It announces each refused save through its own
+   sr-only `role="alert"` line, except a lock-only refusal, where the box takes
+   focus and is read from there.
+2. `TopRefusal` (`FormActions`), the refusal above the lock line once a lock
+   hides Save. It takes focus, so it is a focusable `role="group"` named by its
+   own text (`aria-labelledby`), and it says what happened to the edit; the lock
+   line keeps the reason.
+
+A box that takes focus needs that role and name, or a screen reader may not read
+it. `ServerError` has no `live` prop; use `Notice` directly for a new case and
+add it to this list.
 
 Only `error` is tinted red, so one blocker stands out on a page of advisories.
 `boxed` is an opt-in quiet neutral card (`--color-surface-light`, 8px/12px
@@ -940,6 +950,11 @@ stays as a preview whose lead footer action opens the page
 - KPI strips: `gap-24` grid, `md:grid-cols-2` with `lg:grid-cols-3` (3 cards)
   or `lg:grid-cols-4` (4 cards).
 - Tables/panels never sit flush on the warm field — use the `--panel-*` recipe.
+- Side sheet footer (view mode): the sheet's actions first at natural width,
+  bottom left (primary Edit, then a destructive one), then `Close`
+  (`variant="default"` in `SlideOverPanel.Close`) last. A sheet with no action
+  keeps a footer with Close alone. The header X and Escape stay. Never
+  `flex-1` or `justify-stretch`. Edit and create mode use `FormActions`.
 - Side sheets: header title = entity code (or `Create X` in create mode — **no
   filler subtitle in create mode**); view/edit subtitle = the identifying
   secondary. **Storage bins invert this**: the name is the title and the code

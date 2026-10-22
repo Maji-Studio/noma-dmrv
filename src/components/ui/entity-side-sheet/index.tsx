@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/detail-panel";
 import { SideSheetActionsContext } from "./side-sheet-context";
 import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-block-context";
+import { RefusalSlotContext } from "@/components/ui/refusal-slot-context";
 
 // The fieldset is the body's flex child (`[&>*]:flex` beats `contents`), so it
 // passes the body's fill on to the form inside it. `min-w-0` undoes the
@@ -147,6 +148,8 @@ function EntitySideSheet({
   const editBlock = mode === "edit" ? submitBlock ?? null : null;
 
   const bodyRef = React.useRef<HTMLDivElement>(null);
+  // Where FormActions shows a refusal once the record is read-only (Sent).
+  const [refusalSlot, setRefusalSlot] = React.useState<HTMLElement | null>(null);
   // Dirty tracking is two sources OR-ed together: a native input/change
   // heuristic (covers plain fields even in forms that don't report), and the
   // form's authoritative RHF `formState.isDirty` via `reportDirty` (covers
@@ -283,6 +286,8 @@ function EntitySideSheet({
           ) : (
             <SideSheetActionsContext.Provider value={sheetActions}>
               <SubmitBlockContext.Provider value={editBlock}>
+               <RefusalSlotContext.Provider value={refusalSlot}>
+                {mode === "edit" && <div ref={setRefusalSlot} className="flex-none! empty:hidden pb-12" />}
                 {mode === "edit" && editNotice ? (
                   // flex-none!: the body's `[&>*]:flex-1` would grow the notice.
                   <div className="flex flex-none! flex-col gap-12 pb-20">{editNotice}</div>
@@ -298,6 +303,7 @@ function EntitySideSheet({
                 >
                   {children}
                 </fieldset>
+               </RefusalSlotContext.Provider>
               </SubmitBlockContext.Provider>
             </SideSheetActionsContext.Provider>
           )}
@@ -312,9 +318,10 @@ function EntitySideSheet({
           </SlideOverPanel.Footer>
         )}
 
-        {/* Footer — only in view mode; the header X is the way out. A preview's
-            lead action (its link to the record's own page) comes before Edit. */}
-        {isViewMode && (canEdit || viewPrimaryAction) && (
+        {/* Footer — only in view mode: the actions at natural width, then Close
+            last. A preview's lead action (its link to the record's own page)
+            comes before Edit. A sheet without actions keeps Close alone. */}
+        {isViewMode && (
           <SlideOverPanel.Footer>
             {viewPrimaryAction}
             {canEdit && (
@@ -322,6 +329,7 @@ function EntitySideSheet({
                 {editLabel}
               </Button>
             )}
+            <SlideOverPanel.FooterClose />
           </SlideOverPanel.Footer>
         )}
 

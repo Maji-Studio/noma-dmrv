@@ -66,7 +66,7 @@ vi.mock("@/components/ui/slide-over-panel", () => {
   const Wrapper = ({ children }: { children: ReactNode }) => <div>{children}</div>;
   return { FILL_CHILDREN_CLASS: "", SlideOverPanel: {
     Root: Wrapper, Content: Wrapper, Header: Wrapper, Title: Wrapper,
-    Description: Wrapper, Body: Wrapper, Footer: Wrapper, Close: Wrapper,
+    Description: Wrapper, Body: Wrapper, Footer: Wrapper, Close: Wrapper, FooterClose: () => null,
   } };
 });
 vi.mock("./ghg-statement-carbon-breakdown", () => ({

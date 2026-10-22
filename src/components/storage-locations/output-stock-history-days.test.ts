@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatMassKg } from "@/lib/format-utils";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
-import { stockWaterKg } from "@/lib/output-stock/stock-replay";
+import { stockWaterKg } from "@/lib/output-stock/stock-parts";
 import { buildHistoryDays, entryParts, entrySentence, estimateKg, formatPartFigures, signedKg, WET_MASS_LABEL } from "./output-stock-history-days";
 
 const TZ = "UTC";

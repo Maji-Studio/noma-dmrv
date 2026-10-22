@@ -17,10 +17,8 @@ import { loadBatchesEmissionLines } from "@/lib/read-models/batches-emission-lin
 import { creditBatchStateOf } from "@/lib/credit-batches/batch-state";
 import { loadCreditBatchTodos, type CreditBatchTodos } from "@/fn/certification/credit-batch-todos-core";
 import { loadCreditBatchTodosFn } from "@/fn/certification/credit-batch-todos";
-import { loadCreditBatchHealthSummaries, type CreditBatchHealthSummary } from "@/fn/certification/overview";
-import { loadBatchHealth } from "@/fn/certification/batch-health";
 import { loadCreditBatchDurabilitySummary } from "@/fn/certification/durability-batch-summary";
-import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
+import { loadCreditBatchHealthSummaries, type CreditBatchHealthSummary } from "@/fn/certification/overview";
 import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/load-enrichment";
 import type { IsometricClient } from "@/lib/isometric/client";
 import * as batchSamples from "@/data-access/credit-batch-samples";
@@ -153,20 +151,15 @@ async function parity(
     const action = await loadCreditBatchTodosFn(scope.facilityId, row.id);
     assert(action.success, JSON.stringify(action));
     expect(action.data).toEqual(value);
+    // The durability summary (panel, key numbers, sample form) names the same samples as the Check ids.
+    const durability = await loadCreditBatchDurabilitySummary(row.id);
+    assert(durability.success && durability.data, JSON.stringify(durability));
+    const sampleCodes = (kind: string) => value.check.map(item => item.id).filter(id => id.startsWith(`${kind}:`))
+      .map(id => id.slice(kind.length + 1)).sort();
+    expect([...new Set(durability.data.replicates.filter(r => r.outlier).map(r => r.sampleCode))].sort())
+      .toEqual(sampleCodes("outlier"));
+    expect([...new Set(durability.data.eligibility.unpairedHToCSampleCodes)].sort()).toEqual(sampleCodes("unpaired"));
     const single = await loadBatchEmissionLines(scope.ctx, scope.facilityId, row.id);
-    const pageHealth = await loadBatchHealth(row.id);
-    const pageDurability = await loadCreditBatchDurabilitySummary(row.id);
-    assert(pageHealth.success, JSON.stringify(pageHealth));
-    assert(pageDurability.success, JSON.stringify(pageDurability));
-    // The page model adds only Waiting items, outside Blocking and Check parity.
-    const pageItems = buildCreditBatchOpenItems({
-      facilityId: scope.facilityId, creditBatchId: row.id,
-      canManage: scope.ctx.isPlatformAdmin || scope.ctx.orgRole === "admin",
-      health: pageHealth.data, durability: pageDurability.data ?? undefined,
-      emissionLines: single.status === "ready" ? single.lines : undefined,
-    });
-    expect(pageItems.blocking.map(item => item.id).sort()).toEqual(value.blocking.map(item => item.id).sort());
-    expect(pageItems.check.map(item => item.id).sort()).toEqual(value.check.map(item => item.id).sort());
     const bulk = (await loadBatchesEmissionLines(scope.ctx, rows)).get(row.id)!;
     expect(single.status).toBe(bulk.status);
     if (single.status === "ready" && bulk.status === "ready") {

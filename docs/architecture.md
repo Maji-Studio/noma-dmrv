@@ -46,8 +46,8 @@ components (UI)
   caller's `onSuccess`, or when `startDraft()` is called for a new draft. Equal values with
   a new key create a separate entry. App replay uses the store's existing
   retention period. Quick-add dialogs that submit through `useQuickAddSubmit`
-  (formulation, driver, operator) hold the same draft key with
-  `useCreateIntentKey` directly. API key creation is the one keyed create outside the runner: a retry
+  hold their draft key in that hook and call its `startDraft` on open or close.
+  API key creation is the one keyed create outside the runner: a retry
   replaces the unseen key instead of replaying it ([auth.md](./auth.md)).
   It reads the same lazily parsed key through `create.key`; only this adapter
   may use that property. The keyed action shape is
@@ -371,8 +371,12 @@ runtime.
   hook. A mutation hook that can change a lineage declares it with
   `meta: recordLockMeta(RECORD_LOCK_TOUCHES.<family>)`
   (`src/hooks/record-lock-query-keys.ts`). After a successful write, only the
-  mounted lock reads of those kinds refetch; registry writes declare
-  `registry` and refresh every kind. A new write that adds or removes a
+  mounted lock reads of those kinds refetch. A `certification_locked` refusal
+  also refreshes them. Writes that only need refusal recovery use
+  `{ onRefusalOnly: true }` to leave successful lock reads alone; document
+  mutations resolve the owner kind and also refresh its certification-lock
+  query on refusal. Registry writes declare `registry` and refresh every kind
+  even on failure, unless explicitly refusal-only. A new write that adds or removes a
   dependency, or changes a Removal or GHG Statement, must declare its family,
   or the fail-closed screens keep showing a stale lock. The read itself is
   `/api/reads/record-locks` (below).
@@ -595,8 +599,9 @@ above, closing their document-write inversion. Membership refresh also takes
 artifacts before runs. The remaining production-run and membership cycles are
 tracked in the [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
 
-Emission entry writers discover ancestors unlocked, then lock the facility
-`FOR SHARE`, credit batch `FOR UPDATE`, entry `FOR UPDATE`, and documents last.
+Emission entry writers discover ancestors unlocked, then lock certification
+artifacts in sorted order before the facility `FOR SHARE`, credit batch
+`FOR UPDATE`, entry `FOR UPDATE`, and documents last.
 They revalidate the batch's facility and the entry's batch after locking; changed
 parents return retryable `conflict` without taking a new ancestor lock.
 This order matches facility archive and applies to confirmation and deletion too.
@@ -636,8 +641,10 @@ Credit batch to-dos are built in one server read by the directive-free
 bounded batch contexts and set-based sample and emission-line reads. The list
 projects only Blocking and Check counts, health state and lines to decide from
 this core; its Removal, GHG Statement and lock fields remain in the list action.
-`loadCreditBatchTodosFn` reads one batch through the same core. Waiting items
-need the page model and are never counted.
+`loadCreditBatchTodosFn` reads one batch through the same core; the batch page
+reads it through `useCreditBatchTodos` (`certificationKeys.batchTodos`, refetched
+on every mount, `staleTime: 0`) and shows no to-dos at all when it fails. Waiting
+items need the page model (`buildCreditBatchWaitingItems`) and are never counted.
 
 ```text
 components/certification/  →  hooks/use-certification.ts  →  fn/certification/

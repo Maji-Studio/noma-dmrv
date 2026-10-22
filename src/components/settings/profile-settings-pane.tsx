@@ -123,13 +123,14 @@ function PasswordForm() {
     handleSubmit,
     reset,
     setError,
+    resetField,
     trigger,
     formState: { errors },
   } = useForm<ChangePasswordFormData>({
     resolver: zodResolver(changePasswordSchema),
     defaultValues: EMPTY_PASSWORDS,
   });
-  const refuseSave = useSaveRefusal({ control, setError, formId });
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
 
   const onSubmit = latched(
     handleSubmit(async (values) => {
