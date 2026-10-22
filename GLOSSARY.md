@@ -62,9 +62,8 @@ _Avoid_: activity (reserved for the history log).
 **Recorded zero**:
 A confirmation that one component had no emissions for a specific Removal.
 It is an emissions entry owned by that Removal, contributes 0, and needs no file.
-It is never pooled into another Removal. Distinct from the sandbox zero stub
-(removed), which was a temporary compilation exception and never an operator
-confirmation. On screen it is a component recorded as zero.
+It is never pooled into another Removal. On screen it is a component recorded as zero.
+_Avoid_: zero stub.
 
 **Component comment**:
 One editable comment on a credit batch's Removal-template component, identified by
@@ -181,8 +180,9 @@ proportion to its remaining solids.
 
 **Departure moisture**:
 The water fraction measured in material leaving a storage bin. It sets that
-draw's dry mass only. It never changes the **estimated moisture** or **wet
-stock** of what stays in the bin.
+draw's dry mass. It changes the **estimated moisture** of what stays only if
+subtracting the draw would leave less **wet stock** than dry solids: what stays
+is then re-estimated at that draw's moisture until the next count.
 
 **Wet stock** (output bin):
 The wet mass a sub-bin or mix pile holds by the records: wet mass added less
@@ -192,7 +192,8 @@ has none left. A layer with no dry biochar left holds no wet stock.
 
 **Estimated moisture**:
 A sub-bin's or mix pile's water fraction by the records: what it was added
-with, or the latest count. Removals leave it unchanged. A hint beside moisture
+with, or the latest count. Draws leave it unchanged unless wet stock would fall
+below dry solids, in which case the draw's measured moisture re-estimates what stays. A hint beside moisture
 fields, never a prefilled value.
 
 **Biochar share of solids**:
@@ -521,11 +522,6 @@ _Avoid_: variable input, measured input.
 An Isometric removal-template input bound in the registry to a
 policy-level value (an emission factor, a global-warming potential) —
 the same for every submission. Contrast **monitored input**.
-
-**Zero stub** (removed):
-A placeholder mapping that emitted `0` for a **monitored input** noma
-could not yet source, on the sandbox only. Removed in PR 4 of epic #1058:
-operators now confirm empty components as a **Recorded zero** instead.
 
 **Removal template**:
 The Isometric template (credit type REMOVAL) a **Removal** is built from. It

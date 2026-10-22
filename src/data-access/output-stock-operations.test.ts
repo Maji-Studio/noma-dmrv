@@ -3,7 +3,7 @@ import { conflictCode } from '@/lib/conflict-ref';
 import { ActionConflictError } from '@/lib/errors';
 import { rational } from '@/lib/output-stock';
 
-const mocks = vi.hoisted(() => ({ reads: [] as unknown[], state: vi.fn(), stocks: vi.fn(), correction: vi.fn(), lineage: vi.fn() }));
+const mocks = vi.hoisted(() => ({ reads: [] as unknown[], state: vi.fn(), stocks: vi.fn(), correction: vi.fn(), lineage: vi.fn(), bases: vi.fn() }));
 vi.mock('@/db', () => {
   const tx = { select: () => {
     const query = { from: () => query, where: () => query, orderBy: () => query, then: (resolve: (value: unknown) => unknown) => Promise.resolve(mocks.reads.shift()).then(resolve) };
@@ -12,7 +12,7 @@ vi.mock('@/db', () => {
   return { db: { ...tx, transaction: (run: (reader: unknown) => unknown) => run(tx) } };
 });
 vi.mock('./output-stock', () => ({ getBiocharOutputStockLayers: mocks.state, getProductOutputStockLayers: mocks.state, getOutputBinStocks: mocks.stocks, getLayerMoistureBases: async (_ctx: unknown, _bin: unknown, layers: { id: string; placedAt: string; remainingSolidsKg: unknown }[]) =>
-  layers.map(layer => ({ layerId: layer.id, placedAt: layer.placedAt, remainingSolidsKg: layer.remainingSolidsKg, recorded: null, readings: [], removals: [] })) }));
+  mocks.bases() ?? layers.map(layer => ({ layerId: layer.id, placedAt: layer.placedAt, remainingSolidsKg: layer.remainingSolidsKg, recorded: null, readings: [], removals: [] })) }));
 vi.mock('./output-stock-corrections', () => ({ prepareOutputCorrection: mocks.correction }));
 vi.mock('./certification-lineage-guards', async importOriginal => ({ ...await importOriginal<typeof import('./certification-lineage-guards')>(), getCertifiedLineage: mocks.lineage }));
 vi.mock('./output-stock-history', () => ({ getOutputStockHistory: vi.fn() }));
@@ -125,4 +125,62 @@ it('keeps the operator blocking message and adds the typed shortage for API call
   const fits = await prepare(50, 10);
   expect(fits.blocking).toBeNull();
   expect(fits.preview.blockingMessage).toBeNull();
+});
+
+
+it.each(['loss', 'delivery', 'production_draw'] as const)('previews the %s re-estimate without blocking saving', async kind => {
+  const binId = '00000000-0000-4000-8000-000000000001';
+  const occurredAt = '2026-10-20T12:00:00.000Z';
+  const placedAt = '2026-10-19T12:00:00.000Z';
+  const layers = [{ id: 'run', placedAt, postingSequence: BigInt(1), establishedDryBiocharKg: '80', ingredientDrySolidsKg: '0',
+    remainingDryBiocharKg: '80', remainingSolidsKg: rational(BigInt(80)), runs: [{ productionRunId: 'run', establishedDryKg: '80', remainingDryKg: '80' }] }];
+  const product = kind === 'delivery';
+  const codes = [{ id: 'run', code: 'RUN-001', version: 1 }];
+  const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
+  for (const wetMassKg of [40, 50]) {
+    mocks.reads = [[{ id: binId, type: product ? 'product_bin' : 'biochar_bin', stockMode: 'mix', name: 'Stock', code: 'BIN', formulationId: null }], [], [], codes, codes];
+    mocks.state.mockResolvedValue({ layers });
+    mocks.bases.mockReturnValueOnce([{ layerId: 'run', placedAt, remainingSolidsKg: rational(BigInt(80)),
+      recorded: { wetKg: rational(BigInt(100)), solidsKg: rational(BigInt(80)) }, readings: [], removals: [] }]);
+    const { preview } = await prepareOutputStock(ctx, { storageLocationId: binId, facilityId: '00000000-0000-4000-8000-000000000002', occurredAt,
+      kind, wetMassKg, moisturePercent: 50 });
+    expect(preview.blockingMessage).toBeNull();
+    expect(preview.beforeEstimatedWetKg).toBe(100);
+    expect(preview.afterEstimatedWetKg).toBe(wetMassKg === 50 ? 110 : 60);
+    expect(preview.reestimate).toEqual(wetMassKg === 50 ? { moisturePercent: 50, stayWetKg: 110, stayDryKg: 55, staySolidsKg: 55, layers: [{ layerId: 'run', name: 'RUN-001', moisturePercent: 50, stayWetKg: 110, staySolidsKg: 55 }] } : null);
+  }
+});
+
+
+it('previews ingredient solids separately from biochar for a blend delivery', async () => {
+  const placedAt = '2026-09-01T12:00:00.000Z';
+  const layer = { id: 'blend', placedAt, postingSequence: BigInt(1), establishedDryBiocharKg: '40', ingredientDrySolidsKg: '40',
+    remainingDryBiocharKg: '40', remainingSolidsKg: rational(BigInt(80)), runs: [{ productionRunId: 'run', establishedDryKg: '40', remainingDryKg: '40' }] };
+  mocks.reads = [[{ id: '00000000-0000-4000-8000-000000000001', type: 'product_bin', stockMode: 'mix', name: 'Blend', code: 'BIN', formulationId: null }], [], [], [{ id: 'blend', code: 'BLEND', version: 1 }], [{ id: 'run', code: 'RUN' }]];
+  mocks.state.mockResolvedValue({ layers: [layer] });
+  mocks.bases.mockReturnValueOnce([{ layerId: 'blend', placedAt, remainingSolidsKg: rational(BigInt(80)),
+    recorded: { wetKg: rational(BigInt(100)), solidsKg: rational(BigInt(80)) }, readings: [], removals: [] }]);
+  const { preview } = await prepareOutputStock({ userId: 'operator', organizationId: 'org', orgRole: 'admin', isPlatformAdmin: false },
+    { storageLocationId: '00000000-0000-4000-8000-000000000001', facilityId: '00000000-0000-4000-8000-000000000002', occurredAt: '2026-09-14T12:00:00.000Z', kind: 'delivery', wetMassKg: 50, moisturePercent: 50 });
+  expect(preview).toMatchObject({ beforeDryKg: 40, beforeSolidsKg: 80, removedDryKg: 12.5, removedSolidsKg: 25,
+    afterDryKg: 27.5, afterSolidsKg: 55, afterEstimatedWetKg: 110,
+    reestimate: { moisturePercent: 50, staySolidsKg: 55, stayDryKg: 27.5, stayWetKg: 110 } });
+});
+
+
+it('names only the affected sub-bin and reports its draw reading in the preview', async () => {
+  const placedAt = '2026-09-01T12:00:00.000Z';
+  const ids = { a: '00000000-0000-4000-8000-00000000000a', b: '00000000-0000-4000-8000-00000000000b' };
+  const layers = (['a', 'b'] as const).map((key, i) => ({ id: ids[key], placedAt, postingSequence: BigInt(i + 1), establishedDryBiocharKg: '80', ingredientDrySolidsKg: '0',
+    remainingDryBiocharKg: '80', remainingSolidsKg: rational(BigInt(80)), runs: [{ productionRunId: ids[key], establishedDryKg: '80', remainingDryKg: '80' }] }));
+  const codes = layers.map((layer, i) => ({ id: layer.id, code: ['A', 'B'][i], version: 1 }));
+  mocks.reads = [[{ id: '00000000-0000-4000-8000-000000000001', type: 'product_bin', stockMode: 'split', name: 'Stock', code: 'BIN', formulationId: null }], [], [], codes, codes];
+  mocks.state.mockResolvedValue({ layers });
+  mocks.bases.mockReturnValueOnce(layers.map(layer => ({ layerId: layer.id, placedAt, remainingSolidsKg: rational(BigInt(80)),
+    recorded: { wetKg: rational(BigInt(layer.id === ids.a ? 100 : 200)), solidsKg: rational(BigInt(80)) }, readings: [], removals: [] })));
+  const { preview } = await prepareOutputStock({ userId: 'operator', organizationId: 'org', orgRole: 'admin', isPlatformAdmin: false },
+    { storageLocationId: '00000000-0000-4000-8000-000000000001', facilityId: '00000000-0000-4000-8000-000000000002', occurredAt: '2026-09-14T12:00:00.000Z', kind: 'delivery', wetMassKg: 50,
+      sources: [{ layerId: ids.a, moisturePercent: 50 }] });
+  expect(preview.reestimate).toEqual({ moisturePercent: 50, stayWetKg: 310, staySolidsKg: 135, stayDryKg: 135,
+    layers: [{ layerId: ids.a, name: 'A', moisturePercent: 50, stayWetKg: 110, staySolidsKg: 55 }] });
 });

@@ -14,7 +14,7 @@ import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { DRY_BIOCHAR_LABEL, ingredientSolidsLabel } from "@/components/biochar-products/product-composition-components";
 import { ESTIMATED_WATER_LABEL, ESTIMATED_WET_LABEL, INGREDIENT_SOLIDS_LABEL } from "@/lib/output-stock/labels";
 import type { OutputSubBin, SubBinMovement } from "@/types/output-stock";
-import { formatWetEstimate } from "./stock-preview-shared";
+import { formatWetEstimate, outputStockFigure } from "./stock-preview-shared";
 
 const MOVEMENT_LABELS: Record<SubBinMovement["kind"], string> = {
   added: "Added", removed: "Removed", loss: "Lost mass", count: "Stock count",
@@ -27,18 +27,23 @@ const MOVEMENTS_LABEL = "Latest movements";
 const OPEN_DELAY_MS = 160;
 const CLOSE_DELAY_MS = 80;
 
-/** The sub-bin's wet stock, or why there is none: nothing dates its moisture. */
+/** The sub-bin's wet stock; with no wet figure, its known dry biochar, never a placeholder (#1261). */
 export function subBinWetText(subBin: OutputSubBin): string {
-  return subBin.wetEstimateKg === null ? NO_MOISTURE_READING : `${formatWetEstimate(subBin.wetEstimateKg)} kg wet mass`;
+  return outputStockFigure(subBin.wetEstimateKg, subBin.dryMassKg);
 }
 
-/** The sub-bin's estimated moisture, or the same reason as its wet figure. */
+/** The sub-bin's estimated moisture, or why there is none. */
 export function subBinMoistureText(subBin: OutputSubBin): string {
   return subBin.moisturePercent === null ? NO_MOISTURE_READING : formatMoisturePercent(subBin.moisturePercent);
 }
 
-function movementMass(movement: SubBinMovement): string {
-  return movement.wetMassKg === null ? `${formatMassKg(Math.abs(movement.dryMassKg))} dry` : `${formatMassKg(Math.abs(movement.wetMassKg))} wet mass`;
+/** A sub-bin's moisture as a caption: "26.7% moisture", or why there is no reading. */
+export function subBinMoistureCaption(subBin: OutputSubBin): string {
+  return subBin.moisturePercent === null ? NO_MOISTURE_READING : `${subBinMoistureText(subBin)} moisture`;
+}
+
+export function movementMass(movement: SubBinMovement): string {
+  return movement.wetMassKg === null ? outputStockFigure(null, Math.abs(movement.dryMassKg)) : `${formatMassKg(Math.abs(movement.wetMassKg))} wet mass`;
 }
 
 type TapTrigger = ReactElement<{ onClick?: (event: MouseEvent) => void }>;

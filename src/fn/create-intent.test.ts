@@ -16,6 +16,7 @@ vi.mock("@/data-access/orders", () => ({}));
 vi.mock("@/data-access/order-stats", () => ({}));
 vi.mock("@/data-access/customers", () => ({}));
 vi.mock("@/data-access/supplier-stats", () => ({}));
+vi.mock("@/data-access/customer-stats", () => ({}));
 vi.mock("@/data-access/suppliers", () => ({}));
 vi.mock("@/data-access/production-runs", () => ({}));
 vi.mock("@/lib/operations/customers", () => ({ createCustomer: { id: "create_customer" } }));

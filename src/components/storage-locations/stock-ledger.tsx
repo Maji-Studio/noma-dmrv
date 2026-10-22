@@ -81,8 +81,10 @@ function FigureBlock({ label, value, caption }: { label: string; value: string; 
 interface FigureSide { value: string; caption?: string }
 
 /** Before and after as two blocks with an arrow between, optionally under a title naming what changed. */
-export function LedgerBeforeAfter({ title, before, after, labels = ["Before", "After"] }: {
+export function LedgerBeforeAfter({ title, before, after, labels = ["Before", "After"], stackOnPhone = false }: {
   title?: string;
+  /** On a phone the blocks stack and the arrow points down. */
+  stackOnPhone?: boolean;
   before: string | FigureSide;
   after: string | FigureSide;
   labels?: [string, string];
@@ -91,9 +93,9 @@ export function LedgerBeforeAfter({ title, before, after, labels = ["Before", "A
   return (
     <div className="flex flex-col gap-4">
       {title && <span className="body-caption text-[var(--color-text-secondary)]">{title}</span>}
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-8">
+      <div className={`grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-8${stackOnPhone ? " max-sm:grid-cols-1" : ""}`}>
         <FigureBlock label={labels[0]} {...side(before)} />
-        <ArrowRightIcon size={ICON_PX} aria-label="to" className="text-[var(--color-text-tertiary)]" />
+        <ArrowRightIcon size={ICON_PX} aria-label="to" className={`text-[var(--color-text-tertiary)]${stackOnPhone ? " max-sm:justify-self-center max-sm:rotate-90" : ""}`} />
         <FigureBlock label={labels[1]} {...side(after)} />
       </div>
     </div>

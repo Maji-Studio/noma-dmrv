@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import { ActionError } from "@/lib/action-error";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import {
   CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE,
   creditBatchUpdatePatch,
   isCreditBatchMembershipLocked,
+  logUnexpectedSaveError,
   saveCreditBatchEdit,
 } from "./credit-batch-update-patch";
 
@@ -71,5 +73,41 @@ describe("saveCreditBatchEdit", () => {
       .resolves.toEqual({ status: "error", message: "Changed by someone else." });
     expect(errorLog).toHaveBeenCalled();
     errorLog.mockRestore();
+  });
+});
+
+describe("saveCreditBatchEdit logging", () => {
+  const saved = { ...SAVED, id: "cb-1", version: 3 };
+  const save = (update: () => Promise<never>) =>
+    saveCreditBatchEdit({ data: { ...FORM, sampling: "sampled" } as never, saved, membershipLocked: false, update });
+
+  it("shows a refused edit beside the form without logging an error", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const refusal = new ActionError({ error: "Credit batch CB-1 was not changed. 1 manual entry falls outside the new dates." });
+
+    expect(await save(() => Promise.reject(refusal))).toEqual({ status: "error", message: refusal.message });
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  it("still logs an unexpected failure", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await save(() => Promise.reject(new TypeError("fetch failed")));
+    expect(error).toHaveBeenCalledOnce();
+    error.mockRestore();
+  });
+});
+
+describe("logUnexpectedSaveError", () => {
+  it("skips a refused create and keeps logging a real failure", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    logUnexpectedSaveError("Credit batch create error:", new ActionError({ error: "Dates fall outside the entries." }));
+    expect(error).not.toHaveBeenCalled();
+
+    logUnexpectedSaveError("Credit batch create error:", new TypeError("fetch failed"));
+    expect(error).toHaveBeenCalledOnce();
+    error.mockRestore();
   });
 });

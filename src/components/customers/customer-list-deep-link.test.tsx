@@ -51,6 +51,7 @@ vi.mock("nuqs", () => ({
 }));
 vi.mock("@/hooks/use-customers", () => ({
   useCustomers: () => ({ data: { items: [], total: 0, totalPages: 0 }, isLoading: false, error: null }),
+  useCustomerStats: () => ({ data: undefined, isLoading: false, isError: false }),
   useCustomerWithRelations: () => ({
     data: harness.query.customer ? harness.customer : undefined,
     isLoading: false,

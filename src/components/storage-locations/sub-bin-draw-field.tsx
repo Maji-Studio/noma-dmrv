@@ -31,6 +31,8 @@ interface Props {
   disabled?: boolean;
   /** Set once the operator tries to save, so empty readings then say so. */
   showErrors?: boolean;
+  /** The surface's re-estimate notice already says what to do about a wetter reading, so the rows drop their own advisory. */
+  hideDeviationWarning?: boolean;
 }
 
 /** What a row draws, beside its label. Silent for a one-row load: the load weight already says it. */
@@ -47,7 +49,7 @@ function readingError(raw: string | undefined, showErrors: boolean): string | un
   return undefined;
 }
 
-export function SubBinDrawField({ draw, timeZone, idPrefix, disabled, showErrors = false }: Props) {
+export function SubBinDrawField({ draw, timeZone, idPrefix, disabled, showErrors = false, hideDeviationWarning = false }: Props) {
   const [changing, setChanging] = useState(false);
   const byId = new Map(draw.subBins.map(subBin => [subBin.layerId, subBin]));
   const defaultOrderLabel = OUTPUT_DRAW_ORDER_LABELS[draw.query.data?.drawOrder ?? "oldest_first"];
@@ -90,6 +92,7 @@ export function SubBinDrawField({ draw, timeZone, idPrefix, disabled, showErrors
               timeZone={timeZone}
               disabled={disabled}
               showErrors={showErrors}
+              hideDeviationWarning={hideDeviationWarning}
             />
           ) : null;
         })}
@@ -108,7 +111,7 @@ export function SubBinDrawField({ draw, timeZone, idPrefix, disabled, showErrors
 }
 
 /** One sub-bin's reading: required, never prefilled, with its own estimate as the hint. */
-function ReadingRow({ id, subBin, aside, raw, onChange, timeZone, disabled, showErrors }: {
+function ReadingRow({ id, subBin, aside, raw, onChange, timeZone, disabled, showErrors, hideDeviationWarning }: {
   id: string;
   subBin: OutputSubBin;
   aside?: string;
@@ -117,6 +120,7 @@ function ReadingRow({ id, subBin, aside, raw, onChange, timeZone, disabled, show
   timeZone: string;
   disabled?: boolean;
   showErrors: boolean;
+  hideDeviationWarning: boolean;
 }) {
   const estimate = outputMoistureFieldEstimate({ moisturePercent: subBin.moisturePercent, wetKg: subBin.wetEstimateKg, basis: subBin.basis }, timeZone);
   const error = readingError(raw, showErrors);
@@ -128,7 +132,7 @@ function ReadingRow({ id, subBin, aside, raw, onChange, timeZone, disabled, show
         label={`${subBin.code} moisture (%)`}
         required
         error={error}
-        warning={guidance.warning}
+        warning={hideDeviationWarning ? undefined : guidance.warning}
         cue={guidance.cue}
         hint={guidance.basisText ? <>{guidance.basisText} {MOISTURE_BASIS_HINT}</> : MOISTURE_BASIS_HINT}
         aside={aside}

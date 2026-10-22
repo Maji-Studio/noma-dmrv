@@ -6,6 +6,8 @@ import { getFacilityStatsFn } from "./facilities";
 import { getReactorStatsFn } from "./reactors";
 import { getSupplierStatsFn } from "./suppliers";
 import { getFormulationStatsFn } from "./formulations";
+import { getApplicationStatsFn } from "./applications";
+import { getCustomerStatsFn } from "./customers";
 
 const mocks = vi.hoisted(() => ({
   context: vi.fn(),
@@ -16,15 +18,25 @@ const mocks = vi.hoisted(() => ({
   reactors: vi.fn(),
   suppliers: vi.fn(),
   formulations: vi.fn(),
+  applications: vi.fn(),
+  customers: vi.fn(),
 }));
 vi.mock("@/lib/auth/server", () => ({ requireOrgContext: mocks.context }));
 vi.mock("@/data-access/utils", () => ({ requireOrgFacility: mocks.facility }));
 vi.mock("@/data-access/order-stats", () => ({ getOrderStats: mocks.orders }));
 vi.mock("@/data-access/biochar-product-stats", () => ({ getBiocharProductStats: mocks.products }));
+vi.mock("@/data-access/application-stats", () => ({ getApplicationStats: mocks.applications }));
+vi.mock("@/data-access/customer-stats", () => ({ getCustomerStats: mocks.customers }));
 vi.mock("@/data-access/orders", () => ({}));
 vi.mock("@/data-access/biochar-products", () => ({}));
+vi.mock("@/data-access/applications", () => ({}));
+vi.mock("@/data-access/customers", () => ({}));
 vi.mock("@/lib/operations/orders", () => ({}));
 vi.mock("@/lib/operations/biochar-products", () => ({}));
+vi.mock("@/lib/operations/applications", () => ({}));
+vi.mock("@/lib/operations/customers", () => ({}));
+vi.mock("@/lib/operations/customer-locations", () => ({}));
+vi.mock("@/lib/operations/cascade-preview", () => ({}));
 vi.mock("@/lib/operations/runner", () => ({}));
 
 vi.mock("@/data-access/facility-stats", () => ({ getFacilityStats: mocks.facilities }));
@@ -44,6 +56,8 @@ const FACILITY_ID = "00000000-0000-4000-8000-000000000001";
 const CTX = { organizationId: "stats-org", userId: "stats-user", orgRole: "admin", isPlatformAdmin: false };
 const ORDER_STATS = { totalOrders: 0, totalDeliveries: 0, totalQuantityKg: 0 };
 const PRODUCT_STATS = { totalProducts: 0, totalWetMassKg: null, totalDryBiocharMassKg: null };
+const APPLICATION_STATS = { totalApplications: 0, totalBiocharAppliedTons: 0 };
+const CUSTOMER_STATS = { totalCustomers: 0, totalLocations: 0 };
 
 const FACILITY_STATS = { totalFacilities: 0, totalReactors: 0, totalStorageBins: 0, totalFeedstockWetKg: 0 };
 const REACTOR_STATS = { totalReactors: 0, totalNominalThroughputTph: null };
@@ -59,12 +73,15 @@ beforeEach(() => {
   mocks.reactors.mockResolvedValue(REACTOR_STATS);
   mocks.suppliers.mockResolvedValue(SUPPLIER_STATS);
   mocks.formulations.mockResolvedValue(FORMULATION_STATS);
+  mocks.applications.mockResolvedValue(APPLICATION_STATS);
+  mocks.customers.mockResolvedValue(CUSTOMER_STATS);
 });
 
 describe.each([
   { name: "reactors", action: getReactorStatsFn, read: mocks.reactors, stats: REACTOR_STATS },
   { name: "orders", action: getOrderStatsFn, read: mocks.orders, stats: ORDER_STATS },
   { name: "biochar products", action: getBiocharProductStatsFn, read: mocks.products, stats: PRODUCT_STATS },
+  { name: "applications", action: getApplicationStatsFn, read: mocks.applications, stats: APPLICATION_STATS },
 ])("$name stats action", ({ action, read, stats }) => {
   it("checks the facility before the scoped read and returns ActionResult", async () => {
     expect(await action({ facilityId: FACILITY_ID })).toEqual({ success: true, data: stats });
@@ -80,7 +97,13 @@ describe.each([
   });
 
   it("does not forward list filters supplied by a caller", async () => {
-    const input = { facilityId: FACILITY_ID, search: "one row", status: "ready" };
+    const input = {
+      facilityId: FACILITY_ID,
+      search: "one row",
+      status: "ready",
+      evidenceMethod: "visual",
+      creditBatchId: FACILITY_ID,
+    };
     expect(await action(input)).toEqual({ success: true, data: stats });
     expect(read).toHaveBeenCalledWith(CTX, { facilityId: FACILITY_ID });
   });
@@ -102,6 +125,7 @@ const archivedActions = [
   { name: "facilities", action: getFacilityStatsFn, read: mocks.facilities, stats: FACILITY_STATS },
   { name: "suppliers", action: getSupplierStatsFn, read: mocks.suppliers, stats: SUPPLIER_STATS },
   { name: "formulations", action: getFormulationStatsFn, read: mocks.formulations, stats: FORMULATION_STATS },
+  { name: "customers", action: getCustomerStatsFn, read: mocks.customers, stats: CUSTOMER_STATS },
 ];
 
 describe.each(archivedActions)("$name stats action", ({ action, read, stats }) => {
@@ -132,6 +156,7 @@ describe.each(archivedActions)("$name stats action", ({ action, read, stats }) =
 describe.each([
   ...archivedActions,
   { name: "reactors", action: getReactorStatsFn, read: mocks.reactors },
+  { name: "applications", action: getApplicationStatsFn, read: mocks.applications },
 ])("$name stats action failures", ({ action, read }) => {
   it("does not read data when authentication fails", async () => {
     mocks.context.mockRejectedValue(new SafeError("Sign in required."));
