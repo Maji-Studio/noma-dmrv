@@ -18,10 +18,13 @@ it.each([
   { status: "blocked", blocker: "unpinnedTemplate", storedEntries: [] },
   { status: "blocked", blocker: "templateNotFullyRead", storedEntries: [] },
 ] satisfies Awaited<ReturnType<typeof loadBatchEmissionLines>>[])(
-  "preserves the $status emission lines result through the action wrapper", async (data) => {
+  "returns the $status emission lines payload without stored entries", async (data) => {
     const scope = { facilityId: input.id, creditBatchId: input.id };
     vi.mocked(loadBatchEmissionLines).mockResolvedValue(data);
-    await expect(getBatchEmissionLinesFn(scope)).resolves.toEqual({ success: true, data });
+    const payload = data.status === "ready"
+      ? { status: "ready", lines: data.lines }
+      : { status: "blocked", blocker: data.blocker };
+    await expect(getBatchEmissionLinesFn(scope)).resolves.toEqual({ success: true, data: payload });
     expect(loadBatchEmissionLines).toHaveBeenCalledExactlyOnceWith(makeTestOrgContext(), scope.facilityId, scope.creditBatchId);
   },
 );

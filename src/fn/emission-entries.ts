@@ -11,6 +11,7 @@ import {
 } from "@/data-access/emission-entries";
 import { loadFacilityEmissionsOverview, type FacilityEmissionsOverview } from "@/lib/read-models/facility-emissions-overview";
 import { loadBatchEmissionLines } from "@/lib/read-models/batch-emission-lines";
+import type { BatchEmissionLinesResult } from "@/lib/read-models/batches-emission-lines";
 import {
   createEmissionEntrySchema,
   updateEmissionEntrySchema,
@@ -56,13 +57,20 @@ export async function restoreEmissionEntryFn(
 ): Promise<ActionResult<Awaited<ReturnType<typeof restoreEmissionEntry>>>> {
   return withAction((ctx) => restoreEmissionEntry(ctx, emissionEntryVersionSchema.parse(input)));
 }
+type BatchEmissionLinesPayload =
+  | { status: "ready"; lines: Extract<BatchEmissionLinesResult, { status: "ready" }>["lines"] }
+  | { status: "blocked"; blocker: Extract<BatchEmissionLinesResult, { status: "blocked" }>["blocker"] };
+
 export async function getBatchEmissionLinesFn(input: {
   facilityId: string;
   creditBatchId: string;
-}): Promise<ActionResult<Awaited<ReturnType<typeof loadBatchEmissionLines>>>> {
-  return withAction((ctx) => {
+}): Promise<ActionResult<BatchEmissionLinesPayload>> {
+  return withAction(async (ctx) => {
     const data = z.object({ facilityId: uuidSchema(), creditBatchId: uuidSchema() }).parse(input);
-    return loadBatchEmissionLines(ctx, data.facilityId, data.creditBatchId);
+    const result = await loadBatchEmissionLines(ctx, data.facilityId, data.creditBatchId);
+    return result.status === "ready"
+      ? { status: "ready", lines: result.lines }
+      : { status: "blocked", blocker: result.blocker };
   });
 }
 

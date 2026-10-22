@@ -30,7 +30,8 @@ import { listEmissionLineCommentsForBatches } from "@/data-access/emission-line-
 import { getEmissionAutomaticMasses } from "@/data-access/emission-automatic-masses";
 import { getTemplateObservationsByIds } from "@/data-access/removal-template-observations";
 import { getLatestTemplateObservations } from "@/data-access/removal-template-observations";
-import { buildBatchEmissionLines, loadBatchEmissionLines } from "./batch-emission-lines";
+import { loadBatchEmissionLines } from "./batch-emission-lines";
+import { buildBatchEmissionLines } from "./batches-emission-lines";
 import { SafeError } from "@/lib/errors";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
@@ -77,6 +78,13 @@ it("returns a missing observation as a templateNotFullyRead blocker", async () =
 
 it("authorizes and delegates with comments enabled", async () => {
   const ctx = makeTestOrgContext();
+  vi.mocked(getLatestTemplateObservations).mockResolvedValue([{
+    id: "current", externalTemplateId: "template", definition: { groups: [] }, enrichment: {}, lineSources: {},
+  }] as never);
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ batch: { lineageFacts: { runs: [], runForwards: {} } } } as never);
+  vi.mocked(getTransportLegsForEntities).mockResolvedValue([]);
+  vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
+  vi.mocked(getEmissionAutomaticMasses).mockResolvedValue({ runs: {}, legs: {} });
   await loadBatchEmissionLines(ctx, "facility", "batch");
   expect(requireOrgFacility).toHaveBeenCalledExactlyOnceWith(ctx, "facility");
   expect(getCreditBatchById).toHaveBeenCalledExactlyOnceWith(ctx, "batch", { skipPreview: true });

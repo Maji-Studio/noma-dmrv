@@ -419,7 +419,7 @@ export async function loadCreditBatchHealthSummaries(
       const ghgStatementSubmission = ghgStatementId
         ? (ghgStatementSubmissions.get(ghgStatementId) ?? null)
         : null;
-      const emissionDisplay = emissionDisplayByBatch?.get(batchId);
+      const emissionDisplay = emissionDisplayByBatch.get(batchId);
       summaries[batchId] = {
         recordLock: locksById.get(batchId)!,
         state: health.state,

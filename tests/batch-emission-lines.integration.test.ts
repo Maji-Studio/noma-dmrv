@@ -153,12 +153,34 @@ it("retains stored entries when the batch's current template is unread", async (
   }
 });
 
-it("returns identical ready lines through both loaders, ignoring optional comments", async () => {
+it("returns identical ready lines with a retired entry through both loaders, ignoring optional comments", async () => {
+  const previousTemplate = structuredClone(template);
+  const retiredComponentId = `${group.components[0].id}_retired`;
+  previousTemplate.groups[0].components[0].id = retiredComponentId;
+  const previous = await observeTemplate(ctx, { provider: "isometric", externalProjectId: previousTemplate.project_id,
+    template: previousTemplate, enrichment: await loadTemplateEnrichment(registryClient, previousTemplate, blueprints) });
+  const [entry] = await db.insert(emissionEntries).values({ organizationId: TEST_ORG_ID,
+    creditBatchId: lineage.batchId, removalTemplateId: template.id, componentId: retiredComponentId,
+    inputShape: [{ key: "electricity_use", type: "monitored", quantityKind: "energy" }],
+    lineRule: "additive", observationId: previous.id, kind: "value", occurredOn: "2026-06-13" }).returning();
+  storedEntryId = entry.id;
+  await db.insert(emissionEntryValues).values({ organizationId: TEST_ORG_ID, entryId: entry.id,
+    inputKey: "electricity_use", magnitude: "2", unit: "kWh" });
+  const current = await observeTemplate(ctx, { provider: "isometric", externalProjectId: template.project_id,
+    template, enrichment: await loadTemplateEnrichment(registryClient, template, blueprints) });
+  expect(current.id).not.toBe(previous.id);
   await db.insert(emissionLineComments).values({ organizationId: TEST_ORG_ID,
     creditBatchId: lineage.batchId, componentId: group.components[0].id, body: "Meter context" });
   const [single, set] = await bothLoaders(template.id);
   assert(single.status === "ready" && set.status === "ready");
-  expect(single.lines).toHaveLength(1);
+  expect(single.lines).toHaveLength(2);
+  for (const result of [single, set]) {
+    const retired = result.lines.find(line => line.componentId === retiredComponentId)!;
+    expect(retired.removedFromTemplate).toBe(true);
+    expect(retired.entries).toHaveLength(1);
+    expect(retired.entries[0].id).toBe(entry.id);
+    expect(retired.entries[0].counts).toBe(false);
+  }
   expect(single.lines[0].comment).toMatchObject({ body: "Meter context" });
   expect(set.lines[0].comment).toBeNull();
   expect(single.lines.map(line => ({ ...line, comment: null }))).toEqual(set.lines);

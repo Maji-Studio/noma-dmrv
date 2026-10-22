@@ -6,8 +6,6 @@ vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntriesForBatches
 vi.mock("@/data-access/emission-line-comments", () => ({ listEmissionLineCommentsForBatches: vi.fn() }));
 vi.mock("@/data-access/removal-template-observations", () => ({ getLatestTemplateObservations: vi.fn(), getTemplateObservationsByIds: vi.fn() }));
 vi.mock("@/data-access/batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: vi.fn() }));
-vi.mock("@/data-access/credit-batches", () => ({ getCreditBatchById: vi.fn() }));
-vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn() }));
 import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
 import { listEmissionLineCommentsForBatches } from "@/data-access/emission-line-comments";
 import { getLatestTemplateObservations, getTemplateObservationsByIds } from "@/data-access/removal-template-observations";
@@ -50,8 +48,27 @@ it("returns the union per batch and retains stored entries on blocked batches", 
   expect(results.get("unpinned")).toEqual({ status: "blocked", blocker: "unpinnedTemplate", storedEntries: [] });
   expect(getLatestTemplateObservations).toHaveBeenCalledExactlyOnceWith(ctx, "isometric", ["template", "unread-template"]);
   expect(listEmissionEntriesForBatches).toHaveBeenCalledExactlyOnceWith(ctx, ["ready", "unread", "unpinned"]);
-  expect(getTemplateObservationsByIds).toHaveBeenCalledExactlyOnceWith(ctx, ["previous"]);
+  expect(getTemplateObservationsByIds).toHaveBeenCalledExactlyOnceWith(ctx, []);
   expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledExactlyOnceWith(ctx, ["ready"]);
+  expect(listEmissionLineCommentsForBatches).not.toHaveBeenCalled();
+});
+
+it("loads previous observations only for entries belonging to ready batches", async () => {
+  vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([
+    stored, { id: "ready-entry", creditBatchId: "ready", observationId: "ready-previous", componentId: "electricity", values: [] },
+    { id: "current-entry", creditBatchId: "ready", observationId: observation.id, componentId: "electricity", values: [] },
+  ] as never);
+  await loadBatchesEmissionLines(ctx, batches, { comments: true });
+  expect(getTemplateObservationsByIds).toHaveBeenCalledExactlyOnceWith(ctx, ["ready-previous"]);
+  expect(listEmissionLineCommentsForBatches).toHaveBeenCalledExactlyOnceWith(ctx, ["ready"]);
+});
+
+it("skips comments and requests no previous observations or automatic facts when every batch is blocked", async () => {
+  const results = await loadBatchesEmissionLines(ctx, batches.slice(1), { comments: true });
+  expect(results.get("unread")).toEqual({ status: "blocked", blocker: "templateNotFullyRead", storedEntries: [stored] });
+  expect(results.get("unpinned")).toEqual({ status: "blocked", blocker: "unpinnedTemplate", storedEntries: [] });
+  expect(getTemplateObservationsByIds).toHaveBeenCalledExactlyOnceWith(ctx, []);
+  expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledExactlyOnceWith(ctx, []);
   expect(listEmissionLineCommentsForBatches).not.toHaveBeenCalled();
 });
 

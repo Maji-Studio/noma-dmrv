@@ -7,10 +7,6 @@ vi.mock("@/data-access/emission-line-comments", () => ({ listEmissionLineComment
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntriesForBatches: vi.fn() }));
 vi.mock("@/data-access/removal-template-observations", () => ({ getLatestTemplateObservations: vi.fn(), getTemplateObservationsByIds: vi.fn() }));
 vi.mock("@/data-access/batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: vi.fn() }));
-// Prevent importing the detail loader's unused database dependencies in this unit suite.
-vi.mock("@/data-access/emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: vi.fn() }));
-vi.mock("@/data-access/credit-batches", () => ({ getCreditBatchById: vi.fn() }));
-vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn() }));
 import { loadFacilityEmissionsOverviewScope } from "@/data-access/facility-emissions-overview";
 import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
 import { getLatestTemplateObservations, getTemplateObservationsByIds } from "@/data-access/removal-template-observations";

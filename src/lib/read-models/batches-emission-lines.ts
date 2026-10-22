@@ -4,7 +4,12 @@ import { getLatestTemplateObservations, getTemplateObservationsByIds } from "@/d
 import { loadBatchesEmissionAutomaticFacts } from "@/data-access/batch-emission-automatic-figures";
 import { listEmissionLineCommentsForBatches } from "@/data-access/emission-line-comments";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
-import { buildBatchEmissionLines } from "./batch-emission-lines";
+import { canonicalUnit } from "@/lib/isometric/template-observations/units";
+import { deriveBatchEmissionLines } from "@/lib/certification/emission-lines";
+import { withRemovedEntryComponents } from "@/lib/certification/emission-line-definition";
+import { isEnrichmentComplete, validateLineSources } from "@/lib/isometric/template-observations";
+import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
+import type { BatchEmissionLineFacts } from "@/lib/certification/emission-lines";
 
 export type BatchEmissionLinesResult =
   | { status: "ready"; lines: ReturnType<typeof buildBatchEmissionLines>; storedEntries: StoredEntries }
@@ -21,22 +26,21 @@ export async function loadBatchesEmissionLines(
   if (!batches.length) return new Map();
   const ids = batches.map((batch) => batch.id);
   const templateIds = [...new Set(batches.flatMap((batch) => batch.removalTemplateId ? [batch.removalTemplateId] : []))];
-  const [observations, storedEntries, storedComments] = await Promise.all([
+  const [observations, storedEntries] = await Promise.all([
     getLatestTemplateObservations(ctx, "isometric", templateIds),
     listEmissionEntriesForBatches(ctx, ids),
-    comments ? listEmissionLineCommentsForBatches(ctx, ids) : [],
   ]);
   const byTemplate = new Map(observations.map((observation) => [observation.externalTemplateId, observation]));
-  // Missing observation is the only unread-template blocker. Incomplete
-  // enrichment still builds display lines, exactly like the single-batch read.
+  // Missing observations block the batch; incomplete enrichment produces display lines with review blockers.
   const readyIds = batches.filter((batch) => batch.removalTemplateId && byTemplate.has(batch.removalTemplateId)).map((batch) => batch.id);
   const byId = new Map(observations.map((observation) => [observation.id, observation]));
-  const previousIds = [...new Set(storedEntries.map((entry) => entry.observationId))].filter((id) => !byId.has(id));
-  const [previous, automatic] = await Promise.all([
+  const readyIdSet = new Set(readyIds);
+  const previousIds = [...new Set(storedEntries.filter((entry) => readyIdSet.has(entry.creditBatchId))
+    .map((entry) => entry.observationId))].filter((id) => !byId.has(id));
+  const [previous, automatic, storedComments] = await Promise.all([
     getTemplateObservationsByIds(ctx, previousIds),
-    readyIds.length
-      ? loadBatchesEmissionAutomaticFacts(ctx, readyIds)
-      : Promise.resolve<Awaited<ReturnType<typeof loadBatchesEmissionAutomaticFacts>>>({}),
+    loadBatchesEmissionAutomaticFacts(ctx, readyIds),
+    comments && readyIds.length ? listEmissionLineCommentsForBatches(ctx, readyIds) : [],
   ]);
   for (const observation of previous) byId.set(observation.id, observation);
   const entriesByBatch = new Map<string, typeof storedEntries>();
@@ -60,4 +64,58 @@ export async function loadBatchesEmissionLines(
     const lines = buildBatchEmissionLines(observation, entries, byId, automatic[batch.id], commentsByBatch.get(batch.id));
     return [batch.id, { status: "ready", lines, storedEntries: stored }];
   }));
+}
+
+/** The same display derivation is used by the detail page and facility overview. */
+export function buildBatchEmissionLines(
+  observation: EntryObservation,
+  entries: ReturnType<typeof deriveEmissionEntryFacts>,
+  previousObservations: ReadonlyMap<string, EntryObservation | null>,
+  automaticFacts: Pick<BatchEmissionLineFacts, "automaticFigures" | "automaticRecordCounts">,
+  comments: Awaited<ReturnType<typeof listEmissionLineCommentsForBatches>> = [],
+) {
+  const currentComponents = new Set(observation.definition.groups.flatMap((group) => group.components.map((component) => component.id)));
+  const commentsByComponent = new Map(comments.map((comment) => [comment.componentId, comment]));
+  const definition = withRemovedEntryComponents(observation.definition, entries, previousObservations);
+  return deriveBatchEmissionLines({
+    definition,
+    lineSources: observation.lineSources,
+    problems: validateLineSources(observation.definition, observation.lineSources),
+    enrichmentComplete: isEnrichmentComplete(observation.definition, observation.enrichment),
+    ...automaticFacts,
+    entries,
+  }).map((line) => {
+    const component = definition.groups
+      .flatMap((group) => group.components)
+      .find((component) => component.id === line.componentId)!;
+    const inputShape = component.inputs
+      .filter((input) => input.type === "monitored")
+      .map((input) => {
+        const enriched = observation.enrichment[component.id]?.[input.key];
+        return {
+          ...input,
+          unit:
+            enriched && !("status" in enriched)
+              ? (canonicalUnit(input.quantityKind, enriched.unit) ?? null)
+              : null,
+        };
+      });
+    // Retired entry components remain visible for re-entry, but their comments do not.
+    const removedFromTemplate = !currentComponents.has(line.componentId);
+    const comment = removedFromTemplate ? undefined : commentsByComponent.get(line.componentId);
+    return {
+      ...line,
+      label: line.displayName,
+      description: component.description,
+      inputShape,
+      unit: inputShape.length === 1 ? inputShape[0].unit : null,
+      entryPolicy: line.contract?.entryPolicy ?? "none",
+      entries: entries.filter((entry) => entry.componentId === line.componentId),
+      removedFromTemplate,
+      comment: comment ? {
+        id: comment.id, body: comment.body, version: comment.version,
+        updatedAt: comment.updatedAt, updatedBy: comment.updatedBy,
+      } : null,
+    };
+  });
 }

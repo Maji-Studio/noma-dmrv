@@ -41,7 +41,7 @@ function wrapper({ children }: { children: ReactNode }) {
 it("exposes unpinnedTemplate as a typed error without retrying", async () => {
   const blocker = removalTemplateBlocker("unpinnedTemplate");
   vi.mocked(getBatchEmissionLinesFn).mockResolvedValue({ success: true, data: {
-    status: "blocked", blocker: "unpinnedTemplate", storedEntries: [],
+    status: "blocked", blocker: "unpinnedTemplate",
   } });
   const { result } = renderHook(() => useBatchEmissionLines(scope), { wrapper });
 
@@ -55,7 +55,7 @@ it("exposes unpinnedTemplate as a typed error without retrying", async () => {
 
 it("retries templateNotFullyRead with the existing message", async () => {
   vi.mocked(getBatchEmissionLinesFn).mockResolvedValue({ success: true, data: {
-    status: "blocked", blocker: "templateNotFullyRead", storedEntries: [],
+    status: "blocked", blocker: "templateNotFullyRead",
   } });
   const { result } = renderHook(() => useBatchEmissionLines(scope), { wrapper });
 
@@ -67,8 +67,8 @@ it("retries templateNotFullyRead with the existing message", async () => {
 
 it("recovers when a retry finds the observation", async () => {
   vi.mocked(getBatchEmissionLinesFn)
-    .mockResolvedValueOnce({ success: true, data: { status: "blocked", blocker: "templateNotFullyRead", storedEntries: [] } })
-    .mockResolvedValue({ success: true, data: { status: "ready", lines: [], storedEntries: [] } });
+    .mockResolvedValueOnce({ success: true, data: { status: "blocked", blocker: "templateNotFullyRead" } })
+    .mockResolvedValue({ success: true, data: { status: "ready", lines: [] } });
   const { result } = renderHook(() => useBatchEmissionLines(scope), { wrapper });
   await waitFor(() => expect(result.current.isSuccess).toBe(true));
   expect(result.current.data).toEqual([]);
@@ -87,7 +87,7 @@ it("retries real failures up to the default query retry limit", async () => {
 });
 
 it("returns ready lines as array data", async () => {
-  vi.mocked(getBatchEmissionLinesFn).mockResolvedValue({ success: true, data: { status: "ready", lines: [], storedEntries: [] } });
+  vi.mocked(getBatchEmissionLinesFn).mockResolvedValue({ success: true, data: { status: "ready", lines: [] } });
   const { result } = renderHook(() => useBatchEmissionLines(scope), { wrapper });
 
   await waitFor(() => expect(result.current.isSuccess).toBe(true));

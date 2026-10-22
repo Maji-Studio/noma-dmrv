@@ -6,8 +6,6 @@ import { makeTestOrgContext } from "../../tests/helpers/test-org";
 
 const mocks = vi.hoisted(() => ({ transaction: vi.fn(), latest: vi.fn(), previous: vi.fn(), activity: vi.fn(), holds: vi.fn(), window: vi.fn(), assertWindow: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
-vi.mock("./batch-emission-automatic-figures", () => ({ loadBatchAutomaticFigures: vi.fn() }));
-vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: vi.fn() }));
 vi.mock("./removal-template-observations", () => ({ getLatestTemplateObservation: mocks.latest, getTemplateObservationById: mocks.previous }));
 vi.mock("./emission-entry-activity", () => ({ recordEmissionEntryActivity: mocks.activity }));
 vi.mock("./emission-entry-holds", () => ({ loadEmissionEntryHolds: mocks.holds }));
