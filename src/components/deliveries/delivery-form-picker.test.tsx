@@ -1,16 +1,20 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Delivery } from "@/db/schema";
 import { ActionError } from "@/lib/action-error";
 import { DeliveryForm } from "./delivery-form";
 import { useCreateCustomerLocation, useUpdateCustomerLocation, useDeleteCustomerLocation } from "@/hooks/use-customers";
 import { orderKeys } from "@/hooks/use-orders";
+import { useUpdateDelivery } from "@/hooks/use-deliveries";
 
-const state = vi.hoisted(() => ({ refreshed: undefined as Delivery | undefined, locked: false, distance: 12, save: vi.fn(), read: vi.fn() }));
-vi.mock("@/fn/deliveries", () => ({ getDeliveryWithRelationsFn: async () => ({ success: true, data: state.refreshed }) }));
+const state = vi.hoisted(() => ({ refreshed: undefined as Delivery | undefined, locked: false, distance: 12, save: vi.fn(), read: vi.fn(), update: vi.fn() }));
+vi.mock("@/fn/deliveries", () => ({
+  getDeliveryWithRelationsFn: async () => ({ success: true, data: state.refreshed }),
+  updateDeliveryFn: (...args: unknown[]) => state.update(...args),
+}));
 vi.mock("@/fn/orders", () => ({
   getOrdersForSelectFn: () => {
     state.read();
@@ -63,6 +67,7 @@ beforeEach(() => {
   state.distance = 12;
   state.locked = false;
   vi.clearAllMocks();
+  state.update.mockReset();
   state.save.mockImplementation(async () => {
     state.distance = 34;
     return { success: true, data: { id: "location-one", customerId: "customer-one", version: 2 } };
@@ -172,6 +177,35 @@ it("splits a partly shown refusal: the date at its field, the driver in the foot
   fireEvent.submit(container.querySelector("form")!);
   expect(await screen.findByText("Enter a time at or before now.")).toBeTruthy();
   expect(footer).toBe("Driver was not found.");
+});
+
+it("puts an update action's future occurredAt refusal on the delivery date with no footer", async () => {
+  const message = "Date and time cannot be in the future. Enter a time at or before now.";
+  state.update.mockResolvedValue({ success: false, error: message, code: "validation_failed", issues: [
+    { path: ["occurredAt"], code: "validation_failed", message },
+  ] });
+  const validDelivery = { ...delivery, version: 3, orderId: "00000000-0000-4000-8000-000000000001", storageLocationId: "00000000-0000-4000-8000-000000000002" };
+  const { result } = renderHook(() => useUpdateDelivery(), { wrapper });
+  let footer: string | null | undefined;
+  const onSubmit: ComponentProps<typeof DeliveryForm>["onSubmit"] = async (data, onRefusal) => {
+    try {
+      await result.current.mutateAsync({ ...data, deliveryId: validDelivery.id, expectedVersion: validDelivery.version });
+    } catch (error) {
+      footer = onRefusal!(error, "Delivery was not saved. Try again.");
+    }
+  };
+  const { container } = render(<DeliveryForm delivery={validDelivery} onSubmit={onSubmit} />, { wrapper });
+  const date = screen.getByLabelText(/Delivery date and time/);
+  fireEvent.change(date, { target: { value: "2099-10-02T09:30" } });
+  fireEvent.submit(container.querySelector("form")!);
+  await screen.findByText(message);
+  expect(state.update).toHaveBeenCalledWith(expect.objectContaining({
+    deliveryId: validDelivery.id, deliveryDate: new Date("2099-10-02T09:30:00.000Z"),
+  }));
+  expect(date.getAttribute("aria-invalid")).toBe("true");
+  expect(document.getElementById("deliveryDate-error")?.textContent).toBe(message);
+  expect(footer).toBeNull();
+  await waitFor(() => expect(document.activeElement).toBe(date));
 });
 
 it("refuses a typed zero override with the server's message", async () => {

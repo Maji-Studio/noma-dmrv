@@ -4,6 +4,25 @@ import { describe, expect, it } from "vitest";
 
 const COMPONENTS_DIR = resolve(process.cwd(), "src/components");
 
+/** Parent submit seams the component-form scan cannot see; remove when migrated. */
+const PENDING_SEAMS = [
+  {
+    file: "src/components/feedstocks/feedstock-list.tsx",
+    reason: "PR H: feedstock create getCreateErrorMessage ignores onRefusal",
+    pending: /getCreateErrorMessage:\s*\(error\)\s*=>/,
+  },
+  {
+    file: "src/hooks/use-picker-edit-submit.ts",
+    reason: "PR E: usePickerEditSubmit catches without the form's refusal handler",
+    pending: /setError\(toSaveErrorMessage\(cause,/,
+  },
+  {
+    file: "src/hooks/use-quick-add-submit.ts",
+    reason: "PR H: useQuickAddSubmit reduces action failures to their message",
+    pending: /setError\(result\.error\)/,
+  },
+];
+
 /** #1327: remove each entry when its form moves to the shared refusal handler. */
 const PENDING: Record<string, string> = {
   "orders/order-form.tsx": "PR E: order sheet and picker edit",
@@ -89,6 +108,14 @@ describe("save refusal coverage", () => {
       expect(sources.has(file), `${file} is gone; remove its entry`).toBe(true);
       expect(usesRefusal(sources.get(file) ?? ""), `${file} now uses useSaveRefusal; remove its entry`).toBe(false);
       if (file in PENDING) expect(needsRefusal(sources.get(file) ?? ""), `${file} no longer needs migration`).toBe(true);
+      if (file in EXCLUDED && !file.startsWith("auth/")) {
+        expect(needsRefusal(sources.get(file) ?? ""), `${file} now needs useSaveRefusal; migrate it and remove its exclusion`).toBe(false);
+      }
     }
+  });
+
+  it.each(PENDING_SEAMS)("keeps the parent seam pending: $reason", ({ file, pending }) => {
+    const source = readFileSync(resolve(process.cwd(), file), "utf8");
+    expect(source, `${file} no longer uses the pending error route; remove its seam entry`).toMatch(pending);
   });
 });

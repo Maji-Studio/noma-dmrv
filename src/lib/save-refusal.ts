@@ -27,7 +27,7 @@ export interface SaveRefusalPlan {
 }
 
 export interface SaveRefusalOptions {
-  /** Server path to form field, matched by whole path, one-segment wildcards, then first segment. */
+  /** Server path to form field: whole path, one-segment wildcards (first matching pattern wins), then first segment. */
   aliases?: Readonly<Record<string, string>>;
   /** The field is rendered and editable in the form. */
   isShown: (field: string) => boolean;
@@ -48,8 +48,10 @@ function formField(path: readonly (string | number)[], aliases: Readonly<Record<
       return true;
     });
     if (matches) {
+      const targetParts = target.split(".");
+      if (targetParts.filter((part) => part === "*").length > captures.length) continue;
       let captureIndex = 0;
-      return target.split(".").map((part) => part === "*" ? captures[captureIndex++] : part).join(".");
+      return targetParts.map((part) => part === "*" ? captures[captureIndex++] : part).join(".");
     }
   }
   return (path[0] !== undefined ? aliases[String(path[0])] : undefined) ?? whole;

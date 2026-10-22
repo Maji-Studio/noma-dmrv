@@ -98,6 +98,33 @@ describe("planSaveRefusal", () => {
     expect(plan?.fieldErrors).toEqual([{ field: "gpsLatitude", message: "Refused", locked: false }]);
   });
 
+  it("substitutes two wildcard captures in path order", () => {
+    const plan = planSaveRefusal(refusal([issue(["groups", 2, "ingredients", 5, "wetMassKg"])]), {
+      ...everything, aliases: { "groups.*.ingredients.*.wetMassKg": "sections.*.ingredientBins.*.massKg" },
+    });
+    expect(plan?.fieldErrors).toEqual([{ field: "sections.2.ingredientBins.5.massKg", message: "Refused", locked: false }]);
+  });
+
+  it("uses the first matching wildcard pattern", () => {
+    const plan = planSaveRefusal(refusal([issue(["ingredients", 0, "wetMassKg"])]), {
+      ...everything, aliases: {
+        "ingredients.0.*": "first.*",
+        "ingredients.*.wetMassKg": "ingredientBins.*.massKg",
+      },
+    });
+    expect(plan?.fieldErrors[0].field).toBe("first.wetMassKg");
+  });
+
+  it("skips a wildcard target that needs more captures than its pattern provides", () => {
+    const plan = planSaveRefusal(refusal([issue(["ingredients", 0, "wetMassKg"])]), {
+      ...everything, aliases: {
+        "ingredients.0.*": "ingredientBins.*.*.massKg",
+        "ingredients.*.wetMassKg": "ingredientBins.*.massKg",
+      },
+    });
+    expect(plan?.fieldErrors[0].field).toBe("ingredientBins.0.massKg");
+  });
+
   it.each([
     ["ingredients", "wetMassKg"],
     ["ingredients", 0, "nested", "wetMassKg"],

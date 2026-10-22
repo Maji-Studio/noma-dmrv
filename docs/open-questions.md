@@ -630,5 +630,4 @@ before allowing confirmation to convert stored entry values to the new unit.
 
 - Only delivery, application and feedstock edit use `useSaveRefusal`; the other forms
   keep the bottom line. Also left: re-reading locks after a lock refusal (Kenji left it
-  out of #1298), delivery's server alias seam beside its client alias map, and per-field
-  detail for feedstock lineage locks.
+  out of #1298) and per-field detail for feedstock lineage locks.

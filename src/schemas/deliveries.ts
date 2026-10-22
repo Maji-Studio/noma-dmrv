@@ -299,12 +299,13 @@ export { deliveryDryMassSchema };
 
 export type DeleteDeliveryData = z.infer<typeof deleteDeliverySchema>;
 
-/** Operation issue paths to the delivery form fields that show them. */
+/** Operation and posting issue paths to the delivery form fields that show them. */
 export const DELIVERY_REFUSAL_ALIASES = {
   deliveredAt: "deliveryDate",
+  occurredAt: "deliveryDate",
   moisturePercent: "moistureContentPercent",
   sources: "deliveredWetMassKg",
-} as const;
+} as const satisfies Readonly<Record<string, keyof z.output<typeof createDeliverySchema>>>;
 
 /** The form's facility mirror is ignored; the order supplies the authoritative facility. */
 export function deliveryOperationInput(data: z.output<typeof createDeliverySchema>): z.input<typeof recordDeliveryInput> & { code?: string; idempotencyKey: string } {
