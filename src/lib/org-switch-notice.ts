@@ -73,7 +73,7 @@ export function orgSwitchMessage(organizationName: string): string {
  */
 export function orgSwitchFailedMessage(organizationName: string, reason?: string): string {
   const why = reason?.trim();
-  // Better Auth's membership errors come without a closing period.
+  // A reason may come without a closing period; the toast always ends a sentence.
   const sentence = why ? (/[.!?]$/.test(why) ? why : `${why}.`) : "Try again.";
   return `${organizationName} did not open. ${sentence}`;
 }

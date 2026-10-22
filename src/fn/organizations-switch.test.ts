@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   setActiveOrganization: vi.fn(),
   requirePlatformAdmin: vi.fn(),
   isAdmin: vi.fn(),
+  organizationRows: vi.fn(),
   loggerError: vi.fn(),
 }));
 
@@ -21,7 +22,9 @@ vi.mock("next/headers", () => ({
   cookies: async () => ({ getAll: () => [], delete: vi.fn() }),
 }));
 
-vi.mock("@/db", () => ({ db: {} }));
+vi.mock("@/db", () => ({
+  db: { select: () => ({ from: () => ({ where: () => ({ limit: () => mocks.organizationRows() }) }) }) },
+}));
 
 vi.mock("@/lib/auth/better-auth", () => ({
   auth: { api: { setActiveOrganization: mocks.setActiveOrganization } },
@@ -60,6 +63,7 @@ vi.mock("@/lib/log", () => ({
     error instanceof Error ? error.message : String(error),
 }));
 
+import { SafeError } from "@/lib/errors";
 import { setActiveOrganizationAction } from "./organizations";
 import { ORG_PREFERENCE_NOT_SAVED } from "./org-preference";
 
@@ -127,7 +131,7 @@ describe("setActiveOrganizationAction", () => {
   });
 
   it.each([
-    ["USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION", "You no longer have access to it."],
+    ["USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION", "You no longer have access to it. Ask one of its Admins to add you again."],
     ["ORGANIZATION_NOT_FOUND", "It no longer exists."],
   ])("words the Better Auth code %s for the person switching", async (code, reason) => {
     mocks.setActiveOrganization.mockRejectedValue({ status: "BAD_REQUEST", body: { code, message: "system text" } });
@@ -144,18 +148,58 @@ describe("setActiveOrganizationAction", () => {
 
     const result = await setActiveOrganizationAction({ organizationId: ORGANIZATION_ID });
 
-    expect(result).toEqual({ success: false, error: "You no longer have access to it." });
+    expect(result).toEqual({ success: false, error: "You no longer have access to it. Ask one of its Admins to add you again." });
     expect(mocks.requirePlatformAdmin).not.toHaveBeenCalled();
     expect(mocks.setActiveOrganization).not.toHaveBeenCalled();
     expect(mocks.persistLastActiveOrganization).not.toHaveBeenCalled();
   });
 
-  it("says Try again for a Better Auth code it does not word", async () => {
+  it("says Try again for a Better Auth code it does not word, and logs the code", async () => {
     mocks.setActiveOrganization.mockRejectedValue({ body: { code: "SOMETHING_ELSE", message: "system text" } });
 
     const result = await setActiveOrganizationAction({ organizationId: ORGANIZATION_ID });
 
     expect(result).toEqual({ success: false, error: "Try again." });
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorMessage: "Better Auth could not set the active organization (code: SOMETHING_ELSE).",
+      }),
+      expect.any(String),
+    );
+  });
+
+  it("logs the error name when an unmapped failure has no code", async () => {
+    mocks.setActiveOrganization.mockRejectedValue(new TypeError("boom"));
+
+    await setActiveOrganizationAction({ organizationId: ORGANIZATION_ID });
+
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorMessage: "Better Auth could not set the active organization (error: TypeError).",
+      }),
+      expect.any(String),
+    );
+  });
+
+  it("passes a SafeError from the plugin through unchanged", async () => {
+    mocks.setActiveOrganization.mockRejectedValue(new SafeError("Verify your email first."));
+
+    const result = await setActiveOrganizationAction({ organizationId: ORGANIZATION_ID });
+
+    expect(result).toEqual({ success: false, error: "Verify your email first." });
+  });
+
+  it("lets a Platform Admin without membership try the override, and says a missing organization no longer exists", async () => {
+    mocks.findMembershipRole.mockResolvedValue(null);
+    mocks.isAdmin.mockResolvedValue(true);
+    mocks.requirePlatformAdmin.mockResolvedValue({});
+    mocks.organizationRows.mockResolvedValue([]);
+
+    const result = await setActiveOrganizationAction({ organizationId: ORGANIZATION_ID });
+
+    expect(mocks.requirePlatformAdmin).toHaveBeenCalled();
+    expect(result).toEqual({ success: false, error: "It no longer exists." });
+    expect(mocks.persistLastActiveOrganization).not.toHaveBeenCalled();
   });
 
   it("keeps the failure when the switch itself fails", async () => {

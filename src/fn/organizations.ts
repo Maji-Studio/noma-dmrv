@@ -247,7 +247,7 @@ export async function removeMemberAction(
 
 // The switch toast reads "<Org> did not open. <reason>", so each reason says
 // why in the switcher's own words. Better Auth's texts are system language.
-const SWITCH_ACCESS_LOST = "You no longer have access to it.";
+const SWITCH_ACCESS_LOST = "You no longer have access to it. Ask one of its Admins to add you again.";
 const SWITCH_ORG_GONE = "It no longer exists.";
 const SWITCH_REASONS_BY_CODE: Record<string, string> = {
   USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION: SWITCH_ACCESS_LOST,
@@ -262,11 +262,14 @@ async function setActiveOrganizationAsMember(organizationId: string): Promise<vo
       headers: await headers(),
     });
   } catch (error) {
+    if (error instanceof SafeError) throw error;
     const code = apiErrorCode(error);
     const reason = code ? SWITCH_REASONS_BY_CODE[code] : undefined;
     if (reason) throw new SafeError(reason);
-    // Unmapped: keep Better Auth's system wording out of the toast ("Try again.").
-    throw new Error("Better Auth could not set the active organization.", { cause: error });
+    // Unmapped: keep Better Auth's system wording out of the toast ("Try again."),
+    // but log what it was: the code is not PII, the error name is the fallback.
+    const detail = code ? `code: ${code}` : `error: ${error instanceof Error ? error.name : typeof error}`;
+    throw new Error(`Better Auth could not set the active organization (${detail}).`, { cause: error });
   }
 }
 
