@@ -159,7 +159,7 @@ export async function createInvitationAsPlatformAdmin(
     });
   });
 
-  // This override does not send email; the settings UI exposes a copyable URL.
+  // The server action sends email after this transaction commits.
   return { id: invitationId };
 }
 
