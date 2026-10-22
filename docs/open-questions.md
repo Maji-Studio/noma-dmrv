@@ -626,6 +626,16 @@ before allowing confirmation to convert stored entry values to the new unit.
   out of #1298) and per-field detail for feedstock lineage locks.
 - Delivery update posting refusals at `occurredAt` and `wetMassKg` show in the footer and need aliases (follow-up PR).
 
+## Creates without a retry key (#1302) - **deferred**
+
+- Nine creates still run without `withCreate`: quick-add `createVehicleFn`,
+  `createFeedstockTypeFn` and `createStorageLocationFn`; `createStorageLocationFn`
+  (storage-locations); `createFacilityFn`; `createReactorFn`; `createFeedstockTypeFn`
+  (feedstock-types); `createEmissionEntryFn`; `startNewProductionProcessFn`.
+  Each needs a writer that takes `tx` plus an app-only runner operation, so the key
+  and the record of the save commit together. They sit in the PENDING table of
+  `src/fn/create-action-coverage.test.ts` until then (#1302).
+
 ## Delete refusals render behind the dialog - **deferred**
 
 - `src/components/ui/delete-confirm-dialog.tsx:DeleteConfirmDialog` shows a refusal through its `errorMessage` prop, but these callers keep the dialog open on a refused delete and render the message in a page-level `ServerError` behind the modal, so the operator sees no reason: `application-list`, `biochar-product-list`, `feedstock-list`, `order-list`, `production-run-list`, `reactor-list`, `sample-documents-panel`, `production-readings-documents`, `transport-evidence-documents` and `transport-legs-editor` (all under `src/components/`). Checked in code: `order-list` and `reactor-list`; the rest match the same pattern by grep. Fix per caller: pass `errorMessage={deleteError ?? undefined}` and drop the page-level `ServerError`, as `sample-list` now does; paths that close the dialog on a stale-version refusal (e.g. `feedstock-list.tsx` `handleDeleteConfirm`) keep a page message. `credit-batch-list` is not affected: it reports a refusal with `toast.error`.
