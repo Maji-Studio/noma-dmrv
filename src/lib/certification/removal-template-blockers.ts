@@ -3,13 +3,14 @@ export const SETUP_NOT_LINKED_MESSAGE = "Link this facility to an Isometric proj
 
 export const REMOVAL_TEMPLATE_BLOCKERS = {
   forbiddenLine: "This component belongs at the project level in Isometric.",
-  notRemovalTemplate: "This template is not a Removal template. Choose a Removal template for this credit batch.",
-  unpinnedTemplate: "Choose a Removal template for this credit batch.",
+  notRemovalTemplate: "This template is not a Removal template. Set a Removal template in Settings, Removal templates.",
+  unpinnedTemplate: "Set a Removal template in Settings, Removal templates.",
   mixedTemplatePins: "These credit batches use different Removal templates.",
   templateNotFound: "Template no longer exists in Isometric.",
   templateNotFullyRead: "Template not fully read. Try again.",
+  unsupportedSequestration: "This template uses an unsupported storage component.",
   missingFixedDatapoint: "Set each value in the Isometric template editor before submitting.",
-  templateLinesNeedReview: "This Removal template has components to decide. Decide them in Removal templates.",
+  templateLinesNeedReview: "This Removal template has components to decide. Answer them in Settings, Removal templates.",
 } as const;
 /**
  * Landing line for a deep link to a credit batch's template block when the
@@ -30,23 +31,24 @@ export type TemplateRoutedBlockerCode = RemovalTemplateBlockerCode | TemplateLin
 
 /**
  * Where an operator settles a template blocker. The one routing table:
- * - `creditBatchTemplate`: the credit batch's own template pin (Switch template);
- * - `templateLineReview`: lines without a decision (Decide components);
+ * - `templateSetup`: the facility template setup in Settings (Set template);
+ * - `templateLineReview`: lines without a decision (Answer in Settings);
  * - `templateLines`: decided lines or a read problem (Open Removal templates);
  * - `templateReplacement`: a decided line only another template can fill
- *   (Switch template, else Open Removal templates). Set as data by the line
+ *   (Set template in Settings). Set as data by the line
  *   binding; no code maps to it by default.
  */
-export type RemovalTemplateBlockerDestination = "creditBatchTemplate" | "templateLineReview" | "templateLines" | "templateReplacement";
+export type RemovalTemplateBlockerDestination = "templateSetup" | "templateLineReview" | "templateLines" | "templateReplacement";
 const BLOCKER_DESTINATIONS: Record<TemplateRoutedBlockerCode, RemovalTemplateBlockerDestination> = {
   forbiddenLine: "templateLines",
-  notRemovalTemplate: "creditBatchTemplate",
-  unpinnedTemplate: "creditBatchTemplate",
-  mixedTemplatePins: "creditBatchTemplate",
-  templateNotFound: "creditBatchTemplate",
+  notRemovalTemplate: "templateSetup",
+  unpinnedTemplate: "templateSetup",
+  mixedTemplatePins: "templateSetup",
+  templateNotFound: "templateSetup",
   templateNotFullyRead: "templateLines",
+  unsupportedSequestration: "templateSetup",
   // Line review cannot supply a fixed value. The operator can switch to a corrected template.
-  missingFixedDatapoint: "creditBatchTemplate",
+  missingFixedDatapoint: "templateSetup",
   templateLinesNeedReview: "templateLineReview",
   lineNeedsReview: "templateLineReview",
   lineNeedsSetup: "templateLines",

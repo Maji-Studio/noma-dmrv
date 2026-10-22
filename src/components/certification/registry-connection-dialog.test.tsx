@@ -92,7 +92,7 @@ describe("Isometric project reselection", () => {
   it("keeps unsaved bindings and sharing acknowledgment on reselect, but resets them for another project", async () => {
     loaderData.mapping = {
       externalProjectId: "prj_test", protocolSlug: "biochar",
-      defaultRemovalTemplateId: "tpl_saved", externalFacilityId: "fcl_saved",
+      removalTemplateId: "tpl_saved", externalFacilityId: "fcl_saved",
     } as NonNullable<FacilityCertifierMapping["mapping"]>;
     render(<FacilityCertifierDialog isOpen onClose={close} facilityId={FACILITY_ID} loaderData={loaderData} />);
     await change("externalFacilityId", "fcl_edited");
@@ -135,7 +135,7 @@ describe("registry connection dialog", () => {
     loaderData.mapping = {
       id: "mapping-1", organizationId: "org-1", facilityId: FACILITY_ID,
       provider: "isometric", externalProjectId: "prj_test", protocolSlug: "biochar",
-      protocolVersion: null, defaultRemovalTemplateId: null,
+      protocolVersion: null, removalTemplateId: null,
       defaultSoilTemperatureC: null,
       defaultSoilTemperatureSource: null, webhookSecret: null,
       externalFacilityId: "fcl_test", metadata: null,

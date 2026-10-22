@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { facilities } from "@/db/schema/facilities";
 import { creditBatches } from "@/db/schema/credits";
@@ -10,18 +10,21 @@ import { STALE_VERSION_CONFLICT_CODE } from "@/lib/stale-version";
 import { DomainError } from "@/lib/domain-errors";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { assignmentsFromPlan, setupPlan, templateFitsFacility } from "@/lib/certification/removal-template-setup-plan";
-import { setupBlockedReason } from "@/lib/certification/removal-template-setup-blockers";
+import { removalTemplateReviewEntry } from "@/lib/certification/removal-template-review-entry";
+import { removalTemplateVerdict } from "@/lib/certification/removal-template-verdict";
 import { setupPlanFingerprint } from "@/lib/certification/removal-template-setup-fingerprint";
 import { reviewLineSources } from "@/lib/certification/removal-template-review-sources";
-import { enrichmentProblems, lineNeedsReview, validateLineSources } from "@/lib/isometric/template-observations";
+import { validateLineSources } from "@/lib/isometric/template-observations";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { ApplyRemovalTemplateSetupInput } from "@/schemas/removal-template-setup";
 import { requireOrgScope } from "./utils";
 import { acquireFacilityCertificationBoundaryLock } from "./facility-certification-boundary-lock";
 import { acquireTemplateObservationLock, getLatestTemplateObservation, reviewLineContractsInTransaction } from "./removal-template-observations";
-import { updateFacilityDefaultRemovalTemplateInTransaction } from "./certification";
+import { updateFacilityRemovalTemplateInTransaction } from "./certification";
 import { switchCreditBatchRemovalTemplateInTransaction } from "./credit-batch-removal-template";
-import { staleRowVersion } from "./row-version";
+import { readCreditBatchMembershipSubmissionLock } from "./credit-batch-certification-lock";
+import { getSavedCertifiedLineage, isSubmittedLineageRow } from "./certification-lineage-guards";
+import type { TemplateKeptReason } from "./credit-batch-removal-template";
 
 export function staleSetupTemplate(templateId: string) {
   return new DomainError("stale_version", "The template changed in Isometric. Review it again.", {
@@ -29,10 +32,23 @@ export function staleSetupTemplate(templateId: string) {
   });
 }
 
+/** Preview only: reads saved registry facts (no registry calls); the apply-time guard re-reads fresh and stays authoritative. */
 export async function listSetupCreditBatches(ctx: OrgContext, facilityId: string) {
   requireOrgScope(ctx);
-  return db.select({ id: creditBatches.id, code: creditBatches.code, version: creditBatches.version, removalTemplateId: creditBatches.removalTemplateId })
-    .from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId), isNull(creditBatches.archivedAt)));
+  return db.transaction(async (tx) => {
+    const batches = await tx.select({ id: creditBatches.id, code: creditBatches.code, version: creditBatches.version,
+      removalTemplateId: creditBatches.removalTemplateId, archivedAt: creditBatches.archivedAt })
+      .from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId))).orderBy(creditBatches.id);
+    const result = [];
+    for (const batch of batches) {
+      let reason: TemplateKeptReason | null = null;
+      if (batch.archivedAt) reason = "archived";
+      else if (await readCreditBatchMembershipSubmissionLock(ctx, tx, batch.id)) reason = "removalSent";
+      else if ((await getSavedCertifiedLineage(ctx, tx, { entityType: "creditBatch", entityId: batch.id })).some(isSubmittedLineageRow)) reason = "certified";
+      result.push({ ...batch, reason });
+    }
+    return result;
+  });
 }
 
 /** All setup mutations share this transaction. Locks: boundary, observation, batches. */
@@ -55,17 +71,25 @@ export async function applySetupInTransaction(ctx: OrgContext, tx: DbTransaction
   if (setupPlanFingerprint(plan) !== input.planFingerprint) throw staleSetupTemplate(template.id);
   const assignments = assignmentsFromPlan(plan, input.answers, input.overrides);
   if (Object.keys(assignments).length) row = await reviewLineContractsInTransaction(ctx, tx, { observationId: row.id, expectedVersion: row.version, assignments });
-  const reviewedSources = reviewLineSources(row.lineSources);
-  const problems = validateLineSources(row.definition, row.lineSources);
-  if (row.definition.groups.some((group) => group.components.some((component) => lineNeedsReview(component.id, reviewedSources[component.id], problems)))) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview);
-  const blockedReason = setupBlockedReason(template, enrichmentProblems(row.definition, row.enrichment));
-  if (blockedReason) throw new SafeError(blockedReason);
-  if (input.makeDefault) await updateFacilityDefaultRemovalTemplateInTransaction(ctx, tx, { facilityId: input.facilityId, externalProjectId: template.project_id, removalTemplateId: template.id });
-  for (const selected of [...input.batches].sort((a, b) => a.id.localeCompare(b.id))) {
-    const [batch] = await tx.select().from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, selected.id), eq(creditBatches.facilityId, input.facilityId)));
-    if (!batch) throw new SafeError("Credit batch not found in this facility.");
-    if (batch.removalTemplateId) throw staleRowVersion("creditBatch", batch.id);
-    await switchCreditBatchRemovalTemplateInTransaction(ctx, tx, { creditBatchId: batch.id, expectedVersion: selected.expectedVersion, removalTemplateId: template.id }, { facilityId: input.facilityId, requireUnpinned: true });
+  const verdict = removalTemplateVerdict(removalTemplateReviewEntry({ templateId: template.id, template, observation: row }));
+  if (verdict.toDecideCount > 0) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview);
+  if (verdict.setupBlocker) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS[verdict.setupBlocker]);
+  await updateFacilityRemovalTemplateInTransaction(ctx, tx, { facilityId: input.facilityId, externalProjectId: template.project_id, removalTemplateId: template.id });
+  // The server enumerates the whole facility. The snapshot is only a concurrency precondition.
+  const batches = await tx.select().from(creditBatches).where(and(
+    eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, input.facilityId),
+  )).orderBy(creditBatches.id);
+  const versions = new Map(input.batchVersions.map((batch) => [batch.id, batch]));
+  let batchesUpdated = 0;
+  const batchesKept = [];
+  for (const batch of batches) {
+    if (batch.removalTemplateId === template.id) continue;
+    const expected = versions.get(batch.id);
+    const result = await switchCreditBatchRemovalTemplateInTransaction(ctx, tx, {
+      creditBatchId: batch.id, expectedVersion: expected?.expectedVersion, removalTemplateId: template.id,
+    }, { facilityId: input.facilityId, expectedTemplateId: expected ? expected.removalTemplateId : batch.removalTemplateId });
+    if (result.status === "updated") batchesUpdated++;
+    if (result.status === "kept") batchesKept.push({ id: batch.id, code: batch.code, reason: result.reason });
   }
-  return { removalTemplateId: template.id, batchesUpdated: input.batches.length };
+  return { removalTemplateId: template.id, batchesUpdated, batchesKept };
 }

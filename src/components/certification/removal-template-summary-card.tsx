@@ -2,11 +2,9 @@
  * RemovalTemplateSummaryCard: the "Removal templates" pane of Certification
  * settings. One card for the template this facility's credit batches use:
  * status, where it is used, how many components were decided and by whom, and
- * how many take an emissions entry. Admins get Set up template, Review
- * decisions and Change template, all opening the setup dialog; Members read the
- * same card without buttons and a setup link does not open the dialog for them.
- * Decisions are stored per organization and template, so the caption says they
- * reach every facility using it.
+ * how many take an emissions entry. Admins get Set template and Change
+ * template, both opening the setup dialog; Members read the same card without
+ * buttons and a setup link does not open the dialog for them.
  *
  * Read live from Isometric through the setup read, which stores nothing.
  */
@@ -24,7 +22,6 @@ import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import {
-  REMOVAL_TEMPLATES_MAKE_DEFAULT_PARAM,
   REMOVAL_TEMPLATES_SETUP_PARAM,
   REMOVAL_TEMPLATES_TEMPLATE_PARAM,
   facilityCertificationSettingsHref,
@@ -39,12 +36,10 @@ const EMPTY_ICON_SIZE = 32;
 const SETUP_PARAMS = {
   [REMOVAL_TEMPLATES_SETUP_PARAM]: parseAsString,
   [REMOVAL_TEMPLATES_TEMPLATE_PARAM]: parseAsString,
-  [REMOVAL_TEMPLATES_MAKE_DEFAULT_PARAM]: parseAsString,
 };
 const CLOSED_SETUP = {
   [REMOVAL_TEMPLATES_SETUP_PARAM]: null,
   [REMOVAL_TEMPLATES_TEMPLATE_PARAM]: null,
-  [REMOVAL_TEMPLATES_MAKE_DEFAULT_PARAM]: null,
 };
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -59,7 +54,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 export function RemovalTemplateSummaryCard({ facilityId }: { facilityId: string }) {
   const query = useRemovalTemplateSetup(facilityId);
   const [request, setRequest] = useQueryStates(SETUP_PARAMS, { shallow: true, history: "replace" });
-  const openSetup = (step: "template" | "decisions", templateId: string | null) => void setRequest({
+  const openSetup = (step: "template" | "check", templateId: string | null) => void setRequest({
     ...CLOSED_SETUP,
     [REMOVAL_TEMPLATES_SETUP_PARAM]: step,
     [REMOVAL_TEMPLATES_TEMPLATE_PARAM]: templateId,
@@ -75,7 +70,6 @@ export function RemovalTemplateSummaryCard({ facilityId }: { facilityId: string 
           facilityId={facilityId}
           templateId={request.template}
           step={request.setup}
-          makeDefault={request.makeDefault !== "false"}
           onClose={() => void setRequest(CLOSED_SETUP)}
         />
       )}
@@ -83,7 +77,7 @@ export function RemovalTemplateSummaryCard({ facilityId }: { facilityId: string 
   );
 }
 
-function SummaryBody({ facilityId, onOpenSetup }: { facilityId: string; onOpenSetup: (step: "template" | "decisions", templateId: string | null) => void }) {
+function SummaryBody({ facilityId, onOpenSetup }: { facilityId: string; onOpenSetup: (step: "template" | "check", templateId: string | null) => void }) {
   const query = useRemovalTemplateSetup(facilityId);
   const batches = useCreditBatches(facilityId);
   const retry = () => void query.refetch();
@@ -113,13 +107,13 @@ function SummaryBody({ facilityId, onOpenSetup }: { facilityId: string; onOpenSe
 
   const { data } = query;
   const canManage = data.viewerCanManage;
-  const defaultId = data.defaultRemovalTemplateId;
-  const defaultTemplate = data.fitting.find((template) => template.id === defaultId);
-  const unfit = data.notFitting.find((template) => template.id === defaultId);
-  // Review keeps the template; Change starts with nothing picked, like a first setup.
-  const openSetup = (step: "template" | "decisions") => onOpenSetup(step, step === "decisions" ? (defaultTemplate?.id ?? null) : null);
+  const templateId = data.removalTemplateId;
+  const currentTemplate = data.fitting.find((template) => template.id === templateId);
+  const unfit = data.notFitting.find((template) => template.id === templateId);
+  // Change starts with nothing picked, like a first setup.
+  const openSetup = () => onOpenSetup("template", null);
 
-  if (!defaultId) {
+  if (!templateId) {
     return (
       <EmptyState
         icon={<ListChecksIcon size={EMPTY_ICON_SIZE} weight="bold" />}
@@ -129,29 +123,29 @@ function SummaryBody({ facilityId, onOpenSetup }: { facilityId: string; onOpenSe
           : "Credit batches need a template before a Removal can be sent."}
         padding="sm"
         action={canManage ? (
-          <Button variant="primary" onClick={() => openSetup("template")}>Set up template</Button>
+          <Button variant="primary" onClick={() => openSetup()}>Set template</Button>
         ) : undefined}
       />
     );
   }
 
-  // The default can be a template that no longer fits, is blocked, or has left Isometric.
+  // The template can be a template that no longer fits, is blocked, or has left Isometric.
   const problem = unfit
     ? unfit.reason
-    : !defaultTemplate
-      ? "The default template is no longer in this Isometric project."
-      : defaultTemplate.blockedReason
-        ? (canManage ? blockedCopy(defaultTemplate.blockedReason) : blockedReasonLine(defaultTemplate.blockedReason))
+    : !currentTemplate
+      ? "The Removal template is no longer in this Isometric project."
+      : currentTemplate.blockedReason
+        ? (canManage ? blockedCopy(currentTemplate.blockedReason) : blockedReasonLine(currentTemplate.blockedReason))
         : null;
-  const name = defaultTemplate?.name ?? unfit?.name ?? "Default template not found";
-  const toDecide = defaultTemplate && !defaultTemplate.blockedReason ? data.defaultToDecideCount : 0;
+  const name = currentTemplate?.name ?? unfit?.name ?? "Removal template not found";
+  const toDecide = currentTemplate && !currentTemplate.blockedReason ? data.currentToDecideCount : 0;
   const badge = problem
-    ? <StatusBadge status="failed" label={unfit ? "Does not fit" : defaultTemplate ? "Not ready" : "Not found"} />
+    ? <StatusBadge status="failed" label={unfit ? "Does not fit" : currentTemplate ? "Not ready" : "Not found"} />
     : toDecide > 0
       ? <StatusBadge status="pending" label={`${formatCount(toDecide, "component")} to decide`} />
-      : defaultTemplate?.ready ? <StatusBadge status="ready" /> : <StatusBadge status="pending" label="Not ready" />;
-  const plan = defaultTemplate?.plan;
-  const pinned = (batches.data ?? []).filter((batch) => batch.removalTemplateId === defaultId);
+      : currentTemplate?.ready ? <StatusBadge status="ready" /> : <StatusBadge status="pending" label="Not ready" />;
+  const plan = currentTemplate?.plan;
+  const pinned = (batches.data ?? []).filter((batch) => batch.removalTemplateId === templateId);
 
   return (
     <article aria-labelledby="template-summary-title" className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]">
@@ -160,10 +154,9 @@ function SummaryBody({ facilityId, onOpenSetup }: { facilityId: string; onOpenSe
           <h3 id="template-summary-title" className="title-heading-3">{name}</h3>
           {badge}
         </div>
-        {problem && <p className="body-small text-[var(--color-text-secondary)]">{`${problem}${canManage && !defaultTemplate?.blockedReason ? " Choose another template." : ""}`}</p>}
+        {problem && <p className="body-small text-[var(--color-text-secondary)]">{`${problem}${canManage && !currentTemplate?.blockedReason ? " Choose another template." : ""}`}</p>}
         <dl className="grid grid-cols-1 gap-x-16 gap-y-8 sm:grid-cols-[160px_minmax(0,1fr)] sm:gap-y-12">
           <Row label="Used by">
-            {`Default for ${data.facility.name}. `}
             {pinned.length === 0 ? "No credit batches yet." : (
               <>
                 {`${formatCount(pinned.length, "credit batch", "credit batches")}: `}
@@ -179,7 +172,7 @@ function SummaryBody({ facilityId, onOpenSetup }: { facilityId: string; onOpenSe
           {plan && (
             <>
               <Row label="Components">
-                {`${plan.decided.length} of ${defaultTemplate.componentCount} decided`}
+                {`${plan.decided.length} of ${currentTemplate.componentCount} decided`}
               </Row>
               <Row label="Entries per credit batch">
                 {`${formatCount(storedEntryCount(plan), "component")} ${storedEntryCount(plan) === 1 ? "takes" : "take"} an emissions entry on each credit batch`}
@@ -190,10 +183,7 @@ function SummaryBody({ facilityId, onOpenSetup }: { facilityId: string; onOpenSe
       </div>
       {canManage && (
         <div className="flex flex-wrap items-center gap-12 border-t border-[var(--color-border-tertiary)] px-20 py-12">
-          {defaultTemplate && !defaultTemplate.blockedReason && (
-            <Button size="small" variant="default" onClick={() => openSetup("decisions")}>Review decisions</Button>
-          )}
-          <Button size="small" variant="noOutline" onClick={() => openSetup("template")}>Change template</Button>
+          <Button size="small" variant="default" onClick={() => openSetup()}>Change template</Button>
         </div>
       )}
     </article>

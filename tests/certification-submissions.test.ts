@@ -307,7 +307,7 @@ describe("claimSubmissionDraft — create path", () => {
     await withPinnedBatch(fixture.facilityId, "rvt_pinned", async (creditBatchId) => {
       await db
         .update(certifierProjects)
-        .set({ defaultRemovalTemplateId: "rvt_other" })
+        .set({ removalTemplateId: "rvt_other" })
         .where(eq(certifierProjects.facilityId, fixture.facilityId));
 
       // A default change only affects batches created afterwards.

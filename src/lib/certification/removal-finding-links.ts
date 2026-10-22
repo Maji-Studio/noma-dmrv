@@ -10,7 +10,7 @@ import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { isTemplateFixTarget, templateLineFixTarget } from "./template-fix-targets";
 
 /** Targets that repair the credit batch itself. Every other target is per record. */
-const BATCH_SCOPED_TARGETS: ReadonlySet<BatchHealthFixTarget> = new Set(["creditBatchTemplate", "templateReplacement", "batchDetails", "emissions"]);
+const BATCH_SCOPED_TARGETS: ReadonlySet<BatchHealthFixTarget> = new Set(["batchDetails", "emissions"]);
 
 /**
  * The one repair link for a Removal blocker or advisory. A finding with no
@@ -40,5 +40,5 @@ export function removalFindingFixLink(
       href: batchId ? creditBatchDeepLinkHref(batchId, facilityId) : creditBatchListHref(facilityId),
     };
   }
-  return batchHealthFixLinkFor({ key: target === "creditBatchTemplate" ? "templateSet" : "templateLines", fixTarget: target }, facilityId, batchId);
+  return batchHealthFixLinkFor({ key: target === "templateSetup" ? "templateSet" : "templateLines", fixTarget: target }, facilityId, batchId);
 }
