@@ -13,12 +13,12 @@ export const CENTRED_HIT_AREA =
   "relative before:absolute before:left-1/2 before:top-1/2 before:-translate-x-1/2 before:-translate-y-1/2 before:h-44 before:w-full before:min-w-44 before:content-['']";
 
 /**
- * `Button size="icon"` is meant to be 32px square, but its `width` variant
- * default (`w-auto`) wins the class merge, so the button collapses to its glyph
- * (16px) and a flex row can squeeze it further. Pass this on an icon-only
- * `Button` to get the 32px width back, plus the 44px hit area.
+ * An icon-only `Button` (`size="icon"`, `width="square"`) keeps its 32px square
+ * and gains the 44px hit area. `width="square"` is required: the default
+ * `width` variant (`w-auto`) beats the icon size's `w-[32px]` and collapses the
+ * button to its glyph. `shrink-0` stops a flex row squeezing it.
  */
-export const ICON_BUTTON_HIT_AREA = `w-32 shrink-0 ${CENTRED_HIT_AREA}`;
+export const ICON_BUTTON_HIT_AREA = `shrink-0 ${CENTRED_HIT_AREA}`;
 
 /**
  * A 44px tall hit area for an inline text link or button, as an `::after` that

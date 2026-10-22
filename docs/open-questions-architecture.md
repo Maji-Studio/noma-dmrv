@@ -59,9 +59,13 @@ these areas; the entry rules and invariants live in
   `w-[32px]`, but the `width` variant default `w-auto` wins the class merge, so every
   icon-only `Button` is as wide as its glyph (16px) and a flex row can shrink it
   further. 51 call sites use `size="icon"`; the touch-target fix works around it with
-  `ICON_BUTTON_HIT_AREA` (`touch-target.ts`) on the row menu trigger and the customer
-  location actions only. Fix at the source (drop `w-auto` from the `width` default) and
-  check the 51 sites, then drop `w-32 shrink-0` from `ICON_BUTTON_HIT_AREA`.
+  `ICON_BUTTON_HIT_AREA` (`touch-target.ts`) on the row menu trigger and the location rows
+  only (they pass `width="square"`). Fix at the source (drop `w-auto`
+  from the `width` default) and check the 51 sites.
+- `EntitySideSheet` pins the footer of a form that is the fieldset's direct child
+  (`[&>form]:flex-1`), but a form wrapped in a `div` (for example
+  `feedstock-type-form.tsx`) still leaves the footer under the last field on a short
+  form. Each wrapped form needs the same fill-height treatment.
 
 ### Party write adapters per kind (`api/party-write-adapters`, opened 2026-10-17)
 

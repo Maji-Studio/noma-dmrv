@@ -46,6 +46,13 @@ Read these first. Each one fails quietly rather than loudly.
   connected apps, API keys and the platform-admin organization rows. Text
   buttons need nothing extra; two 32px icon buttons side by side need a 12px
   gap or their hit areas overlap.
+- **Other controls use the shared recipes in `touch-target.ts`.**
+  `ICON_BUTTON_HIT_AREA` for a standalone icon-only `Button` (pass
+  `size="icon" width="square"`; row menus, location rows; keep 12px between
+  neighbours). `CENTRED_HIT_AREA` (`::before`) for chips and badges.
+  `INLINE_HIT_AREA` (`::after`, `_FROM_SM` variant) for inline links.
+  `PHONE_TOUCH_TARGET` for a footer button or a select that must be 44px tall
+  on a phone. A `<select>` cannot take a pseudo-element, so it grows instead.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
   the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),

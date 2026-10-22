@@ -49,6 +49,7 @@ function RowActionsMenu({ label, actions, className }: RowActionsMenuProps) {
             <Button
               variant="noOutline"
               size="icon"
+              width="square"
               aria-label={label}
               className={cn(ICON_BUTTON_HIT_AREA, "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]")}
             />

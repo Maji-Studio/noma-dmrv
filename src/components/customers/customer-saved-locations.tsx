@@ -215,6 +215,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                   <Button
                     variant="noOutline"
                     size="icon"
+                    width="square"
                     className={ICON_BUTTON_HIT_AREA}
                     onClick={() => {
                       setEditingLocation(loc);
@@ -227,6 +228,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                   <Button
                     variant="noOutline"
                     size="icon"
+                    width="square"
                     className={ICON_BUTTON_HIT_AREA}
                     onClick={() => handleArchive(loc)}
                     disabled={isOnlyActive || archiveLocation.isPending}
@@ -238,6 +240,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                   <Button
                     variant="destructive"
                     size="icon"
+                    width="square"
                     className={ICON_BUTTON_HIT_AREA}
                     onClick={() => setDeletingLocation(loc)}
                     aria-label={`Delete ${loc.name || loc.country}`}
@@ -271,7 +274,8 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                         <Button
                           variant="noOutline"
                           size="icon"
-                          className={ICON_BUTTON_HIT_AREA}
+                          width="square"
+                    className={ICON_BUTTON_HIT_AREA}
                           onClick={() => handleRestore(loc)}
                           disabled={restoreLocation.isPending}
                           aria-label={`Restore ${loc.name || loc.country}`}
@@ -281,7 +285,8 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                         <Button
                           variant="destructive"
                           size="icon"
-                          className={ICON_BUTTON_HIT_AREA}
+                          width="square"
+                    className={ICON_BUTTON_HIT_AREA}
                           onClick={() => setDeletingLocation(loc)}
                           aria-label={`Delete ${loc.name || loc.country}`}
                         >

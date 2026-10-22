@@ -44,6 +44,7 @@ import {
 } from "@/schemas/suppliers";
 import type { Supplier, SupplierLocation } from "@/db/schema/parties";
 import { Button } from "@/components/ui/button";
+import { ICON_BUTTON_HIT_AREA } from "@/components/ui/touch-target";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { DefaultLocationBadge } from "@/components/ui/default-location-badge";
 import {
@@ -416,10 +417,12 @@ function CreateModeLocationsSection({
                     </p>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-8">
+                <div className="flex shrink-0 items-center gap-12">
                   <Button
                     variant="noOutline"
                     size="icon"
+                    width="square"
+                    className={ICON_BUTTON_HIT_AREA}
                     onClick={() => {
                       setEditingLocationIndex(index);
                       setIsLocationDialogOpen(true);
@@ -431,6 +434,8 @@ function CreateModeLocationsSection({
                   <Button
                     variant="destructive"
                     size="icon"
+                    width="square"
+                    className={ICON_BUTTON_HIT_AREA}
                     onClick={() => onRemove(index)}
                     aria-label={`Remove ${title}`}
                   >
@@ -559,10 +564,12 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
                   </p>
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-8">
+              <div className="flex shrink-0 items-center gap-12">
                 <Button
                   variant="noOutline"
                   size="icon"
+                  width="square"
+                  className={ICON_BUTTON_HIT_AREA}
                   onClick={() => {
                     setEditingLocation(loc);
                     setIsLocationDialogOpen(true);
@@ -574,6 +581,8 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
                 <Button
                   variant="destructive"
                   size="icon"
+                  width="square"
+                  className={ICON_BUTTON_HIT_AREA}
                   onClick={() => setDeletingLocation(loc)}
                   aria-label={`Delete ${loc.name || loc.country}`}
                 >
