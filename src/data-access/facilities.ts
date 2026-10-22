@@ -31,7 +31,7 @@ import { hasBlockingFacilitySubmission } from "./certification";
 import type { FacilityFilterData } from "@/schemas/facilities";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
-import { deriveLaneStock } from "./lane-stock-derivation";
+import { getFacilityFeedstockWetStock } from "./facility-feedstock-stock";
 import { assertRowVersion, nextVersion } from "./row-version";
 
 // Individual entity archives originate from JavaScript Date values and are
@@ -185,7 +185,7 @@ export async function getFacilities(
   const [
     reactorPreviewRows,
     storageCountsByType,
-    feedstockBinRows,
+    feedstockWetStockByFacility,
     biocharOutputRows,
     biocharAllocationRows,
     productInventoryRows,
@@ -211,17 +211,7 @@ export async function getFacilities(
           .from(storageLocations)
           .where(and(inArray(storageLocations.facilityId, facilityIds), eq(storageLocations.organizationId, ctx.organizationId)))
           .groupBy(storageLocations.facilityId, storageLocations.type),
-        db
-          .select({
-            id: storageLocations.id,
-            facilityId: storageLocations.facilityId,
-          })
-          .from(storageLocations)
-          .where(and(
-            inArray(storageLocations.facilityId, facilityIds),
-            eq(storageLocations.type, "feedstock_bin"),
-            eq(storageLocations.organizationId, ctx.organizationId),
-          )),
+        getFacilityFeedstockWetStock(ctx, facilityIds),
         db
           .select({
             facilityId: productionRuns.facilityId,
@@ -261,25 +251,7 @@ export async function getFacilities(
           .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId), notInArray(biocharProducts.id, deletedProductIds(ctx, db))))
           .groupBy(biocharProducts.facilityId),
       ])
-    : [[], [], [], [], [], []];
-
-  const feedstockLaneStocks = await deriveLaneStock(ctx, db, {
-    storageLocationIds: feedstockBinRows.map((bin) => bin.id),
-    lanes: "feedstock",
-  });
-  const feedstockBinFacilityById = new Map(
-    feedstockBinRows.map((bin) => [bin.id, bin.facilityId]),
-  );
-  const feedstockWetStockByFacility = new Map<string, number>();
-  for (const stock of feedstockLaneStocks) {
-    const facilityId = feedstockBinFacilityById.get(stock.storageLocationId);
-    if (!facilityId) continue;
-    feedstockWetStockByFacility.set(
-      facilityId,
-      (feedstockWetStockByFacility.get(facilityId) ?? 0) +
-        stock.feedstockStockWetKg,
-    );
-  }
+    : [[], [], new Map<string, number>(), [], [], []];
 
   // Derive reactor counts and preview (max 4) from preview rows
   const reactorCountMap = new Map<string, number>();

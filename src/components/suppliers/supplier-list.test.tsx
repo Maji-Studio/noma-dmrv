@@ -33,6 +33,7 @@ vi.mock("nuqs", () => ({
 vi.mock("@/hooks/use-suppliers", () => {
   const mutation = () => ({ mutateAsync: vi.fn(), isPending: false });
   return {
+    useSupplierStats: () => ({ data: undefined, isLoading: false, isError: false }),
     useSuppliers: (filters: { archived?: boolean }) => {
       state.filters.push(filters);
       const items = state.items.filter((item) => Boolean((item as SupplierWithRelations).archivedAt) === Boolean(filters.archived));

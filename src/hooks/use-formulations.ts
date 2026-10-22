@@ -18,6 +18,7 @@ import type {
   FormulationWithIngredients,
 } from "@/data-access/formulations";
 import {
+  getFormulationStatsFn,
   getFormulationsFn,
   getFormulationByIdFn,
   createFormulationFn,
@@ -28,7 +29,7 @@ import {
 } from "@/fn/formulations";
 
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
-import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { unwrap, type MutationCallbacks, type OptimisticUpdateOptions } from "./types";
 
 // ============================================
 // Query Keys
@@ -39,6 +40,9 @@ export const formulationKeys = {
   lists: () => [...formulationKeys.all, "list"] as const,
   list: (filters?: Partial<FormulationFilterData>) =>
     [...formulationKeys.lists(), filters] as const,
+  stats: (filters?: { archived?: boolean }) =>
+    [...formulationKeys.all, "stats", filters] as const,
+  statsPrefix: () => [...formulationKeys.all, "stats"] as const,
   details: () => [...formulationKeys.all, "detail"] as const,
   detail: (id: string) => [...formulationKeys.details(), id] as const,
   options: () => [...formulationKeys.all, "options"] as const,
@@ -51,6 +55,14 @@ const FORMULATION_DETAIL_STALE_TIME_MS = 30_000;
 // ============================================
 // Formulation Query Hooks
 // ============================================
+
+export function useFormulationStats(archived = false) {
+  const filters = { archived };
+  return useQuery({
+    queryKey: formulationKeys.stats(filters),
+    queryFn: async () => unwrap(await getFormulationStatsFn(filters)),
+  });
+}
 
 /**
  * Hook to fetch paginated list of formulations with filtering
@@ -122,6 +134,7 @@ export function useCreateFormulation(
       invalidateEntityTypeQueries(queryClient, "formulation");
       // Invalidate all formulation lists
       queryClient.invalidateQueries({ queryKey: formulationKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: formulationKeys.statsPrefix() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: formulationKeys.options() });
 
@@ -230,6 +243,7 @@ export function useUpdateFormulation(
 
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: formulationKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: formulationKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: formulationKeys.options() });
 
       await callbacks?.onSuccess?.(data, variables);
@@ -334,6 +348,7 @@ export function useDeleteFormulation(
       queryClient.removeQueries({ queryKey: formulationKeys.detail(formulationId) });
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: formulationKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: formulationKeys.statsPrefix() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: formulationKeys.options() });
 
@@ -368,6 +383,7 @@ export function useDeleteFormulation(
     onSettled: async (data, error, variables) => {
             // Refetch lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: formulationKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: formulationKeys.statsPrefix() });
 
       await callbacks?.onSettled?.(data, error, variables);
     },
@@ -397,6 +413,7 @@ function useFormulationLifecycle(
       queryClient.setQueryData(formulationKeys.detail(data.id), data);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: formulationKeys.lists() }),
+        queryClient.invalidateQueries({ queryKey: formulationKeys.statsPrefix() }),
         queryClient.invalidateQueries({ queryKey: formulationKeys.options() }),
       ]);
       await callbacks?.onSuccess?.(data, variables);

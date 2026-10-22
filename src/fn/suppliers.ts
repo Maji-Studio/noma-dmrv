@@ -1,5 +1,7 @@
 "use server";
 
+import { getSupplierStats as getSupplierStatsData, type SupplierStats } from "@/data-access/supplier-stats";
+
 import { withAction } from "./with-action";
 
 /**
@@ -34,6 +36,23 @@ import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/c
 
 const LOG_MESSAGE = "supplier action failed";
 const supplierIdSchema = z.string().uuid("Invalid supplier ID");
+
+const supplierStatsFilterSchema = z.object({
+  archived: z.boolean().optional(),
+}).optional();
+
+export async function getSupplierStatsFn(
+  filters?: { archived?: boolean },
+): Promise<ActionResult<SupplierStats>> {
+  return withAction(async (ctx) => {
+    const validatedFilters = supplierStatsFilterSchema.parse(filters);
+    return getSupplierStatsData(ctx, validatedFilters);
+  }, {
+    fallbackMessage: "Failed to load supplier stats",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: LOG_MESSAGE, context: { op: "supplier:stats" } },
+  });
+}
 
 // ============================================
 // Supplier List/Query Operations

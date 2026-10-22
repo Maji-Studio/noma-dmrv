@@ -23,7 +23,7 @@ test.describe("Dialog focus restore", () => {
     const page = adminPage;
 
     await page.goto(`/facilities?facility=${seededData.facility.id}`);
-    await expect(page.getByText("Active facilities")).toBeVisible({
+    await expect(page.getByText("Active facilities", { exact: true })).toBeVisible({
       timeout: 15000,
     });
 

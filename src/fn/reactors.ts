@@ -1,5 +1,7 @@
 "use server";
 
+import { getReactorStats as getReactorStatsData, type ReactorStats } from "@/data-access/reactor-stats";
+
 import { withAction } from "./with-action";
 
 /**
@@ -32,6 +34,26 @@ import { getReactorById } from "@/data-access/reactors";
 import { uuidSchema } from "@/schemas/helpers";
 
 const LOG_MESSAGE = "reactor action failed";
+
+const reactorStatsFilterSchema = z.object({
+  facilityId: z.string().uuid().optional(),
+}).optional();
+
+export async function getReactorStatsFn(
+  filters?: { facilityId?: string },
+): Promise<ActionResult<ReactorStats>> {
+  return withAction(async (ctx) => {
+    const validatedFilters = reactorStatsFilterSchema.parse(filters);
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
+    return getReactorStatsData(ctx, validatedFilters);
+  }, {
+    fallbackMessage: "Failed to load reactor stats",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: LOG_MESSAGE, context: { op: "reactor:stats" } },
+  });
+}
 
 // ============================================
 // List/Query Operations
