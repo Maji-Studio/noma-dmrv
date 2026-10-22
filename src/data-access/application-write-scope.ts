@@ -80,8 +80,10 @@ export async function lockApplicationWriteScope(ctx: OrgContext, tx: DbTransacti
   const path = [snapshot ? "applicationId" : "deliveryId"];
   const checkLineage = <T>(work: () => Promise<T>, saved = snapshot) => {
     if (input.mutation !== "update" || !saved || !input.updateComparison) return work();
-    const { previous, changes } = input.updateComparison(saved);
-    return withLockedFieldIssues(work, previous, changes);
+    const compare = input.updateComparison;
+    let comparison: ReturnType<typeof compare> | undefined;
+    const readComparison = () => comparison ??= compare(saved);
+    return withLockedFieldIssues(work, () => readComparison().previous, () => readComparison().changes);
   };
   const artifacts = await checkLineage(() => withFeedstockErrors(() => lockCertifiedLineageArtifacts(ctx, tx, checks.map(check => check.target)), "certification_locked", path));
   const facilityRows = await tx.select().from(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), inArray(facilities.id, discovered.facilityIds))).orderBy(facilities.id).for("share");

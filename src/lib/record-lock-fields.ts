@@ -17,13 +17,17 @@ function changedRecordFields(previous: object, changes: object, freeFields: read
     !freeFields.includes(field) && !recordFieldEqual(field, before.get(field), value));
 }
 
+type FieldSnapshot = object | (() => object | Promise<object>);
+
 /** Add operation-field issues without changing the refusal's message or metadata. */
-export async function withLockedFieldIssues<T>(work: () => Promise<T>, previous: object, changes: object): Promise<T> {
+export async function withLockedFieldIssues<T>(work: () => Promise<T>, previous: FieldSnapshot, changes: FieldSnapshot): Promise<T> {
   try {
     return await work();
   } catch (error) {
     if (!(error instanceof DomainError) || error.code !== 'certification_locked') throw error;
-    const issues = changedRecordFields(previous, changes, [], true).map(([field]) => ({ path: [field], code: 'certification_locked', message: error.message }));
+    const issues = changedRecordFields(
+      typeof previous === 'function' ? await previous() : previous,
+      typeof changes === 'function' ? await changes() : changes, [], true).map(([field]) => ({ path: [field], code: 'certification_locked', message: error.message }));
     throw new DomainError(error.code, error.message, { ...error, issues: [...error.issues, ...issues], cause: error });
   }
 }

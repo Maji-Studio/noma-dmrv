@@ -1,6 +1,6 @@
 import { conflictCode } from "./conflict-ref";
 import { DomainError } from "./domain-errors";
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { assertRecordLockFields, withLockedFieldIssues } from './record-lock-fields';
 import { recordLocks } from './record-lock';
 
@@ -40,4 +40,19 @@ it('compares source selections for Sent refusals without changing dependency-loc
     .rejects.toMatchObject({ issues: [{ path: ['sources'] }] });
   const lock = recordLocks.delivery({ removals: [], dependents: [{ kind: 'application', id: 'dependent' }] });
   expect(() => assertRecordLockFields(lock, { sources }, { sources: [] })).not.toThrow();
+});
+
+it('builds lazy snapshots only for certification refusals', async () => {
+  const previous = vi.fn(async () => ({ notes: 'saved' }));
+  const changes = vi.fn(() => ({ notes: 'edited' }));
+  await expect(withLockedFieldIssues(async () => 'saved', previous, changes)).resolves.toBe('saved');
+  const otherError = new DomainError('stale_version', 'Reload.');
+  await expect(withLockedFieldIssues(async () => { throw otherError; }, previous, changes)).rejects.toBe(otherError);
+  expect(previous).not.toHaveBeenCalled();
+  expect(changes).not.toHaveBeenCalled();
+  const refusal = new DomainError('certification_locked', 'Sent.');
+  await expect(withLockedFieldIssues(async () => { throw refusal; }, previous, changes))
+    .rejects.toMatchObject({ code: refusal.code, issues: [{ path: ['notes'] }] });
+  expect(previous).toHaveBeenCalledTimes(1);
+  expect(changes).toHaveBeenCalledTimes(1);
 });

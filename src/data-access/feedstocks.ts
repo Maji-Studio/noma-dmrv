@@ -609,10 +609,6 @@ function feedstockDistanceColumns(
   previous?: Pick<FeedstockWithRelations, "distanceKmOverride" | "distanceSource">,
   routeAnchorChanged = false,
 ) {
-  if (previous && input.transportDistanceKm === undefined && input.transportDistanceSource != null
-    && (previous.distanceKmOverride == null || routeAnchorChanged)) {
-    throw new DomainError("validation_failed", "The feedstock distance source was not changed. Set transportDistanceKm to change its source.");
-  }
   // The v1 input contract accepts zero; it means derived, never a stored override.
   const distanceKmOverride = input.transportDistanceKm !== undefined
     ? input.transportDistanceKm === 0 ? null : input.transportDistanceKm
@@ -705,6 +701,10 @@ export async function updateFeedstockInTransaction(
   });
 
   assertRecordLockFields(recordLocks.feedstock({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "feedstock", entityId: feedstockId }) }), locked, feedstockData);
+  if (transportDistanceKm === undefined && transportDistanceSource != null
+    && (locked.distanceKmOverride == null || routeAnchorChanged)) {
+    throw new DomainError("validation_failed", "The feedstock distance source was not changed. Set transportDistanceKm to change its source.");
+  }
   // Derive before anything reads the new masses: the status, the stock-lane
   // check, and the write below must all see the same dry figure.
   const derivedMassDryKg = resolveFeedstockDryMass(locked, feedstockData);

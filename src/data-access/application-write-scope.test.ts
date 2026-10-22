@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
+import type { Application } from "@/db/schema";
 import type { DbTransaction } from "@/db";
 import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
@@ -34,9 +35,10 @@ it.each(["discovery", "revalidation"])("preserves the entity issue and flags onl
     };
     return query;
   });
+  const updateComparison = vi.fn((application: Application) => ({ previous: application, changes: { code: saved.code, cropType: "Maize" } }));
   const update = lockApplicationWriteScope(ctx, { select } as unknown as DbTransaction, {
     mutation: "update", applicationId: saved.id, expectedVersion: saved.version,
-    updateComparison: application => ({ previous: application, changes: { code: saved.code, cropType: "Maize" } }),
+    updateComparison,
   });
   await expect(update).rejects.toBeInstanceOf(DomainError);
   await expect(update).rejects.toMatchObject({ code: "certification_locked", message });
@@ -44,4 +46,5 @@ it.each(["discovery", "revalidation"])("preserves the entity issue and flags onl
     ["applicationId", "cropType"].map(field => ({ path: [field], code: "certification_locked", message })),
   );
   expect(select).toHaveBeenCalledTimes(stage === "discovery" ? 5 : 8);
+  expect(updateComparison).toHaveBeenCalledTimes(1);
 });

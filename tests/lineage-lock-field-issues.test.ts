@@ -106,3 +106,25 @@ it("names changed application operation fields and normalizes saved dates, mass,
     expect((await db.select().from(applications).where(and(eq(applications.organizationId, TEST_ORG_ID), eq(applications.id, saved.id))))[0]).toEqual(saved);
   }, "removal");
 });
+
+it.each(['removal', 'none'] as const)('prioritizes a %s lock refusal over source-only distance validation', async blockingVia => {
+  await withLineageFixture(async fixture => {
+    const ctx = makeTestOrgContext();
+    const read = async () => (await db.select().from(feedstocks)
+      .where(and(eq(feedstocks.organizationId, TEST_ORG_ID), eq(feedstocks.id, fixture.feedstockId))))[0];
+    const saved = await read();
+    expect(saved.distanceKmOverride).toBeNull();
+    // Distance source is free while In use; changing code triggers that lock.
+    const patch = { expectedVersion: saved.version, transportDistanceSource: 'document' as const,
+      ...(blockingVia === 'none' ? { code: `${saved.code}-EDIT` } : {}) };
+    await expect(db.transaction(tx => updateFeedstockInTransaction(ctx, tx, saved.id, patch)))
+      .rejects.toMatchObject({ code: 'certification_locked', issues: blockingVia === 'none'
+        ? [{ path: ['code'], code: 'certification_locked' }] : [] });
+    expect(await read()).toEqual(saved);
+    if (blockingVia === 'none') {
+      await expect(db.transaction(tx => updateFeedstockInTransaction(ctx, tx, saved.id, {
+        expectedVersion: saved.version, transportDistanceSource: 'document',
+      }))).rejects.toMatchObject({ code: 'validation_failed' });
+    }
+  }, blockingVia);
+});
