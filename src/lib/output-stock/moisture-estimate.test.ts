@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { decimal, rational } from './exact';
 import { BEFORE_LEDGER_SEQUENCE } from './layer-projection';
-import { estimateStock, estimateStockExact, planReadings, planWetRemovals, withMovement, type LayerMoistureBasis } from './moisture-estimate';
+import { estimateStock, estimateStockExact, postingWetSteps, planReadings, planWetRemovals, withMovement, type LayerMoistureBasis } from './moisture-estimate';
 import { planOutputStock, type OutputStockLayer } from './planner';
 
 const T0 = '2026-09-01T08:00:00.000Z';
@@ -304,4 +304,46 @@ it('compares wet with all solids in a blend, not just its dry biochar', () => {
     { readings: [], removals: planWetRemovals(plan) }, T1, BigInt(2), 'delivery');
   expect(plan.remainingLayers[0].remainingDryBiocharKg).toBe('27.500');
   expect(estimateStock(after, NOW)).toMatchObject({ wetKg: 110, solidsKg: 55, moisturePercent: 50 });
+});
+
+describe('postingWetSteps', () => {
+  const posting = { id: 'loss', sequence: BigInt(3), occurredAt: T1 };
+  const drawn = (stockMode: 'mix' | 'split' = 'mix') => layer('a', '100', '80', T0, {
+    remainingSolidsKg: decimal('55'), removals: [{ wetKg: decimal('50'), solidsKg: decimal('55'),
+      moisturePercent: 50, occurredAt: T1, kind: 'loss', sequence: posting.sequence, stockMode }],
+  });
+
+  it('updates a mix loss from +10 to -50 when a late run cancels its re-estimate', () => {
+    expect(postingWetSteps([drawn()], [posting]).get('loss')?.deltaKg).toBe(10);
+    const bases = [drawn(), layer('b', '200', '80')];
+    expect(postingWetSteps(bases, [posting]).get('loss')?.deltaKg).toBe(-50);
+    expect(estimateStock(bases, NOW)).toMatchObject({ wetKg: 250, solidsKg: 135 });
+  });
+
+  it('keeps a split re-estimate and ignores physically future intake', () => {
+    expect(postingWetSteps([drawn('split'), layer('b', '200', '80')], [posting]).get('loss')?.deltaKg).toBe(10);
+    expect(postingWetSteps([drawn(), layer('b', '200', '80', NOW)], [posting]).get('loss')?.deltaKg).toBe(10);
+  });
+
+  it('uses posting order and the solids held then, including layers now empty', () => {
+    const count = { id: 'count', sequence: BigInt(4), occurredAt: T0 };
+    const bases = [{ ...drawn(), remainingSolidsKg: decimal('0'), removals: [...drawn().removals,
+      { wetKg: decimal('0'), solidsKg: decimal('0'), sequence: count.sequence, kind: 'count', occurredAt: T0 }] }];
+    const changes = postingWetSteps(bases, [count, posting]);
+    expect(changes.get('loss')?.deltaKg).toBe(10);
+    expect(changes.get('count')?.deltaKg).toBe(-110);
+    expect(100 + changes.get('loss')!.deltaKg! + changes.get('count')!.deltaKg!).toBe(estimateStock(bases, NOW).wetKg);
+  });
+
+  it('returns null for unknown held wet, and no entry for a posting without moisture facts', () => {
+    const bases = [drawn(), layer('unknown', '10', '8', T0, { recorded: null })];
+    expect(postingWetSteps(bases, [posting]).get('loss')).toEqual({ deltaKg: null, afterKg: null });
+    expect(postingWetSteps(bases, [{ ...posting, sequence: BigInt(9) }]).has('loss')).toBe(false);
+  });
+
+  it('keeps an old below-solids intake recorded, without flooring its starting wet', () => {
+    const bases = [layer('old', '70', '80', T0, { remainingSolidsKg: decimal('70'),
+      readings: [{ sequence: posting.sequence, occurredAt: T1, solidsKg: decimal('70'), moisturePercent: 0 }] })];
+    expect(postingWetSteps(bases, [posting]).get('loss')?.deltaKg).toBe(0);
+  });
 });

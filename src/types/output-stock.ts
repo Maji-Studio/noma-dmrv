@@ -113,14 +113,24 @@ export interface OutputStockHistoryEntry {
   wetMassKg: number | null;
   moisturePercent: number | null;
   dryMassKg: number;
+  /**
+   * Movements retain their saved posting-order balance. Intakes (and their
+   * placement reversals) use physical order. Live intakes exclude cancelled
+   * pairs; cancelled entries retain the audit balance including those pairs.
+   */
   beforeDryKg: number;
   afterDryKg: number;
   correctsMovementId: string | null;
   deliveryId: string | null;
   /** The form this movement came from, when it has one. */
   source?: { entity: 'productionRun' | 'biocharProduct' | 'delivery' | 'application'; id: string };
-  /** Frozen changes for the chart; null means the wet or solids basis is unresolved. */
+  /** Wet change in the current balance model; intakes keep recorded wet. Null means unknown. */
   wetDeltaKg?: number | null;
+  /** Recomputed wet balance after this posting, for recovering an unknown replay figure. */
+  currentAfterWetKg?: number | null;
+  /** Frozen preview wet change, retained for row details when the current estimate changes. */
+  savedWetDeltaKg?: number | null;
+  /** Frozen solids change; null means the solids basis is unresolved. */
   solidsDeltaKg?: number | null;
   /** Movements: the frozen wet and solids balance right after this one, which re-base a replay whose figure turned unknown. */
   afterWetKg?: number | null;
@@ -156,7 +166,9 @@ export interface OutputSubBin {
   /**
    * The sub-bin's wet stock, wet in less wet out from its last count. Null for
    * a mix-bin layer (a mix pile has one moisture, in the bin's totals) and for
-   * a split layer with no reading and no recorded wet mass.
+   * a split layer whose recorded wet is missing, zero or unparseable until a
+   * count supplies a reading. subBinFigures uses this layer figure;
+   * pileFigures instead requires the pile's wet total.
    */
   wetEstimateKg: number | null;
   moisturePercent: number | null;

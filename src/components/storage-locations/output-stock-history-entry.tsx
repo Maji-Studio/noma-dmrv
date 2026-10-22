@@ -110,10 +110,21 @@ function PartsTable({ row, subject }: { row: HistoryRow; subject: string }) {
   );
 }
 
+/** The wet change the entry was saved with, when the history now shows a different one or none. Null when there is no saved figure or the shown figures match. */
+export function savedWetChange(row: HistoryRow): string | null {
+  const { savedWetDeltaKg, wetDeltaKg } = row.entry;
+  if (row.status !== "counts" || savedWetDeltaKg == null) return null;
+  const figureOf = (changeKg: number) => formatPartFigures({ label: WET_MASS_LABEL, changeKg, afterKg: 0, estimated: true }).change;
+  const saved = figureOf(savedWetDeltaKg);
+  if (wetDeltaKg != null && saved === figureOf(wetDeltaKg)) return null;
+  return `${WET_MASS_LABEL} ${saved}.`;
+}
+
 function facts(row: HistoryRow, timeZone: string, linked: boolean) {
   const { entry, replaces, replacedBy, reversedBy } = row;
   const recordedLater = entry.recordedAt.slice(0, 16) !== entry.occurredAt.slice(0, 16);
   const batches = entry.allocations.map((allocation) => allocation.code);
+  const saved = savedWetChange(row);
   return [
     ...(batches.length > 0 ? [{ label: batches.length === 1 ? "Batch" : "Batches", value: batches.join(", ") }] : []),
     ...(entry.moisturePercent !== null ? [{ label: "Moisture", value: formatMoisturePercent(entry.moisturePercent) }] : []),
@@ -122,6 +133,7 @@ function facts(row: HistoryRow, timeZone: string, linked: boolean) {
     // A deleted Lost mass keeps the operator's reason on the crossed-out entry, as on feedstock bins.
     ...(row.kind === "loss" && reversedBy && !replacedBy && reversedBy.reason ? [{ label: "Why deleted", value: reversedBy.reason }] : []),
     { label: "Recorded", value: `${recordedLater ? formatFacilityDateTime(entry.recordedAt, timeZone) : "At the time"}${entry.actorName ? ` by ${entry.actorName}` : ""}` },
+    ...(saved ? [{ label: "Saved change", value: saved }] : []),
   ];
 }
 
@@ -157,7 +169,7 @@ export function HistoryEntry({ row, defaultOpen, linked, timeZone, facilityId, o
           </p>
         )}
         <PartsTable row={row} subject={subject} />
-        {row.moistureEntry?.moistureReset && <MoistureResetChange reset={row.moistureEntry.moistureReset} />}
+        {row.moistureEntry?.moistureReset && <MoistureResetChange reset={row.moistureEntry.moistureReset} saved={savedWetChange(row) !== null} />}
         <LedgerFacts facts={facts(row, timeZone, linked)} />
         {row.kind === "loss" && !struck && (entry.editLockedReason === null
           ? <div className="flex flex-wrap gap-8">

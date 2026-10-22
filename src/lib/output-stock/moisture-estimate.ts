@@ -80,7 +80,7 @@ interface WetState {
 }
 
 /** Replay postings together: a mix draw tests the whole pile, a split draw each sub-bin. */
-function layerWetStates(layers: readonly LayerMoistureBasis[]): Map<string, WetState | null> {
+function layerWetStates(layers: readonly LayerMoistureBasis[], observe?: (sequence: bigint, phase: 'before' | 'after', states: ReadonlyMap<string, WetState | null>, solids: ReadonlyMap<string, Rational>) => void): Map<string, WetState | null> {
   const states = new Map<string, WetState | null>();
   const solidsByLayer = new Map<string, Rational>();
   const postings = new Map<bigint, { readings: { id: string; reading: MoistureReading }[]; removals: { id: string; removal: WetRemoval }[] }>();
@@ -99,7 +99,8 @@ function layerWetStates(layers: readonly LayerMoistureBasis[]): Map<string, WetS
     for (const reading of layer.readings) posting(reading.sequence).readings.push({ id: layer.layerId, reading });
     for (const removal of layer.removals) posting(removal.sequence).removals.push({ id: layer.layerId, removal });
   }
-  for (const [, { readings, removals }] of [...postings].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) {
+  for (const [sequence, { readings, removals }] of [...postings].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) {
+    observe?.(sequence, 'before', states, solidsByLayer);
     for (const { id, removal } of removals) {
       solidsByLayer.set(id, removal.solidsKg);
       const state = states.get(id);
@@ -136,8 +137,44 @@ function layerWetStates(layers: readonly LayerMoistureBasis[]): Map<string, WetS
       states.set(id, { wetKg: divide(reading.solidsKg, fraction), fraction,
         basis: { source: 'reading', at: reading.occurredAt }, reestimateSequence: null });
     }
+    observe?.(sequence, 'after', states, solidsByLayer);
   }
   return states;
+}
+
+/** A live posting whose wet change is read in the balance's posting-order model. */
+export interface WetPosting { id: string; sequence: bigint; occurredAt: string }
+
+/**
+ * Recompute changes with every currently known layer, including late receipts.
+ * Held solids come from the replay at each posting, not today's final balance.
+ * A missing map entry means the posting has no moisture facts; the
+ * delta is unknown when either wet figure is unknown. Intake changes remain recorded wet.
+ */
+export function postingWetSteps(bases: readonly LayerMoistureBasis[], postings: readonly WetPosting[]): Map<string, { deltaKg: number | null; afterKg: number | null }> {
+  const bySequence = new Map(postings.map(posting => [posting.sequence, posting]));
+  const before = new Map<bigint, Rational | null>();
+  const changes = new Map<string, { deltaKg: number | null; afterKg: number | null }>();
+  layerWetStates(bases, (sequence, phase, states, solids) => {
+    const posting = bySequence.get(sequence);
+    if (!posting) return;
+    let wet: Rational | null = ZERO;
+    for (const layer of bases) {
+      const touched = layer.removals.some(removal => removal.sequence === sequence)
+        || layer.readings.some(reading => reading.sequence === sequence);
+      if ((!touched && layer.placedAt > posting.occurredAt) || compare(solids.get(layer.layerId)!, ZERO) <= BigInt(0)) continue;
+      const state = states.get(layer.layerId);
+      if (!state) { wet = null; break; }
+      wet = add(wet, state.wetKg);
+    }
+    if (phase === 'before') before.set(sequence, wet);
+    else {
+      const prior = before.get(sequence);
+      changes.set(posting.id, { deltaKg: prior == null || wet === null ? null : toNumber(subtract(wet, prior)),
+        afterKg: wet === null ? null : toNumber(wet) });
+    }
+  });
+  return changes;
 }
 
 /** Held layers re-estimated by this posting, with each draw's own reading. */
