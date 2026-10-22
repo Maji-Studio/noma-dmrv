@@ -121,7 +121,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
     <Button
       type="button"
       size="small"
-      className="max-sm:h-44"
+      className="shrink-0 max-sm:h-44"
       onClick={() => setInviteOpen(true)}
     >
       Invite member
@@ -156,8 +156,8 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
           pane it sits in is already titled Members. The invite button sits in
           its heading row and opens the invite dialog. */}
       <section className="flex flex-col gap-16">
-        <div className="flex flex-wrap items-center justify-between gap-12">
-          <h2 className="title-heading-3">Current members</h2>
+        <div className="flex items-start justify-between gap-12">
+          <h2 className="title-heading-3 min-w-0 flex-1">Current members</h2>
           {inviteButton}
         </div>
         {membersLoading ? (
