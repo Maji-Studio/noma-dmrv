@@ -10,6 +10,7 @@ import { db } from "@/db";
 import { isPgForeignKeyViolation } from "@/db/errors";
 import { drivers, type Driver } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { DomainError } from "@/lib/domain-errors";
 import { formatFleetDeleteBlocker } from "@/lib/fleet/messages";
 import { countDriverUsage } from "./fleet-usage";
@@ -94,7 +95,7 @@ export async function deleteDriver(
       assertRowVersion({ entity: DRIVER_CONFLICT_ENTITY, id: driverId, expectedVersion, actualVersion: locked.version });
 
       const blocker = formatFleetDeleteBlocker("driver", locked.code, await countDriverUsage(ctx, tx, driverId));
-      if (blocker) throw new DomainError("conflict", blocker);
+      if (blocker) throw inUseDeleteRefusal(blocker, ["driverId"]);
 
       await tx
         .delete(drivers)
@@ -102,7 +103,7 @@ export async function deleteDriver(
     });
   } catch (error) {
     if (isPgForeignKeyViolation(error, DRIVER_FK_CONSTRAINT)) {
-      throw new DomainError("conflict", DRIVER_IN_USE);
+      throw inUseDeleteRefusal(DRIVER_IN_USE, ["driverId"]);
     }
     throw error;
   }

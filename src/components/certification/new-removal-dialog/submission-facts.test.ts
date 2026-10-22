@@ -41,11 +41,11 @@ const SECOND_BATCH = {
   applicationCount: 3,
 } as MemberCreditBatch;
 
-// Midday UTC so the rendered range does not shift a day under a negative
-// local offset.
+// The compiled window carries calendar dates at UTC midnight; the label must
+// not shift a day under a negative local offset (issue #1282).
 const REPORTING_WINDOW = {
-  startedOn: "2026-06-05T12:00:00.000Z",
-  completedOn: "2026-08-20T12:00:00.000Z",
+  startedOn: "2026-06-05T00:00:00.000Z",
+  completedOn: "2026-08-20T00:00:00.000Z",
 };
 
 const READY_COMPILATION = {

@@ -112,7 +112,7 @@ describe("party refusals and atomic effects", () => {
     const [intake] = await db.update(feedstocks).set({ archivedAt: new Date() })
       .where(eq(feedstocks.organizationId, f.ctx.organizationId)).returning();
     await expect(runOperation(deleteSupplier, f.ctx, { supplierId: f.supplierId, expectedVersion: 1 }))
-      .rejects.toMatchObject({ code: "conflict", issues: [expect.objectContaining({ meta: { feedstockCodes: [intake.code] } })] });
+      .rejects.toMatchObject({ code: "conflict", issues: [expect.objectContaining({ meta: { feedstockCodes: [intake.code], reason: "in_use" } })] });
     expect(await db.select().from(suppliers).where(eq(suppliers.id, f.supplierId))).toHaveLength(1);
   });
   it("keeps the feedstock supplier refusal text for foreign and unknown suppliers", async () => {
@@ -177,7 +177,7 @@ describe("party refusals and atomic effects", () => {
       expect(await findCustomerLocationBlockers(f.ctx, tx, id)).toEqual({ orderCodes: [], registeredLocationIds: [id] });
       expect(await findCustomerLocationBlockers(f.ctx, tx, created.locations[0].id)).toEqual({ orderCodes: [], registeredLocationIds: [] });
     });
-    await expect(runOperation(deleteCustomer, f.ctx, { customerId: created.customer.id, expectedVersion: 1 })).rejects.toMatchObject({ code: "conflict", issues: [expect.objectContaining({ meta: { locationIds: [id] } })] });
+    await expect(runOperation(deleteCustomer, f.ctx, { customerId: created.customer.id, expectedVersion: 1 })).rejects.toMatchObject({ code: "conflict", issues: [expect.objectContaining({ meta: { locationIds: [id], reason: "in_use" } })] });
     expect(await db.select().from(customerLocations).where(eq(customerLocations.customerId, created.customer.id))).toHaveLength(2);
     expect(await db.select().from(customers).where(eq(customers.id, created.customer.id))).toHaveLength(1);
   });

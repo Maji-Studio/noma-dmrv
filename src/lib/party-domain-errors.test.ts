@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { IN_USE_DELETE_MARKER } from "./delete-refusal";
+import { IN_USE_DELETE_MARKER, IN_USE_REASON } from "./delete-refusal";
 import { customerLocationHasOrders, customerLocationHasStorageSite } from "./party-domain-errors";
 
 describe("customer location delete refusals", () => {
@@ -10,7 +10,7 @@ describe("customer location delete refusals", () => {
     const error = customerLocationHasOrders(["ORD-001"], archived);
     expect(error).toMatchObject({ code: "conflict", message });
     expect(error.message).toContain(IN_USE_DELETE_MARKER);
-    expect(error.issues).toEqual([{ code: "conflict", path: ["locationId"], message, meta: { orderCodes: ["ORD-001"] } }]);
+    expect(error.issues).toEqual([{ code: "conflict", path: ["locationId"], message, meta: { orderCodes: ["ORD-001"], reason: IN_USE_REASON } }]);
   });
 
   it.each([
@@ -20,7 +20,7 @@ describe("customer location delete refusals", () => {
     const error = customerLocationHasStorageSite(archived);
     expect(error).toMatchObject({ code: "conflict", message });
     expect(error.message).toContain(IN_USE_DELETE_MARKER);
-    expect(error.issues).toEqual([{ code: "conflict", path: ["locationId"], message }]);
+    expect(error.issues).toEqual([{ code: "conflict", path: ["locationId"], message, meta: { reason: IN_USE_REASON } }]);
   });
 
   it("preserves active-location wording and empty order metadata when state is omitted", () => {

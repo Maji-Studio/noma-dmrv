@@ -20,6 +20,7 @@ import {
   useCreateFacility,
   useFacilities,
   useFacilityCountries,
+  useFacilityOutputStock,
   useRestoreFacility,
   useUpdateFacility,
   useFacilityStats,
@@ -105,6 +106,9 @@ export function FacilityList() {
   };
 
   const { data: facilitiesData, isLoading, error: fetchError } = useFacilities(filters);
+  const inventory = useFacilityOutputStock(
+    sideSheet?.mode === "view" ? sideSheet.entity?.id ?? null : null,
+  );
   const { data: statsData, isLoading: statsLoading, isError: statsError } = useFacilityStats(showArchived);
   // Country options follow the visible collection — the archived view offers
   // archived facilities' countries, not the active set's.
@@ -252,7 +256,7 @@ export function FacilityList() {
     sideSheetMode === "create" ? undefined : sideSheetEntity?.name;
 
   const sideSheetSections = sideSheetEntity
-    ? facilitySheetSections(sideSheetEntity)
+    ? facilitySheetSections(sideSheetEntity, { data: inventory.data, isPending: inventory.isPending, isError: inventory.isError })
     : undefined;
 
   return (
