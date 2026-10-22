@@ -9,12 +9,15 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { PLATFORM_HOME_HREF } from "@/lib/auth/home-path";
 import { useViewerOrg } from "./viewer-org";
 import { shouldShowPlatformAdminBar } from "./viewer-org-rules";
 
 export function PlatformAdminBar() {
   const viewer = useViewerOrg();
-  if (!viewer || !shouldShowPlatformAdminBar(viewer)) return null;
+  const pathname = usePathname();
+  if (!viewer || !shouldShowPlatformAdminBar(viewer, pathname)) return null;
   return (
     <div
       role="region"
@@ -25,7 +28,7 @@ export function PlatformAdminBar() {
         Platform Admin in <span className="font-medium">{viewer.organizationName}</span>
       </p>
       <Link
-        href="/admin/organizations"
+        href={PLATFORM_HOME_HREF}
         className="body-small inline-flex min-h-44 shrink-0 items-center font-medium underline underline-offset-4 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
       >
         Back to Platform

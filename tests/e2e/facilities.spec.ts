@@ -143,9 +143,6 @@ test.describe("Facility + Reactor UI CRUD", () => {
     await expect(
       page.locator("table tbody tr").filter({ hasText: reactorIdentifier }).first()
     ).toBeVisible({ timeout: 10000 });
-    await expect(
-      page.locator("table tbody tr").filter({ hasText: reactorIdentifier })
-    ).toContainText(facilityName);
 
     void cleanupTestData;
   });

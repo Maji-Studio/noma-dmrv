@@ -13,14 +13,18 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
-import { CaretDownIcon, CheckIcon } from "@phosphor-icons/react/dist/ssr";
+import { CaretDownIcon, CheckIcon, CircleNotchIcon } from "@phosphor-icons/react/dist/ssr";
 import { authClient } from "@/lib/auth/client";
+import { useToast } from "@/components/ui/toast";
+import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import {
   useActiveOrganizationProfile,
   useAllOrganizations,
   useEnterOrganization,
 } from "@/hooks/use-organizations";
+import { requestAppLeave } from "@/lib/leave-guard";
+import { ORG_SWITCH_DISCARD_DESCRIPTION, orgSwitchFailedMessage } from "@/lib/org-switch-notice";
 import { shouldShowOrganizationSwitcher } from "./org-brand-switching";
 import { useViewerOrg } from "./viewer-org";
 import { FALLBACK_ORG_NAME, viewerRoleLabel } from "./viewer-org-rules";
@@ -80,7 +84,10 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
   const listboxId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [isSwitching, setIsSwitching] = useState(false);
+  const toast = useToast();
+  // Holds the id of the organization being opened, so its row carries the spinner.
+  const switching = useBusyUntilUnload<string>();
+  const isSwitching = switching.held !== null;
 
   // Override-aware active-org lookup: the plugin's useActiveOrganization() is
   // members-only, so it never resolves for Platform Admins inside an org they
@@ -135,21 +142,33 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
       ? allOrgsQuery.isPending && !allOrgsQuery.error
       : memberOrgsQuery.isPending && !memberOrgsQuery.error);
 
-  async function handleSelect(organizationId: string, organizationName: string) {
+  function handleSelect(organizationId: string, organizationName: string) {
+    if (switching.held) return;
     if (organizationId === activeOrganizationId) {
       setIsOpen(false);
       return;
     }
-    setIsSwitching(true);
+    // A pane with unsaved changes asks before the server session moves.
+    requestAppLeave(() => void switchOrganization(organizationId, organizationName), {
+      description: ORG_SWITCH_DISCARD_DESCRIPTION,
+    });
+  }
+
+  async function switchOrganization(organizationId: string, organizationName: string) {
+    // Stay "Switching" until the page reloads into the new organization; only a failure clears it.
+    switching.hold(organizationId);
+    // The list stays open, carrying the picked row's spinner, until the page unloads.
+    setIsOpen(true);
     try {
       const result = await enterOrganization(organizationId, organizationName);
       if (!result.success) {
-        setIsSwitching(false);
-        return;
+        // Revoked access or a deleted organization resolves unsuccessfully without throwing.
+        switching.release();
+        toast.error(orgSwitchFailedMessage(organizationName));
       }
-      setIsOpen(false);
-    } finally {
-      setIsSwitching(false);
+    } catch {
+      switching.release();
+      toast.error(orgSwitchFailedMessage(organizationName));
     }
   }
 
@@ -218,22 +237,34 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
             )}
             {switchable.map((org) => {
               const isSelected = org.id === activeOrganizationId;
+              const isOpening = switching.held === org.id;
               return (
                 <li key={org.id}>
                   <button
                     type="button"
                     role="option"
                     aria-selected={isSelected}
+                    aria-busy={isOpening || undefined}
                     onClick={() => handleSelect(org.id, org.name)}
-                    className={`w-full h-40 px-16 flex items-center justify-between gap-8 body-caption text-left transition-colors duration-150 ${
+                    disabled={isSwitching}
+                    className={`w-full h-40 px-16 flex items-center justify-between gap-8 body-caption text-left transition-colors duration-150 disabled:cursor-default ${isOpening ? "" : "disabled:opacity-40"} ${
                       isSelected
                         ? "text-white bg-[var(--color-white-100)]/[0.08]"
-                        : "text-[var(--color-white-75)] hover:text-white hover:bg-[var(--color-white-100)]/[0.06]"
+                        : isOpening
+                          ? "text-white"
+                          : "text-[var(--color-white-75)] enabled:hover:text-white enabled:hover:bg-[var(--color-white-100)]/[0.06]"
                     }`}
                   >
                     <span className="truncate">{org.name}</span>
-                    {isSelected && (
-                      <CheckIcon size={14} weight="bold" className="shrink-0" />
+                    {isOpening ? (
+                      <CircleNotchIcon
+                        aria-hidden
+                        size={14}
+                        weight="bold"
+                        className="shrink-0 animate-spin"
+                      />
+                    ) : (
+                      isSelected && <CheckIcon size={14} weight="bold" className="shrink-0" />
                     )}
                   </button>
                 </li>

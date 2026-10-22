@@ -10,10 +10,13 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDateRange } from "@/lib/format-utils";
 import type { RecordCreditBatchPreview } from "@/types/record-credit-batches";
 import {
+  CREDIT_BATCH_LEAD,
+  CREDIT_BATCHES_LEAD,
   CREDIT_BATCH_LINE_BASE,
   errorLineCopy,
   missingLineCopy,
   pendingLineCopy,
+  unknownLineCopy,
   type CreditBatchLineBatch,
   type CreditBatchLineCopy,
 } from "./credit-batch-line-copy";
@@ -99,6 +102,21 @@ const PREVIEW_HELD_OUT_INFO = "This delivery's biochar was drawn from a mix bin,
 
 const SOME_UNBATCHED = " Some of the biochar comes from production runs that are in no credit batch yet.";
 
+/** Unknown lines say what unblocks them, in the same words as their ⓘ, instead of "Not yet computed". */
+const REFUSED_LEAD: Record<PreviewedRecordKind, string> = {
+  delivery: "Shown once the load can be saved",
+  application: "Shown once the amount can be saved",
+  "biochar-product": "Shown once the biochar draw can be saved",
+};
+const UNTRACEABLE_LEAD = "Can't be traced for this delivery";
+
+/**
+ * Before the mass is entered, the draw can take from one, some or all of the
+ * batches the source holds, so the line says "Possible", never "A or B".
+ */
+const POSSIBLE_LEAD = "Possible credit batch: ";
+const POSSIBLE_PLURAL_LEAD = "Possible credit batches: ";
+
 function sentence(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
@@ -110,8 +128,8 @@ function isSettled(preview: RecordCreditBatchPreview): boolean {
 }
 
 function previewCopy(kind: PreviewedRecordKind, preview: RecordCreditBatchPreview): CreditBatchLineCopy {
-  if (preview.basis === "refused") return missingLineCopy(MISSING_VALUE.notYetComputed, REFUSED_INFO[kind]);
-  if (preview.basis === "untraceable") return missingLineCopy(MISSING_VALUE.notYetComputed, UNTRACEABLE_INFO);
+  if (preview.basis === "refused") return unknownLineCopy(REFUSED_LEAD[kind], REFUSED_INFO[kind]);
+  if (preview.basis === "untraceable") return unknownLineCopy(UNTRACEABLE_LEAD, UNTRACEABLE_INFO);
   if (preview.heldOut) return missingLineCopy(MISSING_VALUE.notApplicable, PREVIEW_HELD_OUT_INFO);
   if (preview.sourceRunCount === 0) return missingLineCopy(MISSING_VALUE.none, EMPTY_SOURCE_INFO[kind]);
   const { batches } = preview;
@@ -120,11 +138,12 @@ function previewCopy(kind: PreviewedRecordKind, preview: RecordCreditBatchPrevie
     const holds = plural
       ? "biochar from more than one credit batch"
       : "biochar from this credit batch and from production runs that are in none yet";
+    const unbatched = plural && preview.unbatchedRunCount > 0 ? SOME_UNBATCHED : "";
     return {
       ...CREDIT_BATCH_LINE_BASE,
-      lead: plural ? "Could join credit batches " : "Could join credit batch ",
+      lead: plural ? POSSIBLE_PLURAL_LEAD : POSSIBLE_LEAD,
       batches,
-      info: `${THE_SOURCE[kind]} ${holds}. ${STILL_TO_ENTER[kind]} to see which credit ${plural ? "batches" : "batch"} ${RECORD[kind]} joins.`,
+      info: `${THE_SOURCE[kind]} ${holds}.${unbatched} ${STILL_TO_ENTER[kind]} to see which credit ${plural ? "batches" : "batch"} ${RECORD[kind]} joins.`,
     };
   }
   if (batches.length === 0) {
@@ -136,10 +155,10 @@ function previewCopy(kind: PreviewedRecordKind, preview: RecordCreditBatchPrevie
   const [only] = batches;
   return {
     ...CREDIT_BATCH_LINE_BASE,
-    lead: plural ? "Joins credit batches " : "Joins credit batch ",
+    lead: plural ? CREDIT_BATCHES_LEAD : CREDIT_BATCH_LEAD,
     batches,
     // One batch names its window; several list theirs behind "+N".
-    tail: !plural && only.startDate && only.endDate ? ` (${formatDateRange(only.startDate, only.endDate)})` : "",
+    window: !plural && only.startDate && only.endDate ? ` (${formatDateRange(only.startDate, only.endDate)})` : "",
     info: preview.unbatchedRunCount > 0 ? `${RULE_INFO[kind]}${SOME_UNBATCHED}` : RULE_INFO[kind],
   };
 }
@@ -166,7 +185,7 @@ export function describeRecordCreditBatchLine(
       if (batches.length === 0) return missingLineCopy(MISSING_VALUE.none, NONE_INFO[kind]);
       return {
         ...CREDIT_BATCH_LINE_BASE,
-        lead: batches.length === 1 ? "Credit batch: " : "Credit batches: ",
+        lead: batches.length === 1 ? CREDIT_BATCH_LEAD : CREDIT_BATCHES_LEAD,
         batches,
         info: RULE_INFO[kind],
       };

@@ -24,7 +24,7 @@ import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
 import { asc, eq } from "drizzle-orm";
 import { Resend } from "resend";
-import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH } from "@/config/auth";
+import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
 import { env } from "@/config/env";
 import { db } from "@/db";
 import { seedOrgDefaults } from "@/db/org-defaults";
@@ -294,7 +294,7 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24, // Refresh every 24 hours
     cookieCache: {
       enabled: true,
-      maxAge: 5 * 60, // 5 minutes
+      maxAge: SESSION_COOKIE_CACHE_SECONDS,
     },
   },
   rateLimit: {

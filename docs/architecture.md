@@ -134,8 +134,8 @@ export async function createItem(input: CreateItem) {
 
 Rate limiting is opt-in per action: `withAction(fn, { rateLimit: { key, max,
 windowMs } })`, checked after auth so it keys on the resolved `userId`. It
-applies to expensive or abuse-prone actions: certification submits and geo
-geocode/route are the current users.
+applies to expensive or abuse-prone actions: certification submits, geo
+geocode/route and the Profile password change are the current users.
 
 Two more options exist for migrating the legacy wrappers without changing what
 they log or return. `log: { message, context }` replaces the generic
@@ -288,7 +288,7 @@ runtime.
 - `src/app/(app)/layout.tsx` enforces auth and mounts `FacilityProvider`.
 - **One settings console** (`/settings`, #1277). `SettingsConsole` renders a
   rail grouped by whose setting it is, one route per pane, listed in
-  `src/lib/settings/panes.ts`: **You** (Connected apps), **Organization**
+  `src/lib/settings/panes.ts`: **You** (Profile, Connected apps), **Organization**
   (General, Members, Developers), **Certification** (Registry, Removal
   templates, Facilities) and **Platform** (Organizations, Diagnostics,
   Template mapping; Platform Admins only). Each route loads the viewer with
@@ -450,6 +450,12 @@ cache opt-in, so PR builds persist `.next/cache/turbopack` while base-branch,
 local, and deployed builds remain on the stable default.
 
 ## Database Boundaries
+
+Certification submits acquire the boundary advisory lock, facility durability
+advisory lock, certifier mapping `FOR UPDATE`, artifacts, then mirror locks.
+GHG Statement reconciliation follows this order, taking boundary and durability
+on the same dedicated transaction. A caller already holding boundary as a session
+lock passes the held flag instead of requesting it again on another connection.
 
 Supplier and customer creates lock all named facilities `FOR SHARE` in id order,
 then insert the party, ordered locations and pairs inside the `withAutoCodes`
