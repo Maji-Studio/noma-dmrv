@@ -102,17 +102,17 @@ test.describe("Organization foundation UI", () => {
     const pendingSection = sectionWithHeading(page, "Pending invitations");
     await revokeInviteIfPresent(page, pendingSection);
 
-    const inviteSection = sectionWithHeading(page, "Invite a member");
-    await inviteSection.getByLabel("Email").fill(INVITEE_EMAIL);
-    await inviteSection.getByLabel("Role").selectOption("member");
-    await inviteSection
-      .getByRole("button", { name: "Send invitation" })
-      .click();
+    const membersSection = sectionWithHeading(page, "Current members");
+    await membersSection.getByRole("button", { name: "Invite member" }).click();
+    const dialog = page.getByRole("dialog", { name: "Invite a member" });
+    await dialog.getByLabel("Email").fill(INVITEE_EMAIL);
+    await dialog.getByLabel("Role").selectOption("member");
+    await dialog.getByRole("button", { name: "Send invitation" }).click();
+    await expect(dialog).toBeHidden();
 
-    const shareLinkInput = inviteSection
-      .getByText("Share this link with the invitee", { exact: true })
-      .locator("..")
-      .getByRole("textbox");
+    const shareLinkInput = page.getByRole("textbox", {
+      name: "Invitation link",
+    });
     const pendingInvitation = pendingSection
       .getByRole("listitem")
       .filter({ hasText: INVITEE_EMAIL });
