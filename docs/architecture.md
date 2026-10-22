@@ -321,7 +321,8 @@ runtime.
   `/settings/organization`, `/settings/defaults`, `/settings/api-keys` and
   `/settings/vehicles-and-crew` only redirect (`legacyCertificationSettingsRedirect`,
   `redirectPreservingQuery`). Vehicles and crew is a list page at
-  `/vehicles-and-crew` under Distribution; every member can edit and delete
+  `/vehicles-and-crew` under Distribution (tabs per kind on the shared
+  `DataTable`, `?tab=`, `?record=`, `?create=`); every member can edit and delete
   vehicles, drivers and operators there, as every member can create them from
   a picker. `/admin` is cross-tenant platform administration
   (`users.role === "admin"`) and is only the organization directory; `/admin`

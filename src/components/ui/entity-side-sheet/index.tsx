@@ -278,9 +278,7 @@ function EntitySideSheet({
             <SideSheetActionsContext.Provider value={sheetActions}>
               <SubmitBlockContext.Provider value={editBlock}>
                 {mode === "edit" && editNotice ? (
-                  // flex-none: the body's fill rule grows every child, which
-                  // would push a short form to the bottom under the notice.
-                  <div className="flex flex-none! flex-col gap-12 pb-20">{editNotice}</div>
+                  <div className="flex flex-col gap-12 pb-20">{editNotice}</div>
                 ) : null}
                 {/* Always mounted, so turning read-only never remounts the form. */}
                 <fieldset disabled={!!editBlock?.readOnly} className="contents" data-submit-block-fieldset>{children}</fieldset>

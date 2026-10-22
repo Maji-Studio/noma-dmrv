@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { Button, EmptyState } from "@/components/ui";
@@ -17,29 +17,13 @@ import type { FleetKindManager } from "./use-fleet-kind-manager";
 
 interface FleetKindTableProps<K extends FleetKind> {
   manager: FleetKindManager<K>;
-  /** "full": search and Columns above the table, paging below. "none": the table alone. */
-  toolbar?: "full" | "none";
-  /** A search owned by the page, so it survives a change of table. */
-  search?: string;
-  /** With `search`: the toolbar's search box writes it back. */
-  onSearchChange?: (value: string) => void;
-  /** Controls placed before Columns in the toolbar. */
-  extraControls?: ReactNode;
-  /** Paging below the table. */
-  paginate?: boolean;
+  /** Link behind each row's name, so it opens in a new tab and shows its URL. */
+  getRowHref?: (record: FleetRecords[K]) => string | undefined;
 }
 
-export function FleetKindTable<K extends FleetKind>({
-  manager,
-  toolbar = "full",
-  search: pageSearch,
-  onSearchChange,
-  extraControls,
-  paginate = true,
-}: FleetKindTableProps<K>) {
+export function FleetKindTable<K extends FleetKind>({ manager, getRowHref }: FleetKindTableProps<K>) {
   const copy = FLEET_KIND_COPY[manager.kind];
-  const [ownSearch, setOwnSearch] = useState("");
-  const search = pageSearch ?? ownSearch;
+  const [search, setSearch] = useState("");
   const hasSearch = search.trim().length > 0;
 
   if (manager.error) {
@@ -68,9 +52,10 @@ export function FleetKindTable<K extends FleetKind>({
       onRowClick={manager.openView}
       enableSorting
       enableFiltering
-      enablePagination={paginate}
+      enablePagination
       globalFilter={search}
-      onGlobalFilterChange={pageSearch === undefined ? setOwnSearch : onSearchChange}
+      onGlobalFilterChange={setSearch}
+      getRowHref={getRowHref}
       aria-label={copy.title}
       isLoading={manager.isLoading}
       hoverable
@@ -91,16 +76,13 @@ export function FleetKindTable<K extends FleetKind>({
         />
       }
     >
-      {toolbar === "full" && (
-        <DataTable.Toolbar>
-          <DataTable.Search placeholder={`Search ${copy.title.toLowerCase()}...`} aria-label={`Search ${copy.title.toLowerCase()}`} />
-          <DataTable.Controls>
-            {extraControls}
-            <DataTable.ColumnVisibility />
-          </DataTable.Controls>
-        </DataTable.Toolbar>
-      )}
-      {paginate && <DataTable.Pagination />}
+      <DataTable.Toolbar>
+        <DataTable.Search placeholder={`Search ${copy.title.toLowerCase()}...`} aria-label={`Search ${copy.title.toLowerCase()}`} />
+        <DataTable.Controls>
+          <DataTable.ColumnVisibility />
+        </DataTable.Controls>
+      </DataTable.Toolbar>
+      <DataTable.Pagination />
     </DataTable>
   );
 }

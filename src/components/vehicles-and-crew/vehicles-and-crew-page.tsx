@@ -1,42 +1,93 @@
 /**
  * Vehicles and crew: the organization's vehicles, drivers and operators, as a
- * list page under Distribution (Q13). Every member can list, create, edit and
- * delete them, as they can from the pickers on intake, delivery and
- * production forms. Not facility-scoped, so it works with no facility chosen.
+ * list page under Distribution (Q13). A tab per kind with its count, one
+ * DataTable for the open tab, and a header action that follows the tab. Every
+ * member can list, create, edit and delete them, as they can from the pickers
+ * on intake, delivery and production forms. Not facility-scoped, so it works
+ * with no facility chosen.
  *
- * PROTOTYPE: three layouts on the real route, switched by `?variant=a|b|c`
- * (A tabs, B stacked tables, C one list). Fold the pick in and delete the
- * switcher and the other variant files.
+ * URL: `?tab=driver|operator` (Vehicles stays out of the URL), `?record=<id>`
+ * opens that record's sheet on the open tab, `?create=1` opens its create sheet.
  */
 "use client";
 
-import { parseAsStringLiteral, useQueryState } from "nuqs";
-import { PrototypeVariantSwitcher, type PrototypeVariant } from "./prototype-variant-switcher";
-import { VehiclesAndCrewTabs } from "./variant-a-tabs";
-import { VehiclesAndCrewStacked } from "./variant-b-stacked";
-import { VehiclesAndCrewCombined } from "./variant-c-combined";
-
-const VARIANT_KEYS = ["a", "b", "c"] as const;
-type VariantKey = (typeof VARIANT_KEYS)[number];
-
-const VARIANTS: ReadonlyArray<PrototypeVariant<VariantKey>> = [
-  { key: "a", name: "Tabs" },
-  { key: "b", name: "Stacked tables" },
-  { key: "c", name: "One list" },
-];
+import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
+import { PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import { Button, PageHeader } from "@/components/ui";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
+import type { FleetKind } from "@/lib/fleet/messages";
+import { FLEET_KIND_COPY, FLEET_KINDS } from "./fleet-kinds";
+import { FleetKindTable } from "./fleet-kind-table";
+import { FLEET_TAB_PANEL_ID, FleetTabs, fleetTabId } from "./fleet-tabs";
+import { useFleetKindManager, type FleetKindManager } from "./use-fleet-kind-manager";
+import { VEHICLES_AND_CREW_SUBTITLE } from "./vehicles-and-crew-copy";
 
 export function VehiclesAndCrewPage() {
-  const [variant, setVariant] = useQueryState(
-    "variant",
-    parseAsStringLiteral(VARIANT_KEYS).withDefault("a").withOptions({ history: "replace" }),
+  const [tab, setTab] = useQueryState(
+    "tab",
+    parseAsStringLiteral(FLEET_KINDS).withDefault("vehicle").withOptions({ history: "replace", clearOnDefault: true }),
   );
+  const [recordId, setRecordId] = useQueryState("record", parseAsString.withOptions({ history: "replace" }));
+  const clearRecord = () => void setRecordId(null);
+
+  const managerOptions = (kind: FleetKind) => ({
+    linkedId: tab === kind ? recordId : null,
+    onLinkClear: clearRecord,
+  });
+  const managers = {
+    vehicle: useFleetKindManager("vehicle", managerOptions("vehicle")),
+    driver: useFleetKindManager("driver", managerOptions("driver")),
+    operator: useFleetKindManager("operator", managerOptions("operator")),
+  };
+  const active = managers[tab];
+  const copy = FLEET_KIND_COPY[tab];
+
+  useOpenCreateIntent(active.openCreate);
+
+  const counts = Object.fromEntries(
+    FLEET_KINDS.map((kind) => [kind, managers[kind].isLoading || managers[kind].error ? undefined : managers[kind].records.length]),
+  ) as Record<FleetKind, number | undefined>;
+
+  const changeTab = (kind: FleetKind) => {
+    if (kind === tab) return;
+    void setTab(kind);
+    // A record link belongs to the tab it named.
+    clearRecord();
+  };
+
+  const rowHref = (record: { id: string }) => {
+    const params = new URLSearchParams();
+    if (tab !== "vehicle") params.set("tab", tab);
+    params.set("record", record.id);
+    return `/vehicles-and-crew?${params.toString()}`;
+  };
 
   return (
-    <>
-      {variant === "a" && <VehiclesAndCrewTabs />}
-      {variant === "b" && <VehiclesAndCrewStacked />}
-      {variant === "c" && <VehiclesAndCrewCombined />}
-      <PrototypeVariantSwitcher variants={VARIANTS} current={variant} onChange={(next) => void setVariant(next)} />
-    </>
+    <div className="container-max page-shell">
+      <PageHeader
+        area="distribution"
+        title="Vehicles and crew"
+        subtitle={VEHICLES_AND_CREW_SUBTITLE}
+        actions={
+          <Button variant="primary" onClick={active.openCreate}>
+            <PlusIcon size={20} weight="bold" />
+            New {copy.noun}
+          </Button>
+        }
+      />
+
+      <div className="flex flex-col gap-16">
+        <FleetTabs tab={tab} counts={counts} onChange={changeTab} />
+
+        <div id={FLEET_TAB_PANEL_ID} role="tabpanel" aria-labelledby={fleetTabId(tab)}>
+          {/* Keyed so search, sort and paging start fresh on each tab. */}
+          <FleetKindTable key={tab} manager={active as FleetKindManager<FleetKind>} getRowHref={rowHref} />
+        </div>
+      </div>
+
+      {managers.vehicle.overlays}
+      {managers.driver.overlays}
+      {managers.operator.overlays}
+    </div>
   );
 }

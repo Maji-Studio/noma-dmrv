@@ -1,7 +1,7 @@
 /**
  * Vehicles, drivers and operators as list rows: per kind, the table columns,
  * the columns that start hidden, the read sections of the side sheet and the
- * copy. Shared by every layout of the Vehicles and crew page.
+ * copy. Used by the Vehicles and crew page.
  */
 import type { ReactNode } from "react";
 import type { ColumnDef, VisibilityState } from "@tanstack/react-table";

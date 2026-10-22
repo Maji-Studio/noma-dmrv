@@ -1,7 +1,7 @@
 /**
  * One kind's list state on the Vehicles and crew page: its records, the side
- * sheet (view, edit, create) and the delete confirmation. A layout calls it
- * once per kind, places the table wherever it likes and mounts `overlays`.
+ * sheet (view, edit, create) and the delete confirmation. The page calls it
+ * once per kind and mounts `overlays`.
  */
 "use client";
 
@@ -60,7 +60,17 @@ function useFleetDelete(kind: FleetKind) {
   return { run, isPending };
 }
 
-export function useFleetKindManager<K extends FleetKind>(kind: K): FleetKindManager<K> {
+export interface FleetKindManagerOptions {
+  /** A record id from a deep link (`?record=`); once the list has loaded, its view sheet opens. */
+  linkedId?: string | null;
+  /** Called when the sheet closes, so the page can drop the link from the URL. */
+  onLinkClear?: () => void;
+}
+
+export function useFleetKindManager<K extends FleetKind>(
+  kind: K,
+  { linkedId = null, onLinkClear }: FleetKindManagerOptions = {},
+): FleetKindManager<K> {
   const copy = FLEET_KIND_COPY[kind];
   const query = useFleetList(kind);
   const records = (query.data ?? []) as FleetRecords[K][];
@@ -79,10 +89,22 @@ export function useFleetKindManager<K extends FleetKind>(kind: K): FleetKindMana
   const liveRecord = sheetRecord ? records.find((record) => record.id === sheetRecord.id) ?? sheetRecord : null;
   const shownRecord = sheet?.mode === "view" ? liveRecord : sheetRecord;
 
+  // A deep link opens the record's view sheet once, as soon as the list has it.
+  const [openedLinkId, setOpenedLinkId] = useState<string | null>(null);
+  if (!linkedId && openedLinkId) setOpenedLinkId(null);
+  const linked = linkedId ? records.find((record) => record.id === linkedId) : undefined;
+  if (linked && !sheet && openedLinkId !== linkedId) {
+    setOpenedLinkId(linkedId);
+    setSheet({ record: linked, mode: "view" });
+  }
+
   const openCreate = () => setSheet({ record: null, mode: "create" });
   const openView = (record: FleetRecords[K]) => setSheet({ record, mode: "view" });
   const openEdit = (record: FleetRecords[K]) => setSheet({ record, mode: "edit" });
-  const closeSheet = () => setSheet(null);
+  const closeSheet = () => {
+    setSheet(null);
+    onLinkClear?.();
+  };
 
   const closeDelete = () => {
     if (remove.isPending) return;
@@ -98,7 +120,7 @@ export function useFleetKindManager<K extends FleetKind>(kind: K): FleetKindMana
       await remove.run(deleting);
       toast.success(`${label} deleted.`);
       setDeletingId(null);
-      if (sheet?.record?.id === deleting.id) setSheet(null);
+      if (sheet?.record?.id === deleting.id) closeSheet();
     } catch (error) {
       setDeleteError(toDeleteErrorMessage(error, label, `${label} was not deleted. Try again.`));
     }
