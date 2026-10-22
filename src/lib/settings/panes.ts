@@ -13,6 +13,7 @@ import {
   SETTINGS_FACILITIES_HREF,
   SETTINGS_GENERAL_HREF,
   SETTINGS_MEMBERS_HREF,
+  SETTINGS_PROFILE_HREF,
   SETTINGS_REGISTRY_HREF,
   SETTINGS_REMOVAL_TEMPLATES_HREF,
   SETTINGS_TEMPLATE_MAPPING_HREF,
@@ -26,6 +27,7 @@ export const ORGANIZATION_SETTINGS_ROLES = "Admins";
 
 export const SETTINGS_ACCESS = {
   organization: `${ORGANIZATION_SETTINGS_ROLES} can change these.`,
+  self: "Only you can change these.",
   you: `You and organization ${ORGANIZATION_SETTINGS_ROLES} can change these.`,
   platformReadOnly: "Read-only for Platform Admins.",
 } as const;
@@ -47,6 +49,7 @@ export const SETTINGS_GROUP_LABELS: Record<SettingsGroupKey, string> = {
 };
 
 export type SettingsPaneKey =
+  | "profile"
   | "connected-apps"
   | "general"
   | "members"
@@ -82,6 +85,16 @@ export interface SettingsPaneMeta {
 }
 
 export const SETTINGS_PANES: readonly SettingsPaneMeta[] = [
+  {
+    key: "profile",
+    group: "you",
+    label: "Profile",
+    href: SETTINGS_PROFILE_HREF,
+    scope: "you",
+    caption: "Your name and password, the same in every organization you belong to.",
+    access: SETTINGS_ACCESS.self,
+    audience: "everyone",
+  },
   {
     key: "connected-apps",
     group: "you",
