@@ -707,7 +707,8 @@ export function SampleList({
             <Skeleton className="h-40 w-full" />
           </div>
         ) : createContextError ? (
-          <ServerError message={createContextError} />
+          // A plain div takes the sheet's fill, so the Notice keeps its row layout.
+          <div><ServerError message={createContextError} /></div>
         ) : (
           <SampleForm
             key={editingEntity?.id ?? "create"}

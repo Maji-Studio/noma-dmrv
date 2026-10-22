@@ -65,10 +65,24 @@ for (const size of sizes) {
       await page.goto(`/production-runs?facility=${seededData.facility.id}`);
       await page.getByRole("button", { name: "New production run" }).click();
       await waitForSideSheet(page);
-      const { footerBox, bodyBox, scrolls } = await sheetBoxes(page);
-      expect(scrolls).toBe(true);
-      expect(footerBox.y + footerBox.height).toBeLessThanOrEqual(size.height + EDGE_TOLERANCE_PX);
-      expect(Math.abs(footerBox.y + footerBox.height - (bodyBox.y + bodyBox.height))).toBeLessThanOrEqual(EDGE_TOLERANCE_PX);
+      const first = await sheetBoxes(page);
+      expect(first.scrolls).toBe(true);
+      const body = page
+        .locator('[role="dialog"] div.sticky.bottom-0')
+        .first()
+        .locator('xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " overflow-y-auto ")][1]');
+      let lastTop = 0;
+      for (const fraction of [0, 0.5, 1]) {
+        await body.evaluate((el, f) => {
+          el.scrollTop = (el.scrollHeight - el.clientHeight) * f;
+        }, fraction);
+        const top = await body.evaluate((el) => el.scrollTop);
+        if (fraction > 0) expect(top).toBeGreaterThan(lastTop);
+        lastTop = top;
+        const { footerBox, bodyBox } = await sheetBoxes(page);
+        expect(footerBox.y + footerBox.height).toBeLessThanOrEqual(size.height + EDGE_TOLERANCE_PX);
+        expect(Math.abs(footerBox.y + footerBox.height - (bodyBox.y + bodyBox.height))).toBeLessThanOrEqual(EDGE_TOLERANCE_PX);
+      }
     });
   });
 }

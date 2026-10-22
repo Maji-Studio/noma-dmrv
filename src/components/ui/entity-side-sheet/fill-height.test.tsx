@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { FILL_CHILDREN_CLASS } from "@/components/ui/slide-over-panel";
 import { EntitySideSheet } from "./index";
 
-vi.mock("@/components/ui/slide-over-panel", () => {
+vi.mock("@/components/ui/slide-over-panel", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/ui/slide-over-panel")>();
   const Wrapper = ({ children }: { children: ReactNode }) => <div>{children}</div>;
-  return { FILL_CHILDREN_CLASS: "[&>*]:flex [&>*]:flex-1 [&>*]:flex-col", SlideOverPanel: {
+  return { ...actual, SlideOverPanel: {
     Root: Wrapper, Content: Wrapper, Title: Wrapper, Description: Wrapper, Footer: Wrapper, Close: Wrapper,
     Header: ({ children }: { children: ReactNode }) => <header>{children}</header>,
     Body: ({ children }: { children: ReactNode }) => <main>{children}</main>,
@@ -36,9 +38,8 @@ describe("EntitySideSheet form fill", () => {
     const fieldset = renderer.root.findByType("fieldset").props.className as string;
     expect(fieldset).not.toContain("contents");
     expect(fieldset).toContain("min-w-0");
-    expect(fieldset).toContain("[&>*]:flex");
-    expect(fieldset).toContain("[&>*]:flex-1");
-    expect(fieldset).toContain("[&>*]:flex-col");
+    expect(FILL_CHILDREN_CLASS).toContain("[&>*]:flex-1");
+    expect(fieldset).toContain(FILL_CHILDREN_CLASS);
   });
 
   it("keeps the edit notice at natural height", () => {
