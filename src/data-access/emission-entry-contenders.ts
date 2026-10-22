@@ -15,7 +15,7 @@ import { deriveRemovalEntryWindow, type EntryContender } from "@/lib/certificati
 import { requireOrgScope, type Executor } from "./utils";
 
 /** Every unsubmitted Removal is a contender, even before it acquires a ledger row. */
-export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBatchIds: string[], executor: Executor & Pick<typeof db, "selectDistinct"> = db, claimedAttempt?: { removalId: string; submissionId?: string }): Promise<EntryContender[]> {
+export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBatchIds: string[], executor: Executor & Pick<typeof db, "selectDistinct"> = db, claimedAttempt?: { removalId: string; submissionId?: string }, advisory = false): Promise<EntryContender[]> {
   requireOrgScope(ctx);
   if (!creditBatchIds.length) return [];
   const members = await executor.select({ removalId: creditBatchApplications.removalId }).from(creditBatchApplications)
@@ -50,9 +50,14 @@ export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBa
   const lineageByBatch = new Map(await Promise.all([...new Set(rows.map((row) => row.creditBatchId))].map(async (batchId) => {
     const union = await emissionCorrectionBatchIds(ctx, executor, batchId);
     const key = JSON.stringify([...union].sort());
-    if (!lineageReads.has(key)) lineageReads.set(key, getCertifiedLineageForBatches(ctx, executor, union, statementReads, excludeSubmissionId));
+    if (!lineageReads.has(key)) lineageReads.set(key, getCertifiedLineageForBatches(ctx, executor, union, statementReads, excludeSubmissionId, !advisory));
     const lineage = await lineageReads.get(key)!;
-    return [batchId, lineage.map((row) => row.recordLockRemoval)] as const;
+    // Advisory display evaluates the last persisted registry observation. It is
+    // never mutation authority: writes still acquire the lineage locks and make
+    // a fresh registry read. Do not return these projected facts to lock guards.
+    return [batchId, lineage.map((row) => advisory ? { ...row.recordLockRemoval,
+      statements: row.recordLockRemoval.statements.map(statement => ({ ...statement, fresh: true })),
+    } : row.recordLockRemoval)] as const;
   })));
   const facts = [...lineageByBatch.values()].flat();
   return ids.flatMap((removalId) => {

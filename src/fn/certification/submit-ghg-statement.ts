@@ -1,3 +1,4 @@
+import { assertStatementRemovalsCurrent } from "./statement-removal-correction-core";
 import { withGhgVerifierSubmissionLock } from "@/data-access/ghg-verifier-submission-lock";
 import { ghgStatusRegistryAt } from "@/lib/isometric/utils/ghg-status-registry-at";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
@@ -322,6 +323,7 @@ export async function submitGhgStatementToVerifierCore(args: {
       };
 
       let submission = await readCurrentSubmission();
+      await assertStatementRemovalsCurrent(orgCtx, ghgStatementId);
       const generatedReport = parsed.reportId
         ? await getApprovedGhgStatementReport(orgCtx, {
             ghgStatementId,

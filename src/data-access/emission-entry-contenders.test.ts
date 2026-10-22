@@ -29,7 +29,7 @@ it("uses the write scope's full batch union, including a blocking holder beyond 
   const executor = reader();
   expect(await listEmissionEntryDraftContenders(ctx, ["a"], executor)).toEqual([]);
   expect(emissionCorrectionBatchIds).toHaveBeenCalledWith(ctx, executor, "a");
-  expect(getCertifiedLineageForBatches).toHaveBeenCalledWith(ctx, executor, ["a", "b"], expect.any(Map), undefined);
+  expect(getCertifiedLineageForBatches).toHaveBeenCalledWith(ctx, executor, ["a", "b"], expect.any(Map), undefined, true);
 });
 it("offers the correction when the same union has no blocking holder", async () => {
   vi.mocked(getCertifiedLineageForBatches).mockResolvedValue([lineage(returned)]);
@@ -64,4 +64,24 @@ it.each(["current", "missing", null])("prefers the current returned statement wi
   const result = await listEmissionEntryDraftContenders(makeTestOrgContext(), ["a"], reader(undefined, ghgStatementId));
   expect(result[0].returnedStatement).toEqual(ghgStatementId === "current"
     ? { id: "current", status: "DRAFT" } : { id: "statement", status: "FAILED_VERIFICATION" });
+});
+
+
+it("uses persisted return facts without requesting registry refresh for advisory reads", async () => {
+  const saved = { ...returned, statements: returned.statements.map(statement => ({ ...statement, fresh: false })) };
+  vi.mocked(getCertifiedLineageForBatches).mockResolvedValue([lineage(saved)]);
+  const ctx = makeTestOrgContext();
+  const executor = reader();
+  expect(await listEmissionEntryDraftContenders(ctx, ["a"], executor, undefined, true)).toMatchObject([
+    { removalId: "returned", contenderKind: "correction" },
+  ]);
+  expect(getCertifiedLineageForBatches).toHaveBeenCalledWith(ctx, executor, ["a", "b"], expect.any(Map), undefined, false);
+  expect(saved.statements[0].fresh).toBe(false);
+});
+
+it("does not treat persisted return facts as fresh authorization on submission reads", async () => {
+  vi.mocked(getCertifiedLineageForBatches).mockResolvedValue([lineage({ ...returned,
+    statements: returned.statements.map(statement => ({ ...statement, fresh: false })),
+  })]);
+  expect(await listEmissionEntryDraftContenders(makeTestOrgContext(), ["a"], reader())).toEqual([]);
 });

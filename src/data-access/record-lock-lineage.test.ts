@@ -46,11 +46,11 @@ it("logs only safe identifiers and error classification when refresh fails", asy
   warn.mockRestore();
 });
 
-function statementReader(status = "FAILED_VERIFICATION"): Pick<DbTransaction, "select"> {
+function statementReader(status = "FAILED_VERIFICATION", submittedToVerifierAt?: string): Pick<DbTransaction, "select"> {
   let reads = 0;
   const common = { createdAt: null, lockedAt: null, status: "submitted" };
   const removal = { ...common, id: "removal-submission", localEntityId: "removal", externalId: "entry", submittedAt: new Date("2026-10-01"), metadata: {} };
-  const statement = { ...common, id: "statement-submission", localEntityId: "statement", externalId: "remote-statement", submittedAt: null, metadata: { remoteStatus: status } };
+  const statement = { ...common, id: "statement-submission", localEntityId: "statement", externalId: "remote-statement", submittedAt: null, metadata: { remoteStatus: status, submittedToVerifierAt } };
   return { select: () => ({ from: (table: unknown) => ({ where: () => table === certificationSubmissions ? (reads++ === 0 ? [removal] : [statement]) : [] }) }) } as unknown as Pick<DbTransaction, "select">;
 }
 
@@ -99,4 +99,14 @@ it.each(["eligible", "unrelated", "remote-mutation", "in-flight", "ordinary-read
   const [removal] = await readRecordLockLineage(makeTestOrgContext(), tx, [{ removalId: "removal", ghgStatementId: null }], false,
     condition === "ordinary-read" ? {} : { excludeSubmissionId: current.id });
   expect(removal.submissions.map(row => row.id)).toEqual(condition === "eligible" ? [] : condition === "ordinary-read" ? [predecessor.id, current.id] : [predecessor.id]);
+});
+
+
+it("returns saved timing for advisory comparisons without making it mutation authority", async () => {
+  const { getGhgStatement } = await import("@/lib/isometric/ghg-statements");
+  const [removal] = await readRecordLockLineage(makeTestOrgContext(), statementReader("FAILED_VERIFICATION", "2026-10-02"),
+    [{ removalId: "removal", ghgStatementId: "statement" }], false);
+  expect(getGhgStatement).not.toHaveBeenCalled();
+  expect(removal.statements[0]).toMatchObject({ fresh: false, returnedAt: "2026-10-02", submittedToVerifier: true });
+  expect(isSentRemoval(removal)).toBe(true);
 });

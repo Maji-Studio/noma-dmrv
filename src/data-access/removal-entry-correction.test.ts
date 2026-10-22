@@ -1,6 +1,8 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
-import { loadRemovalEntryCorrection } from "./removal-entry-correction";
+import { loadRemovalEntryCorrection } from "@/fn/certification/removal-correction-core";
+import { SafeError } from "@/lib/errors";
+vi.mock("@/fn/certification/removal-scope", () => ({ resolveScopeForRemoval: vi.fn(async () => { throw new SafeError("No lineage in this unit fixture."); }) }));
 import { getCreditBatchesByRemovalId } from "./certifier-removals";
 import { getLatestTemplateObservation } from "./removal-template-observations";
 import { loadBatchEmissionEntryFacts } from "./emission-entry-facts";

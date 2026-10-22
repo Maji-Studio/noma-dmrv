@@ -1,3 +1,6 @@
+import { assertStatementRemovalsCurrent } from "./statement-removal-correction-core";
+import { SafeError } from "@/lib/errors";
+vi.mock("./statement-removal-correction-core", () => ({ assertStatementRemovalsCurrent: vi.fn() }));
 import { withGhgVerifierSubmissionLock } from "@/data-access/ghg-verifier-submission-lock";
 vi.mock("@/data-access/ghg-verifier-submission-lock", () => ({
   withGhgVerifierSubmissionLock: vi.fn(async (_ctx, _id, callback: () => Promise<unknown>) => callback()),
@@ -280,4 +283,16 @@ describe("stored report verification before registry submission", () => {
     expect(readObjectBounded).toHaveBeenCalledOnce();
     expect(status === "DRAFT" ? submitGhgStatement : resubmitGhgStatement).toHaveBeenCalledOnce();
   });
+});
+
+
+it("refuses changed member Removals inside the statement lock before provider I/O", async () => {
+  vi.mocked(assertStatementRemovalsCurrent).mockRejectedValue(new SafeError("Resubmit Removal R-12 first. Its records changed since it was sent."));
+  await expect(submitGhgStatementToVerifierCore({ orgCtx, ghgStatementId: STATEMENT_ID,
+    input: { reportId: REPORT_ID, confirmProduction: true } })).rejects.toThrow("Resubmit Removal R-12 first.");
+  expect(withGhgVerifierSubmissionLock).toHaveBeenCalled();
+  expect(assertStatementRemovalsCurrent).toHaveBeenCalledWith(orgCtx, STATEMENT_ID);
+  expect(getGhgStatement).not.toHaveBeenCalled();
+  expect(submitGhgStatement).not.toHaveBeenCalled();
+  expect(resubmitGhgStatement).not.toHaveBeenCalled();
 });

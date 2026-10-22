@@ -1,4 +1,4 @@
-import { loadRemovalEntryCorrection } from "@/data-access/removal-entry-correction";
+import { loadRemovalEntryCorrection } from "./removal-correction-core";
 import type { EntryCorrectionState } from "@/lib/certification/removal-entry-correction";
 import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
 import { isLiveEntryReservation, entriesWithoutRemoval, type EntryContender } from "@/lib/certification/removal-emission-contributions";
@@ -28,6 +28,7 @@ export async function loadBatchEmissionContext(
   batches: readonly { id: string; removalTemplateId: string | null }[],
   facilityFacts: EntryTemplateContext,
   claimedAttempt?: { removalId: string; submissionId?: string },
+  includeCorrections = true,
 ): Promise<BatchEmissionContext> {
   const result: BatchEmissionContext = {};
   const readableBatches = batches.flatMap((batch) => {
@@ -47,7 +48,7 @@ export async function loadBatchEmissionContext(
   const [storedEntries, automatic, contenders, availableApplications] = await Promise.all([
     listEmissionEntriesForBatches(ctx, ids),
     loadBatchesEmissionAutomaticFacts(ctx, ids),
-    listEmissionEntryDraftContenders(ctx, ids, undefined, claimedAttempt),
+    listEmissionEntryDraftContenders(ctx, ids, undefined, claimedAttempt, !claimedAttempt),
     listEmissionEntryAvailableApplications(ctx, ids),
   ]);
   const reservations = await loadEmissionEntryReservations(ctx, [...new Set(storedEntries.flatMap((entry) => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []))]);
@@ -72,7 +73,7 @@ export async function loadBatchEmissionContext(
     result[id] = { productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
       entriesWithoutRemoval: entriesWithoutRemoval(entries, contenders, liveReservationIds, availableApplications) };
   }
-  for (const contender of contenders.filter((item) => item.contenderKind === "correction")) {
+  for (const contender of contenders.filter((item) => includeCorrections && item.contenderKind === "correction")) {
     const correction = await loadRemovalEntryCorrection(ctx, contender.removalId, contenders);
     for (const id of correction.correction?.batches.map((batch) => batch.id) ?? correction.changedBatchIds ?? []) {
       if (result[id]) (result[id].corrections ??= []).push({ ...correction,

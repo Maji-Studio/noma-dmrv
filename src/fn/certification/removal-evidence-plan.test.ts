@@ -186,3 +186,19 @@ it.each([true, false])("logs invalid entry bindings from either plan at the fn b
   expect(warn).toHaveBeenCalledExactlyOnceWith({ removalId: "removal-1", documentId: "entry-file", entryId: "entry",
     componentId: "absent-component", inputKey: "mass" }, expect.any(String));
 });
+
+it.each([false, true])("includes current operator files in the compiled evidence plan only in an open window (%s)", async correctionWindowOpen => {
+  const sent = inventoryDocument("sent-file");
+  const added = inventoryDocument("added-file");
+  vi.mocked(sources.collectCandidateSourceDocumentsForRemoval).mockResolvedValue([sent, added]);
+  vi.mocked(sources.resolveSourceBindingCandidates).mockImplementation(async (_ctx, args) =>
+    args.candidates.map(candidate => ({ ...candidate, sourceId: `source-${candidate.documentId}` })));
+  const evidence = await planRemovalEvidence({ orgCtx: ORG_CONTEXT, removalId: "removal-1", template,
+    ctx: { ...ctx, correctionWindowOpen, latestSubmission: {
+      status: "submitted", payloadSnapshot: { semantic: { candidateSources: [sent] } },
+    } as RemovalSubmissionContext["latestSubmission"] },
+    compiledBiocharApplicationIntents: [], supplied: {},
+  });
+  expect(evidence.candidateDocumentIds).toEqual(correctionWindowOpen ? ["added-file", "sent-file"] : ["sent-file"]);
+  expect(evidence.sourceIds).toEqual(correctionWindowOpen ? ["source-added-file", "source-sent-file"] : ["source-sent-file"]);
+});
