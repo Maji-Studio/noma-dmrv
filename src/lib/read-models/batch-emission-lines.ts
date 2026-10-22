@@ -1,39 +1,24 @@
-import { loadBatchEmissionAutomaticFacts } from "@/data-access/batch-emission-automatic-figures";
-import { loadBatchEmissionEntryFacts } from "@/data-access/emission-entry-facts";
-import { listEmissionLineComments } from "@/data-access/emission-line-comments";
+import type { loadBatchEmissionEntryFacts } from "@/data-access/emission-entry-facts";
+import type { listEmissionLineComments } from "@/data-access/emission-line-comments";
 import { requireOrgFacility } from "@/data-access/utils";
 import { canonicalUnit } from "@/lib/isometric/template-observations/units";
 import type { OrgContext } from "@/lib/auth/server";
 import { getCreditBatchById } from "@/data-access/credit-batches";
-import { getLatestTemplateObservation } from "@/data-access/removal-template-observations";
-import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
 import { deriveBatchEmissionLines } from "@/lib/certification/emission-lines";
 import { withRemovedEntryComponents } from "@/lib/certification/emission-line-definition";
-import { REMOVAL_TEMPLATE_BLOCKERS, removalTemplateBlocker, type RemovalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 import { isEnrichmentComplete, validateLineSources } from "@/lib/isometric/template-observations";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
 import type { BatchEmissionLineFacts } from "@/lib/certification/emission-lines";
 import { SafeError } from "@/lib/errors";
-
-type BatchEmissionLinesResult =
-  | { status: "ready"; lines: ReturnType<typeof buildBatchEmissionLines> }
-  | { status: "blocked"; blocker: RemovalTemplateBlocker };
+import { loadBatchesEmissionLines, type BatchEmissionLinesResult } from "./batches-emission-lines";
 
 /** Batch display facts only. A stored observation never authorizes submission. */
 export async function loadBatchEmissionLines(ctx: OrgContext, facilityId: string, creditBatchId: string): Promise<BatchEmissionLinesResult> {
   await requireOrgFacility(ctx, facilityId);
   const batch = await getCreditBatchById(ctx, creditBatchId, { skipPreview: true });
   if (!batch || batch.facilityId !== facilityId) throw new SafeError("Credit batch was not found.");
-  const pin = resolveBatchPin([batch]);
-  if ("code" in pin) return { status: "blocked", blocker: removalTemplateBlocker(pin.code) };
-  const observation = await getLatestTemplateObservation(ctx, "isometric", pin.pin);
-  // Transient: other reads on the page write the observation, so keep the normal retry path.
-  if (!observation) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
-  // Display read: a delivery without load mass leaves delivery transport unrecorded, like the overview.
-  const automaticFacts = await loadBatchEmissionAutomaticFacts(ctx, facilityId, creditBatchId);
-  const { entries, previousObservations } = await loadBatchEmissionEntryFacts(ctx, creditBatchId, observation);
-  const comments = await listEmissionLineComments(ctx, creditBatchId);
-  return { status: "ready", lines: buildBatchEmissionLines(observation, entries, previousObservations, automaticFacts, comments) };
+  const results = await loadBatchesEmissionLines(ctx, [batch], { comments: true });
+  return results.get(batch.id)!;
 }
 
 /** The same display derivation is used by the detail page and facility overview. */
