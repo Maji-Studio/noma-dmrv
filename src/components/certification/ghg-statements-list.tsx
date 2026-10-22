@@ -512,9 +512,6 @@ function ListBody({ facilityId }: { facilityId: string }) {
               placeholder="Search GHG Statements..."
               aria-label="Search GHG Statements"
             />
-            <DataTable.Controls>
-              <DataTable.ColumnVisibility />
-            </DataTable.Controls>
           </DataTable.Toolbar>
           <DataTable.Pagination />
         </DataTable>

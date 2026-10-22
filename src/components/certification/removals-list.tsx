@@ -37,7 +37,7 @@ import {
   useRemovalsForFacility,
 } from "@/hooks/use-certification";
 import { deriveRemovalWorkflowStatus } from "@/lib/certification/status";
-import { formatDateRange } from "@/lib/format-utils";
+import { formatDateRange, formatDayString } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { SubmittedOnCell, submittedOnSortingFn, submittedOnText } from "./submitted-on-cell";
 import { CertificationStatusBadge } from "./certification-status-badge";
@@ -277,6 +277,9 @@ function StatusColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
   return <StatusCell summary={row.original} lock={locks[row.original.removalId]} />;
 }
 
+/** The reporting window is already on the Removal cell; its two dates can be added as columns. */
+const REMOVAL_COLUMNS_HIDDEN_BY_DEFAULT = { reportingStart: false, reportingEnd: false };
+
 const createColumns = (
   submittedOnDescending: boolean,
   locks: RecordLockViews,
@@ -310,6 +313,20 @@ const createColumns = (
     accessorFn: (summary) => submittedOnText(summary.submittedOn, timeZone),
     sortingFn: submittedOnSortingFn<RemovalListRow>(submittedOnDescending),
     cell: ({ row }) => <SubmittedOnCell state={row.original.submittedOn} timeZone={timeZone} />,
+  },
+  {
+    id: "reportingStart",
+    enableGlobalFilter: false,
+    header: "Reporting start",
+    accessorFn: (summary) => summary.startedOn ?? "",
+    cell: ({ row }) => <span>{formatDayString(row.original.startedOn)}</span>,
+  },
+  {
+    id: "reportingEnd",
+    enableGlobalFilter: false,
+    header: "Reporting end",
+    accessorFn: (summary) => summary.completedOn ?? "",
+    cell: ({ row }) => <span>{formatDayString(row.original.completedOn)}</span>,
   },
   {
     id: "status",
@@ -395,6 +412,7 @@ function ListBody({
         </h2>
         <RemovalLocksContext.Provider value={removalLocks.locks}>
           <DataTable
+            defaultColumnVisibility={REMOVAL_COLUMNS_HIDDEN_BY_DEFAULT}
             columns={columns}
             data={rows}
             // Rows carry `removalId`, not `id`: key by it so an open status

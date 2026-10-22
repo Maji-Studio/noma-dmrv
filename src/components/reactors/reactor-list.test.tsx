@@ -2,8 +2,10 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+const state = vi.hoisted(() => ({ facilityId: null as string | null }));
+
 vi.mock("@/hooks/use-facility-context", () => ({
-  useFacilityContext: () => ({ facilityId: null }),
+  useFacilityContext: () => ({ facilityId: state.facilityId }),
 }));
 vi.mock("@/hooks/use-debounce", () => ({
   useDebounce: (value: unknown) => value,
@@ -14,7 +16,7 @@ vi.mock("@/hooks/use-open-create-intent", () => ({
 vi.mock("@/hooks/use-reactors", () => ({
   useReactorStats: () => ({ data: undefined, isLoading: false, isError: false }),
   useReactors: () => ({
-    data: { items: [], total: 0 },
+    data: { items: [], total: 0, totalPages: 0 },
     isLoading: false,
     error: null,
   }),
@@ -78,11 +80,19 @@ vi.mock("@/components/ui/data-table", () => {
   const DataTable = ({
     children,
     emptyMessage,
+    columns,
+    defaultColumnVisibility,
   }: {
     children?: ReactNode;
     emptyMessage?: ReactNode;
+    columns?: Array<{ header?: unknown }>;
+    defaultColumnVisibility?: Record<string, boolean>;
   }) => (
-    <div>
+    <div
+      data-testid="table"
+      data-hidden-by-default={Object.keys(defaultColumnVisibility ?? {}).filter((id) => defaultColumnVisibility?.[id] === false).join(",")}
+      data-headers={(columns ?? []).map((column) => column.header).filter(Boolean).join(",")}
+    >
       {children}
       {emptyMessage}
     </div>
@@ -94,6 +104,7 @@ vi.mock("@/components/ui/data-table", () => {
   const DataTableColumnVisibility = () => null;
   const DataTablePagination = () => null;
   DataTable.Toolbar = DataTableToolbar;
+  DataTable.Controls = DataTableToolbar;
   DataTable.Search = DataTableSearch;
   DataTable.ColumnVisibility = DataTableColumnVisibility;
   DataTable.Pagination = DataTablePagination;
@@ -134,5 +145,21 @@ describe("ReactorList without facility context", () => {
     expect(html).not.toContain("New reactor");
     expect(html).not.toContain("Create reactor");
     expect(html).not.toContain("<form");
+  });
+});
+
+describe("ReactorList columns menu", () => {
+  it("offers Nominal throughput as a field that starts hidden, and has no Facility column", () => {
+    state.facilityId = "facility-1";
+    try {
+      const html = renderToStaticMarkup(<ReactorList />);
+      const attribute = (name: string) => new RegExp(`${name}="([^"]*)"`).exec(html)?.[1] ?? "";
+
+      expect(attribute("data-headers")).toContain("Nominal throughput (tph)");
+      expect(attribute("data-hidden-by-default")).toBe("nominalThroughputTph");
+      expect(attribute("data-headers")).not.toContain("Facility");
+    } finally {
+      state.facilityId = null;
+    }
   });
 });

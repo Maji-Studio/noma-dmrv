@@ -10,7 +10,6 @@ import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
-import { FACILITY_COLUMN_HIDDEN_BY_DEFAULT } from "@/components/ui/data-table/data-table-helpers";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
@@ -45,7 +44,7 @@ import {
   deriveBlendEffectiveMoisturePercent,
   fromCompositionJsonb,
 } from "@/lib/biochar-composition";
-import { FACILITY_NOT_FOUND, MISSING_VALUE } from "@/lib/copy-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
@@ -69,7 +68,7 @@ import { BIOCHAR_PRODUCT_DEEP_LINK_PARAM } from "@/lib/biochar-product-links";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useEffect, useState } from "react";
 import { BiocharProductForm } from "./biochar-product-form";
-import { productSheetSections } from "./product-read-details";
+import { formatSavedMassKg, productSheetSections } from "./product-read-details";
 import { ILLUSTRATION_SIZE, BiocharProductArt } from "@/components/ui/illustrations";
 
 const WET_PRODUCT_LABEL = "Wet product";
@@ -94,6 +93,12 @@ function productEffectiveMoisturePercent(
   });
 }
 
+/** Water added and density are optional detail an operator can add from the Columns menu. */
+const PRODUCT_COLUMNS_HIDDEN_BY_DEFAULT = {
+  waterAddedKg: false,
+  densityKgM3: false,
+};
+
 // ============================================
 // Column Definitions
 // ============================================
@@ -117,13 +122,6 @@ function createColumns(
       meta: { nowrap: true },
       header: "Production date",
       cell: ({ row }) => formatDayString(row.original.productionDate),
-    },
-    {
-      id: "facility",
-      header: "Facility",
-      accessorFn: (row) => row.facility?.name ?? "",
-      cell: ({ row }) =>
-        row.original.facility?.name || FACILITY_NOT_FOUND,
     },
     {
       id: "formulation",
@@ -157,6 +155,24 @@ function createColumns(
       cell: ({ row }) => (
         <span className="font-mono">
           {formatMoisturePercent(productEffectiveMoisturePercent(row.original))}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "waterAddedKg",
+      header: "Water added",
+      cell: ({ row }) => (
+        <span className="font-mono">{formatSavedMassKg(row.original.waterAddedKg)}</span>
+      ),
+    },
+    {
+      accessorKey: "densityKgM3",
+      header: "Density",
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {row.original.densityKgM3 == null
+            ? MISSING_VALUE.notRecorded
+            : `${row.original.densityKgM3} kg/m³`}
         </span>
       ),
     },
@@ -490,7 +506,7 @@ export function BiocharProductList() {
 
       {/* Data Table */}
       <DataTable
-        defaultColumnVisibility={FACILITY_COLUMN_HIDDEN_BY_DEFAULT}
+        defaultColumnVisibility={PRODUCT_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={products}
         enableSorting={false}

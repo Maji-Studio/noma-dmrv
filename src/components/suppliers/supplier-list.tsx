@@ -50,6 +50,12 @@ import { toSaveErrorMessage } from "@/lib/stale-version";
 import { supplierSheetSections } from "./supplier-read-sections";
 import { ILLUSTRATION_SIZE, SupplierArt } from "@/components/ui/illustrations";
 
+/** Record details an operator can add from the Columns menu. */
+const SUPPLIER_COLUMNS_HIDDEN_BY_DEFAULT = {
+  sourceRegion: false,
+  address: false,
+};
+
 // ============================================
 // Column Definitions
 // ============================================
@@ -99,6 +105,24 @@ function createColumns(
           {row.original.contactName ||
             row.original.contactEmail ||
             MISSING_VALUE.notRecorded}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "sourceRegion",
+      header: "Source region",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate text-[var(--color-text-secondary)]">
+          {row.original.sourceRegion || MISSING_VALUE.notRecorded}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "address",
+      header: "Address",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate text-[var(--color-text-secondary)]">
+          {row.original.address || MISSING_VALUE.notRecorded}
         </span>
       ),
     },
@@ -424,6 +448,7 @@ export function SupplierList() {
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={SUPPLIER_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={suppliers}
         enableSorting={false}

@@ -392,7 +392,6 @@ export function FormulationList() {
               <ArchiveIcon size={16} weight="bold" />
               Archived
             </Button>
-            <DataTable.ColumnVisibility />
           </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />

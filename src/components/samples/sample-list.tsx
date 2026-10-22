@@ -43,7 +43,8 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDateRange } from "@/lib/format-utils";
+import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { formatMoisturePercent, MASS_MOISTURE_LABELS } from "@/lib/mass-moisture";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
@@ -55,7 +56,7 @@ import {
   type SampleFilterData,
 } from "@/schemas/samples";
 import type { SampleWithRelations } from "@/data-access/samples";
-import { formatSamplingTime, sampleSheetSections } from "./sample-read-sections";
+import { formatLabPercent, formatSamplingTime, RATIO_DIGITS, sampleSheetSections } from "./sample-read-sections";
 import {
   leaveSampleCreateIntent,
   resolveSampleCreateCreditBatchId,
@@ -95,6 +96,16 @@ function DurabilityBadge({ durability }: { durability: "200_year" | "1000_year" 
     </span>
   );
 }
+
+/** Lab details an operator can add from the Columns menu. */
+const SAMPLE_COLUMNS_HIDDEN_BY_DEFAULT = {
+  labName: false,
+  analysisDate: false,
+  oToCOrgRatio: false,
+  moistureContentPercent: false,
+  ph: false,
+  ashContentPercent: false,
+};
 
 // ============================================
 // Column Definitions
@@ -148,7 +159,41 @@ function createColumns(
       accessorKey: "hToCOrgRatio",
       header: "H:C org ratio",
       cell: ({ row }) =>
-        row.original.hToCOrgRatio?.toFixed(3) ?? MISSING_VALUE.notRecorded,
+        row.original.hToCOrgRatio?.toFixed(RATIO_DIGITS) ?? MISSING_VALUE.notRecorded,
+    },
+    {
+      accessorKey: "labName",
+      header: "Lab name",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate">{row.original.labName || MISSING_VALUE.notRecorded}</span>
+      ),
+    },
+    {
+      accessorKey: "analysisDate",
+      meta: { nowrap: true },
+      header: "Analysis date",
+      cell: ({ row }) => formatDate(row.original.analysisDate),
+    },
+    {
+      accessorKey: "oToCOrgRatio",
+      header: "O:C org ratio",
+      cell: ({ row }) =>
+        row.original.oToCOrgRatio?.toFixed(RATIO_DIGITS) ?? MISSING_VALUE.notRecorded,
+    },
+    {
+      accessorKey: "moistureContentPercent",
+      header: MASS_MOISTURE_LABELS.moisture,
+      cell: ({ row }) => formatMoisturePercent(row.original.moistureContentPercent),
+    },
+    {
+      accessorKey: "ph",
+      header: "pH",
+      cell: ({ row }) => (row.original.ph == null ? MISSING_VALUE.notRecorded : String(row.original.ph)),
+    },
+    {
+      accessorKey: "ashContentPercent",
+      header: "Ash content",
+      cell: ({ row }) => formatLabPercent(row.original.ashContentPercent),
     },
     {
       accessorKey: "durabilityOption",
@@ -546,6 +591,7 @@ export function SampleList({
       <RecordLockListNotice read={sampleLocks} />
 
       <DataTable
+        defaultColumnVisibility={SAMPLE_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={samples}
         enableSorting={false}
