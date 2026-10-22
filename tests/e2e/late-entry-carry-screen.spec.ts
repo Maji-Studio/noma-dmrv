@@ -71,6 +71,8 @@ test.describe("Late emissions entry on screen", () => {
         await expect(list).toContainText(`Goes into ${seeded.receiver.removalCode}`, { timeout: 30_000 });
         await expect(page.getByText("is waiting for a Removal")).toHaveCount(0);
         await shoot(page, "batch-overview-draft", size, page.getByRole("region", { name: "Removals" }));
+        await expect(list.getByRole("link", { name: seeded.origin.removalCode }).first()).toBeVisible();
+        await expect(list.getByRole("link", { name: seeded.receiver.creditBatchCode }).first()).toBeVisible();
       }
 
       await seeded.dropReceiver();
