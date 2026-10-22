@@ -2,6 +2,7 @@ import { archiveStorageLocation } from '@/data-access/storage-locations';
 import { loadRunForwardFactsWithExecutor } from '@/data-access/credit-batch-run-forward-facts';
 import { feedstockFixtureValues } from './helpers/feedstock-fixture';
 import { archiveFacility, getFacilities } from '@/data-access/facilities';
+import { getFacilityOutputStock } from '@/data-access/facility-output-stock';
 import { enrichStorageLocationRows } from '@/data-access/storage-location-enrichment';
 import { getFeedstockBinStock } from '@/data-access/feedstock-bin-ledger';
 import { getIngredientMoistureBasis } from '@/data-access/ingredient-moisture-basis';
@@ -258,9 +259,9 @@ it('excludes a deleted 50 kg pure product from facility and bin inventory totals
   await deleteProductionRun(f.ctx, f.runs[1].id, f.runs[1].version);
   await updateProductionRun(f.ctx, f.runs[0].id, { expectedVersion: f.runs[0].version, biocharOutputKg: 100, biocharMoisturePercent: 0 });
   const product = await postProduct(f, { massKg: 50 });
-  expect((await getFacilities(f.ctx)).items[0].inventorySummary).toMatchObject({ biocharKg: 50, productKg: 50 });
+  expect(await getFacilityOutputStock(f.ctx, f.facility.id)).toMatchObject({ biochar: { wetKg: 50, dryBiocharKg: 50 }, product: { wetKg: 50, dryBiocharKg: 50 } });
   await deleteBiocharProduct(f.ctx, product.id, product.version);
-  expect((await getFacilities(f.ctx)).items[0].inventorySummary).toMatchObject({ biocharKg: 100, productKg: 0 });
+  expect(await getFacilityOutputStock(f.ctx, f.facility.id)).toMatchObject({ biochar: { wetKg: 100, dryBiocharKg: 100 }, product: { wetKg: 0, dryBiocharKg: 0 } });
   const [bin] = await enrichStorageLocationRows(f.ctx, [{ ...f.bin, facilityName: f.facility.name, facilityCode: f.facility.code, feedstockTypeName: null, formulationName: f.pure.name }]);
   expect(bin.productInventory).toMatchObject({ batchCount: 0, currentMassKg: 0 });
   const [source] = await enrichStorageLocationRows(f.ctx, [{ ...f.source, facilityName: f.facility.name, facilityCode: f.facility.code, feedstockTypeName: null, formulationName: null }]);
@@ -290,11 +291,14 @@ it('keeps only the replacement product in live run-forwards after deletion', asy
 
 it('preserves inventory totals when a facility archives its products', async () => {
   const f = await fixture({ stockKg: 50 });
-  const before = (await getFacilities(f.ctx)).items.find(row => row.id === f.facility.id)!.inventorySummary;
-  expect(before.productKg).toBe(50);
+  const feedstockBefore = (await getFacilities(f.ctx)).items.find(row => row.id === f.facility.id)!.inventorySummary;
+  const before = await getFacilityOutputStock(f.ctx, f.facility.id);
+  expect(before.product).toEqual({ wetKg: 50, dryBiocharKg: 50 });
   await archiveFacility(f.ctx, f.facility.id, f.facility.version);
-  const after = (await getFacilities(f.ctx, { archived: true })).items.find(row => row.id === f.facility.id)!.inventorySummary;
+  const after = await getFacilityOutputStock(f.ctx, f.facility.id);
   expect(after).toEqual(before);
+  const feedstockAfter = (await getFacilities(f.ctx, { archived: true })).items.find(row => row.id === f.facility.id)!.inventorySummary;
+  expect(feedstockAfter).toEqual(feedstockBefore);
   const [bin] = await enrichStorageLocationRows(f.ctx, [{ ...f.bin, facilityName: f.facility.name, facilityCode: f.facility.code, feedstockTypeName: null, formulationName: f.pure.name }]);
   expect(bin.productInventory).toMatchObject({ batchCount: 1, currentMassKg: 50 });
 });
