@@ -9,9 +9,12 @@
 
 import { useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeftIcon, BuildingsIcon, MagnifyingGlassIcon, PlusIcon, WarningCircleIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArrowLeftIcon, ArrowRightIcon, BuildingsIcon, CheckCircleIcon, MagnifyingGlassIcon, PlusIcon, WarningCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
+import { useToast } from "@/components/ui/toast";
+import { setActiveOrganizationAction } from "@/fn/organizations";
+import { SETTINGS_MEMBERS_HREF } from "@/lib/settings/links";
 import { OrganizationCertifierCredentials } from "../organization-certifier-credentials";
 import {
   CreateOrganizationForm,
@@ -122,9 +125,13 @@ function DetailC({ row, entering, onOpen }: { row: OrgRow; entering: string | nu
           <span className="body-small text-[var(--color-text-secondary)]">{membersLabel(row.memberCount)}</span>
         </div>
         {row.current ? (
-          <span className="body-small font-medium text-[var(--color-text-secondary)]">You are working here</span>
+          <span className="body-small flex items-center gap-6 text-[var(--color-text-secondary)]">
+            <CheckCircleIcon size={18} className="text-[var(--st-ok)]" /> You're working in {row.name}.
+          </span>
         ) : (
-          <Button type="button" variant="primary" busy={entering === row.id} onClick={onOpen}>Open organization</Button>
+          <Button type="button" variant="primary" busy={entering === row.id} disabled={entering !== null && entering !== row.id} onClick={onOpen}>
+            {entering === row.id ? "Switching…" : `Switch to ${row.name}`}
+          </Button>
         )}
       </header>
 
@@ -150,13 +157,51 @@ function DetailC({ row, entering, onOpen }: { row: OrgRow; entering: string | nu
         </div>
       </div>
 
-      <div className="flex flex-col gap-8 p-24">
-        <h3 className="title-chapter-title text-[var(--color-text-tertiary)]">Members</h3>
-        <p className="body-small text-[var(--color-text-secondary)]">
-          {row.memberCount === 0 ? "Nobody can sign in to this organization yet. Open it and invite an Admin in Settings, Members." : `${membersLabel(row.memberCount)}. Manage them in Settings, Members after opening the organization.`}
-        </p>
-      </div>
+      <MembersC row={row} />
       {api.dialog}
     </article>
+  );
+}
+
+/**
+ * Members: the count and a way to Settings, Members. Settings only shows the
+ * organization you are working in, so for another organization the link
+ * switches first and says so.
+ */
+function MembersC({ row }: { row: OrgRow }) {
+  const toast = useToast();
+  const router = useRouter();
+  const [switching, setSwitching] = useState(false);
+
+  async function manageInOtherOrg() {
+    setSwitching(true);
+    const result = await setActiveOrganizationAction({ organizationId: row.id });
+    if (!result.success) {
+      setSwitching(false);
+      toast.error(result.error);
+      return;
+    }
+    window.location.assign(SETTINGS_MEMBERS_HREF);
+  }
+
+  return (
+    <div className="flex flex-col gap-8 p-24">
+      <h3 className="title-chapter-title text-[var(--color-text-tertiary)]">Members</h3>
+      <p className="body-small">
+        {row.memberCount === 0 ? "No members yet. Nobody can sign in to this organization." : membersLabel(row.memberCount)}
+      </p>
+      {row.current ? (
+        <Button type="button" variant="noOutline" size="small" onClick={() => router.push(SETTINGS_MEMBERS_HREF)} className="w-fit px-0 underline underline-offset-2">
+          {row.memberCount === 0 ? "Invite members" : "Manage members"} <ArrowRightIcon size={14} />
+        </Button>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <Button type="button" variant="noOutline" size="small" busy={switching} onClick={manageInOtherOrg} className="w-fit px-0 underline underline-offset-2">
+            {row.memberCount === 0 ? "Invite members" : "Manage members"} <ArrowRightIcon size={14} />
+          </Button>
+          <span className="body-caption text-[var(--color-text-tertiary)]">Switches you to {row.name}, then opens Settings, Members.</span>
+        </div>
+      )}
+    </div>
   );
 }
