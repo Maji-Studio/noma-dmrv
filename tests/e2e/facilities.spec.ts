@@ -143,6 +143,12 @@ test.describe("Facility + Reactor UI CRUD", () => {
     await expect(
       page.locator("table tbody tr").filter({ hasText: reactorIdentifier }).first()
     ).toBeVisible({ timeout: 10000 });
+    // The Facility column is hidden by default; switch it on before checking it.
+    await page.getByRole("button", { name: "Columns" }).click();
+    await page
+      .getByRole("dialog", { name: "Column visibility" })
+      .getByLabel("Facility")
+      .check({ force: true });
     await expect(
       page.locator("table tbody tr").filter({ hasText: reactorIdentifier })
     ).toContainText(facilityName);

@@ -11,6 +11,7 @@ import { EntitySelect, ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
+import { FACILITY_COLUMN_HIDDEN_BY_DEFAULT } from "@/components/ui/data-table/data-table-helpers";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
@@ -384,6 +385,7 @@ export function OrderList() {
       <RecordLockListNotice read={orderLocks} />
 
       <DataTable
+        defaultColumnVisibility={FACILITY_COLUMN_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={orders}
         enableSorting={false}
