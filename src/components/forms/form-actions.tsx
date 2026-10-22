@@ -15,6 +15,7 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import {
+  get,
   useFormState,
   type Control,
   type FieldValues,
@@ -25,12 +26,14 @@ import { Notice } from "@/components/ui/notice";
 import { useSubmitBlock } from "@/components/ui/submit-block-context";
 import { useRefusalSlot } from "@/components/ui/refusal-slot-context";
 import { cn } from "@/lib/utils";
+import { splitErrorMessage } from "@/lib/error-title";
 import {
   useSideSheetActions,
   type SideSheetActions,
 } from "@/components/ui/entity-side-sheet/side-sheet-context";
 import { ServerError } from "./server-error";
 import { FormErrorSummary } from "./form-error-summary";
+import { LOCK_REFUSAL_ROOT } from "./use-save-refusal";
 import { readFieldDirectory, type FieldDirectory } from "./form-error-summary-dom";
 
 /** Room kept between a focused control and the sticky CTA row's top edge. */
@@ -170,8 +173,8 @@ export function FormActions<
         got it there moves to the top of the sheet, where Save used to be. */}
     {block?.readOnly && errorMessage && (
       refusalSlot
-        ? createPortal(<TopRefusal action={errorAction} />, refusalSlot)
-        : <TopRefusal action={errorAction} />
+        ? createPortal(<TopRefusal control={control} message={errorMessage} action={errorAction} />, refusalSlot)
+        : <TopRefusal control={control} message={errorMessage} action={errorAction} />
     )}
     {/* The error box scrolls with the form, after its last field. */}
     {!block?.readOnly && (
@@ -242,18 +245,47 @@ export function FormActions<
   );
 }
 
-/** What happened to the edit; the lock line below says why and how to free the record. */
+/** What a lock refusal says at the top; the lock line below keeps the reason. */
 const TOP_REFUSAL_TITLE = "Your changes were not saved.";
-const TOP_REFUSAL_DETAIL = "The fields show what is saved.";
 
 /**
  * The refusal of a record that turned read-only. The Save button that held
  * focus is gone, so the box takes it. A focused box needs a role and a name to
  * be read, so it is a named group and not a live region: a screen reader
- * hears it once, from focus. The lock line under it keeps the reason, so the
- * server's message is not repeated here.
+ * hears it once, from focus. Only a lock refusal is worded here, since it
+ * refused the whole edit and the lock line under the box keeps the reason;
+ * any other message (a partial save, a stale version, a form that has not
+ * moved to the shared refusal hook) shows as the server said it.
  */
-function TopRefusal({ action }: { action?: React.ReactNode }) {
+function TopRefusal<TFieldValues extends FieldValues, TContext, TTransformed>({
+  control,
+  message,
+  action,
+}: {
+  control?: Control<TFieldValues, TContext, TTransformed>;
+  message: string;
+  action?: React.ReactNode;
+}) {
+  return control
+    ? <LockAwareTopRefusal control={control} message={message} action={action} />
+    : <TopRefusalBox locked={false} message={message} action={action} />;
+}
+
+function LockAwareTopRefusal<TFieldValues extends FieldValues, TContext, TTransformed>({
+  control,
+  message,
+  action,
+}: {
+  control: Control<TFieldValues, TContext, TTransformed>;
+  message: string;
+  action?: React.ReactNode;
+}) {
+  const { errors } = useFormState({ control });
+  const locked = Boolean(get(errors, LOCK_REFUSAL_ROOT));
+  return <TopRefusalBox locked={locked} message={message} action={action} />;
+}
+
+function TopRefusalBox({ locked, message, action }: { locked: boolean; message: string; action?: React.ReactNode }) {
   const boxRef = React.useRef<HTMLDivElement>(null);
   const textId = React.useId();
   // Sanctioned useEffect: focus and scroll are imperative DOM work.
@@ -262,10 +294,11 @@ function TopRefusal({ action }: { action?: React.ReactNode }) {
     box?.scrollIntoView?.({ block: "nearest" });
     box?.focus({ preventScroll: true });
   }, []);
+  const { title, detail } = locked ? { title: TOP_REFUSAL_TITLE, detail: null } : splitErrorMessage(message);
   return (
     <div ref={boxRef} tabIndex={-1} role="group" aria-labelledby={textId} data-top-refusal="">
-      <Notice tone="error" live={false} id={textId} title={TOP_REFUSAL_TITLE}>
-        <p className="body-small">{" "}{TOP_REFUSAL_DETAIL}</p>
+      <Notice tone="error" live={false} id={textId} title={title}>
+        {detail && <p className="body-small">{" "}{detail}</p>}
         {action && <div className="mt-8">{action}</div>}
       </Notice>
     </div>

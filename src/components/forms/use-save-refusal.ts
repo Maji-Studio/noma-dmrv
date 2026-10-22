@@ -11,9 +11,16 @@
  * caller's fallback when there is no plan.
  */
 import { get, useFormState, type Control, type FieldValues, type Path, type UseFormResetField, type UseFormSetError } from "react-hook-form";
-import { planSaveRefusal } from "@/lib/save-refusal";
+import { isLockRefusal, planSaveRefusal } from "@/lib/save-refusal";
 import { LOCKED_ERROR_TYPE } from "./form-error-summary";
 import { locateInDirectory, readFieldDirectory } from "./form-error-summary-dom";
+
+/**
+ * Form-level marker of a lock refusal, filed under `errors.root` (which the
+ * error summary skips and the next submit clears). `FormActions` reads it to
+ * word the top refusal of a form that turned read-only.
+ */
+export const LOCK_REFUSAL_ROOT = "root.lockRefusal";
 
 /** `setError` type of a refused save's field error. */
 export const SERVER_ERROR_TYPE = "server";
@@ -64,6 +71,7 @@ export function useSaveRefusal<TFieldValues extends FieldValues, TContext, TTran
       if (locked) resetField(field as Path<TFieldValues>);
       setError(field as Path<TFieldValues>, { type: locked ? LOCKED_ERROR_TYPE : SERVER_ERROR_TYPE, message });
     }
+    if (isLockRefusal(error)) setError(LOCK_REFUSAL_ROOT as Path<TFieldValues>, { type: LOCKED_ERROR_TYPE });
     return plan.footer;
   };
 }

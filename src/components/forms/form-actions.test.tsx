@@ -2,6 +2,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useForm } from "react-hook-form";
+import { LOCK_REFUSAL_ROOT } from "./use-save-refusal";
 import { MapControls } from "@/components/map";
 import { RefusalSlotContext } from "@/components/ui/refusal-slot-context";
 import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-block-context";
@@ -205,6 +207,12 @@ describe("reserveStickyFooterSpace", () => {
   });
 });
 
+/** FormActions with a form whose lock refusal is filed, as `useSaveRefusal` does. */
+function LockRefused({ message }: { message: string }) {
+  const { control } = useForm({ errors: { root: { lockRefusal: { type: "locked" } } } });
+  return <div data-testid="form"><FormActions control={control} errorMessage={message} submitLabel="Save record" /></div>;
+}
+
 describe("FormActions refusal on a read-only form", () => {
   const SENT: SubmitBlock = { reason: "Sent", tone: "error", readOnly: true };
   afterEach(cleanup);
@@ -215,12 +223,12 @@ describe("FormActions refusal on a read-only form", () => {
     render(
       <RefusalSlotContext.Provider value={slot}>
         <SubmitBlockContext.Provider value={SENT}>
-          <div data-testid="form"><FormActions errorMessage="Locked. Its Removal was sent." submitLabel="Save record" /></div>
+          <LockRefused message="Locked. Its Removal was sent." />
         </SubmitBlockContext.Provider>
       </RefusalSlotContext.Provider>,
     );
-    // It says what happened to the edit; the lock line keeps the reason.
-    expect(slot.textContent).toContain("Your changes were not saved. The fields show what is saved.");
+    // A lock refusal says what happened to the edit; the lock line keeps the reason.
+    expect(slot.textContent).toBe("Your changes were not saved.");
     expect(slot.textContent).not.toContain("Its Removal was sent.");
     expect(screen.getByTestId("form").textContent).not.toContain("Its Removal was sent.");
     const box = slot.querySelector<HTMLElement>("[data-top-refusal]");
@@ -232,10 +240,28 @@ describe("FormActions refusal on a read-only form", () => {
     slot.remove();
   });
 
+  it("shows a refusal that is not a lock as the server worded it", () => {
+    const slot = document.createElement("div");
+    document.body.append(slot);
+    function Plain() {
+      const { control } = useForm();
+      return <FormActions control={control} errorMessage="Updated the application. The photo was not uploaded." />;
+    }
+    render(
+      <RefusalSlotContext.Provider value={slot}>
+        <SubmitBlockContext.Provider value={SENT}><Plain /></SubmitBlockContext.Provider>
+      </RefusalSlotContext.Provider>,
+    );
+    expect(slot.textContent).toContain("Updated the application.");
+    expect(slot.textContent).toContain("The photo was not uploaded.");
+    expect(slot.textContent).not.toContain("Your changes were not saved.");
+    slot.remove();
+  });
+
   it("renders the box inline without a slot instead of vanishing", () => {
     render(
       <SubmitBlockContext.Provider value={SENT}>
-        <div data-testid="form"><FormActions errorMessage="Locked. Its Removal was sent." submitLabel="Save record" /></div>
+        <LockRefused message="Locked. Its Removal was sent." />
       </SubmitBlockContext.Provider>,
     );
     expect(screen.getByTestId("form").textContent).toContain("Your changes were not saved.");

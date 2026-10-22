@@ -197,7 +197,8 @@ test.describe("Record locks on screen", () => {
       await expect(refusal).toBeVisible();
       await expect(refusal).toBeFocused();
       await expect(refusal).toHaveAttribute("role", "group");
-      await expect(refusal).toContainText("Your changes were not saved. The fields show what is saved.");
+      await expect(refusal).toContainText("Your changes were not saved.")
+      await expect(refusal).not.toContainText("The fields show what is saved");
       await expect(sheet.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
       // The header arrow and the footer both go back to the view.
       await expect(sheet.getByRole("button", { name: "Back to view" })).toHaveCount(2);

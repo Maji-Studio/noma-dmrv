@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useForm } from "react-hook-form";
 import { cleanup, render, screen } from "@testing-library/react";
 import { FormActions } from "@/components/forms/form-actions";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -290,12 +291,17 @@ describe("RecordUsedBy", () => {
   });
 });
 
+function LockRefusedActions() {
+  const { control } = useForm({ errors: { root: { lockRefusal: { type: "locked" } } } });
+  return <FormActions control={control} errorMessage="Locked. Its Removal was sent." submitLabel="Save record" />;
+}
+
 describe("RecordLockFormFrame refusal slot", () => {
   it("shows a refusal above the lock line once the record is Sent, with focus and no Save", () => {
     const sent = view("sent", [REMOVAL]);
     render(
       <RecordLockFormFrame lock={sent} status="ready">
-        <FormActions errorMessage="Locked. Its Removal was sent." submitLabel="Save record" />
+        <LockRefusedActions />
       </RecordLockFormFrame>,
     );
     const box = document.querySelector<HTMLElement>("[data-top-refusal]");

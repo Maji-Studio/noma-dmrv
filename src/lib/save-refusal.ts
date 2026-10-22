@@ -57,6 +57,11 @@ function formField(path: readonly (string | number)[], aliases: Readonly<Record<
   return (path[0] !== undefined ? aliases[String(path[0])] : undefined) ?? whole;
 }
 
+/** The refusal holds a lock issue: the edit was refused whole, not partly saved. */
+export function isLockRefusal(error: unknown): boolean {
+  return isActionError(error) && error.issues.some((issue) => issue.code === LOCK_CODE);
+}
+
 /**
  * Null means the form has nothing to add: not an `ActionError`, no issues
  * (including a lock that names no field), a stale-version refusal, or a conflict

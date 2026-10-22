@@ -115,7 +115,10 @@ describe("RecordLockFormFrame (picker edit dialogs)", () => {
 
 describe("a refusal once the record is Sent", () => {
   function RefusingForm() {
-    const { control, register } = useForm({ defaultValues: { notes: "Typed draft" } });
+    const { control, register } = useForm({
+      defaultValues: { notes: "Typed draft" },
+      errors: { root: { lockRefusal: { type: "locked" } } },
+    });
     return <form>
       <input {...register("notes")} />
       <FormActions control={control} errorMessage="This record is locked. Its Removal was sent." />

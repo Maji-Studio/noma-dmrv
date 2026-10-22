@@ -36,7 +36,7 @@ function Harness({ refusal }: { refusal: unknown }) {
   });
   return (
     <>
-      <form id={FORM_ID} aria-label="Sample" onSubmit={save}>
+      <form id={FORM_ID} aria-label="Sample" onSubmit={save} data-lock-refusal={errors.root?.lockRefusal ? "yes" : "no"}>
         <FormField id="labName" label="Lab name" error={errors.labName?.message}>
           <FormInput id="labName" {...register("labName")} />
         </FormField>
@@ -98,6 +98,18 @@ describe("useSaveRefusal", () => {
     expect(screen.getAllByText("Locked. Your change was not saved.").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(LOCK_REASON)).toHaveLength(1);
     expect((screen.getByLabelText("Wet mass") as HTMLInputElement).value).toBe("5");
+  });
+
+  it("marks only a lock refusal for the top refusal wording", async () => {
+    const lock = new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [issue(["weight"], LOCK_REASON, "certification_locked")] });
+    const { unmount } = render(<Harness refusal={lock} />);
+    await save();
+    await waitFor(() => expect(screen.getByRole("form", { name: "Sample" }).getAttribute("data-lock-refusal")).toBe("yes"));
+    unmount();
+    render(<Harness refusal={new ActionError({ error: "Refused", issues: [issue(["labName"], "Lab was not found.")] })} />);
+    await save();
+    await screen.findByText("Not saved. Fix 1 field.");
+    expect(screen.getByRole("form", { name: "Sample" }).getAttribute("data-lock-refusal")).toBe("no");
   });
 
   it("puts a lock on a field the operator did not change in the footer only", async () => {

@@ -231,9 +231,12 @@ hides its footer, so the refusal would vanish. `EntitySideSheet` (edit mode) and
 `RefusalSlotContext` (`src/components/ui/refusal-slot-context.tsx`; the element is
 kept in a `useState` ref callback, no effect). On `block.readOnly` with an error
 message `FormActions` portals `TopRefusal` into that slot and focuses it, since
-the Save button that held focus is gone. It says what happened to the edit
-("Your changes were not saved. The fields show what is saved."); the lock line
-below keeps the reason and how to free the record. It is a focusable `role="group"`
+the Save button that held focus is gone. After a `certification_locked` refusal it says only
+"Your changes were not saved." (`useSaveRefusal` files `errors.root.lockRefusal`, which
+`FormActions` reads through `control`; the error summary skips `root`, the next submit
+clears it); the lock line below keeps the reason and how to free the record. Any other
+message (a partial save, a stale version, a form not yet on the hook) shows as the
+server worded it, since the fields were not necessarily reverted. It is a focusable `role="group"`
 named by its own text, not a live region, so a screen reader hears it once from
 focus. Without a slot the box renders inline. A refusal made only of locks focuses
 the summary box (also a named group) rather than the field, which is disabled once
