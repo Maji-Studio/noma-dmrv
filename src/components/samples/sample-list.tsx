@@ -44,6 +44,7 @@ import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { SAMPLE_DELETE_MESSAGE } from "./sample-delete-copy";
 import { formatMoisturePercent, MASS_MOISTURE_LABELS } from "@/lib/mass-moisture";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
@@ -666,7 +667,7 @@ export function SampleList({
       <DeleteConfirmDialog
         isOpen={!!deletingSampleId}
         title="Delete Sample"
-        message="Delete this Sample? Samples linked to credit batches cannot be deleted. This action cannot be undone."
+        message={SAMPLE_DELETE_MESSAGE}
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingSampleId(null); setDeleteError(null); }}
         isPending={deleteSample.isPending}
