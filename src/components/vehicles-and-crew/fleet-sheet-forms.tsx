@@ -14,7 +14,6 @@ import { OperatorForm } from "@/components/operators/operator-form";
 import { VehicleForm } from "@/components/vehicles/vehicle-form";
 import type { Driver, Operator, Vehicle } from "@/db/schema";
 import { createDriverFn, createOperatorFn, createVehicleFn } from "@/fn/quick-add";
-import { useCreateIntentKey } from "@/hooks/use-create-intent-key";
 import {
   useInvalidateFleetKind,
   useUpdateDriver,
@@ -44,7 +43,7 @@ function VehicleSheetForm({ record, onSaved, onCancel }: SheetFormProps<Vehicle>
   const invalidate = useInvalidateFleetKind();
   const create = useQuickAddSubmit<VehicleFormData>({
     entityType: "vehicle",
-    serverFn: (data) => createVehicleFn(toVehiclePayload(data)),
+    serverFn: (data, intentKey) => createVehicleFn(toVehiclePayload(data), { intentKey }),
     onSuccess: () => {
       invalidate("vehicle");
       onSaved("Vehicle created.");
@@ -79,15 +78,9 @@ function VehicleSheetForm({ record, onSaved, onCancel }: SheetFormProps<Vehicle>
 
 function DriverSheetForm({ record, onSaved, onCancel }: SheetFormProps<Driver>) {
   const invalidate = useInvalidateFleetKind();
-  // One key per open draft: a retry after a lost response replays the first save.
-  const intent = useCreateIntentKey();
   const create = useQuickAddSubmit<DriverFormData>({
     entityType: "driver",
-    serverFn: async (data) => {
-      const result = await createDriverFn(toDriverPayload(data), { intentKey: intent.current() });
-      if (result.success) intent.rotate();
-      return result;
-    },
+    serverFn: (data, intentKey) => createDriverFn(toDriverPayload(data), { intentKey }),
     onSuccess: () => {
       invalidate("driver");
       onSaved("Driver created.");
@@ -122,14 +115,9 @@ function DriverSheetForm({ record, onSaved, onCancel }: SheetFormProps<Driver>) 
 
 function OperatorSheetForm({ record, onSaved, onCancel }: SheetFormProps<Operator>) {
   const invalidate = useInvalidateFleetKind();
-  const intent = useCreateIntentKey();
   const create = useQuickAddSubmit<OperatorFormData>({
     entityType: "operator",
-    serverFn: async (data) => {
-      const result = await createOperatorFn(toOperatorPayload(data), { intentKey: intent.current() });
-      if (result.success) intent.rotate();
-      return result;
-    },
+    serverFn: (data, intentKey) => createOperatorFn(toOperatorPayload(data), { intentKey }),
     onSuccess: () => {
       invalidate("operator");
       onSaved("Operator created.");
