@@ -314,15 +314,15 @@ describe('postingWetSteps', () => {
   });
 
   it('updates a mix loss from +10 to -50 when a late run cancels its re-estimate', () => {
-    expect(postingWetSteps([drawn()], [posting]).get('loss')).toBe(10);
+    expect(postingWetSteps([drawn()], [posting]).get('loss')?.deltaKg).toBe(10);
     const bases = [drawn(), layer('b', '200', '80')];
-    expect(postingWetSteps(bases, [posting]).get('loss')).toBe(-50);
+    expect(postingWetSteps(bases, [posting]).get('loss')?.deltaKg).toBe(-50);
     expect(estimateStock(bases, NOW)).toMatchObject({ wetKg: 250, solidsKg: 135 });
   });
 
   it('keeps a split re-estimate and ignores physically future intake', () => {
-    expect(postingWetSteps([drawn('split'), layer('b', '200', '80')], [posting]).get('loss')).toBe(10);
-    expect(postingWetSteps([drawn(), layer('b', '200', '80', NOW)], [posting]).get('loss')).toBe(10);
+    expect(postingWetSteps([drawn('split'), layer('b', '200', '80')], [posting]).get('loss')?.deltaKg).toBe(10);
+    expect(postingWetSteps([drawn(), layer('b', '200', '80', NOW)], [posting]).get('loss')?.deltaKg).toBe(10);
   });
 
   it('uses posting order and the solids held then, including layers now empty', () => {
@@ -330,20 +330,20 @@ describe('postingWetSteps', () => {
     const bases = [{ ...drawn(), remainingSolidsKg: decimal('0'), removals: [...drawn().removals,
       { wetKg: decimal('0'), solidsKg: decimal('0'), sequence: count.sequence, kind: 'count', occurredAt: T0 }] }];
     const changes = postingWetSteps(bases, [count, posting]);
-    expect(changes.get('loss')).toBe(10);
-    expect(changes.get('count')).toBe(-110);
-    expect(100 + changes.get('loss')! + changes.get('count')!).toBe(estimateStock(bases, NOW).wetKg);
+    expect(changes.get('loss')?.deltaKg).toBe(10);
+    expect(changes.get('count')?.deltaKg).toBe(-110);
+    expect(100 + changes.get('loss')!.deltaKg! + changes.get('count')!.deltaKg!).toBe(estimateStock(bases, NOW).wetKg);
   });
 
   it('returns null for unknown held wet, and no entry for a posting without moisture facts', () => {
     const bases = [drawn(), layer('unknown', '10', '8', T0, { recorded: null })];
-    expect(postingWetSteps(bases, [posting]).get('loss')).toBeNull();
+    expect(postingWetSteps(bases, [posting]).get('loss')).toEqual({ deltaKg: null, afterKg: null });
     expect(postingWetSteps(bases, [{ ...posting, sequence: BigInt(9) }]).has('loss')).toBe(false);
   });
 
   it('keeps an old below-solids intake recorded, without flooring its starting wet', () => {
     const bases = [layer('old', '70', '80', T0, { remainingSolidsKg: decimal('70'),
       readings: [{ sequence: posting.sequence, occurredAt: T1, solidsKg: decimal('70'), moisturePercent: 0 }] })];
-    expect(postingWetSteps(bases, [posting]).get('loss')).toBe(0);
+    expect(postingWetSteps(bases, [posting]).get('loss')?.deltaKg).toBe(0);
   });
 });

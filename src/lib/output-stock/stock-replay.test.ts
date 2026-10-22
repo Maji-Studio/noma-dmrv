@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { decimal } from './exact';
-import { estimateStock } from './moisture-estimate';
+import { estimateStock, postingWetSteps, type LayerMoistureBasis } from './moisture-estimate';
 import { replayStock } from "./stock-replay";
 
 const AT = (hour: number) => `2026-10-14T${String(hour).padStart(2, "0")}:00:00.000Z`;
@@ -92,7 +92,6 @@ describe("replayStock", () => {
   });
 });
 
-
 it('replays the saved re-estimate delta to the same stock as the live estimate', () => {
   const live = estimateStock([{ layerId: 'b1', placedAt: AT(9), remainingSolidsKg: decimal('55'),
     recorded: { solidsKg: decimal('80'), wetKg: decimal('100') }, readings: [],
@@ -107,7 +106,6 @@ it('replays the saved re-estimate delta to the same stock as the live estimate',
   expect(last([measured, loss, count])).toMatchObject({ wetKg: 60, solidsKg: 45, dryKg: 45 });
 });
 
-
 it('uses recomputed wet changes despite stale frozen preview balances', () => {
   const lateRun = entry({ id: 'late', kind: 'intake', occurredAt: AT(10), recordedAt: AT(15),
     dryMassKg: -80, wetDeltaKg: 200, solidsDeltaKg: 80 });
@@ -115,4 +113,40 @@ it('uses recomputed wet changes despite stale frozen preview balances', () => {
     dryMassKg: 25, wetDeltaKg: -50, savedWetDeltaKg: 10, solidsDeltaKg: -25,
     afterWetKg: 110, afterSolidsKg: 55 });
   expect(last([loss, lateRun, measured])).toMatchObject({ wetKg: 250, solidsKg: 135, dryKg: 135 });
+});
+
+it('recovers current counted wet after a late intake makes the saved balance stale', () => {
+  const bases: LayerMoistureBasis[] = [
+    { layerId: 'legacy', placedAt: AT(9), remainingSolidsKg: decimal('80'), recorded: null, removals: [],
+      readings: [{ moisturePercent: 20, solidsKg: decimal('80'), occurredAt: AT(12), sequence: BigInt(1) }] },
+    { layerId: 'late', placedAt: AT(10), remainingSolidsKg: decimal('80'),
+      recorded: { wetKg: decimal('200'), solidsKg: decimal('80') }, readings: [], removals: [] },
+  ];
+  const change = postingWetSteps(bases, [{ id: 'count', occurredAt: AT(12), sequence: BigInt(1) }]).get('count')!;
+  expect(change).toEqual({ deltaKg: null, afterKg: 300 });
+  const history = [
+    entry({ id: 'legacy', kind: 'intake', dryMassKg: -80, solidsDeltaKg: 80, wetDeltaKg: null }),
+    entry({ id: 'late', kind: 'intake', occurredAt: AT(10), recordedAt: AT(15), dryMassKg: -80, solidsDeltaKg: 80, wetDeltaKg: 200 }),
+    entry({ id: 'count', kind: 'count', occurredAt: AT(12), recordedAt: AT(12), solidsDeltaKg: 0,
+      wetDeltaKg: change.deltaKg, currentAfterWetKg: change.afterKg, afterWetKg: 100 }),
+  ];
+  expect(last(history)?.wetKg).toBe(300);
+  expect(last(history)?.wetKg).toBe(estimateStock(bases, AT(16)).wetKg);
+});
+
+it('counts a loss from a later-placed layer in both history and balance', () => {
+  const placedAt = '2026-09-16T12:00:00.000Z';
+  const occurredAt = '2026-09-15T12:00:00.000Z';
+  const bases: LayerMoistureBasis[] = [{ layerId: 'later', placedAt, remainingSolidsKg: decimal('64'),
+    recorded: { wetKg: decimal('100'), solidsKg: decimal('80') }, readings: [],
+    removals: [{ wetKg: decimal('20'), solidsKg: decimal('64'), sequence: BigInt(1), occurredAt, kind: 'loss', stockMode: 'split' }] }];
+  const change = postingWetSteps(bases, [{ id: 'loss', occurredAt, sequence: BigInt(1) }]).get('loss')!;
+  expect(change).toEqual({ deltaKg: -20, afterKg: 80 });
+  const history = [
+    entry({ ...measured, id: 'later', occurredAt: placedAt, recordedAt: placedAt }),
+    entry({ id: 'loss', kind: 'loss', occurredAt, recordedAt: AT(9), dryMassKg: 16, solidsDeltaKg: -16,
+      wetDeltaKg: change.deltaKg, currentAfterWetKg: change.afterKg }),
+  ];
+  expect(last(history)?.wetKg).toBe(80);
+  expect(last(history)?.wetKg).toBe(estimateStock(bases, AT(16)).wetKg);
 });

@@ -21,7 +21,7 @@ import { savedIngredientSolids } from './output-stock-ingredients';
  * Intake facts retain their recorded wet mass; movement facts remain immutable.
  * A snapshot read passes its transaction as `reader`, so history and stock agree.
  */
-export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: string, reader: Pick<DbTransaction, 'select' | 'selectDistinct'> = db): Promise<OutputStockHistoryEntry[]> {
+export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: string, reader: Pick<DbTransaction, 'select' | 'selectDistinct'> = db, options: { recomputeWet?: boolean } = {}): Promise<OutputStockHistoryEntry[]> {
   requireOrgScope(ctx);
   const [bin] = await reader.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
   if (!bin) throw new SafeError('Storage bin not found');
@@ -49,6 +49,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     const direction = m.outputKind === 'reversal' ? -1 : 1;
     const difference = (after: number | null | undefined, before: number | null | undefined) =>
       typeof after === 'number' && typeof before === 'number' ? direction * (after - before) : null;
+    const savedWetDeltaKg = difference(preview?.afterEstimatedWetKg, preview?.beforeEstimatedWetKg);
     const targetProductId = m.inputSnapshot?.targetBiocharProductId;
     const deliveryId = allocations.find(a => a.deliveryId)?.deliveryId ?? (typeof m.inputSnapshot?.deliveryId === 'string' ? m.inputSnapshot.deliveryId : null);
     const savedSources = orderedSourcesSchema.safeParse(m.inputSnapshot?.sources);
@@ -73,8 +74,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
       correctsMovementId: m.correctsMovementId, deliveryId,
       source: deliveryId ? { entity: 'delivery', id: deliveryId }
         : typeof targetProductId === 'string' ? { entity: 'biocharProduct', id: targetProductId } : undefined,
-      savedWetDeltaKg: difference(preview?.afterEstimatedWetKg, preview?.beforeEstimatedWetKg),
-      wetDeltaKg: difference(preview?.afterEstimatedWetKg, preview?.beforeEstimatedWetKg),
+      savedWetDeltaKg, wetDeltaKg: savedWetDeltaKg,
       solidsDeltaKg: difference(preview?.afterSolidsKg, preview?.beforeSolidsKg),
       afterWetKg: typeof preview?.afterEstimatedWetKg === 'number' ? preview.afterEstimatedWetKg : null,
       afterSolidsKg: typeof preview?.afterSolidsKg === 'number' ? preview.afterSolidsKg : null,
@@ -129,10 +129,18 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     }
   }
   history.sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
-  let balance = 0;
+  const entryIds = new Set(history.map(entry => entry.id));
+  const cancelledIds = new Set(history.flatMap(entry => entry.kind === 'reversal'
+    && entry.correctsMovementId !== null && entryIds.has(entry.correctsMovementId)
+    ? [entry.id, entry.correctsMovementId] : []));
+  let auditBalance = 0;
+  let liveBalance = 0;
   for (const entry of [...history].sort(stockOrder)) {
+    const live = !cancelledIds.has(entry.id);
+    const balance = live ? liveBalance : auditBalance;
     if (entry.kind === 'intake' || entry.id.endsWith(':placement')) { entry.beforeDryKg = balance; entry.afterDryKg = balance - entry.dryMassKg; }
-    balance -= entry.dryMassKg;
+    auditBalance -= entry.dryMassKg;
+    if (live) liveBalance -= entry.dryMassKg;
   }
   // The correction path refuses an applied delivery too; locking it here keeps the delivery's other fields saveable.
   const deliveryIds = [...new Set(history.flatMap(entry => entry.deliveryId ? [entry.deliveryId] : []))];
@@ -145,11 +153,14 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   } catch (error) {
     if (!(error instanceof UnresolvedOutputStockError)) throw error;
   }
-  if (layers) {
+  if (layers && options.recomputeWet !== false) {
     const bases = await getLayerMoistureBases(ctx, bin, layers, reader);
     const changes = postingWetSteps(bases, movements.flatMap(({ movement }) => movement.occurredAt
       ? [{ id: movement.id, sequence: movement.postingSequence, occurredAt: movement.occurredAt.toISOString() }] : []));
-    for (const entry of history) if (changes.has(entry.id)) entry.wetDeltaKg = changes.get(entry.id)!;
+    for (const entry of history) {
+      const change = changes.get(entry.id);
+      if (change) { entry.wetDeltaKg = change.deltaKg; entry.currentAfterWetKg = change.afterKg; }
+    }
   }
   const editableIds = history.filter(entry => entry.kind !== 'reversal' && ['loss', 'delivery'].includes(entry.eventKind ?? entry.kind)).map(entry => entry.id);
   const certificationLocks = await getOutputMovementCertificationLocks(ctx, reader, editableIds, rows);

@@ -59,7 +59,6 @@ it('keeps an explicit saved order even when placement and allocation order diffe
   expect((await getOutputStockHistory(ctx, 'bin'))[0].sources).toEqual(sources);
 });
 
-
 it('uses physical intake dry balances but returns recorded order', async () => {
   const rows = historyRows('fifo', ['2026-09-12', '2026-09-13'], ['1', '2']);
   rows.set(productionRuns, [
@@ -76,12 +75,12 @@ it('uses physical intake dry balances but returns recorded order', async () => {
   expect(history.find(entry => entry.id === 'movement')).toMatchObject({ beforeDryKg: 200, afterDryKg: 50 });
 });
 
-it('recomputes wet changes while preserving the saved preview and recorded intake', async () => {
+it.each([true, false])('recomputes wet changes with a saved wet preview: %s', async (hasSavedWet) => {
   const rows = historyRows('pro_rata', ['2026-09-12', '2026-09-13'], ['1', '2']);
   rows.set(binMovements, [{ actorName: null, movement: {
     id: 'movement', outputKind: 'loss', occurredAt: new Date(time), createdAt: new Date(time), postingSequence: BigInt(3),
     outputDryDeltaKg: '-25', balanceBeforeDryKg: '80', balanceAfterDryKg: '55', correctsMovementId: null,
-    inputSnapshot: { kind: 'loss', preview: { beforeEstimatedWetKg: 100, afterEstimatedWetKg: 110, beforeSolidsKg: 80, afterSolidsKg: 55 } },
+    inputSnapshot: { kind: 'loss', preview: { beforeEstimatedWetKg: hasSavedWet ? 100 : null, afterEstimatedWetKg: hasSavedWet ? 110 : null, beforeSolidsKg: 80, afterSolidsKg: 55 } },
   } }]);
   rows.set(productionRuns, [{ id: LAYER_B, code: 'B', status: 'complete', biocharStorageLocationId: 'bin',
     endTime: new Date('2026-09-13'), updatedAt: new Date('2026-09-17'), biocharOutputKg: 200, biocharDryMassKg: 80, biocharMoisturePercent: 60 }]);
@@ -94,6 +93,15 @@ it('recomputes wet changes while preserving the saved preview and recorded intak
       recorded: { wetKg: decimal('200'), solidsKg: decimal('80') }, readings: [], removals: [] },
   ]);
   const history = await getOutputStockHistory(ctx, 'bin');
-  expect(history.find(entry => entry.id === 'movement')).toMatchObject({ wetDeltaKg: -50, savedWetDeltaKg: 10, afterWetKg: 110 });
+  expect(history.find(entry => entry.id === 'movement')).toMatchObject({ wetDeltaKg: -50, currentAfterWetKg: 250, savedWetDeltaKg: hasSavedWet ? 10 : null, afterWetKg: hasSavedWet ? 110 : null });
   expect(history.find(entry => entry.id === LAYER_B)).toMatchObject({ wetDeltaKg: 200, wetMassKg: 200 });
+});
+
+it('can omit wet recomputation for sub-bin history readers', async () => {
+  historyRows('fifo', ['2026-09-12', '2026-09-13'], ['1', '2']);
+  vi.spyOn(stock, 'readOutputBinAllLayers').mockResolvedValue({ layers: [], allLayersDryKg: '0.000', availableDryKg: '0.000', expectedSolidsKg: decimal('0') });
+  const bases = vi.spyOn(stock, 'getLayerMoistureBases');
+  const history = await getOutputStockHistory(ctx, 'bin', undefined, { recomputeWet: false });
+  expect(bases).not.toHaveBeenCalled();
+  expect(history.find(entry => entry.id === 'movement')).not.toHaveProperty('currentAfterWetKg');
 });

@@ -55,7 +55,9 @@ async function parity(f: PostedStockParents, storageLocationId: string) {
   const balanceParts = stockParts(balance);
   for (const key of ['waterKg', 'ingredientSolidsKg', 'wetKg'] as const) equalKg(replayParts[key], balanceParts[key]);
   // Cancelled placement pairs retain their audit balances (100 -> 40), while
-  // the display replay excludes both. Only live intakes have replay parity.
+  // the display replay excludes both. Live intake dry before/after balances
+  // match physical-order replay with cancelled pairs removed; movement balances
+  // stay frozen in posting order and need not match that replay.
   for (const step of steps.filter(step => step.live && step.entry.kind === 'intake')) {
     equalKg(step.entry.beforeDryKg, step.before.dryKg, DRY_TOLERANCE_KG);
     equalKg(step.entry.afterDryKg, step.after.dryKg, DRY_TOLERANCE_KG);
@@ -117,12 +119,14 @@ it('5: deleted pure product and corrected loss retain parity', async () => {
   await db.update(storageLocations).set({ formulationId: f.pure.id }).where(and(eq(storageLocations.organizationId, f.ctx.organizationId), eq(storageLocations.id, f.bin.id)));
   await postProduct(f, { massKg: 40 });
   const removed = await postProduct(f, { massKg: 60 });
+  const interleaved = await postProduct(f, { massKg: 20 });
   await deleteBiocharProduct(f.ctx, removed.id, removed.version);
   const loss = await postMeasurement(f, { kind: 'loss', wetMassKg: 10, moisturePercent: 0 });
   await postMeasurement(f, { kind: 'loss', wetMassKg: 5, moisturePercent: 0, correctsMovementId: loss.movementId });
   const { end, history } = await parity(f, f.bin.id);
-  expect(end).toMatchObject({ dryKg: 35, wetKg: 35 });
-  expect(history.find(entry => entry.id.endsWith(':placement'))).toMatchObject({ beforeDryKg: 100, afterDryKg: 40 });
+  expect(end).toMatchObject({ dryKg: 55, wetKg: 55 });
+  expect(history.find(entry => entry.id.endsWith(':placement'))).toMatchObject({ beforeDryKg: 120, afterDryKg: 60 });
+  expect(history.find(entry => entry.id === interleaved.id)).toMatchObject({ beforeDryKg: 40, afterDryKg: 60 });
 });
 
 it('6: mix products retain compost solids by name through a re-estimate', async () => {

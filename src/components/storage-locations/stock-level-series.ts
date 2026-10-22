@@ -1,5 +1,5 @@
-import { stockWaterKg } from "@/lib/output-stock/stock-parts";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
+import { stockWaterKg } from "@/lib/output-stock/stock-parts";
 import { replayStock } from "@/lib/output-stock/stock-replay";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 

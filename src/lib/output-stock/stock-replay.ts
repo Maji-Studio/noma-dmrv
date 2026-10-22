@@ -1,14 +1,9 @@
 /**
  * The output bin's stock replayed from its history: the one rule the stock
- * chart and the history both read. Live entries replay their current wet and frozen solids changes
- * in physical time, so a back-dated entry lands where it happened, and a
- * correction pair cancels out. Dry biochar always has a figure, and so does
- * every intake's wet mass (a run must carry moisture to complete). Solids,
- * and wet mass without a resolved movement change,
- * turn unknown at that entry, and become known again when the bin is emptied
- * or a movement's own frozen balance after it gives one. A frozen balance only
- * counts while it is current: once an earlier-dated entry was recorded after
- * it was saved, the balance never saw that entry and the figure stays unknown.
+ * chart and history both read. Live entries replay current wet and frozen
+ * solids changes in physical time; correction pairs cancel out. Unknown wet
+ * can recover from a recomputed after-value. Frozen after-balances recover
+ * unknown figures only when no earlier-dated entry was recorded after them.
  */
 import { STOCK_PART_MIN_KG } from "@/config/output-stock";
 import { stockOrder } from "./stock-order";
@@ -74,7 +69,8 @@ export function applyStockEntry(state: StockState, entry: OutputStockHistoryEntr
   for (const part of entry.ingredientSolidsDeltas ?? []) ingredients.set(part.name, (ingredients.get(part.name) ?? 0) + part.solidsKg);
   const rebase = (value: number | null | undefined) => (frozenIsCurrent ? frozenAfter(entry, value) : null);
   let solidsKg = runningKg(state.solidsKg, entry.solidsDeltaKg) ?? rebase(entry.afterSolidsKg);
-  let wetKg = runningKg(state.wetKg, entry.wetDeltaKg) ?? rebase(entry.afterWetKg);
+  let wetKg = runningKg(state.wetKg, entry.wetDeltaKg)
+    ?? frozenAfter(entry, entry.currentAfterWetKg) ?? rebase(entry.afterWetKg);
   // An emptied bin holds nothing, whatever the batches it held were missing.
   if (Math.abs(dryKg) < STOCK_PART_MIN_KG) {
     solidsKg ??= 0;

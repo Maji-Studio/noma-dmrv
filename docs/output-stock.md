@@ -167,21 +167,26 @@ is hidden. `stock-parts.ts` owns unrounded display composition: `subBinFigures`
 reads a split layer's wet figure and `pileFigures` takes the pile's own wet total.
 `stockParts` exposes raw dry biochar, ingredient solids, water and wet mass, plus
 layout rows (water, named ingredients, unnamed remainder, dry biochar). Only
-layout rows use `STOCK_PART_MIN_KG`; history changes keep their own display
-threshold. A split bay's size is wet when water is known, otherwise solids,
+layout rows filter parts by `STOCK_PART_MIN_KG`; `stockWaterKg` also uses it
+as the below-solids tolerance. History changes keep their own display threshold.
+A split bay's size is wet when water is known, otherwise solids,
 otherwise dry biochar, without rounding even a tiny remaining sub-bin.
 
 Late-recorded intake can change earlier wet estimates in a mix pile. History
 recomputes each movement's wet change through the balance's posting-order
-moisture model (`postingWetSteps`); intake keeps its recorded wet mass. Past
-days and chart points update to end at the current balance. The row retains
+moisture model (`postingWetSteps`) from current layers, including movements saved
+under older moisture rules and legacy movements saved without a wet figure,
+which now get a computed change when the current layers resolve it. Intake
+keeps its recorded wet mass. Past days and chart points update to end at the current balance. The row retains
 its saved preview change in `savedWetDeltaKg` for details; measurements and
 saved allocations never change. For example, adding a late 200 kg wet run to
 100 kg wet before a 50 kg loss removes the earlier re-estimate: history ends
 at 250 kg instead of 310 kg, while the saved change remains +10 kg.
 
 Water is display only; no balance, guard, preview or posting reads it. The
-replay re-bases an unknown wet or solids figure on a movement's saved
+replay first re-bases unknown wet on `currentAfterWetKg`, the recomputed
+after-value, even when a late intake made the saved balance stale. Otherwise,
+it re-bases an unknown wet or solids figure on a movement's saved
 after-balance only while no earlier-dated entry was recorded after that balance
 was saved. A run intake counts as recorded when its output was posted (the
 run's last save as complete, `updatedAt`), not when the run was created. Bay, pile-band and chart
@@ -274,8 +279,9 @@ posting, correction, and history modules live in `src/data-access/output-stock*`
 
 `stock-order.ts` owns physical history order independently of the display replay.
 Intake dry before/after balances use that order; movements retain their saved
-posting-order balances. Cancelled pairs remain in these audit balances, while
-the display replay excludes both entries.
+posting-order balances. Live intake balances exclude cancelled pairs, matching
+the display replay. Cancelled intakes and placement reversals keep their audit
+balances with those pairs included.
 
 `stock-parts.test.ts`, `stock-replay.test.ts` and `moisture-estimate.test.ts`
 cover composition, stale saved balances and posting wet changes. The six

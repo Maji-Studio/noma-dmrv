@@ -26,7 +26,7 @@ const eslintConfig = defineConfig([
     files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/components/storage-locations/**", "src/lib/output-stock/stock-{replay,parts}.test.ts"],
     rules: {
-      "import/no-restricted-paths": ["error", { zones: [
+      "import/no-restricted-paths": ["error", { basePath: import.meta.dirname, zones: [
         {
           target: "./src/**/*.{ts,tsx}",
           from: ["./src/lib/output-stock/stock-replay.ts", "./src/lib/output-stock/stock-parts.ts"],
