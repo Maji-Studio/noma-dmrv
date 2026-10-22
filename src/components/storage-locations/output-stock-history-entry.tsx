@@ -110,13 +110,14 @@ function PartsTable({ row, subject }: { row: HistoryRow; subject: string }) {
   );
 }
 
-/** The wet change the entry was saved with, when a later entry has since moved today's estimate of it. Null when they agree. */
+/** The wet change the entry was saved with, when the history now recomputes it to a different figure. Null when the shown figures match. */
 export function savedWetChange(row: HistoryRow): string | null {
   const { savedWetDeltaKg, wetDeltaKg } = row.entry;
   if (row.status !== "counts" || savedWetDeltaKg == null || wetDeltaKg == null) return null;
-  if (Math.abs(savedWetDeltaKg - wetDeltaKg) < MIN_SHOWN_CHANGE_KG) return null;
-  const figure = formatPartFigures({ label: WET_MASS_LABEL, changeKg: savedWetDeltaKg, afterKg: 0, estimated: true }).change;
-  return `${WET_MASS_LABEL} ${figure}. A later entry changed this estimate.`;
+  const figureOf = (changeKg: number) => formatPartFigures({ label: WET_MASS_LABEL, changeKg, afterKg: 0, estimated: true }).change;
+  const saved = figureOf(savedWetDeltaKg);
+  if (saved === figureOf(wetDeltaKg)) return null;
+  return `${WET_MASS_LABEL} ${saved}. Re-estimated with the entries known now.`;
 }
 
 function facts(row: HistoryRow, timeZone: string, linked: boolean) {
@@ -125,7 +126,6 @@ function facts(row: HistoryRow, timeZone: string, linked: boolean) {
   const batches = entry.allocations.map((allocation) => allocation.code);
   const saved = savedWetChange(row);
   return [
-    ...(saved ? [{ label: "When saved", value: saved }] : []),
     ...(batches.length > 0 ? [{ label: batches.length === 1 ? "Batch" : "Batches", value: batches.join(", ") }] : []),
     ...(entry.moisturePercent !== null ? [{ label: "Moisture", value: formatMoisturePercent(entry.moisturePercent) }] : []),
     ...(replaces ? [{ label: "Replaces", value: <EntryLink entryId={replaces.id} linked={linked}>{`${entryAmount(replaces, row.kind, formatMassKg)}, ${formatFacilityDateTime(replaces.occurredAt, timeZone)}`}</EntryLink> }] : []),
@@ -133,6 +133,7 @@ function facts(row: HistoryRow, timeZone: string, linked: boolean) {
     // A deleted Lost mass keeps the operator's reason on the crossed-out entry, as on feedstock bins.
     ...(row.kind === "loss" && reversedBy && !replacedBy && reversedBy.reason ? [{ label: "Why deleted", value: reversedBy.reason }] : []),
     { label: "Recorded", value: `${recordedLater ? formatFacilityDateTime(entry.recordedAt, timeZone) : "At the time"}${entry.actorName ? ` by ${entry.actorName}` : ""}` },
+    ...(saved ? [{ label: "Saved change", value: saved }] : []),
   ];
 }
 

@@ -11,7 +11,7 @@ import { HistoryEntry } from "./output-stock-history-entry";
 
 const AT = "2026-09-15T12:00:00.000Z";
 const FACILITY_ID = "00000000-0000-4000-8000-000000000002";
-const SAVED_LINE = "Wet mass +10 kg. A later entry changed this estimate.";
+const SAVED_LINE = "Wet mass +10 kg. Re-estimated with the entries known now.";
 
 function entry(values: Partial<OutputStockHistoryEntry> & Pick<OutputStockHistoryEntry, "id" | "kind">): OutputStockHistoryEntry {
   return { occurredAt: AT, recordedAt: AT, actorName: "Asha", reason: "", wetMassKg: null, moisturePercent: 50, dryMassKg: 0,
@@ -35,16 +35,29 @@ async function renderLoss(loss: Partial<OutputStockHistoryEntry>): Promise<strin
 describe("HistoryEntry when saved", () => {
   it("shows the saved wet change when a later entry moved the estimate", async () => {
     const output = await renderLoss({ wetDeltaKg: -50, savedWetDeltaKg: 10 });
-    expect(output).toContain("When saved");
+    expect(output).toContain("Saved change");
     expect(output).toContain(SAVED_LINE);
   });
 
+  it("shows nothing when the figures round to the same text", async () => {
+    expect(await renderLoss({ wetDeltaKg: 10.4, savedWetDeltaKg: 10.2 })).not.toContain("Saved change");
+  });
+
+  it("shows the detail when the rounded figures differ", async () => {
+    expect(await renderLoss({ wetDeltaKg: 12.4, savedWetDeltaKg: 10.2 })).toContain("Saved change");
+  });
+
+  it("puts the detail after Recorded", async () => {
+    const output = await renderLoss({ wetDeltaKg: -50, savedWetDeltaKg: 10 });
+    expect(output.indexOf("Saved change")).toBeGreaterThan(output.indexOf("Recorded"));
+  });
+
   it("shows nothing when the saved and current wet change are equal", async () => {
-    expect(await renderLoss({ wetDeltaKg: -50, savedWetDeltaKg: -50 })).not.toContain("When saved");
+    expect(await renderLoss({ wetDeltaKg: -50, savedWetDeltaKg: -50 })).not.toContain("Saved change");
   });
 
   it("shows nothing when there is no saved figure", async () => {
-    expect(await renderLoss({ wetDeltaKg: -50, savedWetDeltaKg: null })).not.toContain("When saved");
+    expect(await renderLoss({ wetDeltaKg: -50, savedWetDeltaKg: null })).not.toContain("Saved change");
   });
 });
 
