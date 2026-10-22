@@ -94,36 +94,33 @@ export function ChainNodeSheet({
           )}
         </SlideOverPanel.Body>
 
-        {(drillable && onTrace) || (href && onViewRecord) ? (
-          <SlideOverPanel.Footer className="justify-stretch">
-            {drillable && onTrace ? (
-              <Button
-                variant="primary"
-                className="flex-1"
-                onClick={() => {
-                  onOpenChange(false);
-                  onTrace();
-                }}
-              >
-                <TreeStructureIcon size={14} weight="bold" />
-                Trace rollback
-              </Button>
-            ) : null}
-            {href && onViewRecord ? (
-              <Button
-                variant="default"
-                className="flex-1"
-                onClick={() => {
-                  onOpenChange(false);
-                  onViewRecord();
-                }}
-              >
-                <ArrowUpRightIcon size={14} weight="bold" />
-                View full record
-              </Button>
-            ) : null}
-          </SlideOverPanel.Footer>
-        ) : null}
+        <SlideOverPanel.Footer>
+          {drillable && onTrace ? (
+            <Button
+              variant="primary"
+              onClick={() => {
+                onOpenChange(false);
+                onTrace();
+              }}
+            >
+              <TreeStructureIcon size={14} weight="bold" />
+              Trace rollback
+            </Button>
+          ) : null}
+          {href && onViewRecord ? (
+            <Button
+              variant="default"
+              onClick={() => {
+                onOpenChange(false);
+                onViewRecord();
+              }}
+            >
+              <ArrowUpRightIcon size={14} weight="bold" />
+              View full record
+            </Button>
+          ) : null}
+          <SlideOverPanel.FooterClose />
+        </SlideOverPanel.Footer>
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
   );
