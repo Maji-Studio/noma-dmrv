@@ -32,8 +32,9 @@
  * or aliased) is applied to a value derived from a parameter, through casts,
  * property access or a local initialised from it, inside a `"use server"`
  * module or inline server function. The one allowed shape is the first
- * parameter of the callback passed to `withAction(async (ctx) => …)`, which
- * `withAction` resolves from the session. Any other callback parameter
+ * parameter of the callback passed to `withAction(async (ctx) => …)` or
+ * `withCreate((ctx, create) => …, options)`, which both wrappers resolve from
+ * the session. Any other callback parameter
  * (`contexts.map((ctx) => requireOrgRole(ctx, …))`) may carry caller input.
  *
  * Inside those same bodies it fails on a type assertion (`as`, `<T>x`,
@@ -87,7 +88,10 @@ const TEST_FILE = /\.test\.tsx?$/;
 const USE_SERVER = "use server";
 const GUARD_NAMES = new Set(["requireOrgRole", "requireOrgScope"]);
 /** Wrappers that call their callback with a session-resolved OrgContext. */
-const SESSION_CONTEXT_WRAPPERS = new Set(["withAction"]);
+const SESSION_CONTEXT_WRAPPERS = new Map([
+  ["withAction", "/src/fn/with-action.ts"],
+  ["withCreate", "/src/fn/with-create.ts"],
+]);
 const FORWARDING_UTILITY_TYPES = new Set([
   "Parameters",
   "ConstructorParameters",
@@ -225,11 +229,11 @@ function rootExpression(expression: ts.Expression): ts.Expression {
   return current;
 }
 
-/** The resolved name of a call's callee, following import aliases. */
-function resolvedCalleeName(
+/** The canonical callee symbol, following import and local aliases. */
+function resolvedCalleeSymbol(
   checker: ts.TypeChecker,
   callee: ts.LeftHandSideExpression,
-): string | null {
+): ts.Symbol | null {
   const nameNode = ts.isIdentifier(callee)
     ? callee
     : ts.isPropertyAccessExpression(callee)
@@ -237,7 +241,7 @@ function resolvedCalleeName(
       : null;
   if (!nameNode) return null;
   let symbol = checker.getSymbolAtLocation(nameNode);
-  if (!symbol) return nameNode.text;
+  if (!symbol) return null;
   // Follow import aliases and `const check = requireOrgRole` style locals.
   for (let hop = 0; hop < MAX_ALIAS_HOPS; hop += 1) {
     if (symbol.flags & ts.SymbolFlags.Alias) {
@@ -261,11 +265,16 @@ function resolvedCalleeName(
     if (!next) break;
     symbol = next;
   }
-  return symbol.name;
+  return symbol;
+}
+
+function resolvedCalleeName(checker: ts.TypeChecker, callee: ts.LeftHandSideExpression): string | null {
+  return resolvedCalleeSymbol(checker, callee)?.name ??
+    (ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : null);
 }
 
 /**
- * True only for the first parameter of the callback handed to `withAction`,
+ * True only for the first parameter of the callback handed to a session wrapper,
  * the one parameter whose value comes from the session.
  */
 function isSessionContextParameter(
@@ -281,8 +290,9 @@ function isSessionContextParameter(
   if (!call || !ts.isCallExpression(call) || call.arguments[0] !== argument) {
     return false;
   }
-  const wrapper = resolvedCalleeName(checker, call.expression);
-  return !!wrapper && SESSION_CONTEXT_WRAPPERS.has(wrapper);
+  const wrapper = resolvedCalleeSymbol(checker, call.expression);
+  const modulePath = wrapper && SESSION_CONTEXT_WRAPPERS.get(wrapper.name);
+  return !!modulePath && !!wrapper?.valueDeclaration?.getSourceFile().fileName.replaceAll("\\", "/").endsWith(modulePath);
 }
 
 /**
@@ -685,7 +695,7 @@ function main(): void {
     "\nEvery export of a \"use server\" module is a public action the browser can\n" +
       "call with any arguments. Move trusted-context code into a directive-free\n" +
       "module (conventionally src/fn/**/*-core.ts) and export only actions that\n" +
-      "resolve their own context (withAction). See docs/architecture.md.",
+      "resolve their own context (withAction or withCreate). See docs/architecture.md.",
   );
   process.exitCode = 1;
 }

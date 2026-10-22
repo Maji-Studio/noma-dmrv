@@ -6,8 +6,7 @@
 
 import { createDriver } from "@/lib/operations/drivers";
 import { createOperator } from "@/lib/operations/operators";
-import { runOperationInProcess } from "@/lib/operations/runner";
-import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 import {
   createVehicle,
   createFeedstockType,
@@ -33,6 +32,7 @@ import {
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 
 // ============================================
 // Driver Quick Add
@@ -45,11 +45,10 @@ export async function createDriverFn(
   data: DriverQuickAddData,
   options?: CreateIntentOptions,
 ): Promise<ActionResult<EntityOption>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const parsed = driverQuickAddSchema.parse(data);
-    const parsedOptions = createIntentOptionsSchema.parse(options);
-    return runOperationInProcess(createDriver, ctx, parsed, parsedOptions);
-  }, { fallbackMessage: "Failed to create driver" });
+    return create(createDriver, parsed);
+  }, options, { fallbackMessage: "Failed to create driver" });
 }
 
 // ============================================
@@ -60,11 +59,10 @@ export async function createOperatorFn(
   data: OperatorQuickAddData,
   options?: CreateIntentOptions,
 ): Promise<ActionResult<EntityOption>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const parsed = operatorQuickAddSchema.parse(data);
-    const parsedOptions = createIntentOptionsSchema.parse(options);
-    return runOperationInProcess(createOperator, ctx, parsed, parsedOptions);
-  }, { fallbackMessage: "Failed to create operator" });
+    return create(createOperator, parsed);
+  }, options, { fallbackMessage: "Failed to create operator" });
 }
 
 // ============================================

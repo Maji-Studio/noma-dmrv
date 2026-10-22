@@ -18,6 +18,7 @@ import {
   updateEmissionEntryFn,
 } from "@/fn/emission-entries";
 import { throwActionError } from "@/lib/stale-version";
+import { REMOVAL_TEMPLATE_BLOCKERS, removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 import { EmissionLinesBlockedError } from "@/lib/certification/emission-lines-blocked-error";
 import type { ActionResult } from "@/types/actions";
 import type { EmissionLineRecords, EmissionRecordSource } from "@/lib/certification/emission-lines";
@@ -54,7 +55,11 @@ export function useBatchEmissionLines(scope: EmissionBatchScope | null) {
       : creditBatchKeys.emissionLines("", ""),
     queryFn: async (): Promise<EmissionLine[]> => {
       const result = unwrapEntry(await getBatchEmissionLinesFn(scope!));
-      if (result.status === "blocked") throw new EmissionLinesBlockedError(result.blocker);
+      if (result.status === "blocked") {
+        // Other reads may write the missing observation; retain the normal retry path.
+        if (result.blocker === "templateNotFullyRead") throw new Error(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
+        throw new EmissionLinesBlockedError(removalTemplateBlocker(result.blocker));
+      }
       return result.lines;
     },
     retry: (failureCount, error) => !(error instanceof EmissionLinesBlockedError) && failureCount < EMISSION_LINES_RETRY_LIMIT,
