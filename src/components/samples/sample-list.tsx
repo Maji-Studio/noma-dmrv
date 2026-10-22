@@ -664,7 +664,6 @@ export function SampleList({
         <DataTable.Pagination />
       </DataTable>
 
-      {deleteError && <ServerError message={deleteError} />}
       <DeleteConfirmDialog
         isOpen={!!deletingSampleId}
         title="Delete Sample"
@@ -672,6 +671,7 @@ export function SampleList({
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingSampleId(null); setDeleteError(null); }}
         isPending={deleteSample.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       <EntitySideSheet

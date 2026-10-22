@@ -632,3 +632,7 @@ before allowing confirmation to convert stored entry values to the new unit.
   keep the bottom line. Also left: re-reading locks after a lock refusal (Kenji left it
   out of #1298), delivery's server alias seam beside its client alias map, and per-field
   detail for feedstock lineage locks.
+
+## Delete refusals render behind the dialog - **deferred**
+
+- `src/components/ui/delete-confirm-dialog.tsx:DeleteConfirmDialog` shows a refusal through its `errorMessage` prop, but these callers keep the dialog open on a refused delete and render the message in a page-level `ServerError` behind the modal, so the operator sees no reason: `application-list`, `biochar-product-list`, `credit-batch-list`, `feedstock-list`, `order-list`, `production-run-list`, `reactor-list`, `sample-documents-panel`, `production-readings-documents`, `transport-evidence-documents` and `transport-legs-editor` (all under `src/components/`). Checked in code: `order-list` and `reactor-list`; the rest match the same pattern by grep. Fix is the one-line `errorMessage={deleteError ?? undefined}` plus dropping the page-level `ServerError`, as `sample-list` now does.
