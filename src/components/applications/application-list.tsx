@@ -24,6 +24,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import type { Application } from "@/db/schema/application";
 import type { ApplicationListItem } from "@/data-access/applications";
 import {
   applicationKeys,
@@ -404,7 +405,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const handleCreate = (data: ApplicationFormData, onRefusal: SaveRefusalHandler) =>
     createWithEvidence.handleCreate({ data, onRefusal });
 
-  const handleUpdate = async (data: ApplicationFormData, onRefusal: SaveRefusalHandler) => {
+  const handleUpdate = async (data: ApplicationFormData, onRefusal: SaveRefusalHandler, onCommitted: (record: Application) => void) => {
     if (!displaySideSheet?.entity) return;
     const applicationId = displaySideSheet.entity.id;
     setUpdateError(null);
@@ -428,10 +429,12 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           );
           if (!flushResult.ok) {
             // The update itself committed, so the still-open sheet has to adopt
-            // the version it wrote. Leaving the opened-on snapshot in place
+            // the version and form defaults it wrote, preserving typed input.
+            // Leaving the opened-on snapshot in place
             // would get the operator's next Save refused as stale against
             // their own write (#768).
             const saved = result.data;
+            onCommitted({ ...displaySideSheet.entity, ...saved });
             setSideSheet((prev) =>
               prev?.entity && prev.entity.id === applicationId
                 ? { ...prev, entity: { ...prev.entity, ...saved } }

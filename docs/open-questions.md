@@ -626,9 +626,15 @@ before allowing confirmation to convert stored entry values to the new unit.
 ## Save refusals on the remaining forms (#1327) - **deferred**
 
 - Only delivery, application and feedstock edit use `useSaveRefusal`; the other forms
-  keep the bottom line. Also left: re-reading locks after a lock refusal (Kenji left it
-  out of #1298) and per-field detail for feedstock lineage locks.
+  keep the bottom line.
+- Revert gaps to finish in the per-form PRs:
+  - Delivery sub-bin readings and selections (P1/P2 moisture) are not reset, and `draw.changed` stays true.
+  - Application manual position and GIS boundary are not RHF-registered, so `resetField` cannot restore them.
+  - Feedstock: a supplier change plus a lock refusal restores the supplier, then clears the restored override.
+  - Unmigrated forms keep typed values after a Sent refusal.
 - Delivery update posting refusals at `occurredAt` and `wetMassKg` show in the footer and need aliases (follow-up PR).
+- Registered customer locations have no lock-read kind; their refusal-specific
+  disabling belongs to the customer forms migration.
 
 ## In-use delete refusals on the remaining lists - **deferred**
 

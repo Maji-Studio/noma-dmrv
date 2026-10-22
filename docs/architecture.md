@@ -378,8 +378,12 @@ runtime.
   hook. A mutation hook that can change a lineage declares it with
   `meta: recordLockMeta(RECORD_LOCK_TOUCHES.<family>)`
   (`src/hooks/record-lock-query-keys.ts`). After a successful write, only the
-  mounted lock reads of those kinds refetch; registry writes declare
-  `registry` and refresh every kind. A new write that adds or removes a
+  mounted lock reads of those kinds refetch. A `certification_locked` refusal
+  also refreshes them. Writes that only need refusal recovery use
+  `{ onRefusalOnly: true }` to leave successful lock reads alone; document
+  mutations resolve the owner kind and also refresh its certification-lock
+  query on refusal. Registry writes declare `registry` and refresh every kind
+  even on failure, unless explicitly refusal-only. A new write that adds or removes a
   dependency, or changes a Removal or GHG Statement, must declare its family,
   or the fail-closed screens keep showing a stale lock. The read itself is
   `/api/reads/record-locks` (below).
