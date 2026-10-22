@@ -55,7 +55,7 @@ it.each(["file-only", "entry-only", "compile-refusal", "missing-observation", "u
   expect(notice.comparison).toBe(comparison.kind);
   if (unavailable) {
     expect(notice.message).toBe("Resubmit needed: noma could not compare this Removal with what it sent.");
-    expect(notice.unavailableMessages).toEqual([]);
+    expect(notice.unavailableMessages).toEqual(scenario === "compile-refusal" ? ["Invalid current content"] : []);
     expect(notice.unavailableReason).toBe(scenario === "compile-refusal" ? "compile_refused" : "missing_observation");
   }
   if (scenario === "entry-only") {
@@ -119,4 +119,20 @@ it.each(["invalid_snapshot", "invalid_compile"] as const)("logs notice %s with o
     comparison: "unavailable", unavailableReason: reason, unavailableMessages: [], correctionNeeded: true,
   });
   expect(logger.warn).toHaveBeenCalledExactlyOnceWith({ removalId: "removal", reason }, "Removal notice comparison failed");
+});
+
+it("passes a plain SafeError message to the notice and keeps it out of the guard log", async () => {
+  const message = "Delivery proof is missing for CB-1.";
+  vi.mocked(compileRemovalCorrectionContent).mockRejectedValue(new SafeError(message));
+  expect(await compareRemovalCurrentContent(ctx, "removal")).toMatchObject({
+    kind: "unavailable", reason: "compile_refused", unavailableMessages: [message],
+  });
+  expect(await loadRemovalEntryCorrection(ctx, "removal")).toMatchObject({
+    comparison: "unavailable", unavailableReason: "compile_refused", unavailableMessages: [message],
+    correction: { unavailableMessages: [message], resubmitNeeded: true },
+  });
+  vi.mocked(logger.warn).mockClear();
+  await expect(assertStatementRemovalsCurrent(ctx, "statement")).rejects.toThrow("noma could not compare Removal R-12");
+  expect(vi.mocked(logger.warn).mock.calls.length).toBeGreaterThan(0);
+  expect(JSON.stringify(vi.mocked(logger.warn).mock.calls)).not.toContain(message);
 });

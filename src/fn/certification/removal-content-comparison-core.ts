@@ -61,7 +61,7 @@ export async function compareRemovalCurrentContent(ctx: OrgContext, removalId: s
     current = await compileRemovalCorrectionContent(ctx, removalId, observation, true);
   } catch (error) {
     if (error instanceof RemovalComparisonBlockedError) return unavailable("compile_refused", error.messages);
-    if (error instanceof SafeError) return unavailable("compile_refused");
+    if (error instanceof SafeError) return unavailable("compile_refused", [error.message]);
     if (error instanceof z.ZodError) return unavailable("invalid_compile");
     throw error;
   }
