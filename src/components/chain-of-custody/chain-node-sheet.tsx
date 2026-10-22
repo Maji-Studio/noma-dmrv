@@ -95,33 +95,33 @@ export function ChainNodeSheet({
         </SlideOverPanel.Body>
 
         <SlideOverPanel.Footer>
-            {drillable && onTrace ? (
-              <Button
-                variant="primary"
-                onClick={() => {
-                  onOpenChange(false);
-                  onTrace();
-                }}
-              >
-                <TreeStructureIcon size={14} weight="bold" />
-                Trace rollback
-              </Button>
-            ) : null}
-            {href && onViewRecord ? (
-              <Button
-                variant="default"
-                onClick={() => {
-                  onOpenChange(false);
-                  onViewRecord();
-                }}
-              >
-                <ArrowUpRightIcon size={14} weight="bold" />
-                View full record
-              </Button>
-            ) : null}
-            <SlideOverPanel.Close>
-              <Button variant="default">Close</Button>
-            </SlideOverPanel.Close>
+          {drillable && onTrace ? (
+            <Button
+              variant="primary"
+              onClick={() => {
+                onOpenChange(false);
+                onTrace();
+              }}
+            >
+              <TreeStructureIcon size={14} weight="bold" />
+              Trace rollback
+            </Button>
+          ) : null}
+          {href && onViewRecord ? (
+            <Button
+              variant="default"
+              onClick={() => {
+                onOpenChange(false);
+                onViewRecord();
+              }}
+            >
+              <ArrowUpRightIcon size={14} weight="bold" />
+              View full record
+            </Button>
+          ) : null}
+          <SlideOverPanel.Close>
+            <Button variant="default">Close</Button>
+          </SlideOverPanel.Close>
         </SlideOverPanel.Footer>
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>

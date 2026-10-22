@@ -491,7 +491,7 @@ function EntityDetailPanel({
         </SlideOverPanel.Body>
 
         <SlideOverPanel.Footer>
-            {onEdit && (
+          {onEdit && (
             <Button
               variant="primary"
               onClick={() => {
@@ -501,11 +501,11 @@ function EntityDetailPanel({
             >
               {editLabel}
             </Button>
-            )}
-            <SlideOverPanel.Close>
-              <Button variant="default">Close</Button>
-            </SlideOverPanel.Close>
-          </SlideOverPanel.Footer>
+          )}
+          <SlideOverPanel.Close>
+            <Button variant="default">Close</Button>
+          </SlideOverPanel.Close>
+        </SlideOverPanel.Footer>
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
   );
