@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { isUnloadWarningSuppressed } from "@/lib/leave-guard";
+import { isUnloadWarningSuppressed, suppressUnloadWarning } from "@/lib/leave-guard";
 import { useResetAfterOrgSwitch } from "./use-organizations";
 
 const mocks = vi.hoisted(() => ({ assign: vi.fn() }));
@@ -30,4 +30,13 @@ it("drops the unload prompt before the hard load, so the operator is not asked t
   });
   useResetAfterOrgSwitch()();
   expect(mocks.assign).toHaveBeenCalledWith("/dashboard");
+});
+
+it("allows the unload prompt again after a back-forward-cache restore", () => {
+  suppressUnloadWarning();
+  expect(isUnloadWarningSuppressed()).toBe(true);
+  window.dispatchEvent(Object.assign(new Event("pageshow"), { persisted: false }));
+  expect(isUnloadWarningSuppressed()).toBe(true);
+  window.dispatchEvent(Object.assign(new Event("pageshow"), { persisted: true }));
+  expect(isUnloadWarningSuppressed()).toBe(false);
 });

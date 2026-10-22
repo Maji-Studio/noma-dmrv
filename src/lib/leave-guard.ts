@@ -22,6 +22,14 @@ export type RequestLeave = (leave: () => void, options?: LeaveOptions) => void;
 let registered: RequestLeave | null = null;
 let unloadWarningSuppressed = false;
 
+// A page restored from the back-forward cache keeps this module state, so the
+// suppression of a switch that has since been left would outlive it.
+if (typeof window !== "undefined") {
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) unloadWarningSuppressed = false;
+  });
+}
+
 /** Registers the mounted pane's guard; the returned function removes it. */
 export function registerLeaveGuard(requestLeave: RequestLeave): () => void {
   registered = requestLeave;

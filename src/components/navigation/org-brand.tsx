@@ -161,7 +161,11 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
     setIsOpen(true);
     try {
       const result = await enterOrganization(organizationId, organizationName);
-      if (!result.success) switching.release();
+      if (!result.success) {
+        // Revoked access or a deleted organization resolves unsuccessfully without throwing.
+        switching.release();
+        toast.error(orgSwitchFailedMessage(organizationName));
+      }
     } catch {
       switching.release();
       toast.error(orgSwitchFailedMessage(organizationName));
