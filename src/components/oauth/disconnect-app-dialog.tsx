@@ -32,7 +32,6 @@ export function DisconnectAppDialog({ grant, organizationId, organizationName, o
       isPending={revoke.isPending}
       errorMessage={error}
       confirmLabel="Disconnect"
-      pendingLabel="Disconnecting..."
     />
   );
 }

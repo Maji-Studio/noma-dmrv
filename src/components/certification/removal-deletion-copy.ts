@@ -25,7 +25,6 @@ export interface RemovalDeletionCopy {
   actionLabel: string;
   title: string;
   message: string;
-  pendingLabel: string;
   successToast: string;
 }
 
@@ -37,14 +36,12 @@ export function removalDeletionCopy(
         actionLabel: "Delete Removal",
         title: REMOVAL_DELETE_TITLE,
         message: REMOVAL_DELETE_WITH_REGISTRY_MESSAGE,
-        pendingLabel: "Deleting...",
         successToast: REMOVAL_DELETED_TOAST,
       }
     : {
         actionLabel: "Discard draft",
         title: REMOVAL_DISCARD_TITLE,
         message: REMOVAL_DELETE_LOCAL_ONLY_MESSAGE,
-        pendingLabel: "Discarding...",
         successToast: REMOVAL_DISCARDED_TOAST,
       };
 }

@@ -31,6 +31,7 @@ import {
 } from "@/hooks/use-credit-batches";
 import { useBatchEmissionLines } from "@/hooks/use-emission-entries";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useNavigateWithToast } from "@/hooks/use-navigate-with-toast";
 import { useRecordLock } from "@/hooks/use-record-locks";
 import { creditBatchListHref } from "@/lib/certification/batch-health-links";
 import { ConflictError } from "@/lib/conflict-ref";
@@ -195,6 +196,7 @@ export function CreditBatchPage({
   const { lock, status: lockStatus, retry: retryLock, retrying: lockRetrying } = useRecordLock("creditBatch", creditBatchId);
   const updateCreditBatch = useUpdateCreditBatch();
   const deleteCreditBatch = useDeleteCreditBatch();
+  const toList = useNavigateWithToast();
 
   const batch = batchQuery.data;
   const emissionLines = useBatchEmissionLines(batch
@@ -275,9 +277,8 @@ export function CreditBatchPage({
     if (!deleting) return;
     try {
       await deleteCreditBatch.mutateAsync({ creditBatchId: deleting.id, expectedVersion: deleting.version });
-      setDeleting(null);
-      toast.success("Credit batch deleted.");
-      router.push(creditBatchListHref(batch.facilityId));
+      // The dialog stays open and busy until the list has rendered; the toast arrives with it.
+      toList.navigate(creditBatchListHref(batch.facilityId), "Credit batch deleted.");
     } catch (error) {
       setDeleting(null);
       if (error instanceof ConflictError) setDeleteConflict(error);
@@ -354,7 +355,7 @@ export function CreditBatchPage({
         onCancel={() => setDeleting(null)}
         title="Delete credit batch"
         message={CREDIT_BATCH_DELETE_MESSAGE}
-        isPending={deleteCreditBatch.isPending}
+        isPending={deleteCreditBatch.isPending || toList.isPending}
       />
       {deleteConflict && (
         <InUseDeleteDialog label={batch.code} onClose={() => setDeleteConflict(null)}>

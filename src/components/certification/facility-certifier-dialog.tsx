@@ -322,7 +322,6 @@ export function UnlinkConfirmDialog({
       variant="neutral"
       title="Unlink Isometric project"
       confirmLabel="Unlink"
-      busyLabel="Unlinking…"
       body="The facility will no longer be associated with the Isometric project. Past submissions stay on Isometric."
     />
   );

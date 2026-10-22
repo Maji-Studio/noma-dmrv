@@ -157,7 +157,6 @@ function DistanceRefreshDialog({
         </div>
       }
       confirmLabel={CONFIRM_LABEL}
-      busyLabel="Refreshing…"
       isPending={busy}
       dismissible={!busy}
       confirmDisabled={drift.hasSubmittedRemoval}

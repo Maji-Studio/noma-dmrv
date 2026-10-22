@@ -21,6 +21,13 @@ function findButtons(node: ReactNode): ReactElement<ElementProps>[] {
 }
 
 describe("ConfirmActionDialog", () => {
+  it("holds dismissal while the action is pending", () => {
+    const props = { isOpen: true, onClose: vi.fn(), onConfirm: vi.fn(), title: "T", body: "B", confirmLabel: "Go" };
+    const modalOf = (isPending: boolean) => (ConfirmActionDialog({ ...props, isPending }) as ReactElement<{ dismissible: boolean }>).props.dismissible;
+    expect(modalOf(false)).toBe(true);
+    expect(modalOf(true)).toBe(false);
+  });
+
   it("renders reversible confirmations with the neutral outline treatment", () => {
     const view = ConfirmActionDialog({
       isOpen: true,

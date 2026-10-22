@@ -64,3 +64,12 @@ export function orgNameToAnnounce(
 export function orgSwitchMessage(organizationName: string): string {
   return `Now working in ${organizationName}.`;
 }
+
+/** The failure toast for a switch that could not start; names the organization it aimed at. */
+export function orgSwitchFailedMessage(organizationName: string): string {
+  return `${organizationName} did not open. Try again.`;
+}
+
+/** The discard dialog's body when a switch would leave a pane with unsaved changes. */
+export const ORG_SWITCH_DISCARD_DESCRIPTION =
+  "This section has changes that are not saved. Switching organization discards them.";
