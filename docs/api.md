@@ -832,13 +832,15 @@ org-scoped data-access guards as Server Actions. See [Record locks](./database.m
 for all-version ledger and fresh reopening rules. Stock insufficiency,
 validation failures and stale versions retain their distinct error codes.
 
-Feedstock and biochar product update lineage refusals additionally carry one
+Feedstock, biochar product, delivery and application update lineage refusals additionally carry one
 `certification_locked` issue per changed operation field. Omitted fields and
 unchanged normalized values produce no issue; mass comparison uses gram precision.
 Feedstock distance overrides keep their operation names (`transportDistanceKm`,
 `transportDistanceSource`, `distanceNote`), and product `massKg` compares source
 biochar wet mass rather than stored blend mass. The top-level message and code
-are unchanged; this issue detail is additive.
+are unchanged; this issue detail is additive. Delivery and application refusals
+retain their original entity issue before the changed-field issues. REST `errors`
+and MCP `issues` gain entries without changing the HTTP 409 or top-level code.
 
 ### In-use delete refusals
 
