@@ -17,7 +17,7 @@ import { CompiledSubmissionReview } from "./compiled-submission-review";
 const ACCORDION_ITEM =
   "rounded-none border-[var(--color-border-secondary)] bg-[var(--color-background-white)]";
 const ACCORDION_TRIGGER =
-  "bg-[var(--color-background-white)] px-16 py-10 hover:bg-[var(--color-surface-light)]";
+  "min-h-44 bg-[var(--color-background-white)] px-16 py-10 hover:bg-[var(--color-surface-light)]";
 
 interface DebugDrawerProps {
   compilation: RemovalCompilationView | null;
@@ -42,7 +42,7 @@ export function DebugDrawer({
           >
             <span className="flex w-full items-center justify-between gap-12">
               <span>Technical details</span>
-              <span className="body-caption font-normal normal-case tracking-normal text-[var(--color-text-tertiary)]">
+              <span className="hidden body-caption font-normal normal-case tracking-normal text-[var(--color-text-tertiary)] sm:inline">
                 Registry submission data
               </span>
             </span>

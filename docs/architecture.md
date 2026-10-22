@@ -147,8 +147,8 @@ export async function createItem(input: CreateItem) {
 
 Rate limiting is opt-in per action: `withAction(fn, { rateLimit: { key, max,
 windowMs } })`, checked after auth so it keys on the resolved `userId`. It
-applies to expensive or abuse-prone actions: certification submits and geo
-geocode/route are the current users.
+applies to expensive or abuse-prone actions: certification submits, geo
+geocode/route and the Profile password change are the current users.
 
 Two more options exist for migrating the legacy wrappers without changing what
 they log or return. `log: { message, context }` replaces the generic
@@ -195,10 +195,14 @@ production process names its facility, one blocked by a formulation
 ingredient names its formulation. Mutation hooks re-throw a
 failure through `throwActionError` (`src/lib/stale-version.ts`) as an
 `ActionError` carrying `code`, `issues` (always an array), `conflict`, `blockers`
-and `preview`. A stale save becomes `StaleVersionError`; any other conflict
-becomes `ConflictError`. Both extend `ActionError`. Forms are expected to honor
-both; the first list consumer is the feedstock edit sheet, which shows the runs
-and products a negative-stock refusal named.
+and `preview`. In-use delete refusals, including fleet deletes, keep
+`code: "conflict"` on the error and issue and add
+`issues[].meta.reason: "in_use"`; the UI checks the top-level conflict code and
+that marker on the `ActionError` instead of matching message text. A stale save
+becomes `StaleVersionError`; any other conflict becomes `ConflictError`. Both
+extend `ActionError`. Forms are expected to honor both; the first list consumer
+is the feedstock edit sheet, which shows the runs and products a negative-stock
+refusal named.
 
 The success branch may carry `warning?: string`: the write committed and a
 non-fatal follow-up did not (a preference that was not stored, an enrichment
@@ -301,7 +305,7 @@ runtime.
 - `src/app/(app)/layout.tsx` enforces auth and mounts `FacilityProvider`.
 - **One settings console** (`/settings`, #1277). `SettingsConsole` renders a
   rail grouped by whose setting it is, one route per pane, listed in
-  `src/lib/settings/panes.ts`: **You** (Connected apps), **Organization**
+  `src/lib/settings/panes.ts`: **You** (Profile, Connected apps), **Organization**
   (General, Members, Developers), **Certification** (Registry, Removal
   templates, Facilities) and **Platform** (Organizations, Diagnostics,
   Template mapping; Platform Admins only). Each route loads the viewer with
@@ -463,6 +467,12 @@ cache opt-in, so PR builds persist `.next/cache/turbopack` while base-branch,
 local, and deployed builds remain on the stable default.
 
 ## Database Boundaries
+
+Certification submits acquire the boundary advisory lock, facility durability
+advisory lock, certifier mapping `FOR UPDATE`, artifacts, then mirror locks.
+GHG Statement reconciliation follows this order, taking boundary and durability
+on the same dedicated transaction. A caller already holding boundary as a session
+lock passes the held flag instead of requesting it again on another connection.
 
 Supplier and customer creates lock all named facilities `FOR SHARE` in id order,
 then insert the party, ordered locations and pairs inside the `withAutoCodes`

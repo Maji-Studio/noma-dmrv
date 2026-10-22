@@ -1,6 +1,8 @@
+// @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ColumnDef, Table as TanStackTable } from "@tanstack/react-table";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DataTable, recordRowId, useDataTable } from ".";
 
 interface TestRow {
@@ -134,6 +136,52 @@ describe("DataTable row identity", () => {
   });
 });
 
+describe("DataTable default column visibility", () => {
+  const withFacility: ColumnDef<TestRow>[] = [
+    ...columns,
+    { id: "facility", header: "Facility", accessorFn: () => "Mafinga" },
+  ];
+
+  it("starts with the declared columns hidden but still offered in the menu", () => {
+    let table: TanStackTable<TestRow> | undefined;
+    const html = renderToStaticMarkup(
+      <DataTable columns={withFacility} data={data} defaultColumnVisibility={{ facility: false }}>
+        <TableProbe capture={(next) => { table = next; }} />
+      </DataTable>,
+    );
+
+    expect(table?.getColumn("facility")?.getIsVisible()).toBe(false);
+    expect(table?.getColumn("facility")?.getCanHide()).toBe(true);
+    expect(table?.getColumn("name")?.getIsVisible()).toBe(true);
+    expect(html).not.toContain("Mafinga");
+  });
+
+  it("resets to the declared starting state, not to everything visible", () => {
+    let table: TanStackTable<TestRow> | undefined;
+    renderToStaticMarkup(
+      <DataTable columns={withFacility} data={data} defaultColumnVisibility={{ facility: false }}>
+        <TableProbe capture={(next) => { table = next; }} />
+      </DataTable>,
+    );
+
+    expect(table?.initialState.columnVisibility).toEqual({ facility: false });
+    const onChange = vi.fn();
+    renderToStaticMarkup(
+      <DataTable
+        columns={withFacility}
+        data={data}
+        defaultColumnVisibility={{ facility: false }}
+        columnVisibility={{ facility: true }}
+        onColumnVisibilityChange={onChange}
+      >
+        <TableProbe capture={(next) => { table = next; }} />
+      </DataTable>,
+    );
+    table?.resetColumnVisibility();
+    expect(onChange).toHaveBeenCalledWith({ facility: false });
+  });
+});
+
 describe("DataTable one-line cells", () => {
   interface CodeRow {
     id: string;
@@ -163,5 +211,50 @@ describe("DataTable one-line cells", () => {
     expect(cellClass(html, "OR-26-002")).toContain("whitespace-nowrap");
     expect(cellClass(html, "1,000 kg")).toContain("whitespace-nowrap");
     expect(cellClass(html, "Demo Mbeya")).not.toContain("whitespace-nowrap");
+  });
+});
+
+describe("DataTable columns menu", () => {
+  const withHidden: ColumnDef<TestRow>[] = [
+    ...columns,
+    { id: "notes", header: "Notes", accessorFn: () => "Hand dried" },
+  ];
+
+  function renderMenu() {
+    render(
+      <DataTable columns={withHidden} data={data} defaultColumnVisibility={{ notes: false }}>
+        <DataTable.Toolbar>
+          <DataTable.Controls>
+            <DataTable.ColumnVisibility />
+          </DataTable.Controls>
+        </DataTable.Toolbar>
+      </DataTable>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Columns" }));
+  }
+
+  afterEach(cleanup);
+
+  it("sits on the popover layer so sticky end cells cannot paint over it", () => {
+    renderMenu();
+    const menu = screen.getByRole("dialog", { name: "Column visibility" });
+    expect(menu.className).toContain("z-[var(--z-layer-popover)]");
+    expect(menu.className).not.toMatch(/(^|\s)z-10(\s|$)/);
+  });
+
+  it("lists a hidden-by-default field unchecked, adds it when checked, and Reset hides it again", () => {
+    renderMenu();
+    const isChecked = () => (screen.getByRole("checkbox", { name: "Notes" }) as HTMLInputElement).checked;
+    expect(isChecked()).toBe(false);
+    expect(screen.queryByText("Hand dried")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reset columns" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Notes" }));
+    expect(isChecked()).toBe(true);
+    expect(screen.getAllByText("Hand dried").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset columns" }));
+    expect(isChecked()).toBe(false);
+    expect(screen.queryByText("Hand dried")).toBeNull();
   });
 });

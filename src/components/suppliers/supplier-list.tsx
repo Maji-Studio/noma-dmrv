@@ -36,7 +36,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
-import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { ArchivedSupplierNotice } from "@/components/parties";
 import { SupplierForm, type PendingSupplierLocation } from "./supplier-form";
@@ -49,6 +49,12 @@ import { ENTITY_DEEP_LINK_EDIT_MODE, ENTITY_DEEP_LINK_MODE_PARAM, SUPPLIER_QUERY
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { supplierSheetSections } from "./supplier-read-sections";
 import { ILLUSTRATION_SIZE, SupplierArt } from "@/components/ui/illustrations";
+
+/** Record details an operator can add from the Columns menu. */
+const SUPPLIER_COLUMNS_HIDDEN_BY_DEFAULT = {
+  sourceRegion: false,
+  address: false,
+};
 
 // ============================================
 // Column Definitions
@@ -99,6 +105,24 @@ function createColumns(
           {row.original.contactName ||
             row.original.contactEmail ||
             MISSING_VALUE.notRecorded}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "sourceRegion",
+      header: "Source region",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate text-[var(--color-text-secondary)]">
+          {row.original.sourceRegion || MISSING_VALUE.notRecorded}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "address",
+      header: "Address",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate text-[var(--color-text-secondary)]">
+          {row.original.address || MISSING_VALUE.notRecorded}
         </span>
       ),
     },
@@ -300,7 +324,7 @@ export function SupplierList() {
       toast.success("Supplier deleted.");
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Supplier ${deletingSupplier.code}`, "Supplier was not deleted. Try again.");
-      if (isInUseDeleteRefusal(message) && !deletingSupplier.archivedAt) {
+      if (isInUseDeleteRefusal(error) && !deletingSupplier.archivedAt) {
         // In use: the dialog gives way to the in-use dialog that offers Archive instead.
         setDeleteConflict(deletingSupplier);
         setDeletingSupplier(null);
@@ -424,6 +448,7 @@ export function SupplierList() {
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={SUPPLIER_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={suppliers}
         enableSorting={false}

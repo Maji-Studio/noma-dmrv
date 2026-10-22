@@ -128,7 +128,8 @@ describe("DistanceDriftAction", () => {
     // The record fetch is still delayed: the dialog stays, pending, with no way back to Save.
     expect(screen.queryByTestId("transport-distance-drift-action")).toBeNull();
     expect(screen.getByText("Refresh distance from location?")).toBeTruthy();
-    expect((screen.getByRole("button", { name: /Refreshing/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Refresh" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "Refresh" }).getAttribute("aria-busy")).toBe("true");
     expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
     expect(mocks.success).not.toHaveBeenCalled();
 
@@ -154,7 +155,7 @@ describe("DistanceDriftAction", () => {
     renderAction(() => new Promise<void>((resolve) => { landReload = resolve; }));
     fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Refresh" })); });
-    await screen.findByRole("button", { name: /Refreshing/ });
+    await screen.findByRole("button", { name: "Refresh" });
 
     await act(async () => { fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" }); });
     const backdrop = document.querySelector('[data-overlay-layer="dialog-backdrop"]');
@@ -205,11 +206,11 @@ describe("DistanceDriftAction", () => {
     await act(async () => { await Promise.resolve(); });
     mocks.drift.mockImplementation(async () => { await recheck; return { success: true, data: drift }; });
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Refresh" })); });
-    await screen.findByRole("button", { name: /Refreshing/ });
+    await screen.findByRole("button", { name: "Refresh" });
 
     await act(async () => { fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" }); });
     expect(screen.getByText("Refresh distance from location?")).toBeTruthy();
-    expect((screen.getByRole("button", { name: /Refreshing/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Refresh" }) as HTMLButtonElement).disabled).toBe(true);
 
     await act(async () => { landRecheck(); });
     expect(await screen.findByText(errorBox(message))).toBeTruthy();

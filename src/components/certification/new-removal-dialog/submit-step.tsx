@@ -56,8 +56,9 @@ import { SubmissionSummary } from "./submission-summary";
 import { allowsRemovalSubmission } from "./resume-state";
 import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { cn } from "@/lib/utils";
-import { RemovalEmissionsLedger } from "./removal-emissions-ledger";
-import { ComponentsSent } from "./components-sent";
+import { ComponentTable } from "./component-table";
+import { buildComponentTable } from "./component-table-model";
+import { SourceRecords } from "./source-records";
 import { Notice } from "@/components/ui/notice";
 
 const REJECTED_IN_ISOMETRIC_MSG =
@@ -112,6 +113,17 @@ export function SubmitStep({
   const compilationReady = isRemovalCompilationReady(
     compilationQuery.data ?? null,
   );
+  const componentTable = buildComponentTable({
+    batches: ctx.memberBatches,
+    linesByBatchId: ctx.emissionLinesByBatchId,
+    review: compilationQuery.data?.review ?? null,
+    isLoading: compilationQuery.isLoading,
+    unbindableComponentIds: new Set(
+      (ctx.unbindableTemplateInputs ?? []).map((input) => input.componentId),
+    ),
+    ledger: ctx.emissionsLedger,
+    facilityId,
+  });
   const requirementsMet =
     allowsRemovalSubmission(readiness.state) && compilationReady === true;
   // Anything short of "Submission complete" may be deleted. Once a ledger
@@ -169,7 +181,6 @@ export function SubmitStep({
           : undefined
       }
       confirmLabel={deleteCopy.actionLabel}
-      pendingLabel={deleteCopy.pendingLabel}
     />
   );
 
@@ -381,24 +392,26 @@ export function SubmitStep({
         isCompilationLoading={compilationQuery.isLoading}
         compilationError={compilationQuery.error}
         checks={checklist}
+        table={componentTable}
         readiness={readiness}
         rejectionMessage={
           rejectedWithExternal ? REJECTED_IN_ISOMETRIC_MSG : null
         }
       />
 
-      <ComponentsSent
-        ctx={ctx}
-        facilityId={facilityId}
-        review={compilationQuery.data?.review ?? null}
-        isLoading={compilationQuery.isLoading}
-      />
+      <ComponentTable table={componentTable} facilityId={facilityId} />
 
-      <RemovalEmissionsLedger
-        compilation={compilationQuery.data ?? null}
+      <SourceRecords
         ledger={ctx.emissionsLedger}
         facilityId={facilityId}
-        isLoading={compilationQuery.isLoading}
+        storageSitesHref={
+          ctx.mapping?.externalProjectId
+            ? isometricRegistry.storageSites({
+                environment: ctx.isProduction ? "production" : "sandbox",
+                externalProjectId: ctx.mapping.externalProjectId,
+              })
+            : null
+        }
       />
 
       <DebugDrawer

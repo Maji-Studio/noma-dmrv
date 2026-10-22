@@ -68,6 +68,7 @@ const EXCEPTION: Record<string, string> = {
 };
 
 const NOT_CREATE: Record<string, string> = {
+  "organizations#renameOrganizationAction": "Renames an existing organization.",
   "applications#getApplicationStatsFn": "Reads application totals without creating a domain record.",
   "customers#getCustomerStatsFn": "Reads customer totals without creating a domain record.",
   "facilities#getFacilityStatsFn": "Reads facility totals without creating a domain record.",

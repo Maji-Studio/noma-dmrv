@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
 import { squashed } from "../../../tests/helpers/error-box-text";
+import { ActionError } from "@/lib/action-error";
+import { inUseDeleteRefusal } from "@/lib/delete-refusal";
 import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
 import { CustomerSavedLocations } from "./customer-saved-locations";
+
+function inUseError(message: string): ActionError {
+  return new ActionError({ error: message, ...inUseDeleteRefusal(message, []) });
+}
 
 const state = vi.hoisted(() => ({
   locations: [] as unknown[],
@@ -139,7 +145,7 @@ describe("CustomerSavedLocations", () => {
   });
 
   it("offers Archive instead when a delete is refused because orders use the location", async () => {
-    state.remove.mockRejectedValue(new Error(IN_USE));
+    state.remove.mockRejectedValue(inUseError(IN_USE));
     render(<CustomerSavedLocations customerId="c1" />);
     fireEvent.click(screen.getByRole("button", { name: "Delete E2E South Block" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
@@ -161,7 +167,7 @@ describe("CustomerSavedLocations", () => {
   });
 
   it("drops the Archive instead dialog once its location is the only active one", async () => {
-    state.remove.mockRejectedValueOnce(new Error(IN_USE));
+    state.remove.mockRejectedValueOnce(inUseError(IN_USE));
     const view = render(<CustomerSavedLocations customerId="c1" />);
     fireEvent.click(screen.getByRole("button", { name: "Delete E2E South Block" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
@@ -181,7 +187,7 @@ describe("CustomerSavedLocations", () => {
 
   it("does not offer Archive instead for the only active location refused as in use", async () => {
     state.locations = [location("l1", "E2E North Block", { isDefault: true })];
-    state.remove.mockRejectedValue(new Error(IN_USE));
+    state.remove.mockRejectedValue(inUseError(IN_USE));
     render(<CustomerSavedLocations customerId="c1" />);
     fireEvent.click(screen.getByRole("button", { name: "Delete E2E North Block" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
@@ -197,7 +203,7 @@ describe("CustomerSavedLocations", () => {
 
   it("says only that an archived location is in use when its delete is refused", async () => {
     state.locations = [...state.locations, location("l3", "E2E Old Field", { archivedAt: ARCHIVED_AT })];
-    state.remove.mockRejectedValue(new Error(ARCHIVED_IN_USE));
+    state.remove.mockRejectedValue(inUseError(ARCHIVED_IN_USE));
     render(<CustomerSavedLocations customerId="c1" />);
     fireEvent.click(screen.getByRole("button", { name: "Archived locations (1)" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete E2E Old Field" }));

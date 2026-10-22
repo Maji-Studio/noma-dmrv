@@ -63,8 +63,8 @@ beforeEach(() => {
   vi.mocked(batchLinesToDecide).mockReturnValue(LINES_TO_DECIDE);
   vi.mocked(getCreditBatchesWithSamples).mockResolvedValue(sampling as never);
   vi.mocked(loadBatchesEmissionLines).mockResolvedValue(new Map([
-    [ids[0], { lines: emissionLines, storedEntries: [] }],
-    [ids[1], { lines: undefined, storedEntries: [] }],
+    [ids[0], { status: "ready", lines: emissionLines, storedEntries: [] }],
+    [ids[1], { status: "blocked", blocker: "templateNotFullyRead", storedEntries: [] }],
   ]) as never);
 });
 

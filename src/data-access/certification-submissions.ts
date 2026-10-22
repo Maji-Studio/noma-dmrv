@@ -51,8 +51,7 @@ import {
   type CertificationSubmissionRow,
 } from "./certification";
 import { withCertificationStatusActivity } from "./certification-status-activity";
-import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
-import { acquireFacilityCertificationBoundaryLock } from "./facility-certification-boundary-lock";
+import { acquireFacilityCertificationLocks } from "./facility-durability-lock";
 import { assertSameOrg, requireOrgScope } from "./utils";
 
 /** Ledger statuses that mean "a submission finalized"; deletion refuses on any of them. */
@@ -73,8 +72,8 @@ export interface SubmissionKey {
 
 export interface MappingClaimGuard {
   facilityId: string;
-  /** Caller holds the matching certification-boundary session lock. */
-  facilityCertificationBoundaryLockHeldBySession?: true;
+  /** Caller already holds the boundary lock, on this transaction or as a session lock on another connection. */
+  facilityCertificationBoundaryLockHeld?: true;
   provider: CertifierProvider;
   expectedExternalProjectId: string;
   /** Removals compile against their member batches' pin; a switch must not land between read and claim. */
@@ -599,14 +598,9 @@ async function lockAndVerifyMapping(
   executor: DbTransaction,
   guard: MappingClaimGuard,
 ): Promise<void> {
-  if (!guard.facilityCertificationBoundaryLockHeldBySession) {
-    await acquireFacilityCertificationBoundaryLock(
-      ctx,
-      executor,
-      guard.facilityId,
-    );
-  }
-  await acquireFacilityDurabilityLock(ctx, executor, guard.facilityId);
+  await acquireFacilityCertificationLocks(ctx, executor, guard.facilityId, {
+    boundaryLockHeld: guard.facilityCertificationBoundaryLockHeld,
+  });
 
   if (guard.expectedDurabilityOption !== undefined) {
     const [facility] = await executor

@@ -32,7 +32,7 @@ import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { FormulationForm } from "./formulation-form";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
-import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { ArchivedFormulationNotice } from "./formulation-notices";
 import { formatRatio, formulationSheetSections } from "./formulation-read-sections";
 import type { FormulationFormData } from "@/schemas/formulations";
@@ -223,7 +223,7 @@ export function FormulationList() {
       toast.success("Formulation deleted.");
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Formulation ${deletingFormulation.code}`, "Formulation was not deleted. Try again.");
-      if (isInUseDeleteRefusal(message) && !deletingFormulation.archivedAt) {
+      if (isInUseDeleteRefusal(error) && !deletingFormulation.archivedAt) {
         // In use: the dialog gives way to the in-use dialog that offers Archive instead.
         setDeleteConflict(deletingFormulation);
         setDeletingFormulation(null);
@@ -392,7 +392,6 @@ export function FormulationList() {
               <ArchiveIcon size={16} weight="bold" />
               Archived
             </Button>
-            <DataTable.ColumnVisibility />
           </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />

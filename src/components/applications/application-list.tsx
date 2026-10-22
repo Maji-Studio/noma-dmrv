@@ -66,6 +66,13 @@ import { ApplicationForm } from "./application-form";
 import { applicationSheetSections } from "./application-read-sections";
 import { formatApplicationKgFromTons, formatFieldSizeHa, type ApplicationDeliveryOption } from "./mass-utils";
 
+/** Record details an operator can add from the Columns menu. */
+const APPLICATION_COLUMNS_HIDDEN_BY_DEFAULT = {
+  deliveryCode: false,
+  cropType: false,
+  fieldIdentifier: false,
+};
+
 // ============================================
 // Column Definitions
 // ============================================
@@ -91,6 +98,12 @@ function createColumns(
       cell: ({ row }) => (
         <span>{formatCalendarDate(row.original.applicationDate)}</span>
       ),
+    },
+    {
+      accessorKey: "deliveryCode",
+      meta: { nowrap: true },
+      header: "Delivery",
+      cell: ({ row }) => <span>{row.original.deliveryCode}</span>,
     },
     {
       id: "customer",
@@ -135,6 +148,16 @@ function createColumns(
       cell: ({ row }) => (
         <span className="font-mono">{formatFieldSizeHa(row.original.fieldSizeHa)}</span>
       ),
+    },
+    {
+      accessorKey: "cropType",
+      header: "Crop type",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.cropType ?? MISSING_VALUE.notRecorded}</span>,
+    },
+    {
+      accessorKey: "fieldIdentifier",
+      header: "Field identifier",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.fieldIdentifier ?? MISSING_VALUE.notRecorded}</span>,
     },
     {
       accessorKey: "applicationMethodType",
@@ -360,9 +383,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     setError: setCreateError,
     setUpdateError,
     getCreateErrorMessage: (error, { onRefusal }) => {
-      const shown = onRefusal(error);
-      if (shown) return shown.footer;
-      return error instanceof Error ? error.message : "Application was not created. Check the form.";
+      return onRefusal(error, error instanceof Error ? error.message : "Application was not created. Check the form.");
     },
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this application.",
@@ -443,8 +464,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         );
       }
     } catch (error) {
-      const shown = onRefusal(error);
-      setUpdateError(shown ? shown.footer : toSaveErrorMessage(error, "Application was not saved. Try again."));
+      setUpdateError(onRefusal(error, toSaveErrorMessage(error, "Application was not saved. Try again.")));
     }
   };
 
@@ -610,6 +630,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={APPLICATION_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={items}
         enableSorting={false}

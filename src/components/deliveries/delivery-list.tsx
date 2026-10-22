@@ -56,7 +56,8 @@ import {
   ENTITY_DEEP_LINK_MODE_PARAM,
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
-import { formatDateRange, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
+import { formatDateRange, formatDistanceKm, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
+import { DISTANCE_FIELD_LABEL, DISTANCE_SOURCE_FIELD_LABEL, sourceLabel } from "@/components/transport-legs/distance-override";
 import { formatMoisturePercent, MASS_MOISTURE_LABELS, qualifyMassLabel } from "@/lib/mass-moisture";
 import type {
   CreateDeliveryData,
@@ -92,6 +93,15 @@ function deliveryDetailToRelations(
     vehicleName: delivery.vehicle?.name ?? null,
   };
 }
+
+/** Record details an operator can add from the Columns menu. */
+const DELIVERY_COLUMNS_HIDDEN_BY_DEFAULT = {
+  destinationName: false,
+  driverName: false,
+  vehicleName: false,
+  effectiveDistanceKm: false,
+  effectiveDistanceSource: false,
+};
 
 // ============================================
 // Column Definitions
@@ -136,6 +146,11 @@ function createColumns(
         </span>
       ),
     },
+    {
+      accessorKey: "destinationName",
+      header: "Customer location",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.destinationName || MISSING_VALUE.notSet}</span>,
+    },
     // Every mass on this surface — these two columns, the KPI strip, the detail
     // sheet's wet-mass row and composition preview go through `formatMassKg`:
     // fixed kg, one decimal. Wet product and its tracked dry-biochar allocation
@@ -166,6 +181,30 @@ function createColumns(
         <span className="font-mono text-right">
           {formatMoisturePercent(row.original.moistureContentPercent)}
         </span>
+      ),
+    },
+    {
+      accessorKey: "driverName",
+      header: "Driver",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.driverName || MISSING_VALUE.notSet}</span>,
+    },
+    {
+      accessorKey: "vehicleName",
+      header: "Vehicle",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.vehicleName || MISSING_VALUE.notSet}</span>,
+    },
+    {
+      accessorKey: "effectiveDistanceKm",
+      header: DISTANCE_FIELD_LABEL,
+      cell: ({ row }) => (
+        <span className="font-mono">{formatDistanceKm(row.original.effectiveDistanceKm)}</span>
+      ),
+    },
+    {
+      accessorKey: "effectiveDistanceSource",
+      header: DISTANCE_SOURCE_FIELD_LABEL,
+      cell: ({ row }) => (
+        <span>{sourceLabel(row.original.effectiveDistanceSource) ?? MISSING_VALUE.notRecorded}</span>
       ),
     },
     {
@@ -297,7 +336,7 @@ export function DeliveryList() {
   const createWithEvidence = useCreateWithEvidence({
     entityType: "delivery",
     entityNoun: "Delivery",
-    executeCreate: async ({ data }: { data: DeliveryFormData; onError: SaveRefusalHandler }) => {
+    executeCreate: async ({ data }: { data: DeliveryFormData; onRefusal: SaveRefusalHandler }) => {
       if (!contextFacilityId) {
         throw new Error("No facility selected. Select a facility and try again.");
       }
@@ -327,10 +366,8 @@ export function DeliveryList() {
     },
     setError: setFormError,
     setUpdateError: setFormError,
-    getCreateErrorMessage: (error, { onError }) => {
-      const shown = onError(error);
-      if (shown) return shown.footer;
-      return error instanceof Error ? error.message : "Delivery was not created. Check the form.";
+    getCreateErrorMessage: (error, { onRefusal }) => {
+      return onRefusal(error, error instanceof Error ? error.message : "Delivery was not created. Check the form.");
     },
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this delivery.",
@@ -414,11 +451,11 @@ export function DeliveryList() {
   ]);
 
   // Handlers
-  const handleCreate = async (data: DeliveryFormData, onError: SaveRefusalHandler) => {
-    await createWithEvidence.handleCreate({ data, onError });
+  const handleCreate = async (data: DeliveryFormData, onRefusal: SaveRefusalHandler) => {
+    await createWithEvidence.handleCreate({ data, onRefusal });
   };
 
-  const handleUpdate = async (data: DeliveryFormData, onError: SaveRefusalHandler, expectedVersion?: number) => {
+  const handleUpdate = async (data: DeliveryFormData, onRefusal: SaveRefusalHandler, expectedVersion?: number) => {
     if (!displaySideSheet?.entity) return;
     setFormError(null);
     if (createWithEvidence.guardUpdate()) return;
@@ -431,8 +468,7 @@ export function DeliveryList() {
       closeSideSheet();
       toast.success("Delivery updated.");
     } catch (error) {
-      const shown = onError(error);
-      setFormError(shown ? shown.footer : error instanceof Error ? error.message : "Delivery was not saved. Try again.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Delivery was not saved. Try again."));
     }
   };
 
@@ -553,6 +589,7 @@ export function DeliveryList() {
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={DELIVERY_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={deliveries}
         enableSorting={false}

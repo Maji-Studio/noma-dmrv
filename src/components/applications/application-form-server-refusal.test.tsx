@@ -72,7 +72,7 @@ const lockRefusal = (path: string) =>
 
 function renderRefused(error: ActionError, { footer = null as string | null, edit = () => {} } = {}) {
   const onSubmit = vi.fn((_data, onRefusal) => {
-    expect(onRefusal(error)).toEqual({ footer });
+    expect(onRefusal(error, "Application was not saved. Try again.")).toBe(footer);
   });
   const view = render(
     <QueryClientProvider client={new QueryClient()}>

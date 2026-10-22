@@ -17,7 +17,7 @@ const START_BASIS = { ...END_BASIS, day: "2026-09-30", dayBasis: "start" as cons
 
 function line(view: ProductionRunCreditBatchPreviewView) {
   const copy = describeCreditBatchPreview(view);
-  return `${copy.lead}${copy.batches.map((batch) => batch.code).join(", ")}${copy.tail}`;
+  return `${copy.lead}${copy.batches.map((batch) => batch.code).join(", ")}${copy.window}${copy.tail}`;
 }
 
 const ALL_VIEWS: ProductionRunCreditBatchPreviewView[] = [
@@ -47,19 +47,19 @@ describe("describeCreditBatchPreview", () => {
   it("names a completed run's batch and window, matched on the end day", () => {
     const copy = describeCreditBatchPreview({ state: "match", batch: OCTOBER, basis: END_BASIS, expected: false });
     expect(line({ state: "match", batch: OCTOBER, basis: END_BASIS, expected: false }))
-      .toBe("Joins credit batch CB-26-010-A (Oct 1 to Oct 31, 2026)");
+      .toBe("Credit batch: CB-26-010-A (Oct 1 to Oct 31, 2026)");
     expect(copy.tone).toBe("neutral");
     expect(copy.info).toContain("Matched on the end day, Oct 2, 2026 (Africa/Dar es Salaam), at Mafinga Facility with Forestry waste.");
   });
 
-  it("calls a running run's batch an expectation, never a join", () => {
+  it("labels a running run's batch as once completed", () => {
     expect(line({ state: "match", batch: OCTOBER, basis: END_BASIS, expected: true }))
-      .toBe("Expected credit batch: CB-26-010-A (Oct 1 to Oct 31, 2026)");
+      .toBe("Credit batch: CB-26-010-A (Oct 1 to Oct 31, 2026) once completed");
   });
 
-  it("marks a start-day stand-in as provisional in the line itself", () => {
+  it("keeps a running run's start-day stand-in to one qualifier, explained in the ⓘ", () => {
     const view = { state: "match", batch: SEPTEMBER, basis: START_BASIS, expected: true } as const;
-    expect(line(view)).toBe("Expected credit batch: CB-26-009-A (Sep 1 to Sep 30, 2026), by start day");
+    expect(line(view)).toBe("Credit batch: CB-26-009-A (Sep 1 to Sep 30, 2026) once completed");
     expect(describeCreditBatchPreview(view).info).toContain("no end time yet, so its start day stands in");
   });
 
@@ -86,7 +86,7 @@ describe("describeCreditBatchPreview", () => {
     expect(line({ state: "mixed-feedstock", feedstockTypeCount: 2 }))
       .toBe("No credit batch: the source bins hold 2 feedstock types.");
     expect(line({ state: "member", batch: SEPTEMBER, basis: END_BASIS, conflict: "outside-window" }))
-      .toBe("In credit batch CB-26-009-A (Sep 1 to Sep 30, 2026). This end day is outside it, so the save is refused.");
+      .toBe("Credit batch: CB-26-009-A (Sep 1 to Sep 30, 2026). This end day is outside it, so the save is refused.");
   });
 
   const START_DAY_VIEWS: ProductionRunCreditBatchPreviewView[] = [

@@ -2,7 +2,7 @@
  * Organization React Query hooks — members, invitations, and the Platform
  * Admin org directory. Mutations invalidate the member/invitation lists.
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   changeMemberRoleAction,
   createOrganizationAction,
@@ -11,15 +11,19 @@ import {
   listMembersFn,
   listOrganizationsFn,
   removeMemberAction,
+  renameOrganizationAction,
   revokeInvitationAction,
   setActiveOrganizationAction,
 } from "@/fn/organizations";
 import { listOrganizationApiAccessFn, setOrganizationApiAccessFn } from "@/fn/organization-api-access";
 import { getActiveOrganizationRead } from "@/lib/read-api/client";
 import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
+import { authClient } from "@/lib/auth/client";
+import type { RenameOrganizationInput } from "@/schemas/organizations";
 import { unwrap } from "@/hooks/types";
 import { NO_ORGANIZATION_MESSAGE } from "@/lib/errors";
 import { stashPendingWarning } from "@/lib/pending-warning";
+import { suppressUnloadWarning } from "@/lib/leave-guard";
 import { stashOrgSwitchNotice, type OrgSwitchTarget } from "@/lib/org-switch-notice";
 
 // How many times the active-organization read is re-attempted after a
@@ -53,6 +57,11 @@ export function useActiveOrganizationProfile() {
   });
 }
 
+/** Refetch the member list, for a change made elsewhere (a member renaming themselves). */
+export function invalidateOrgMembers(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({ queryKey: organizationKeys.members() });
+}
+
 export function useResetAfterOrgSwitch() {
   /**
    * `warning` is a non-fatal outcome of the switch itself (the "remember my
@@ -74,13 +83,15 @@ export function useResetAfterOrgSwitch() {
       // succeeded server-side, so swallow it and still land in the new
       // organization.
     }
+    // The operator already chose to switch (and discarded any unsaved edits);
+    // the browser's own "Leave site?" would ask again, and Stay would strand
+    // the page in the old organization with the session in the new one.
+    suppressUnloadWarning();
     // A hard load makes every server component, Better Auth store, and client
     // cache re-read the new context.
     window.location.assign("/dashboard");
   };
 }
-
-export const ORG_SWITCH_FAILED_MESSAGE = "The organization did not open. Try again.";
 
 export function useEnterOrganization() {
   const resetAfterOrgSwitch = useResetAfterOrgSwitch();
@@ -202,6 +213,18 @@ export function useCreateOrganization() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.directory() });
       queryClient.invalidateQueries({ queryKey: organizationKeys.apiAccess() });
+    },
+  });
+}
+
+export function useRenameOrganization() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: RenameOrganizationInput) =>
+      unwrap(await renameOrganizationAction(input)),
+    onSuccess: () => {
+      authClient.$store.notify("$listOrg");
+      return queryClient.invalidateQueries({ queryKey: organizationKeys.all });
     },
   });
 }

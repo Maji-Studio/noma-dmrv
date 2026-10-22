@@ -85,7 +85,7 @@ const mocks = vi.hoisted(() => ({
         onDistanceRefreshed?: () => Promise<void>;
         serverError?: string;
         serverErrorAction?: unknown;
-        onSubmit: (data: unknown, onRefusal?: (error: unknown) => { footer: string | null } | null) => Promise<void> | void;
+        onSubmit: (data: unknown, onRefusal?: (error: unknown, fallback: string) => string | null) => Promise<void> | void;
       }
     | undefined,
   updateRejection: undefined as unknown,
@@ -291,13 +291,13 @@ describe("FeedstockList refused update shown at fields", () => {
   it("shows only the footer text the form hands back, with the form's aliases in the payload", async () => {
     mocks.updateRejection = new ActionError({ error: "Locked by a Removal.", code: "certification_locked", issues: [] });
     const renderer = renderList();
-    const onRefusal = vi.fn(() => ({ footer: "Sent to a Removal." }));
+    const onRefusal = vi.fn(() => "Sent to a Removal.");
 
     await act(async () => {
       await mocks.form?.onSubmit(draft, onRefusal);
     });
 
-    expect(onRefusal).toHaveBeenCalledWith(mocks.updateRejection);
+    expect(onRefusal).toHaveBeenCalledWith(mocks.updateRejection, "Locked by a Removal.");
     expect(textOf(renderer, "server-error")).toBe("Sent to a Removal.");
   });
 
@@ -306,7 +306,7 @@ describe("FeedstockList refused update shown at fields", () => {
     const renderer = renderList();
 
     await act(async () => {
-      await mocks.form?.onSubmit(draft, () => ({ footer: null }));
+      await mocks.form?.onSubmit(draft, () => null);
     });
 
     expect(textOf(renderer, "server-error")).toBe("");
@@ -317,7 +317,7 @@ describe("FeedstockList refused update shown at fields", () => {
     const renderer = renderList();
 
     await act(async () => {
-      await mocks.form?.onSubmit(draft, () => ({ footer: null }));
+      await mocks.form?.onSubmit(draft, () => null);
     });
 
     expect(textOf(renderer, "server-error")).toBe("");
@@ -339,7 +339,7 @@ describe("FeedstockList refused update shown at fields", () => {
     const renderer = renderList();
 
     await act(async () => {
-      await mocks.form?.onSubmit(draft, () => null);
+      await mocks.form?.onSubmit(draft, (_error, fallback) => fallback);
     });
 
     expect(textOf(renderer, "server-error")).toBe(STALE_VERSION_MESSAGE);
