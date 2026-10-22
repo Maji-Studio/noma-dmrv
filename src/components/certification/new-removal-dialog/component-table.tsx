@@ -120,6 +120,7 @@ function StateCell({ row }: { row: ComponentRow }) {
   if (row.state === "earlier" || row.state === "elsewhere") {
     return <span className="body-small text-[var(--color-text-secondary)]">{STATE_WORD[row.state]}</span>;
   }
+  if (row.state === "unverified") return null;
   return <span className="body-small text-[var(--color-text-tertiary)]">{STATE_WORD.included}</span>;
 }
 
@@ -135,7 +136,7 @@ function Row({ row, loading }: { row: ComponentRow; loading: boolean }) {
     >
       <span className="body-small text-[var(--color-text-primary)]">{row.name}</span>
       <div className="text-right md:text-left">
-        {loading && row.state === "included" && <Skeleton className="ml-auto h-16 w-64 md:ml-0" />}
+        {loading && row.state === "unverified" && <Skeleton className="ml-auto h-16 w-64 md:ml-0" />}
         {row.figure && (
           <span
             className={cn(
@@ -162,8 +163,7 @@ function Row({ row, loading }: { row: ComponentRow; loading: boolean }) {
           row.state === "included" && "hidden md:block",
         )}
       >
-        {/* "Included" is a claim the compile has not made yet. */}
-        {!(loading && row.state === "included") && <StateCell row={row} />}
+        <StateCell row={row} />
       </span>
     </li>
   );

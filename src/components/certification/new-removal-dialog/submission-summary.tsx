@@ -157,6 +157,7 @@ export function SubmissionSummary({
           hint={FILES_NOTE}
           value={facts.pendingDocuments > 0 ? countLabel(facts.pendingDocuments, "file") : null}
           emptySituation="none"
+          pending={factsInput.isCompilationLoading}
         />
       </div>
 

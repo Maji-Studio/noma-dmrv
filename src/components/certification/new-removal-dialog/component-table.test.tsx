@@ -40,6 +40,8 @@ function binding(componentId: string, wireMagnitude: number, wireUnit: string, k
 function review(bindings: unknown[], omittedComponentIds: string[] = []) {
   return { bindings, omittedComponentIds, memberCreditBatches: [{ id: "batch-a", code: "CB-26-001" }] } as never;
 }
+// What the server returns when a line blocker or an unbindable input stops the compile.
+const EMPTY_REVIEW = { bindings: [], memberCreditBatches: [], omittedComponentIds: [], intendedPostTargets: [], pendingSourceCount: 0 } as never;
 const HERE = { creditBatchId: "batch-a", creditBatchCode: "CB-26-001", claimingRemovalId: null, claimingRemovalCode: null, contribution: "production-and-delivery" } as const;
 const EARLIER = { creditBatchId: "batch-b", creditBatchCode: "CB-26-002", claimingRemovalId: "rm-3", claimingRemovalCode: "RM-26-003", contribution: "delivery-only" } as const;
 
@@ -135,7 +137,7 @@ describe("componentRows", () => {
         componentId: "lab", displayName: "Lab electricity", state: "confirmedZero",
         blocker: { code: "entryMissingEvidence", message: BLOCK_MESSAGE, fixTarget: "emissions", lineRef: { componentId: "lab", displayName: "Lab electricity" } },
       })]];
-      const rows = componentRows(input(lines, { review: review([binding("lab", 0, "kWh")]) }));
+      const rows = componentRows(input(lines, { review: EMPTY_REVIEW }));
       const lab = rows.find((row) => row.componentId === "lab")!;
       expect(lab.state).toBe("blocked");
       expect(lab.figure).toBeNull();
@@ -151,7 +153,7 @@ describe("componentRows", () => {
       const rows = componentRows(input([
         [line({ componentId: "lab", displayName: "Lab electricity", state: "missingEvidence", blocker: blocker(BLOCK_MESSAGE, "emissions") })],
         [line({ componentId: "lab", displayName: "Lab electricity", state: "needsReview", blocker: blocker("Enter the values again for the current component.", "emissions") })],
-      ], { review: review([]) }));
+      ], { review: EMPTY_REVIEW }));
       expect(rows).toHaveLength(1);
       expect(rows[0].blocked?.items.map((item) => [item.message, item.batchCodes])).toEqual([
         [BLOCK_MESSAGE, ["CB-26-001"]],
@@ -162,7 +164,7 @@ describe("componentRows", () => {
 
     it("an unbindable component is blocked and links to the Removal templates", () => {
       const [row] = componentRows(input([[line({ componentId: "u", state: "filled" })]], {
-        review: review([]), unbindableComponentIds: new Set(["u"]),
+        review: EMPTY_REVIEW, unbindableComponentIds: new Set(["u"]),
       }));
       expect(row.state).toBe("blocked");
       expect(row.blocked?.items[0].message).toContain("noma cannot submit");
@@ -221,42 +223,49 @@ describe("buildComponentTable", () => {
     ]);
   });
 
-  it("while the review compiles, leaves every figure pending, not a settled token", () => {
+  it("while the review compiles, leaves every figure pending and every state unsaid", () => {
     const table = buildComponentTable(input([LINES], { isLoading: true }));
     expect(table.loading).toBe(true);
     expect(table.rows.map((row) => row.figure)).toEqual([null, null, null]);
+    expect(table.rows.every((row) => row.state === "unverified")).toBe(true);
   });
 
-  it("treats the empty review of a failed build like no review: no rows", () => {
-    const empty = { bindings: [], memberCreditBatches: [], omittedComponentIds: [] } as never;
-    const table = buildComponentTable(input([LINES], { review: empty }));
-    expect(table.rows).toEqual([]);
+  it("builds the rows from the lines when the compile stopped, with no figures and no state words", () => {
+    // A failed compile with no blockers: the empty review carries nothing to verify.
+    const table = buildComponentTable(input([LINES], { review: EMPTY_REVIEW }));
+    expect(table.rows.map((row) => row.name)).toEqual(["Metered electricity", "Staff travel", "Pyrolyzer CO"]);
+    expect(table.rows.every((row) => row.state === "unverified" && row.figure === null)).toBe(true);
+    expect(table.rows.map((row) => row.source)).toEqual([SENT_SOURCE.automatic, "2 manual entries", SENT_SOURCE.zero]);
+    expect(table.rows[1].fileCount).toBe(3);
     expect(table.batches).toHaveLength(1);
   });
 
-  it("lists no rows without a compiled review, but still names the batches", () => {
+  it("builds the same unverified rows with no review at all", () => {
     const table = buildComponentTable(input([LINES]));
-    expect(table.rows).toEqual([]);
-    expect(table.batches).toHaveLength(1);
+    expect(table.rows.every((row) => row.state === "unverified" && row.figure === null)).toBe(true);
   });
 });
 
 describe("ComponentTable", () => {
+  const ENTRY_BLOCKER = { code: "entryMissingEvidence", message: BLOCK_MESSAGE, fixTarget: "emissions", lineRef: { componentId: "lab", displayName: "Lab electricity" } };
+  // A compiled review, nothing blocked: the states the real review can carry.
   const rows = (ledgerClaims = [HERE, EARLIER]) => {
     const lines = [
       [line({ componentId: "auto", displayName: "Metered electricity", state: "filled", automaticFigure: { magnitude: "72", unit: "kWh" } }),
         line({ componentId: "prod", displayName: "Kiln construction", state: "filled", contract: { automaticSource: "run-electricity" } })],
       [line({ componentId: "auto", displayName: "Metered electricity", state: "filled" }),
-        line({ componentId: "prod", displayName: "Kiln construction", state: "filled", contract: { automaticSource: "run-electricity" } }),
-        line({ componentId: "lab", displayName: "Lab electricity", state: "missingEvidence",
-          blocker: { code: "entryMissingEvidence", message: BLOCK_MESSAGE, fixTarget: "emissions", lineRef: { componentId: "lab", displayName: "Lab electricity" } } })],
+        line({ componentId: "prod", displayName: "Kiln construction", state: "filled", contract: { automaticSource: "run-electricity" } })],
     ];
-    lines[0].push(line({ componentId: "lab", displayName: "Lab electricity", state: "filled" }));
     return buildComponentTable(input(lines, {
       review: review([binding("auto", 72, "kWh")], ["prod"]),
       ledger: { claims: ledgerClaims, inputs: [] },
     }));
   };
+  // The server's real shape for a blocked Removal: the empty review, plus a blocker on a line.
+  const blockedTable = () => buildComponentTable(input([
+    [line({ componentId: "auto", displayName: "Metered electricity", state: "filled", automaticFigure: { magnitude: "72", unit: "kWh" } })],
+    [line({ componentId: "lab", displayName: "Lab electricity", state: "missingEvidence", entries: [entry({ id: "l1" })], blocker: ENTRY_BLOCKER })],
+  ], { review: EMPTY_REVIEW, ledger: { claims: [HERE, EARLIER], inputs: [] } }));
 
   it("names the batches once in the header, with dates, dry tonnes and the production claim", () => {
     render(<ComponentTable table={rows()} facilityId="facility-1" />);
@@ -270,14 +279,18 @@ describe("ComponentTable", () => {
     expect(within(region).getByText("12.4 t dry")).toBeTruthy();
   });
 
-  it("reads a blocked row as a state word, what to do and a link, on a white row", () => {
-    render(<ComponentTable table={rows()} facilityId="facility-1" />);
+  it("reads a blocked row as a state word, what to do and a link, on a white row, after the compile stops", () => {
+    render(<ComponentTable table={blockedTable()} facilityId="facility-1" />);
     const row = screen.getByText("Lab electricity").closest("li")!;
     expect(within(row).getByText("Blocked")).toBeTruthy();
     expect(within(row).getByText(BLOCK_MESSAGE)).toBeTruthy();
     expect(within(row).getByRole("link", { name: /Review emissions on CB-26-002/ })).toBeTruthy();
     expect(row.className).not.toContain("st-bad");
     expect(within(row).queryByText("Not applicable")).toBeNull();
+    // Nothing else is verified: its source shows, with no figure and no Included.
+    const other = screen.getByText("Metered electricity").closest("li")!;
+    expect(within(other).getByText("Automatic datapoints")).toBeTruthy();
+    expect(screen.queryByText("Included")).toBeNull();
   });
 
   it("reads a component left out for an earlier production claim as Sent earlier, with no link, never as not applicable", () => {
@@ -314,10 +327,12 @@ describe("ComponentTable", () => {
     expect(screen.queryByText("Not yet computed")).toBeNull();
   });
 
-  it("still names the credit batches after a failed compile, with no rows", () => {
-    render(<ComponentTable table={buildComponentTable(input([LINES]))} facilityId="facility-1" />);
+  it("after a failed compile with no blockers, lists the rows with sources only", () => {
+    render(<ComponentTable table={buildComponentTable(input([LINES], { review: EMPTY_REVIEW }))} facilityId="facility-1" />);
     expect(screen.getByText("CB-26-001")).toBeTruthy();
-    expect(screen.queryByRole("list", { name: "Components" })).toBeNull();
+    expect(screen.getByText("Staff travel")).toBeTruthy();
+    expect(screen.queryByText(/Included|Blocked|Sent earlier|In another Removal/)).toBeNull();
+    expect(screen.queryByText("30 L")).toBeNull();
   });
 
   it("offers the file names behind a toggletip", () => {
@@ -335,7 +350,7 @@ describe("BlockedComponentsNotice", () => {
   function setup() {
     const lines = [[line({ componentId: "lab", displayName: "Lab electricity", state: "missingEvidence",
       blocker: { code: "entryMissingEvidence", message: BLOCK_MESSAGE, fixTarget: "emissions", lineRef: { componentId: "lab", displayName: "Lab electricity" } } })]];
-    const table = buildComponentTable(input(lines, { review: review([]) }));
+    const table = buildComponentTable(input(lines, { review: EMPTY_REVIEW }));
     const blockers = [
       { code: "entryMissingEvidence", message: BLOCK_MESSAGE, fixTarget: "emissions", lineRef: { componentId: "lab", displayName: "Lab electricity" } },
       { code: "legacy", message: "Delivery DL-1 has no proof of delivery.", fixTarget: null },
@@ -369,7 +384,7 @@ describe("BlockedComponentsNotice", () => {
   it("keeps the compile blocker when the row shows a different message", () => {
     const lines = [[line({ componentId: "lab", displayName: "Lab electricity", state: "missingEvidence",
       blocker: { code: "entryMissingEvidence", message: BLOCK_MESSAGE, fixTarget: "emissions", lineRef: { componentId: "lab", displayName: "Lab electricity" } } })]];
-    const table = buildComponentTable(input(lines, { review: review([]) }));
+    const table = buildComponentTable(input(lines, { review: EMPTY_REVIEW }));
     const blockers = [{ code: "lineNeedsReview", message: "Enter the values again for the current component.", fixTarget: null, lineRef: { componentId: "lab", displayName: "Lab electricity" } }] as never;
     render(<BlockedComponentsNotice blockers={blockers} blockedRows={table.rows} facilityId="facility-1" memberBatchIds={["batch-a"]} />);
     expect(screen.getByRole("alert").textContent).toContain("Enter the values again for the current component.");
@@ -377,7 +392,7 @@ describe("BlockedComponentsNotice", () => {
 
   it("drops the compiler's unbindable sentence only when every component it names is a blocked row", () => {
     const table = buildComponentTable(input([[line({ componentId: "u", displayName: "Unbindable", state: "filled" })]], {
-      review: review([]), unbindableComponentIds: new Set(["u"]),
+      review: EMPTY_REVIEW, unbindableComponentIds: new Set(["u"]),
     }));
     const sentence = "These inputs cannot be submitted:\nUnbindable";
     const blockers = [{ code: "legacy", message: sentence, fixTarget: null }] as never;

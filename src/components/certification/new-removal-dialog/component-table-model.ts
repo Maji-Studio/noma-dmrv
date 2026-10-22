@@ -27,7 +27,7 @@ import {
   removalTemplatesSettingsHref,
 } from "@/lib/certification/links";
 import { removalFindingFixLink } from "@/lib/certification/removal-finding-links";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { isEmptyReview } from "./submission-facts";
 import { SOURCE_IDS, type AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
 import { SOURCE_BUCKETS } from "@/lib/isometric/utils/aggregation";
 
@@ -44,7 +44,13 @@ export const ESTIMATE_POINTER = "In the CO₂e estimate";
 const UNBINDABLE_REASON =
   "noma cannot submit this component. Review the Removal template.";
 
-export type ComponentState = "included" | "blocked" | "earlier" | "elsewhere";
+export type ComponentState =
+  | "included"
+  | "blocked"
+  | "earlier"
+  | "elsewhere"
+  /** No real review yet (loading, or the compile stopped): nothing is verified, so no state word. */
+  | "unverified";
 
 export interface ComponentFix {
   label: string;
@@ -266,9 +272,10 @@ export function componentRows(input: ComponentTableInput): ComponentRow[] {
     const included = { ...base, state: "included" as const, fileCount: files.count,
       fileEntryIds: files.entryIds, blocked: null };
 
-    if (input.isLoading) {
-      // Figures are not known yet: the cell stays pending, never a settled "not computed".
-      return { ...included, source: parts.join(", "), figure: null };
+    if (!input.review) {
+      // Loading, or the compile stopped before it could compile: the context still
+      // knows the entries and files, but nothing is verified, so no figure and no state.
+      return { ...included, state: "unverified" as const, source: parts.join(", "), figure: null };
     }
     if (lines.some((line) => line.contract?.automaticSource === "sequestration")) {
       // Compiled from Samples and applications, inside the estimate above the table.
@@ -307,11 +314,6 @@ export function groupRows(rows: readonly ComponentRow[]) {
   return [...groups.values()];
 }
 
-/** What `compileRemovalSubmission` returns when the build fails: a review with nothing in it. */
-function isEmptyReview(review: NonNullable<RemovalCompilationView["review"]>): boolean {
-  return review.memberCreditBatches?.length === 0 && review.bindings.length === 0;
-}
-
 /** The table's batches, each with its production claim, and its rows. Rows wait for the compiled review. */
 export function buildComponentTable(input: ComponentTableInput): ComponentTable {
   const claimByBatch = new Map(input.ledger.claims.map((claim) => [claim.creditBatchId, claim]));
@@ -330,9 +332,10 @@ export function buildComponentTable(input: ComponentTableInput): ComponentTable 
           : { kind: "earlier", removalId: claim.claimingRemovalId, removalCode: claim.claimingRemovalCode },
     };
   });
-  // Without a compiled review, or after a failed build (which returns a review
-  // with no members and no bindings), nothing is known about what is sent.
+  // Rows come from the context's lines, so a blocked component always shows. Figures and
+  // the Included, Sent earlier and In another Removal states need a real compiled review:
+  // the empty review of a stopped compile carries none.
   const compiled = input.review && !isEmptyReview(input.review) ? input.review : null;
-  const rows = compiled || input.isLoading ? componentRows({ ...input, review: compiled }) : [];
+  const rows = componentRows({ ...input, review: compiled });
   return { loading: input.isLoading, batches, rows, groups: groupRows(rows) };
 }

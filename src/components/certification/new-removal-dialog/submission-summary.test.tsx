@@ -205,7 +205,18 @@ describe("SubmissionSummary", () => {
   it("shows the estimate and reporting window as pending while the compile loads, never as not yet computed", () => {
     const html = render({ loading: true });
     expect(html).not.toContain("Not yet computed");
-    expect(html).toContain("animate-skeleton");
+    expect(html).not.toContain(">None<");
+    expect(html.split("animate-skeleton").length - 1).toBeGreaterThanOrEqual(3);
+  });
+
+  it("falls back to the context's files after a blocked or failed compile, whose empty review has none", () => {
+    const emptyReview = { ...COMPILATION.review, memberCreditBatches: [], bindings: [], pendingSourceCount: 0 };
+    const html = render({
+      compilation: { ...COMPILATION, review: emptyReview } as unknown as RemovalCompilationView,
+      ctx: { ...CONTEXT, supportingDocuments: { total: 4, mirrored: 1 } } as unknown as RemovalCertifyContext,
+    });
+    expect(html).toContain("3 files");
+    expect(html).not.toContain(">None<");
   });
 
   it("counts the files to upload, and says None when there are none", () => {
