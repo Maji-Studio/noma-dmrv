@@ -185,6 +185,13 @@ export async function hasBlockingFacilitySubmission(
 const CERTIFIER_EXTERNAL_FACILITY_CONSTRAINT =
   "certifier_projects_provider_external_facility_unique";
 
+/** Refusal shown at the form's Isometric facility ID field (`validation_failed` with one issue). */
+function facilityIdInUse(message: string): DomainError {
+  return new DomainError("validation_failed", message, {
+    issues: [{ path: ["externalFacilityId"], code: "validation_failed", message }],
+  });
+}
+
 async function withExternalFacilityConflictGuard<T>(
   externalFacilityId: string,
   fn: () => Promise<T>,
@@ -193,7 +200,7 @@ async function withExternalFacilityConflictGuard<T>(
     return await fn();
   } catch (err) {
     if (isPgUniqueViolation(err, CERTIFIER_EXTERNAL_FACILITY_CONSTRAINT)) {
-      throw new SafeError(
+      throw facilityIdInUse(
         `Isometric facility ID ${externalFacilityId} is already linked to another facility. Each Isometric facility maps to exactly one facility here.`,
       );
     }
@@ -268,7 +275,7 @@ export async function upsertCertifierProject(
         )
         .limit(1);
       if (collision) {
-        throw new SafeError(
+        throw facilityIdInUse(
           `Isometric facility ID ${values.externalFacilityId} is already linked to ${collision.code}: ${collision.name}. Each Isometric facility maps to one noma facility.`,
         );
       }

@@ -108,7 +108,7 @@ describe("MethodBPrerequisitesSetup refusals", () => {
 });
 
 describe("FacilityCertifierForm refusals", () => {
-  const renderForm = () =>
+  const renderForm = (isProduction = false) =>
     render(
       <FacilityCertifierForm
         facilityId={FACILITY_ID}
@@ -119,17 +119,27 @@ describe("FacilityCertifierForm refusals", () => {
           },
           availableProjects: [{ id: "prj_test", name: "Test project" }],
           linkHints: [],
-          isProduction: false,
+          isProduction,
         } as never}
       />,
     );
 
   it("shows a refused facility ID at its field with no footer", async () => {
-    const message = "That facility ID does not exist in the Isometric project.";
+    // The shape saveFacilityCertifierMapping returns when another facility owns the ID.
+    const message = "Isometric facility ID fcl_old is already linked to FAC-2: North. Each Isometric facility maps to one noma facility.";
     mocks.saveMapping.mockRejectedValue(refusal("externalFacilityId", message));
     const view = renderForm();
     fireEvent.submit(view.container.querySelector("form")!);
     await expectAtField(message, "externalFacilityId-error");
+  });
+
+  it("shows the production confirmation refusal under the checkbox", async () => {
+    // The shape saveFacilityCertifierMapping returns when the box is not ticked in production.
+    const message = "Confirm you want to save against the production Isometric environment.";
+    mocks.saveMapping.mockRejectedValue(refusal("confirmProduction", message));
+    const view = renderForm(true);
+    fireEvent.submit(view.container.querySelector("form")!);
+    await expectAtField(message);
   });
 
   it("keeps a registry failure in the footer with its exact text", async () => {
