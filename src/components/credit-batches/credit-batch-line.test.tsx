@@ -29,14 +29,14 @@ describe("CreditBatchLine with several batches", () => {
     expect(screen.getByText(/Jul 1 to Sep 30, 2026|Jul 1 to Sep 30/)).toBeTruthy();
   });
 
-  it("joins two possible batches with or, and hides the window on phones", () => {
+  it("lists two possible batches behind +1, with their windows", () => {
     const copy = describeRecordCreditBatchLine("delivery", {
       state: "preview",
       preview: { batches: batches.slice(0, 2), heldOut: false, basis: "source", sourceRunCount: 2, unbatchedRunCount: 0 },
     });
     render(<CreditBatchLine copy={copy} />);
-    expect(screen.getByRole("status").textContent).toContain("Credit batch: CB-26-001 (opens in a new tab) or CB-26-002");
-    expect(screen.queryByRole("button", { name: /Show all/ })).toBeNull();
+    expect(screen.getByRole("status").textContent).toContain("Possible credit batches: CB-26-001");
+    expect(screen.getByRole("button", { name: /Show all 2 credit batches/ })).toBeTruthy();
   });
 
   it("puts a single batch's window in a span hidden below 640px", () => {

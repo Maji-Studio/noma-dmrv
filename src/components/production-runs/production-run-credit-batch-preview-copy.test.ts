@@ -86,7 +86,7 @@ describe("describeCreditBatchPreview", () => {
     expect(line({ state: "mixed-feedstock", feedstockTypeCount: 2 }))
       .toBe("No credit batch: the source bins hold 2 feedstock types.");
     expect(line({ state: "member", batch: SEPTEMBER, basis: END_BASIS, conflict: "outside-window" }))
-      .toBe("Credit batch: CB-26-009-A (Sep 1 to Sep 30, 2026). This end day is outside its window, so the save is refused.");
+      .toBe("Credit batch: CB-26-009-A (Sep 1 to Sep 30, 2026). This end day is outside it, so the save is refused.");
   });
 
   const START_DAY_VIEWS: ProductionRunCreditBatchPreviewView[] = [

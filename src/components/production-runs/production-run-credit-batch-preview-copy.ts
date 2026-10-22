@@ -6,6 +6,7 @@
 import { formatDateRange, formatDayString } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
+  CREDIT_BATCH_LEAD,
   CREDIT_BATCH_LINE_BASE,
   errorLineCopy,
   pendingLineCopy,
@@ -77,7 +78,7 @@ function memberCopy(
   preview: Extract<ProductionRunCreditBatchPreview, { state: "member" }>,
 ): CreditBatchLineCopy {
   const { batch, basis, conflict } = preview;
-  const base = { ...CREDIT_BATCH_LINE_BASE, lead: "Credit batch: ", batches: [batch] };
+  const base = { ...CREDIT_BATCH_LINE_BASE, lead: CREDIT_BATCH_LEAD, batches: [batch] };
   switch (conflict) {
     case null:
       return { ...base, window: windowLabel(batch), info: basis ? matchedOn(basis) : null };
@@ -85,8 +86,8 @@ function memberCopy(
       return {
         ...base,
         tone: "warning",
-        window: windowLabel(batch),
-        tail: ". This end day is outside its window, so the save is refused.",
+        // The warning is about the window, so it shows at every width.
+        tail: `${windowLabel(batch)}. This end day is outside it, so the save is refused.`,
         info: "A run stays in its credit batch. To move it, remove it from the batch on the credit batch page first.",
       };
     case "facility":
@@ -143,7 +144,7 @@ export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreview
     case "match":
       return {
         ...CREDIT_BATCH_LINE_BASE,
-        lead: "Credit batch: ",
+        lead: CREDIT_BATCH_LEAD,
         batches: [view.batch],
         window: windowLabel(view.batch),
         // "once completed" already marks a running run's batch as provisional; the ⓘ says the start day stood in.

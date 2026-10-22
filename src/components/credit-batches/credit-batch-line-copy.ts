@@ -27,11 +27,6 @@ export interface CreditBatchLineCopy {
    */
   batches: CreditBatchLineBatch[];
   /**
-   * Set when the line names exactly two batches the record could end up in:
-   * they read "A or B" instead of "A +1".
-   */
-  batchJoin?: "or";
-  /**
    * The batch's date window, "(Sep 1 to Sep 30, 2026)". Its own field, not
    * part of `tail`, so a phone can hide it while the rest of the line stays.
    */
@@ -46,6 +41,10 @@ export interface CreditBatchLineCopy {
   retry: boolean;
   busy: boolean;
 }
+
+/** The label every line that names a batch opens with, before and after saving. */
+export const CREDIT_BATCH_LEAD = "Credit batch: ";
+export const CREDIT_BATCHES_LEAD = "Credit batches: ";
 
 /** The line's label for the ⓘ, so a screen reader names what it explains. */
 export const CREDIT_BATCH_INFO_LABEL = "How the credit batch is chosen";
@@ -78,7 +77,7 @@ export function errorLineCopy(): CreditBatchLineCopy {
  * missing-value vocabulary, never hand-written; `info` says why.
  */
 export function missingLineCopy(token: MissingValueCopy, info: string | null = null): CreditBatchLineCopy {
-  return { ...CREDIT_BATCH_LINE_BASE, lead: `Credit batch: ${token}`, info };
+  return { ...CREDIT_BATCH_LINE_BASE, lead: `${CREDIT_BATCH_LEAD}${token}`, info };
 }
 
 /**
@@ -86,5 +85,5 @@ export function missingLineCopy(token: MissingValueCopy, info: string | null = n
  * own words, not the generic "Not yet computed" token.
  */
 export function unknownLineCopy(unblocks: string, info: string | null): CreditBatchLineCopy {
-  return { ...CREDIT_BATCH_LINE_BASE, lead: `Credit batch: ${unblocks}`, info };
+  return { ...CREDIT_BATCH_LINE_BASE, lead: `${CREDIT_BATCH_LEAD}${unblocks}`, info };
 }
