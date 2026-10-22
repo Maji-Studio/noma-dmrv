@@ -71,6 +71,10 @@ it("asks for a permission, focuses the first tick box and does not submit when n
   expect(mocks.mutateAsync).not.toHaveBeenCalled();
   expect(screen.getByRole("alert").textContent).toBe("Choose at least one permission.");
   expect(document.activeElement).toBe(box("All areas, read"));
+  // The error is wired to the controls: each tick box points at it and is marked invalid.
+  const errorId = screen.getByRole("alert").id;
+  expect(box("All areas, read").getAttribute("aria-describedby")).toBe(errorId);
+  expect(box("Feedstocks, read").getAttribute("aria-invalid")).toBe("true");
   fireEvent.click(box("All areas, read"));
   expect(screen.queryByRole("alert")).toBeNull();
 });

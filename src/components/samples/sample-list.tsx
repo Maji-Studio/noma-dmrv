@@ -469,8 +469,9 @@ export function SampleList({
       toast.success("Sample deleted.");
     } catch (error) {
       if (error instanceof StaleVersionError) {
+        const code = samples.find((item) => item.id === deletingSampleId)?.sampleCode;
         setDeletingSampleId(null);
-        setStaleDeleteNotice(staleDeleteMessage("Sample"));
+        setStaleDeleteNotice(staleDeleteMessage(code ? `Sample ${code}` : "Sample"));
       } else {
         setDeleteError(toDeleteErrorMessage(error, "Sample", "Sample was not deleted. Try again."));
       }

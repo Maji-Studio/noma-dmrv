@@ -133,7 +133,7 @@ describe("Sample delete refusal", () => {
 
     expect(harness.dialog?.isOpen).toBe(false);
     expect(harness.dialog?.errorMessage).toBeUndefined();
-    expect(JSON.stringify(page.toJSON())).toContain(staleDeleteMessage("Sample"));
+    expect(JSON.stringify(page.toJSON())).toContain(staleDeleteMessage("Sample SMP-26-001"));
     page.unmount();
   });
 });
