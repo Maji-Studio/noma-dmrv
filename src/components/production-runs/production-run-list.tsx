@@ -33,7 +33,6 @@ import {
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
-import { FACILITY_COLUMN_HIDDEN_BY_DEFAULT } from "@/components/ui/data-table/data-table-helpers";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -62,7 +61,8 @@ import {
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
-import { FACILITY_NOT_FOUND } from "@/lib/copy-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
+import { formatMoisturePercent, MASS_MOISTURE_LABELS, qualifyMassLabel } from "@/lib/mass-moisture";
 import { ILLUSTRATION_SIZE, ReactorArt } from "@/components/ui/illustrations";
 
 function productionRunDetailHref(run: ProductionRunWithRelations) {
@@ -80,6 +80,17 @@ function productionRunDetailHref(run: ProductionRunWithRelations) {
 // ============================================
 // Column Definitions
 // ============================================
+
+/** Run details start hidden and are added from the Columns menu. */
+const PRODUCTION_RUN_COLUMNS_HIDDEN_BY_DEFAULT = {
+  operator: false,
+  biocharMoisturePercent: false,
+  residenceTimeMinutes: false,
+  electricityKwh: false,
+  dieselOperationLiters: false,
+  dieselGensetLiters: false,
+};
+
 
 function createColumns(
   onEdit: (run: ProductionRunWithRelations) => void,
@@ -100,14 +111,6 @@ function createColumns(
       meta: { nowrap: true },
       header: "Date",
       cell: ({ row }) => formatDate(row.original.date),
-    },
-    {
-      id: "facility",
-      header: "Facility",
-      accessorFn: (row) => row.facilityName ?? "",
-      cell: ({ row }) => (
-        <span>{row.original.facilityName || FACILITY_NOT_FOUND}</span>
-      ),
     },
     {
       id: "reactor",
@@ -133,6 +136,55 @@ function createColumns(
       header: "Biochar dry mass",
       cell: ({ row }) => (
         <span className="font-mono">{formatMassKg(row.original.biocharDryMassKg)}</span>
+      ),
+    },
+    {
+      id: "operator",
+      header: "Operator",
+      accessorFn: (row) => row.operatorName ?? "",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.operatorName || MISSING_VALUE.notSet}</span>,
+    },
+    {
+      accessorKey: "biocharMoisturePercent",
+      header: qualifyMassLabel(MASS_MOISTURE_LABELS.moisture, "Biochar"),
+      cell: ({ row }) => (
+        <span className="font-mono">{formatMoisturePercent(row.original.biocharMoisturePercent)}</span>
+      ),
+    },
+    {
+      accessorKey: "residenceTimeMinutes",
+      header: "Residence time",
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {row.original.residenceTimeMinutes == null ? MISSING_VALUE.notRecorded : `${row.original.residenceTimeMinutes} min`}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "electricityKwh",
+      header: "Electricity",
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {row.original.electricityKwh == null ? MISSING_VALUE.notRecorded : `${row.original.electricityKwh} kWh`}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "dieselOperationLiters",
+      header: "Startup / plant diesel",
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {row.original.dieselOperationLiters == null ? MISSING_VALUE.notRecorded : `${row.original.dieselOperationLiters} L`}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "dieselGensetLiters",
+      header: "Genset diesel",
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {row.original.dieselGensetLiters == null ? MISSING_VALUE.notRecorded : `${row.original.dieselGensetLiters} L`}
+        </span>
       ),
     },
     {
@@ -508,7 +560,7 @@ export function ProductionRunList() {
 
       {/* Data Table */}
       <DataTable
-        defaultColumnVisibility={FACILITY_COLUMN_HIDDEN_BY_DEFAULT}
+        defaultColumnVisibility={PRODUCTION_RUN_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={runs}
         enableSorting={false}

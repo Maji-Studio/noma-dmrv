@@ -28,7 +28,8 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatCalendarDate, formatMass, formatMassKg } from "@/lib/format-utils";
+import { formatCalendarDate, formatDistanceKm, formatMass, formatMassKg } from "@/lib/format-utils";
+import { DISTANCE_FIELD_LABEL } from "@/components/transport-legs/distance-override";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { StaleVersionError, staleDeleteMessage, toSaveErrorMessage } from "@/lib/stale-version";
 import { getConflict, type ConflictRef } from "@/lib/conflict-ref";
@@ -67,6 +68,13 @@ import {
   useFeedstockTypeFilterOptions,
 } from "./use-feedstock-type-filter";
 import { ILLUSTRATION_SIZE, FeedstockArt } from "@/components/ui/illustrations";
+
+/** Record details an operator can add from the Columns menu. */
+const FEEDSTOCK_COLUMNS_HIDDEN_BY_DEFAULT = {
+  vehiclePlateNumber: false,
+  distance: false,
+  notes: false,
+};
 
 // ============================================
 // Column Definitions
@@ -142,6 +150,29 @@ function createColumns(
         <span className="font-mono">
           {formatMoisturePercent(row.original.moistureContentPercent)}
         </span>
+      ),
+    },
+    {
+      accessorKey: "vehiclePlateNumber",
+      header: "Vehicle",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.vehiclePlateNumber || MISSING_VALUE.notSet}</span>,
+    },
+    {
+      id: "distance",
+      header: DISTANCE_FIELD_LABEL,
+      // An override wins; otherwise the leg derived from the supplier location.
+      accessorFn: (row) => row.distanceKmOverride ?? row.transportDistanceKm,
+      cell: ({ getValue }) => (
+        <span className="font-mono">
+          {formatDistanceKm(getValue<number | null>())}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "notes",
+      header: "Notes",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate">{row.original.notes || MISSING_VALUE.notRecorded}</span>
       ),
     },
     {
@@ -544,6 +575,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={FEEDSTOCK_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={feedstockItems}
         enableSorting={false}

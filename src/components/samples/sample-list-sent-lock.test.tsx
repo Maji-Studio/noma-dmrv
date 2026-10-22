@@ -25,7 +25,7 @@ const harness = vi.hoisted(() => ({
   lockStatus: "ready" as "pending" | "error" | "ready",
   retry: vi.fn(),
   sheetProps: null as { canEdit?: boolean; submitBlock?: { retry?: { run: () => void } } | null } | null,
-  columns: [] as Array<{ id?: string; cell?: unknown }>,
+  columns: [] as Array<{ id?: string; accessorKey?: string; header?: unknown; cell?: unknown }>,
   rowActions: null as Array<{ label: string }> | null,
 }));
 
@@ -98,7 +98,7 @@ vi.mock("@/components/ui", () => ({
 }));
 vi.mock("@/components/navigation", () => ({ SelectFacilityEmptyState: () => null }));
 vi.mock("@/components/ui/data-table", () => ({
-  DataTable: ({ columns }: { columns: Array<{ id?: string; cell?: unknown }> }) => {
+  DataTable: ({ columns }: { columns: typeof harness.columns }) => {
     harness.columns = columns;
     return null;
   },
@@ -127,7 +127,11 @@ vi.mock("@/components/ui/entity-side-sheet", () => ({
     return props.open ? <div>{props.titleBadge}{props.mode === "view" ? props.viewModeNotice : props.children}</div> : null;
   },
 }));
-vi.mock("./sample-read-sections", () => ({ sampleSheetSections: () => [] }));
+vi.mock("./sample-read-sections", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./sample-read-sections")>()),
+  sampleSheetSections: () => [],
+}));
+vi.mock("./sample-documents-panel", () => ({ SampleDocumentsPanel: () => null }));
 vi.mock("./sample-form", () => ({
   SampleForm: (props: { onSubmit: SubmitHandler }) => {
     harness.onSubmit = props.onSubmit;
@@ -261,5 +265,28 @@ describe("Sample sheet behind a Sent Removal", () => {
     expect(harness.rowActions?.map((action) => action.label)).toEqual(["Edit", "Delete"]);
     cell.unmount();
     renderer?.unmount();
+  });
+});
+
+describe("Sample list added lab columns", () => {
+  it("prints lab values with the digits the Sample sheet uses", async () => {
+    harness.sample = SAMPLE;
+    harness.query = {};
+    harness.lock = undefined;
+    harness.lockStatus = "ready";
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<SampleList />); });
+    const row = { ashContentPercent: 0.04, oToCOrgRatio: 0.06123456 };
+    const cellText = (accessorKey: string) => {
+      const column = harness.columns.find((entry) => entry.accessorKey === accessorKey);
+      const cell = column?.cell as (context: unknown) => ReactNode;
+      let cellRenderer!: ReactTestRenderer;
+      act(() => { cellRenderer = create(<>{cell({ row: { original: row } })}</>); });
+      return textOf(cellRenderer);
+    };
+    expect(cellText("ashContentPercent")).toBe("0.04%");
+    expect(cellText("oToCOrgRatio")).toBe("0.0612");
+    expect(harness.columns.find((entry) => entry.accessorKey === "labName")?.header).toBe("Lab name");
+    renderer.unmount();
   });
 });

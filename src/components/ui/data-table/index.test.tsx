@@ -1,6 +1,8 @@
+// @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ColumnDef, Table as TanStackTable } from "@tanstack/react-table";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DataTable, recordRowId, useDataTable } from ".";
 
 interface TestRow {
@@ -209,5 +211,50 @@ describe("DataTable one-line cells", () => {
     expect(cellClass(html, "OR-26-002")).toContain("whitespace-nowrap");
     expect(cellClass(html, "1,000 kg")).toContain("whitespace-nowrap");
     expect(cellClass(html, "Demo Mbeya")).not.toContain("whitespace-nowrap");
+  });
+});
+
+describe("DataTable columns menu", () => {
+  const withHidden: ColumnDef<TestRow>[] = [
+    ...columns,
+    { id: "notes", header: "Notes", accessorFn: () => "Hand dried" },
+  ];
+
+  function renderMenu() {
+    render(
+      <DataTable columns={withHidden} data={data} defaultColumnVisibility={{ notes: false }}>
+        <DataTable.Toolbar>
+          <DataTable.Controls>
+            <DataTable.ColumnVisibility />
+          </DataTable.Controls>
+        </DataTable.Toolbar>
+      </DataTable>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Columns" }));
+  }
+
+  afterEach(cleanup);
+
+  it("sits on the popover layer so sticky end cells cannot paint over it", () => {
+    renderMenu();
+    const menu = screen.getByRole("dialog", { name: "Column visibility" });
+    expect(menu.className).toContain("z-[var(--z-layer-popover)]");
+    expect(menu.className).not.toMatch(/(^|\s)z-10(\s|$)/);
+  });
+
+  it("lists a hidden-by-default field unchecked, adds it when checked, and Reset hides it again", () => {
+    renderMenu();
+    const isChecked = () => (screen.getByRole("checkbox", { name: "Notes" }) as HTMLInputElement).checked;
+    expect(isChecked()).toBe(false);
+    expect(screen.queryByText("Hand dried")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reset columns" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Notes" }));
+    expect(isChecked()).toBe(true);
+    expect(screen.getAllByText("Hand dried").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset columns" }));
+    expect(isChecked()).toBe(false);
+    expect(screen.queryByText("Hand dried")).toBeNull();
   });
 });
