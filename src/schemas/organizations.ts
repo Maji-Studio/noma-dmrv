@@ -26,7 +26,7 @@ export const ORGANIZATION_NAME_MAX_LENGTH = 100;
 export const renameOrganizationSchema = z.object({
   name: z.string().trim()
     .min(2, "Name must be at least 2 characters.")
-    .max(ORGANIZATION_NAME_MAX_LENGTH, "Name must be at most 100 characters."),
+    .max(ORGANIZATION_NAME_MAX_LENGTH, `Name must be at most ${ORGANIZATION_NAME_MAX_LENGTH} characters.`),
 });
 export type RenameOrganizationInput = z.infer<typeof renameOrganizationSchema>;
 

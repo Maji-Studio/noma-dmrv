@@ -61,6 +61,29 @@ describe("OrganizationNameForm", () => {
     expect(router.refresh).toHaveBeenCalled();
   });
 
+  it("keeps Rename hidden after a save, before the page refresh lands", async () => {
+    render(<OrganizationNameForm name="Dark Earth Carbon" canManage />);
+    fireEvent.change(nameInput(), { target: { value: "Dark Earth Carbon Ltd" } });
+    fireEvent.click(save()!);
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(nameInput().value).toBe("Dark Earth Carbon Ltd");
+    expect(save()).toBeNull();
+  });
+
+  it("clears a refusal once the name is edited", async () => {
+    const refusal = "Only organization Admins can rename the organization.";
+    rename.mutateAsync.mockRejectedValue(new Error(refusal));
+    render(<OrganizationNameForm name="Dark Earth Carbon" canManage />);
+    fireEvent.change(nameInput(), { target: { value: "Dark Earth Carbon Ltd" } });
+    fireEvent.click(save()!);
+    expect(await screen.findByText(refusal)).toBeTruthy();
+
+    fireEvent.change(nameInput(), { target: { value: "Dark Earth Carbon" } });
+
+    expect(screen.queryByText(refusal)).toBeNull();
+  });
+
   it("refuses a one-letter name before sending it", async () => {
     render(<OrganizationNameForm name="Dark Earth Carbon" canManage />);
     fireEvent.change(nameInput(), { target: { value: "D" } });

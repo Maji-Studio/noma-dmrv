@@ -44,6 +44,14 @@ function NameForm({ savedName }: { savedName: string }) {
   const toast = useToast();
   const rename = useRenameOrganization();
   const [serverError, setServerError] = useState("");
+  // The name this form last saved, ahead of the refreshed prop, so Rename does
+  // not come back between the save and the page refresh.
+  const [baseline, setBaseline] = useState(savedName);
+  const [lastProp, setLastProp] = useState(savedName);
+  if (savedName !== lastProp) {
+    setLastProp(savedName);
+    setBaseline(savedName);
+  }
   const {
     control,
     register,
@@ -58,14 +66,15 @@ function NameForm({ savedName }: { savedName: string }) {
     values: { name: savedName },
     resetOptions: { keepDirtyValues: true },
   });
-  const typed = useWatch({ control, name: "name" }) ?? savedName;
-  const changed = typed.trim() !== savedName;
+  const typed = useWatch({ control, name: "name" }) ?? baseline;
+  const changed = typed.trim() !== baseline;
 
   const latched = useLatchedSubmit();
   const onSubmit = latched(handleSubmit(async (values) => {
     setServerError("");
     try {
       const renamed = await rename.mutateAsync(values);
+      setBaseline(renamed.name);
       reset({ name: renamed.name });
       toast.success(`Organization renamed to ${renamed.name}.`);
       router.refresh();
@@ -81,6 +90,7 @@ function NameForm({ savedName }: { savedName: string }) {
       <FormField
         id="organization-name"
         label="Name"
+        required
         error={errors.name?.message}
       >
         <FormInput
@@ -90,7 +100,10 @@ function NameForm({ savedName }: { savedName: string }) {
           maxLength={ORGANIZATION_NAME_MAX_LENGTH}
           error={!!errors.name}
           disabled={rename.isPending}
-          {...register("name")}
+          {...register("name", {
+            // A refusal belongs to the name that was sent, not the one being typed.
+            onChange: () => setServerError(""),
+          })}
         />
       </FormField>
       <FormActions
