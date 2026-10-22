@@ -585,6 +585,30 @@ describe("OrderForm save refusal (#1327)", () => {
     await act(async () => {});
     expect(customer().textContent).toBe("Customer A");
     expect(location().textContent).toBe("North field");
+    expect(document.getElementById("customerLocationId-error")?.textContent).toBe("Locked. Your change was not saved.");
+    client.clear();
+  });
+
+  it("keeps the location and stays clean when the operator re-picks the same customer", async () => {
+    const LOCATION_ONE = { id: ORDER.customerLocationId, code: "", name: "North field" };
+    const CUSTOMER_A = { id: ORDER.customerId, code: "", name: "Customer A" };
+    state.customerOptions = [CUSTOMER_A, { id: "66666666-6666-4666-8666-666666666666", code: "", name: "Customer B" }];
+    state.customersById = { [CUSTOMER_A.id]: CUSTOMER_A };
+    state.locationOptions = [LOCATION_ONE];
+    const client = new QueryClient();
+    const { states } = renderReportingDirty(<OrderForm order={ORDER} lock={OPEN_LOCK} onSubmit={noop} onCancel={noop} />, {
+      wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    });
+    const customer = () => screen.getByRole("combobox", { name: /^Customer(Required)?$/ });
+    const location = () => screen.getByRole("combobox", { name: /^Customer location/ });
+    await waitFor(() => expect(location().textContent).toBe("North field"));
+
+    fireEvent.click(customer());
+    fireEvent.click(await screen.findByTestId(`entity-option-${CUSTOMER_A.id}`));
+    await act(async () => {});
+    expect(customer().textContent).toBe("Customer A");
+    expect(location().textContent).toBe("North field");
+    expectStayedClean(states);
     client.clear();
   });
 

@@ -51,6 +51,9 @@ import { isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
 type CreditBatchFormInput = z.input<ReturnType<typeof creditBatchFormSchemaForCertifier>>;
 type CreditBatchFormResolver = Resolver<CreditBatchFormInput, unknown, CreditBatchFormData>;
 
+/** Form fields whose value decides which production runs the batch holds. */
+const MEMBERSHIP_INPUTS = ["startDate", "endDate", "feedstockTypeId", "facilityId"] as const;
+
 function parseWatchedDate(value: unknown): Date | null {
   if (value == null || value === "") {
     return null;
@@ -339,14 +342,14 @@ export function CreditBatchForm({
     : "Create credit batch";
 
   const refuseCreditBatchSave = useSaveRefusal({ control, setError, resetField, formId });
-  // The membership dates decide which runs belong to the batch, and changing
-  // them prunes the cohort. A lock revert that restores a date therefore
-  // restores the saved cohort with it.
+  // Every input that decides which runs belong to the batch (the window, the
+  // feedstock type, the facility) prunes the cohort when it changes. A lock
+  // revert that restores any of them therefore restores the saved cohort too.
   const refuseSave: SaveRefusalHandler = (error, fallback) => {
-    const [startBefore, endBefore] = getValues(["startDate", "endDate"]);
+    const before = getValues(MEMBERSHIP_INPUTS);
     const footer = refuseCreditBatchSave(error, fallback);
-    const [startAfter, endAfter] = getValues(["startDate", "endDate"]);
-    if (startAfter !== startBefore || endAfter !== endBefore) {
+    const after = getValues(MEMBERSHIP_INPUTS);
+    if (after.some((value, index) => value !== before[index])) {
       // setValue tells the watchers (resetField alone does not reach the
       // unregistered cohort field); resetField then clears its dirty mark.
       setValue("productionRunIds", creditBatch?.productionRunIds ?? [], { shouldValidate: true });

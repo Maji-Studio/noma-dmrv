@@ -109,4 +109,18 @@ describe("save refusal coverage", () => {
     const source = readFileSync(resolve(process.cwd(), file), "utf8");
     expect(source, `${file} no longer uses the pending error route; remove its seam entry`).toMatch(pending);
   });
+
+  it("hands every migrated form's picker edit dialog onSubmitWithRefusal, not the legacy onSubmit", () => {
+    const dialogs = readFileSync(resolve(COMPONENTS_DIR, "forms/entity-select/entity-edit-forms.tsx"), "utf8");
+    // One dialog entry per exported function; each renders a single entity form.
+    const entries = dialogs.split(/^export function /m).slice(1);
+    const migrated = entries.flatMap((entry) => {
+      const form = /<(\w+Form)\b/.exec(entry)?.[1];
+      const file = [...sources].find(([, source]) => form && new RegExp(`export function ${form}\\b`).test(source));
+      return form && file && usesRefusal(file[1]) ? [{ form, entry }] : [];
+    });
+    expect(migrated.length, "no migrated picker dialog found; the scan is stale").toBeGreaterThan(0);
+    const legacy = migrated.filter(({ entry }) => !/onSubmit=\{formProps\.onSubmitWithRefusal\}/.test(entry)).map(({ form }) => form);
+    expect(legacy, "these migrated forms must take onSubmitWithRefusal in entity-edit-forms.tsx").toEqual([]);
+  });
 });

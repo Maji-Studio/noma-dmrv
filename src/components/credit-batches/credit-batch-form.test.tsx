@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 const ISOMETRIC_FACILITY_ID = "00000000-0000-4000-8000-000000000002";
 const UNMAPPED_FACILITY_ID = "00000000-0000-4000-8000-000000000004";
 const FEEDSTOCK_TYPE_ID = "00000000-0000-4000-8000-000000000003";
+const OTHER_FEEDSTOCK_TYPE_ID = "00000000-0000-4000-8000-000000000004";
 const EARLIER_PROCESS_ID = "00000000-0000-4000-8000-000000000005";
 const LATER_PROCESS_ID = "00000000-0000-4000-8000-000000000006";
 const MONTH_REFUSAL = "Choose an end date on or before Jan 31, 2026. Isometric credit batches must cover less than one month.";
@@ -41,6 +42,7 @@ function FeedstockSelect({ control }: { control: Control<SelectFields> }) {
     <select aria-label="Feedstock type" {...field}>
       <option value="">Select feedstock type</option>
       <option value={FEEDSTOCK_TYPE_ID}>Pyrolysis feedstock</option>
+      <option value={OTHER_FEEDSTOCK_TYPE_ID}>Other feedstock</option>
     </select>
   );
 }
@@ -386,6 +388,33 @@ describe("CreditBatchForm save refusal (#1327)", () => {
         },
       );
       await waitFor(() => expect(endDate.value).toBe("2026-04-30"));
+
+      await act(async () => {});
+      expect(container.textContent).not.toContain("Saving removes a claimed production run");
+    } finally {
+      batch.productionRunIds = [];
+    }
+  });
+
+  it("brings the saved production runs back with a reverted feedstock type", async () => {
+    const RUN_ID = "00000000-0000-4000-8000-0000000000aa";
+    const batch = creditBatch as unknown as { productionRunIds: string[] };
+    batch.productionRunIds = [RUN_ID];
+    mocks.showFeedstockSelect = true;
+    mocks.claimedRun = {
+      endsOn: "2026-04-15",
+      run: { id: RUN_ID, code: "PR-1", status: "complete", feedstockTypeIds: [creditBatch.feedstockTypeId], assignedCreditBatchId: creditBatch.id },
+    };
+    try {
+      const { container } = await saveRefused(
+        new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [issue(["feedstockTypeId"], LOCK_REASON, "certification_locked")] }),
+        async () => {
+          fireEvent.change(screen.getByLabelText("Feedstock type"), { target: { value: OTHER_FEEDSTOCK_TYPE_ID } });
+          await act(async () => {});
+          expect(document.body.textContent).toContain("Saving removes a claimed production run");
+        },
+      );
+      await waitFor(() => expect((screen.getByLabelText("Feedstock type") as HTMLSelectElement).value).toBe(FEEDSTOCK_TYPE_ID));
 
       await act(async () => {});
       expect(container.textContent).not.toContain("Saving removes a claimed production run");
