@@ -8,7 +8,7 @@ import { EntitySideSheet } from "./index";
 
 vi.mock("@/components/ui/slide-over-panel", () => {
   const Wrapper = ({ children }: { children: ReactNode }) => <div>{children}</div>;
-  return { SlideOverPanel: {
+  return { FILL_CHILDREN_CLASS: "[&>*]:flex [&>*]:flex-1 [&>*]:flex-col", SlideOverPanel: {
     Root: Wrapper, Content: Wrapper, Title: Wrapper, Description: Wrapper, Footer: Wrapper, Close: Wrapper,
     Header: ({ children }: { children: ReactNode }) => <header>{children}</header>,
     Body: ({ children }: { children: ReactNode }) => <main>{children}</main>,

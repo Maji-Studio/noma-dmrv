@@ -325,7 +325,7 @@ export function FeedstockTypeForm({
 
       <form
         onSubmit={latched(handleSubmit((data) => onSubmit(data)))}
-        className={cn(FILL_COLUMN, "space-y-20")}
+        className={cn(FILL_COLUMN, "gap-20")}
       >
         <ResolvedErrorRevalidator control={control} trigger={trigger} />
         <div

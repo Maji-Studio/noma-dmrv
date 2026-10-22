@@ -13,8 +13,9 @@
 "use client";
 
 import * as React from "react";
-import { SlideOverPanel } from "@/components/ui/slide-over-panel";
+import { SlideOverPanel, FILL_CHILDREN_CLASS } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { DiscardChangesDialog } from "@/components/ui/discard-changes-dialog";
 import {
   DetailSpine,
@@ -23,14 +24,14 @@ import {
 import { SideSheetActionsContext } from "./side-sheet-context";
 import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-block-context";
 
+// The fieldset is the body's flex child (`[&>*]:flex` beats `contents`), so it
+// passes the body's fill on to the form inside it. `min-w-0` undoes the
+// fieldset's default min-content width.
+const SHEET_FIELDSET_CLASS = cn("min-w-0", FILL_CHILDREN_CLASS);
+
 /* -------------------------------------------------------------------------------------------------
  * Back Arrow Icon
  * -----------------------------------------------------------------------------------------------*/
-
-// The fieldset is the body's flex child (`[&>*]:flex` beats `contents`), so it
-// repeats the body's fill rule for the form inside it. `min-w-0` undoes the
-// fieldset's default min-content width.
-const SHEET_FIELDSET_CLASS = "min-w-0 [&>*]:flex [&>*]:flex-1 [&>*]:flex-col";
 
 function ArrowLeftIcon() {
   return (

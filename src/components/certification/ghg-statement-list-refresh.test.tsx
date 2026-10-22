@@ -64,7 +64,7 @@ vi.mock("@/components/ui/data-table", () => {
 });
 vi.mock("@/components/ui/slide-over-panel", () => {
   const Wrapper = ({ children }: { children: ReactNode }) => <div>{children}</div>;
-  return { SlideOverPanel: {
+  return { FILL_CHILDREN_CLASS: "", SlideOverPanel: {
     Root: Wrapper, Content: Wrapper, Header: Wrapper, Title: Wrapper,
     Description: Wrapper, Body: Wrapper, Footer: Wrapper, Close: Wrapper,
   } };
