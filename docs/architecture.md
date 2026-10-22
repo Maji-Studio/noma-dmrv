@@ -134,8 +134,8 @@ export async function createItem(input: CreateItem) {
 
 Rate limiting is opt-in per action: `withAction(fn, { rateLimit: { key, max,
 windowMs } })`, checked after auth so it keys on the resolved `userId`. It
-applies to expensive or abuse-prone actions: certification submits and geo
-geocode/route are the current users.
+applies to expensive or abuse-prone actions: certification submits, geo
+geocode/route and the Profile password change are the current users.
 
 Two more options exist for migrating the legacy wrappers without changing what
 they log or return. `log: { message, context }` replaces the generic
@@ -288,7 +288,7 @@ runtime.
 - `src/app/(app)/layout.tsx` enforces auth and mounts `FacilityProvider`.
 - **One settings console** (`/settings`, #1277). `SettingsConsole` renders a
   rail grouped by whose setting it is, one route per pane, listed in
-  `src/lib/settings/panes.ts`: **You** (Connected apps), **Organization**
+  `src/lib/settings/panes.ts`: **You** (Profile, Connected apps), **Organization**
   (General, Members, Developers), **Certification** (Registry, Removal
   templates, Facilities) and **Platform** (Organizations, Diagnostics,
   Template mapping; Platform Admins only). Each route loads the viewer with
