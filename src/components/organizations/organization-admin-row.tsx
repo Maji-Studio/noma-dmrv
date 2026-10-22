@@ -16,6 +16,8 @@ interface OrganizationAdminRowProps {
   org: { id: string; name: string; slug: string; memberCount: number };
   apiAccessEnabled: boolean | undefined;
   entering: boolean;
+  /** Another organization is opening; hold this row's Open button. */
+  enterDisabled?: boolean;
   /** True for the organization the viewer is working in now. */
   current?: boolean;
   onEnter: () => void;
@@ -25,7 +27,7 @@ interface OrganizationAdminRowProps {
  * Organization status and actions, with confirmation before disabling API
  * access and a write-only certifier keys form in its own modal.
  */
-export function OrganizationAdminRow({ org, apiAccessEnabled, entering, current = false, onEnter }: OrganizationAdminRowProps) {
+export function OrganizationAdminRow({ org, apiAccessEnabled, entering, enterDisabled = false, current = false, onEnter }: OrganizationAdminRowProps) {
   const [keysOpen, setKeysOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmOff, setConfirmOff] = useState(false);
@@ -93,6 +95,7 @@ export function OrganizationAdminRow({ org, apiAccessEnabled, entering, current 
                 size="small"
                 onClick={onEnter}
                 busy={entering}
+                disabled={enterDisabled && !entering}
               >
                 Open
               </Button>

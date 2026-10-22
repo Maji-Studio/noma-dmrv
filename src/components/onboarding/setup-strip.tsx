@@ -8,7 +8,7 @@
 import { EyeIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import type { SetupActions } from "./setup-actions";
-import { SetupStepAction } from "./setup-step-action";
+import { SetupStepAction, useStepNavigation } from "./setup-step-action";
 import type { SetupProgress } from "./use-setup-steps";
 
 interface SetupStripProps {
@@ -19,6 +19,7 @@ interface SetupStripProps {
 
 export function SetupStrip({ progress, onExpand, actions }: SetupStripProps) {
   const { steps, doneCount, total, activeIndex } = progress;
+  const navigation = useStepNavigation();
 
   return (
     <section
@@ -47,7 +48,7 @@ export function SetupStrip({ progress, onExpand, actions }: SetupStripProps) {
       </div>
       <div className="flex flex-wrap items-center gap-12">
         {activeIndex >= 0 && (
-          <SetupStepAction step={steps[activeIndex]} active actions={actions} />
+          <SetupStepAction step={steps[activeIndex]} active actions={actions} navigation={navigation} />
         )}
         <Button variant="weak" size="small" onClick={onExpand}>
           <EyeIcon size={16} weight="bold" />

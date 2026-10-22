@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { FormField, FormInput, ServerError } from "@/components/forms";
+import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import { bootstrapInvitationAccountAction } from "@/fn/invitation-bootstrap";
 import { stashPendingWarning } from "@/lib/pending-warning";
 import { stashOrgSwitchNotice } from "@/lib/org-switch-notice";
@@ -21,6 +22,8 @@ export function InvitationBootstrapForm({
   email: string;
 }) {
   const [serverError, setServerError] = useState("");
+  // The page reloads into the dashboard after the action returns; stay busy through that.
+  const leaving = useBusyUntilUnload();
   const {
     register,
     handleSubmit,
@@ -42,8 +45,10 @@ export function InvitationBootstrapForm({
     // to the dashboard rather than lost to this reload.
     stashPendingWarning(result.warning);
     stashOrgSwitchNotice();
+    leaving.hold(true);
     window.location.assign("/dashboard");
   }
+  const busy = isSubmitting || !!leaving.held;
 
   return (
     <form onSubmit={handleSubmit(submit)} className="space-y-24">
@@ -58,7 +63,7 @@ export function InvitationBootstrapForm({
         <FormInput
           id="invite-name"
           autoComplete="name"
-          disabled={isSubmitting}
+          disabled={busy}
           error={Boolean(errors.name)}
           {...register("name")}
         />
@@ -72,7 +77,7 @@ export function InvitationBootstrapForm({
           id="invite-password"
           type="password"
           autoComplete="new-password"
-          disabled={isSubmitting}
+          disabled={busy}
           error={Boolean(errors.password)}
           {...register("password")}
         />
@@ -82,9 +87,9 @@ export function InvitationBootstrapForm({
         type="submit"
         variant="primary"
         width="full"
-        disabled={isSubmitting}
+        busy={busy}
       >
-        {isSubmitting ? "Creating account…" : "Create account and join"}
+        Create account and join
       </Button>
     </form>
   );
