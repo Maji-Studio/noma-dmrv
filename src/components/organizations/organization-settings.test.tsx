@@ -171,10 +171,12 @@ describe("OrganizationSettings pending and expired invitations", () => {
   it("marks an expired invitation and says when each one expires", () => {
     render(<OrganizationSettings {...PROPS} canManage />);
 
-    expect(within(rowOf("pending@example.com")).queryByText("Expired")).toBeNull();
-    expect(within(rowOf("pending@example.com")).getByText(/Expires Oct 29/)).toBeTruthy();
-    expect(within(rowOf("expired@example.com")).getByText("Expired")).toBeTruthy();
-    expect(within(rowOf("expired@example.com")).getByText(/Expired Oct 20/)).toBeTruthy();
+    expect(within(rowOf("pending@example.com")).queryByText(/Expired/)).toBeNull();
+    expect(within(rowOf("pending@example.com")).getByText(/Expires Oct 29, 2026/)).toBeTruthy();
+    // Said once: the badge carries the date, the meta line keeps the role.
+    expect(within(rowOf("expired@example.com")).getAllByText(/Expired/)).toHaveLength(1);
+    expect(within(rowOf("expired@example.com")).getByText("Expired Oct 20, 2026")).toBeTruthy();
+    expect(within(rowOf("expired@example.com")).queryByText(/Expires/)).toBeNull();
   });
 
   it("offers Send again on pending and expired rows", () => {
@@ -197,6 +199,18 @@ describe("OrganizationSettings pending and expired invitations", () => {
     );
   });
 
+  it("moves focus to the delivery notice after Send again", async () => {
+    state.resend.mutateAsync.mockResolvedValue({ invitationId: "n", acceptUrl: "https://app.test/accept-invitation/n", emailSent: true });
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    render(<OrganizationSettings {...PROPS} canManage />);
+    fireEvent.click(within(rowOf("expired@example.com")).getByRole("button", { name: "Send again" }));
+
+    const title = await screen.findByText("Invitation emailed to expired@example.com");
+    expect(scrollIntoView).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(title.closest("[tabindex='-1']"));
+  });
+
   it("says the email did not send after Send again, keeping the link", async () => {
     state.resend.mutateAsync.mockResolvedValue({ invitationId: "n", acceptUrl: "https://app.test/accept-invitation/n", emailSent: false });
     render(<OrganizationSettings {...PROPS} canManage />);
@@ -217,7 +231,7 @@ describe("OrganizationSettings pending and expired invitations", () => {
 });
 
 describe("OrganizationSettings leave organization", () => {
-  const leaveButton = () => screen.queryByRole("button", { name: "Leave organization" });
+  const leaveButton = () => screen.queryByRole("button", { name: "Leave Dark Earth Carbon" });
   const openDialog = () => {
     fireEvent.click(leaveButton()!);
     return screen.findByRole("dialog", { name: "Leave Dark Earth Carbon?" });
@@ -239,6 +253,17 @@ describe("OrganizationSettings leave organization", () => {
 
     await waitFor(() => expect(state.resetAfterOrgSwitch).toHaveBeenCalledWith(undefined, undefined, "/"));
     expect(state.leave.mutateAsync).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the confirm button busy after a successful leave until the page unloads", async () => {
+    state.leave.mutateAsync.mockResolvedValue({ organizationId: null });
+    render(<OrganizationSettings {...PROPS} canManage canLeave />);
+    const dialog = await openDialog();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Leave organization" }));
+
+    await waitFor(() => expect(state.resetAfterOrgSwitch).toHaveBeenCalled());
+    expect(within(dialog).getByRole("button", { name: "Cancel" }).hasAttribute("disabled")).toBe(true);
+    expect(within(dialog).getByRole("button", { name: "Leave organization" }).hasAttribute("disabled")).toBe(true);
   });
 
   it("cancels without leaving", async () => {
@@ -263,5 +288,6 @@ describe("OrganizationSettings leave organization", () => {
     expect(alert.textContent).toContain(refusal);
     expect(state.resetAfterOrgSwitch).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole("button", { name: "Cancel" }).hasAttribute("disabled")).toBe(false);
   });
 });

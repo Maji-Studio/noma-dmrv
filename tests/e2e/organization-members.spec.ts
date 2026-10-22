@@ -96,16 +96,16 @@ test.describe("Settings, Members", () => {
       });
       await openMembers(page, fixture);
       const row = page.getByRole("listitem").filter({ hasText: email });
-      await expect(row.getByText("Expired", { exact: true })).toBeVisible();
-      await expect(row.getByText(/Expired \w{3} \d{1,2}/)).toBeVisible();
+      await expect(row.getByText(/Expired \w{3} \d{1,2}, \d{4}/)).toBeVisible();
+      await expect(row.getByText(/Expired/)).toHaveCount(1);
 
       await row.getByRole("button", { name: "Send again" }).click();
       await expect(page.getByText(`The email to ${email} did not send`)).toBeVisible();
       await expect(page.getByRole("textbox", { name: "Invitation link" })).toHaveValue(/\/accept-invitation\/.+/);
       // The old row is replaced by a fresh seven-day invitation.
       await expect(row).toHaveCount(1);
-      await expect(row.getByText("Expired", { exact: true })).toHaveCount(0);
-      await expect(row.getByText(/Expires \w{3} \d{1,2}/)).toBeVisible();
+      await expect(row.getByText(/Expired/)).toHaveCount(0);
+      await expect(row.getByText(/Expires \w{3} \d{1,2}, \d{4}/)).toBeVisible();
     } finally {
       await context.close();
       await pool.end();
@@ -120,7 +120,7 @@ test.describe("Settings, Members", () => {
     try {
       await openMembers(page, fixture);
       await expect(page.getByRole("button", { name: "Invite member" })).toHaveCount(0);
-      await page.getByRole("button", { name: "Leave organization" }).click();
+      await page.getByRole("button", { name: `Leave ${fixture.organizationName}` }).click();
       const dialog = page.getByRole("dialog", { name: `Leave ${fixture.organizationName}?` });
       await expect(dialog).toContainText("You lose access to its data straight away.");
       await dialog.getByRole("button", { name: "Leave organization" }).click();
@@ -140,7 +140,7 @@ test.describe("Settings, Members", () => {
     const { db, pool } = createDbConnection();
     try {
       await openMembers(page, fixture);
-      await page.getByRole("button", { name: "Leave organization" }).click();
+      await page.getByRole("button", { name: `Leave ${fixture.organizationName}` }).click();
       const dialog = page.getByRole("dialog", { name: `Leave ${fixture.organizationName}?` });
       await dialog.getByRole("button", { name: "Leave organization" }).click();
       await expect(dialog.getByRole("alert")).toContainText(LAST_ADMIN_REFUSAL);
@@ -161,6 +161,6 @@ test.describe("Settings, Members", () => {
     await adminPage.goto(MEMBERS_PATH);
     await expect(adminPage.getByRole("heading", { name: "Members", exact: true, level: 1 })).toBeVisible({ timeout: HYDRATION_TIMEOUT_MS });
     await expect(adminPage.getByRole("button", { name: "Invite member" })).toBeVisible();
-    await expect(adminPage.getByRole("button", { name: "Leave organization" })).toHaveCount(0);
+    await expect(adminPage.getByRole("button", { name: /^Leave / })).toHaveCount(0);
   });
 });
