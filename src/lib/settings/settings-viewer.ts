@@ -42,7 +42,6 @@ export async function loadSettingsViewer(): Promise<{ ctx: OrgContext; viewer: S
     viewer: {
       organizationId: ctx.organizationId,
       organizationName: organization?.name ?? "This organization",
-      organizationSlug: organization?.slug ?? null,
       isPlatformAdmin: ctx.isPlatformAdmin,
       canManage: hasOrgRole(ctx, "admin"),
       canManageApiKeys: canOwnApiKey(ctx.orgRole),

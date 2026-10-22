@@ -199,7 +199,6 @@ export interface SettingsPaneAccess {
 export interface SettingsViewer extends SettingsPaneAccess {
   organizationId: string;
   organizationName: string;
-  organizationSlug: string | null;
   /** Admin in the organization, or a Platform Admin. */
   canManage: boolean;
   /** As loaded; the console follows the live credential status for managers. */

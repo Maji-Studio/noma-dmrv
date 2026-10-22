@@ -43,6 +43,7 @@ vi.mock("@/data-access/organizations", () => ({
   persistLastActiveOrganization: (...args: unknown[]) =>
     mockPersistLastActiveOrganization(...args),
   removeMemberAsPlatformAdmin: vi.fn(),
+  renameActiveOrganization: vi.fn(),
   updateMemberRoleAsPlatformAdmin: vi.fn(),
 }));
 
@@ -62,12 +63,14 @@ vi.mock("@/lib/log", () => ({
 }));
 
 import {
+  renameActiveOrganization,
   findMembershipRole,
   findUserIdByEmail,
   listOrgInvitations,
   listOrgMembers,
 } from "@/data-access/organizations";
 import {
+  renameOrganizationAction,
   acceptInvitationAction,
   createOrganizationAction,
   listInvitationsFn,
@@ -301,5 +304,41 @@ describe("setActiveOrganizationAction", () => {
       success: false,
       error: "You are not a member of this Organization.",
     });
+  });
+});
+
+describe("renameOrganizationAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireOrgRole).mockReset();
+    vi.mocked(requireOrgContext).mockResolvedValue(ORG_CONTEXT);
+  });
+
+  it.each(["a", "a".repeat(101)])("refuses an invalid name", async (name) => {
+    expect(await renameOrganizationAction({ name })).toMatchObject({
+      success: false, code: "validation_failed",
+    });
+    expect(renameActiveOrganization).not.toHaveBeenCalled();
+  });
+
+  it("refuses a Member before the write", async () => {
+    const member = { ...ORG_CONTEXT, orgRole: "member" as const };
+    vi.mocked(requireOrgContext).mockResolvedValue(member);
+    vi.mocked(requireOrgRole).mockImplementation(() => {
+      throw new SafeError("You don't have permission to perform this action.");
+    });
+    expect(await renameOrganizationAction({ name: "New name" })).toEqual({
+      success: false, error: "You don't have permission to perform this action.",
+    });
+    expect(requireOrgRole).toHaveBeenCalledWith(member, "admin");
+    expect(renameActiveOrganization).not.toHaveBeenCalled();
+  });
+
+  it("trims the name and returns the saved name and slug", async () => {
+    const saved = { name: "New name", slug: "new-name-2" };
+    vi.mocked(renameActiveOrganization).mockResolvedValue(saved);
+    expect(await renameOrganizationAction({ name: "  New name  " })).toEqual({ success: true, data: saved });
+    expect(requireOrgRole).toHaveBeenCalledWith(ORG_CONTEXT, "admin");
+    expect(renameActiveOrganization).toHaveBeenCalledWith(ORG_CONTEXT, { name: "New name" });
   });
 });

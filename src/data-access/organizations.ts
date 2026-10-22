@@ -11,7 +11,7 @@ import { oauthRolePolicy } from "@/lib/auth/oauth-role-policy";
 import { canOwnApiKey } from "@/lib/auth/api-scopes";
 import { LAST_ADMIN_MESSAGE, rethrowLastAdmin } from "@/lib/auth/organization-role-policy";
 import { randomUUID } from "node:crypto";
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, like, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
 import { seedOrgDefaults } from "@/db/org-defaults";
@@ -19,16 +19,19 @@ import { invitations, members, organizations, users } from "@/db/schema";
 import { requireOrgScope } from "@/data-access/utils";
 import { getBetterAuthSession } from "@/lib/auth/providers/better-auth-server";
 import {
+  hasOrgRole,
   requirePlatformAdmin,
   type OrgContext,
   type OrgRole,
 } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { isSlugForBase, organizationSlugBase, organizationSlugCandidate } from "@/lib/organizations/organization-slug";
 import { logger } from "@/lib/log";
 
 // Mirrors Better Auth's organization plugin configuration in better-auth.ts.
 const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
 const MILLISECONDS_PER_SECOND = 1_000;
+const ORGANIZATION_RENAME_MAX_ATTEMPTS = 3;
 const ORGANIZATION_SLUG_CONSTRAINT = "organizations_slug_unique";
 const ORGANIZATION_SLUG_CONFLICT_MESSAGE =
   "An Organization with this slug already exists.";
@@ -461,4 +464,56 @@ export async function persistLastActiveOrganization(
     .update(users)
     .set({ lastActiveOrganizationId: organizationId })
     .where(eq(users.id, userId));
+}
+
+/** Rename only the active organization, preserving an already matching slug. */
+export async function renameActiveOrganization(
+  ctx: OrgContext,
+  input: { name: string },
+): Promise<{ name: string; slug: string }> {
+  requireOrgScope(ctx);
+  if (!hasOrgRole(ctx, "admin")) {
+    throw new SafeError("Only organization Admins can rename the organization.");
+  }
+  const base = organizationSlugBase(input.name);
+  const escapedBase = base.replace(/[\\%_]/g, "\\$&");
+
+  for (let attempt = 0; attempt < ORGANIZATION_RENAME_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await db.transaction(async (tx) => {
+        const [current] = await tx.select({ slug: organizations.slug })
+          .from(organizations)
+          .where(eq(organizations.id, ctx.organizationId))
+          .for("update");
+        if (!current) throw new SafeError("Organization was not found.");
+
+        let slug = current.slug;
+        if (!isSlugForBase(slug, base)) {
+          // Slugs are globally unique; this lookup intentionally spans other orgs.
+          const occupied = await tx.select({ slug: organizations.slug })
+            .from(organizations)
+            .where(and(
+              ne(organizations.id, ctx.organizationId),
+              or(eq(organizations.slug, base), like(organizations.slug, `${escapedBase}-%`)),
+            ));
+          const taken = new Set(occupied.map((row) => row.slug));
+          let candidate = 1;
+          slug = organizationSlugCandidate(base, candidate);
+          while (taken.has(slug)) {
+            candidate++;
+            slug = organizationSlugCandidate(base, candidate);
+          }
+        }
+        const [updated] = await tx.update(organizations)
+          .set({ name: input.name, slug })
+          .where(eq(organizations.id, ctx.organizationId))
+          .returning({ name: organizations.name, slug: organizations.slug });
+        if (!updated) throw new SafeError("Organization was not found.");
+        return updated;
+      });
+    } catch (error) {
+      if (!isPgUniqueViolation(error, ORGANIZATION_SLUG_CONSTRAINT)) throw error;
+    }
+  }
+  throw new SafeError("Couldn't rename the organization. Try again.");
 }

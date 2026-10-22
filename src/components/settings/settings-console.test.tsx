@@ -35,7 +35,6 @@ vi.mock("@/components/certification/env-banner", () => ({ EnvBanner: () => <div>
 const base: SettingsViewer = {
   organizationId: "org-1",
   organizationName: "Dark Earth Carbon",
-  organizationSlug: "dark-earth-carbon",
   isPlatformAdmin: false,
   canManage: true,
   canManageApiKeys: true,

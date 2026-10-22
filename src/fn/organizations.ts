@@ -39,6 +39,7 @@ import {
   listOrgInvitations,
   listOrgMembers,
   removeMemberAsPlatformAdmin,
+  renameActiveOrganization,
   updateMemberRoleAsPlatformAdmin,
   type OrganizationSummary,
   type OrgInvitationRow,
@@ -49,6 +50,7 @@ import {
   createOrganizationSchema,
   inviteMemberSchema,
   orgRoleSchema,
+  renameOrganizationSchema,
 } from "@/schemas/organizations";
 
 const LOG_MESSAGE = "organization action failed";
@@ -356,4 +358,17 @@ export async function acceptInvitationAction(
     const warning = await saveOrgPreference(session.user.id, organizationId);
     return { data: { organizationId }, warning };
   }, "Failed to accept invitation.");
+}
+
+export async function renameOrganizationAction(
+  input: unknown,
+): Promise<ActionResult<{ name: string; slug: string }>> {
+  return withAction(async (ctx) => {
+    const values = renameOrganizationSchema.parse(input);
+    requireOrgRole(ctx, "admin");
+    return renameActiveOrganization(ctx, values);
+  }, {
+    fallbackMessage: "Failed to rename the organization.",
+    log: { message: LOG_MESSAGE, context: { op: "organization:rename" } },
+  });
 }
