@@ -1,3 +1,4 @@
+import { carriedEntryDatapointDescription, type CarriedEntryNote } from "@/lib/certification/emission-entry-carry-copy";
 import { sumFigures, type EmissionFigure } from "@/lib/certification/emission-lines";
 import { canonicalUnit } from "../template-observations/units";
 import { effectiveContract } from "../template-observations/line-sources";
@@ -133,7 +134,7 @@ function declarativeSequestrationBindingRevision(
   return blueprints;
 }
 
-const PRODUCTION_CLAIM_POLICY = "application-slice-delivery-entry-contributions-v2";
+const PRODUCTION_CLAIM_POLICY = "application-slice-delivery-entry-carry-v3";
 
 export function buildMappingRevisionInput(
   sequestrationBindings: MappingRevisionSequestrationBindings =
@@ -158,6 +159,7 @@ export interface BuildCreateDatapointArgs {
   componentDisplayName?: string;
   lineContract?: LineContract;
   entryContribution?: EmissionFigure;
+  carriedEntries?: readonly CarriedEntryNote[];
   omitAutomaticProduction?: boolean;
   rtcInput: GhgEntryTemplateComponentInput;
   blueprintInput: ComponentBlueprintInput;
@@ -203,7 +205,7 @@ export function buildCreateDatapointRequest(
     }
     const magnitude = Number(figure.magnitude);
     if (!Number.isFinite(magnitude)) throw new SafeError("The emissions entry value is too large to submit.");
-    return { description: "Recorded emissions entries", display_name: blueprintInput.input_key, project_id: projectId,
+    return { description: carriedEntryDatapointDescription(args.carriedEntries ?? []), display_name: blueprintInput.input_key, project_id: projectId,
       quantity: { magnitude, unit: blueprintInput.compatible_unit }, source_ids: sourceIds ?? [], supplier_reference_id: supplierRefId, type: "REPORTED" };
   }
   const inputKey = rtcInput.input_key;

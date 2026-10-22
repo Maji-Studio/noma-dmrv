@@ -1,3 +1,5 @@
+import type { CarriedEntryNote } from "./emission-entry-carry-copy";
+import type { EntryCarryDisposition, EntryCarryDestination } from "./emission-entry-carry";
 import { z } from "zod";
 import { ENTRY_HAS_NO_REMOVAL } from "@/lib/certification/emission-entry-messages";
 import { formatUtcDate } from "@/lib/date-utils";
@@ -31,6 +33,8 @@ export interface RemovalEntryValue extends EmissionFigure {
   massDistanceDetail?: { mass: EmissionFigure; distance: EmissionFigure } | null;
 }
 export interface RemovalEntryFact {
+  carry?: EntryCarryDisposition;
+  reportedIn?: EntryCarryDestination | null;
   id: string; creditBatchId: string; componentId: string; contentRevision: number;
   kind: "value" | "zero"; lineRule: "single" | "additive"; occurredOn: string;
   deletedAt: Date | string | null; sentByRemovalId: string | null;
@@ -56,6 +60,7 @@ export const entryInputManifestSchema = z.object({
 });
 export type EntryInputManifest = z.infer<typeof entryInputManifestSchema>;
 export interface RemovalEntryContributions {
+  carriedEntries?: (CarriedEntryNote & { componentId: string; evidenceDocumentIds: readonly string[] })[];
   manifest: EntryInputManifest[];
   inputs: { componentId: string; inputKey: string; value: EmissionFigure }[];
   entrySet: { entryId: string; contentRevision: number }[];
@@ -99,6 +104,7 @@ export function entriesWithoutRemoval(
 ): string[] {
   return entries.filter((entry) => entry.kind === "value" && !entry.sentByRemovalId && !entry.heldForRemovalId &&
     !liveReservationIds.has(entry.sendReservedBySubmissionId ?? "") &&
+    !entry.deletedAt && !entry.carry?.receiver && !entry.carry?.waitingReason &&
     !removalEntryOwner({ ...entry, reservationKnownInactive: true }, contenders) &&
     !applications.some((application) => application.creditBatchId === entry.creditBatchId &&
       formatUtcDate(application.applicationDate) >= entry.occurredOn)).map((entry) => entry.id);
@@ -113,11 +119,13 @@ export function deriveRemovalEntryContributions(args: {
   monitoredInputs: readonly { componentId: string; inputKey: string; unit: string; componentDisplayName?: string }[];
 }): RemovalEntryContributions {
   const result: RemovalEntryContributions = { manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], ownedEntryIds: [], sentSingleComponentIds: [], blockers: [] };
-  const relevant = args.entries.filter((entry) => !entry.deletedAt && args.memberBatchIds.includes(entry.creditBatchId));
+  const relevant = args.entries.filter((entry) => !entry.deletedAt && (args.memberBatchIds.includes(entry.creditBatchId) ||
+    entry.carry?.receiver?.removalId === args.removalId || entry.reservedByRemovalId === args.removalId || entry.sentByRemovalId === args.removalId));
   const selected: RemovalEntryFact[] = [];
   for (const entry of relevant) {
-    const owner = removalEntryOwner(entry, args.contenders);
-    const owned = owner === args.removalId && !!args.window && inWindow(entry, args.window) &&
+    const carried = !args.memberBatchIds.includes(entry.creditBatchId);
+    const owner = removalEntryOwner(entry, args.contenders) ?? entry.carry?.receiver?.removalId;
+    const owned = owner === args.removalId && !!args.window && (carried ? entry.occurredOn <= args.window.end : inWindow(entry, args.window)) &&
       (entry.kind !== "zero" || entry.confirmedForRemovalId === args.removalId);
     if (owned) result.ownedEntryIds!.push(entry.id);
     const stored = args.lineSources[entry.componentId];

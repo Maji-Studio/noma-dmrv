@@ -25,6 +25,7 @@ import type { FixedInputValue } from "./resolve-removal-template";
 type DurabilityOption = "200_year" | "1000_year";
 // UI-facing removal context — the lean payload React Query caches.
 export interface RemovalCertifyContext {
+  carriedEntries?: import("@/lib/certification/removal-emission-contributions").RemovalEntryContributions["carriedEntries"];
   facilityId: string;
   hasOrgCredentials: boolean;
   // Null when the credit batch is not yet grouped into a removal (a 1:1

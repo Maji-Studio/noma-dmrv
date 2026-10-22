@@ -813,6 +813,7 @@ export async function buildRemovalSubmissionBuild(args: {
     removalId,
     mappingRevision: MAPPING_REVISION,
     ...(ctx.removalEntryContext ? { templateSemanticFingerprint: ctx.removalEntryContext.semanticFingerprint,
+      carriedEntries: ctx.removalEntryContext.contributions.carriedEntries,
       entryContributions: normalizeEntryContributionsForHash(ctx.removalEntryContext.contributions.manifest) } : {}),
     externalProjectId,
     templateId: removalTemplate.id,

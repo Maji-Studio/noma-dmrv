@@ -3,7 +3,7 @@ import type { LineContract } from "@/lib/isometric/template-observations/line-so
  * Parity for the semantic binding catalog (#636): the catalog's projections
  * must resolve every (group, blueprint, input) tuple exactly as the literal
  * INPUT_MAPPING and PERIOD_INPUT_TUPLES did before the catalog existed, and
- * MAPPING_REVISION is pinned to the entry-contribution policy (PR 4).
+ * MAPPING_REVISION is pinned to the late-entry carry policy (#1059).
  *
  * The frozen tables below are the pre-catalog literals (staging @ 41ac738fe),
  * with transform functions reduced to their transformRevision. Change them
@@ -28,7 +28,7 @@ import {
 } from "@/lib/isometric/transformers/datapoint";
 
 const ENTRY_CONTRIBUTION_MAPPING_REVISION =
-  "72a68a1d8d2b61b338c874fe101275dfb2185b1a53851de4339ff5588d412315";
+  "e36e6718afd12055b00bed661cec447d44b66aa7e15d1f203eef4df4dbdd962c";
 
 const PRE_CATALOG_INPUT_MAPPING = {
   "co2-stored": {

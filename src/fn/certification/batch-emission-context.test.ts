@@ -1,3 +1,4 @@
+import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 import { loadRemovalEntryCorrection } from "./removal-correction-core";
 import { buildRemovalCorrection, deriveEntryCorrection, correctionForRemoval } from "@/lib/certification/removal-entry-correction";
 import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
@@ -20,6 +21,7 @@ import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib
 import { resolveTemplateInputs } from "./removal-template-inputs";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 
+vi.mock("@/data-access/emission-entry-carry", () => ({ loadFacilityEmissionEntryCarry: vi.fn() }));
 vi.mock("./removal-correction-core", () => ({ loadRemovalEntryCorrection: vi.fn() }));
 vi.mock("@/data-access/emission-entry-contenders", () => ({ listEmissionEntryDraftContenders: vi.fn(), listEmissionEntryAvailableApplications: vi.fn(), loadEmissionEntryReservations: vi.fn() }));
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntries: vi.fn(), listEmissionEntriesForBatches: vi.fn() }));
@@ -47,6 +49,7 @@ function storedEntry(creditBatchId: string, overrides: Partial<StoredEntry> = {}
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(loadFacilityEmissionEntryCarry).mockResolvedValue({ entries: [], contenders: [], ownContenders: [], batches: [] });
   vi.mocked(listEmissionEntryAvailableApplications).mockResolvedValue([]);
   vi.mocked(loadEmissionEntryReservations).mockResolvedValue([]);
   vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([{ contenderKind: "draft", removalId: "removal", createdAt: "2026-01-01",

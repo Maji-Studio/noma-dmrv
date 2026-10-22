@@ -1,3 +1,4 @@
+import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 import { loadRemovalEntryCorrection } from "./removal-correction-core";
 import type { EntryCorrectionState } from "@/lib/certification/removal-entry-correction";
 import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
@@ -20,7 +21,7 @@ export interface EntryTemplateContext {
 }
 
 export type BatchEmissionContext = Record<string,
-  Pick<BatchEmissionLineFacts, "automaticFigures" | "omittedAutomaticSources"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { corrections?: EntryCorrectionState[]; productionReservationSubmissionId?: string | null; contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
+  Pick<BatchEmissionLineFacts, "automaticFigures" | "omittedAutomaticSources"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { carryContext?: Awaited<ReturnType<typeof loadFacilityEmissionEntryCarry>>; corrections?: EntryCorrectionState[]; productionReservationSubmissionId?: string | null; contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
 
 /** Batch-wide facts, even when the Removal carries only some applications. */
 export async function loadBatchEmissionContext(
@@ -51,6 +52,7 @@ export async function loadBatchEmissionContext(
     listEmissionEntryDraftContenders(ctx, ids, undefined, claimedAttempt),
     listEmissionEntryAvailableApplications(ctx, ids),
   ]);
+  const carryContext = await loadFacilityEmissionEntryCarry(ctx, facilityId, undefined, claimedAttempt);
   const reservations = await loadEmissionEntryReservations(ctx, [...new Set(storedEntries.flatMap((entry) => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []))]);
   const liveReservationIds = new Set(reservations.filter((row) => isLiveEntryReservation(row, Date.now())).map((row) => row.submissionId));
   const observationsById = new Map(readableBatches.map(({ observation }) => [observation.id, observation]));
@@ -69,10 +71,14 @@ export async function loadBatchEmissionContext(
     const previousObservations = new Map(stored.map((entry) =>
       [entry.observationId, observationsById.get(entry.observationId) ?? null] as const,
     ));
-    const entries = deriveEmissionEntryFacts(stored, observation, previousObservations);
+    const entries = deriveEmissionEntryFacts(stored, observation, previousObservations).map(entry => {
+      const carried = carryContext.entries.find(item => item.id === entry.id);
+      return { ...entry, carry: carried?.carry, reportedIn: carried?.reportedIn };
+    });
     result[id] = { productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
       entriesWithoutRemoval: entriesWithoutRemoval(entries, contenders, liveReservationIds, availableApplications) };
   }
+  result[readableBatches[0].id].carryContext = carryContext;
   for (const contender of contenders.filter((item) => includeCorrections && item.contenderKind === "correction")) {
     const correction = await loadRemovalEntryCorrection(ctx, contender.removalId, contenders);
     for (const id of correction.correction?.batches.map((batch) => batch.id) ?? correction.changedBatchIds ?? []) {

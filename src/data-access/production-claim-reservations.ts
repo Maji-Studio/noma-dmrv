@@ -1,3 +1,4 @@
+import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
 import { loadEmissionEntryHolds } from "./emission-entry-holds";
 import { releaseSubmissionReservations } from "./submission-reservation-release";
 import { EMISSION_ENTRIES_CHANGED } from "@/lib/certification/emission-entry-messages";
@@ -85,10 +86,14 @@ export async function reserveProductionEmissionsClaims(
   requireOrgScope(ctx);
   const entryClaim = args.entryClaim;
   const productionIds = [...new Set(args.creditBatchIds)].sort();
-  const ids = [...new Set([...productionIds, ...(entryClaim?.memberBatchIds ?? [])])].sort();
-  if (ids.length === 0 && !entryClaim?.frozenEntrySet.length) return;
+  const baseIds = [...new Set([...productionIds, ...(entryClaim?.memberBatchIds ?? [])])].sort();
+  if (baseIds.length === 0 && !entryClaim?.frozenEntrySet.length) return;
 
   await db.transaction(async (tx) => {
+    const frozenIds = entryClaim?.frozenEntrySet.map(entry => entry.entryId) ?? [];
+    const origins = frozenIds.length ? await tx.select({ creditBatchId: emissionEntries.creditBatchId }).from(emissionEntries)
+      .where(and(eq(emissionEntries.organizationId, ctx.organizationId), inArray(emissionEntries.id, frozenIds))) : [];
+    const ids = [...new Set([...baseIds, ...origins.map(entry => entry.creditBatchId)])].sort();
     const batches = await tx
       .select()
       .from(creditBatches)
@@ -114,8 +119,13 @@ export async function reserveProductionEmissionsClaims(
       eq(emissionEntries.organizationId, ctx.organizationId), inArray(emissionEntries.id, entryIds),
     )).orderBy(emissionEntries.id).for("update") : [];
     const holds = await loadEmissionEntryHolds(ctx, entries, tx);
+    const memberIds = members.map(member => member.creditBatchId);
+    const originEntries = entries.filter(entry => !memberIds.includes(entry.creditBatchId));
+    const facilityId = batches.find(batch => memberIds.includes(batch.id))?.facilityId;
+    const carryContext = originEntries.length && facilityId
+      ? await loadFacilityEmissionEntryCarry(ctx, facilityId, tx, { removalId: args.removalId, submissionId: args.submissionId }) : null;
     const entryChanged = () => new DomainError("conflict", EMISSION_ENTRIES_CHANGED, { retryable: true });
-    if (new Set(entryIds).size !== entryIds.length || entries.length !== frozen.length) throw entryChanged();
+    if (new Set(entryIds).size !== entryIds.length || entries.length !== frozen.length || entries.some(entry => !ids.includes(entry.creditBatchId))) throw entryChanged();
     const submissionIds = [
       ...new Set(
         [
@@ -186,6 +196,8 @@ export async function reserveProductionEmissionsClaims(
       const owner = entry.sendReservedBySubmissionId ? ownerById.get(entry.sendReservedBySubmissionId) : undefined;
       if (!emissionEntryCanBeReserved({ entry: { ...entry, heldForRemovalId: holds.get(entry.id) }, expectedRevision: frozen.find((item) => item.entryId === entry.id)?.contentRevision,
         memberBatchIds: members.map((member) => member.creditBatchId).filter((id) => entryClaim!.memberBatchIds.includes(id)),
+        eligibleCarry: carryContext?.entries.some(fact => fact.id === entry.id &&
+          (fact.carry.receiver?.removalId === args.removalId || fact.reservedByRemovalId === args.removalId || fact.sentByRemovalId === args.removalId)) ?? false,
         removalId: args.removalId, submissionId: args.submissionId,
         priorReservationTransferable: canTransferReservation(owner, nowMs) || isReviewedEvidencePredecessor(owner),
       })) throw entryChanged();

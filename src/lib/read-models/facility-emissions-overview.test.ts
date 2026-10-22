@@ -1,3 +1,5 @@
+import { loadBatchEmissionEntryCarry } from "@/data-access/emission-entry-carry";
+vi.mock("@/data-access/emission-entry-carry", () => ({ loadBatchEmissionEntryCarry: vi.fn() }));
 import { assert, afterEach, beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
@@ -37,6 +39,7 @@ function entry(componentId: string, overrides = {}) {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(loadBatchEmissionEntryCarry).mockResolvedValue([]);
   vi.useFakeTimers();
   // It is still October in Los Angeles, even though UTC has crossed into November.
   vi.setSystemTime(new Date("2026-11-01T03:00:00Z"));

@@ -1,3 +1,4 @@
+import type { EntryCarryDisposition, EntryCarryDestination } from "./emission-entry-carry";
 import { EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages";
 import { DomainError } from "@/lib/domain-errors";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
@@ -30,6 +31,8 @@ const RECORD_SOURCES: Record<AutomaticSourceId, EmissionRecordSource> = {
   "delivery-transport": "deliveries", sequestration: "applications",
 };
 export interface EmissionLineEntryFact {
+  carry?: EntryCarryDisposition;
+  reportedIn?: EntryCarryDestination | null;
   /** Present on stored entries; the submit step's component table reads them. */
   id?: string;
   documentCount?: number;

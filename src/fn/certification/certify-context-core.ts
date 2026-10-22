@@ -473,6 +473,7 @@ function projectUiContext(
     entryCorrectionsByBatchId: ctx.entryCorrectionsByBatchId,
     emissionLines: ctx.emissionLines,
     emissionLinesByBatchId: ctx.emissionLinesByBatchId,
+    carriedEntries: ctx.removalEntryContext?.contributions.carriedEntries ?? [],
     blueprintsForTemplate: ctx.blueprintsForTemplate,
     unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
     unbindableTemplateInputs: ctx.unbindableTemplateInputs,

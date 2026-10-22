@@ -1,3 +1,4 @@
+import { carriedEntrySourceDescription, type CarriedEntryNote } from "./emission-entry-carry-copy";
 import { isInFrozenEntrySet } from "./removal-entry-snapshot";
 import { EmissionEntryEvidenceError } from "./emission-entry-evidence-error";
 import { EMISSION_ENTRY_FILE_MISMATCH } from "./emission-entry-messages";
@@ -42,6 +43,7 @@ export type RemovalSourceIntendedTarget = EvidenceIntendedTarget | {
 };
 
 export interface ClassifiedRemovalSource {
+  carriedEntry?: Pick<CarriedEntryNote, "creditBatchCode" | "occurredOn">;
   nomaRole: NomaEvidenceRole;
   nomaRoleLabel: string;
   lineage: RemovalSourceLineage;
@@ -288,7 +290,7 @@ export function buildRemovalSourceDescription(
   lineageEntityLabel?: string,
 ): string {
   return binding
-    ? `Noma role: ${binding.nomaRoleLabel}. Lineage: ${binding.lineage.entityLabel}.`
+    ? `Noma role: ${binding.nomaRoleLabel}. Lineage: ${binding.lineage.entityLabel}${binding.carriedEntry ? `, ${carriedEntrySourceDescription(binding.carriedEntry)}` : ""}.`
     : `Supporting evidence for ${lineageEntityLabel}.`;
 }
 

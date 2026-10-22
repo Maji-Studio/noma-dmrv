@@ -1,3 +1,4 @@
+import { emissionEntryCounts } from "@/lib/certification/emission-entry-rules";
 import { EMISSION_ENTRIES_CHANGED } from "@/lib/certification/emission-entry-messages";
 import type { certificationSubmissions } from "@/db/schema/certification";
 import { readRemovalEntrySnapshot } from "@/lib/certification/removal-entry-snapshot";
@@ -14,7 +15,12 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   if (!scope.removalId) return undefined;
   const observation = facility.templatesById[scope.memberBatches[0]?.removalTemplateId ?? ""]?.observation;
   if (!observation) return undefined;
-  const allEntries = Object.values(facts).flatMap((batch) => batch.entries);
+  const carryEntries = Object.values(facts).find(batch => batch.carryContext)?.carryContext?.entries ?? [];
+  const memberIds = scope.memberBatches.map(batch => batch.id);
+  const carriedEntries = carryEntries.filter(entry => !memberIds.includes(entry.creditBatchId) &&
+    (entry.carry.receiver?.removalId === scope.removalId || entry.reservedByRemovalId === scope.removalId || entry.sentByRemovalId === scope.removalId))
+    .map(entry => ({ ...entry, ...emissionEntryCounts(entry.entryObservation, observation, entry.componentId) }));
+  const allEntries = [...Object.values(facts).flatMap((batch) => batch.entries), ...carriedEntries];
   const frozenChanged = frozenEntrySet && frozenEntrySet.some((frozen) => !allEntries.some((entry) => entry.id === frozen.entryId && entry.contentRevision === frozen.contentRevision && !entry.deletedAt));
   if (frozenChanged) frozenEntrySet = undefined;
   // Historical sent singles remain omission facts, even though they are not part of this attempt's frozen set.
@@ -28,10 +34,15 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   const contributions = deriveRemovalEntryInputs({
     removalId: scope.removalId, memberBatchIds: scope.memberBatches.map((batch) => batch.id),
     window: deriveRemovalEntryWindow(scope.memberBatches, scope.lineages.map((lineage) => lineage.application.applicationDate)),
-    creditBatchCodes: Object.fromEntries(scope.memberBatches.map((batch) => [batch.id, batch.code])),
+    creditBatchCodes: Object.fromEntries([...scope.memberBatches.map((batch) => [batch.id, batch.code]), ...carriedEntries.map(entry => [entry.creditBatchId, entry.creditBatchCode])]),
     contenders, entries, reservations, nowMs: Date.now(), frozen: !!frozenEntrySet, observation,
     entriesWithoutRemoval: frozenEntrySet ? [] : Object.values(facts).flatMap((batch) => batch.entriesWithoutRemoval ?? []),
   });
+  contributions.carriedEntries = carriedEntries.filter(entry => contributions.selectedEntryIds.includes(entry.id)).map(entry => ({
+    entryId: entry.id, creditBatchCode: entry.creditBatchCode, occurredOn: entry.occurredOn,
+    componentId: entry.componentId, value: entry.values[0], evidenceDocumentIds: entry.evidenceDocumentIds,
+    earlierRemovalCode: entry.earlierRemovalCode,
+  }));
   if (frozenChanged) contributions.blockers.push({ code: "lineNeedsReview", message: EMISSION_ENTRIES_CHANGED,
     fixTarget: "emissions", creditBatchId: scope.memberBatches[0].id });
   const batchFacts: BatchEmissionContext = Object.fromEntries(Object.entries(facts).map(([id, batch]) => {
@@ -49,7 +60,8 @@ export function frozenEntriesForAttempt(submission: typeof certificationSubmissi
   if (!submission || submission.status !== "draft" || !submission.payloadSnapshot ||
     typeof submission.payloadSnapshot !== "object" || !("frozenEntrySet" in submission.payloadSnapshot)) return undefined;
   const frozen = readRemovalEntrySnapshot(submission).frozenEntrySet;
-  const entries = Object.values(facts).flatMap((batch) => batch.entries);
+  const entries = [...Object.values(facts).flatMap((batch) => batch.entries),
+    ...(Object.values(facts).find(batch => batch.carryContext)?.carryContext?.entries ?? [])];
   // Both claim sets commit together, so production ownership also freezes an empty entry set.
   const productionReserved = Object.values(facts).some((batch) => batch.productionReservationSubmissionId === submission.id);
   const reserved = productionReserved || frozen.length > 0 && frozen.every((item) => entries.some((entry) =>

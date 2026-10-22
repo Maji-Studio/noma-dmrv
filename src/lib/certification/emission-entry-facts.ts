@@ -1,3 +1,4 @@
+import type { EntryCarryDisposition, EntryCarryDestination } from "./emission-entry-carry";
 import type { listEmissionEntries } from "@/data-access/emission-entries";
 import { emissionEntryCounts, type EntryObservation } from "./emission-entry-rules";
 import { canonicalUnit } from "@/lib/isometric/template-observations/units";
@@ -29,6 +30,7 @@ export function deriveEmissionEntryFacts(
     const value = entry.values.length === 1 ? entry.values[0] : null;
     return {
       ...entry,
+      ...({} as { carry?: EntryCarryDisposition; reportedIn?: EntryCarryDestination | null }),
       ...status,
       unitMismatch,
       hasEvidence: entry.documentCount > 0,
