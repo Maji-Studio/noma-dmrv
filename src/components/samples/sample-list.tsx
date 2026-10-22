@@ -1,7 +1,7 @@
 "use client";
 
 import { entityViewHref } from "@/lib/entity-deep-link";
-import { toDeleteErrorMessage } from "@/lib/stale-version";
+import { StaleVersionError, staleDeleteMessage, toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * SampleList component
  * Main sample listing with CRUD operations, stat cards, filters, and DataTable
@@ -290,6 +290,8 @@ export function SampleList({
   const [deletingVersion, setDeletingVersion] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A stale refusal closes the dialog (its Delete would resubmit the same version), so it reads on the page.
+  const [staleDeleteNotice, setStaleDeleteNotice] = useState<string | null>(null);
 
   const filters: Partial<SampleFilterData> = {
     search: debouncedSearch || undefined,
@@ -454,6 +456,7 @@ export function SampleList({
   const handleDelete = (sampleId: string) => {
     const row = (samples).find((item) => item.id === sampleId);
     if (!row) return;
+    setStaleDeleteNotice(null);
     setDeletingVersion(row.version);
     setDeletingSampleId(sampleId);
   };
@@ -465,7 +468,12 @@ export function SampleList({
       setDeletingSampleId(null);
       toast.success("Sample deleted.");
     } catch (error) {
-      setDeleteError(toDeleteErrorMessage(error, "Sample", "Sample was not deleted. Try again."));
+      if (error instanceof StaleVersionError) {
+        setDeletingSampleId(null);
+        setStaleDeleteNotice(staleDeleteMessage("Sample"));
+      } else {
+        setDeleteError(toDeleteErrorMessage(error, "Sample", "Sample was not deleted. Try again."));
+      }
     }
   };
 
@@ -664,6 +672,7 @@ export function SampleList({
         <DataTable.Pagination />
       </DataTable>
 
+      {staleDeleteNotice && <ServerError message={staleDeleteNotice} />}
       <DeleteConfirmDialog
         isOpen={!!deletingSampleId}
         title="Delete Sample"

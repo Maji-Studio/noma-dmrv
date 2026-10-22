@@ -8,6 +8,7 @@ import type { CellContext } from "@tanstack/react-table";
 import { act, create } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 import type { RecordLockView } from "@/lib/record-lock-view";
+import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
 
 const SAMPLE_ID = "6f1c4d3a-0f2b-4d6a-9f1e-0a1b2c3d4e5f";
 const FACILITY_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
@@ -95,19 +96,23 @@ vi.mock("./sample-form", () => ({ SampleForm: () => null }));
 
 import { SampleList } from "./sample-list";
 
+async function openDelete() {
+  let page!: ReturnType<typeof create>;
+  await act(async () => { page = create(<SampleList />); });
+  const cell = harness.columns.find((entry) => entry.id === "actions")?.cell as (context: CellContext<typeof SAMPLE_ROW, unknown>) => ReactNode;
+  await act(async () => {
+    create(<>{cell({ row: { original: SAMPLE_ROW } } as CellContext<typeof SAMPLE_ROW, unknown>)}</>);
+  });
+  act(() => { harness.rowActions?.find((action) => action.label === "Delete")?.onSelect?.(); });
+  expect(harness.dialog?.isOpen).toBe(true);
+  expect(harness.dialog?.errorMessage).toBeUndefined();
+  return page;
+}
+
 describe("Sample delete refusal", () => {
   it("shows the server's reason inside the open dialog and nowhere else", async () => {
     harness.deleteSample.mockRejectedValue(new Error(REFUSAL));
-    let page!: ReturnType<typeof create>;
-    await act(async () => { page = create(<SampleList />); });
-
-    const cell = harness.columns.find((entry) => entry.id === "actions")?.cell as (context: CellContext<typeof SAMPLE_ROW, unknown>) => ReactNode;
-    await act(async () => {
-      create(<>{cell({ row: { original: SAMPLE_ROW } } as CellContext<typeof SAMPLE_ROW, unknown>)}</>);
-    });
-    act(() => { harness.rowActions?.find((action) => action.label === "Delete")?.onSelect?.(); });
-    expect(harness.dialog?.isOpen).toBe(true);
-    expect(harness.dialog?.errorMessage).toBeUndefined();
+    const page = await openDelete();
 
     await act(async () => { await harness.dialog?.onConfirm(); });
 
@@ -115,6 +120,20 @@ describe("Sample delete refusal", () => {
     expect(harness.dialog?.isOpen).toBe(true);
     expect(harness.dialog?.errorMessage).toBe(REFUSAL);
     expect(JSON.stringify(page.toJSON())).not.toContain(REFUSAL);
+    page.unmount();
+  });
+
+  it("closes the dialog on a stale refusal and says so on the page", async () => {
+    harness.deleteSample.mockRejectedValue(
+      new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "sample", id: SAMPLE_ID, code: STALE_VERSION_CONFLICT_CODE }),
+    );
+    const page = await openDelete();
+
+    await act(async () => { await harness.dialog?.onConfirm(); });
+
+    expect(harness.dialog?.isOpen).toBe(false);
+    expect(harness.dialog?.errorMessage).toBeUndefined();
+    expect(JSON.stringify(page.toJSON())).toContain(staleDeleteMessage("Sample"));
     page.unmount();
   });
 });
