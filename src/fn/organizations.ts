@@ -27,7 +27,8 @@ import {
   type ResultWithWarning,
 } from "@/fn/action-errors";
 import { saveOrgPreference } from "@/fn/org-preference";
-import { createIntentOptionsSchema, type CreateIntentOptions } from "@/schemas/create-intent";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
+import { parseCreateIntentKey } from "./with-create";
 import { withAction } from "@/fn/with-action";
 import { env } from "@/config/env";
 import {
@@ -321,7 +322,7 @@ export async function createOrganizationAction(
   return toResult(async () => {
     await requirePlatformAdmin();
     const values = createOrganizationSchema.parse(input);
-    const intentKey = createIntentOptionsSchema.parse(options)?.intentKey;
+    const intentKey = parseCreateIntentKey(options);
     const organization = await createOrganizationWithAdmin({ ...values, organizationId: intentKey });
     return {
       organizationId: organization.id,
