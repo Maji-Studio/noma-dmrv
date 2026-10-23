@@ -9,6 +9,7 @@ import { CODE_CONFLICT_MESSAGES, withAutoCodes } from "@/data-access/code-genera
 import { toBiocharProductRecord } from "@/data-access/biochar-product-record";
 import { biocharProducts, type BiocharProductRecord } from "@/db/schema";
 import { deriveBlendMassKg } from "@/lib/biochar-composition/composition";
+import { BIOCHAR_PRODUCT_MASS_ISSUE_PATH } from "@/lib/biochar-composition/product-submission";
 import { withOutputStockErrors } from "@/lib/output-stock-domain-errors";
 import { makeBiocharProductInput, updateBiocharProductInput, type MakeBiocharProductInput } from "@/schemas/biochar-product-input";
 import { hasLocalEventInstant, resolveEventInstant } from "./event-times";
@@ -100,7 +101,7 @@ export const makeBiocharProduct: Operation<typeof makeBiocharProductInput, Creat
     // A short sub-bin points at its entry in `sources`; a short source bin at the biochar mass.
     shortage: (detail) => {
       const index = detail.layerId ? input.sources?.findIndex((source) => source.layerId === detail.layerId) ?? -1 : -1;
-      return index >= 0 ? ["sources", index] : ["biocharWetMassKg"];
+      return index >= 0 ? ["sources", index] : [BIOCHAR_PRODUCT_MASS_ISSUE_PATH];
     },
     // A short ingredient bin points at the first ingredient drawn from it.
     ingredient: (detail) => {
