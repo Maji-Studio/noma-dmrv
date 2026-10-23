@@ -21,6 +21,7 @@ vi.mock("@/components/ui/slide-over-panel", () => {
     <div>{preview}{children}</div>
   );
   return {
+    FILL_CHILDREN_CLASS: "",
     SlideOverPanelBody: Plain,
     SlideOverPanelDescription: Plain,
     SlideOverPanelFooter: Footer,
