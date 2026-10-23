@@ -5,7 +5,8 @@ import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import type { ProductionRunFeedstockWithDetails } from "@/data-access/production-runs";
 import type { ProductionRunStatus } from "@/schemas/production-runs";
 import { formatCount } from "@/lib/copy-utils";
-import { formatDayString } from "@/lib/format-utils";
+import { formatDayString, formatMassKg } from "@/lib/format-utils";
+import { StockRows } from "@/components/storage-locations/stock-figures";
 import {
   formatFacilityDate,
   formatFacilityTime,
@@ -110,12 +111,15 @@ function FeedstockSummaryEntry({
 }: {
   summary: ProductionRunFeedstockSummary;
 }) {
+  // "Between", not "to": codes run across the facility, so other bins'
+  // intakes fall inside the range.
   const range = codeRange && (
     <>
+      {codeRange[0] !== codeRange[1] && "between "}
       <Code code={codeRange[0]} />
       {codeRange[0] !== codeRange[1] && (
         <>
-          {" to "}
+          {" and "}
           <Code code={codeRange[1]} />
         </>
       )}
@@ -127,7 +131,7 @@ function FeedstockSummaryEntry({
     ) : (
       <>
         {formatCount(intakeCount, "intake")}
-        {range && <>, {range}</>}
+        {range && <> {range}</>}
       </>
     );
   if (!typeName) return details;
@@ -141,11 +145,33 @@ function FeedstockSummaryEntry({
 }
 
 export function buildProductionRunFeedstockDetailField(
-  feedstocks: Parameters<typeof summarizeProductionRunFeedstocks>[0],
+  feedstocks: ReadonlyArray<
+    Pick<
+      ProductionRunFeedstockWithDetails,
+      "feedstockCode" | "feedstockTypeName" | "wetMassUsedKg"
+    >
+  >,
 ): DetailPanelField {
   const summaries = summarizeProductionRunFeedstocks(feedstocks);
+  const intakes = feedstocks
+    .filter((feedstock) => feedstock.feedstockCode)
+    .toSorted((a, b) => compareCodes(a.feedstockCode!, b.feedstockCode!));
   return {
     label: "Feedstock",
+    // The intakes behind the count, one (i) away.
+    ...(intakes.length > 0 && {
+      explanationTitle: "Feedstock intakes",
+      hint: "Each draw is split across the intakes in its bin by their wet mass.",
+      explanation: (
+        <StockRows
+          label="Wet mass used per intake"
+          rows={intakes.map((intake) => ({
+            label: intake.feedstockCode!,
+            value: formatMassKg(intake.wetMassUsedKg),
+          }))}
+        />
+      ),
+    }),
     value:
       summaries.length > 0
         ? summaries.map((summary, index) => (

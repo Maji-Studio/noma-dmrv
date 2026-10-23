@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
@@ -7,12 +8,16 @@ import {
   summarizeProductionRunFeedstocks,
 } from "./production-run-detail-fields";
 
-const feedstockText = (
-  feedstocks: Parameters<typeof buildProductionRunFeedstockDetailField>[0],
-) =>
-  renderToStaticMarkup(
-    <>{buildProductionRunFeedstockDetailField(feedstocks).value}</>,
-  ).replace(/<[^>]+>/g, "");
+type Intake = {
+  feedstockCode: string | null;
+  feedstockTypeName: string | null;
+};
+const withMass = (intakes: Intake[]) =>
+  intakes.map((intake) => ({ ...intake, wetMassUsedKg: 50 }));
+const textOf = (node: ReactNode) =>
+  renderToStaticMarkup(<>{node}</>).replace(/<[^>]+>/g, "");
+const feedstockText = (intakes: Intake[]) =>
+  textOf(buildProductionRunFeedstockDetailField(withMass(intakes)).value);
 
 const FACILITIES = [
   { id: "facility-a", timezone: "Africa/Dar_es_Salaam" },
@@ -43,18 +48,31 @@ describe("production run detail certification fields", () => {
       },
     ]);
     expect(feedstockText(feedstocks)).toBe(
-      "Pine Off-cuts (4 intakes, FS-26-021 to FS-26-1000)",
+      "Pine Off-cuts (4 intakes between FS-26-021 and FS-26-1000)",
     );
   });
 
   it("keeps each code on one line", () => {
-    const field = buildProductionRunFeedstockDetailField([
-      { feedstockCode: "FS-26-001", feedstockTypeName: "Pine Off-cuts" },
-      { feedstockCode: "FS-26-002", feedstockTypeName: "Pine Off-cuts" },
-    ]);
-    expect(renderToStaticMarkup(<>{field.value}</>)).toContain(
-      '<span class="whitespace-nowrap">FS-26-001</span> to <span class="whitespace-nowrap">FS-26-002</span>',
+    const field = buildProductionRunFeedstockDetailField(
+      withMass([
+        { feedstockCode: "FS-26-001", feedstockTypeName: "Pine Off-cuts" },
+        { feedstockCode: "FS-26-002", feedstockTypeName: "Pine Off-cuts" },
+      ]),
     );
+    expect(renderToStaticMarkup(<>{field.value}</>)).toContain(
+      '<span class="whitespace-nowrap">FS-26-001</span> and <span class="whitespace-nowrap">FS-26-002</span>',
+    );
+  });
+
+  it("lists the intakes behind the summary, by code, with the wet mass each gave", () => {
+    const field = buildProductionRunFeedstockDetailField([
+      { feedstockCode: "FS-26-010", feedstockTypeName: "Pine Off-cuts", wetMassUsedKg: 1200 },
+      { feedstockCode: "FS-26-002", feedstockTypeName: "Pine Off-cuts", wetMassUsedKg: 800 },
+      { feedstockCode: null, feedstockTypeName: "Pine Off-cuts", wetMassUsedKg: 5 },
+    ]);
+    expect(field.explanationTitle).toBe("Feedstock intakes");
+    const text = textOf(field.explanation);
+    expect(text).toMatch(/FS-26-002800 kg.*FS-26-0101,200 kg/);
   });
 
   it("gives each feedstock type its own entry, sorted by name", () => {
@@ -65,7 +83,7 @@ describe("production run detail certification fields", () => {
         { feedstockCode: "FS-26-001", feedstockTypeName: "Pine Off-cuts" },
       ]),
     ).toBe(
-      "Pine Off-cuts (2 intakes, FS-26-001 to FS-26-002), Wood chips (FS-26-003)",
+      "Pine Off-cuts (2 intakes between FS-26-001 and FS-26-002), Wood chips (FS-26-003)",
     );
   });
 
