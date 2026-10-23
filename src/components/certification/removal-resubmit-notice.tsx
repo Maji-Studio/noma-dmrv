@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 import { buttonVariants } from "@/components/ui";
-import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
+import { INLINE_HIT_AREA, PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { cn } from "@/lib/utils";
+import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { Notice } from "@/components/ui/notice";
 import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
 import type { RemovalCorrection } from "@/lib/certification/removal-entry-correction";
 import {
   OPEN_GHG_STATEMENT_LABEL,
   RESUBMIT_REMOVAL_LABEL,
-  correctionBatchEmissionsHref,
   correctionStatementHref,
   correctionStatementLabel,
   removalResubmitHref,
@@ -35,8 +36,9 @@ function JoinedParts({ parts }: { parts: { key: string; node: ReactNode }[] }) {
   );
 }
 
+/** A batch code in the notice: opens the batch page, whose to-dos lead on to what needs correcting. */
 function BatchLink({ batch, facilityId }: { batch: { id: string; code: string }; facilityId: string }) {
-  return <Link href={correctionBatchEmissionsHref(batch.id, facilityId)} className={LINK_CLASS}>{batch.code}</Link>;
+  return <Link href={creditBatchDeepLinkHref(batch.id, facilityId)} className={cn(RECORD_CODE_LINK, INLINE_HIT_AREA)}>{batch.code}</Link>;
 }
 
 /**
