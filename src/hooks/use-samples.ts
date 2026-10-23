@@ -35,7 +35,7 @@ import { unwrap, type MutationCallbacks, type OptimisticUpdateOptions } from "./
 // Query Keys
 // ============================================
 
-const sampleKeys = {
+export const sampleKeys = {
   all: ["samples"] as const,
   lists: () => [...sampleKeys.all, "list"] as const,
   list: (filters?: Partial<SampleFilterData>) =>

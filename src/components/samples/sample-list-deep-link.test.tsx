@@ -31,6 +31,7 @@ const harness = vi.hoisted(() => ({
   onOpenChange: null as ((open: boolean) => void) | null,
 }));
 
+vi.mock("@/components/forms/use-documents-cert-status", () => ({ useDocumentsCertStatus: () => "neutral" }));
 vi.mock("nuqs", () => ({
   parseAsString: { withOptions: () => ({}) },
   useQueryState: (key: string) => [

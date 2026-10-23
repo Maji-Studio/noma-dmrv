@@ -158,7 +158,7 @@ export function distanceProvenance({
  * the record counts, with its provenance behind the ⓘ as on the form.
  */
 export function distanceReadFields({
-  overrideKm, effectiveKm, note, pending = false, locationName, derivedSource, locationDefaultKm,
+  overrideKm, effectiveKm, note, pending = false, locationName, derivedSource, locationDefaultKm, certify,
 }: {
   overrideKm: number | null;
   /** The distance the record counts. */
@@ -170,6 +170,8 @@ export function distanceReadFields({
   derivedSource?: DistanceSourceValue | null;
   /** What resetting the override returns to. */
   locationDefaultKm?: number | null;
+  /** CERT chip on the distance; its colour follows whether a distance is on file. */
+  certify?: Pick<DetailPanelField, "certifyRequired" | "certifyStatus">;
 }): DetailPanelField[] {
   const overridden = isOverrideDistance(overrideKm);
   return [
@@ -177,6 +179,7 @@ export function distanceReadFields({
       label: DISTANCE_FIELD_LABEL,
       value: effectiveKm == null ? null : formatDistanceKm(effectiveKm),
       pending,
+      ...certify,
       hint: distanceProvenance({ overriding: overridden, locationName, source: derivedSource, locationDefaultKm }),
     },
     ...(overridden ? [{ label: DISTANCE_NOTE_FIELD_LABEL, value: note }] : []),

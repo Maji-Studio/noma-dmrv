@@ -10,6 +10,7 @@ import {
   overrideSourceOptions,
   type DistanceOverrideDraft,
 } from "./distance-override";
+import { resolveDeliveryTransportRoute } from "@/lib/calculations/transport-leg";
 
 const derived: DistanceOverrideDraft = { overriding: false, distanceKm: null, source: null, note: "" };
 const saved = { distanceKm: 60, source: "document" as const, note: "Detour" };
@@ -149,5 +150,23 @@ describe("distanceReadFields", () => {
 
   it("leaves a missing distance to the shared empty token", () => {
     expect(distanceReadFields({ overrideKm: null, effectiveKm: null, note: null })[0]?.value).toBeNull();
+  });
+});
+
+describe("the delivery distance CERT chip's shared saved route", () => {
+  it.each([
+    { distanceKmOverride: 12, recordedDistanceKm: null, expectedKm: 12 },
+    { distanceKmOverride: null, recordedDistanceKm: 240, expectedKm: 240 },
+    { distanceKmOverride: null, recordedDistanceKm: null, expectedKm: null },
+    { distanceKmOverride: 0, recordedDistanceKm: null, expectedKm: null },
+    { distanceKmOverride: Infinity, recordedDistanceKm: null, expectedKm: null },
+    { distanceKmOverride: NaN, recordedDistanceKm: 240, expectedKm: 240 },
+  ])("resolves $distanceKmOverride over $recordedDistanceKm to $expectedKm", ({ distanceKmOverride, recordedDistanceKm, expectedKm }) => {
+    const route = resolveDeliveryTransportRoute({
+      distanceKmOverride,
+      distanceSource: null,
+      location: { distanceKm: recordedDistanceKm, distanceSource: null },
+    });
+    expect(route.distanceKm).toBe(expectedKm);
   });
 });

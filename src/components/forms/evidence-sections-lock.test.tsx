@@ -14,6 +14,7 @@ import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachme
 
 const mocks = vi.hoisted(() => ({ locked: false, lockArgs: [] as unknown[][] }));
 
+vi.mock("@/components/forms/use-documents-cert-status", () => ({ useDocumentsCertStatus: () => "neutral" }));
 vi.mock("@/hooks/use-record-certification-lock", () => ({
   useIsRecordCertificationLocked: (...args: unknown[]) => {
     mocks.lockArgs.push(args);

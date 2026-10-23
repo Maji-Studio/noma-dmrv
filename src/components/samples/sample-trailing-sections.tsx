@@ -7,6 +7,9 @@ import { DOCUMENT_TYPE_LABELS } from "@/schemas/documents";
 import { SAMPLE_DOCUMENT_ACCEPT, SampleDocumentTypePicker, type SampleDocumentType } from "./sample-document-type-picker";
 import { PaperclipIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormFileUpload, FormSection } from "@/components/forms";
+import { useDocumentsCertStatus } from "@/components/forms/use-documents-cert-status";
+import { isLabReportDocument } from "@/lib/certification/lab-report";
+import { isCertifyEntityField } from "@/lib/certification/certify-field-registry";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import { SPINE_SECTION_TAG, type SpineMeta } from "@/components/forms/form-spine";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
@@ -41,18 +44,15 @@ export function SampleEvidenceSection({
 }: SampleTrailingSectionProps) {
   const [documentType, setDocumentType] = useState<SampleDocumentType>("lab_report");
   const locked = useIsRecordCertificationLocked("sample", isEditMode ? sample?.id : undefined);
+  const labReportStatus = useDocumentsCertStatus("sample", isEditMode ? sample?.id : undefined, isLabReportDocument);
   return (
     <FormSection
       title="Evidence & documents"
+      certifyRequired={isCertifyEntityField("sample", "labReport", { sampling: sample?.sampling, durabilityOption: sample?.durabilityOption })}
+      certifyStatus={labReportStatus}
       icon={<PaperclipIcon size={14} weight="bold" />}
       __spine={__spine}
     >
-      {/* The panel explains a locked sample itself; this cue would contradict it. */}
-      {!locked && (
-        <p className="body-small text-[var(--color-text-secondary)]">
-          Upload lab reports and reflectance histograms here. You can still submit the Removal without them.
-        </p>
-      )}
       {isEditMode && sample ? (
         <div className="flex flex-col gap-12">
           {deferredAttachments && (
