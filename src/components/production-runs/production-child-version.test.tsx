@@ -4,7 +4,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
 
-const state = vi.hoisted(() => ({ row: { severity: "low", id: "child", version: 1, incidentTime: new Date("2026-09-01T12:00:00Z"), timestamp: new Date("2026-09-01T12:00:00Z") }, save: vi.fn(), remove: vi.fn(), toast: vi.fn() }));
+const state = vi.hoisted(() => ({ row: { severity: "low", id: "child", version: 1, incidentTime: new Date("2026-09-01T12:00:00Z"), timestamp: new Date("2026-09-01T12:00:00Z") }, refuse: ((_error: unknown, fallback: string) => fallback) as (error: unknown, fallback: string) => string | null, save: vi.fn(), remove: vi.fn(), toast: vi.fn() }));
 vi.mock("@/hooks/use-production-incidents", () => ({
   useProductionIncidents: () => ({ data: [state.row] }), useCreateProductionIncident: () => ({}),
   useUpdateProductionIncident: () => ({ mutateAsync: state.save }), useDeleteProductionIncident: () => ({ mutateAsync: state.remove }),
@@ -19,9 +19,9 @@ vi.mock("@/components/forms", () => ({ ServerError: () => null }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: state.toast, success: vi.fn() }) }));
 vi.mock("@/components/forms/entity-select/quick-add-dialog-shell", () => ({ QuickAddDialogShell: ({ children }: { children: ReactNode }) => children }));
 vi.mock("@/components/ui/delete-confirm-dialog", () => ({ DeleteConfirmDialog: ({ isOpen, onConfirm }: { isOpen: boolean; onConfirm: () => void }) => isOpen ? <button aria-label="Confirm delete" onClick={onConfirm} /> : null }));
-interface FormProps { onSubmit: (input: object) => Promise<void>; errorMessage?: string; }
-vi.mock("./production-incident-form", () => ({ ProductionIncidentForm: ({ onSubmit, errorMessage }: FormProps) => <form data-error={errorMessage}><button aria-label="Save draft" onClick={() => onSubmit({ notes: "Operator draft" })} /></form> }));
-vi.mock("./production-sample-form", () => ({ ProductionSampleForm: ({ onSubmit, errorMessage }: FormProps) => <form data-error={errorMessage}><button aria-label="Save draft" onClick={() => onSubmit({ notes: "Operator draft" })} /></form> }));
+interface FormProps { onSubmit: (input: object, onRefusal: (error: unknown, fallback: string) => string | null) => Promise<void>; errorMessage?: string; }
+vi.mock("./production-incident-form", () => ({ ProductionIncidentForm: ({ onSubmit, errorMessage }: FormProps) => <form data-error={errorMessage}><button aria-label="Save draft" onClick={() => onSubmit({ notes: "Operator draft" }, (error, fallback) => state.refuse(error, fallback))} /></form> }));
+vi.mock("./production-sample-form", () => ({ ProductionSampleForm: ({ onSubmit, errorMessage }: FormProps) => <form data-error={errorMessage}><button aria-label="Save draft" onClick={() => onSubmit({ notes: "Operator draft" }, (error, fallback) => state.refuse(error, fallback))} /></form> }));
 import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionSampleTable } from "./production-sample-table";
 
@@ -33,6 +33,7 @@ beforeEach(() => {
   state.row = { ...state.row, version: INITIAL_VERSION };
   state.save.mockRejectedValue(refusal);
   state.remove.mockRejectedValue(refusal);
+  state.refuse = (_error, fallback) => fallback;
 });
 for (const [label, title, idKey, Component] of [
   ["incident", "Incident", "productionIncidentId", ProductionIncidentTable],
@@ -49,6 +50,19 @@ for (const [label, title, idKey, Component] of [
         await act(async () => { await renderer.root.findByProps({ "aria-label": "Save draft" }).props.onClick(); });
         expect(state.save).toHaveBeenCalledWith({ [idKey]: "child", expectedVersion: INITIAL_VERSION, notes: "Operator draft" });
         expect(renderer.root.findByType("form").props["data-error"]).toBe(STALE_VERSION_MESSAGE);
+      } finally { await act(async () => renderer.unmount()); }
+    });
+    it("shows the footer the form's refusal handler returns, nothing when every reason sits at a field", async () => {
+      let renderer!: ReactTestRenderer;
+      await act(async () => { renderer = create(<Component productionRunId="run" facilityId="facility" />); });
+      try {
+        await act(async () => { renderer.root.findByProps({ "aria-label": `Edit ${label}` }).props.onClick(); });
+        state.refuse = () => null;
+        await act(async () => { await renderer.root.findByProps({ "aria-label": "Save draft" }).props.onClick(); });
+        expect(renderer.root.findByType("form").props["data-error"]).toBeFalsy();
+        state.refuse = () => "Not saved: reactor is in use.";
+        await act(async () => { await renderer.root.findByProps({ "aria-label": "Save draft" }).props.onClick(); });
+        expect(renderer.root.findByType("form").props["data-error"]).toBe("Not saved: reactor is in use.");
       } finally { await act(async () => renderer.unmount()); }
     });
     it("uses the confirmation's loaded version and explains a stale delete", async () => {

@@ -35,6 +35,12 @@ interface UseSaveRefusalOptions<TFieldValues extends FieldValues, TContext, TTra
   formId: string;
   /** Server path to form field name, kept next to the form's payload builder. */
   aliases?: Readonly<Record<string, string>>;
+  /**
+   * A server field the form splits across several controls (a combined instant
+   * as a date and a time). A change to any control counts as a change to the
+   * field, and a refusal files its error on, and a lock reverts, every control.
+   */
+  splitFields?: Readonly<Record<string, readonly string[]>>;
   /** Extra state the DOM cannot show, such as a section the form leaves out. */
   isEnabled?: (field: string) => boolean;
 }
@@ -56,6 +62,7 @@ export function useSaveRefusal<TFieldValues extends FieldValues, TContext, TTran
   resetField,
   formId,
   aliases,
+  splitFields,
   isEnabled,
 }: UseSaveRefusalOptions<TFieldValues, TContext, TTransformed>): SaveRefusalHandler {
   const { dirtyFields } = useFormState({ control });
@@ -64,12 +71,14 @@ export function useSaveRefusal<TFieldValues extends FieldValues, TContext, TTran
     const plan = planSaveRefusal(error, {
       aliases,
       isShown: (field) => isRendered(form, field) && (isEnabled?.(field) ?? true),
-      isChanged: (field) => Boolean(get(dirtyFields, field)),
+      isChanged: (field) => (splitFields?.[field] ?? [field]).some((part) => Boolean(get(dirtyFields, part))),
     });
     if (!plan) return fallback;
     for (const { field, message, locked } of plan.fieldErrors) {
-      if (locked) resetField(field as Path<TFieldValues>);
-      setError(field as Path<TFieldValues>, { type: locked ? LOCKED_ERROR_TYPE : SERVER_ERROR_TYPE, message });
+      for (const part of splitFields?.[field] ?? [field]) {
+        if (locked) resetField(part as Path<TFieldValues>);
+        setError(part as Path<TFieldValues>, { type: locked ? LOCKED_ERROR_TYPE : SERVER_ERROR_TYPE, message });
+      }
     }
     if (isLockRefusal(error)) setError(LOCK_REFUSAL_ROOT as Path<TFieldValues>, { type: LOCKED_ERROR_TYPE });
     return plan.footer;

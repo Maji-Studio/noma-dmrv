@@ -49,7 +49,8 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
-import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { footerForRefusedSave } from "./production-run-refusal";
 import { StaleVersionError, toDeleteErrorMessage, toSaveErrorMessage } from "@/lib/stale-version";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
@@ -326,19 +327,20 @@ export function ProductionRunList() {
   const createWithEvidence = useCreateWithEvidence({
     entityType: "production_run",
     entityNoun: "Production run",
-    executeCreate: async (data: ProductionRunSubmitData) => {
+    executeCreate: async ({ data }: { data: ProductionRunSubmitData; onRefusal: SaveRefusalHandler }) => {
       const run = await createRun.mutateAsync(data as CreateProductionRunData);
       return { entities: [run], result: run };
     },
     setError: setCreateError,
     setUpdateError,
-    getCreateErrorMessage: (error) => {
+    getCreateErrorMessage: (error, { onRefusal }) => {
       // Let the form surface an overlap conflict inline (on the start field,
       // with a link to the conflicting run); show other errors as a banner.
-      if (getRunConflict(error)) throw error;
-      return error instanceof Error
-        ? error.message
-        : "Production run was not created. Check the form.";
+      return footerForRefusedSave(
+        error,
+        error instanceof Error ? error.message : "Production run was not created. Check the form.",
+        onRefusal,
+      );
     },
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachment before saving this production run.",
@@ -350,9 +352,11 @@ export function ProductionRunList() {
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
-  const handleCreate = createWithEvidence.handleCreate;
+  const handleCreate = async (data: ProductionRunSubmitData, onRefusal: SaveRefusalHandler) => {
+    await createWithEvidence.handleCreate({ data, onRefusal });
+  };
 
-  const handleUpdate = async (data: ProductionRunSubmitData) => {
+  const handleUpdate = async (data: ProductionRunSubmitData, onRefusal: SaveRefusalHandler) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     if (createWithEvidence.guardUpdate()) return;
@@ -377,10 +381,10 @@ export function ProductionRunList() {
       closeSideSheet();
       toast.success("Production run updated.");
     } catch (error) {
-      if (getRunConflict(error)) throw error;
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      setUpdateError(toSaveErrorMessage(error, "Production run was not saved. Try again."));
+      const fallback = toSaveErrorMessage(error, "Production run was not saved. Try again.");
+      setUpdateError(footerForRefusedSave(error, fallback, onRefusal));
     }
   };
 
