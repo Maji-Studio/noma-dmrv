@@ -9,7 +9,9 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useId, useState } from "react";
+import { useForm, useWatch, type Resolver } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField } from "@/components/forms/form-field";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { FormTextarea } from "@/components/forms/form-textarea";
@@ -22,6 +24,8 @@ import {
   SlideOverPanelHeader,
   SlideOverPanelTitle,
 } from "@/components/ui/slide-over-panel";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
 import {
   useCreateEmissionEntry,
@@ -36,23 +40,21 @@ import { describeEmissionEntryCreditBatchLine } from "./emission-entry-credit-ba
 import { EntryFileNames, ENTRY_ENTITY_TYPE } from "./emission-entry-files";
 import {
   ENTRY_FILE_ACCEPT,
-  MAX_NOTE_LENGTH,
-  NOTE_TOO_LONG_MESSAGE,
   SINGLE_LINE_CAPTION,
   defaultEntryDate,
   draftFromEntry,
   draftMassDistanceFigure,
   entryDocumentType,
   entryFields,
+  entryRefusalAliases,
   entryValues,
   inputShapeKey,
   UNITS_CHANGED_MESSAGE,
-  validateEntryDate,
-  validateFields,
   type EmissionBatch,
   type EmissionEntry,
   type EmissionLine,
 } from "./emission-line-display";
+import { emissionEntryFormSchema, entryFieldName } from "@/schemas/emission-entry-form";
 
 export type EntryFormMode =
   | { kind: "add" }
@@ -84,10 +86,28 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
   const seed = mode.kind === "add" ? undefined : mode.entry;
   const single = line.entryPolicy === "single";
   const fields = entryFields(line);
-  const [draft, setDraft] = useState<Record<string, string>>(() => (seed ? draftFromEntry(seed, line) : {}));
-  const [date, setDate] = useState(() => (mode.kind === "edit" ? mode.entry.occurredOn : defaultEntryDate(today, batch)));
-  const [note, setNote] = useState(seed?.note ?? "");
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const formId = useId();
+  const latched = useLatchedSubmit();
+  const seedDraft = seed ? draftFromEntry(seed, line) : {};
+  const {
+    register,
+    handleSubmit,
+    control,
+    setError,
+    setValue,
+    clearErrors,
+    resetField,
+    formState: { errors },
+  } = useForm<Record<string, string>>({
+    resolver: zodResolver(
+      emissionEntryFormSchema({ fieldCount: fields.length, dated: !single, today, startDate: batch.startDate }),
+    ) as Resolver<Record<string, string>>,
+    defaultValues: {
+      ...Object.fromEntries(fields.map((field, index) => [entryFieldName(index), seedDraft[field.key] ?? ""])),
+      date: mode.kind === "edit" ? mode.entry.occurredOn : defaultEntryDate(today, batch),
+      note: seed?.note ?? "",
+    },
+  });
   // The units the draft was typed in: a template refresh must never reinterpret the numbers.
   const [typedIn, setTypedIn] = useState(() => inputShapeKey(line));
   const [serverError, setServerError] = useState<string | null>(null);
@@ -98,45 +118,29 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
   const updateEntry = useUpdateEmissionEntry(scope);
   const replaceEntry = useReplaceEmissionEntry(scope);
   const saving = createEntry.isPending || updateEntry.isPending || replaceEntry.isPending || attachments.attachments.some((a) => a.status === "uploading");
-  const computed = draftMassDistanceFigure(line, draft);
+  const watched = useWatch({ control });
+  /** The typed values keyed by the template's field keys, as the display helpers read them. */
+  const draftOf = (values: Record<string, string | undefined>) =>
+    Object.fromEntries(fields.map((field, index) => [field.key, values[entryFieldName(index)] ?? ""]));
+  const computed = draftMassDistanceFigure(line, draftOf(watched));
   const idPrefix = `entry-${line.componentId}`;
-  // Pending flags update after a render; this blocks a second Enter or click in the same tick.
-  const inFlight = useRef(false);
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: entryRefusalAliases(line) });
 
-  const save = async () => {
-    if (inFlight.current) return;
-    if (inputShapeKey(line) !== typedIn) {
-      setTypedIn(inputShapeKey(line));
-      setDraft({});
-      setErrors({});
-      setServerError(UNITS_CHANGED_MESSAGE);
-      return;
-    }
-    const next = validateFields(line, draft);
-    const dateError = single ? null : validateEntryDate(date, today, batch.startDate);
-    if (dateError) next.date = dateError;
-    const trimmedNote = note.trim() || null;
-    // Checked here to fail fast, before the server call.
-    if (trimmedNote && trimmedNote.length > MAX_NOTE_LENGTH) next.note = NOTE_TOO_LONG_MESSAGE;
-    setErrors(next);
-    setServerError(null);
-    if (Object.keys(next).length) {
-      document.getElementById(`${idPrefix}-${Object.keys(next)[0]}`)?.focus();
-      return;
-    }
+  const save = handleSubmit(async (data) => {
+    const draft = draftOf(data);
+    const note = (data.note ?? "").trim() || null;
     const values = entryValues(line, draft);
-    const occurredOn = single ? undefined : date;
-    inFlight.current = true;
+    const occurredOn = single ? undefined : data.date;
     try {
       let entryId: string;
       if (mode.kind === "edit") {
-        const saved = await updateEntry.mutateAsync({ id: mode.entry.id, expectedVersion: mode.entry.version, occurredOn, note: trimmedNote, values });
+        const saved = await updateEntry.mutateAsync({ id: mode.entry.id, expectedVersion: mode.entry.version, occurredOn, note, values });
         entryId = saved.id;
       } else if (mode.kind === "again") {
-        const replaced = await replaceEntry.mutateAsync({ id: mode.entry.id, expectedVersion: mode.entry.version, occurredOn, note: trimmedNote, values });
+        const replaced = await replaceEntry.mutateAsync({ id: mode.entry.id, expectedVersion: mode.entry.version, occurredOn, note, values });
         entryId = replaced.id;
       } else {
-        const created = await createEntry.mutateAsync({ creditBatchId: scope.creditBatchId, componentId: line.componentId, occurredOn, note: trimmedNote, values });
+        const created = await createEntry.mutateAsync({ creditBatchId: scope.creditBatchId, componentId: line.componentId, occurredOn, note, values });
         entryId = created.id;
       }
       if (attachments.hasHeld) {
@@ -150,11 +154,24 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
       }
       onSaved({});
     } catch (error) {
-      setServerError(toSaveErrorMessage(error, SAVE_FALLBACK));
-    } finally {
-      inFlight.current = false;
+      setServerError(refuseSave(error, toSaveErrorMessage(error, SAVE_FALLBACK)));
     }
-  };
+  });
+
+  // The latch holds across validation and the awaited save, before a render shows the pending flags.
+  const submit = latched(async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (saving) return;
+    setServerError(null);
+    if (inputShapeKey(line) !== typedIn) {
+      setTypedIn(inputShapeKey(line));
+      fields.forEach((_, index) => setValue(entryFieldName(index), ""));
+      clearErrors();
+      setServerError(UNITS_CHANGED_MESSAGE);
+      return;
+    }
+    await save(event);
+  });
 
   return (
     <>
@@ -165,14 +182,7 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
         </div>
       </SlideOverPanelHeader>
       <SlideOverPanelBody>
-        <form
-          noValidate
-          className="flex flex-col gap-20"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!saving) void save();
-          }}
-        >
+        <form id={formId} noValidate className="flex flex-col gap-20" onSubmit={submit}>
           {mode.kind === "again" && (
             <p className="body-small text-[var(--color-text-secondary)]">
               The earlier entry stopped counting after a template change. Saving replaces it and keeps its files.
@@ -185,7 +195,7 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
                 id={`${idPrefix}-${field.key}`}
                 label={field.label}
                 unit={field.unit}
-                error={errors[field.key]}
+                error={errors[entryFieldName(index)]?.message}
                 cue={field.part === "distance" && computed ? `This entry: ${computed}` : undefined}
               >
                 <Input
@@ -193,8 +203,7 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
                   inputMode="decimal"
                   autoComplete="off"
                   autoFocus={index === 0}
-                  value={draft[field.key] ?? ""}
-                  onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))}
+                  {...register(entryFieldName(index))}
                 />
               </FormField>
             ))}
@@ -202,14 +211,13 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
           {single ? (
             <p className="body-caption text-[var(--color-text-secondary)]">{SINGLE_LINE_CAPTION}</p>
           ) : (
-            <FormField id={`${idPrefix}-date`} label="Date" error={errors.date}>
+            <FormField id={`${idPrefix}-date`} label="Date" error={errors.date?.message}>
               <Input
                 id={`${idPrefix}-date`}
                 type="date"
-                value={date}
                 min={batch.startDate}
                 max={today}
-                onChange={(event) => setDate(event.target.value)}
+                {...register("date")}
               />
             </FormField>
           )}
@@ -226,8 +234,8 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
               />
             </div>
           </FormField>
-          <FormField id={`${idPrefix}-note`} label="Note" error={errors.note}>
-            <FormTextarea id={`${idPrefix}-note`} value={note} onChange={(event) => setNote(event.target.value)} />
+          <FormField id={`${idPrefix}-note`} label="Note" error={errors.note?.message}>
+            <FormTextarea id={`${idPrefix}-note`} {...register("note")} />
           </FormField>
           {serverError && <ServerError message={serverError} />}
           {/* Lets Enter in a field submit; the visible buttons sit in the footer. */}
@@ -238,7 +246,7 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
         preview={<CreditBatchLine copy={describeEmissionEntryCreditBatchLine(batch)} facilityId={scope.facilityId} />}
       >
         <Button variant="weak" onClick={onCancel} disabled={saving}>Cancel</Button>
-        <Button variant="primary" busy={saving} onClick={() => void save()}>Save</Button>
+        <Button variant="primary" type="submit" form={formId} busy={saving}>Save</Button>
       </SlideOverPanelFooter>
     </>
   );

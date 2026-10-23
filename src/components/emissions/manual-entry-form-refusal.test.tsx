@@ -1,0 +1,152 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ActionError } from "@/lib/action-error";
+import { LOCKED_FIELD_MESSAGE } from "@/lib/save-refusal";
+import { makeEntry, makeLine } from "./emission-line-test-fixtures";
+import { ManualEntryForm } from "./manual-entry-form";
+
+const mutations = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn(), replace: vi.fn() }));
+
+vi.mock("@/hooks/use-emission-entries", () => ({
+  useCreateEmissionEntry: () => ({ isPending: false, mutateAsync: mutations.create }),
+  useUpdateEmissionEntry: () => ({ isPending: false, mutateAsync: mutations.update }),
+  useReplaceEmissionEntry: () => ({ isPending: false, mutateAsync: mutations.replace }),
+  invalidateEmissionEntryReads: vi.fn(),
+}));
+vi.mock("@/components/ui/slide-over-panel", () => {
+  const Plain = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
+  const Footer = ({ children, preview }: { children?: React.ReactNode; preview?: React.ReactNode }) => (
+    <div>{preview}{children}</div>
+  );
+  return {
+    SlideOverPanelBody: Plain,
+    SlideOverPanelDescription: Plain,
+    SlideOverPanelFooter: Footer,
+    SlideOverPanelHeader: Plain,
+    SlideOverPanelTitle: Plain,
+  };
+});
+vi.mock("@/hooks/use-deferred-attachments", () => ({
+  useDeferredAttachments: () => ({ attachments: [], hasHeld: false, add: vi.fn(), remove: vi.fn(), flush: vi.fn() }),
+}));
+
+const SCOPE = { facilityId: "fac", creditBatchId: "cb" };
+const BATCH = { creditBatchId: "cb", code: "CB-1", startDate: "2026-09-01", endDate: "2026-09-30" };
+const FALLBACK = "The manual entry was not saved. Check the values and try again.";
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+function renderForm(mode: React.ComponentProps<typeof ManualEntryForm>["mode"] = { kind: "add" }, onSaved = vi.fn()) {
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ManualEntryForm line={makeLine()} batch={BATCH} scope={SCOPE} today="2026-09-20" mode={mode} onCancel={vi.fn()} onSaved={onSaved} />
+    </QueryClientProvider>,
+  );
+  return onSaved;
+}
+const energy = () => screen.getByRole("textbox", { name: /Energy/ });
+const refusal = (issues: ConstructorParameters<typeof ActionError>[0]["issues"]) =>
+  new ActionError({ error: "Not saved.", code: "validation_failed", issues });
+
+describe("ManualEntryForm save", () => {
+  it("creates the entry and reports the save when the values are valid", async () => {
+    mutations.create.mockResolvedValue({ id: "entry-9" });
+    const onSaved = renderForm();
+    fireEvent.change(energy(), { target: { value: " 12.5 " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith({}));
+    expect(mutations.create).toHaveBeenCalledTimes(1);
+    expect(mutations.create.mock.calls[0][0]).toMatchObject({
+      creditBatchId: "cb",
+      componentId: "line-1",
+      occurredOn: "2026-09-20",
+      note: null,
+      values: [{ inputKey: "energy", magnitude: "12.5", unit: "kWh" }],
+    });
+  });
+
+  it("shows the schema's messages at the fields and sends nothing", async () => {
+    renderForm();
+    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "x".repeat(4001) } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Enter a non-negative decimal value.")).toBeTruthy();
+    expect(screen.getByText("Use 4,000 characters or fewer.")).toBeTruthy();
+    expect(mutations.create).not.toHaveBeenCalled();
+  });
+
+  it("sends one save when the form is submitted twice in the same tick", async () => {
+    let finish: (value: { id: string }) => void = () => undefined;
+    mutations.create.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    const onSaved = renderForm();
+    fireEvent.change(energy(), { target: { value: "3" } });
+    const form = energy().closest("form")!;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    await waitFor(() => expect(mutations.create).toHaveBeenCalledTimes(1));
+    finish({ id: "entry-9" });
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(mutations.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ManualEntryForm refusals", () => {
+  it("lands a refusal that names the value at its field, with no footer", async () => {
+    // The issue path the server sends for a rejected magnitude (createEmissionEntrySchema).
+    mutations.create.mockRejectedValue(refusal([{ path: ["values", 0, "magnitude"], code: "too_big", message: "Use 100 characters or fewer." }]));
+    const onSaved = renderForm();
+    fireEvent.change(energy(), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Use 100 characters or fewer.")).toBeTruthy();
+    expect(document.getElementById("entry-line-1-energy-error")?.textContent).toBe("Use 100 characters or fewer.");
+    expect(screen.queryByText(/not saved/i)).toBeNull();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it("lands an occurredOn refusal at the date", async () => {
+    mutations.create.mockRejectedValue(refusal([{ path: ["occurredOn"], code: "invalid_format", message: "Invalid ISO date" }]));
+    renderForm();
+    fireEvent.change(energy(), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(document.getElementById("entry-line-1-date-error")?.textContent).toBe("Invalid ISO date"));
+    expect(screen.queryByText(/not saved/i)).toBeNull();
+  });
+
+  it("keeps the footer for a refusal that names no field", async () => {
+    mutations.create.mockRejectedValue(new Error("boom"));
+    renderForm();
+    fireEvent.change(energy(), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText(/boom|not saved/i)).toBeTruthy();
+  });
+
+  it("shows the fallback footer for an ActionError without issues", async () => {
+    mutations.create.mockRejectedValue(new ActionError({ error: FALLBACK }));
+    renderForm();
+    fireEvent.change(energy(), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Not saved. Check the values and try again.")).toBeTruthy();
+  });
+
+  // Form contract test, not a real server shape: the server's lock refusal
+  // (lockWritableEmissionEntry) names no field, so it reads in the footer. This
+  // proves the revert path should a lock issue ever name the note.
+  it("puts a changed field back and says it is locked when a lock names it", async () => {
+    mutations.update.mockRejectedValue(
+      new ActionError({
+        error: "This emissions entry is reserved or sent. It cannot be changed.",
+        code: "certification_locked",
+        issues: [{ path: ["note"], code: "certification_locked", message: "This emissions entry is reserved or sent. It cannot be changed." }],
+      }),
+    );
+    renderForm({ kind: "edit", entry: makeEntry({ note: "Saved note" }) });
+    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Changed note" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText(LOCKED_FIELD_MESSAGE)).toBeTruthy();
+    expect(screen.getByLabelText("Note")).toHaveProperty("value", "Saved note");
+  });
+});
