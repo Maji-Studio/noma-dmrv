@@ -89,6 +89,12 @@ describe("order errors", () => {
     ]>();
   });
 
+  it("never lets a total below the named deliveries drop names or go negative", () => {
+    const deliveries = [{ id: "a", code: "DL-1" }, { id: "b", code: "DL-2" }, { id: "c", code: "DL-3" }];
+    expect(orderHasDeliveries(deliveries, "OR-1", 1).message).toBe(orderHasDeliveries(deliveries, "OR-1").message);
+    expect(orderHasDeliveries(deliveries, "OR-1", 0).message).toContain("3 deliveries still use it: DL-1, DL-2 and DL-3.");
+  });
+
   it.each([
     [1, "Order OR-1 was not deleted because delivery DL-1 still uses it. Delete that delivery first, or keep this order."],
     [2, "Order OR-1 was not deleted because 2 deliveries still use it: DL-1 and DL-2. Delete those deliveries first, or keep this order."],

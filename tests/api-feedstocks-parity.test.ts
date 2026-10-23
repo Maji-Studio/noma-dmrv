@@ -195,7 +195,7 @@ describe("feedstock action, REST and MCP decoded-command parity", { timeout: SUI
       const body = await expectFeedstockProblem(rest, testCase.status, testCase.code);
       expect(body.errors.map((issue: { pointer: string }) => pointerPath(issue.pointer))).toEqual(actionPaths);
       if (testCase.scenario === "blocked-delete") {
-        const message = `Feedstock ${saved!.row.code} was not deleted because production runs still use it. Move their draws to another feedstock first, or keep this feedstock.`;
+        const message = `Feedstock ${saved!.row.code} was not deleted because production runs still use it. Change the source bin on those runs first, or keep this feedstock.`;
         expect(action.error).toBe(message);
         expect(body.detail).toBe(message);
         expect(mcp.structuredContent.detail).toBe(message);
