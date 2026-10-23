@@ -1,3 +1,4 @@
+import { isCarriedToRemoval } from "@/lib/certification/emission-entry-carry";
 import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
 import { loadEmissionEntryHolds } from "./emission-entry-holds";
 import { releaseSubmissionReservations } from "./submission-reservation-release";
@@ -197,7 +198,7 @@ export async function reserveProductionEmissionsClaims(
       if (!emissionEntryCanBeReserved({ entry: { ...entry, heldForRemovalId: holds.get(entry.id) }, expectedRevision: frozen.find((item) => item.entryId === entry.id)?.contentRevision,
         memberBatchIds: members.map((member) => member.creditBatchId).filter((id) => entryClaim!.memberBatchIds.includes(id)),
         eligibleCarry: carryContext?.entries.some(fact => fact.id === entry.id &&
-          (fact.carry.receiver?.removalId === args.removalId || fact.reservedByRemovalId === args.removalId || fact.sentByRemovalId === args.removalId)) ?? false,
+          isCarriedToRemoval(fact, args.removalId)) ?? false,
         removalId: args.removalId, submissionId: args.submissionId,
         priorReservationTransferable: canTransferReservation(owner, nowMs) || isReviewedEvidencePredecessor(owner),
       })) throw entryChanged();

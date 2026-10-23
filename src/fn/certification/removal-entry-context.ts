@@ -1,3 +1,4 @@
+import { isCarriedToRemoval } from "@/lib/certification/emission-entry-carry";
 import { emissionEntryCounts, entryLine } from "@/lib/certification/emission-entry-rules";
 import { EMISSION_ENTRIES_CHANGED } from "@/lib/certification/emission-entry-messages";
 import type { certificationSubmissions } from "@/db/schema/certification";
@@ -19,7 +20,7 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   const carryEntries = carryContext?.entries ?? [];
   const memberIds = scope.memberBatches.map(batch => batch.id);
   const carriedEntries = carryEntries.filter(entry => !memberIds.includes(entry.creditBatchId) &&
-    (entry.carry.receiver?.removalId === scope.removalId || entry.reservedByRemovalId === scope.removalId || entry.sentByRemovalId === scope.removalId))
+    isCarriedToRemoval(entry, scope.removalId!))
     .map(entry => ({ ...entry, ...emissionEntryCounts(entry.entryObservation, observation, entry.componentId) }));
   const allEntries = [...Object.values(facts).flatMap((batch) => batch.entries), ...carriedEntries];
   const frozenChanged = frozenEntrySet && frozenEntrySet.some((frozen) => !allEntries.some((entry) => entry.id === frozen.entryId && entry.contentRevision === frozen.contentRevision && !entry.deletedAt));

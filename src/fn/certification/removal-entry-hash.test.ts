@@ -8,6 +8,7 @@ import { emissionEntrySourceCandidates } from "@/lib/certification/emission-entr
 import { buildRemovalSourceDescription } from "@/lib/certification/removal-source-bindings";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import type { RemovalSubmissionContext } from "./certify-context-core";
+import { normalizeCarriedEntriesForHash } from "./removal-entry-hash";
 import { buildRemovalSubmissionBuild } from "./removal-submission-build";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 
@@ -23,7 +24,7 @@ function observation(displayName: string): EntryObservation {
   }] }, enrichment: { "entry-component": { electricity_use: { unit: "kWh" } } },
   lineSources: { "entry-component": { scope: "operating", entryPolicy: "additive", origin: "reviewed" } } };
 }
-async function build(current: EntryObservation, batchCode: string, kind: "value" | "zero", revision = 1, documentId = "document") {
+async function build(current: EntryObservation, batchCode: string, kind: "value" | "zero", revision = 1, documentId = "document", earlierRemovalCode?: string) {
   const contributions = deriveRemovalEntryInputs({ observation: current, removalId: "removal", memberBatchIds: ["batch"],
     creditBatchCodes: { batch: batchCode }, window: { start: "2026-01-01", end: "2026-01-03" }, reservations: [], nowMs: 0,
     contenders: [{ contenderKind: "draft", removalId: "removal", createdAt: "2026-01-01", creditBatchIds: ["batch"], window: { start: "2026-01-01", end: "2026-01-03" } }],
@@ -32,6 +33,12 @@ async function build(current: EntryObservation, batchCode: string, kind: "value"
       confirmedForRemovalId: kind === "zero" ? "removal" : null, evidenceDocumentIds: kind === "zero" ? [] : [documentId],
       values: [{ inputKey: "electricity_use", magnitude: "2", unit: "kWh" }] }],
   });
+  if (earlierRemovalCode) contributions.carriedEntries = [{
+    entryId: "entry", creditBatchId: "batch", creditBatchCode: batchCode,
+    componentId: "entry-component", componentName: current.definition.groups[0].components[0].displayName,
+    occurredOn: "2026-01-02", value: { magnitude: "2", unit: "kWh" },
+    evidenceDocumentIds: [documentId], earlierRemovalId: "earlier-removal", earlierRemovalCode,
+  }];
   expect(contributions.blockers).toEqual([]);
   const template = { id: "template", groups: [
     { key: "co2-stored", components: [{ id: "storage", blueprint_key: "carbon_rich_substance_sequestration", inputs: [
@@ -83,4 +90,40 @@ it.each(["value", "zero"] as const)("keeps cosmetic observation and batch change
   }
   expect(payloadHash((await build(original, "CB-001", kind, 2)).semanticPayload)).not.toBe(payloadHash(baseline.semanticPayload));
   if (kind === "value") expect(payloadHash((await build(original, "CB-001", kind, 1, "replacement-document")).semanticPayload)).not.toBe(payloadHash(baseline.semanticPayload));
+});
+
+it("keeps carried batch, component and earlier Removal labels out of both hashes", async () => {
+  const baseline = await build(observation("Electricity"), "CB-001", "value", 1, "document", "RM-001");
+  for (const [component, batch, removal] of [
+    ["Site electricity", "CB-001", "RM-001"],
+    ["Electricity", "CB-RENAMED", "RM-001"],
+    ["Electricity", "CB-001", "RM-RENAMED"],
+    ["Site electricity", "CB-RENAMED", "RM-RENAMED"],
+  ]) {
+    const changed = await build(observation(component), batch, "value", 1, "document", removal);
+    expect(payloadHash(changed.semanticPayload)).toBe(payloadHash(baseline.semanticPayload));
+    expect(reviewPayloadHash(changed.semanticPayload)).toBe(reviewPayloadHash(baseline.semanticPayload));
+    expect(buildRemovalSourceDescription(changed.candidateSourceDocuments[0].binding!)).toContain(batch);
+    expect(changed.datapointBodyByKey.get("entry-component::electricity_use")?.description).toContain(removal);
+  }
+});
+
+it("hashes carried semantic fields and canonical evidence order", () => {
+  const entry = { entryId: "entry", creditBatchId: "batch", componentId: "component", occurredOn: "2026-01-02",
+    value: { magnitude: "2", unit: "kWh" }, evidenceDocumentIds: ["b", "a"], earlierRemovalId: "earlier",
+    creditBatchCode: "CB-001", componentName: "Electricity", earlierRemovalCode: "RM-001" };
+  const baseline = { carriedEntries: normalizeCarriedEntriesForHash([entry]) };
+  expect(baseline.carriedEntries?.[0]).toEqual({ entryId: "entry", creditBatchId: "batch", componentId: "component",
+    occurredOn: "2026-01-02", value: entry.value, evidenceDocumentIds: ["a", "b"], earlierRemovalId: "earlier" });
+  const reordered = { carriedEntries: normalizeCarriedEntriesForHash([{ ...entry, evidenceDocumentIds: ["a", "b"] }]) };
+  expect(payloadHash(reordered)).toBe(payloadHash(baseline));
+  for (const patch of [
+    { entryId: "other" }, { creditBatchId: "other" }, { componentId: "other" }, { occurredOn: "2026-01-03" },
+    { value: { magnitude: "3", unit: "kWh" } }, { evidenceDocumentIds: ["a"] }, { earlierRemovalId: "other" },
+  ]) {
+    const changed = { carriedEntries: normalizeCarriedEntriesForHash([{ ...entry, ...patch }]) };
+    expect(payloadHash(changed)).not.toBe(payloadHash(baseline));
+    expect(reviewPayloadHash(changed)).not.toBe(reviewPayloadHash(baseline));
+  }
+  expect(entry.evidenceDocumentIds).toEqual(["b", "a"]);
 });

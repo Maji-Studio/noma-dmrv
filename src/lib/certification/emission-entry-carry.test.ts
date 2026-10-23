@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { removalEntryCarryOwner, type CarryContender } from "./emission-entry-carry";
+import { isCarriedToRemoval, removalEntryCarryOwner, type CarryContender } from "./emission-entry-carry";
 import { deriveRemovalEntryContributions, entriesWithoutRemoval, type RemovalEntryFact } from "./removal-emission-contributions";
 import type { EntryObservation } from "./emission-entry-rules";
 import { creditBatchApplicationMass, isCreditBatchFullyApplied, MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "@/lib/credit-batches/application-mass";
@@ -119,10 +119,10 @@ it("gives an own-batch correction priority over carry, only inside its window", 
 });
 
 
-it.each([0, MIN_VISIBLE_NOT_APPLIED_DRY_KG - 0.001, MIN_VISIBLE_NOT_APPLIED_DRY_KG, MIN_VISIBLE_NOT_APPLIED_DRY_KG + 0.001, null])(
-  "uses the shared remaining-stock threshold for %s dry kg", remaining => {
+it.each([0, 0.001, MIN_VISIBLE_NOT_APPLIED_DRY_KG - 0.001, MIN_VISIBLE_NOT_APPLIED_DRY_KG, MIN_VISIBLE_NOT_APPLIED_DRY_KG + 0.001, null])(
+  "requires zero remaining mass for carry (%s dry kg)", remaining => {
     const fullyApplied = isCreditBatchFullyApplied(remaining);
-    expect(fullyApplied).toBe(remaining !== null && remaining < MIN_VISIBLE_NOT_APPLIED_DRY_KG);
+    expect(fullyApplied).toBe(remaining === 0);
     expect(decide({ fullyApplied }).receiver?.removalId ?? null).toBe(fullyApplied ? draft.removalId : null);
   },
 );
@@ -134,4 +134,18 @@ it("skips a known incompatible draft then waits for the first unread draft", () 
   expect(decide({ contenders: [later, unread, incompatible] })).toEqual({
     receiver: null, waitingReason: "templateUnknown", waitingFor: { removalId: unread.removalId, removalCode: unread.code },
   });
+});
+
+it("recognizes elected, reserved and sent carry destinations", () => {
+  const receiver = decide().receiver!;
+  for (const fact of [
+    { ...entry, carry: { receiver, waitingReason: null } },
+    { ...entry, reservedByRemovalId: receiver.removalId },
+    { ...entry, sentByRemovalId: receiver.removalId },
+  ]) {
+    expect(isCarriedToRemoval(fact, receiver.removalId)).toBe(true);
+    expect(isCarriedToRemoval(fact, "other-removal")).toBe(false);
+  }
+  expect(isCarriedToRemoval(entry, receiver.removalId)).toBe(false);
+  expect(isCarriedToRemoval({ ...entry, carry: { receiver: null, waitingReason: null } }, receiver.removalId)).toBe(false);
 });

@@ -303,8 +303,8 @@ it("does not give an expired resumable carry to a better-ranked rival Removal", 
   }
 });
 
-it.each([0, MIN_VISIBLE_NOT_APPLIED_DRY_KG - 0.001, MIN_VISIBLE_NOT_APPLIED_DRY_KG, MIN_VISIBLE_NOT_APPLIED_DRY_KG + 0.001])(
-  "elects a carry receiver using the batch page threshold (%s dry kg remaining)", async remaining => {
+it.each([0, 0.001, MIN_VISIBLE_NOT_APPLIED_DRY_KG - 0.001, MIN_VISIBLE_NOT_APPLIED_DRY_KG, MIN_VISIBLE_NOT_APPLIED_DRY_KG + 0.001])(
+  "elects a carry receiver only at zero remaining mass (%s dry kg remaining)", async remaining => {
     const [slice] = await db.select().from(creditBatchApplications).where(and(
       eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.creditBatchId, origin.batchId),
     ));
@@ -313,6 +313,6 @@ it.each([0, MIN_VISIBLE_NOT_APPLIED_DRY_KG - 0.001, MIN_VISIBLE_NOT_APPLIED_DRY_
     ));
     const loaded = await loadFacilityEmissionEntryCarry(ctx, origin.facilityId);
     expect(loaded.entries.find(item => item.id === entry.id)?.carry.receiver?.removalId ?? null)
-      .toBe(remaining < MIN_VISIBLE_NOT_APPLIED_DRY_KG ? receiving.removalId : null);
+      .toBe(remaining === 0 ? receiving.removalId : null);
   },
 );

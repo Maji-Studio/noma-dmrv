@@ -71,3 +71,12 @@ export function recordedAfter(carried: { earlierRemovalId?: string; earlierRemov
   return carried?.earlierRemovalId && carried.earlierRemovalCode
     ? { removalId: carried.earlierRemovalId, removalCode: carried.earlierRemovalCode } : null;
 }
+
+/** A carry belongs to its elected, reserved, or sent Removal. */
+export function isCarriedToRemoval(
+  entry: Pick<RemovalEntryFact, "carry" | "reservedByRemovalId" | "sentByRemovalId">,
+  removalId: string,
+): boolean {
+  return entry.carry?.receiver?.removalId === removalId ||
+    entry.reservedByRemovalId === removalId || entry.sentByRemovalId === removalId;
+}

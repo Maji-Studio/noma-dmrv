@@ -1,3 +1,4 @@
+import { isCarriedToRemoval } from "@/lib/certification/emission-entry-carry";
 import type { CarriedEntryNote } from "./emission-entry-carry-copy";
 import type { EntryCarryDisposition, EntryCarryDestination } from "./emission-entry-carry";
 import { z } from "zod";
@@ -123,7 +124,7 @@ export function deriveRemovalEntryContributions(args: {
 }): RemovalEntryContributions {
   const result: RemovalEntryContributions = { manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], ownedEntryIds: [], sentSingleComponentIds: [], blockers: [] };
   const relevant = args.entries.filter((entry) => !entry.deletedAt && (args.memberBatchIds.includes(entry.creditBatchId) ||
-    entry.carry?.receiver?.removalId === args.removalId || entry.reservedByRemovalId === args.removalId || entry.sentByRemovalId === args.removalId));
+    isCarriedToRemoval(entry, args.removalId)));
   const selected: RemovalEntryFact[] = [];
   for (const entry of relevant) {
     const carried = !args.memberBatchIds.includes(entry.creditBatchId);
