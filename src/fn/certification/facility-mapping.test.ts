@@ -10,7 +10,8 @@ import { IsometricApiError, listProjects } from "@/lib/isometric";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
-import { loadFacilityCertifierMapping } from "./facility-mapping";
+import { env } from "@/config/env";
+import { loadFacilityCertifierMapping, saveFacilityCertifierMapping } from "./facility-mapping";
 
 vi.mock("@/lib/auth/server", () => ({ requireOrgContext: vi.fn(), requireOrgRole: vi.fn() }));
 vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn() }));
@@ -18,6 +19,7 @@ vi.mock("@/data-access/certifier-credentials", () => ({ resolveIsometricClient: 
 vi.mock("@/data-access/certification", () => ({
   getCertifierProjectByFacility: vi.fn(),
   listAllFacilitiesLinkedByProvider: vi.fn(),
+  upsertCertifierProject: vi.fn(),
 }));
 vi.mock("@/lib/isometric", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/isometric")>(),
@@ -90,5 +92,31 @@ describe("loadFacilityCertifierMapping project listing", () => {
     expect(await loadFacilityCertifierMapping(facilityId)).toMatchObject({ success: false });
     expect(resolveIsometricClient).not.toHaveBeenCalled();
     expect(listProjects).not.toHaveBeenCalled();
+  });
+});
+
+describe("saveFacilityCertifierMapping refusals", () => {
+  const input = {
+    facilityId,
+    externalProjectId: "prj_1",
+    protocolSlug: "biochar",
+    externalFacilityId: "fcl_12345",
+    confirmProduction: false,
+  };
+
+  it("files the production confirmation at the confirmation field", async () => {
+    const message = "Confirm you want to save against the production Isometric environment.";
+    const spy = vi.spyOn(env, "ISOMETRIC_ENVIRONMENT", "get").mockReturnValue("production");
+    try {
+      expect(await saveFacilityCertifierMapping(input)).toEqual({
+        success: false,
+        error: message,
+        code: "validation_failed",
+        issues: [{ path: ["confirmProduction"], code: "validation_failed", message }],
+      });
+      expect(listProjects).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

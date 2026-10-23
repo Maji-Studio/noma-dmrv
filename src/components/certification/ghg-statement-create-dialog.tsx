@@ -25,7 +25,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
@@ -33,6 +33,8 @@ import {
   ClipboardTextIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, ServerError } from "@/components/forms";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 import { Button, EmptyState, Modal } from "@/components/ui";
 import { Accordion } from "@/components/ui/accordion";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -138,13 +140,16 @@ function DialogBody({
       registryStatementsExpanded,
     );
 
+  const formId = useId();
   const {
     register,
     handleSubmit,
     watch,
     trigger,
+    control,
     setError,
     clearErrors,
+    resetField,
     formState: { errors },
   } = useForm<CreateGhgStatementInput>({
     resolver: zodResolver(createGhgStatementSchema),
@@ -200,6 +205,7 @@ function DialogBody({
     await goTo(stepIndex + 1);
   };
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const onCreate = handleSubmit(async (data) => {
     if (isProduction && !data.confirmProduction) {
       setError("confirmProduction", {
@@ -225,12 +231,11 @@ function DialogBody({
         toast.success(`Created with ${linked}.`);
       }
     } catch (err) {
-      setError("root.serverError", {
-        message:
-          err instanceof Error
-            ? err.message
-            : "The GHG Statement was not created. Check the period and try again.",
-      });
+      const footer = refuseSave(
+        err,
+        toSaveErrorMessage(err, "The GHG Statement was not created. Check the period and try again."),
+      );
+      if (footer) setError("root.serverError", { message: footer });
     }
   });
 
@@ -238,7 +243,7 @@ function DialogBody({
   const isLastStep = stepIndex === STEPS.length - 1;
 
   return (
-    <div className="flex flex-col gap-24">
+    <div id={formId} className="flex flex-col gap-24">
       <header className="flex flex-col gap-4 pr-40">
         <h2 id={DIALOG_TITLE_ID} className="title-heading-3">
           {result
