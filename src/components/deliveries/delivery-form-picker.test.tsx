@@ -152,6 +152,9 @@ it.each([
   ["deliveredAt", "Enter a time at or before now."],
   ["moisturePercent", "Enter a valid moisture reading."],
   ["sources", "Refresh the source stock."],
+  // Stock posting names on a delivery edit: a future posting date and a cleared load mass.
+  ["occurredAt", "Date and time cannot be in the future. Enter a time at or before now."],
+  ["wetMassKg", "Enter a valid mass."],
 ])("shows the operation's %s refusal beside the delivery field", async (path, message) => {
   const validDelivery = { ...delivery, orderId: "00000000-0000-4000-8000-000000000001", storageLocationId: "00000000-0000-4000-8000-000000000002" };
   const onSubmit = vi.fn((_data, onRefusal) => {

@@ -632,7 +632,6 @@ before allowing confirmation to convert stored entry values to the new unit.
   - Application manual position and GIS boundary are not RHF-registered, so `resetField` cannot restore them.
   - Feedstock: a supplier change plus a lock refusal restores the supplier, then clears the restored override.
   - Unmigrated forms keep typed values after a Sent refusal.
-- Delivery update posting refusals at `occurredAt` and `wetMassKg` show in the footer and need aliases (follow-up PR).
 - Registered customer locations have no lock-read kind; their refusal-specific
   disabling belongs to the customer forms migration.
 
