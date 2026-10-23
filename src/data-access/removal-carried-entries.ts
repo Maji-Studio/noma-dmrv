@@ -34,7 +34,7 @@ export async function loadRemovalCarriedEntries(ctx: OrgContext, removalId: stri
   const sent = await getSentRemovalForComparison(ctx, removalId);
   if (!sent) return loadDraftRemovalCarriedEntries(ctx, removalId, removal.facilityId);
   const parsed = snapshotSchema.safeParse(sent.payloadSnapshot);
-  if (!parsed.success) throw new DomainError("validation_failed", "The saved emissions entry set could not be read. Refresh the Removal before submitting.");
+  if (!parsed.success) throw new DomainError("validation_failed", "The sent Removal’s saved emissions entry set could not be read. Reload the Removal and try again.");
   const snapshot = parsed.data;
   const entries = snapshot.semantic.carriedEntries;
   if (!entries.length) return [];

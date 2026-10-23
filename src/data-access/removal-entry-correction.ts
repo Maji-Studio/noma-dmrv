@@ -1,5 +1,5 @@
 import { REMOVAL_MEMBERSHIP_STATUSES } from "@/lib/certification/removal-membership";
-import type { EntryContender } from "@/lib/certification/removal-emission-contributions";
+import { coversBatches, type CoveredContenders } from "@/lib/certification/covered-contenders";
 import { getEffectiveReportingPeriodEndOn } from "./certifier-ghg-statements";
 import { and, desc, eq, isNotNull, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -10,13 +10,13 @@ import { listEmissionEntryDraftContenders } from "./emission-entry-contenders";
 import { getCreditBatchesByRemovalId } from "./certifier-removals";
 
 /** Advisory state only. Mutation authorization comes from the locked lineage loader. */
-export async function loadRemovalCorrectionFacts(ctx: OrgContext, removalId: string, suppliedContenders?: EntryContender[], contendersBatchIds?: readonly string[]) {
+export async function loadRemovalCorrectionFacts(ctx: OrgContext, removalId: string, coveredContenders?: CoveredContenders) {
   requireOrgScope(ctx);
   const submitted = await getSentRemovalForComparison(ctx, removalId);
   if (!submitted) return null;
   const batches = await getCreditBatchesByRemovalId(ctx, removalId);
   const ids = batches.map((batch) => batch.id);
-  const contenders = suppliedContenders && ids.every(id => contendersBatchIds?.includes(id)) ? suppliedContenders : await listEmissionEntryDraftContenders(ctx, ids);
+  const contenders = coversBatches(coveredContenders, ids) ? coveredContenders.contenders : await listEmissionEntryDraftContenders(ctx, ids);
   const correction = contenders.find((item) => item.removalId === removalId && item.contenderKind === "correction");
   if (!correction) return null;
   if (!correction.returnedStatement) return null;
@@ -29,7 +29,7 @@ export async function loadRemovalCorrectionFacts(ctx: OrgContext, removalId: str
       eq(certifierGhgStatements.id, correction.returnedStatement.id)))
     .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, removalId)));
   if (!identity) return null;
-  return { submitted, batches, contenders, contendersBatchIds: ids, correction, identity: {
+  return { submitted, batches, coveredContenders: { contenders, batchIds: ids }, correction, identity: {
     ...identity, reportingPeriodEndOn: getEffectiveReportingPeriodEndOn(identity),
   } };
 }

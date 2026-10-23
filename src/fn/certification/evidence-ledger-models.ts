@@ -19,10 +19,13 @@ function orderedLegs(legs: TransportLeg[]) {
   return [...legs].sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0) || a.id.localeCompare(b.id));
 }
 
+function memberCodes(ctx: RemovalSubmissionContext) {
+  return [...ctx.memberBatches].sort((a, b) => a.id.localeCompare(b.id)).map(b => b.code).join(" · ") || null;
+}
+
 /** Deterministic render inputs; correction reads compare source facts separately. */
 export function transportLedgerModel(ctx: RemovalSubmissionContext, facilityName: string | null, generatedAtIso: string) {
-  const memberBatchCodes =
-    [...ctx.memberBatches].sort((a, b) => a.id.localeCompare(b.id)).map((b) => b.code).join(" · ") || null;
+  const memberBatchCodes = memberCodes(ctx);
 
   return buildLedgerModel({
     legsByCategory: {
@@ -39,8 +42,7 @@ export function transportLedgerModel(ctx: RemovalSubmissionContext, facilityName
 
 }
 export function durabilityLedgerModel(ctx: RemovalSubmissionContext, facilityName: string | null, generatedAtIso: string) {
-  const memberBatchCodes =
-    [...ctx.memberBatches].sort((a, b) => a.id.localeCompare(b.id)).map((b) => b.code).join(" · ") || null;
+  const memberBatchCodes = memberCodes(ctx);
 
   const commonModelArgs = {
     batches: [...ctx.batchesWithSamples].sort((a, b) => a.creditBatchId.localeCompare(b.creditBatchId)).map(batch => ({
@@ -55,6 +57,7 @@ export function durabilityLedgerModel(ctx: RemovalSubmissionContext, facilityNam
     generatedAtIso,
   };
   return ctx.batchesWithSamples[0]?.durabilityOption === "1000_year"
-    ? buildThousandYearDurabilityLedgerModel({ ...commonModelArgs, componentKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR })
-    : buildDurabilityLedgerModel({ ...commonModelArgs, facilityReferenceSoilTemperature: ctx.facilityReferenceSoilTemperature! });
+    // Submission uses the current blueprint; legacy templates are blocked upstream.
+    ? { option: "1000_year" as const, model: buildThousandYearDurabilityLedgerModel({ ...commonModelArgs, componentKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR }) }
+    : { option: "200_year" as const, model: buildDurabilityLedgerModel({ ...commonModelArgs, facilityReferenceSoilTemperature: ctx.facilityReferenceSoilTemperature! }) };
 }

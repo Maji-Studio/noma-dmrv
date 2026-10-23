@@ -1,4 +1,4 @@
-import type { EntryContender } from "@/lib/certification/removal-emission-contributions";
+import type { CoveredContenders } from "@/lib/certification/covered-contenders";
 import { changedGeneratedEvidence } from "./generated-evidence-comparison";
 import { RemovalComparisonBlockedError } from "./removal-comparison-blocked-error";
 import type { OrgContext } from "@/lib/auth/server";
@@ -13,7 +13,7 @@ import { buildRemovalSubmissionBuild } from "./removal-submission-build";
 import { prepareRemovalSubmission } from "./removal-submission-prepare";
 
 /** Content comparison only; never authorizes a Removal mutation. */
-export async function compileRemovalCorrectionContent(orgCtx: OrgContext, removalId: string, observation: RemovalTemplateObservation, contenders?: EntryContender[], contendersBatchIds?: readonly string[]): Promise<Record<string, unknown> | null> {
+export async function compileRemovalCorrectionContent(orgCtx: OrgContext, removalId: string, observation: RemovalTemplateObservation, coveredContenders?: CoveredContenders): Promise<Record<string, unknown> | null> {
   const scope = await resolveScopeForRemoval(orgCtx, removalId);
   const [facility, mapping] = await Promise.all([
     getFacilityById(orgCtx, scope.facilityId),
@@ -29,7 +29,7 @@ export async function compileRemovalCorrectionContent(orgCtx: OrgContext, remova
   };
   // Suppress correction projections and storage summaries only. Keep all
   // compilation validation; invalid current records cannot equal sent content.
-  const context = await buildRemovalContext(orgCtx, scope, facilityFacts, { correctionRead: true, contenders, contendersBatchIds });
+  const context = await buildRemovalContext(orgCtx, scope, facilityFacts, { correctionRead: true, coveredContenders });
   const { prepared, blockers } = prepareRemovalSubmission(context);
   const comparisonBlockers = [...blockers, ...(context.removalEntryContext?.contributions.blockers ?? [])];
   if (comparisonBlockers.length) {

@@ -65,7 +65,7 @@ it.each(["generated-ledger", "file-only", "entry-only", "compile-refusal", "miss
   const guard = assertStatementRemovalsCurrent(ctx, "statement");
   if (unchanged) await expect(guard).resolves.toBeUndefined();
   else await expect(guard).rejects.toThrow(unavailable ? "noma could not compare Removal R-12" : "Resubmit Removal R-12 first");
-  if (scenario !== "missing-observation") expect(compileRemovalCorrectionContent).toHaveBeenCalledWith(ctx, "removal", observation, undefined, undefined);
+  if (scenario !== "missing-observation") expect(compileRemovalCorrectionContent).toHaveBeenCalledWith(ctx, "removal", observation, undefined);
   expect(getLatestTemplateObservation).not.toHaveBeenCalled();
 });
 

@@ -25,8 +25,6 @@ import { renderDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/d
 import {
   DURABILITY_EVIDENCE_LEDGER_KIND,
   type DurabilityEvidenceLedgerDocMetadata,
-  type DurabilityLedgerModel,
-  type ThousandYearDurabilityLedgerModel,
 } from "@/lib/certification/evidence-ledger/durability-types";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import { logger } from "@/lib/log";
@@ -99,10 +97,11 @@ export async function ensureDurabilityEvidenceLedgerSourceFromContext(
   }
 
   const facility = await getFacilityById(orgCtx, ctx.facilityId);
-  const model = durabilityLedgerModel(ctx, facility?.name ?? null, new Date().toISOString());
-  const render = () => durabilityOption === "1000_year"
-    ? renderThousandYearDurabilityLedgerPdf(model as ThousandYearDurabilityLedgerModel)
-    : renderDurabilityLedgerPdf(model as DurabilityLedgerModel);
+  const ledger = durabilityLedgerModel(ctx, facility?.name ?? null, new Date().toISOString());
+  const { model } = ledger;
+  const render = () => ledger.option === "1000_year"
+    ? renderThousandYearDurabilityLedgerPdf(ledger.model)
+    : renderDurabilityLedgerPdf(ledger.model);
 
   const contentHash = stableLedgerContentHash({
     ...model,

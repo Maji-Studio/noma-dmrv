@@ -11,7 +11,7 @@ vi.mock("./removal-template-observations", () => ({ getLatestTemplateObservation
 vi.mock("./emission-entry-carry", () => ({ loadFacilityEmissionEntryCarry: mocks.carry }));
 vi.mock("./credit-batch-accounting", () => ({ loadCreditBatchRollups: mocks.rollups }));
 vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: mocks.facts }));
-vi.mock("./emission-entry-contenders", () => ({ listEmissionEntryDraftContenders: mocks.contenders, loadEmissionEntryReservations: vi.fn(async () => []) }));
+vi.mock("./emission-entry-contenders", () => ({ listEmissionEntryAvailableApplications: vi.fn(async () => []), listEmissionEntryDraftContenders: mocks.contenders, loadEmissionEntryReservations: vi.fn(async () => []) }));
 vi.mock("./certification-submissions", () => ({ getLatestSubmission: mocks.latest }));
 const ctx = makeTestOrgContext();
 const observation = {

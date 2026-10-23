@@ -37,10 +37,10 @@ it.each([null, { remotePeriodEndOn: "2026-06-30", remotePeriodEndIsSynthetic: tr
     vi.mocked(compareRemovalCurrentContent).mockResolvedValue({ kind: "unavailable", reason: "compile_refused", unavailableMessages: [], components: [],
       state: deriveRemovalSemanticCorrection({ windowOpen: true, previous: {}, current: null,
         previousEntries: [], currentEntries: [], componentIds: [], batchIds: ["batch"] }) });
-    const result = await loadRemovalEntryCorrection(makeTestOrgContext(), "removal", [{
+    const result = await loadRemovalEntryCorrection(makeTestOrgContext(), "removal", { contenders: [{
       removalId: "removal", contenderKind: "correction", createdAt: "2026-04-01", creditBatchIds: ["batch"],
       window: { start: "2026-04-01", end: "2026-06-30" }, returnedStatement: { id: "statement", status: "FAILED_VERIFICATION" },
-    }], ["batch"]);
+    }], batchIds: ["batch"] });
     expect(compareRemovalCurrentContent).toHaveBeenCalledExactlyOnceWith(makeTestOrgContext(), "removal", expect.objectContaining({
       submitted: { payloadSnapshot: { semantic: { entryContributions: [] } } },
       batches: [{ id: "batch", code: "CB-001", removalTemplateId: "template" }],
@@ -60,9 +60,9 @@ it("refreshes A-only page contenders before comparing returned R's full A+B memb
   vi.mocked(getCreditBatchesByRemovalId).mockResolvedValue([{ id: "A", code: "CB-A" }, { id: "B", code: "CB-B" }] as never);
   vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([returned, earlier]);
   vi.mocked(compareRemovalCurrentContent).mockResolvedValue({ kind: "unchanged", components: [], state: { windowOpen: true, correctionNeeded: false } } as never);
-  await loadRemovalEntryCorrection(makeTestOrgContext(), "R", [returned], ["A"]);
+  await loadRemovalEntryCorrection(makeTestOrgContext(), "R", { contenders: [returned], batchIds: ["A"] });
   expect(listEmissionEntryDraftContenders).toHaveBeenCalledExactlyOnceWith(makeTestOrgContext(), ["A", "B"]);
   expect(compareRemovalCurrentContent).toHaveBeenCalledWith(makeTestOrgContext(), "R", expect.objectContaining({
-    contenders: [returned, earlier], contendersBatchIds: ["A", "B"],
+    coveredContenders: { contenders: [returned, earlier], batchIds: ["A", "B"] },
   }));
 });

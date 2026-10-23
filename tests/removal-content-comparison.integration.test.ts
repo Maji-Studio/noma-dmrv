@@ -1,8 +1,6 @@
 import { normalizeCarriedEntriesForHash } from "@/fn/certification/removal-entry-hash";
 import * as contextBuilder from "@/fn/certification/removal-context-build";
-import { currentEvidenceLedgerHashes } from "@/fn/certification/generated-evidence-comparison";
 import { generatedEvidenceFacts } from "@/fn/certification/generated-evidence-facts";
-import { getFacilityById } from "@/data-access/facilities";
 import { loadRemovalCarriedEntries } from "@/data-access/removal-carried-entries";
 /**
  * Real-DB regression for the one Removal comparison. The "sent" baseline is the
@@ -139,14 +137,6 @@ beforeEach(async () => {
   await compileRemovalCorrectionContent(org, f.removalId, observation);
   const baselineContext = await buildContext.mock.results.at(-1)!.value;
   buildContext.mockRestore();
-  const facility = await getFacilityById(org, f.facilityId);
-  for (const { kind, hash } of currentEvidenceLedgerHashes(baselineContext, facility.name)) {
-    if (!hash) continue;
-    documentIds.push((await insertDocument(org, { entityType: "credit_batch", entityId: f.batchId,
-      documentType: "pdf", fileName: `${kind}.pdf`, fileUrl: "https://example.test/ledger.pdf",
-      metadata: { kind, removalId: f.removalId, contentHash: hash },
-    })).id);
-  }
   const baseline = await compileRemovalCorrectionContent(org, f.removalId, observation);
   expect(baseline).not.toHaveProperty("changedGeneratedEvidence");
   expect(baseline).toMatchObject({ entryContributions: [expect.objectContaining({ componentId: "line" })] });

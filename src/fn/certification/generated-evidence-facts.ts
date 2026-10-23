@@ -1,57 +1,43 @@
+import type { TransportLeg } from "@/db/schema";
 import { z } from "zod";
 import type { RemovalSubmissionContext } from "./certify-context-types";
 import { TRANSPORT_EVIDENCE_LEDGER_KIND } from "@/lib/certification/evidence-ledger/types";
 import { DURABILITY_EVIDENCE_LEDGER_KIND } from "@/lib/certification/evidence-ledger/durability-types";
+import { transportLedgerModel, durabilityLedgerModel, stableLedgerContentHash } from "./evidence-ledger-models";
 
-const measured = z.number().nullable();
 export const generatedEvidenceFactsSchema = z.object({
-  transport: z.array(z.object({
-    category: z.string(), id: z.string(), entityType: z.string(), entityId: z.string(),
-    distanceKm: z.number(), loadMassKg: measured, method: z.string(), calculationMethod: z.string(),
-    roundTrip: z.boolean(),
-  })),
-  durability: z.object({
-    memberBatchIds: z.array(z.string()),
-    declaredSoilTemperatureC: measured,
-    batches: z.array(z.object({
-      creditBatchId: z.string(), durabilityOption: z.string(),
-      samples: z.array(z.object({ id: z.string(), hToCOrgRatio: measured, oToCOrgRatio: measured,
-        totalCarbonPercent: measured, organicCarbonPercent: measured, inorganicCarbonPercent: measured,
-        sReflectanceFraction: measured, randomReflectanceR0Percent: measured })),
-      runs: z.array(z.object({ id: z.string(), biocharDryMassKg: measured, attribution: z.number() })),
-    })),
-  }),
+  transport: z.string().nullable(),
+  durability: z.string().nullable(),
 });
 export type GeneratedEvidenceFacts = z.infer<typeof generatedEvidenceFactsSchema>;
 
-/** Source values only. No rendered labels, blueprint versions or formula outputs. */
+/** Use the ledger's exact row order and tier-specific reads, with display labels neutralized.
+ * Hashing the model also preserves its numeric normalization: an unused source edit
+ * cannot demand a resubmission that would reuse the same ledger.
+ */
 export function generatedEvidenceFacts(ctx: RemovalSubmissionContext): GeneratedEvidenceFacts {
+  if (!ctx.mapping || !ctx.memberBatches.length) return { transport: null, durability: null };
+  const neutral: RemovalSubmissionContext = {
+    ...ctx,
+    mapping: { ...ctx.mapping, externalProjectId: "" },
+    memberBatches: ctx.memberBatches.map(batch => ({ ...batch, code: "" })),
+    transportLegs: Object.fromEntries(Object.entries(ctx.transportLegs).map(([category, legs]) => [category,
+      legs.map((leg: TransportLeg) => ({ ...leg, originName: "", destinationName: "", originGpsLatitude: null,
+        originGpsLongitude: null, destinationGpsLatitude: null, destinationGpsLongitude: null,
+        vehicleType: null, modelYear: null, isDerived: false, distanceSource: "manual" as const })),
+    ])) as RemovalSubmissionContext["transportLegs"],
+    batchesWithSamples: ctx.batchesWithSamples.map(batch => ({ ...batch, creditBatchCode: "",
+      samples: batch.samples.map(sample => ({ ...sample, sampleCode: "", labName: null })),
+    })),
+  };
+  const transport = transportLedgerModel(neutral, null, "");
+  const tier = neutral.batchesWithSamples[0]?.durabilityOption;
+  const hasDurability = tier && neutral.batchesWithSamples.every(batch => batch.durabilityOption === tier)
+    && (tier !== "200_year" || !!neutral.facilityReferenceSoilTemperature);
+  const durability = hasDurability ? durabilityLedgerModel(neutral, null, "").model : null;
   return {
-    transport: Object.entries(ctx.transportLegs).sort(([a], [b]) => a.localeCompare(b)).flatMap(([category, legs]) =>
-      [...legs].sort((a, b) => a.id.localeCompare(b.id)).map(leg => ({
-        category, id: leg.id, entityType: leg.entityType, entityId: leg.entityId,
-        distanceKm: leg.distanceKm, loadMassKg: leg.loadMassKg ?? null,
-        method: leg.transportMethodType, calculationMethod: leg.calculationMethodType,
-        // All transport legs currently count a round trip; there is no per-row flag.
-        roundTrip: true,
-      }))),
-    durability: {
-      memberBatchIds: ctx.memberBatches.map(batch => batch.id).sort(),
-      declaredSoilTemperatureC: ctx.facilityReferenceSoilTemperature?.declaredSoilTemperatureC ?? null,
-      batches: [...ctx.batchesWithSamples].sort((a, b) => a.creditBatchId.localeCompare(b.creditBatchId)).map(batch => ({
-        creditBatchId: batch.creditBatchId, durabilityOption: batch.durabilityOption,
-        samples: [...batch.samples].sort((a, b) => a.id.localeCompare(b.id)).map(sample => ({
-          id: sample.id, hToCOrgRatio: sample.hToCOrgRatio, oToCOrgRatio: sample.oToCOrgRatio,
-          totalCarbonPercent: sample.totalCarbonPercent, organicCarbonPercent: sample.organicCarbonPercent,
-          inorganicCarbonPercent: sample.inorganicCarbonPercent, sReflectanceFraction: sample.sReflectanceFraction,
-          randomReflectanceR0Percent: sample.randomReflectanceR0Percent,
-        })),
-        runs: [...batch.runs].sort((a, b) => a.id.localeCompare(b.id)).map(run => ({
-          id: run.id, biocharDryMassKg: run.biocharDryMassKg,
-          attribution: ctx.attributionByRunId.get(run.id) ?? 1,
-        })),
-      })),
-    },
+    transport: transport.totalLegs ? stableLedgerContentHash(transport) : null,
+    durability: durability?.batches.length ? stableLedgerContentHash(durability) : null,
   };
 }
 

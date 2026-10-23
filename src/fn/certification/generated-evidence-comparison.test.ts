@@ -69,7 +69,7 @@ it("detects removal, addition, method and category changes", () => {
     expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline).status).toBe("changed");
   }
 });
-it("compares measured chemistry, sample identity and attribution, not durability formulas", () => {
+it("compares the applicable measured chemistry and attributed product mass", () => {
   const ctx = context();
   ctx.attributionByRunId = new Map([["run", 0.5]]);
   ctx.batchesWithSamples = [{ creditBatchId: "batch", durabilityOption: "1000_year", creditBatchCode: "CB-1",
@@ -103,4 +103,39 @@ it("makes member-code ledger order deterministic while preserving already sorted
   const after = transportLedgerModel(ctx, "Facility", "later");
   expect(after.memberBatchCodes).toBe("CB-1 · CB-2");
   expect(stableLedgerContentHash(after)).toBe(stableLedgerContentHash(before));
+});
+
+it("ignores replacement transport identities and calculation methods in the same ledger row", () => {
+  const ctx = context();
+  ctx.transportLegs.feedstock[0].createdAt = new Date("2026-01-01");
+  ctx.transportLegs.feedstock[1].createdAt = new Date("2026-01-02");
+  const baseline = generatedEvidenceFacts(ctx);
+  ctx.transportLegs.feedstock[0] = { ...ctx.transportLegs.feedstock[0], id: "replacement", entityId: "new-owner",
+    calculationMethodType: "distance_based" };
+  expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline).status).toBe("unchanged");
+});
+
+it.each(["200_year", "1000_year"] as const)("ignores R0 and unused chemistry for %s", tier => {
+  const ctx = context();
+  ctx.attributionByRunId = new Map();
+  ctx.facilityReferenceSoilTemperature = { declaredSoilTemperatureC: 20, effectiveSoilTemperatureC: 20,
+    temperatureFloored: false, source: "facility_reference", method: "declared", warnings: [] };
+  ctx.batchesWithSamples = [{ creditBatchId: "batch", creditBatchCode: "CB-1", durabilityOption: tier,
+    samples: [{ id: "sample", hToCOrgRatio: 0.4, oToCOrgRatio: 0.1, totalCarbonPercent: 80,
+      organicCarbonPercent: 78, inorganicCarbonPercent: 2, sReflectanceFraction: 0.5, randomReflectanceR0Percent: 3 }],
+    runs: [{ id: "run", biocharDryMassKg: 100 }],
+  }] as never;
+  const baseline = generatedEvidenceFacts(ctx);
+  expect(baseline.durability).not.toBeNull();
+  const sample = ctx.batchesWithSamples[0].samples[0];
+  sample.randomReflectanceR0Percent = 4;
+  expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline).status).toBe("unchanged");
+  if (tier === "200_year") sample.sReflectanceFraction = 0.9;
+  else {
+    sample.hToCOrgRatio = 0.6;
+    sample.oToCOrgRatio = 0.2;
+    sample.organicCarbonPercent = 70;
+    ctx.facilityReferenceSoilTemperature!.declaredSoilTemperatureC = 25;
+  }
+  expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline).status).toBe("unchanged");
 });

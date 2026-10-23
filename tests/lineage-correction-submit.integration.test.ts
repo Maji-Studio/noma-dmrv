@@ -1,5 +1,10 @@
-import { currentEvidenceLedgerHashes } from "@/fn/certification/generated-evidence-comparison";
-import { insertDocument } from "@/data-access/documents";
+import type { TransportLeg } from "@/db/schema";
+import { generatedEvidenceFacts } from "@/fn/certification/generated-evidence-facts";
+import { compareRemovalCurrentContent } from "@/fn/certification/removal-content-comparison-core";
+import { ensureTransportEvidenceLedgerSourceFromContext } from "@/fn/certification/evidence-ledger";
+import * as evidenceStorage from "@/fn/certification/evidence-ledger-core";
+import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
+import { logger } from "@/lib/log";
 import * as comparisonContext from "@/fn/certification/removal-context-build";
 vi.mock("@/fn/certification/removal-context-build");
 import { makeContext, makeTemplate, fakeExternalIds, makeInventorySourceDocument } from "./fixtures/submit-removal-orchestrator";
@@ -103,7 +108,9 @@ async function batchRunIds(batchId: string) {
     .where(and(eq(creditBatchProductionRuns.organizationId, org.organizationId), eq(creditBatchProductionRuns.creditBatchId, batchId)))).map(row => row.id);
 }
 
-it("detects a run-only correction, fences the statement, supersedes and relocks on resubmit", async () => {
+it.each(["run", "distance"] as const)("detects a %s-only correction, fences the statement, supersedes and relocks on resubmit", async correctionKind => {
+  let distanceKm = 5;
+  let generatedDocumentId = "";
   // Restore transaction lock exports hidden by the general orchestrator harness.
   Object.assign(await import("@/data-access/facility-durability-lock"),
     await vi.importActual("@/data-access/facility-durability-lock"));
@@ -180,6 +187,10 @@ it("detects a run-only correction, fences the statement, supersedes and relocks 
     result.blueprintsForTemplate.push({ key: "grid_electricity_use", display_name: "Electricity", inputs: [{ input_key: "electricity_use", quantity_kind: "energy", compatible_unit: "kWh", data_shape: "SCALAR" }] } as never);
     const [run] = await db.select().from(productionRuns).where(and(eq(productionRuns.organizationId, org.organizationId), eq(productionRuns.id, f.productionRunId)));
     result.runs[0].electricityKwh = run.electricityKwh;
+    if (correctionKind === "distance") result.transportLegs.feedstock = [{ id: "leg", entityId: "feedstock", entityType: "feedstock",
+      distanceKm, loadMassKg: 1000, transportMethodType: "road", calculationMethodType: "distance_based",
+      originName: "Origin", destinationName: "Facility", distanceSource: "manual", createdAt: new Date("2026-01-01"),
+    } as TransportLeg];
     result.memberBatchClaims = [{ creditBatchId: f.batchId, code: "CB-CORRECTION", durabilityOption: "200_year", claimedByRemovalId: null,
       productionRunIds: [result.runs[0].id], applicationIds: [], applicationSlices: [] }];
     result.correctionWindowOpen = true;
@@ -193,36 +204,52 @@ it("detects a run-only correction, fences the statement, supersedes and relocks 
   vi.mocked(ledger.getCertifierProjectByFacility).mockResolvedValue(makeContext().mapping);
   const facilitiesDA = await import("@/data-access/facilities");
   vi.mocked(facilitiesDA.getFacilityById).mockResolvedValue({ timezone: "UTC" } as never);
-  vi.mocked(sources.collectCandidateSourceDocumentsForRemoval).mockImplementation(async () => [inventorySource]);
+  vi.mocked(sources.collectCandidateSourceDocumentsForRemoval).mockImplementation(async () =>
+    [{ ...inventorySource, documentId: generatedDocumentId || inventorySource.documentId }]);
+  if (correctionKind === "distance") {
+    // Real model generation and hashing; only artifact storage/Source mirroring is faked.
+    // Its content-addressed document is attached to the harness's inventory input.
+    vi.spyOn(evidenceStorage, "ensureLedgerSource").mockImplementation(async (_ctx, spec) => {
+      generatedDocumentId = `ledger-${spec.contentHash}`;
+      return { status: "created", documentId: generatedDocumentId, externalSourceId: `src-${generatedDocumentId}`, contentHash: spec.contentHash };
+    });
+    vi.mocked(evidenceLedgers.ensureEvidenceLedgersFromContext).mockImplementation(async (ctx, removalId, submissionContext) => {
+      await ensureTransportEvidenceLedgerSourceFromContext(ctx, removalId, submissionContext);
+    });
+  }
   // Build uses the contributions supplied by its context, including the claim-scoped freshness read.
   vi.mocked(sources.resolveSourceBindingCandidates).mockImplementation(async (_ctx, args) => args.candidates.map(candidate => ({ ...candidate, sourceId: `src-${candidate.documentId}` })));
   vi.mocked(isometric.createDatapoint).mockImplementation(vi.fn(fakeExternalIds("dp")) as never);
   vi.mocked(isometric.createGhgEntry).mockImplementation(vi.fn(fakeExternalIds("rmv")) as never);
   const baselineContext = await loadContext();
-  // The harness mocks PDF/storage generation. Persist its content fingerprints
-  // so the real correction read sees the evidence that this sent baseline used.
-  for (const { kind, hash } of currentEvidenceLedgerHashes(baselineContext, null)) {
-    if (!hash) continue;
-    documentIds.push((await insertDocument(org, { entityType: "credit_batch", entityId: f.batchId,
-      documentType: "pdf", fileName: `${kind}.pdf`, fileUrl: "https://example.test/ledger.pdf",
-      metadata: { kind, removalId: f.removalId, contentHash: hash },
-    })).id);
-  }
+  if (correctionKind === "distance") await evidenceLedgers.ensureEvidenceLedgersFromContext(org, f.removalId, baselineContext, logger);
   const baseline = await buildRemovalSubmissionBuild({ orgCtx: org, removalId: f.removalId,
     ctx: baselineContext, prepared: requirePreparedRemovalSubmission(baselineContext) });
   // Snapshots are frozen once a row leaves draft, so insert the sent attempt with its snapshot.
   const [prior] = await db.insert(certificationSubmissions).values({ organizationId: org.organizationId, provider: "isometric", localEntityType: "removal",
-    localEntityId: f.removalId, submissionType: "removal", status: "submitted", version: 1, submittedAt: new Date("2026-01-01"), externalId: originalId, payloadHash: "original",
+    localEntityId: f.removalId, submissionType: "removal", status: "submitted", version: 1, submittedAt: new Date("2026-01-01"), externalId: originalId, payloadHash: isometric.payloadHash(baseline.semanticPayload),
     payloadSnapshot: { generatedEvidenceFacts: baseline.generatedEvidenceFacts, semantic: baseline.semanticPayload, templateObservationId: observation.id, frozenEntrySet: [] } }).returning();
   expect(await loadRemovalEntryCorrection(org, f.removalId)).toMatchObject({ windowOpen: true, correctionNeeded: false });
 
-  // Exercise the real mutation guard and update path, not a direct fixture SQL edit.
-  const [beforeRun] = await db.select().from(productionRuns).where(and(eq(productionRuns.organizationId, org.organizationId), eq(productionRuns.id, f.productionRunId)));
-  const updated = await updateProductionRun(org, f.productionRunId, { expectedVersion: beforeRun.version, electricityKwh: 11 });
-  expect(updated.electricityKwh).toBe(11);
-  const correction = await loadRemovalEntryCorrection(org, f.removalId);
-  expect(correction).toMatchObject({ correctionNeeded: true, changedComponentIds: ["line"],
-    message: "Resubmit needed: 1 component changed since this Removal was sent." });
+  if (correctionKind === "distance") {
+    distanceKm = 10;
+    const changed = await compareRemovalCurrentContent(org, f.removalId);
+    expect(changed).toMatchObject({ kind: "changed", state: { correctionNeeded: true } });
+    expect(generatedEvidenceFacts(await loadContext())).not.toEqual(baseline.generatedEvidenceFacts);
+    // Before regeneration, only the comparison facts differ. The claim would reuse
+    // the old submission if generation did not replace the Source.
+    const beforeGeneration = await buildRemovalSubmissionBuild({ orgCtx: org, removalId: f.removalId,
+      ctx: await loadContext(), prepared: requirePreparedRemovalSubmission(await loadContext()) });
+    expect(isometric.payloadHash(beforeGeneration.semanticPayload)).toBe(isometric.payloadHash(baseline.semanticPayload));
+  } else {
+    // Exercise the real mutation guard and update path, not a direct fixture SQL edit.
+    const [beforeRun] = await db.select().from(productionRuns).where(and(eq(productionRuns.organizationId, org.organizationId), eq(productionRuns.id, f.productionRunId)));
+    const updated = await updateProductionRun(org, f.productionRunId, { expectedVersion: beforeRun.version, electricityKwh: 11 });
+    expect(updated.electricityKwh).toBe(11);
+    const correction = await loadRemovalEntryCorrection(org, f.removalId);
+    expect(correction).toMatchObject({ correctionNeeded: true, changedComponentIds: ["line"],
+      message: "Resubmit needed: 1 component changed since this Removal was sent." });
+  }
   await expect(withGhgVerifierSubmissionLock(org, statement.id,
     () => assertStatementRemovalsCurrent(org, statement.id))).rejects.toThrow("Resubmit Removal");
 
@@ -245,8 +272,11 @@ it("detects a run-only correction, fences the statement, supersedes and relocks 
   expect(isometric.createGhgEntry).toHaveBeenCalledOnce();
   const sent = await realClaims.getLatestSubmission(org, { provider: "isometric", localEntityType: "removal", submissionType: "removal", localEntityId: f.removalId });
   expect(sent?.payloadSnapshot).toMatchObject({ semantic: { inputs: expect.arrayContaining([
-    expect.objectContaining({ rtcId: "line", value: 11 }),
+    expect.objectContaining({ rtcId: "line", value: correctionKind === "run" ? 11 : 10 }),
   ]) } });
+  expect(sent?.payloadHash).not.toBe(prior.payloadHash);
+  expect(sent?.payloadSnapshot).toMatchObject({ generatedEvidenceFacts: generatedEvidenceFacts(await loadContext()) });
+  expect(await compareRemovalCurrentContent(org, f.removalId)).toMatchObject({ kind: "unchanged", state: { correctionNeeded: false } });
   expect((await db.transaction(tx => getRecordLock(org, tx, { entityType: "productionRun", entityId: f.productionRunId }))).level).toBe("sent");
   expect(await loadRemovalEntryCorrection(org, f.removalId)).toMatchObject({ correctionNeeded: false, windowOpen: false });
   // Contrast: once the Removal is Sent again, a run completed in the window stays without a batch.

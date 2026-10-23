@@ -601,7 +601,7 @@ describe("buildRemovalSubmissionBuild", () => {
       },
     ] as const;
 
-    const evidenceFacts = { transport: [], durability: { memberBatchIds: ["batch-1"], declaredSoilTemperatureC: null, batches: [] } };
+    const evidenceFacts = { transport: "transport-model-fingerprint", durability: null };
     const semanticPayload = { removalId: "removal-1" };
     const snapshot = materializeRemovalSubmissionSnapshot({
       compiled: {

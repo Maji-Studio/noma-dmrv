@@ -296,7 +296,7 @@ it.each([false, true])("reuses one correction read for all member batches and th
   });
   vi.mocked(loadRemovalEntryCorrection).mockResolvedValue({ ...state, removalId: "returned", removalCode: "RM-001", correction });
   const { batchFacts: loaded } = await loadBatchEmissionContext(ctx, "facility", batches, facilityFacts, { loadCorrection: loadRemovalEntryCorrection });
-  expect(loadRemovalEntryCorrection).toHaveBeenCalledExactlyOnceWith(ctx, "returned", [contender], batches.map(batch => batch.id));
+  expect(loadRemovalEntryCorrection).toHaveBeenCalledExactlyOnceWith(ctx, "returned", { contenders: [contender], batchIds: batches.map(batch => batch.id), claimedAttempt: undefined });
   expect(loaded.one.corrections?.[0].correction).toEqual(correction);
   expect(loaded.two.corrections?.[0].correction).toEqual({ ...correction, changed: [] });
   expect(loaded.unrelated.corrections).toBeUndefined();
@@ -360,7 +360,7 @@ it("does not recurse into the comparison when correction projections are suppres
 it("reuses supplied correction contenders without refreshing their registry window", async () => {
   const contenders = [{ contenderKind: "correction" as const, removalId: "returned", createdAt: "2026-01-01",
     creditBatchIds: ["one"], window: { start: "2026-01-01", end: "2026-02-01" } }];
-  const result = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts, { contenders, contendersBatchIds: ["one"] });
+  const result = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts, { coveredContenders: { contenders, batchIds: ["one"] } });
   expect(listEmissionEntryDraftContenders).not.toHaveBeenCalled();
   expect(result.batchFacts.one.contenders).toBe(contenders);
 });
@@ -372,7 +372,7 @@ it("refreshes an A-only contender set for a Removal covering A+B, retaining B's 
   vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([returned, earlier]);
   const batches = ["one", "two"].map(id => ({ id, removalTemplateId: "template" }));
   const advisory = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facilityFacts,
-    { contenders: [returned], contendersBatchIds: ["one"] });
+    { coveredContenders: { contenders: [returned], batchIds: ["one"] } });
   const guard = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facilityFacts);
   expect(listEmissionEntryDraftContenders).toHaveBeenCalledTimes(2);
   expect(advisory.batchFacts.two.contenders).toEqual(guard.batchFacts.two.contenders);
