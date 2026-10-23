@@ -1,3 +1,5 @@
+import { withIntakeAllocationIssues } from "@/lib/feedstock-allocation-errors";
+import { reallocateRunsForBins } from "./feedstock-run-allocations";
 import { readRecordDependents } from "./record-lock-dependents";
 import { assertRecordLockFields, withLockedFieldIssues } from "@/lib/record-lock-fields";
 import { recordLocks } from "@/lib/record-lock";
@@ -595,6 +597,8 @@ export async function createFeedstockInTransaction(
     },
   );
 
+  await withIntakeAllocationIssues(() => reallocateRunsForBins(ctx, tx, binIds, { earliestDeliveryDate: data.deliveryDate }), {}, data);
+
   // Generate warning if allocated wet mass > total delivery wet mass
   let warning: string | null = null;
   if (allocationsExceedDelivery) {
@@ -688,18 +692,20 @@ export async function updateFeedstockInTransaction(
 
   // Compare operation names, including overrides stripped from feedstockData.
   // Zero distance and an empty note both mean clearing the saved override.
-  await withLockedFieldIssues(() => withFeedstockErrors(() => assertCanMutateCertifiedLineage(
-    ctx, tx, { entityType: "feedstock", entityId: feedstockId }, "update",
-  ), "certification_locked"), {
+  const previousFields = {
     ...locked,
     transportDistanceKm: locked.distanceKmOverride,
     transportDistanceSource: locked.distanceKmOverride == null ? null : locked.distanceSource,
-  }, {
+  };
+  const changedFields = {
     ...data,
     transportDistanceKm: distanceColumns.distanceKmOverride,
     transportDistanceSource: distanceColumns.distanceSource,
     distanceNote: distanceColumns.distanceNote,
-  });
+  };
+  await withLockedFieldIssues(() => withFeedstockErrors(() => assertCanMutateCertifiedLineage(
+    ctx, tx, { entityType: "feedstock", entityId: feedstockId }, "update",
+  ), "certification_locked"), previousFields, changedFields);
 
   assertRecordLockFields(recordLocks.feedstock({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "feedstock", entityId: feedstockId }) }), locked, feedstockData);
   if (transportDistanceKm === undefined && transportDistanceSource != null
@@ -733,7 +739,10 @@ export async function updateFeedstockInTransaction(
     (feedstockData.storageLocationId !== undefined &&
       feedstockData.storageLocationId !== locked.storageLocationId);
 
-  if (stockDerivationChanged || storageReferenceNeedsValidation) {
+  const allocationChanged = stockDerivationChanged ||
+    (feedstockData.deliveryDate !== undefined && feedstockData.deliveryDate.getTime() !== locked.deliveryDate.getTime());
+
+  if (allocationChanged || storageReferenceNeedsValidation) {
     await lockBinStocks(ctx, tx, [
       locked.storageLocationId,
       effectiveStorageLocationId,
@@ -775,6 +784,13 @@ export async function updateFeedstockInTransaction(
       (binId) => binId === locked.storageLocationId && effectiveStorageLocationId === locked.storageLocationId
         ? ["massWetKg"] : ["storageLocationId"],
     );
+  }
+
+  if (allocationChanged) {
+    const earliestDeliveryDate = new Date(Math.min(locked.deliveryDate.getTime(), saved.deliveryDate.getTime()));
+    await withIntakeAllocationIssues(() => reallocateRunsForBins(
+      ctx, tx, [locked.storageLocationId, effectiveStorageLocationId], { earliestDeliveryDate },
+    ), previousFields, changedFields);
   }
 
   await syncFeedstockTransportLeg(ctx, tx, feedstockId, {
