@@ -1,4 +1,3 @@
-import { loadRemovalEntryCorrection } from "./removal-correction-core";
 import type { OrgContext } from "@/lib/auth/server";
 import { getLatestSubmission } from "@/data-access/certification-submissions";
 import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE, REMOVAL_SUBMISSION_TYPE } from "@/lib/isometric/utils/constants";
@@ -16,6 +15,8 @@ export async function loadEntrySourceContributions(ctx: OrgContext, removalId: s
     [...new Set(scope.memberBatches.flatMap((batch) => batch.removalTemplateId ? [batch.removalTemplateId] : []))]);
   const facility = { templatesById: Object.fromEntries(observations.map((observation) =>
     [observation.externalTemplateId, { observation }])) };
+  // Loaded lazily: removal-correction-core reaches the submission build, which imports the Source candidates that import this module.
+  const { loadRemovalEntryCorrection } = await import("./removal-correction-core");
   const facts = await loadBatchEmissionContext(ctx, scope.facilityId, scope.memberBatches, facility, { ownedRemovalId: scope.removalId ?? undefined, loadCorrection: loadRemovalEntryCorrection });
   const latest = await getLatestSubmission(ctx, { provider: ISOMETRIC_PROVIDER,
     submissionType: REMOVAL_SUBMISSION_TYPE, localEntityType: REMOVAL_ENTITY_TYPE, localEntityId: removalId });

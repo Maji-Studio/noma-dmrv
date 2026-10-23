@@ -1,6 +1,6 @@
-import { loadRemovalEntryCorrection } from "@/fn/certification/removal-correction-core";
 /** DB-backed claim/freshness/reservation regression. Registry I/O uses the orchestrator harness. */
 import { makeContext, makeTemplate, fakeExternalIds, makeInventorySourceDocument } from "./fixtures/submit-removal-orchestrator";
+import { loadRemovalEntryCorrection } from "@/fn/certification/removal-correction-core";
 import { afterEach, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
