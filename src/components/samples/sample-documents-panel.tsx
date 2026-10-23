@@ -124,7 +124,6 @@ export function SampleDocumentsPanel({
           <EmptyState
             icon={<FileIcon size={32} weight="bold" />}
             title="No documents"
-            description="No documents are attached."
             padding="sm"
           />
         ) : null

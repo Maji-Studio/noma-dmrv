@@ -3,13 +3,14 @@ import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import type { SampleWithRelations } from "@/data-access/samples";
 
 vi.mock("@/components/forms/use-documents-cert-status", () => ({ useDocumentsCertStatus: () => "neutral" }));
 vi.mock("@/hooks/use-record-certification-lock", () => ({ useIsRecordCertificationLocked: () => false }));
 vi.mock("./sample-documents-panel", () => ({ SampleDocumentsPanel: () => null }));
 vi.mock("@/components/transport-legs", () => ({ TransportLegsEditor: () => null }));
 vi.mock("@/components/forms", () => ({
-  FormSection: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  FormSection: ({ children, certifyRequired }: { children: ReactNode; certifyRequired?: boolean }) => <div data-testid="evidence-section" data-certify-required={certifyRequired}>{children}</div>,
   FormField: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   FormFileUpload: ({ id, onDeferredAdd }: { id: string; onDeferredAdd: (files: File[]) => void }) => (
     <input id={id} type="file" aria-label="Attach evidence" onChange={(event) => onDeferredAdd(Array.from(event.target.files ?? []))} />
@@ -18,6 +19,12 @@ vi.mock("@/components/forms", () => ({
 import { SampleEvidenceSection } from "./sample-trailing-sections";
 
 afterEach(cleanup);
+it.each(["sampled", "unsampled", undefined] as const)("shows a lab-report chip only for a saved sampled batch (%s)", (sampling) => {
+  const sample = sampling ? { id: "sample-1", sampling, durabilityOption: "200_year" } as SampleWithRelations : undefined;
+  render(<SampleEvidenceSection sample={sample} isEditMode={!!sample} />);
+  expect(screen.getByTestId("evidence-section").getAttribute("data-certify-required")).toBe(String(sampling === "sampled"));
+});
+
 it("classifies each deferred file using the selection when it was attached", () => {
   const add = vi.fn();
   const deferred = { attachments: [], add, remove: vi.fn() } as unknown as UseDeferredAttachmentsResult;

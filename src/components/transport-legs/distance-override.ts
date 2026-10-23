@@ -65,14 +65,6 @@ export function hasSavedOverride(saved: SavedDistanceOverride | null | undefined
   return isOverrideDistance(saved?.distanceKm);
 }
 
-/** Whether a saved delivery or feedstock distance is on file: an override, else the recorded pair. */
-export function hasSavedDistance(saved: {
-  distanceKmOverride: number | null | undefined;
-  recordedDistanceKm: number | null | undefined;
-}): boolean {
-  return isOverrideDistance(saved.distanceKmOverride) || saved.recordedDistanceKm != null;
-}
-
 /**
  * The request fields for the draft:
  *

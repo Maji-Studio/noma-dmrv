@@ -450,6 +450,36 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
+  it.each([true, false, undefined])("keeps a sampled Sample non-blocking with hasLabReport=%s", (hasLabReport) => {
+    const readiness = deriveEntityCertifyReadiness("sample", {
+      sampling: "sampled",
+      durabilityOption: "200_year",
+      moistureContentPercent: 10,
+      organicCarbonPercent: 80,
+      hToCOrgRatio: 0.4,
+      oToCOrgRatio: 0.15,
+      hasLabReport,
+    });
+
+    expect(readiness.state).toBe("ready");
+    expect(readiness.gaps).toEqual([]);
+    if (hasLabReport === false) {
+      expect(readiness.warnings).toEqual([
+        expect.objectContaining({ key: "labReport", fields: ["hasLabReport"] }),
+      ]);
+    } else {
+      // Submission loads the batch-level fact only; an unloaded Sample fact
+      // must not add a second warning alongside the batch Check.
+      expect(readiness.warnings).toEqual([]);
+    }
+  });
+
+  it("omits the lab-report chip and warning on an unsampled batch", () => {
+    const sample = { sampling: "unsampled", durabilityOption: "200_year", hasLabReport: false };
+    expect(isCertifyEntityField("sample", "labReport", sample)).toBe(false);
+    expect(deriveEntityCertifyReadiness("sample", sample)).toEqual({ state: "ready", gaps: [], warnings: [] });
+  });
+
   it("blocks a delivered delivery without proof", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
       proofOfDeliveryCount: 0,

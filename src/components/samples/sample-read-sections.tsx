@@ -108,7 +108,7 @@ export function sampleSheetSections(
     },
     {
       title: "Evidence & documents",
-      certifyRequired: isCertifyEntityField("sample", "labReport"),
+      certifyRequired: isCertifyEntityField("sample", "labReport", certificationContext),
       certifyStatus: labReportStatus,
       fields: [],
       content: <SampleDocumentsPanel sampleId={sample.id} readOnly />,

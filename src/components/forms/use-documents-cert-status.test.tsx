@@ -54,4 +54,9 @@ describe("useDocumentsCertStatus", () => {
     mocks.data = [doc("reflectance_histogram"), doc("lab_report")];
     expect(status("s1", isLabReportDocument)).toBe("satisfied");
   });
+
+  it.each(["pending", "failed"])("does not count a %s lab report", (uploadStatus) => {
+    mocks.data = [doc("lab_report", uploadStatus)];
+    expect(status("s1", isLabReportDocument)).toBe("missing");
+  });
 });

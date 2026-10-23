@@ -3,7 +3,6 @@ import {
   distanceOverridePatch,
   distanceProvenance,
   distanceReadFields,
-  hasSavedDistance,
   hasSavedOverride,
   OVERRIDE_DISTANCE_POSITIVE_MESSAGE,
   OVERRIDE_DISTANCE_REQUIRED_MESSAGE,
@@ -11,6 +10,7 @@ import {
   overrideSourceOptions,
   type DistanceOverrideDraft,
 } from "./distance-override";
+import { resolveDeliveryTransportRoute } from "@/lib/calculations/transport-leg";
 
 const derived: DistanceOverrideDraft = { overriding: false, distanceKm: null, source: null, note: "" };
 const saved = { distanceKm: 60, source: "document" as const, note: "Detour" };
@@ -153,14 +153,20 @@ describe("distanceReadFields", () => {
   });
 });
 
-describe("hasSavedDistance (the delivery distance CERT chip's saved state)", () => {
-  it("counts an override or a recorded pair distance", () => {
-    expect(hasSavedDistance({ distanceKmOverride: 12, recordedDistanceKm: null })).toBe(true);
-    expect(hasSavedDistance({ distanceKmOverride: null, recordedDistanceKm: 240 })).toBe(true);
-  });
-
-  it("is missing with neither, and a legacy zero override does not count", () => {
-    expect(hasSavedDistance({ distanceKmOverride: null, recordedDistanceKm: null })).toBe(false);
-    expect(hasSavedDistance({ distanceKmOverride: 0, recordedDistanceKm: null })).toBe(false);
+describe("the delivery distance CERT chip's shared saved route", () => {
+  it.each([
+    { distanceKmOverride: 12, recordedDistanceKm: null, expectedKm: 12 },
+    { distanceKmOverride: null, recordedDistanceKm: 240, expectedKm: 240 },
+    { distanceKmOverride: null, recordedDistanceKm: null, expectedKm: null },
+    { distanceKmOverride: 0, recordedDistanceKm: null, expectedKm: null },
+    { distanceKmOverride: Infinity, recordedDistanceKm: null, expectedKm: null },
+    { distanceKmOverride: NaN, recordedDistanceKm: 240, expectedKm: 240 },
+  ])("resolves $distanceKmOverride over $recordedDistanceKm to $expectedKm", ({ distanceKmOverride, recordedDistanceKm, expectedKm }) => {
+    const route = resolveDeliveryTransportRoute({
+      distanceKmOverride,
+      distanceSource: null,
+      location: { distanceKm: recordedDistanceKm, distanceSource: null },
+    });
+    expect(route.distanceKm).toBe(expectedKm);
   });
 });

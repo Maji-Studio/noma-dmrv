@@ -74,7 +74,7 @@ describe("edit mode evidence sections", () => {
 
   it.each(["neutral", "missing", "satisfied"])("Sample Evidence & documents carries CERT with the %s status", (status) => {
     mocks.status = status;
-    render(<SampleEvidenceSection isEditMode sample={{ id: "s1" } as SampleWithRelations} />);
+    render(<SampleEvidenceSection isEditMode sample={{ id: "s1", sampling: "sampled" } as SampleWithRelations} />);
     const section = screen.getByLabelText("Evidence & documents");
     expect(section.dataset.cert).toBe("on");
     expect(section.dataset.status).toBe(status);
@@ -130,7 +130,7 @@ describe("Feedstock read view", () => {
 });
 
 describe("Sample read view", () => {
-  const sample = { id: "s1", creditBatchCode: "CB-1", samplingTime: new Date("2026-09-10T08:00:00Z"), facilityTimezone: "UTC" } as unknown as SampleWithRelations;
+  const sample = { id: "s1", sampling: "sampled", creditBatchCode: "CB-1", samplingTime: new Date("2026-09-10T08:00:00Z"), facilityTimezone: "UTC" } as unknown as SampleWithRelations;
 
   it.each(["neutral", "missing", "satisfied"] as const)("Evidence & documents carries CERT with the %s status", (status) => {
     const evidence = sampleSheetSections(sample, status).find((s) => s.title === "Evidence & documents")!;
