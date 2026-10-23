@@ -367,7 +367,7 @@ it("projects a late run Check through the shared page and list read without addi
       }], { ctx: lineageCtx, facilityId: lineage.facilityId });
       expect(summaries[lineage.batchId].checkCount).toBe(DOCUMENT_IDS.length + 1);
       expect(todos.get(lineage.batchId)?.check.find(item => item.id === `late-production-run:${lateRun.id}`))
-        .toMatchObject({ title: expect.stringContaining(lateRun.code),
+        .toMatchObject({ title: expect.stringContaining(lateRun.code), target: { tab: "emissions" },
           detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Jun 18, 2026." });
     } finally {
       await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, lateRun.id));

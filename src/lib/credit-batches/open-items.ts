@@ -26,7 +26,6 @@ import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-
 import type { RemovalCorrection } from "@/lib/certification/removal-entry-correction";
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { formatCalendarDate, formatTonnes } from "@/lib/format-utils";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { lateRunEntryDate } from "./late-run-entry-date";
 import {
   RESUBMIT_NEEDED_LABEL,
@@ -154,16 +153,15 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
 
   const late = input.lateProductionRuns;
   if (late?.sentRemovalCodes.length) {
-    const recordedDays = new Set(late.manualEntryDates);
     const codes = joinWithAnd(late.sentRemovalCodes);
     for (const run of late.runs) {
       const entryDate = lateRunEntryDate(run.startDate, late.batchStartDate);
-      if (recordedDays.has(entryDate)) continue;
+      if (late.manualEntries.some(entry => entry.occurredOn === entryDate && entry.createdAt > run.createdAt)) continue;
       check.push({
         id: `late-production-run:${run.id}`,
         title: `${run.code} was recorded after ${codes} ${late.sentRemovalCodes.length === 1 ? "was" : "were"} sent`,
         detail: `It is not in this credit batch. Record its diesel and power on the Emissions tab, dated ${formatCalendarDate(entryDate)}.`,
-        target: { href: creditBatchDeepLinkHref(input.creditBatchId, input.facilityId, { tab: "emissions" }) },
+        target: { tab: "emissions" },
       });
     }
   }

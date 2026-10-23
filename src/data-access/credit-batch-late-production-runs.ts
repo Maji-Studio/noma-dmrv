@@ -5,6 +5,7 @@ import {
   productionRunFeedstocks, productionRuns,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { readCreditBatchesMembershipSubmissionLocks } from "./credit-batch-certification-lock";
 import { productionRunDateExpr, productionRunMembershipDateExpr } from "./production-runs/date-expr";
 import { requireOrgScope } from "./utils";
@@ -13,9 +14,9 @@ export interface CreditBatchLateProductionRuns {
   sentRemovalCodes: string[];
   /** First day of the batch period; entries must be dated inside it. */
   batchStartDate: string;
-  runs: { id: string; code: string; startDate: string }[];
-  /** Undeleted additive values not sent by this batch's locking Removals. */
-  manualEntryDates: string[];
+  runs: { id: string; code: string; startDate: string; createdAt: Date }[];
+  /** Undeleted additive values; creation time determines which runs they can report. */
+  manualEntries: { occurredOn: string; createdAt: Date }[];
 }
 
 /** Read-only, set-based facts for the Check to-dos, independent of template availability. */
@@ -27,9 +28,6 @@ export async function loadCreditBatchesLateProductionRuns(
   const sentByBatch = await readCreditBatchesMembershipSubmissionLocks(ctx, db, creditBatchIds);
   const sentBatchIds = [...sentByBatch.keys()];
   if (!sentBatchIds.length) return new Map();
-  const sentRemovalIdsByBatch = new Map([...sentByBatch].map(([id, removals]) => [
-    id, new Set(removals.map(removal => removal.id)),
-  ]));
   const [rows, entries] = await Promise.all([
     db.selectDistinct({
       creditBatchId: creditBatches.id,
@@ -38,11 +36,12 @@ export async function loadCreditBatchesLateProductionRuns(
       feedstockTypeId: feedstocks.feedstockTypeId,
       id: productionRuns.id,
       code: productionRuns.code,
+      createdAt: productionRuns.createdAt,
       startDate: productionRunDateExpr(ctx.organizationId),
     }).from(creditBatches).innerJoin(productionRuns, and(
       eq(productionRuns.organizationId, ctx.organizationId),
       eq(productionRuns.facilityId, creditBatches.facilityId),
-      eq(productionRuns.status, "complete"),
+      eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
       isNull(productionRuns.archivedAt),
       gte(productionRunMembershipDateExpr(ctx.organizationId), creditBatches.startDate),
       lte(productionRunMembershipDateExpr(ctx.organizationId), creditBatches.endDate),
@@ -62,7 +61,7 @@ export async function loadCreditBatchesLateProductionRuns(
       isNull(creditBatchProductionRuns.creditBatchId),
     )).orderBy(productionRuns.code, productionRuns.id),
     db.selectDistinct({ creditBatchId: emissionEntries.creditBatchId, occurredOn: emissionEntries.occurredOn,
-      sentByRemovalId: emissionEntries.sentByRemovalId })
+      createdAt: emissionEntries.createdAt })
       .from(emissionEntries).where(and(
         eq(emissionEntries.organizationId, ctx.organizationId),
         inArray(emissionEntries.creditBatchId, sentBatchIds),
@@ -72,7 +71,7 @@ export async function loadCreditBatchesLateProductionRuns(
       )),
   ]);
   const result = new Map<string, CreditBatchLateProductionRuns>(sentBatchIds.map(id => [id, {
-    sentRemovalCodes: sentByBatch.get(id)!.map(removal => removal.code), batchStartDate: "", runs: [], manualEntryDates: [],
+    sentRemovalCodes: sentByBatch.get(id)!, batchStartDate: "", runs: [], manualEntries: [],
   }]));
   // Match attachment's single-feedstock rule: mixed and empty runs cannot join a cohort.
   const candidates = new Map<string, { row: typeof rows[number]; types: Set<string> }>();
@@ -85,13 +84,10 @@ export async function loadCreditBatchesLateProductionRuns(
   for (const { row, types } of candidates.values()) {
     if (types.size !== 1 || !types.has(row.batchFeedstockTypeId)) continue;
     result.get(row.creditBatchId)!.batchStartDate = row.batchStartDate;
-    result.get(row.creditBatchId)!.runs.push({ id: row.id, code: row.code, startDate: row.startDate });
+    result.get(row.creditBatchId)!.runs.push({ id: row.id, code: row.code, startDate: row.startDate, createdAt: row.createdAt });
   }
   for (const entry of entries) {
-    // Already-sent batch emissions cannot report the late run. A carried entry
-    // sent by another Removal does report it and still resolves the Check.
-    if (entry.sentByRemovalId && sentRemovalIdsByBatch.get(entry.creditBatchId)!.has(entry.sentByRemovalId)) continue;
-    result.get(entry.creditBatchId)!.manualEntryDates.push(entry.occurredOn);
+    result.get(entry.creditBatchId)!.manualEntries.push({ occurredOn: entry.occurredOn, createdAt: entry.createdAt });
   }
   return result;
 }

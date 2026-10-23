@@ -143,7 +143,7 @@ export async function readCreditBatchesMembershipSubmissionLocks(
   ctx: OrgContext,
   executor: Pick<DbTransaction, "select">,
   creditBatchIds: readonly string[],
-): Promise<Map<string, { id: string; code: string }[]>> {
+): Promise<Map<string, string[]>> {
   requireOrgScope(ctx);
   if (!creditBatchIds.length) return new Map();
   const rows = await readCreditBatchesRemovalRows(ctx, executor, creditBatchIds);
@@ -151,12 +151,12 @@ export async function readCreditBatchesMembershipSubmissionLocks(
     removalId: row.id, ghgStatementId: row.ghgStatementId,
   })));
   const factsById = new Map(facts.map(fact => [fact.id, fact]));
-  const sentByBatch = new Map<string, { id: string; code: string }[]>();
+  const sentByBatch = new Map<string, string[]>();
   for (const row of rows.sort((a, b) => a.code.localeCompare(b.code) || a.id.localeCompare(b.id))) {
     const fact = factsById.get(row.id)!;
     if (recordLocks.creditBatch({ removals: [fact], dependents: [] }).level !== "sent") continue;
     const removals = sentByBatch.get(row.creditBatchId) ?? [];
-    removals.push({ id: row.id, code: row.code });
+    removals.push(row.code);
     sentByBatch.set(row.creditBatchId, removals);
   }
   return sentByBatch;
