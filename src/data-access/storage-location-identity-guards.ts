@@ -32,8 +32,9 @@ import {
 import { requireOrgScope } from "./utils";
 
 /**
- * Field labels, exactly as the storage bin form shows them, so the refusal
- * names the control the operator just changed.
+ * Each field holds its label, exactly as the storage bin form shows it, so
+ * the refusal names the control the operator just changed, and its form key,
+ * which becomes the issue path.
  */
 const STORAGE_TYPE_FIELD = { label: "Storage type", key: "type" };
 const FEEDSTOCK_TYPE_FIELD = { label: "Feedstock type", key: "feedstockTypeId" };
