@@ -1,6 +1,8 @@
+// @vitest-environment jsdom
 import type { ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { useForm } from "react-hook-form";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { FormActions } from "@/components/forms/form-actions";
 import type { SubmitBlock } from "@/components/ui/submit-block-context";
@@ -110,5 +112,37 @@ describe("RecordLockFormFrame (picker edit dialogs)", () => {
     });
     expect(renderer.root.findByType("fieldset").props.disabled).toBe(true);
     expect(buttonsNamed("Save changes")).toHaveLength(0);
+  });
+});
+
+describe("a refusal once the record is Sent", () => {
+  function RefusingForm() {
+    const { control, register } = useForm({
+      defaultValues: { notes: "Typed draft" },
+      errors: { root: { lockRefusal: { type: "locked" } } },
+    });
+    return <form>
+      <input {...register("notes")} />
+      <FormActions control={control} errorMessage="This record is locked. Its Removal was sent." />
+    </form>;
+  }
+
+  it("sits in the slot above the lock line, takes focus, and leaves no Save", () => {
+    render(
+      <EntitySideSheet open mode="edit" onModeChange={() => undefined} onOpenChange={() => undefined} title="FS-1"
+        editNotice={<p>Lock line</p>} submitBlock={SENT}>
+        <RefusingForm />
+      </EntitySideSheet>,
+    );
+    const box = document.querySelector<HTMLElement>("[data-top-refusal]");
+    expect(box?.textContent).toContain("Your changes were not saved.");
+    expect(document.activeElement).toBe(box);
+    // Above the lock line, not at the end of the form.
+    const lockLine = screen.getByText("Lock line");
+    expect(box!.compareDocumentPosition(lockLine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    // Read from focus once: the box itself is not a live region.
+    expect(box!.querySelector('[role="alert"]')).toBeNull();
+    cleanup();
   });
 });

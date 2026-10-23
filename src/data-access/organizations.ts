@@ -12,10 +12,10 @@ import { canOwnApiKey } from "@/lib/auth/api-scopes";
 import { LAST_ADMIN_MESSAGE, rethrowLastAdmin } from "@/lib/auth/organization-role-policy";
 import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, like, ne, or, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
 import { seedOrgDefaults } from "@/db/org-defaults";
-import { invitations, members, organizations, users } from "@/db/schema";
+import { certifierCredentials, invitations, members, organizationApiAccess, organizations, users } from "@/db/schema";
 import { requireOrgScope } from "@/data-access/utils";
 import { getBetterAuthSession } from "@/lib/auth/providers/better-auth-server";
 import {
@@ -27,14 +27,14 @@ import {
 import { SafeError } from "@/lib/errors";
 import { isSlugForBase, organizationSlugBase, organizationSlugCandidate } from "@/lib/organizations/organization-slug";
 import { logger } from "@/lib/log";
+import { uuidSchema } from "@/schemas/helpers";
 
 // Mirrors Better Auth's organization plugin configuration in better-auth.ts.
 const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
 const MILLISECONDS_PER_SECOND = 1_000;
-const ORGANIZATION_RENAME_MAX_ATTEMPTS = 3;
+const ORGANIZATION_SLUG_MAX_ATTEMPTS = 3;
+const CREATE_INTENT_LOCK_HASH_SEED = 0;
 const ORGANIZATION_SLUG_CONSTRAINT = "organizations_slug_unique";
-const ORGANIZATION_SLUG_CONFLICT_MESSAGE =
-  "An Organization with this slug already exists.";
 
 export type OrgMemberRow = {
   memberId: string;
@@ -153,22 +153,26 @@ export async function createInvitationAsPlatformAdmin(
           eq(invitations.status, "pending")
         )
       );
-    await tx.insert(invitations).values({
-      id: invitationId,
-      organizationId: ctx.organizationId,
-      email,
-      role: input.role,
-      status: "pending",
-      expiresAt: new Date(
-        Date.now() +
-          INVITATION_EXPIRES_IN_SECONDS * MILLISECONDS_PER_SECOND
-      ),
-      inviterId: ctx.userId,
+    await insertPendingInvitation(tx, {
+      id: invitationId, organizationId: ctx.organizationId, email,
+      role: input.role, inviterId: ctx.userId,
     });
   });
 
   // This override does not send email; the settings UI exposes a copyable URL.
   return { id: invitationId };
+}
+
+// org-scope-ok: callers authorize the target organization before inserting its invitation.
+async function insertPendingInvitation(
+  tx: DbTransaction,
+  input: { id: string; organizationId: string; email: string; role: OrgRole; inviterId: string },
+): Promise<void> {
+  await tx.insert(invitations).values({
+    ...input,
+    status: "pending",
+    expiresAt: new Date(Date.now() + INVITATION_EXPIRES_IN_SECONDS * MILLISECONDS_PER_SECOND),
+  });
 }
 
 /** Cancel a pending invitation in the active organization. */
@@ -335,52 +339,129 @@ export async function listAllOrganizations(): Promise<OrganizationSummary[]> {
   return rows.map((row) => ({ ...row, memberCount: Number(row.memberCount) }));
 }
 
-/** Create an organization and its selected Admin as one atomic unit. */
+export type PlatformOrganizationDirectoryRow = {
+  id: string;
+  name: string;
+  memberCount: number;
+  adminCount: number;
+  isometricKeysSaved: boolean;
+  apiAccessEnabled: boolean;
+};
+
+// org-scope-ok: the Platform Admin directory deliberately reads every organization.
+export async function listPlatformOrganizationDirectory(): Promise<PlatformOrganizationDirectoryRow[]> {
+  await requirePlatformAdmin();
+  const membershipCounts = db.select({
+    organizationId: members.organizationId,
+    memberCount: count().as("member_count"),
+    adminCount: sql<number>`count(*) filter (where ${members.role} = 'admin')`.mapWith(Number).as("admin_count"),
+  }).from(members).groupBy(members.organizationId).as("membership_counts");
+  return db.select({
+    id: organizations.id,
+    name: organizations.name,
+    memberCount: sql<number>`coalesce(${membershipCounts.memberCount}, 0)`.mapWith(Number),
+    adminCount: sql<number>`coalesce(${membershipCounts.adminCount}, 0)`.mapWith(Number),
+    isometricKeysSaved: sql<boolean>`${certifierCredentials.organizationId} is not null`,
+    apiAccessEnabled: sql<boolean>`coalesce(${organizationApiAccess.enabled}, true)`,
+  }).from(organizations)
+    .leftJoin(membershipCounts, eq(membershipCounts.organizationId, organizations.id))
+    .leftJoin(certifierCredentials, and(
+      eq(certifierCredentials.organizationId, organizations.id),
+      eq(certifierCredentials.provider, "isometric"),
+    ))
+    .leftJoin(organizationApiAccess, eq(organizationApiAccess.organizationId, organizations.id))
+    .orderBy(sql`lower(${organizations.name})`, organizations.id);
+}
+
+// org-scope-ok: globally unique slug allocation deliberately checks all organizations inside the authorized writer's transaction.
+async function allocateOrganizationSlug(tx: DbTransaction, base: string, organizationId?: string): Promise<string> {
+  const escapedBase = base.replace(/[\\%_]/g, "\\$&");
+  const occupied = await tx.select({ slug: organizations.slug }).from(organizations)
+    .where(and(
+      organizationId ? ne(organizations.id, organizationId) : undefined,
+      or(eq(organizations.slug, base), like(organizations.slug, `${escapedBase}-%`)),
+    ));
+  const taken = new Set(occupied.map((row) => row.slug));
+  let candidate = 1;
+  while (taken.has(organizationSlugCandidate(base, candidate))) candidate++;
+  return organizationSlugCandidate(base, candidate);
+}
+
+export type CreatedOrganizationWithAdmin = {
+  id: string;
+  name: string;
+  firstAdmin: { kind: "member" } | { kind: "invited"; invitationId: string };
+};
+
+/** Create an organization and its first Admin membership or invitation atomically. */
+// org-scope-ok: Platform Admins create organizations before any membership exists.
 export async function createOrganizationWithAdmin(input: {
   name: string;
-  slug: string;
-  adminUserId: string;
-}): Promise<{ id: string }> {
-  await requirePlatformAdmin();
-  const organizationId = randomUUID();
-  try {
-    await db.transaction(async (tx) => {
-      const [adminUser] = await tx
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.id, input.adminUserId))
-        .limit(1);
-      if (!adminUser) {
-        throw new SafeError("The selected admin account no longer exists.");
-      }
-      await tx.insert(organizations).values({
-        id: organizationId,
-        name: input.name,
-        slug: input.slug,
+  adminEmail: string;
+  organizationId?: string;
+}): Promise<CreatedOrganizationWithAdmin> {
+  const admin = await requirePlatformAdmin();
+  const organizationId = input.organizationId === undefined ? randomUUID() : uuidSchema().parse(input.organizationId);
+  let replayed = false;
+  const email = input.adminEmail.trim().toLowerCase();
+  let created: CreatedOrganizationWithAdmin | undefined;
+  for (let attempt = 0; attempt < ORGANIZATION_SLUG_MAX_ATTEMPTS; attempt++) {
+    try {
+      created = await db.transaction(async (tx): Promise<CreatedOrganizationWithAdmin> => {
+        if (input.organizationId !== undefined) {
+          // Serialize the absent-row check too: concurrent retries share one identity.
+          await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`create-organization:${organizationId}`}, ${CREATE_INTENT_LOCK_HASH_SEED}))`);
+          const [existing] = await tx.select({ id: organizations.id, name: organizations.name })
+            .from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+          if (existing) {
+            if (existing.name !== input.name) {
+              throw new SafeError("This form was already used to create another organization. Reload and try again.");
+            }
+            replayed = true;
+            const [member] = await tx.select({ id: members.id }).from(members)
+              .innerJoin(users, eq(users.id, members.userId))
+              .where(and(eq(members.organizationId, organizationId), eq(members.role, "admin"),
+                sql`lower(${users.email}) = ${email}`)).limit(1);
+            if (member) return { ...existing, firstAdmin: { kind: "member" } };
+            const [invitation] = await tx.select({ id: invitations.id }).from(invitations)
+              .where(and(eq(invitations.organizationId, organizationId), eq(invitations.email, email),
+                eq(invitations.role, "admin"), eq(invitations.status, "pending")))
+              .orderBy(desc(invitations.createdAt)).limit(1);
+            if (!invitation) {
+              throw new SafeError("The organization already exists. Open it to manage its Admins.");
+            }
+            return { ...existing, firstAdmin: { kind: "invited", invitationId: invitation.id } };
+          }
+        }
+        const slug = await allocateOrganizationSlug(tx, organizationSlugBase(input.name));
+        const [adminUser] = await tx.select({ id: users.id }).from(users)
+          .where(sql`lower(${users.email}) = ${email}`).limit(1);
+        await tx.insert(organizations).values({ id: organizationId, name: input.name, slug });
+        if (adminUser) {
+          await tx.insert(members).values({
+            id: randomUUID(), organizationId, userId: adminUser.id, role: "admin",
+          });
+          return { id: organizationId, name: input.name, firstAdmin: { kind: "member" } };
+        }
+        const invitationId = randomUUID();
+        await insertPendingInvitation(tx, {
+          id: invitationId, organizationId, email, role: "admin", inviterId: admin.id,
+        });
+        return { id: organizationId, name: input.name, firstAdmin: { kind: "invited", invitationId } };
       });
-      await tx.insert(members).values({
-        id: randomUUID(),
-        organizationId,
-        userId: input.adminUserId,
-        role: "admin",
-      });
-    });
-  } catch (error) {
-    if (isPgUniqueViolation(error, ORGANIZATION_SLUG_CONSTRAINT)) {
-      throw new SafeError(ORGANIZATION_SLUG_CONFLICT_MESSAGE);
+      break;
+    } catch (error) {
+      if (!isPgUniqueViolation(error, ORGANIZATION_SLUG_CONSTRAINT)) throw error;
     }
-    throw error;
   }
-
+  if (!created) throw new SafeError("Couldn't create the organization. Try again.");
+  if (replayed) return created;
   try {
     await seedOrgDefaults(db, organizationId);
   } catch (error) {
-    logger.error(
-      { error, organizationId },
-      "failed to seed organization defaults",
-    );
+    logger.error({ error, organizationId }, "failed to seed organization defaults");
   }
-  return { id: organizationId };
+  return created;
 }
 
 /** Look up a user id by email (for the create-org admin picker). */
@@ -476,9 +557,8 @@ export async function renameActiveOrganization(
     throw new SafeError("Only organization Admins can rename the organization.");
   }
   const base = organizationSlugBase(input.name);
-  const escapedBase = base.replace(/[\\%_]/g, "\\$&");
 
-  for (let attempt = 0; attempt < ORGANIZATION_RENAME_MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < ORGANIZATION_SLUG_MAX_ATTEMPTS; attempt++) {
     try {
       return await db.transaction(async (tx) => {
         const [current] = await tx.select({ slug: organizations.slug })
@@ -489,20 +569,7 @@ export async function renameActiveOrganization(
 
         let slug = current.slug;
         if (!isSlugForBase(slug, base)) {
-          // Slugs are globally unique; this lookup intentionally spans other orgs.
-          const occupied = await tx.select({ slug: organizations.slug })
-            .from(organizations)
-            .where(and(
-              ne(organizations.id, ctx.organizationId),
-              or(eq(organizations.slug, base), like(organizations.slug, `${escapedBase}-%`)),
-            ));
-          const taken = new Set(occupied.map((row) => row.slug));
-          let candidate = 1;
-          slug = organizationSlugCandidate(base, candidate);
-          while (taken.has(slug)) {
-            candidate++;
-            slug = organizationSlugCandidate(base, candidate);
-          }
+          slug = await allocateOrganizationSlug(tx, base, ctx.organizationId);
         }
         const [updated] = await tx.update(organizations)
           .set({ name: input.name, slug })

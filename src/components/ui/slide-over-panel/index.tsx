@@ -407,6 +407,15 @@ const Close = React.forwardRef<HTMLButtonElement, SlideOverPanelCloseProps>(
 );
 Close.displayName = "SlideOverPanel.Close";
 
+/** The view-mode footer's Close: last, after the sheet's actions. */
+function FooterClose() {
+  return (
+    <Close>
+      <Button variant="default">Close</Button>
+    </Close>
+  );
+}
+
 /* -------------------------------------------------------------------------------------------------
  * Icons
  * -----------------------------------------------------------------------------------------------*/
@@ -444,6 +453,7 @@ export const SlideOverPanel = {
   Body,
   Footer,
   Close,
+  FooterClose,
 };
 
 export {
@@ -456,4 +466,5 @@ export {
   Body as SlideOverPanelBody,
   Footer as SlideOverPanelFooter,
   Close as SlideOverPanelClose,
+  FooterClose as SlideOverPanelFooterClose,
 };

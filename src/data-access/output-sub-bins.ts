@@ -48,7 +48,7 @@ export async function getOutputSubBins(ctx: OrgContext, raw: OutputSubBinsInput,
     } : undefined,
   });
   if (unresolved) throw unresolved;
-  const history = await getOutputStockHistory(ctx, bin.id, tx);
+  const history = await getOutputStockHistory(ctx, bin.id, tx, { recomputeWet: false });
   // A product bin's layers are its products, so each layer's ingredients are that product's saved lines.
   const ingredients = bin.type === 'product_bin' ? await savedIngredientSolids(ctx, stock.subBins.map(subBin => subBin.layerId), tx) : new Map<string, SavedIngredientSolids[]>();
   // A split bin lists its sub-bins in its default draw order; the API stock read stays oldest first.

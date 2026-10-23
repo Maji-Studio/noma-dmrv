@@ -22,6 +22,7 @@ export async function seedDedicatedOrg({
 }) {
   const tag = randomUUID();
   const organizationId = `${E2E_CERTIFIER_ORG_ID_PREFIX}${tag}`;
+  const organizationName = `E2E Settings Org ${tag}`;
   const accountId = `e2e-settings-account-${tag}`;
   const memberId = `e2e-settings-member-${tag}`;
   const facilityId = randomUUID();
@@ -39,7 +40,7 @@ export async function seedDedicatedOrg({
     await db.transaction(async (tx) => {
       await tx.insert(schema.organizations).values({
         id: organizationId,
-        name: `E2E Settings Org ${tag}`,
+        name: organizationName,
         slug: `e2e-settings-${tag}`,
       });
       await tx.insert(schema.users).values({
@@ -90,6 +91,8 @@ export async function seedDedicatedOrg({
   return {
     user,
     facilityId,
+    organizationId,
+    organizationName,
     async cleanup() {
       try {
         await db.transaction(async (tx) => {

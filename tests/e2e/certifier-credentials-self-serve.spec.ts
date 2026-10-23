@@ -13,11 +13,11 @@ import {
   E2E_CERTIFIER_ROTATED_ACCESS_TOKEN,
   maskedCertifierAccessToken,
 } from "./fixtures/certifier-credentials";
-import { certifierKeyInput } from "./fixtures/certifier-credentials-ui";
+import { certifierKeyInput, openCertifierKeys } from "./fixtures/certifier-credentials-ui";
 import { CERTIFIER_VERIFICATION_MESSAGES } from "@/lib/certification/certifier-credentials-verification";
 
 test.describe("Isometric credentials self-service", () => {
-  test("the admin directory reflects configured and replaced credentials", async ({
+  test("the Platform Organizations page reflects configured and replaced credentials", async ({
     adminPage: page,
   }) => {
     // Never replace the shared org's keys, even temporarily: @live specs can
@@ -34,14 +34,9 @@ test.describe("Isometric credentials self-service", () => {
         slug: `e2e-credentials-${tag}`,
       });
 
-      await page.goto("/admin/organizations");
-      const organization = page
-        .getByRole("listitem")
-        .filter({ hasText: organizationName });
-      await expect(organization).toBeVisible();
-      await expect(organization.getByText("No keys", { exact: true })).toBeVisible();
-      await organization.getByRole("button", { name: "Isometric keys" }).click();
-      const keys = page.getByRole("dialog");
+      // The Platform page shows the keys inline in the organization's panel.
+      let keys = await openCertifierKeys(page, organizationName);
+      await expect(keys.getByText("Missing", { exact: true })).toBeVisible();
       await certifierKeyInput(keys, "Access token").fill(E2E_CERTIFIER_ACCESS_TOKEN);
       await certifierKeyInput(keys, "Client secret").fill(E2E_CERTIFIER_CLIENT_SECRET);
       await keys.getByRole("button", { name: "Save and test connection" }).click();
@@ -49,13 +44,11 @@ test.describe("Isometric credentials self-service", () => {
       // The fixture secret cannot form an HTTP header, so the check fails
       // offline as a network error after the keys are stored.
       await expect(keys.getByText(CERTIFIER_VERIFICATION_MESSAGES.network, { exact: true })).toBeVisible();
-      await page.keyboard.press("Escape");
-      await expect(keys).not.toBeVisible();
-      await page.reload();
-      await expect(organization.getByText("Keys saved")).toBeVisible();
-      // The keys live in a modal; a saved key shows only its last characters
-      // and a Replace action, never an input holding the secret.
-      await organization.getByRole("button", { name: "Isometric keys" }).click();
+
+      // A saved key shows only its last characters and a Replace action,
+      // never an input holding the secret.
+      keys = await openCertifierKeys(page, organizationName);
+      await expect(keys.getByText("Saved", { exact: true })).toBeVisible();
       await expect(keys.getByText(maskedCertifierAccessToken(E2E_CERTIFIER_ACCESS_TOKEN), { exact: false })).toBeVisible();
       await expect(keys.getByText("••••••••", { exact: true })).toBeVisible();
       await expect(keys.getByRole("button", { name: "Save and test connection" })).toHaveCount(0);
@@ -67,17 +60,10 @@ test.describe("Isometric credentials self-service", () => {
       await keys.getByRole("button", { name: "Save and test connection" }).click();
       await expect(keys.getByText(maskedCertifierAccessToken(E2E_CERTIFIER_ROTATED_ACCESS_TOKEN), { exact: false })).toBeVisible();
       await expect(keys.getByRole("button", { name: /^Replace/ })).toHaveCount(2);
-      await page.keyboard.press("Escape");
-      await expect(keys).not.toBeVisible();
-      await page.reload();
 
-      await page
-        .getByRole("listitem")
-        .filter({ hasText: organizationName })
-        .getByRole("button", { name: "Isometric keys" })
-        .click();
+      keys = await openCertifierKeys(page, organizationName);
       await expect(
-        page.getByRole("dialog").getByText(maskedCertifierAccessToken(E2E_CERTIFIER_ROTATED_ACCESS_TOKEN), { exact: false }),
+        keys.getByText(maskedCertifierAccessToken(E2E_CERTIFIER_ROTATED_ACCESS_TOKEN), { exact: false }),
       ).toBeVisible();
     } finally {
       // One transaction: the credentials row has no cascade, so it goes

@@ -27,19 +27,19 @@ const KEYED = [
   "formulations#createFormulationFn",
   "quick-add#createDriverFn",
   "quick-add#createOperatorFn",
+  "quick-add#createVehicleFn",
+  "quick-add#createFeedstockTypeFn",
+  "quick-add#createStorageLocationFn",
+  "emission-entries#createEmissionEntryFn",
   API_KEY_ACTION,
 ];
 
 // Creates not yet keyed; see docs/open-questions.md. Wiring and client checks apply only to KEYED.
 const PENDING = [
-  "quick-add#createVehicleFn",
-  "quick-add#createFeedstockTypeFn",
-  "quick-add#createStorageLocationFn",
   "storage-locations#createStorageLocationFn",
   "facilities#createFacilityFn",
   "reactors#createReactorFn",
   "feedstock-types#createFeedstockTypeFn",
-  "emission-entries#createEmissionEntryFn",
   "production-processes#startNewProductionProcessFn",
 ];
 
@@ -51,7 +51,7 @@ const EXCEPTION: Record<string, string> = {
   "emission-entries#replaceEmissionEntryFn": "expectedVersion refuses stale replacement retries.",
   "certification/emission-zeros#recordEmissionZerosFn": "Reuses zero entries and checks the removal version.",
   "feedstock-types#importIsometricFeedstockTypeFn": "Refuses an already imported isometricFeedstockTypeId.",
-  "organizations#createOrganizationAction": "Platform admin creation is guarded by the unique slug.",
+  "organizations#createOrganizationAction": "platform create outside an org; replays through its own store keyed by parseCreateIntentKey",
   "invitation-bootstrap#bootstrapInvitationAccountAction": "Pre-sign-in bootstrap refuses an existing account.",
   "certification/create-removal-with-batches#createRemovalWithBatchesAction": "Rechecks ungrouped batches under row locks.",
   "certification/ghg-statements#createGhgStatementDraft": "External POST adopts or refuses a matching remote statement under a facility lock.",

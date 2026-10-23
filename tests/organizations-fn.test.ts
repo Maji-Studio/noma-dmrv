@@ -35,7 +35,6 @@ vi.mock("@/data-access/organizations", () => ({
   createOrganizationWithAdmin: (...args: unknown[]) =>
     mockCreateOrganizationWithAdmin(...args),
   findMembershipRole: vi.fn(),
-  findUserIdByEmail: vi.fn(),
   getActiveOrganization: vi.fn(),
   listAllOrganizations: vi.fn(),
   listOrgInvitations: vi.fn(),
@@ -65,7 +64,6 @@ vi.mock("@/lib/log", () => ({
 import {
   renameActiveOrganization,
   findMembershipRole,
-  findUserIdByEmail,
   listOrgInvitations,
   listOrgMembers,
 } from "@/data-access/organizations";
@@ -81,10 +79,8 @@ import { getBetterAuthSession } from "@/lib/auth/providers/better-auth-server";
 import { requireOrgContext, requireOrgRole, requirePlatformAdmin, type OrgContext } from "@/lib/auth/server";
 import { logger } from "@/lib/log";
 
-const ADMIN_USER_ID = "admin-user-123";
 const VALID_INPUT = {
   name: "Example Organization",
-  slug: "example-organization",
   adminEmail: "admin@example.com",
 };
 
@@ -146,8 +142,7 @@ describe("createOrganizationAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requirePlatformAdmin).mockResolvedValue({} as never);
-    vi.mocked(findUserIdByEmail).mockResolvedValue(ADMIN_USER_ID);
-    mockCreateOrganizationWithAdmin.mockResolvedValue({ id: "organization-123" });
+    mockCreateOrganizationWithAdmin.mockResolvedValue({ id: "organization-123", name: VALID_INPUT.name, firstAdmin: { kind: "member" } });
   });
 
   it("requires Platform Admin authorization before resolving the admin", async () => {
@@ -161,11 +156,24 @@ describe("createOrganizationAction", () => {
       success: false,
       error: "Admin access is required for this action.",
     });
-    expect(findUserIdByEmail).not.toHaveBeenCalled();
     expect(mockCreateOrganizationWithAdmin).not.toHaveBeenCalled();
   });
 
-  it("creates through Better Auth with the selected admin user id", async () => {
+  it("validates and passes the intent key as the organization identity", async () => {
+    const intentKey = "A1234567-1234-4123-8123-123456789ABC";
+    await createOrganizationAction(VALID_INPUT, { intentKey });
+    expect(mockCreateOrganizationWithAdmin).toHaveBeenCalledWith({
+      ...VALID_INPUT, organizationId: intentKey.toLowerCase(),
+    });
+  });
+
+  it("refuses an invalid intent key before creating anything", async () => {
+    const result = await createOrganizationAction(VALID_INPUT, { intentKey: "invalid" });
+    expect(result.success).toBe(false);
+    expect(mockCreateOrganizationWithAdmin).not.toHaveBeenCalled();
+  });
+
+  it("passes normalized name and email to the transaction", async () => {
     const result = await createOrganizationAction({
       ...VALID_INPUT,
       name: "  Example Organization  ",
@@ -174,29 +182,29 @@ describe("createOrganizationAction", () => {
     });
 
     expect(requirePlatformAdmin).toHaveBeenCalledOnce();
-    expect(findUserIdByEmail).toHaveBeenCalledWith("admin@example.com");
     expect(mockCreateOrganizationWithAdmin).toHaveBeenCalledWith({
       name: "Example Organization",
-      slug: "example-organization",
-      adminUserId: ADMIN_USER_ID,
+      adminEmail: "admin@example.com",
+      organizationId: undefined,
     });
     expect(result).toEqual({
       success: true,
-      data: { organizationId: "organization-123" },
+      data: { organizationId: "organization-123", organizationName: VALID_INPUT.name, firstAdmin: { kind: "member" } },
     });
   });
 
-  it("returns a clear error when the selected admin has no account", async () => {
-    vi.mocked(findUserIdByEmail).mockResolvedValue(null);
-
-    const result = await createOrganizationAction(VALID_INPUT);
-
-    expect(result).toEqual({
-      success: false,
-      error:
-        "No user account found for the admin email. The admin must have an account first.",
+  it("returns the first Admin invitation link for an unknown email", async () => {
+    mockCreateOrganizationWithAdmin.mockResolvedValue({
+      id: "organization-123", name: VALID_INPUT.name,
+      firstAdmin: { kind: "invited", invitationId: "invitation-123" },
     });
-    expect(mockCreateOrganizationWithAdmin).not.toHaveBeenCalled();
+    expect(await createOrganizationAction(VALID_INPUT)).toEqual({
+      success: true,
+      data: {
+        organizationId: "organization-123", organizationName: VALID_INPUT.name,
+        firstAdmin: { kind: "invited", acceptUrl: "http://localhost:3100/accept-invitation/invitation-123" },
+      },
+    });
   });
 
   it("surfaces Better Auth API errors", async () => {

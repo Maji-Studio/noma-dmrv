@@ -6,6 +6,7 @@
  * seeds the entity cache, and invokes onSuccess/onClose.
  */
 
+import { useCreateIntentKey } from "./use-create-intent-key";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { seedEntityCache } from "@/components/forms/entity-select/cache-utils";
@@ -15,7 +16,7 @@ import type { ActionResult } from "@/types/actions";
 interface UseQuickAddSubmitOptions<TFormData> {
   entityType: EntityType;
   /** Transform form data and call the server action */
-  serverFn: (data: TFormData) => Promise<ActionResult<EntityOption>>;
+  serverFn: (data: TFormData, intentKey: string) => Promise<ActionResult<EntityOption>>;
   onSuccess: (entity: EntityOption) => void;
   onClose: () => void;
 }
@@ -26,6 +27,7 @@ export function useQuickAddSubmit<TFormData>({
   onSuccess,
   onClose,
 }: UseQuickAddSubmitOptions<TFormData>) {
+  const intent = useCreateIntentKey();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,13 +37,14 @@ export function useQuickAddSubmit<TFormData>({
     setIsSubmitting(true);
 
     try {
-      const result = await serverFn(data);
+      const result = await serverFn(data, intent.current());
 
       if (!result.success) {
         setError(result.error);
         return;
       }
 
+      intent.rotate();
       seedEntityCache(queryClient, entityType, result.data);
       onSuccess(result.data);
       onClose();
@@ -56,5 +59,5 @@ export function useQuickAddSubmit<TFormData>({
     }
   };
 
-  return { error, isSubmitting, handleSubmit };
+  return { error, isSubmitting, handleSubmit, startDraft: intent.rotate };
 }

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import type { Sample } from "@/db/schema";
-import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
   O_TO_C_ORG_ELIGIBILITY_MAX,
@@ -44,36 +43,6 @@ function replicate(overrides: Partial<DurabilitySummaryReplicate> = {}): Durabil
     totalCarbonPercent: null,
     organicCarbonPercent: null,
     ...overrides,
-  };
-}
-
-function pageModel(): CreditBatchPageModel {
-  return {
-    creditBatchId: "batch",
-    facilityId: "facility",
-    slices: [],
-    removals: [],
-    mass: {
-      producedDryKg: 100,
-      appliedDryKg: 50,
-      inSubmittedDryKg: 0,
-      inDraftDryKg: 0,
-      notInRemovalDryKg: 50,
-      notAppliedDryKg: 50,
-    },
-    milestones: {
-      firstRemovalSubmittedAt: null,
-      firstRemovalSubmittedCode: null,
-      ghgStatement: {
-        id: "statement",
-        reportingPeriodStartOn: null,
-        reportingPeriodEndOn: "2026-06-30",
-        hasMissingPeriod: false,
-        status: { kind: "in-verification", value: "pending", label: "In verification", isActionable: false, isTerminal: false },
-        submittedToVerifierAt: null,
-        creditsIssuedAt: null,
-      },
-    },
   };
 }
 
@@ -139,7 +108,6 @@ describe("buildCreditBatchOpenItems", () => {
     expect(buildCreditBatchOpenItems(batchContext)).toEqual({
       blocking: [],
       check: [],
-      waiting: [],
     });
   });
 
@@ -235,7 +203,7 @@ describe("buildCreditBatchOpenItems", () => {
       emissions: { tab: "emissions" },
     };
     const local = localTargets[fixTarget as keyof typeof localTargets];
-    const result = buildCreditBatchOpenItems({ ...batchContext, pageModel: pageModel(),
+    const result = buildCreditBatchOpenItems({ ...batchContext,
       health: { state: "incomplete", issueCount: 1, checks: [check] } });
     expect(result.blocking[0].target).toEqual(local ?? {
       href: batchHealthFixLinkFor(check, "facility", "batch").href,
@@ -301,10 +269,9 @@ describe("buildCreditBatchOpenItems", () => {
     expect(batchHealthFixLinkFor(check, "facility", "batch").label).toBe("Open Removal templates");
   });
 
-  it("groups threshold, pairing, emission review and waiting items", () => {
+  it("groups threshold, pairing, and emission review items", () => {
     const input = {
       ...fixture(),
-      pageModel: pageModel(),
       emissionLines: [{
         componentId: "diesel",
         displayName: "Diesel",
@@ -335,22 +302,6 @@ describe("buildCreditBatchOpenItems", () => {
       title: `Sample SAM-26-002: H/Corg above the ${H_TO_C_ORG_ELIGIBILITY_MAX} limit`,
       target: { tab: "samples", rowId: "sample" },
     });
-    expect(result.waiting).toEqual([
-      {
-        id: "verification:statement",
-        title: "GHG Statement Ends Jun 30, 2026: In verification",
-        target: { tab: "removals" },
-      },
-      {
-        id: "not-applied",
-        title: "0.05 t produced but not applied yet",
-        detail: "It can join a Removal once its application is recorded.",
-        target: { tab: "removals" },
-      },
-    ]);
-    input.pageModel.mass.notAppliedDryKg = null;
-    input.pageModel.milestones.ghgStatement!.status = { kind: "verified", value: "verified", label: "Verified", isActionable: false, isTerminal: true };
-    expect(buildCreditBatchOpenItems(input).waiting).toEqual([]);
   });
 
   it.each([
@@ -396,44 +347,7 @@ describe("buildCreditBatchOpenItems", () => {
     ];
     expect(buildCreditBatchOpenItems(input).check).toHaveLength(1);
   });
-
-  it.each([null, 0, 0.001, 4.999])("omits the unapplied item for %s dry kg", notAppliedDryKg => {
-    const model = pageModel();
-    model.mass.notAppliedDryKg = notAppliedDryKg;
-    model.milestones.ghgStatement = null;
-    expect(buildCreditBatchOpenItems({ ...batchContext, pageModel: model }).waiting).toEqual([]);
-  });
-
-  it.each([5, 5.001])("shows the unapplied item at the visible threshold for %s dry kg", notAppliedDryKg => {
-    const model = pageModel();
-    model.mass.notAppliedDryKg = notAppliedDryKg;
-    model.milestones.ghgStatement = null;
-    expect(buildCreditBatchOpenItems({ ...batchContext, pageModel: model }).waiting).toEqual([{
-      id: "not-applied",
-      title: "0.01 t produced but not applied yet",
-      detail: "It can join a Removal once its application is recorded.",
-      target: { tab: "removals" },
-    }]);
-  });
-
-  it.each([
-    {
-      reportingPeriodStartOn: "2026-01-01",
-      hasMissingPeriod: false,
-      title: "GHG Statement Jan 1 to Jun 30, 2026: In verification",
-    },
-    {
-      reportingPeriodStartOn: "2026-01-01",
-      hasMissingPeriod: true,
-      title: "GHG Statement No period set: In verification",
-    },
-  ])("formats the waiting period: $title", ({ title, ...period }) => {
-    const model = pageModel();
-    Object.assign(model.milestones.ghgStatement!, period);
-    expect(buildCreditBatchOpenItems({ ...batchContext, pageModel: model }).waiting[0].title).toBe(title);
-  });
 });
-
 
 it("surfaces a negative O/C_org as an unpaired H/C sample", () => {
   const [durability] = buildDurabilityBatchSummaries([{
@@ -445,4 +359,14 @@ it("surfaces a negative O/C_org as an unpaired H/C sample", () => {
     id: "unpaired:SAM-1", title: "Sample SAM-1 has H/C without paired O/C",
     target: { tab: "samples", rowId: "sample" },
   }]);
+});
+
+it("points an unavailable returned-Removal comparison to the Removal without claiming changed records", () => {
+  const { check } = buildCreditBatchOpenItems({ ...batchContext, health: returnedHealth({
+    removalId: "removal-1", removalCode: "RM-26-003", windowOpen: true, resubmitNeeded: true,
+    comparison: "unavailable", unavailableMessages: ["Add a file for each emissions entry with a value."],
+    statement: STATEMENT, batches: [{ id: "batch", code: "CB-1" }], changed: [],
+  }) });
+  expect(check[0].detail).toBe("noma could not compare RM-26-003 with what it sent. Open the Removal to see why.");
+  expect(check[0].title).toBe("RM-26-003: Resubmit needed");
 });

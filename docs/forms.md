@@ -206,6 +206,45 @@ rerender the parent form on every keystroke.
 
 Prefer the `PositionPicker` component (map preview + address search + manual lat/lng) over a hand-rolled coordinate input.
 
+## Saved values after a lock refusal
+
+`useSaveRefusal` requires the form's `resetField` alongside `setError`. Its
+locked-field reset uses RHF defaults, so those defaults must describe saved
+values. Delivery and feedstock initialize from the opened record. Feedstock
+resets both its total and single-bin allocation mass together. Application
+updates its defaults explicitly when an update commits but an attachment upload
+fails: the parent adopts the returned row and calls the form's committed-record
+callback, which uses `reset(committedValues, { keepValues: true, keepSubmitCount: true, keepIsSubmitted: true, keepDirty: true })`. Typed input
+stays on screen; a background refetch never re-syncs the form. A stale-version
+refusal does not replace that snapshot. The profile password pane also wires
+`resetField`, although it has no record-lock read.
+
+Mutations declare affected kinds with `recordLockMeta`. A `certification_locked`
+`ActionError` refreshes those kinds even though the write failed; unrelated
+failures leave ordinary lock reads alone. Registry mutations refresh all kinds
+even on other failures. Refetching retains ready status while saved lock data
+is available.
+
+When the re-read turns the whole record Sent, the form is read-only and `FormActions`
+hides its footer, so the refusal would vanish. `EntitySideSheet` (edit mode) and
+`RecordLockFormFrame` hold a refusal slot above the lock line, shared through
+`RefusalSlotContext` (`src/components/ui/refusal-slot-context.tsx`; the element is
+kept in a `useState` ref callback, no effect). On `block.readOnly` with an error
+message `FormActions` portals `TopRefusal` into that slot and focuses it, since
+the Save button that held focus is gone. After a `certification_locked` refusal it says only
+"Your changes were not saved." (`useSaveRefusal` files `errors.root.lockRefusal`, which
+`FormActions` reads through `control`; the error summary skips `root`, the next submit
+clears it); the lock line below keeps the reason and how to free the record. Any other
+message (a partial save, a stale version, a form not yet on the hook) shows as the
+server worded it, since the fields were not necessarily reverted. It is a focusable `role="group"`
+named by its own text, not a live region, so a screen reader hears it once from
+focus. Without a slot the box renders inline. A refusal made only of locks focuses
+the summary box (also a named group) rather than the field, which is disabled once
+the lock read lands, whether or not a reason sits beside the count, so the reason is
+read from it; a locked link in the summary scrolls to its field without focusing it.
+A refused override edit on a delivery or feedstock goes back to the saved override
+as a whole (distance, source, note, and whether the panel is open).
+
 ## Dates
 
 Union date fields use `dateOrStringSchema` from `@/schemas/helpers`.
@@ -278,7 +317,7 @@ New or touched leaf and shared components should import from `@/components/forms
   - `cueAction` ({ label, onClick, disabled?, ariaLabel? }) puts one tertiary text action at the right of the cue row, for a shortcut that fills the control from the cue's figure ("Add all" beside "1,000 kg available from this delivery"). It stays mounted whenever `cue` has text, even while an error or warning replaces the cue's message, so a click that follows the input's blur still lands. Compute the value with `wholeStockDrawKg` (`@/lib/stock-overdraw`), set it with `shouldDirty`, `shouldTouch` and `shouldValidate`, and omit the action (do not dim it) when the field is locked.
   - `unit` renders a suffix inside the control ("kg", "%", "km"), so the label drops its "(kg)". The label keeps the unit for screen readers. Use it only for a single input; the read-view value already carries the unit, so the read label drops it too.
   - The label row is `min-h-24` (the ⓘ hit area), so a one-line label reads at the same height with or without a CERT chip or ⓘ. The ⓘ is a sibling of the `<label>`, never inside it.
-- **`FormError` / `ServerError`** — field-level vs server-level; both carry `role="alert"`. A refused save is split, not all-or-nothing: an issue whose field is on screen shows at that field, the rest show once in the error box. A form calls `useSaveRefusal` (`src/components/forms/use-save-refusal.ts`) and calls the returned function from its submit `catch`, **inside the `handleSubmit` callback** (RHF works out `isSubmitSuccessful` when the callback ends, and `FormErrorSummary` shows only after an unsuccessful submit, so a later `setError` is never listed or focused). Its handler is `(error: unknown, fallback: string) => string | null`: it returns the plan's footer, including `null` when every issue sits at a field, or the supplied fallback for a stale-version or conflict refusal, a refusal without issues, or a non-`ActionError`. This handler owns the one footer rule; parents keep their conflict and blocker side effects. The rule itself is `planSaveRefusal` (`src/lib/save-refusal.ts`). Server paths the form names differently go in an alias map next to the payload builder (`feedstockUpdatePayload`, `applicationOperationInput`, delivery's shared `DELIVERY_REFUSAL_ALIASES` next to `deliveryOperationInput` in `src/schemas/deliveries.ts`). Aliases match the whole dotted path first, then patterns where `*` matches exactly one segment and the target's `*` takes that segment (for example `ingredients.*.wetMassKg -> ingredientBins.*.massKg`), then the first segment. The delivery create action returns operation paths (form-schema refusals keep form names); the update action validates and writes with form names except posting refusals. The form applies the shared map; posting refusals on update (`occurredAt`, `wetMassKg`) still show in the footer. A lock refusal (`certification_locked`) shows **"Locked"** at a field the operator changed and that is on screen; the lock's reason shows once in the footer, and a lock on any other field (lineage, a whole-record lock) goes to the footer only. The summary words it apart: "Not saved. 2 fields are locked." (mixed: "Not saved. Fix 1 field. 2 fields are locked."). Forms that do not use the hook yet keep the footer line. Never copy a server rule into the form just to show it at the field; the server's issue now lands there. Parents hand the form's handler the caught error and their existing fallback: `onSubmit(data, onRefusal)`, then `setError(onRefusal(error, fallback))`; a null footer means every reason sits at a field, so `?? fallback` would wrongly bring the generic line back (see `delivery-list.tsx`, `feedstock-list.tsx`, `application-list.tsx`).
+- **`FormError` / `ServerError`** — field-level vs server-level; both carry `role="alert"`. A refused save is split, not all-or-nothing: an issue whose field is on screen shows at that field, the rest show once in the error box. A form calls `useSaveRefusal` (`src/components/forms/use-save-refusal.ts`) and calls the returned function from its submit `catch`, **inside the `handleSubmit` callback** (RHF works out `isSubmitSuccessful` when the callback ends, and `FormErrorSummary` shows only after an unsuccessful submit, so a later `setError` is never listed or focused). Its handler is `(error: unknown, fallback: string) => string | null`: it returns the plan's footer, including `null` when every issue sits at a field, or the supplied fallback for a stale-version or conflict refusal, a refusal without issues, or a non-`ActionError`. This handler owns the one footer rule; parents keep their conflict and blocker side effects. The rule itself is `planSaveRefusal` (`src/lib/save-refusal.ts`). Server paths the form names differently go in an alias map next to the payload builder (`feedstockUpdatePayload`, `applicationOperationInput`, delivery's shared `DELIVERY_REFUSAL_ALIASES` next to `deliveryOperationInput` in `src/schemas/deliveries.ts`). Aliases match the whole dotted path first, then patterns where `*` matches exactly one segment and the target's `*` takes that segment (for example `ingredients.*.wetMassKg -> ingredientBins.*.massKg`), then the first segment. The delivery create action returns operation paths (form-schema refusals keep form names); the update action validates and writes with form names except posting refusals. The form applies the shared map; posting refusals on update (`occurredAt`, `wetMassKg`) still show in the footer. A lock refusal (`certification_locked`) restores the saved value with `resetField`, then shows **"Locked. Your change was not saved."** at a field the operator changed and that is on screen; the lock's reason shows once in the footer, and a lock without a changed visible field goes to the footer only. Lineage refusals include changed operation fields so their typed values revert too. The summary words it apart: "Not saved. 2 fields are locked." (mixed: "Not saved. Fix 1 field. 2 fields are locked."). Forms that do not use the hook yet keep the footer line. Never copy a server rule into the form just to show it at the field; the server's issue now lands there. Parents hand the form's handler the caught error and their existing fallback: `onSubmit(data, onRefusal)`, then `setError(onRefusal(error, fallback))`; a null footer means every reason sits at a field, so `?? fallback` would wrongly bring the generic line back (see `delivery-list.tsx`, `feedstock-list.tsx`, `application-list.tsx`).
 - **`FormSelect`**, **`FormInput`**, **`FormTextarea`** — styled primitives; spread `{...register(name)}`.
   Use `EntitySelect` / `FormEntitySelect` for lists of user data, including
   customer locations, deliveries and registry projects or templates. Keep
@@ -406,7 +445,7 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 - Wrap the RHF handler: `const latched = useLatchedSubmit(); <form onSubmit={latched(handleSubmit(...))}>`. The inner handler must `return` or `await` the save, or the latch lets go before the server answers.
 - Create hooks backed by `runOperationInProcess` use `useIntentMutation` from `@/hooks/use-create-intent-key`. Its `mutationFn(variables, intentKey)` passes `{ intentKey }` to the action and throws on an unsuccessful `ActionResult` (use `unwrap` or `throwActionError`). The action uses `withCreate(callback, options, actionOptions)`; see [architecture.md](./architecture.md#layers). The helper keeps the key through failed saves, rotates it before the caller's `onSuccess`, and exposes `startDraft()` to rotate it for a new draft: call it when a create sheet or dialog opens, or when a dialog that stays mounted closes. A retry inside one open draft keeps the key and replays the first save.
 
-Quick-add dialogs that submit through `useQuickAddSubmit` (formulation, driver, operator) are not mutations: they hold a `useCreateIntentKey()` key, rotate it after a successful save and when the dialog opens or closes. A create that saves several records in a loop, such as pending Sample transport legs, passes one key per record instead of the draft key.
+All six quick-add dialogs use the key owned by `useQuickAddSubmit`: its `serverFn(data, intentKey)` forwards the key, and the hook rotates it after success. Dialogs call `startDraft()` on open; formulation calls it on close. Failed saves keep the key and existing error behaviour. A create that saves several records in a loop, such as pending Sample transport legs, passes one key per record instead of the draft key.
 
 API key creation sends an intent key without the runner, and a retry replaces the unseen key instead of replaying it because the secret is shown only once (see [docs/auth.md](./auth.md)).
 

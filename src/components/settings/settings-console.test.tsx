@@ -60,11 +60,13 @@ beforeEach(() => {
 describe("SettingsConsole", () => {
   it("lists the groups in order with the organization name on its group", () => {
     const html = render("general", { isPlatformAdmin: true });
-    const order = ["You", "Organization", "Dark Earth Carbon", "Certification", "Platform"].map((label) =>
+    const order = ["You", "Organization", "Dark Earth Carbon", "Certification"].map((label) =>
       html.indexOf(`>${label}<`),
     );
     expect(order.every((index) => index > -1)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // Platform pages live under /admin, not in Settings (#1373).
+    expect(html).not.toContain(">Platform<");
   });
 
   it("titles the page after the pane and keeps the caption and footnote", () => {

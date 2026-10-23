@@ -1,5 +1,8 @@
 "use client";
 
+import { documentKeys } from "./document-query-keys";
+export { documentKeys } from "./document-query-keys";
+import { documentLockRefresh } from "./document-lock-refresh";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   canChangeDocumentVisibility,
@@ -87,12 +90,6 @@ export function invalidateDeletedDocumentOwner(
   invalidateTransportEvidenceOwner(queryClient, owner);
 }
 
-export const documentKeys = {
-  all: ["documents"] as const,
-  forEntity: (entityType: string, entityId: string) =>
-    [...documentKeys.all, entityType, entityId] as const,
-};
-
 export function useDocumentsForEntity(
   entityType: string,
   entityId: string | null | undefined,
@@ -111,6 +108,7 @@ export function useDocumentsForEntity(
 export function useRequestUpload() {
   const qc = useQueryClient();
   return useMutation({
+    ...documentLockRefresh(qc),
     mutationFn: async (
       input: Parameters<typeof requestUpload>[0]
     ): Promise<RequestUploadResult> => unwrap(await requestUpload(input)),
@@ -122,6 +120,7 @@ export function useRequestUpload() {
 export function useConfirmUpload() {
   const qc = useQueryClient();
   return useMutation({
+    ...documentLockRefresh(qc),
     mutationFn: async (documentId: string) => unwrap(await confirmUpload({ documentId })),
     onSuccess: (row) => {
       qc.invalidateQueries({
@@ -134,13 +133,16 @@ export function useConfirmUpload() {
 
 export function useSetDocumentVisibility(invalidateKey?: readonly unknown[]) {
   const qc = useQueryClient();
+  const lockRefresh = documentLockRefresh(qc, undefined, invalidateKey);
   return useMutation({
+    meta: lockRefresh.meta,
     mutationFn: async (input: {
       documentId: string;
       visibility: DocumentVisibility;
       expectedVersion: number;
     }) => unwrap(await setDocumentVisibility(input)),
-    onError: (error) => {
+    onError: (error, variables) => {
+      lockRefresh.onError(error, variables);
       if (error instanceof StaleVersionError && invalidateKey) qc.invalidateQueries({ queryKey: invalidateKey });
     },
     onSuccess: () => {
@@ -156,9 +158,12 @@ export function useDeleteDocument(
   owner?: DocumentOwner,
 ) {
   const qc = useQueryClient();
+  const lockRefresh = documentLockRefresh(qc, owner, invalidateKey);
   return useMutation({
+    meta: lockRefresh.meta,
     mutationFn: async (input: { documentId: string; expectedVersion: number }) => unwrap(await deleteDocument(input)),
-    onError: (error) => {
+    onError: (error, variables) => {
+      lockRefresh.onError(error, variables);
       if (error instanceof StaleVersionError && invalidateKey) qc.invalidateQueries({ queryKey: invalidateKey });
     },
     onSuccess: () => {
@@ -178,13 +183,16 @@ export function useCanChangeDocumentVisibility() {
 
 export function useReclassifyApplicationEvidence() {
   const qc = useQueryClient();
+  const lockRefresh = documentLockRefresh(qc);
   return useMutation({
+    meta: lockRefresh.meta,
     mutationFn: async (input: z.infer<typeof updateApplicationEvidenceMetadataSchema> & { expectedVersion: number }) => unwrap(await updateApplicationEvidenceMetadata(input)),
     onSuccess: (row) => {
       qc.invalidateQueries({ queryKey: documentKeys.forEntity(row.entityType, row.entityId) });
       invalidateDocumentOwner(qc, row);
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      lockRefresh.onError(error, variables);
       if (error instanceof StaleVersionError) qc.invalidateQueries({ queryKey: documentKeys.all });
     },
   });

@@ -714,6 +714,14 @@ export default async function globalTeardown() {
         DELETE FROM organizations
         WHERE id LIKE $1 || '%'
       `, [E2E_CERTIFIER_ORG_ID_PREFIX]);
+      // Organizations created through Platform Organizations (platform-organizations.spec.ts)
+      // get random ids, so they are found by name. Their starter catalog
+      // (seedOrgDefaults) and invitations go first.
+      const platformSpecOrgs = `SELECT id FROM organizations WHERE name LIKE 'E2E Platform %'`;
+      await client.query(`DELETE FROM formulations WHERE organization_id IN (${platformSpecOrgs})`);
+      await client.query(`DELETE FROM feedstock_types WHERE organization_id IN (${platformSpecOrgs})`);
+      await client.query(`DELETE FROM invitations WHERE organization_id IN (${platformSpecOrgs})`);
+      await client.query(`DELETE FROM organizations WHERE name LIKE 'E2E Platform %'`);
 
       // Sessions for E2E users
       await client.query(`DELETE FROM session WHERE user_id LIKE 'e2e-%'`);

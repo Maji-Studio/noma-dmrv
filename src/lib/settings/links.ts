@@ -19,10 +19,10 @@ export const SETTINGS_REGISTRY_HREF = "/settings/registry";
 export const SETTINGS_REMOVAL_TEMPLATES_HREF = "/settings/removal-templates";
 export const SETTINGS_FACILITIES_HREF = "/settings/facilities";
 
-// Platform (Platform Admins only)
+// Platform (Platform Admins only): pages under /admin, outside the console (#1373)
 export { PLATFORM_HOME_HREF as ADMIN_ORGANIZATIONS_HREF } from "@/lib/auth/home-path";
-export const SETTINGS_DIAGNOSTICS_HREF = "/settings/diagnostics";
-export const SETTINGS_TEMPLATE_MAPPING_HREF = "/settings/template-mapping";
+export const PLATFORM_DIAGNOSTICS_HREF = "/admin/diagnostics";
+export const PLATFORM_TEMPLATE_MAPPING_HREF = "/admin/template-mapping";
 
 /** Vehicles and crew is a list page under Distribution, not a setting. */
 export const VEHICLES_AND_CREW_HREF = "/vehicles-and-crew";

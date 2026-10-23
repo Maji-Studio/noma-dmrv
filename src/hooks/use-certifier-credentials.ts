@@ -5,6 +5,7 @@ import {
 } from "@/fn/certifier-credentials";
 import type { CertifierCredentialsFormInput } from "@/schemas/organizations";
 import { certificationKeys } from "@/hooks/use-certification";
+import { organizationKeys } from "@/hooks/use-organizations";
 import { unwrap } from "@/hooks/types";
 
 const certifierCredentialKeys = {
@@ -59,6 +60,7 @@ export function useSetOrgCertifierCredentials(organizationId: string) {
       // must refetch now or the credentials-then-link flow stays stale until a
       // full reload.
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      queryClient.invalidateQueries({ queryKey: organizationKeys.platformDirectory() });
     },
   });
 }

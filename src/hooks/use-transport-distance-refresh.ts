@@ -1,3 +1,4 @@
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getTransportDistanceDriftFn, refreshDeliveryDistanceFn, refreshFeedstockDistanceFn } from "@/fn/transport-distance-refresh";
 import type { TransportDistanceDrift } from "@/data-access/transport-distance-drift";
@@ -31,6 +32,7 @@ export function useRefreshTransportDistance(
 ) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.transport, { onRefusalOnly: true }),
     mutationFn: async (input: RefreshTransportDistanceInput) => {
       const result = await (entityType === "feedstock" ? refreshFeedstockDistanceFn(input) : refreshDeliveryDistanceFn(input));
       if (!result.success) throwActionError(result);

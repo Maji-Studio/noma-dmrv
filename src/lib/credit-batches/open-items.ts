@@ -31,6 +31,7 @@ import {
   joinWithAnd,
   removalSheetHref,
   returnedStatementPhrase,
+  comparisonUnavailableClause,
 } from "@/lib/removal-correction-copy";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
 
@@ -60,7 +61,6 @@ export interface CreditBatchOpenItemsInput {
   health?: BatchHealth;
   durability?: DurabilityBatchSummary;
   emissionLines?: readonly BatchEmissionLine[];
-  pageModel?: CreditBatchPageModel;
   /** Admin. Members get no link to decide components, which only Admins can do. */
   canManage: boolean;
 }
@@ -127,7 +127,9 @@ function removalCorrectionItem(
       title: `${code}: ${RESUBMIT_NEEDED_LABEL}`,
       detail: names.length
         ? `${joinWithAnd(names)} changed here since ${code} was sent. Resubmit the Removal to send ${names.length === 1 ? "it" : "them"}.`
-        : `Records or files changed since ${code} was sent. Resubmit the Removal to send the changes.`,
+        : correction.comparison === "unavailable"
+          ? `${comparisonUnavailableClause(code)}. Open the Removal to see why.`
+          : `Records or files changed since ${code} was sent. Resubmit the Removal to send the changes.`,
       target: { href: removalSheetHref(correction.removalId, facilityId) },
     };
   }
@@ -143,7 +145,6 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
   const canManage = input.canManage;
   const blocking: CreditBatchOpenItem[] = [];
   const check: CreditBatchOpenItem[] = [];
-  const waiting: CreditBatchOpenItem[] = [];
 
   for (const healthCheck of input.health?.checks ?? []) {
     if (healthCheck.status !== "unmet") continue;
@@ -225,8 +226,13 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
   for (const correction of input.health?.removalCorrections ?? []) {
     check.push(removalCorrectionItem(correction, input.facilityId));
   }
+  return { blocking, check };
+}
 
-  const statement = input.pageModel?.milestones.ghgStatement;
+/** Items the batch is waiting on. They need the page model and never count as to-dos. */
+export function buildCreditBatchWaitingItems(pageModel: CreditBatchPageModel | undefined): CreditBatchOpenItem[] {
+  const waiting: CreditBatchOpenItem[] = [];
+  const statement = pageModel?.milestones.ghgStatement;
   if (statement?.status.kind === "in-verification") {
     waiting.push({
       id: `verification:${statement.id}`,
@@ -234,7 +240,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       target: { tab: "removals" },
     });
   }
-  const notAppliedDryKg = input.pageModel?.mass.notAppliedDryKg;
+  const notAppliedDryKg = pageModel?.mass.notAppliedDryKg;
   if (notAppliedDryKg != null && notAppliedDryKg >= MIN_VISIBLE_NOT_APPLIED_DRY_KG) {
     waiting.push({
       id: "not-applied",
@@ -243,5 +249,5 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       target: { tab: "removals" },
     });
   }
-  return { blocking, check, waiting };
+  return waiting;
 }
