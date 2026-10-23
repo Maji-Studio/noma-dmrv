@@ -647,7 +647,7 @@ later; Isometric-specific HTTP, transformers, and typings live under
 
 Credit batch to-dos are built in one server read by the directive-free
 `credit-batch-todos-core.ts`: facility certifier facts load once, followed by
-bounded batch contexts and set-based sample and emission-line reads. The list
+bounded batch contexts and set-based sample, emission-line and late production run reads. The list
 projects only Blocking and Check counts, health state and lines to decide from
 this core; its Removal, GHG Statement and lock fields remain in the list action.
 `loadCreditBatchTodosFn` reads one batch through the same core; the batch page
