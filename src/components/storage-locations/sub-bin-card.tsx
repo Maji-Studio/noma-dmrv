@@ -14,7 +14,7 @@ import { DRY_BIOCHAR_LABEL, ingredientSolidsLabel } from "@/components/biochar-p
 import { ESTIMATED_WATER_LABEL, ESTIMATED_WET_LABEL, INGREDIENT_SOLIDS_LABEL } from "@/lib/output-stock/labels";
 import { stockParts, subBinFigures, type StockPart } from "@/lib/output-stock/stock-parts";
 import type { OutputSubBin, SubBinMovement } from "@/types/output-stock";
-import { formatPartFigures } from "./output-stock-history-days";
+import { estimateKg } from "./output-stock-history-days";
 import { formatWetEstimate, outputStockFigure } from "./stock-preview-shared";
 
 const MOVEMENT_LABELS: Record<SubBinMovement["kind"], string> = {
@@ -59,7 +59,7 @@ export function partLabel(part: StockPart): string {
 
 /** A part's kg: water is an estimate and reads like the wet mass it is part of, other parts keep their decimal. */
 export function partFigure(part: StockPart): string {
-  return formatPartFigures({ label: partLabel(part), changeKg: null, afterKg: part.kg, estimated: part.kind === "water" }).after;
+  return part.kind === "water" ? estimateKg(part.kg) : formatMassKg(part.kg);
 }
 
 /**

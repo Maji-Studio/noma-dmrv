@@ -180,6 +180,8 @@ export interface PileBand {
   details: { label: string; value: string }[];
   /** A part that is not a batch (ingredient solids, water) takes its category's fill; batches take a batch accent. */
   category?: Exclude<MassCategory, "dry-batch">;
+  /** An estimate (an output bin's water), read in whole kg in the pile list. Feedstock bins weigh theirs and leave this off. */
+  estimated?: boolean;
 }
 
 function bandSwatch(band: PileBand, index: number): Pick<PartRow, "swatchClassName" | "swatchStyle"> {
@@ -202,7 +204,7 @@ export function MixPileBay({ bands, label = SHARES_LABEL, capacityKg = null }: {
   const listed = batches.slice(0, PILE_LIST_LIMIT);
   const folded = batches.slice(PILE_LIST_LIMIT);
   const rows: PartRow[] = [
-    ...[...parts, ...listed].toSorted((a, b) => b.index - a.index).map(({ band, index }) => ({ label: band.label, kg: band.kg, details: band.details, estimated: band.category === "existing-water", ...bandSwatch(band, index) })),
+    ...[...parts, ...listed].toSorted((a, b) => b.index - a.index).map(({ band, index }) => ({ label: band.label, kg: band.kg, details: band.details, estimated: band.estimated, ...bandSwatch(band, index) })),
     ...(folded.length > 0 ? [{ label: `${folded.length} older batches`, kg: folded.reduce((sum, { band }) => sum + band.kg, 0), swatchClassName: "bg-[var(--clr-dark-purple-10)]", details: folded.map(({ band }) => ({ label: band.label, value: formatCompositionMass(band.kg) })) }] : []),
   ];
   return (
