@@ -6,6 +6,7 @@ export async function sendAuthEmail(input: {
   to: string;
   subject: string;
   html: string;
+  text: string;
   url: string;
 }): Promise<void> {
   const result = await sendEmail(input);

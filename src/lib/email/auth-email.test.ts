@@ -11,11 +11,11 @@ import { sendOrganizationInvitation } from "./organization-invitation";
 
 const INPUT = {
   type: "reset-password" as const, userId: "user-123", to: "recipient@example.test",
-  subject: "Reset your password", html: "<p>Reset</p>", url: "http://localhost:3100/reset-password/token",
+  subject: "Reset your password", html: "<p>Reset</p>", text: "Reset", url: "http://localhost:3100/reset-password/token",
 };
 const INVITATION = {
   invitationId: "invite-123", organizationId: "org-123", organizationName: "Org <script>",
-  email: INPUT.to, role: "member",
+  email: INPUT.to, role: "member", inviterName: "Amani <b>Mushi</b>",
 };
 const originalMode = env.NODE_ENV;
 
@@ -47,7 +47,7 @@ it.each(["development", "test", "production"] as const)("only logs fallback link
   }
 });
 
-it("keeps invitation HTML and escapes organization names", async () => {
+it("renders the invitation from the shared template and escapes crafted names", async () => {
   vi.mocked(sendEmail).mockResolvedValue({ sent: true, id: "message-123" });
   expect(await sendOrganizationInvitation(INVITATION)).toEqual({
     acceptUrl: "http://localhost:3100/accept-invitation/invite-123", emailSent: true,
@@ -55,6 +55,11 @@ it("keeps invitation HTML and escapes organization names", async () => {
   expect(sendEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
     type: "org-invite", to: INPUT.to,
     idempotencyKey: `org-invite/${INVITATION.invitationId}`,
-    html: expect.stringContaining("<strong>Org &lt;script&gt;</strong> as member."),
+    subject: "Amani <b>Mushi</b> invited you to Org <script>",
+    html: expect.stringContaining("<strong style=\"font-weight:600;\">Org &lt;script&gt;</strong> as a Member."),
+    text: expect.stringContaining("http://localhost:3100/accept-invitation/invite-123"),
   }));
+  const { html } = vi.mocked(sendEmail).mock.calls[0]![0];
+  expect(html).not.toContain("<script>");
+  expect(html).not.toContain("<b>Mushi</b>");
 });

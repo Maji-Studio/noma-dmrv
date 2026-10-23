@@ -21,6 +21,23 @@ Hermetic production builds never print links.
 `NEXT_PUBLIC_APP_URL` determines the host in invitation and auth links. Set it
 to the deployed app URL, then exercise reset, verification and invitation flows.
 
+## Templates and previews
+
+Every email is built in `src/lib/email/templates/`. One function per email
+(`reset-password-email.ts`, `verify-email-email.ts`, `invitation-email.ts`)
+returns `{ subject, preheader, html, text }` through `composeEmail`. The look
+lives only in `panel-layout.ts` (colours, widths, dark-mode styles); copy lives
+in the per-email files; `plain-text.ts` builds the text twin. Every user value
+is HTML-escaped by the layout. Do not write inline HTML in a handler.
+
+Drawings and the logo are PNGs in `public/email/` (`<name>.png` plus
+`<name>-dark.png`), loaded by absolute URL from `NEXT_PUBLIC_APP_URL`. The
+proxy matcher skips `.png`, so they need no session.
+
+Preview with example data, images read from disk:
+`pnpm tsx scripts/render-email-previews.ts /tmp/email-previews`, then open the
+`.html` files. Dark mode follows the browser's colour scheme.
+
 ## Delivery outcomes
 
 The shared sender checks both Resend's returned `error` and thrown exceptions.

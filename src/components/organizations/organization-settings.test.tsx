@@ -92,7 +92,7 @@ describe("OrganizationSettings invite dialog", () => {
       expect(state.invite.mutateAsync).toHaveBeenCalledWith({ email: "new@example.com", role: "member" }),
     );
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(toast.success).toHaveBeenCalledWith("Invitation created.");
+    expect(toast.success).not.toHaveBeenCalled();
     expect((screen.getByRole("textbox", { name: "Invitation link" }) as HTMLInputElement).value).toBe(
       "https://app.test/accept-invitation/t",
     );
@@ -117,7 +117,7 @@ describe("OrganizationSettings invite dialog", () => {
       screen.getByText("The invitation is saved. Copy the link and send it another way, or check the address."),
     ).toBeTruthy();
     expect(screen.queryByText(/Invitation emailed/)).toBeNull();
-    expect(toast.success).not.toHaveBeenCalledWith("Invitation created.");
+    expect(toast.success).not.toHaveBeenCalled();
     expect((screen.getByRole("textbox", { name: "Invitation link" }) as HTMLInputElement).value).toBe(
       "https://app.test/accept-invitation/t",
     );
