@@ -360,3 +360,13 @@ it("surfaces a negative O/C_org as an unpaired H/C sample", () => {
     target: { tab: "samples", rowId: "sample" },
   }]);
 });
+
+it("points an unavailable returned-Removal comparison to the Removal without claiming changed records", () => {
+  const { check } = buildCreditBatchOpenItems({ ...batchContext, health: returnedHealth({
+    removalId: "removal-1", removalCode: "RM-26-003", windowOpen: true, resubmitNeeded: true,
+    comparison: "unavailable", unavailableMessages: ["Add a file for each emissions entry with a value."],
+    statement: STATEMENT, batches: [{ id: "batch", code: "CB-1" }], changed: [],
+  }) });
+  expect(check[0].detail).toBe("noma could not compare RM-26-003 with what it sent. Open the Removal to see why.");
+  expect(check[0].title).toBe("RM-26-003: Resubmit needed");
+});

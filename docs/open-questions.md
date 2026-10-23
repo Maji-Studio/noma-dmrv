@@ -636,16 +636,6 @@ before allowing confirmation to convert stored entry values to the new unit.
 - Registered customer locations have no lock-read kind; their refusal-specific
   disabling belongs to the customer forms migration.
 
-## Creates without a retry key (#1302) - **deferred**
-
-- Five creates still run without `withCreate`: `createStorageLocationFn`
-  (storage-locations); `createFacilityFn`; `createReactorFn`; `createFeedstockTypeFn`
-  (feedstock-types); `startNewProductionProcessFn`. These remain for the settings
-  create (#1302).
-  Each needs a writer that takes `tx` plus an app-only runner operation, so the key
-  and the record of the save commit together. They sit in the PENDING table of
-  `src/fn/create-action-coverage.test.ts` until then (#1302).
-
 ## Stale versions on delete dialogs - **deferred**
 
 - Stale versions: `application-list`, `order-list`, `transport-legs-editor` and the document panels keep the dialog open on a stale version, so Delete retries the same saved version and fails again; `sample-list` closes the dialog instead. Unify them.

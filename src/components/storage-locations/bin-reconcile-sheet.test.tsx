@@ -30,7 +30,7 @@ vi.mock("@/components/ui/slide-over-panel", () => {
   );
   const Body = ({ children }: { children: ReactNode }) => <div>{children}</div>;
 
-  return {
+  return { FILL_CHILDREN_CLASS: "",
     SlideOverPanel: { Root, Content, Header, Title, Description, Body },
   };
 });

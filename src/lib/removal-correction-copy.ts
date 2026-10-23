@@ -18,6 +18,11 @@ export const RESUBMIT_NEEDED_LABEL = "Resubmit needed";
 export const RESUBMIT_REMOVAL_LABEL = "Resubmit Removal";
 export const OPEN_GHG_STATEMENT_LABEL = "Open GHG Statement";
 
+/** "noma could not compare <subject> with what it sent", without end punctuation so callers add their own. */
+export function comparisonUnavailableClause(subject: string): string {
+  return `noma could not compare ${subject} with what it sent`;
+}
+
 /** What Isometric said about the returned statement, in the operator's words. */
 export function returnedStatementPhrase(status: string | null): string {
   return status === "FAILED_VERIFICATION" ? "failed verification" : "is back in draft";

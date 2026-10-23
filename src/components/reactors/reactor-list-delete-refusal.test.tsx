@@ -21,7 +21,7 @@ vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => un
 vi.mock("@/hooks/use-reactors", () => ({
   useReactorStats: () => ({ data: undefined, isLoading: false, isError: false }),
   useReactors: () => ({ data: { items: [REACTOR], total: 1, totalPages: 1 }, isLoading: false, error: null }),
-  useCreateReactor: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useCreateReactor: () => ({ startDraft: vi.fn(), isPending: false, mutateAsync: vi.fn() }),
   useUpdateReactor: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useDeleteReactor: () => ({ isPending: false, mutateAsync: harness.remove }),
 }));
