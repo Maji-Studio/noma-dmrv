@@ -601,7 +601,7 @@ describe("buildRemovalSubmissionBuild", () => {
       },
     ] as const;
 
-    const evidenceFacts = { transport: "transport-model-fingerprint", durability: null };
+    const evidenceFacts = { format: "ledger-inputs-v1" as const, transport: "transport-input-fingerprint", durability: null };
     const semanticPayload = { removalId: "removal-1" };
     const snapshot = materializeRemovalSubmissionSnapshot({
       compiled: {

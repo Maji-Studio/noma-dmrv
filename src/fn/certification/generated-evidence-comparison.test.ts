@@ -5,10 +5,23 @@ import { generatedEvidenceFacts, compareGeneratedEvidenceFacts } from "./generat
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import type { RemovalSubmissionContext } from "./certify-context-types";
 import { changedGeneratedEvidence } from "./generated-evidence-comparison";
-import { stableLedgerContentHash, transportLedgerModel } from "./evidence-ledger-models";
+import { durabilityLedgerModel, stableLedgerContentHash, transportLedgerModel } from "./evidence-ledger-models";
 import { deriveRemovalSemanticCorrection } from "@/lib/certification/removal-semantic-correction";
 
 vi.mock("@/data-access/removal-entry-correction", () => ({ getSentRemovalForComparison: vi.fn() }));
+const deploy = vi.hoisted(() => ({ blueprint: "", formula: "" }));
+vi.mock("@/lib/isometric/storage-blueprints", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/lib/isometric/storage-blueprints")>();
+  return { ...actual, get CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR() {
+    return deploy.blueprint || actual.CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR;
+  } };
+});
+vi.mock("@/lib/calculations/biochar-removal", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/lib/calculations/biochar-removal")>();
+  return { ...actual, get CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION() {
+    return deploy.formula || actual.CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION;
+  } };
+});
 const org = makeTestOrgContext();
 function context(): RemovalSubmissionContext {
   const leg = (id: string, distanceKm: number) => ({ id, entityType: "feedstock", entityId: id,
@@ -19,7 +32,7 @@ function context(): RemovalSubmissionContext {
     transportLegs: { feedstock: [leg("a", 5), leg("b", 15)], biochar: [], sample: [] }, batchesWithSamples: [],
   } as unknown as RemovalSubmissionContext;
 }
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => { vi.resetAllMocks(); deploy.blueprint = ""; deploy.formula = ""; });
 async function comparison(changed: boolean) {
   const ctx = context();
   vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { generatedEvidenceFacts: generatedEvidenceFacts(ctx) } } as never);
@@ -138,4 +151,56 @@ it.each(["200_year", "1000_year"] as const)("ignores R0 and unused chemistry for
     ctx.facilityReferenceSoilTemperature!.declaredSoilTemperatureC = 25;
   }
   expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline).status).toBe("unchanged");
+});
+
+
+it.each(["blueprint", "formula"] as const)("ignores a deployed %s constant after the baseline is frozen", async constant => {
+  const ctx = context();
+  ctx.attributionByRunId = new Map();
+  ctx.batchesWithSamples = [{ creditBatchId: "batch", creditBatchCode: "CB-1", durabilityOption: "1000_year",
+    samples: [{ id: "sample", totalCarbonPercent: 80, inorganicCarbonPercent: 2, sReflectanceFraction: 0.5 }],
+    runs: [{ id: "run", biocharDryMassKg: 100 }],
+  }] as never;
+  const baseline = generatedEvidenceFacts(ctx);
+  const before = durabilityLedgerModel(ctx, null, "").model;
+  vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { generatedEvidenceFacts: baseline } } as never);
+  deploy[constant] = "deployed-version";
+  const after = durabilityLedgerModel(ctx, null, "").model;
+  // Prove the mocked deploy actually changes the generated model.
+  expect(stableLedgerContentHash(after)).not.toBe(stableLedgerContentHash(before));
+  expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline).status).toBe("unchanged");
+  expect(await changedGeneratedEvidence(org, "removal", ctx)).toEqual([]);
+  ctx.batchesWithSamples[0].samples[0].sReflectanceFraction = 0.6;
+  expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline).status).toBe("changed");
+  const resubmitted = generatedEvidenceFacts(ctx);
+  expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), resubmitted).status).toBe("unchanged");
+});
+
+it("treats run C model fingerprints and prior raw baselines as unknown", async () => {
+  const ctx = context();
+  for (const baseline of [
+    { transport: "old-model-hash", durability: "old-durability-model-hash" },
+    { transport: [], durability: [] },
+    { format: "ledger-inputs-v0", transport: "old", durability: null },
+  ]) {
+    expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline)).toEqual({ status: "unknown", changed: [] });
+    vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { generatedEvidenceFacts: baseline } } as never);
+    expect(await changedGeneratedEvidence(org, "removal", ctx)).toEqual([]);
+  }
+});
+
+it("normalizes missing transport mass and clamped attribution like the builders", () => {
+  const ctx = context();
+  ctx.transportLegs.feedstock[0].loadMassKg = null;
+  const baseline = generatedEvidenceFacts(ctx);
+  ctx.transportLegs.feedstock[0].loadMassKg = -1;
+  expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline).status).toBe("unchanged");
+  ctx.attributionByRunId = new Map([["run", 1]]);
+  ctx.batchesWithSamples = [{ creditBatchId: "batch", durabilityOption: "1000_year",
+    samples: [{ id: "sample", totalCarbonPercent: 80, inorganicCarbonPercent: 2, sReflectanceFraction: 0.5 }],
+    runs: [{ id: "run", biocharDryMassKg: 100 }],
+  }] as never;
+  const attributed = generatedEvidenceFacts(ctx);
+  ctx.attributionByRunId.set("run", 2);
+  expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), attributed).status).toBe("unchanged");
 });

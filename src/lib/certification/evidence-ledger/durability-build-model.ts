@@ -58,7 +58,7 @@ function statOf(value: ValueWithStdDev | null): LedgerStat | null {
 // (light fixtures). Reads an existing Date/string — no clock access. Typed
 // `unknown` because the column maps to `Date` but raw rows / test fixtures can
 // carry a string.
-function samplingDayOf(
+export function samplingDayOf(
   samplingTime: unknown,
   facilityTimezone: string | null | undefined,
 ): string | null {

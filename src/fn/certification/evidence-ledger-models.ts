@@ -15,8 +15,16 @@ export function stableLedgerContentHash<M extends { generatedAtIso: string }>(
 }
 
 /** Retain the historical created-at ordering, resolving ties by stable identity. */
-function orderedLegs(legs: TransportLeg[]) {
+export function orderedLegs(legs: TransportLeg[]) {
   return [...legs].sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0) || a.id.localeCompare(b.id));
+}
+
+export function orderedDurabilityBatches(ctx: RemovalSubmissionContext) {
+  return [...ctx.batchesWithSamples].sort((a, b) => a.creditBatchId.localeCompare(b.creditBatchId)).map(batch => ({
+    ...batch,
+    samples: [...batch.samples].sort((a, b) => a.id.localeCompare(b.id)),
+    runs: [...batch.runs].sort((a, b) => a.id.localeCompare(b.id)),
+  }));
 }
 
 function memberCodes(ctx: RemovalSubmissionContext) {
@@ -45,11 +53,7 @@ export function durabilityLedgerModel(ctx: RemovalSubmissionContext, facilityNam
   const memberBatchCodes = memberCodes(ctx);
 
   const commonModelArgs = {
-    batches: [...ctx.batchesWithSamples].sort((a, b) => a.creditBatchId.localeCompare(b.creditBatchId)).map(batch => ({
-      ...batch,
-      samples: [...batch.samples].sort((a, b) => a.id.localeCompare(b.id)),
-      runs: [...batch.runs].sort((a, b) => a.id.localeCompare(b.id)),
-    })),
+    batches: orderedDurabilityBatches(ctx),
     attributionByRunId: ctx.attributionByRunId,
     memberBatchCodes,
     facilityName,
