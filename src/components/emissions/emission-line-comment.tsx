@@ -11,23 +11,33 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { ChatTextIcon } from "@phosphor-icons/react/dist/ssr";
+import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
+import { FormError } from "@/components/forms/form-error";
 import { FormTextarea } from "@/components/forms/form-textarea";
 import { ServerError } from "@/components/forms/server-error";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { Button } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { useToast } from "@/components/ui/toast";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useDeleteEmissionLineComment, useSetEmissionLineComment } from "@/hooks/use-emission-line-comments";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { cn } from "@/lib/utils";
+import {
+  emissionLineCommentFormSchema,
+  type EmissionLineCommentFormData,
+  type EmissionLineCommentFormInput,
+} from "@/schemas/emission-entry-form";
 import { EntryMenu } from "./emission-ledger-entries";
 import { ICON } from "./emission-line-body-parts";
-import { MAX_NOTE_LENGTH, NOTE_TOO_LONG_MESSAGE, type EmissionLine } from "./emission-line-display";
+import type { EmissionLine } from "./emission-line-display";
 import { MENU_PULL, NAME_INSET, TABLE_ROW } from "./emission-line-grid";
 
-const EMPTY_MESSAGE = "Enter a comment.";
 const SAVE_FALLBACK = "The comment was not saved. Try again.";
 const DELETE_FALLBACK = "The comment was not deleted. Try again.";
 /** The comment row opens with a row divider, like every row of the sources table above it. */
@@ -139,47 +149,62 @@ export function useCommentDelete(line: EmissionLine, scope: EmissionBatchScope) 
 function CommentEditor({ line, scope, onDone }: { line: EmissionLine; scope: EmissionBatchScope; onDone: () => void }) {
   const save = useSetEmissionLineComment(scope);
   const [opened] = useState(() => (line.comment ? { id: line.comment.id, version: line.comment.version } : null));
-  const [body, setBody] = useState(line.comment?.body ?? "");
   const [error, setError] = useState<string | null>(null);
+  const latched = useLatchedSubmit();
+  const formId = useId();
+  const {
+    register,
+    handleSubmit,
+    control,
+    setError: setFieldError,
+    setFocus,
+    resetField,
+    trigger,
+    formState: { errors },
+  } = useForm<EmissionLineCommentFormInput, unknown, EmissionLineCommentFormData>({
+    resolver: zodResolver(emissionLineCommentFormSchema),
+    defaultValues: { body: line.comment?.body ?? "" },
+  });
+  const refuseSave = useSaveRefusal({ control, setError: setFieldError, resetField, formId });
   const id = `comment-${line.componentId}`;
-  const submit = async () => {
-    const trimmed = body.trim();
-    if (!trimmed) return setError(EMPTY_MESSAGE);
-    if (trimmed.length > MAX_NOTE_LENGTH) return setError(NOTE_TOO_LONG_MESSAGE);
-    setError(null);
+  const fieldError = errors.body?.message;
+  const saveComment = handleSubmit(async ({ body }) => {
     try {
       await save.mutateAsync({
         facilityId: scope.facilityId,
         creditBatchId: scope.creditBatchId,
         componentId: line.componentId,
-        body: trimmed,
+        body,
         ...(opened ? { id: opened.id, expectedVersion: opened.version } : {}),
       });
       onDone();
     } catch (caught) {
-      setError(toSaveErrorMessage(caught, SAVE_FALLBACK));
+      const footer = refuseSave(caught, toSaveErrorMessage(caught, SAVE_FALLBACK));
+      setError(footer);
+      // With the refusal at the field, focus would stay on Save, possibly out of view.
+      if (footer === null) setFocus("body");
     }
-  };
+  });
+  const submit = latched(async (event: React.FormEvent<HTMLFormElement>) => {
+    setError(null);
+    await saveComment(event);
+  });
   return (
-    <form
-      noValidate
-      className={COMMENT_ROW}
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (!save.isPending) void submit();
-      }}
-    >
+    <form id={formId} noValidate className={COMMENT_ROW} onSubmit={submit}>
       <CommentLabel htmlFor={id} />
       <div className={cn(BODY_CELL, "flex flex-col gap-8")}>
-        <FormTextarea
-          id={id}
-          autoFocus
-          error={!!error}
-          aria-describedby={error ? `${id}-error` : undefined}
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
-        />
-        {error && <div id={`${id}-error`}><ServerError message={error} /></div>}
+        <ResolvedErrorRevalidator control={control} trigger={trigger} />
+        <div>
+          <FormTextarea
+            id={id}
+            autoFocus
+            error={!!fieldError}
+            aria-describedby={fieldError ? `${id}-error` : undefined}
+            {...register("body")}
+          />
+          <FormError id={`${id}-error`} message={fieldError} />
+        </div>
+        {error && <ServerError message={error} />}
         <div className="flex flex-wrap gap-8">
           <Button size="small" variant="primary" type="submit" busy={save.isPending}>Save comment</Button>
           <Button size="small" variant="weak" onClick={onDone} disabled={save.isPending}>Cancel</Button>
