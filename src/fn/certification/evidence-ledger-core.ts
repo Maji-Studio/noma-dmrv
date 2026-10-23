@@ -25,6 +25,7 @@
  */
 import type { OrgContext } from "@/lib/auth/server";
 import { createHash } from "node:crypto";
+export { stableLedgerContentHash } from "./evidence-ledger-models";
 import {
   deleteDocumentUploadByDocument,
   getDocumentUploadByDocument,
@@ -113,14 +114,6 @@ export class EvidenceLedgerRetirementError extends SafeError {
     this.cause = cause;
     this.generationCause = generationCause;
   }
-}
-
-/** Pin the render timestamp to a constant so identical models hash identically. */
-export function stableLedgerContentHash<M extends { generatedAtIso: string }>(
-  model: M,
-): string {
-  const stable = { ...model, generatedAtIso: "" };
-  return createHash("sha256").update(JSON.stringify(stable)).digest("hex");
 }
 
 function docContentHash(doc: DocumentRow): string | null {

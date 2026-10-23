@@ -1,3 +1,4 @@
+import { durabilityLedgerModel } from "./evidence-ledger-models";
 /**
  * Durability evidence-ledger generation, storage, and Source mirroring.
  *
@@ -16,20 +17,18 @@
  * Server-internal core (no "use server" — takes an explicit `orgCtx`, called from
  * the submit pipeline which already resolved the caller).
  */
-import type { OrgContext } from "@/lib/auth/server";
 import { getFacilityById } from "@/data-access/facilities";
-import { buildDurabilityLedgerModel } from "@/lib/certification/evidence-ledger/durability-build-model";
-import { buildThousandYearDurabilityLedgerModel } from "@/lib/certification/evidence-ledger/durability-1000-build-model";
-import { renderDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/durability-pdf";
+import type { OrgContext } from "@/lib/auth/server";
+import { CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION } from "@/lib/calculations/biochar-removal";
 import { renderThousandYearDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/durability-1000-pdf";
+import { renderDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/durability-pdf";
 import {
   DURABILITY_EVIDENCE_LEDGER_KIND,
-  type DurabilityLedgerModel,
   type DurabilityEvidenceLedgerDocMetadata,
+  type DurabilityLedgerModel,
   type ThousandYearDurabilityLedgerModel,
 } from "@/lib/certification/evidence-ledger/durability-types";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
-import { CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION } from "@/lib/calculations/biochar-removal";
 import { logger } from "@/lib/log";
 import {
   type RemovalSubmissionContext,
@@ -100,40 +99,10 @@ export async function ensureDurabilityEvidenceLedgerSourceFromContext(
   }
 
   const facility = await getFacilityById(orgCtx, ctx.facilityId);
-  const memberBatchCodes =
-    ctx.memberBatches.map((b) => b.code).join(" · ") || null;
-
-  const commonModelArgs = {
-    batches: ctx.batchesWithSamples,
-    attributionByRunId: ctx.attributionByRunId,
-    memberBatchCodes,
-    facilityName: facility?.name ?? null,
-    externalProjectId: ctx.mapping.externalProjectId,
-    generatedAtIso: new Date().toISOString(),
-  };
-  let model: DurabilityLedgerModel | ThousandYearDurabilityLedgerModel;
-  let render: () => Promise<Buffer>;
-  if (durabilityOption === "1000_year") {
-    const thousandYearModel =
-      buildThousandYearDurabilityLedgerModel({
-        ...commonModelArgs,
-        // This artifact accompanies the submission being compiled now. The
-        // active template boundary rejects deprecated components, so prior
-        // snapshot semantics must not leak into superseding evidence.
-        componentKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-      });
-    model = thousandYearModel;
-    render = () =>
-      renderThousandYearDurabilityLedgerPdf(thousandYearModel);
-  } else {
-    const twoHundredYearModel = buildDurabilityLedgerModel({
-      ...commonModelArgs,
-      facilityReferenceSoilTemperature:
-        ctx.facilityReferenceSoilTemperature!,
-    });
-    model = twoHundredYearModel;
-    render = () => renderDurabilityLedgerPdf(twoHundredYearModel);
-  }
+  const model = durabilityLedgerModel(ctx, facility?.name ?? null, new Date().toISOString());
+  const render = () => durabilityOption === "1000_year"
+    ? renderThousandYearDurabilityLedgerPdf(model as ThousandYearDurabilityLedgerModel)
+    : renderDurabilityLedgerPdf(model as DurabilityLedgerModel);
 
   const contentHash = stableLedgerContentHash({
     ...model,

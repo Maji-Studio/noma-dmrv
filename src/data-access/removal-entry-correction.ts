@@ -1,3 +1,4 @@
+import { REMOVAL_MEMBERSHIP_STATUSES } from "@/lib/certification/removal-membership";
 import type { EntryContender } from "@/lib/certification/removal-emission-contributions";
 import { getEffectiveReportingPeriodEndOn } from "./certifier-ghg-statements";
 import { and, desc, eq, isNotNull, inArray } from "drizzle-orm";
@@ -59,7 +60,7 @@ export async function getSentRemovalForComparison(ctx: OrgContext, removalId: st
   return submitted ?? null;
 }
 
-/** Use the same ledger identities and statuses as reconcileStatementRemovals. */
+/** Use the same ledger identities and statuses as reconcileRemovalMembership. */
 export async function listNomaSentRemovalsForRemoteEntries(ctx: OrgContext, statementId: string, externalIds: readonly string[]) {
   requireOrgScope(ctx);
   if (!externalIds.length) return [];
@@ -72,6 +73,6 @@ export async function listNomaSentRemovalsForRemoteEntries(ctx: OrgContext, stat
     .where(and(eq(certificationSubmissions.organizationId, ctx.organizationId),
       eq(certificationSubmissions.provider, "isometric"), eq(certificationSubmissions.submissionType, "removal"),
       eq(certificationSubmissions.localEntityType, "removal"),
-      inArray(certificationSubmissions.status, ["submitted", "accepted", "superseded"]),
+      inArray(certificationSubmissions.status, REMOVAL_MEMBERSHIP_STATUSES),
       inArray(certificationSubmissions.externalId, [...externalIds])));
 }

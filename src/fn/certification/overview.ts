@@ -161,7 +161,7 @@ async function buildRemovalPreflightSummary(
   const scope = await resolveScopeForRemoval(orgCtx, removalId);
   if (!scope.removal) throw new SafeError("Removal not found.");
   const [ctx, recentSyncEvents] = await Promise.all([
-    buildRemovalContext(orgCtx, scope, facilityFacts, undefined, false, false, carryReads),
+    buildRemovalContext(orgCtx, scope, facilityFacts, { carryReads }),
     listRecentSyncEvents(orgCtx, {
       entityType: REMOVAL_ENTITY_TYPE,
       entityId: removalId,

@@ -15,6 +15,7 @@ import { RESUBMIT_NEEDED_LABEL, comparisonUnavailableClause } from "@/lib/remova
 const snapshotSchema = z.object({ semantic: z.record(z.string(), z.unknown()), templateObservationId: z.string().optional() });
 const entriesSchema = z.array(entryInputManifestSchema);
 type ComparisonFacts = {
+  contenders?: import("@/lib/certification/removal-emission-contributions").EntryContender[];
   submitted: Awaited<ReturnType<typeof getSentRemovalForComparison>>;
   batches: Awaited<ReturnType<typeof getCreditBatchesByRemovalId>>;
 };
@@ -59,7 +60,7 @@ export async function compareRemovalCurrentContent(ctx: OrgContext, removalId: s
   componentIds = components.map(component => component.id);
   let current: Record<string, unknown> | null;
   try {
-    current = await compileRemovalCorrectionContent(ctx, removalId, observation);
+    current = await compileRemovalCorrectionContent(ctx, removalId, observation, facts?.contenders);
   } catch (error) {
     if (error instanceof RemovalComparisonBlockedError) return unavailable("compile_refused", error.messages);
     if (error instanceof SafeError) return unavailable("compile_refused", [error.message]);

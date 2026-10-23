@@ -224,7 +224,7 @@ it("keeps an expired carried reservation in the resumed frozen compilation and r
   const facility = { templatesById: { [observation.externalTemplateId]: { observation } } };
   const scope = await resolveScopeForRemoval(ctx, receiving.removalId);
   const facts = await loadBatchEmissionContext(ctx, origin.facilityId, scope.memberBatches, facility,
-    { removalId: receiving.removalId }, false, undefined, receiving.removalId);
+    { claimedAttempt: { removalId: receiving.removalId }, ownedRemovalId: receiving.removalId });
   const frozen = frozenEntriesForAttempt(row, facts);
   expect(frozen).toEqual([{ entryId: entry.id, contentRevision: entry.contentRevision }]);
   const compiled = await loadRemovalEntryContext(ctx, scope, facts, facility, frozen);

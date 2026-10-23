@@ -1,3 +1,4 @@
+import { transportLedgerModel } from "./evidence-ledger-models";
 /**
  * Transport evidence-ledger generation, storage, and Source mirroring.
  *
@@ -13,9 +14,8 @@
  * document on a member credit batch, and mirrors it to an Isometric Source so it
  * rides into the removal's `source_ids`.
  */
-import type { OrgContext } from "@/lib/auth/server";
 import { getFacilityById } from "@/data-access/facilities";
-import { buildLedgerModel } from "@/lib/certification/evidence-ledger/build-model";
+import type { OrgContext } from "@/lib/auth/server";
 import { renderEvidenceLedgerPdf } from "@/lib/certification/evidence-ledger/pdf";
 import {
   TRANSPORT_EVIDENCE_LEDGER_KIND,
@@ -56,16 +56,7 @@ export async function ensureTransportEvidenceLedgerSourceFromContext(
   }
 
   const facility = await getFacilityById(orgCtx, ctx.facilityId);
-  const memberBatchCodes =
-    ctx.memberBatches.map((b) => b.code).join(" · ") || null;
-
-  const model = buildLedgerModel({
-    legsByCategory: ctx.transportLegs,
-    memberBatchCodes,
-    facilityName: facility?.name ?? null,
-    externalProjectId: ctx.mapping.externalProjectId,
-    generatedAtIso: new Date().toISOString(),
-  });
+  const model = transportLedgerModel(ctx, facility?.name ?? null, new Date().toISOString());
 
   const metadata: TransportEvidenceLedgerDocMetadata = {
     kind: TRANSPORT_EVIDENCE_LEDGER_KIND,

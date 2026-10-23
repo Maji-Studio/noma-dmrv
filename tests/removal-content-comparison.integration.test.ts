@@ -210,3 +210,13 @@ it("says unchanged everywhere for a returned receiving Removal that sent an entr
     await cleanupLineageFixture(origin);
   }
 });
+
+// A lineage-only change through the real context, preparation and compilation path.
+it("requires resubmission everywhere after sent sample chemistry changes without entry changes", async () => {
+  const f = fixture!;
+  await db.update(samples).set({ sReflectanceFraction: 0.6 })
+    .where(and(eq(samples.organizationId, org.organizationId), eq(samples.id, f.sampleId)));
+  expect(await compareRemovalCurrentContent(org, f.removalId)).toMatchObject({ kind: "changed", state: { correctionNeeded: true } });
+  expect(await loadRemovalEntryCorrection(org, f.removalId)).toMatchObject({ comparison: "changed", correctionNeeded: true });
+  await expect(guard()).rejects.toThrow(/Resubmit Removal .* first/);
+});

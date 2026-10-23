@@ -1,3 +1,7 @@
+import { currentEvidenceLedgerHashes } from "@/fn/certification/generated-evidence-comparison";
+import { insertDocument } from "@/data-access/documents";
+import * as comparisonContext from "@/fn/certification/removal-context-build";
+vi.mock("@/fn/certification/removal-context-build");
 import { makeContext, makeTemplate, fakeExternalIds, makeInventorySourceDocument } from "./fixtures/submit-removal-orchestrator";
 import { submitGhgStatementToVerifierCore } from "@/fn/certification/submit-ghg-statement";
 import { makeRemoteStatement } from "./fixtures/isometric-ghg-statement";
@@ -167,7 +171,7 @@ it("detects a run-only correction, fences the statement, supersedes and relocks 
   }] } as unknown as RemovalScope);
   const loadContext = async (options?: { claimedSubmissionId?: string }, advisory = true) => {
     const facts = await loadBatchEmissionContext(org, f.facilityId, scope.memberBatches, facilityFacts,
-      advisory ? undefined : { removalId: f.removalId, submissionId: options?.claimedSubmissionId }, false);
+      { claimedAttempt: advisory ? undefined : { removalId: f.removalId, submissionId: options?.claimedSubmissionId } });
     const entries = await loadRemovalEntryContext(org, scope, facts, facilityFacts);
     const result = makeContext(undefined, { facilityId: f.facilityId, removalId: f.removalId, removalTemplate: template, lineSources,
       latestSubmission: null, memberBatchClaims: [], batchesWithSamples, removalEntryContext: entries });
@@ -184,7 +188,7 @@ it("detects a run-only correction, fences the statement, supersedes and relocks 
   vi.mocked(context.loadRemovalSubmissionContext).mockImplementation(async (_org, _id, options) => loadContext(options, false));
   // The harness supplies complete, valid submission facts; the changed electricity
   // field is read from the real run on every build, including claim freshness.
-  vi.mocked(context.buildRemovalContext).mockImplementation(async () => loadContext());
+  vi.mocked(comparisonContext.buildRemovalContext).mockImplementation(async () => loadContext());
   vi.spyOn(scopeReader, "resolveScopeForRemoval").mockResolvedValue(scope);
   vi.mocked(ledger.getCertifierProjectByFacility).mockResolvedValue(makeContext().mapping);
   const facilitiesDA = await import("@/data-access/facilities");
@@ -195,6 +199,15 @@ it("detects a run-only correction, fences the statement, supersedes and relocks 
   vi.mocked(isometric.createDatapoint).mockImplementation(vi.fn(fakeExternalIds("dp")) as never);
   vi.mocked(isometric.createGhgEntry).mockImplementation(vi.fn(fakeExternalIds("rmv")) as never);
   const baselineContext = await loadContext();
+  // The harness mocks PDF/storage generation. Persist its content fingerprints
+  // so the real correction read sees the evidence that this sent baseline used.
+  for (const { kind, hash } of currentEvidenceLedgerHashes(baselineContext, null)) {
+    if (!hash) continue;
+    documentIds.push((await insertDocument(org, { entityType: "credit_batch", entityId: f.batchId,
+      documentType: "pdf", fileName: `${kind}.pdf`, fileUrl: "https://example.test/ledger.pdf",
+      metadata: { kind, removalId: f.removalId, contentHash: hash },
+    })).id);
+  }
   const baseline = await buildRemovalSubmissionBuild({ orgCtx: org, removalId: f.removalId,
     ctx: baselineContext, prepared: requirePreparedRemovalSubmission(baselineContext) });
   // Snapshots are frozen once a row leaves draft, so insert the sent attempt with its snapshot.
