@@ -5,7 +5,7 @@ import { assertRowVersion, nextVersion } from "./row-version";
  */
 
 import { and, asc, desc, eq, ilike, inArray, isNull, or, SQL, count } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   reactors,
@@ -40,6 +40,7 @@ export interface PaginatedReactors {
 
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { IN_USE_DELETE_MARKER, inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { guardReactorIdentifier } from "./unique-name-guards";
 import { CODE_CONFLICT_MESSAGES, withUniqueCodeGuard } from "./code-generator";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
@@ -236,11 +237,9 @@ export async function getReactorById(
 // Create Operations
 // ============================================
 
-/**
- * Create a new reactor
- */
-export async function createReactor(
+export async function createReactorInTransaction(
   ctx: OrgContext,
+  tx: DbTransaction,
   data: {
     code: string;
     identifier: string;
@@ -254,24 +253,22 @@ export async function createReactor(
 
   // ADR 0022: sampling is a credit-batch choice, not a reactor property.
 
-  const [reactor] = await db.transaction(async (tx) => {
-    // No new children under an archived parent, including one being archived.
-    await lockActiveFacilityReference(ctx, tx, data.facilityId);
-    return guardReactorIdentifier(ctx, data.identifier, () =>
-      tx
-        .insert(reactors)
-        .values({
-          organizationId: ctx.organizationId,
-          code: data.code,
-          identifier: data.identifier,
-          facilityId: data.facilityId,
-          reactorType: data.reactorType,
-          nominalThroughputTph: data.nominalThroughputTph ?? null,
-          specifications: data.specifications ?? null,
-        })
-        .returning()
-    );
-  });
+  // No new children under an archived parent, including one being archived.
+  await lockActiveFacilityReference(ctx, tx, data.facilityId);
+  const [reactor] = await guardReactorIdentifier(ctx, data.identifier, () =>
+    tx
+      .insert(reactors)
+      .values({
+        organizationId: ctx.organizationId,
+        code: data.code,
+        identifier: data.identifier,
+        facilityId: data.facilityId,
+        reactorType: data.reactorType,
+        nominalThroughputTph: data.nominalThroughputTph ?? null,
+        specifications: data.specifications ?? null,
+      })
+      .returning()
+  );
 
   return reactor;
 }
@@ -377,7 +374,7 @@ export async function deleteReactor(
   requireOrgScope(ctx);
 
   await db.transaction(async (tx) => {
-    const [versioned] = await tx.select({ version: reactors.version })
+    const [versioned] = await tx.select({ version: reactors.version, code: reactors.code })
       .from(reactors)
       .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)))
       .for("update");
@@ -394,8 +391,9 @@ export async function deleteReactor(
         ),
       );
     if (Number(productionRunCount) > 0) {
-      throw new SafeError(
-        "Cannot delete reactor with associated production runs. Remove the production runs first.",
+      throw inUseDeleteRefusal(
+        `Reactor ${versioned.code} ${IN_USE_DELETE_MARKER} production runs still use it. Keep this reactor.`,
+        ["reactorId"],
       );
     }
 

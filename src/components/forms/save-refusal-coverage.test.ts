@@ -12,11 +12,6 @@ const PENDING_SEAMS = [
     pending: /getCreateErrorMessage:\s*\(error\)\s*=>/,
   },
   {
-    file: "src/hooks/use-picker-edit-submit.ts",
-    reason: "PR E: usePickerEditSubmit catches without the form's refusal handler",
-    pending: /setError\(toSaveErrorMessage\(cause,/,
-  },
-  {
     file: "src/hooks/use-quick-add-submit.ts",
     reason: "PR H: useQuickAddSubmit reduces action failures to their message",
     pending: /setError\(result\.error\)/,
@@ -25,12 +20,6 @@ const PENDING_SEAMS = [
 
 /** #1327: remove each entry when its form moves to the shared refusal handler. */
 const PENDING: Record<string, string> = {
-  "orders/order-form.tsx": "PR E: order sheet and picker edit",
-  "samples/sample-form.tsx": "PR E: sample code alias and parent catches",
-  "credit-batches/credit-batch-form.tsx": "PR E: credit batch sheets",
-  "production-runs/production-run-form.tsx": "PR F: run overlap catch and parent catches",
-  "production-runs/production-incident-form.tsx": "PR F: incident child editor",
-  "production-runs/production-sample-form.tsx": "PR F: in-process sample child editor",
   "biochar-products/biochar-product-form.tsx": "PR G: replace inline stock routing with aliases",
   "storage-locations/storage-location-form.tsx": "PR H: storage bin sheet and quick-add",
   "storage-locations/output-stock-form.tsx": "PR H: output stock refusal",
@@ -116,5 +105,19 @@ describe("save refusal coverage", () => {
   it.each(PENDING_SEAMS)("keeps the parent seam pending: $reason", ({ file, pending }) => {
     const source = readFileSync(resolve(process.cwd(), file), "utf8");
     expect(source, `${file} no longer uses the pending error route; remove its seam entry`).toMatch(pending);
+  });
+
+  it("hands every migrated form's picker edit dialog onSubmitWithRefusal, not the legacy onSubmit", () => {
+    const dialogs = readFileSync(resolve(COMPONENTS_DIR, "forms/entity-select/entity-edit-forms.tsx"), "utf8");
+    // One dialog entry per exported function; each renders a single entity form.
+    const entries = dialogs.split(/^export function /m).slice(1);
+    const migrated = entries.flatMap((entry) => {
+      const form = /<(\w+Form)\b/.exec(entry)?.[1];
+      const file = [...sources].find(([, source]) => form && new RegExp(`export function ${form}\\b`).test(source));
+      return form && file && usesRefusal(file[1]) ? [{ form, entry }] : [];
+    });
+    expect(migrated.length, "no migrated picker dialog found; the scan is stale").toBeGreaterThan(0);
+    const legacy = migrated.filter(({ entry }) => !/onSubmit=\{formProps\.onSubmitWithRefusal\}/.test(entry)).map(({ form }) => form);
+    expect(legacy, "these migrated forms must take onSubmitWithRefusal in entity-edit-forms.tsx").toEqual([]);
   });
 });

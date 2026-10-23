@@ -24,3 +24,11 @@ it("reserves a held replacement only for its holding Removal, even on reservatio
   expect(emissionEntryCanBeReserved({ ...args, entry: { ...entry, heldForRemovalId: "r" } })).toBe(true);
   expect(emissionEntryCanBeReserved({ ...args, entry: { ...entry, heldForRemovalId: "other" }, priorReservationTransferable: true })).toBe(false);
 });
+
+it("reserves a nonmember only after the transactional carry check, retaining all claim guards", () => {
+  const carried = { ...args, memberBatchIds: ["receiving"] };
+  expect(emissionEntryCanBeReserved(carried)).toBe(false);
+  expect(emissionEntryCanBeReserved({ ...carried, eligibleCarry: true })).toBe(true);
+  expect(emissionEntryCanBeReserved({ ...carried, eligibleCarry: true, entry: { ...entry, sendReservedBySubmissionId: "foreign" } })).toBe(false);
+  expect(emissionEntryCanBeReserved({ ...carried, eligibleCarry: true, expectedRevision: 1 })).toBe(false);
+});

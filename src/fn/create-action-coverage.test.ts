@@ -32,10 +32,6 @@ const KEYED = [
   "quick-add#createStorageLocationFn",
   "emission-entries#createEmissionEntryFn",
   API_KEY_ACTION,
-];
-
-// Creates not yet keyed; see docs/open-questions.md. Wiring and client checks apply only to KEYED.
-const PENDING = [
   "storage-locations#createStorageLocationFn",
   "facilities#createFacilityFn",
   "reactors#createReactorFn",
@@ -57,6 +53,7 @@ const EXCEPTION: Record<string, string> = {
   "certification/ghg-statements#createGhgStatementDraft": "External POST adopts or refuses a matching remote statement under a facility lock.",
   "certification/sources#mirrorDocumentToSource": "Reconciles external uploads and uses insert-or-get locally.",
   "organizations#inviteMemberAction": "Owner-approved retry replaces the pending invitation through Better Auth.",
+  "organizations#resendInvitationAction": "Replaces one pending invitation in a transaction; a retry replaces it again and the newest link wins.",
   "documents#requestUpload": "Duplicates leave pending uploads reclaimed by the upload sweep; evidence create is single-flight.",
   "production-run-reading-imports#importProductionRunReadingsFromDocumentFn": "Seed-only unmounted importer deduplicates timestamps.",
   "bin-movements#recordStockTakeFn": "Legacy unmounted action; useRecordStockTake has no caller.",
@@ -69,6 +66,7 @@ const EXCEPTION: Record<string, string> = {
 
 const NOT_CREATE: Record<string, string> = {
   "organizations#renameOrganizationAction": "Renames an existing organization.",
+  "organizations#leaveOrganizationAction": "Removes the caller's own existing membership.",
   "applications#getApplicationStatsFn": "Reads application totals without creating a domain record.",
   "customers#getCustomerStatsFn": "Reads customer totals without creating a domain record.",
   "facilities#getFacilityStatsFn": "Reads facility totals without creating a domain record.",
@@ -281,7 +279,7 @@ const actions = new Map<string, Action>(fnFiles.filter(isServerModule).flatMap(s
   [...exportedActions(source)].map(([name, fn]) => [`${moduleName(source.fileName)}#${name}`, fn] as const)));
 
 it("classifies every create candidate exactly once and rejects stale entries", () => {
-  const entries = [...KEYED, ...PENDING, ...Object.keys(EXCEPTION), ...Object.keys(NOT_CREATE)];
+  const entries = [...KEYED, ...Object.keys(EXCEPTION), ...Object.keys(NOT_CREATE)];
   expect(entries.filter((entry, index) => entries.indexOf(entry) !== index)).toEqual([]);
   expect(entries.filter(entry => !actions.has(entry)), "Stale inventory entries").toEqual([]);
   expect([...actions.keys()].filter(identity => !NON_CREATE_VERBS.test(identity.split("#")[1]) && !entries.includes(identity)), "Unclassified exports").toEqual([]);

@@ -197,6 +197,7 @@ export function FacilityList() {
   };
 
   const openCreate = () => {
+    createFacility.startDraft();
     setCreatedFacility(null);
     setCreateError(null);
     setUpdateError(null);

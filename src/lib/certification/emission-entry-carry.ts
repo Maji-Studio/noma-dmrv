@@ -1,0 +1,82 @@
+import { emissionEntryCounts, entryLine, type EntryObservation } from "./emission-entry-rules";
+import { removalEntryOwner, type EntryContender, type RemovalEntryFact } from "./removal-emission-contributions";
+
+export interface CarryContender extends EntryContender {
+  organizationId: string;
+  facilityId: string;
+  code: string;
+  creditBatchCodes: string[];
+  /** `creditBatchIds` (from EntryContender) lines up with these codes, so each can link to its batch. */
+  observation: EntryObservation | null;
+}
+export const CARRY_WAITING_REASONS = {
+  noDraft: "Waiting for a Removal. No later draft is available at this facility.",
+  templateUnknown: "Waiting for a Removal. noma has not read the next draft's template yet. Open the Removal to load it.",
+  incompatibleTemplate: "Waiting for a Removal. The next draft's template cannot take this component.",
+} as const;
+export type CarryWaitingReason = keyof typeof CARRY_WAITING_REASONS;
+export interface EntryCarryDestination {
+  removalId: string;
+  removalCode: string;
+  creditBatchCodes: string[];
+  /** Aligned with `creditBatchCodes`. */
+  creditBatchIds: string[];
+  anotherCreditBatch: boolean;
+}
+export interface EntryCarryDisposition {
+  receiver: EntryCarryDestination | null;
+  waitingReason: CarryWaitingReason | null;
+  /** The draft whose template is not read yet (`templateUnknown`), so the wait can open it. */
+  waitingFor?: { removalId: string; removalCode: string } | null;
+}
+
+/** The skip-incompatible policy lives here so a later blocking policy changes one seam. */
+export function removalEntryCarryOwner(args: {
+  entry: RemovalEntryFact;
+  organizationId: string;
+  facilityId: string;
+  fullyApplied: boolean;
+  ownContenders: readonly EntryContender[];
+  contenders: readonly CarryContender[];
+  observation: EntryObservation | null;
+}): EntryCarryDisposition {
+  const { entry } = args;
+  const none: EntryCarryDisposition = { receiver: null, waitingReason: null };
+  if (entry.deletedAt || entry.kind !== "value" || entry.lineRule !== "additive" ||
+    entry.values.length !== 1 ||
+    !args.observation || entryLine(args.observation, entry.componentId)?.component.inputs.filter(input => input.type === "monitored").length !== 1 ||
+    entry.sentByRemovalId || entry.heldForRemovalId || entry.reservedByRemovalId ||
+    (entry.sendReservedBySubmissionId && !entry.reservationKnownInactive) ||
+    !args.fullyApplied || removalEntryOwner(entry, args.ownContenders)) return none;
+  const candidates = args.contenders.filter(candidate => candidate.contenderKind === "draft" &&
+    candidate.organizationId === args.organizationId && candidate.facilityId === args.facilityId &&
+    !candidate.creditBatchIds.includes(entry.creditBatchId) && candidate.window.end >= entry.occurredOn)
+    .sort((a, b) => a.window.end.localeCompare(b.window.end) || a.createdAt.localeCompare(b.createdAt) || a.removalId.localeCompare(b.removalId));
+  for (const receiver of candidates) {
+    if (!receiver.observation) return { receiver: null, waitingReason: "templateUnknown",
+      waitingFor: { removalId: receiver.removalId, removalCode: receiver.code } };
+    const line = entryLine(receiver.observation, entry.componentId);
+    if (line?.entryPolicy === "additive" &&
+      line.component.inputs.filter(input => input.type === "monitored").length === 1 &&
+      emissionEntryCounts(args.observation, receiver.observation, entry.componentId).counts) {
+      return { receiver: { removalId: receiver.removalId, removalCode: receiver.code, creditBatchCodes: receiver.creditBatchCodes,
+        creditBatchIds: [...receiver.creditBatchIds], anotherCreditBatch: true }, waitingReason: null };
+    }
+  }
+  return { receiver: null, waitingReason: candidates.length ? "incompatibleTemplate" : "noDraft", waitingFor: null };
+}
+
+/** The sent Removal of the entry's own batch, when the entry was recorded after it was sent. */
+export function recordedAfter(carried: { earlierRemovalId?: string; earlierRemovalCode?: string } | undefined): { removalId: string; removalCode: string } | null {
+  return carried?.earlierRemovalId && carried.earlierRemovalCode
+    ? { removalId: carried.earlierRemovalId, removalCode: carried.earlierRemovalCode } : null;
+}
+
+/** A carry belongs to its elected, reserved, or sent Removal. */
+export function isCarriedToRemoval(
+  entry: Pick<RemovalEntryFact, "carry" | "reservedByRemovalId" | "sentByRemovalId">,
+  removalId: string,
+): boolean {
+  return entry.carry?.receiver?.removalId === removalId ||
+    entry.reservedByRemovalId === removalId || entry.sentByRemovalId === removalId;
+}

@@ -9,9 +9,10 @@ import { revokeMemberOAuthGrants } from "./oauth-grant-lifecycle";
 import { disableOwnerApiKeys } from "./api-credential-auth";
 import { oauthRolePolicy } from "@/lib/auth/oauth-role-policy";
 import { canOwnApiKey } from "@/lib/auth/api-scopes";
-import { LAST_ADMIN_MESSAGE, rethrowLastAdmin } from "@/lib/auth/organization-role-policy";
+import { assertOrganizationRole, LAST_ADMIN_MESSAGE, rethrowLastAdmin } from "@/lib/auth/organization-role-policy";
 import { randomUUID } from "node:crypto";
-import { and, count, desc, eq, like, ne, or, sql } from "drizzle-orm";
+import { INVITATION_EXPIRES_IN_SECONDS, ORGANIZATION_INVITATION_LIMIT } from "@/config/auth";
+import { and, count, desc, eq, gt, like, ne, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
 import { seedOrgDefaults } from "@/db/org-defaults";
@@ -29,8 +30,6 @@ import { isSlugForBase, organizationSlugBase, organizationSlugCandidate } from "
 import { logger } from "@/lib/log";
 import { uuidSchema } from "@/schemas/helpers";
 
-// Mirrors Better Auth's organization plugin configuration in better-auth.ts.
-const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
 const MILLISECONDS_PER_SECOND = 1_000;
 const ORGANIZATION_SLUG_MAX_ATTEMPTS = 3;
 const CREATE_INTENT_LOCK_HASH_SEED = 0;
@@ -51,6 +50,7 @@ export type OrgInvitationRow = {
   role: string;
   status: string;
   expiresAt: Date | null;
+  expired: boolean;
   createdAt: Date;
 };
 
@@ -93,7 +93,7 @@ export async function listOrgInvitations(
   ctx: OrgContext
 ): Promise<OrgInvitationRow[]> {
   requireOrgScope(ctx);
-  return db
+  const rows = await db
     .select({
       id: invitations.id,
       email: invitations.email,
@@ -110,6 +110,28 @@ export async function listOrgInvitations(
       )
     )
     .orderBy(desc(invitations.createdAt));
+  const now = Date.now();
+  return rows.map((row) => ({
+    ...row,
+    expired: row.expiresAt !== null && row.expiresAt.getTime() <= now,
+  }));
+}
+
+/** Pending includes expired invitations; other organizations resolve as absent. */
+export async function findPendingOrgInvitation(ctx: OrgContext, invitationId: string) {
+  requireOrgScope(ctx);
+  if (!hasOrgRole(ctx, "admin")) {
+    throw new SafeError("Only organization Admins can send invitations again.");
+  }
+  const [invitation] = await db.select({ email: invitations.email, role: invitations.role })
+    .from(invitations)
+    .where(and(
+      eq(invitations.id, invitationId),
+      eq(invitations.organizationId, ctx.organizationId),
+      eq(invitations.status, "pending"),
+    )).limit(1);
+  if (!invitation) throw new SafeError("Invitation not found or is no longer pending.");
+  return invitation;
 }
 
 /** Create an invitation without the plugin's org-membership requirement. */
@@ -159,8 +181,53 @@ export async function createInvitationAsPlatformAdmin(
     });
   });
 
-  // This override does not send email; the settings UI exposes a copyable URL.
+  // The server action sends email after this transaction commits.
   return { id: invitationId };
+}
+
+/** Caller authorizes Admin access; lock the scoped pending row before replacing it. */
+export async function replacePendingInvitation(
+  ctx: OrgContext,
+  input: { invitationId: string },
+): Promise<{ id: string; email: string; role: OrgRole }> {
+  requireOrgScope(ctx);
+  return db.transaction(async (tx) => {
+    const [invitation] = await tx.select({ email: invitations.email, role: invitations.role })
+      .from(invitations)
+      .where(and(
+        eq(invitations.id, input.invitationId),
+        eq(invitations.organizationId, ctx.organizationId),
+        eq(invitations.status, "pending"),
+      )).for("update");
+    if (!invitation) throw new SafeError("Invitation not found or is no longer pending.");
+    // The global plugin middleware rejects legacy Owner and multi-role grants.
+    assertOrganizationRole(invitation.role);
+    const role = invitation.role as OrgRole;
+    // Email was validated when the invitation was created; no new recipient input
+    // is accepted here. Recheck membership because the recipient may have joined.
+    const [existingMember] = await tx.select({ id: members.id }).from(members)
+      .innerJoin(users, eq(users.id, members.userId))
+      .where(and(eq(members.organizationId, ctx.organizationId),
+        sql`lower(${users.email}) = ${invitation.email.toLowerCase()}`)).limit(1);
+    if (existingMember) throw new SafeError("User is already a member of this Organization.");
+
+    await tx.update(invitations).set({ status: "canceled" }).where(and(
+      eq(invitations.id, input.invitationId),
+      eq(invitations.organizationId, ctx.organizationId),
+      eq(invitations.status, "pending"),
+    ));
+    // Match the plugin's check after cancellation, including expired replacements.
+    const [{ activeCount }] = await tx.select({ activeCount: count() }).from(invitations)
+      .where(and(eq(invitations.organizationId, ctx.organizationId),
+        eq(invitations.status, "pending"), gt(invitations.expiresAt, new Date())));
+    if (activeCount >= ORGANIZATION_INVITATION_LIMIT) throw new SafeError("Invitation limit reached.");
+
+    const id = randomUUID();
+    await insertPendingInvitation(tx, {
+      id, organizationId: ctx.organizationId, ...invitation, role, inviterId: ctx.userId,
+    });
+    return { id, ...invitation, role };
+  });
 }
 
 // org-scope-ok: callers authorize the target organization before inserting its invitation.

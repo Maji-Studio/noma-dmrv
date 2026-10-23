@@ -4,6 +4,8 @@
  */
 "use client";
 
+import { useId } from "react";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -36,7 +38,7 @@ interface ProductionSampleFormProps {
   productionRunId: string;
   facilityId: string;
   sample?: ProductionSampleWithRelations;
-  onSubmit: (data: ProductionSampleFormData) => Promise<void> | void;
+  onSubmit: (data: ProductionSampleFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
@@ -58,6 +60,7 @@ export function ProductionSampleForm({
   onRemoveDeferredAttachment,
 }: ProductionSampleFormProps) {
   const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!sample;
   // A saved measurement inherits its run's lineage; once submitted its files cannot change.
   const locked = useIsRecordCertificationLocked("production_sample", sample?.id);
@@ -68,6 +71,8 @@ export function ProductionSampleForm({
     handleSubmit,
     control,
     trigger,
+    resetField,
+    setError,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(productionSampleFormSchema),
@@ -92,10 +97,11 @@ export function ProductionSampleForm({
 
   // Rendered via the parent ProductionRunForm's `children` slot, which lives
   // outside its <form> element — so a real <form> is safe here (no nesting).
-  const onFormSubmit = latched(handleSubmit((data) => onSubmit(data as ProductionSampleFormData)));
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
+  const onFormSubmit = latched(handleSubmit((data) => onSubmit(data as ProductionSampleFormData, refuseSave)));
 
   return (
-    <form className="space-y-20" onSubmit={onFormSubmit}>
+    <form id={formId} className="space-y-20" onSubmit={onFormSubmit}>
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {/* Sample info */}
       <FormSection title="Sample info" divider={false}>
@@ -315,6 +321,7 @@ export function ProductionSampleForm({
 
       <FormActions
         control={control}
+        formId={formId}
         sticky={false}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
