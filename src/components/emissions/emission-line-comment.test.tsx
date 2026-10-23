@@ -77,6 +77,7 @@ describe("line comment editor", () => {
     expect(await screen.findByText("Use 4,000 characters or fewer.")).toBeTruthy();
     expect(document.getElementById("comment-line-1-error")?.textContent).toBe("Use 4,000 characters or fewer.");
     expect(screen.queryByText("Not saved.")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(box()));
   });
 
   it("keeps the footer when the refusal names no field", async () => {

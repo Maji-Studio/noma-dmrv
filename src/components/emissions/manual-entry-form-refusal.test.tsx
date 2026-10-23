@@ -7,10 +7,10 @@ import { LOCKED_FIELD_MESSAGE } from "@/lib/save-refusal";
 import { makeEntry, makeLine } from "./emission-line-test-fixtures";
 import { ManualEntryForm } from "./manual-entry-form";
 
-const mutations = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn(), replace: vi.fn() }));
+const mutations = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn(), replace: vi.fn(), pending: false }));
 
 vi.mock("@/hooks/use-emission-entries", () => ({
-  useCreateEmissionEntry: () => ({ isPending: false, mutateAsync: mutations.create }),
+  useCreateEmissionEntry: () => ({ isPending: mutations.pending, mutateAsync: mutations.create }),
   useUpdateEmissionEntry: () => ({ isPending: false, mutateAsync: mutations.update }),
   useReplaceEmissionEntry: () => ({ isPending: false, mutateAsync: mutations.replace }),
   invalidateEmissionEntryReads: vi.fn(),
@@ -39,12 +39,13 @@ const FALLBACK = "The manual entry was not saved. Check the values and try again
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  mutations.pending = false;
 });
 
-function renderForm(mode: React.ComponentProps<typeof ManualEntryForm>["mode"] = { kind: "add" }, onSaved = vi.fn()) {
+function renderForm(mode: React.ComponentProps<typeof ManualEntryForm>["mode"] = { kind: "add" }, onSaved = vi.fn(), line = makeLine()) {
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <ManualEntryForm line={makeLine()} batch={BATCH} scope={SCOPE} today="2026-09-20" mode={mode} onCancel={vi.fn()} onSaved={onSaved} />
+      <ManualEntryForm line={line} batch={BATCH} scope={SCOPE} today="2026-09-20" mode={mode} onCancel={vi.fn()} onSaved={onSaved} />
     </QueryClientProvider>,
   );
   return onSaved;
@@ -94,6 +95,28 @@ describe("ManualEntryForm save", () => {
   });
 });
 
+describe("ManualEntryForm submit", () => {
+  it("lets Enter in a field submit through the Save button, which names the form", () => {
+    renderForm();
+    const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    expect(save.type).toBe("submit");
+    // A button owned by the form is its default button, so Enter submits without a hidden one.
+    expect(save.form).toBe(energy().closest("form"));
+    expect(document.querySelectorAll("button[hidden]").length).toBe(0);
+  });
+
+  it("blocks Save and a submit while a save is pending", () => {
+    mutations.pending = true;
+    renderForm();
+    const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    expect(save.getAttribute("aria-busy")).toBe("true");
+    fireEvent.change(energy(), { target: { value: "3" } });
+    fireEvent.submit(energy().closest("form")!);
+    expect(mutations.create).not.toHaveBeenCalled();
+  });
+});
+
 describe("ManualEntryForm refusals", () => {
   it("lands a refusal that names the value at its field, with no footer", async () => {
     // The issue path the server sends for a rejected magnitude (createEmissionEntrySchema).
@@ -105,6 +128,8 @@ describe("ManualEntryForm refusals", () => {
     expect(document.getElementById("entry-line-1-energy-error")?.textContent).toBe("Use 100 characters or fewer.");
     expect(screen.queryByText(/not saved/i)).toBeNull();
     expect(onSaved).not.toHaveBeenCalled();
+    // No error summary on this form: focus moves to the refused field.
+    await waitFor(() => expect(document.activeElement).toBe(energy()));
   });
 
   it("lands an occurredOn refusal at the date", async () => {
@@ -116,12 +141,50 @@ describe("ManualEntryForm refusals", () => {
     expect(screen.queryByText(/not saved/i)).toBeNull();
   });
 
+  it("lands a refusal on the Mass part of a mass-distance line and sends the computed total to the footer", async () => {
+    const line = makeLine({ unit: "km * tonne", inputShape: [{ key: "md", type: "monitored", quantityKind: "mass_distance", unit: "km * tonne" }] });
+    mutations.create.mockRejectedValue(refusal([{ path: ["values", 0, "massDistanceDetail", "mass", "magnitude"], code: "too_big", message: "Mass is too long." }]));
+    renderForm({ kind: "add" }, vi.fn(), line);
+    fireEvent.change(screen.getByRole("textbox", { name: /Mass/ }), { target: { value: "5" } });
+    fireEvent.change(screen.getByRole("textbox", { name: /Distance/ }), { target: { value: "7" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(document.getElementById("entry-line-1-md:mass-error")?.textContent).toBe("Mass is too long."));
+    expect(screen.queryByText(/not saved/i)).toBeNull();
+    cleanup();
+    mutations.create.mockRejectedValue(refusal([{ path: ["values", 0, "magnitude"], code: "too_big", message: "The total is too long." }]));
+    renderForm({ kind: "add" }, vi.fn(), line);
+    fireEvent.change(screen.getByRole("textbox", { name: /Mass/ }), { target: { value: "5" } });
+    fireEvent.change(screen.getByRole("textbox", { name: /Distance/ }), { target: { value: "7" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText(/The total is too long/)).toBeTruthy();
+    expect(document.getElementById("entry-line-1-md:mass-error")).toBeNull();
+    expect(document.getElementById("entry-line-1-md:distance-error")).toBeNull();
+  });
+
+  it("maps the second input of a single line to its own field", async () => {
+    const line = makeLine({
+      entryPolicy: "single",
+      inputShape: [
+        { key: "conc", type: "monitored", quantityKind: "mass_fraction", unit: "kg/kg" },
+        { key: "flow", type: "monitored", quantityKind: "mass", unit: "kg" },
+      ],
+    } as never);
+    mutations.create.mockRejectedValue(refusal([{ path: ["values", 1, "magnitude"], code: "too_big", message: "Flow is too long." }]));
+    renderForm({ kind: "add" }, vi.fn(), line);
+    fireEvent.change(screen.getByRole("textbox", { name: /Concentration/ }), { target: { value: "1" } });
+    fireEvent.change(screen.getByRole("textbox", { name: /Total mass flow/ }), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(document.getElementById("entry-line-1-flow-error")?.textContent).toBe("Flow is too long."));
+    expect(document.getElementById("entry-line-1-conc-error")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("textbox", { name: /Total mass flow/ })));
+  });
+
   it("keeps the footer for a refusal that names no field", async () => {
     mutations.create.mockRejectedValue(new Error("boom"));
     renderForm();
     fireEvent.change(energy(), { target: { value: "5" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByText(/boom|not saved/i)).toBeTruthy();
+    expect(await screen.findByText("boom")).toBeTruthy();
   });
 
   it("shows the fallback footer for an ActionError without issues", async () => {

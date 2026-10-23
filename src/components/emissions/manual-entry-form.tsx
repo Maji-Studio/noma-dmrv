@@ -95,6 +95,8 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
     control,
     setError,
     setValue,
+    setFocus,
+    getFieldState,
     clearErrors,
     resetField,
     formState: { errors },
@@ -154,7 +156,13 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
       }
       onSaved({});
     } catch (error) {
-      setServerError(refuseSave(error, toSaveErrorMessage(error, SAVE_FALLBACK)));
+      const footer = refuseSave(error, toSaveErrorMessage(error, SAVE_FALLBACK));
+      setServerError(footer);
+      // No error summary here: with every issue at a field, focus would stay on Save.
+      if (footer === null) {
+        const refused = [...fields.map((_, index) => entryFieldName(index)), "date", "note"].find((name) => getFieldState(name).error);
+        if (refused) setFocus(refused);
+      }
     }
   });
 
@@ -238,8 +246,6 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
             <FormTextarea id={`${idPrefix}-note`} {...register("note")} />
           </FormField>
           {serverError && <ServerError message={serverError} />}
-          {/* Lets Enter in a field submit; the visible buttons sit in the footer. */}
-          <button type="submit" hidden aria-hidden="true" tabIndex={-1} disabled={saving} />
         </form>
       </SlideOverPanelBody>
       <SlideOverPanelFooter

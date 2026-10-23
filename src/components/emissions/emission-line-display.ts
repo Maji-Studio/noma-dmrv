@@ -12,17 +12,7 @@ import { EMISSION_LINE_STATE_LABELS, type EmissionFigure, type EmissionLineState
 import { canonicalDecimal, canonicalUnit } from "@/lib/isometric/template-observations/units";
 import type { QuantityKind } from "@/lib/isometric/template-observations/types";
 import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
-import {
-  DECIMAL_MESSAGE,
-  DATE_BEFORE_START_MESSAGE,
-  DATE_IN_FUTURE_MESSAGE,
-  DATE_INVALID_MESSAGE,
-  MAX_NOTE_LENGTH,
-  NOTE_TOO_LONG_MESSAGE,
-  entryFieldName,
-  isDecimal,
-  validateEntryDate,
-} from "@/schemas/emission-entry-form";
+import { entryFieldName, isDecimal } from "@/schemas/emission-entry-form";
 
 /* ---------- types ---------- */
 
@@ -38,8 +28,6 @@ const MAX_FRACTION_DIGITS = 3;
 const NUMBER_FORMAT = new Intl.NumberFormat("en-US", { maximumFractionDigits: MAX_FRACTION_DIGITS });
 export const NEEDS_SETUP_COPY = "noma cannot fill this component from its records yet. Its decision and the template are in Removal templates.";
 export const SINGLE_LINE_CAPTION = "One manual entry per credit batch. It counts for the whole credit batch.";
-// The entry form's rules and messages live in the client-safe form schema.
-export { DECIMAL_MESSAGE, DATE_BEFORE_START_MESSAGE, DATE_IN_FUTURE_MESSAGE, DATE_INVALID_MESSAGE, MAX_NOTE_LENGTH, NOTE_TOO_LONG_MESSAGE, isDecimal, validateEntryDate };
 
 const OPEN_STATES: readonly EmissionLineState[] = ["needsSetup", "missingEvidence", "needsReview", "empty"];
 const DONE_STATES: readonly EmissionLineState[] = ["filled", "confirmedZero"];
@@ -90,13 +78,11 @@ export function massDistanceUnits(unit: string | null): { mass: string; distance
 }
 
 /**
- * `isDecimal` (re-exported above) mirrors the server's ENTRY_DECIMAL_PATTERN;
+ * Exact product of two entry decimals, as the server checks it for mass × distance.
  * multiplyEntryDecimals in emission-entry-rules pulls node-only template
  * comparison code, so the client keeps this small mirror and the server
  * re-validates every value.
  */
-
-/** Exact product of two entry decimals, as the server checks it for mass × distance. */
 export function multiplyDecimals(a: string, b: string): string {
   const left = canonicalDecimal(a) ?? "0";
   const right = canonicalDecimal(b) ?? "0";
@@ -375,12 +361,6 @@ export function draftFromEntry(entry: EmissionEntry, line: EmissionLine): Record
   return draft;
 }
 
-export function validateFields(line: EmissionLine, draft: Record<string, string>): Record<string, string> {
-  const errors: Record<string, string> = {};
-  for (const field of entryFields(line)) if (!isDecimal(draft[field.key] ?? "")) errors[field.key] = DECIMAL_MESSAGE;
-  return errors;
-}
-
 /** The figure a mass-distance draft computes ("55.2 t·km"), or null until both parts are numbers. */
 export function draftMassDistanceFigure(line: EmissionLine, draft: Record<string, string>): string | null {
   const input = line.inputShape.find((candidate) => candidate.quantityKind === "mass_distance");
@@ -392,7 +372,6 @@ export function draftMassDistanceFigure(line: EmissionLine, draft: Record<string
   return formatFigure({ magnitude: multiplyDecimals(tonnes, distance.trim()), unit: input.unit ?? "" });
 }
 
-/** Wire values for create and update. Call after validateFields passes. */
 /** The template units a draft is typed in. A change means the typed numbers no longer mean the same. */
 export function inputShapeKey(line: EmissionLine): string {
   return line.inputShape.map((input) => `${input.key}:${input.quantityKind}:${input.unit ?? ""}`).join("|");
@@ -400,6 +379,7 @@ export function inputShapeKey(line: EmissionLine): string {
 
 export const UNITS_CHANGED_MESSAGE = "The template units changed while you typed. Enter the values again in the units shown.";
 
+/** Wire values for create and update. Call after the form schema passes. */
 export function entryValues(line: EmissionLine, draft: Record<string, string>) {
   return line.inputShape.map((input) => {
     const unit = input.unit ?? "";

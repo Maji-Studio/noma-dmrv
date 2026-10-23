@@ -65,7 +65,6 @@ export function emissionEntryFormSchema({ fieldCount, dated, today, startDate }:
     note: text.refine((note) => note.trim().length <= MAX_NOTE_LENGTH, NOTE_TOO_LONG_MESSAGE),
   });
 }
-export type EmissionEntryFormValues = Record<string, string | undefined>;
 
 /** The line comment editor: the words, trimmed on save. */
 export const emissionLineCommentFormSchema = z.object({

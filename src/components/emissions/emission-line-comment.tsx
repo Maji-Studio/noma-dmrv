@@ -27,14 +27,14 @@ import { useDeleteEmissionLineComment, useSetEmissionLineComment } from "@/hooks
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { cn } from "@/lib/utils";
-import { EntryMenu } from "./emission-ledger-entries";
-import { ICON } from "./emission-line-body-parts";
-import type { EmissionLine } from "./emission-line-display";
 import {
   emissionLineCommentFormSchema,
   type EmissionLineCommentFormData,
   type EmissionLineCommentFormInput,
 } from "@/schemas/emission-entry-form";
+import { EntryMenu } from "./emission-ledger-entries";
+import { ICON } from "./emission-line-body-parts";
+import type { EmissionLine } from "./emission-line-display";
 import { MENU_PULL, NAME_INSET, TABLE_ROW } from "./emission-line-grid";
 
 const SAVE_FALLBACK = "The comment was not saved. Try again.";
@@ -156,6 +156,7 @@ function CommentEditor({ line, scope, onDone }: { line: EmissionLine; scope: Emi
     handleSubmit,
     control,
     setError: setFieldError,
+    setFocus,
     resetField,
     formState: { errors },
   } = useForm<EmissionLineCommentFormInput, unknown, EmissionLineCommentFormData>({
@@ -176,7 +177,10 @@ function CommentEditor({ line, scope, onDone }: { line: EmissionLine; scope: Emi
       });
       onDone();
     } catch (caught) {
-      setError(refuseSave(caught, toSaveErrorMessage(caught, SAVE_FALLBACK)));
+      const footer = refuseSave(caught, toSaveErrorMessage(caught, SAVE_FALLBACK));
+      setError(footer);
+      // With the refusal at the field, focus would stay on Save, possibly out of view.
+      if (footer === null) setFocus("body");
     }
   });
   const submit = latched(async (event: React.FormEvent<HTMLFormElement>) => {
