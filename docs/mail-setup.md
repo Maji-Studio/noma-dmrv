@@ -1,53 +1,41 @@
 # Mail Setup
 
-How transactional auth email is delivered (Better Auth handlers → Resend) and
-how the no-Resend local fallback behaves. Read it when an auth email is not
-arriving, or before changing an email handler. Auth flows and route protection
-are owned by [auth.md](./auth.md); the env inventory and secrets handling by
-[security.md](./security.md).
-
-## Flows That Send Mail
-
-| Flow | Route | Handler |
-|---|---|---|
-| Password reset | `/forgot-password` → `/reset-password` | `sendResetPassword` |
-| Email verification | `/verify-email` | `sendVerificationEmail` |
-| Org invitation | `/accept-invitation/<invitationId>` | organization plugin `sendInvitationEmail` |
-
-Signup is invite-first, so the invitation mail is the entry point for most new
-users. It is deliberately **best-effort**: the invite action also surfaces a
-copyable accept link in the UI, so a mail failure never blocks onboarding.
+Transactional reset, verification and organization-invitation email uses
+`src/lib/email/send.ts` → Resend. Read this when mail is missing or when changing
+an email handler. Auth policy lives in [auth.md](./auth.md); secrets and the
+hermetic-CI exception live in [security.md](./security.md).
 
 ## Configuration
 
-Handlers live in `src/lib/auth/better-auth.ts`; env validation in
-`src/config/env.ts`.
+Real production refuses to boot unless `RESEND_API_KEY`, `RESEND_FROM_EMAIL`
+and `RESEND_REPLY_TO` are all set. The error names every missing variable.
+Use a sender on a domain verified in Resend and a monitored reply-to mailbox.
+Every email uses the configured sender and reply-to address.
 
-`RESEND_API_KEY` and `RESEND_FROM_EMAIL` are validated as a **both-or-neither
-pair** — setting only one fails env validation at boot with
-`"RESEND_API_KEY and RESEND_FROM_EMAIL must either both be set or both be
-omitted"`. There is no half-configured state.
+The API key and from address remain a **both-or-neither pair** in every
+environment. `RESEND_REPLY_TO` is an optional, validated email address outside
+production. Development/test and hermetic CI can omit all three: no mail is
+sent and links are printed to the local console only outside production.
+Hermetic production builds never print links.
 
-- **Both set** → mail is sent through Resend.
-- **Both omitted** → local fallback: nothing is sent, and the target URL is
-  logged to the server console. Open it directly to continue the flow.
+`NEXT_PUBLIC_APP_URL` determines the host in invitation and auth links. Set it
+to the deployed app URL, then exercise reset, verification and invitation flows.
 
-```text
-[auth:reset-password] RESEND_* env vars are not configured, using local fallback.
-[auth:reset-password] userId=... url=http://localhost:3100/reset-password?token=...
-```
+## Delivery outcomes
 
-The fallback logs `userId` and the URL, never the recipient address — the
-no-PII-in-logs rule applies to mail code like everywhere else.
+The shared sender checks both Resend's returned `error` and thrown exceptions.
+Logs contain email type, stable IDs, provider status code and message ID only;
+provider error text and addresses must never be logged.
 
-`NEXT_PUBLIC_APP_URL` is what every emailed link is built from. If reset or
-invitation links point at the wrong host, that is the variable to check.
+- Password reset logs delivery failures but keeps the same response as an
+  unknown account to avoid revealing account existence.
+- Verification logs failures and propagates a generic delivery error.
+- Invitations are saved before sending. Settings member invites (including
+  Platform Admin overrides) and Platform Organizations creation share one
+  invitation helper and return `emailSent` with the accept link. Delivery
+  failure keeps the invitation and the action succeeds. Existing-account first
+  Admins are added directly and receive no invitation.
 
-## Production Checklist
-
-1. Set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` together, with a sender on a
-   domain verified in Resend.
-2. Set `NEXT_PUBLIC_APP_URL` to the deployed URL, or emailed links will 404.
-3. Exercise reset and invitation flows against the deployed environment — the
-   fallback is silent-by-design, so an unset pair looks identical to success
-   from the UI.
+Better Auth's invitation hook handles direct HTTP calls only; server actions
+send after creation so they can return delivery status without double-sending.
+`emailSent` means Resend accepted the message, not confirmed inbox delivery.

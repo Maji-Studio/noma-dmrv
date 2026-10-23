@@ -8,13 +8,14 @@ import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { useToast } from "@/components/ui/toast";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useCreateOrganization } from "@/hooks/use-organizations";
+import type { InvitationDelivery } from "./invitation-link-notice";
 import { createOrganizationSchema, type CreateOrganizationInput } from "@/schemas/organizations";
 
 export interface CreatedOrganization {
   organizationId: string;
   organizationName: string;
   /** Set when the first Admin had no account: the link to send them. */
-  invitation: { email: string; acceptUrl: string } | null;
+  invitation: InvitationDelivery | null;
 }
 
 interface CreateOrganizationFormProps {
@@ -55,7 +56,7 @@ export function CreateOrganizationForm({ onCreated, onCancel }: CreateOrganizati
         organizationId: result.organizationId,
         organizationName: result.organizationName,
         invitation: result.firstAdmin.kind === "invited"
-          ? { email: values.adminEmail, acceptUrl: result.firstAdmin.acceptUrl }
+          ? { email: values.adminEmail, acceptUrl: result.firstAdmin.acceptUrl, emailSent: result.firstAdmin.emailSent }
           : null,
       });
     } catch (error) {

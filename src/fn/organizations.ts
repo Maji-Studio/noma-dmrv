@@ -30,12 +30,13 @@ import { saveOrgPreference } from "@/fn/org-preference";
 import type { CreateIntentOptions } from "@/schemas/create-intent";
 import { parseCreateIntentKey } from "./with-create";
 import { withAction } from "@/fn/with-action";
-import { env } from "@/config/env";
+import { sendOrganizationInvitation } from "@/lib/email/organization-invitation";
 import {
   cancelInvitationAsPlatformAdmin,
   createInvitationAsPlatformAdmin,
   createOrganizationWithAdmin,
   findMembershipRole,
+  getActiveOrganization,
   listAllOrganizations,
   listPlatformOrganizationDirectory,
   type PlatformOrganizationDirectoryRow,
@@ -115,10 +116,6 @@ function extractApiErrorMessage(error: unknown): string | null {
   return null;
 }
 
-function buildAcceptUrl(invitationId: string): string {
-  return `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/accept-invitation/${invitationId}`;
-}
-
 // --- Reads ----------------------------------------------------------------
 
 export async function listMembersFn(): Promise<ActionResult<OrgMemberRow[]>> {
@@ -160,11 +157,13 @@ export async function listPlatformOrganizationsFn(): Promise<ActionResult<Platfo
 
 export async function inviteMemberAction(
   input: unknown
-): Promise<ActionResult<{ invitationId: string; acceptUrl: string }>> {
+): Promise<ActionResult<{ invitationId: string; acceptUrl: string; emailSent: boolean }>> {
   return toResult(async () => {
     const { email, role } = inviteMemberSchema.parse(input);
     const ctx = await requireOrgContext();
     requireOrgRole(ctx, "admin");
+    const organization = await getActiveOrganization(ctx);
+    if (!organization) throw new SafeError("Organization not found.");
     const result =
       ctx.orgRole !== null
         ? await auth.api.createInvitation({
@@ -172,10 +171,14 @@ export async function inviteMemberAction(
             headers: await headers(),
           })
         : await createInvitationAsPlatformAdmin(ctx, { email, role });
-    return {
+    const delivery = await sendOrganizationInvitation({
       invitationId: result.id,
-      acceptUrl: buildAcceptUrl(result.id),
-    };
+      organizationId: ctx.organizationId,
+      organizationName: organization.name,
+      email,
+      role,
+    });
+    return { invitationId: result.id, ...delivery };
   }, "Failed to send invitation.");
 }
 
@@ -317,19 +320,29 @@ export async function createOrganizationAction(
 ): Promise<ActionResult<{
   organizationId: string;
   organizationName: string;
-  firstAdmin: { kind: "member" } | { kind: "invited"; acceptUrl: string };
+  firstAdmin: { kind: "member" } | { kind: "invited"; acceptUrl: string; emailSent: boolean };
 }>> {
   return toResult(async () => {
     await requirePlatformAdmin();
     const values = createOrganizationSchema.parse(input);
     const intentKey = parseCreateIntentKey(options);
     const organization = await createOrganizationWithAdmin({ ...values, organizationId: intentKey });
+    const firstAdmin = organization.firstAdmin.kind === "member"
+      ? { kind: "member" as const }
+      : {
+          kind: "invited" as const,
+          ...await sendOrganizationInvitation({
+            invitationId: organization.firstAdmin.invitationId,
+            organizationId: organization.id,
+            organizationName: organization.name,
+            email: values.adminEmail,
+            role: "admin",
+          }),
+        };
     return {
       organizationId: organization.id,
       organizationName: organization.name,
-      firstAdmin: organization.firstAdmin.kind === "member"
-        ? { kind: "member" as const }
-        : { kind: "invited" as const, acceptUrl: buildAcceptUrl(organization.firstAdmin.invitationId) },
+      firstAdmin,
     };
   }, "Failed to create organization.");
 }

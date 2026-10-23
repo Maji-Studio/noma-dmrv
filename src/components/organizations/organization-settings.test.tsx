@@ -38,7 +38,7 @@ async function fillAndSend(email: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   state.members = [MEMBER];
-  state.invite.mutateAsync.mockResolvedValue({ acceptUrl: "https://app.test/accept-invitation/t" });
+  state.invite.mutateAsync.mockResolvedValue({ acceptUrl: "https://app.test/accept-invitation/t", emailSent: true });
 });
 afterEach(cleanup);
 
@@ -96,6 +96,32 @@ describe("OrganizationSettings invite dialog", () => {
     expect((screen.getByRole("textbox", { name: "Invitation link" }) as HTMLInputElement).value).toBe(
       "https://app.test/accept-invitation/t",
     );
+  });
+
+  it("says the invitation was emailed when the email went out", async () => {
+    render(<OrganizationSettings canManage />);
+    await fillAndSend("new@example.com");
+
+    expect(await screen.findByText("Invitation emailed to new@example.com")).toBeTruthy();
+    expect(screen.queryByText(/did not send/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Copy link" })).toBeTruthy();
+  });
+
+  it("keeps the invitation and says the email did not send, with the link to copy", async () => {
+    state.invite.mutateAsync.mockResolvedValue({ acceptUrl: "https://app.test/accept-invitation/t", emailSent: false });
+    render(<OrganizationSettings canManage />);
+    await fillAndSend("new@example.com");
+
+    expect(await screen.findByText("The email to new@example.com did not send")).toBeTruthy();
+    expect(
+      screen.getByText("The invitation is saved. Copy the link and send it another way, or check the address."),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Invitation emailed/)).toBeNull();
+    expect(toast.success).not.toHaveBeenCalledWith("Invitation created.");
+    expect((screen.getByRole("textbox", { name: "Invitation link" }) as HTMLInputElement).value).toBe(
+      "https://app.test/accept-invitation/t",
+    );
+    expect(screen.getByRole("button", { name: "Copy link" })).toBeTruthy();
   });
 
   it("asks before Cancel discards a draft, and a discard starts the next draft empty", async () => {

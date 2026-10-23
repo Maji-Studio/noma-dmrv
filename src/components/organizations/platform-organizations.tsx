@@ -23,6 +23,7 @@ import { orgSwitchFailedMessage } from "@/lib/org-switch-notice";
 import { MEMBER_HOME_HREF } from "@/lib/auth/home-path";
 import { cn } from "@/lib/utils";
 import { CreateOrganizationForm, type CreatedOrganization } from "./create-organization-form";
+import type { InvitationDelivery } from "./invitation-link-notice";
 import { PlatformOrganizationDetail } from "./platform-organization-detail";
 import { PlatformOrganizationList } from "./platform-organization-rows";
 
@@ -44,7 +45,7 @@ export function PlatformOrganizations() {
     parseAsString.withOptions({ history: "replace" }),
   );
   const [query, setQuery] = useState("");
-  const [lastInvitation, setLastInvitation] = useState<{ organizationId: string; email: string; acceptUrl: string } | null>(null);
+  const [lastInvitation, setLastInvitation] = useState<({ organizationId: string } & InvitationDelivery) | null>(null);
 
   const organizations = directory.data ?? [];
   const creating = selectedKey === CREATE_KEY;

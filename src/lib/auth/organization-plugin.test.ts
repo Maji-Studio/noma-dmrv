@@ -4,7 +4,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { LAST_ADMIN_MESSAGE } from "./organization-role-policy";
 const databaseFailure = vi.hoisted(() => ({ enabled: false }));
 const memory = vi.hoisted(() => Object.fromEntries(
-  ["user", "organization", "member", "session", "invitation"].map(key => [key, [] as Record<string, unknown>[]]),
+  ["user", "organization", "member", "session", "invitation", "verification", "account"].map(key => [key, [] as Record<string, unknown>[]]),
 ));
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/db/org-defaults", () => ({ seedOrgDefaults: vi.fn() }));
@@ -33,15 +33,23 @@ vi.mock("better-auth/adapters/drizzle", async () => {
 });
 import { auth } from "./better-auth";
 vi.mock("next/headers", () => ({ headers: () => sessionHeaders(), cookies: () => ({ getAll: () => [] }) }));
-vi.mock("@/data-access/organizations", () => ({}));
+vi.mock("@/data-access/organizations", () => ({
+  getActiveOrganization: async () => memory.organization[0],
+}));
+vi.mock("@/lib/email/send", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/email/send")>()),
+  sendEmail: vi.fn(),
+}));
+import { sendEmail } from "@/lib/email/send";
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: async () => ({ userId: "actor", organizationId: "org", orgRole: "admin", isPlatformAdmin: false }),
   requireOrgRole: vi.fn(),
 }));
-import { changeMemberRoleAction } from "@/fn/organizations";
+import { changeMemberRoleAction, inviteMemberAction } from "@/fn/organizations";
 const ORIGIN = "http://localhost:3100";
 const SESSION_LIFETIME_MS = 60_000;
 beforeEach(() => {
+  vi.mocked(sendEmail).mockReset().mockResolvedValue({ sent: true, id: "message-123" });
   databaseFailure.enabled = false;
   Object.values(memory).forEach(rows => rows.splice(0));
   for (const id of ["actor", "other"]) {
@@ -162,4 +170,51 @@ it("maps the database invariant through the real plugin and server action", asyn
   expect(await changeMemberRoleAction({ memberId: "actor-member", role: "member" })).toEqual({
     success: false, error: LAST_ADMIN_MESSAGE,
   });
+});
+
+
+it.each([true, false])("direct HTTP invitations send once and retain the invitation when sent=%s", async (sent) => {
+  vi.mocked(sendEmail).mockResolvedValue(sent
+    ? { sent: true, id: "message-123" }
+    : { sent: false, reason: "provider-error" });
+  expect((await post("invite-member", { role: "member", email: "invite@example.test" })).status).toBe(200);
+  expect(memory.invitation).toHaveLength(1);
+  expect(memory.invitation[0]).toMatchObject({ status: "pending", email: "invite@example.test" });
+  expect(sendEmail).toHaveBeenCalledOnce();
+  expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+    to: "invite@example.test",
+    html: expect.stringContaining(`/accept-invitation/${memory.invitation[0].id}`),
+  }));
+});
+
+it.each([true, false])("the real plugin and member action send exactly once and report sent=%s", async (sent) => {
+  vi.mocked(sendEmail).mockResolvedValue(sent
+    ? { sent: true, id: "message-123" }
+    : { sent: false, reason: "provider-error" });
+  const result = await inviteMemberAction({ role: "member", email: "invite@example.test" });
+  expect(result).toMatchObject({ success: true, data: { emailSent: sent } });
+  expect(memory.invitation).toHaveLength(1);
+  expect(memory.invitation[0]).toMatchObject({ status: "pending", email: "invite@example.test" });
+  expect(sendEmail).toHaveBeenCalledOnce();
+  expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+    to: "invite@example.test",
+    html: expect.stringContaining(`/accept-invitation/${memory.invitation[0].id}`),
+  }));
+});
+
+
+it("returns the same reset response for existing and unknown accounts when delivery fails", async () => {
+  vi.mocked(sendEmail).mockResolvedValue({ sent: false, reason: "provider-error" });
+  const reset = (email: string) => auth.handler(new Request(`${ORIGIN}/api/auth/request-password-reset`, {
+    method: "POST",
+    headers: { origin: ORIGIN, "content-type": "application/json" },
+    body: JSON.stringify({ email }),
+  }));
+  const existing = await reset("actor@example.test");
+  const unknown = await reset("unknown@example.test");
+  expect(existing.status).toBe(200);
+  expect(unknown.status).toBe(existing.status);
+  expect(await existing.json()).toEqual(await unknown.json());
+  expect(sendEmail).toHaveBeenCalledOnce();
+  expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ type: "reset-password", userId: "actor" }));
 });

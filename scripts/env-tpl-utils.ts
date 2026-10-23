@@ -28,7 +28,7 @@ export const REQUIRED_LOCAL_VARS = new Set([
 /**
  * Vars a Vercel deployment cannot boot without (NODE_ENV=production at
  * runtime): the core trio, the cron secret, credential encryption key, and s3-compatible
- * storage set that env.ts mandates in production. Everything else in
+ * storage set and the three email settings that env.ts mandates in production. Everything else in
  * .env.tpl degrades gracefully.
  */
 export const REQUIRED_DEPLOYED_VARS = new Set([
@@ -42,6 +42,9 @@ export const REQUIRED_DEPLOYED_VARS = new Set([
   "STORAGE_REGION",
   "STORAGE_ACCESS_KEY_ID",
   "STORAGE_SECRET_ACCESS_KEY",
+  "RESEND_API_KEY",
+  "RESEND_FROM_EMAIL",
+  "RESEND_REPLY_TO",
 ]);
 
 // Shape of an env-var name (and therefore a per-var 1Password field label).

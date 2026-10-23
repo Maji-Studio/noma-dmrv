@@ -11,6 +11,7 @@ vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/auth/better-auth", () => ({
   auth: {
     api: {
+      createInvitation: vi.fn(),
       acceptInvitation: (...args: unknown[]) => mockAcceptInvitation(...args),
       setActiveOrganization: (...args: unknown[]) =>
         mockSetActiveOrganization(...args),
@@ -61,13 +62,23 @@ vi.mock("@/lib/log", () => ({
   sanitizeErrorMessage: () => "Unexpected failure.",
 }));
 
+vi.mock("@/lib/email/send", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/email/send")>()),
+  sendEmail: vi.fn(),
+}));
+
+import { sendEmail } from "@/lib/email/send";
+import { auth } from "@/lib/auth/better-auth";
 import {
+  getActiveOrganization,
+  createInvitationAsPlatformAdmin,
   renameActiveOrganization,
   findMembershipRole,
   listOrgInvitations,
   listOrgMembers,
 } from "@/data-access/organizations";
 import {
+  inviteMemberAction,
   renameOrganizationAction,
   acceptInvitationAction,
   createOrganizationAction,
@@ -142,6 +153,7 @@ describe("createOrganizationAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requirePlatformAdmin).mockResolvedValue({} as never);
+    vi.mocked(sendEmail).mockResolvedValue({ sent: true, id: "message-123" });
     mockCreateOrganizationWithAdmin.mockResolvedValue({ id: "organization-123", name: VALID_INPUT.name, firstAdmin: { kind: "member" } });
   });
 
@@ -202,9 +214,34 @@ describe("createOrganizationAction", () => {
       success: true,
       data: {
         organizationId: "organization-123", organizationName: VALID_INPUT.name,
-        firstAdmin: { kind: "invited", acceptUrl: "http://localhost:3100/accept-invitation/invitation-123" },
+        firstAdmin: { kind: "invited", acceptUrl: "http://localhost:3100/accept-invitation/invitation-123", emailSent: true },
       },
     });
+  });
+
+  it.each([true, false])("reports emailSent=%s for a new first Admin without losing the created org", async (sent) => {
+    mockCreateOrganizationWithAdmin.mockResolvedValue({
+      id: "organization-123", name: VALID_INPUT.name,
+      firstAdmin: { kind: "invited", invitationId: "invitation-123" },
+    });
+    vi.mocked(sendEmail).mockResolvedValue(sent
+      ? { sent: true, id: "message-123" }
+      : { sent: false, reason: "provider-error" });
+    expect(await createOrganizationAction(VALID_INPUT)).toMatchObject({
+      success: true,
+      data: { firstAdmin: { kind: "invited", emailSent: sent } },
+    });
+    expect(mockCreateOrganizationWithAdmin).toHaveBeenCalledOnce();
+    expect(sendEmail).toHaveBeenCalledOnce();
+    expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+      to: VALID_INPUT.adminEmail,
+      html: expect.stringContaining('href="http://localhost:3100/accept-invitation/invitation-123"'),
+    }));
+  });
+
+  it("does not send an invitation to an existing first Admin", async () => {
+    await createOrganizationAction(VALID_INPUT);
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 
   it("surfaces Better Auth API errors", async () => {
@@ -348,5 +385,57 @@ describe("renameOrganizationAction", () => {
     expect(await renameOrganizationAction({ name: "  New name  " })).toEqual({ success: true, data: saved });
     expect(requireOrgRole).toHaveBeenCalledWith(ORG_CONTEXT, "admin");
     expect(renameActiveOrganization).toHaveBeenCalledWith(ORG_CONTEXT, { name: "New name" });
+  });
+});
+
+
+describe("inviteMemberAction delivery", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireOrgRole).mockReset();
+    vi.mocked(getActiveOrganization).mockResolvedValue({ name: VALID_INPUT.name } as never);
+    vi.mocked(auth.api.createInvitation).mockResolvedValue({ id: "invitation-123" } as never);
+    vi.mocked(createInvitationAsPlatformAdmin).mockResolvedValue({ id: "invitation-123" });
+  });
+
+  it.each([
+    { platform: false, sent: true }, { platform: false, sent: false },
+    { platform: true, sent: true }, { platform: true, sent: false },
+  ])("sends once and reports $sent for platform=$platform", async ({ platform, sent }) => {
+    const ctx = { ...ORG_CONTEXT, orgRole: platform ? null : "admin" as const, isPlatformAdmin: platform };
+    vi.mocked(requireOrgContext).mockResolvedValue(ctx);
+    vi.mocked(sendEmail).mockResolvedValue(sent
+      ? { sent: true, id: "message-123" }
+      : { sent: false, reason: "provider-error" });
+    expect(await inviteMemberAction({ email: "invitee@example.test", role: "member" })).toEqual({
+      success: true,
+      data: {
+        invitationId: "invitation-123",
+        acceptUrl: "http://localhost:3100/accept-invitation/invitation-123",
+        emailSent: sent,
+      },
+    });
+    expect(requireOrgRole).toHaveBeenCalledWith(ctx, "admin");
+    const writer = platform ? createInvitationAsPlatformAdmin : auth.api.createInvitation;
+    const unusedWriter = platform ? auth.api.createInvitation : createInvitationAsPlatformAdmin;
+    expect(writer).toHaveBeenCalledOnce();
+    expect(unusedWriter).not.toHaveBeenCalled();
+    expect(sendEmail).toHaveBeenCalledOnce();
+    expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+      type: "org-invite", to: "invitee@example.test", invitationId: "invitation-123",
+      organizationId: ctx.organizationId,
+      html: expect.stringContaining('href="http://localhost:3100/accept-invitation/invitation-123"'),
+    }));
+    expect(vi.mocked(writer).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(sendEmail).mock.invocationCallOrder[0]);
+  });
+
+  it("does not write or send when the Admin role check refuses", async () => {
+    vi.mocked(requireOrgContext).mockResolvedValue({ ...ORG_CONTEXT, orgRole: "member" });
+    vi.mocked(requireOrgRole).mockImplementation(() => { throw new SafeError("Admin access is required."); });
+    expect(await inviteMemberAction({ email: "invitee@example.test", role: "member" }))
+      .toEqual({ success: false, error: "Admin access is required." });
+    expect(auth.api.createInvitation).not.toHaveBeenCalled();
+    expect(createInvitationAsPlatformAdmin).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 });

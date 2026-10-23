@@ -23,100 +23,16 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
 import { asc, eq } from "drizzle-orm";
-import { Resend } from "resend";
-import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
+import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH, INVITATION_EXPIRES_IN_SECONDS, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
 import { env } from "@/config/env";
+import { escapeHtml } from "@/lib/email/escape-html";
+import { sendAuthEmail } from "@/lib/email/auth-email";
+import { sendOrganizationInvitation } from "@/lib/email/organization-invitation";
 import { db } from "@/db";
 import { seedOrgDefaults } from "@/db/org-defaults";
 import * as schema from "@/db/schema";
 import { selectActiveOrganizationId } from "@/lib/auth/organization-selection";
 import { logger } from "@/lib/log";
-
-/** Pending invitations expire after 7 days. */
-const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
-
-/**
- * Build the URL an invitee follows to accept an org invitation. The invitation
- * id is the only token; the accept page (src/app/(auth)/accept-invitation)
- * establishes the session and calls the plugin's accept endpoint.
- */
-function buildInvitationAcceptUrl(invitationId: string): string {
-  const base = env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
-  return `${base}/accept-invitation/${invitationId}`;
-}
-
-const hasEmailConfig = Boolean(env.RESEND_API_KEY && env.RESEND_FROM_EMAIL);
-const resend = hasEmailConfig ? new Resend(env.RESEND_API_KEY) : null;
-const isProduction = process.env.NODE_ENV === "production";
-
-function sanitizeAuthUrl(url: string) {
-  try {
-    const parsed = new URL(url);
-    const redactedPath = parsed.pathname
-      .split("/")
-      .map((segment) => (segment.length >= 20 ? "<redacted>" : segment))
-      .join("/");
-    return `${parsed.origin}${redactedPath}`;
-  } catch {
-    const base = url.split("?")[0];
-    return base || "<invalid-url>";
-  }
-}
-
-// User-controlled values (profile name, organization name) are interpolated
-// into email HTML; escape them so a crafted name can't inject markup into
-// what email clients render.
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function logAuthEmailFallback(args: {
-  type: "reset-password" | "verify-email";
-  userId: string;
-  url: string;
-}) {
-  const sanitizedUrl = sanitizeAuthUrl(args.url);
-  console.warn(
-    `[auth:${args.type}] RESEND_* env vars are not configured, using local fallback.`
-  );
-  // Never log the user's email — log userId only (see CLAUDE.md: no PII in logs).
-  console.warn(
-    `[auth:${args.type}] userId=${args.userId} url=${sanitizedUrl}`
-  );
-  if (!isProduction) {
-    console.warn(`[auth:${args.type}] fullUrl=${args.url}`);
-  }
-}
-
-async function sendAuthEmail(args: {
-  type: "reset-password" | "verify-email";
-  userId: string;
-  to: string;
-  subject: string;
-  html: string;
-  url: string;
-}) {
-  if (!resend || !env.RESEND_FROM_EMAIL) {
-    logAuthEmailFallback({
-      type: args.type,
-      userId: args.userId,
-      url: args.url,
-    });
-    return;
-  }
-
-  await resend.emails.send({
-    from: env.RESEND_FROM_EMAIL,
-    to: args.to,
-    subject: args.subject,
-    html: args.html,
-  });
-}
 
 /**
  * Build the list of origins Better Auth accepts on auth requests.
@@ -235,29 +151,20 @@ export const auth = betterAuth({
     minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
     maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
     sendResetPassword: async ({ user, url }) => {
-      try {
-        await sendAuthEmail({
-          type: "reset-password",
-          userId: user.id,
-          to: user.email,
-          subject: "Reset your password",
-          url,
-          html: `
+      await sendAuthEmail({
+        type: "reset-password",
+        userId: user.id,
+        to: user.email,
+        subject: "Reset your password",
+        url,
+        html: `
             <p>Hello ${escapeHtml(user.name || "there")},</p>
             <p>Use the link below to choose a new password:</p>
             <p><a href="${url}">Choose a new password</a></p>
             <p>This link expires in 24 hours.</p>
             <p>If you did not request a password reset, ignore this email.</p>
           `,
-        });
-      } catch (error) {
-        console.error("Failed to send password reset email:", {
-          userId: user.id,
-          from: env.RESEND_FROM_EMAIL,
-          error,
-        });
-        throw error;
-      }
+      });
     },
   },
   emailVerification: {
@@ -265,28 +172,19 @@ export const auth = betterAuth({
     expiresIn: 60 * 60 * 24, // 24 hours
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
-      try {
-        await sendAuthEmail({
-          type: "verify-email",
-          userId: user.id,
-          to: user.email,
-          url,
-          subject: "Verify your email",
-          html: `
+      await sendAuthEmail({
+        type: "verify-email",
+        userId: user.id,
+        to: user.email,
+        url,
+        subject: "Verify your email",
+        html: `
             <p>Hello ${escapeHtml(user.name || "there")},</p>
             <p>Use the link below to verify your email address:</p>
             <p><a href="${url}">Verify email</a></p>
             <p>This link expires in 24 hours.</p>
           `,
-        });
-      } catch (error) {
-        console.error("Failed to send verification email:", {
-          userId: user.id,
-          from: env.RESEND_FROM_EMAIL,
-          error,
-        });
-        throw error;
-      }
+      });
     },
   },
   session: {
@@ -462,41 +360,17 @@ export const auth = betterAuth({
       // Re-inviting the same email cancels the stale pending invite so the
       // pending list never shows duplicates.
       cancelPendingInvitationsOnReInvite: true,
-      sendInvitationEmail: async (data) => {
-        const acceptUrl = buildInvitationAcceptUrl(data.id);
-        // The UI also surfaces a copyable accept link from the invite action,
-        // so email is best-effort. Never log the invitee email (PII) — log the
-        // invitation and organization ids only.
-        if (!resend || !env.RESEND_FROM_EMAIL) {
-          console.warn(
-            `[auth:org-invite] RESEND_* not configured; using copyable-link fallback. invitationId=${data.id} organizationId=${data.organization.id}`
-          );
-          if (!isProduction) {
-            console.warn(`[auth:org-invite] acceptUrl=${acceptUrl}`);
-          }
-          return;
-        }
-        try {
-          await resend.emails.send({
-            from: env.RESEND_FROM_EMAIL,
-            to: data.email,
-            subject: `You're invited to join ${data.organization.name}`,
-            html: `
-              <p>Hello,</p>
-              <p>Join <strong>${escapeHtml(data.organization.name)}</strong> as ${escapeHtml(data.role)}.</p>
-              <p><a href="${acceptUrl}">Accept invitation</a></p>
-              <p>This invitation expires in 7 days.</p>
-            `,
-          });
-        } catch (error) {
-          console.error("Failed to send org invitation email:", {
-            invitationId: data.id,
-            organizationId: data.organization.id,
-            from: env.RESEND_FROM_EMAIL,
-            error,
-          });
-          // Swallow — the copyable link in the UI is the reliable path.
-        }
+      sendInvitationEmail: async (data, request) => {
+        // Server actions own delivery and its result after createInvitation
+        // returns. Direct HTTP plugin calls still send here. Never send twice.
+        if (!request) return;
+        await sendOrganizationInvitation({
+          invitationId: data.id,
+          organizationId: data.organization.id,
+          organizationName: data.organization.name,
+          email: data.email,
+          role: data.role,
+        });
       },
     }),
     nextCookies(),

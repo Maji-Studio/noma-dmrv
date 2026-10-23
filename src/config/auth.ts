@@ -10,3 +10,6 @@ export const PROFILE_NAME_MAX_LENGTH = 100;
  * password change) keeps working for at most this long.
  */
 export const SESSION_COOKIE_CACHE_SECONDS = 5 * 60;
+
+/** Pending invitations expire after 7 days. */
+export const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;

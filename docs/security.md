@@ -127,6 +127,10 @@ Non-obvious semantics only:
 - **Both-or-neither pairs** (`superRefine`): `RESEND_API_KEY` +
   `RESEND_FROM_EMAIL`; `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
   (seed/CI-only, not runtime app credentials).
+- **`RESEND_REPLY_TO`** — optional email address in the schema, applied to every
+  transactional email. Real production boot requires `RESEND_API_KEY`,
+  `RESEND_FROM_EMAIL` and `RESEND_REPLY_TO`; one error names missing variables.
+  Development/test and hermetic CI may omit them; see [mail setup](./mail-setup.md).
 - **`CREDENTIALS_ENCRYPTION_KEY`** — a hard boot requirement in production (see
   Hermetic-CI exception below). Server-only 32-byte hex/base64 key.
 - **`BETTER_AUTH_SECRET`** and **`STORAGE_SIGNING_SECRET`** — min length 32. In
@@ -235,8 +239,8 @@ must be set directly on the staging/production items.
 ### Hermetic-CI exception on the production fail-closed gates
 
 The production gates — `GEO_PROVIDER=stub`, unset `ISOMETRIC_ENVIRONMENT`,
-missing `CREDENTIALS_ENCRYPTION_KEY` or `CRON_SECRET`, and non-`s3-compatible` storage — are
-skipped only for a **hermetic CI build**: `NOMA_HERMETIC_CI=true`, `CI` truthy,
+missing `CREDENTIALS_ENCRYPTION_KEY`, `CRON_SECRET` or the Resend trio, and
+non-`s3-compatible` storage — are skipped only for a **hermetic CI build**: `NOMA_HERMETIC_CI=true`, `CI` truthy,
 and an HTTP(S) loopback `NEXT_PUBLIC_APP_URL` (ci.yml and e2e.yml compile
 production bundles against localhost with placeholder config on purpose).
 Live E2E does not set the marker because it loads sandbox credentials and makes

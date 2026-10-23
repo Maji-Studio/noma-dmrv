@@ -37,6 +37,7 @@ CRON_SECRET="op://Environment Variables/noma-dmrv env staging/CRON_SECRET"
 # -----------------------------------------------------------------------------
 RESEND_API_KEY="op://Environment Variables/noma-dmrv env staging/RESEND_API_KEY"
 RESEND_FROM_EMAIL="op://Environment Variables/noma-dmrv env staging/RESEND_FROM_EMAIL"
+RESEND_REPLY_TO="op://Environment Variables/noma-dmrv env staging/RESEND_REPLY_TO"
 
 # -----------------------------------------------------------------------------
 # Admin Configuration

@@ -41,6 +41,7 @@ DISABLE_RATE_LIMIT="op://Environment Variables/noma-dmrv env local/DISABLE_RATE_
 # -----------------------------------------------------------------------------
 RESEND_API_KEY="op://Environment Variables/noma-dmrv env local/RESEND_API_KEY"
 RESEND_FROM_EMAIL="op://Environment Variables/noma-dmrv env local/RESEND_FROM_EMAIL"
+RESEND_REPLY_TO="op://Environment Variables/noma-dmrv env local/RESEND_REPLY_TO"
 
 # -----------------------------------------------------------------------------
 # Isometric (sandbox)
