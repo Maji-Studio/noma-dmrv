@@ -10,7 +10,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
-import { useForm, useWatch, type Resolver } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField } from "@/components/forms/form-field";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
@@ -54,7 +54,15 @@ import {
   type EmissionEntry,
   type EmissionLine,
 } from "./emission-line-display";
-import { emissionEntryFormSchema, entryFieldName } from "@/schemas/emission-entry-form";
+import {
+  emissionEntryFormSchema,
+  entryFieldName,
+  type EmissionEntryFormData,
+  type EmissionEntryFormInput,
+} from "@/schemas/emission-entry-form";
+import { isActionError } from "@/lib/action-error";
+import { FormErrorSummary } from "@/components/forms/form-error-summary";
+import { readFieldDirectory, type FieldDirectory } from "@/components/forms/form-error-summary-dom";
 
 export type EntryFormMode =
   | { kind: "add" }
@@ -68,6 +76,7 @@ const TITLES: Record<EntryFormMode["kind"], string> = {
   again: "Enter again",
 };
 const SAVE_FALLBACK = "The manual entry was not saved. Check the values and try again.";
+const LOCK_CODE = "certification_locked";
 const FILE_NOT_UPLOADED = "The file did not upload. Open the entry and add it again.";
 
 interface ManualEntryFormProps {
@@ -95,15 +104,13 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
     control,
     setError,
     setValue,
-    setFocus,
-    getFieldState,
     clearErrors,
     resetField,
     formState: { errors },
-  } = useForm<Record<string, string>>({
+  } = useForm<EmissionEntryFormInput, unknown, EmissionEntryFormData>({
     resolver: zodResolver(
       emissionEntryFormSchema({ fieldCount: fields.length, dated: !single, today, startDate: batch.startDate }),
-    ) as Resolver<Record<string, string>>,
+    ),
     defaultValues: {
       ...Object.fromEntries(fields.map((field, index) => [entryFieldName(index), seedDraft[field.key] ?? ""])),
       date: mode.kind === "edit" ? mode.entry.occurredOn : defaultEntryDate(today, batch),
@@ -113,6 +120,10 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
   // The units the draft was typed in: a template refresh must never reinterpret the numbers.
   const [typedIn, setTypedIn] = useState(() => inputShapeKey(line));
   const [serverError, setServerError] = useState<string | null>(null);
+  // The whole entry is reserved or sent: the form turns read-only and the refusal moves to the top.
+  const [locked, setLocked] = useState(false);
+  // Labels and order of the controls, read when Save is pressed, for the error summary.
+  const [directory, setDirectory] = useState<FieldDirectory | null>(null);
   const attachments = useDeferredAttachments();
   const queryClient = useQueryClient();
   // Each form mount scopes a fresh create intent key to this draft.
@@ -158,11 +169,8 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
     } catch (error) {
       const footer = refuseSave(error, toSaveErrorMessage(error, SAVE_FALLBACK));
       setServerError(footer);
-      // No error summary here: with every issue at a field, focus would stay on Save.
-      if (footer === null) {
-        const refused = [...fields.map((_, index) => entryFieldName(index)), "date", "note"].find((name) => getFieldState(name).error);
-        if (refused) setFocus(refused);
-      }
+      // The lock names no field (lockWritableEmissionEntry), so the footer carries it.
+      if (footer !== null && isActionError(error) && error.code === LOCK_CODE) setLocked(true);
     }
   });
 
@@ -171,6 +179,7 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
     event.preventDefault();
     if (saving) return;
     setServerError(null);
+    setDirectory(readFieldDirectory(event.currentTarget));
     if (inputShapeKey(line) !== typedIn) {
       setTypedIn(inputShapeKey(line));
       fields.forEach((_, index) => setValue(entryFieldName(index), ""));
@@ -191,6 +200,9 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
       </SlideOverPanelHeader>
       <SlideOverPanelBody>
         <form id={formId} noValidate className="flex flex-col gap-20" onSubmit={submit}>
+          {locked && serverError && <TopRefusal message={serverError} />}
+          {/* `contents` keeps the fields laid out as before; disabled makes the locked form read-only. */}
+          <fieldset disabled={locked} className="contents">
           {mode.kind === "again" && (
             <p className="body-small text-[var(--color-text-secondary)]">
               The earlier entry stopped counting after a template change. Saving replaces it and keeps its files.
@@ -245,15 +257,38 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
           <FormField id={`${idPrefix}-note`} label="Note" error={errors.note?.message}>
             <FormTextarea id={`${idPrefix}-note`} {...register("note")} />
           </FormField>
-          {serverError && <ServerError message={serverError} />}
+          </fieldset>
+          {!locked && (
+            <FormErrorSummary
+              control={control}
+              directory={directory}
+              getForm={() => document.getElementById(formId)}
+              message={serverError ?? undefined}
+            />
+          )}
         </form>
       </SlideOverPanelBody>
       <SlideOverPanelFooter
         preview={<CreditBatchLine copy={describeEmissionEntryCreditBatchLine(batch)} facilityId={scope.facilityId} />}
       >
-        <Button variant="weak" onClick={onCancel} disabled={saving}>Cancel</Button>
-        <Button variant="primary" type="submit" form={formId} busy={saving}>Save</Button>
+        <Button variant="weak" onClick={onCancel} disabled={saving}>{locked ? "Close" : "Cancel"}</Button>
+        {!locked && <Button variant="primary" type="submit" form={formId} busy={saving}>Save</Button>}
       </SlideOverPanelFooter>
     </>
+  );
+}
+
+/** The refusal of an entry that turned read-only: at the top, taking the focus Save held. */
+function TopRefusal({ message }: { message: string }) {
+  return (
+    <div
+      tabIndex={-1}
+      ref={(box) => {
+        box?.scrollIntoView?.({ block: "nearest" });
+        box?.focus({ preventScroll: true });
+      }}
+    >
+      <ServerError message={message} />
+    </div>
   );
 }

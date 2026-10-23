@@ -48,8 +48,12 @@ export interface EmissionEntryFormOptions {
 
 const text = z.string().optional().default("");
 
+/** Typed text per field: the value fields are named at run time (`entryFieldName`), so the keys are open. */
+export type EmissionEntryFormInput = Record<string, string | undefined>;
+export type EmissionEntryFormData = Record<string, string>;
+
 /** The manual entry drawer: one decimal text per value field, the date, an optional note. */
-export function emissionEntryFormSchema({ fieldCount, dated, today, startDate }: EmissionEntryFormOptions) {
+export function emissionEntryFormSchema({ fieldCount, dated, today, startDate }: EmissionEntryFormOptions): z.ZodType<EmissionEntryFormData, EmissionEntryFormInput> {
   const values = Object.fromEntries(
     Array.from({ length: fieldCount }, (_, index) => [
       entryFieldName(index),

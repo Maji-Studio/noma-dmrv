@@ -117,6 +117,35 @@ describe("ManualEntryForm submit", () => {
   });
 });
 
+describe("ManualEntryForm whole-entry lock", () => {
+  it("turns read-only with the refusal at the top and no Save", async () => {
+    // What lockWritableEmissionEntry sends: the lock code, no issues.
+    mutations.update.mockRejectedValue(new ActionError({ error: "This emissions entry is reserved or sent. It cannot be changed.", code: "certification_locked" }));
+    renderForm({ kind: "edit", entry: makeEntry() });
+    fireEvent.change(energy(), { target: { value: "9" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    const message = await screen.findByText("This emissions entry is reserved or sent.");
+    expect(screen.getAllByText(/reserved or sent/)).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+    expect(energy().matches(":disabled")).toBe(true);
+    expect(screen.getByLabelText("Note").matches(":disabled")).toBe(true);
+    // Above the fields.
+    expect(message.compareDocumentPosition(energy()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe("ManualEntryForm error summary", () => {
+  it("counts the refused fields and focuses the first", async () => {
+    mutations.create.mockRejectedValue(refusal([{ path: ["values", 0, "magnitude"], code: "too_big", message: "Use 100 characters or fewer." }]));
+    renderForm();
+    fireEvent.change(energy(), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Not saved. Fix 1 field.")).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(energy()));
+  });
+});
+
 describe("ManualEntryForm refusals", () => {
   it("lands a refusal that names the value at its field, with no footer", async () => {
     // The issue path the server sends for a rejected magnitude (createEmissionEntrySchema).
@@ -126,7 +155,7 @@ describe("ManualEntryForm refusals", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByText("Use 100 characters or fewer.")).toBeTruthy();
     expect(document.getElementById("entry-line-1-energy-error")?.textContent).toBe("Use 100 characters or fewer.");
-    expect(screen.queryByText(/not saved/i)).toBeNull();
+    expect(screen.queryByText("Not saved.")).toBeNull();
     expect(onSaved).not.toHaveBeenCalled();
     // No error summary on this form: focus moves to the refused field.
     await waitFor(() => expect(document.activeElement).toBe(energy()));
@@ -138,7 +167,7 @@ describe("ManualEntryForm refusals", () => {
     fireEvent.change(energy(), { target: { value: "5" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(document.getElementById("entry-line-1-date-error")?.textContent).toBe("Invalid ISO date"));
-    expect(screen.queryByText(/not saved/i)).toBeNull();
+    expect(screen.queryByText("Not saved.")).toBeNull();
   });
 
   it("lands a refusal on the Mass part of a mass-distance line and sends the computed total to the footer", async () => {
@@ -149,7 +178,7 @@ describe("ManualEntryForm refusals", () => {
     fireEvent.change(screen.getByRole("textbox", { name: /Distance/ }), { target: { value: "7" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(document.getElementById("entry-line-1-md:mass-error")?.textContent).toBe("Mass is too long."));
-    expect(screen.queryByText(/not saved/i)).toBeNull();
+    expect(screen.queryByText("Not saved.")).toBeNull();
     cleanup();
     mutations.create.mockRejectedValue(refusal([{ path: ["values", 0, "magnitude"], code: "too_big", message: "The total is too long." }]));
     renderForm({ kind: "add" }, vi.fn(), line);
