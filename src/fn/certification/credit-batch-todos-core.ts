@@ -1,4 +1,5 @@
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
+import { loadCreditBatchesLateProductionRuns } from "@/data-access/credit-batch-late-production-runs";
 import type { OrgContext } from "@/lib/auth/server";
 import { batchLinesToDecide, deriveBatchHealth, type BatchHealthState } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
@@ -33,9 +34,10 @@ export async function loadCreditBatchTodos(
     }
     return [id, deriveBatchHealth(toBatchHealthFacts(context, id))];
   }));
-  const [batchesWithSamples, emissionDisplayByBatch] = await Promise.all([
+  const [batchesWithSamples, emissionDisplayByBatch, lateProductionRunsByBatch] = await Promise.all([
     getCreditBatchesWithSamples(ctx, ids),
     loadBatchesEmissionLines(ctx, batches, { comments: false }),
+    loadCreditBatchesLateProductionRuns(ctx, ids),
   ]);
   const durabilityByBatch = new Map(buildDurabilityBatchSummaries(batchesWithSamples)
     .map((summary) => [summary.creditBatchId, summary]));
@@ -47,6 +49,7 @@ export async function loadCreditBatchTodos(
       facilityId, creditBatchId: id, canManage, health,
       durability: durabilityByBatch.get(id),
       emissionLines: emissionDisplay?.status === "ready" ? emissionDisplay.lines : undefined,
+      lateProductionRuns: lateProductionRunsByBatch.get(id),
     });
     return [id, { state: health.state, linesToDecide: batchLinesToDecide(health), blocking, check }];
   }));

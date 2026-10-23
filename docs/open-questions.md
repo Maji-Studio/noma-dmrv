@@ -60,6 +60,7 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
 
 ## Late production runs after submission (`credit-batches/late-runs`) - **parked**
 
+- The batch now shows a Check to-do to record each excluded run's diesel and power as manual entries dated on the later of the run's start day and the batch's first day; crediting remains parked.
 - `src/data-access/credit-batch-membership.ts:assertNoOverlappingCreditBatchCohort`
   keeps one credit batch per facility and feedstock for any day. Since PR 5
   (Kenji, 2026-10-22), a run completed while its batch's Removal is a draft or
