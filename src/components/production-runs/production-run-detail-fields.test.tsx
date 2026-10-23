@@ -1,30 +1,89 @@
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   buildProductionRunFeedstockDetailField,
   buildProductionRunWindowDetailFields,
   productionRunStatusCertStatus,
+  summarizeProductionRunFeedstocks,
 } from "./production-run-detail-fields";
+
+const feedstockText = (
+  feedstocks: Parameters<typeof buildProductionRunFeedstockDetailField>[0],
+) =>
+  renderToStaticMarkup(
+    <>{buildProductionRunFeedstockDetailField(feedstocks).value}</>,
+  ).replace(/<[^>]+>/g, "");
 
 const FACILITIES = [
   { id: "facility-a", timezone: "Africa/Dar_es_Salaam" },
 ] as const;
 
 describe("production run detail certification fields", () => {
-  it("shows the linked feedstock batches with their feedstock types", () => {
+  it("names a single intake by its code", () => {
     expect(
-      buildProductionRunFeedstockDetailField([
-        {
-          feedstockCode: "FS-26-901",
-          feedstockTypeName: "Wood chips",
-        },
-        {
-          feedstockCode: "FS-26-902",
-          feedstockTypeName: "Wood chips",
-        },
+      feedstockText([
+        { feedstockCode: "FS-26-901", feedstockTypeName: "Wood chips" },
       ]),
-    ).toEqual({
+    ).toBe("Wood chips (FS-26-901)");
+  });
+
+  it("summarises many intakes of one type as a count and code range", () => {
+    // One draw from a long-lived bin is allocated across all its intakes,
+    // returned in no particular order (#1403).
+    const codes = ["FS-26-123", "FS-26-021", "FS-26-1000", "FS-26-076"];
+    const feedstocks = codes.map((feedstockCode) => ({
+      feedstockCode,
+      feedstockTypeName: "Pine Off-cuts",
+    }));
+    expect(summarizeProductionRunFeedstocks(feedstocks)).toEqual([
+      {
+        typeName: "Pine Off-cuts",
+        intakeCount: 4,
+        codeRange: ["FS-26-021", "FS-26-1000"],
+      },
+    ]);
+    expect(feedstockText(feedstocks)).toBe(
+      "Pine Off-cuts (4 intakes, FS-26-021 to FS-26-1000)",
+    );
+  });
+
+  it("keeps each code on one line", () => {
+    const field = buildProductionRunFeedstockDetailField([
+      { feedstockCode: "FS-26-001", feedstockTypeName: "Pine Off-cuts" },
+      { feedstockCode: "FS-26-002", feedstockTypeName: "Pine Off-cuts" },
+    ]);
+    expect(renderToStaticMarkup(<>{field.value}</>)).toContain(
+      '<span class="whitespace-nowrap">FS-26-001</span> to <span class="whitespace-nowrap">FS-26-002</span>',
+    );
+  });
+
+  it("gives each feedstock type its own entry, sorted by name", () => {
+    expect(
+      feedstockText([
+        { feedstockCode: "FS-26-003", feedstockTypeName: "Wood chips" },
+        { feedstockCode: "FS-26-002", feedstockTypeName: "Pine Off-cuts" },
+        { feedstockCode: "FS-26-001", feedstockTypeName: "Pine Off-cuts" },
+      ]),
+    ).toBe(
+      "Pine Off-cuts (2 intakes, FS-26-001 to FS-26-002), Wood chips (FS-26-003)",
+    );
+  });
+
+  it("keeps intakes whose type or code is missing", () => {
+    expect(
+      feedstockText([
+        { feedstockCode: null, feedstockTypeName: "Rice husk" },
+        { feedstockCode: null, feedstockTypeName: "Rice husk" },
+        { feedstockCode: "FS-26-010", feedstockTypeName: null },
+        { feedstockCode: null, feedstockTypeName: null },
+      ]),
+    ).toBe("FS-26-010, Rice husk (2 intakes)");
+  });
+
+  it("is empty without linked intakes", () => {
+    expect(buildProductionRunFeedstockDetailField([])).toEqual({
       label: "Feedstock",
-      value: "Wood chips (FS-26-901), Wood chips (FS-26-902)",
+      value: null,
     });
   });
 
