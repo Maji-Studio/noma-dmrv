@@ -59,6 +59,7 @@ describe("EntitySideSheet record lock in edit mode", () => {
     expect(text()).toContain("Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026.");
     expect(buttonsNamed("Save changes")).toHaveLength(0);
     expect(buttonsNamed("Back to view")).toHaveLength(1);
+    expect(buttonsNamed("Back to view")[0].props.className).toContain("max-sm:flex-1");
   });
 
   it("explains a pending check above Save, which stays off, and leaves fields to the form", () => {
