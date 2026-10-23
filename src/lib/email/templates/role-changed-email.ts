@@ -1,8 +1,10 @@
 import { composeEmail } from "./compose-email";
 import { formatDateUtc } from "./format-duration";
 
+export type OrgRoleLabel = "Admin" | "Member";
+
 /** What each role can do, from GLOSSARY.md (Admin: full organization control; Member: day-to-day data entry). */
-const ROLE_EXPLANATION: Record<string, string> = {
+const ROLE_EXPLANATION: Record<OrgRoleLabel, string> = {
   Admin: "As an Admin you have full control of the organization, including its settings and members.",
   Member: "As a Member you can enter the organization's day-to-day data.",
 };
@@ -11,8 +13,8 @@ export function roleChangedEmail(input: {
   to: string;
   organizationName: string;
   actorName?: string;
-  fromRole: string;
-  toRole: string;
+  fromRole: OrgRoleLabel;
+  toRole: OrgRoleLabel;
   changedAt: Date;
   appUrl: string;
 }) {

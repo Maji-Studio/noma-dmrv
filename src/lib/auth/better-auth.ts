@@ -2,6 +2,9 @@
  * Better Auth configuration
  * Sets up authentication with email/password and admin invite
  */
+import { capturePasswordResetNotice, deliverPasswordNotice } from "./account-notice-hooks";
+import { getBetterAuthSession } from "./providers/better-auth-server";
+import { sendRoleChangedNotice, sendRemovedFromOrganizationNotice } from "@/lib/email/account-notices";
 import { createOAuthProvider } from "./oauth-provider";
 import { createOAuthCimdPlugins } from "./oauth-cimd";
 import { oauthBefore } from "./oauth-hooks";
@@ -79,6 +82,7 @@ export const auth = betterAuth({
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
       validateOrganizationRoleInput(ctx.path, ctx.body);
+      await capturePasswordResetNotice(ctx);
       // HTTP callers cannot bypass the guarded application actions. Block reads
       // too, so plugin responses cannot expose credential hashes or metadata.
       if (ctx.path?.startsWith("/api-key/") && (ctx.request || ctx.headers)) {
@@ -87,6 +91,7 @@ export const auth = betterAuth({
       if (env.OAUTH_PROVIDER_ENABLED) return oauthBefore(ctx);
     }),
     after: createAuthMiddleware(async (ctx) => {
+      await deliverPasswordNotice(ctx);
       const returned = ctx.context.returned;
       if (returned instanceof APIError && returned.body?.code?.startsWith("YOU_CANNOT_LEAVE_THE_ORGANIZATION")) {
         const session = await getSessionFromCtx(ctx);
@@ -319,17 +324,29 @@ export const auth = betterAuth({
         beforeAcceptInvitation: async ({ invitation }) => {
           assertOrganizationRole(invitation.role);
         },
-        afterRemoveMember: async ({ member }) => {
+        afterRemoveMember: async ({ member, user, organization }) => {
           await revokeMemberOAuthGrants(member.organizationId, member.userId, member.id);
           await disableOwnerApiKeys(member.organizationId, member.userId);
+          // Leave does not invoke this hook. Suppress self-removal here too.
+          let actorUserId: string | undefined;
+          try { actorUserId = (await getBetterAuthSession())?.user.id; } catch { /* Unknown actor. */ }
+          await sendRemovedFromOrganizationNotice({
+            userId: user.id, email: user.email, memberId: member.id,
+            organizationId: organization.id, organizationName: organization.name, actorUserId,
+          });
         },
-        afterUpdateMemberRole: async ({ member }) => {
+        afterUpdateMemberRole: async ({ member, previousRole, user, organization }) => {
           if (!oauthRolePolicy(member.role).connect) {
             await revokeMemberOAuthGrants(member.organizationId, member.userId, member.id);
           }
           if (!canOwnApiKey(member.role)) {
             await disableOwnerApiKeys(member.organizationId, member.userId);
           }
+          await sendRoleChangedNotice({
+            userId: user.id, email: user.email, memberId: member.id,
+            organizationId: organization.id, organizationName: organization.name,
+            fromRole: previousRole, toRole: member.role,
+          });
         },
         afterCreateOrganization: async ({ organization }) => {
           try {

@@ -165,7 +165,7 @@ it("waits for keyed issuance before demotion revokes the key permanently", async
     return original(...args);
   });
   const creating = createApiKey(ctx, input, randomUUID());
-  let demotion: Promise<void> | undefined;
+  let demotion: Promise<unknown> | undefined;
   let created: Awaited<typeof creating>;
   try {
     await Promise.race([entered.promise, creating]);
@@ -265,7 +265,7 @@ it("finishes a replay overlapping a platform-admin demotion, leaving the new key
     return original(...args);
   });
   const replaying = createApiKey(ctx, input, intentKey);
-  let demotion: Promise<void> | undefined;
+  let demotion: Promise<unknown> | undefined;
   let created: Awaited<typeof replaying>;
   try {
     await Promise.race([entered.promise, replaying]);
@@ -295,7 +295,7 @@ it("locks the member before the previous key, so a member-first demotion cannot 
   const intentKey = randomUUID();
   const first = await createApiKey(ctx, input, intentKey);
   const memberLocked = Promise.withResolvers<void>();
-  let demotion: Promise<void> | undefined;
+  let demotion: Promise<unknown> | undefined;
   const original = auth.api.createApiKey;
   vi.spyOn(auth.api, "createApiKey").mockImplementationOnce(async (...args) => {
     const issued = await original(...args);

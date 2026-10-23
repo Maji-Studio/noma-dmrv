@@ -3,13 +3,14 @@
  * to the role set is one edit here.
  */
 import type { OrgRole } from "@/lib/auth/server";
+import type { OrgRoleLabel } from "@/lib/email/templates/role-changed-email";
 
-const ORG_ROLE_LABELS: Readonly<Record<OrgRole, string>> = {
+const ORG_ROLE_LABELS: Readonly<Record<OrgRole, OrgRoleLabel>> = {
   admin: "Admin",
   member: "Member",
 };
 
 /** Label for a membership role; null for an unknown or missing role. */
-export function orgRoleLabel(role: OrgRole | null | undefined): string | null {
+export function orgRoleLabel(role: OrgRole | null | undefined): OrgRoleLabel | null {
   return role ? ORG_ROLE_LABELS[role] : null;
 }
