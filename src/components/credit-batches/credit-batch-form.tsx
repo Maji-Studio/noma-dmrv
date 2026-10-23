@@ -135,7 +135,6 @@ export function CreditBatchForm({
     handleSubmit,
     control,
     trigger,
-    getValues,
     formState: { errors, isSubmitted, dirtyFields },
     setValue,
     resetField,
