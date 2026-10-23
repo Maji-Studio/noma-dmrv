@@ -6,6 +6,7 @@ import { DriverForm } from "@/components/drivers/driver-form";
 import { OperatorForm } from "@/components/operators/operator-form";
 import { VehicleForm } from "@/components/vehicles/vehicle-form";
 import type { Driver, Operator, Vehicle } from "@/db/schema";
+import { ActionError } from "@/lib/action-error";
 import { fieldRefusal, RefusalParent } from "../../../tests/helpers/refusal-form-parent";
 import { FleetSheetForm } from "./fleet-sheet-forms";
 
@@ -27,10 +28,12 @@ const vehicle = {
 afterEach(cleanup);
 
 describe("fleet forms refused save", () => {
+  // Form contract cases: the server validates `name` with the form's own Zod schema, so a Zod issue at
+  // ["name"] is a real shape; duplicate-name conflicts carry no path (see the vehicle case below).
   it("shows a driver name refusal at the name field with no footer", async () => {
-    render(<RefusalParent refusal={fieldRefusal(["name"], "Driver name is taken")} fallback="not saved">{(props) => <DriverForm driver={driver} {...props} />}</RefusalParent>);
+    render(<RefusalParent refusal={fieldRefusal(["name"], "Driver name must be less than 255 characters")} fallback="not saved">{(props) => <DriverForm driver={driver} {...props} />}</RefusalParent>);
     fireEvent.submit(screen.getByRole("textbox", { name: /^Name/ }).closest("form")!);
-    await waitFor(() => expect(document.querySelector("#name-error")?.textContent).toContain("Driver name is taken"));
+    await waitFor(() => expect(document.querySelector("#name-error")?.textContent).toContain("Driver name must be less than 255 characters"));
     expect(screen.getByTestId("footer").textContent).toBe("none");
   });
 
@@ -48,12 +51,6 @@ describe("fleet forms refused save", () => {
     await waitFor(() => expect(document.querySelector("#fuelConsumptionLPer100Km-error")?.textContent).toContain("too high"));
     expect(screen.getByTestId("footer").textContent).toBe("none");
   });
-
-  it("keeps the footer for a vehicle name conflict that names no field", async () => {
-    render(<RefusalParent refusal={new Error("A vehicle with this name already exists.")} fallback="The vehicle was not saved. Try again.">{(props) => <VehicleForm vehicle={vehicle} {...props} />}</RefusalParent>);
-    fireEvent.submit(screen.getByRole("textbox", { name: /^Name/ }).closest("form")!);
-    await waitFor(() => expect(screen.getByTestId("footer").textContent).toBe("The vehicle was not saved. Try again."));
-  });
 });
 
 describe("fleet sheet parents", () => {
@@ -64,23 +61,36 @@ describe("fleet sheet parents", () => {
   );
 
   it("shows a refused driver edit at its field and leaves no footer", async () => {
-    mocks.updateDriver.mockRejectedValueOnce(fieldRefusal(["name"], "Driver name is taken"));
+    mocks.updateDriver.mockRejectedValueOnce(fieldRefusal(["name"], "Driver name must be less than 255 characters"));
     renderSheet(driver);
     fireEvent.submit(screen.getByRole("textbox", { name: /^Name/ }).closest("form")!);
-    await waitFor(() => expect(document.querySelector("#name-error")?.textContent).toContain("Driver name is taken"));
-    expect(screen.getAllByRole("alert").filter((node) => node.id !== "name-error" && node.textContent?.includes("Driver name is taken"))).toEqual([]);
+    await waitFor(() => expect(document.querySelector("#name-error")?.textContent).toContain("Driver name must be less than 255 characters"));
+    expect(screen.getAllByRole("alert").filter((node) => node.id !== "name-error" && node.textContent?.includes("Driver name must be less than 255 characters"))).toEqual([]);
   });
 
   it("shows a refused driver create at its field and leaves no footer", async () => {
     mocks.createDriver.mockResolvedValueOnce({
-      success: false, error: "Driver name is taken", code: "validation_failed",
-      issues: [{ path: ["name"], code: "validation_failed", message: "Driver name is taken" }],
+      success: false, error: "Driver name must be less than 255 characters", code: "validation_failed",
+      issues: [{ path: ["name"], code: "validation_failed", message: "Driver name must be less than 255 characters" }],
     });
     renderSheet(null);
     fireEvent.change(screen.getByRole("textbox", { name: /^Name/ }), { target: { value: "Asha" } });
     fireEvent.submit(screen.getByRole("textbox", { name: /^Name/ }).closest("form")!);
-    await waitFor(() => expect(document.querySelector("#name-error")?.textContent).toContain("Driver name is taken"));
-    expect(screen.getAllByRole("alert").filter((node) => node.id !== "name-error" && node.textContent?.includes("Driver name is taken"))).toEqual([]);
+    await waitFor(() => expect(document.querySelector("#name-error")?.textContent).toContain("Driver name must be less than 255 characters"));
+    expect(screen.getAllByRole("alert").filter((node) => node.id !== "name-error" && node.textContent?.includes("Driver name must be less than 255 characters"))).toEqual([]);
+  });
+
+  // Real server shape: DomainError("conflict", VEHICLE_NAME_TAKEN), no issues, so the sheet shows the message.
+  it("shows a vehicle name conflict in the sheet's message line, not at a field", async () => {
+    mocks.updateVehicle.mockRejectedValueOnce(new ActionError({ error: "A vehicle with this name already exists", code: "conflict" }));
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <FleetSheetForm kind="vehicle" record={vehicle} onSaved={vi.fn()} onCancel={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    fireEvent.submit(screen.getByRole("textbox", { name: /^Name/ }).closest("form")!);
+    await waitFor(() => expect(screen.getAllByRole("alert").some((node) => node.textContent?.includes("A vehicle with this name already exists"))).toBe(true));
+    expect(document.querySelector("#name-error")).toBeNull();
   });
 
   it("keeps the old message line for a refusal that names no field", async () => {

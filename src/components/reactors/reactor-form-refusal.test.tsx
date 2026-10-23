@@ -32,9 +32,11 @@ describe("ReactorForm refused save", () => {
     expect(screen.getByTestId("footer").textContent).toBe("none");
   });
 
+  // Form contract case: the server's Zod schema validates `identifier` (max 255), so a Zod issue at
+  // ["identifier"] is a real shape. A duplicate-identifier conflict carries no path and reaches the footer.
   it("shows an identifier refusal at the identifier field", async () => {
-    renderRefused(fieldRefusal(["identifier"], "Identifier is taken"));
-    await waitFor(() => expect(document.querySelector("#identifier-error")?.textContent).toContain("Identifier is taken"));
+    renderRefused(fieldRefusal(["identifier"], "Too long", "validation_failed"));
+    await waitFor(() => expect(document.querySelector("#identifier-error")?.textContent).toContain("Too long"));
     expect(screen.getByTestId("footer").textContent).toBe("none");
   });
 

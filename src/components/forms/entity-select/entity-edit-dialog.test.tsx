@@ -9,7 +9,7 @@ import type { EditableEntityType } from "@/hooks/use-entity-edit-record";
 
 const mocks = vi.hoisted(() => ({
   query: { data: undefined as unknown, isFetchedAfterMount: false, isFetching: true, isSuccess: false, isError: false, refetch: vi.fn() },
-  load: vi.fn(), update: vi.fn(), toast: vi.fn(), restore: vi.fn(), restoreSupplier: vi.fn(), restoreCustomer: vi.fn(), success: vi.fn(), refusal: vi.fn(), withoutHandler: false,
+  load: vi.fn(), update: vi.fn(), toast: vi.fn(), restore: vi.fn(), restoreSupplier: vi.fn(), restoreCustomer: vi.fn(), success: vi.fn(), refusal: vi.fn(),
 }));
 vi.mock("@/hooks/use-entity-edit-record", () => ({ useEntityEditRecord: (...args: unknown[]) => { mocks.load(...args); return mocks.query; } }));
 vi.mock("@/hooks/use-record-locks", async () => (await import("../../../../tests/helpers/record-lock-mocks")).openRecordLocksModule);
@@ -39,7 +39,7 @@ interface FormProps {
 }
 function EditForm(props: FormProps) {
   const record = props.customer ?? props.reactor ?? props.order ?? props.supplier ?? props.formulation ?? props.feedstockType;
-  return <form aria-label="Edit form" onSubmit={(event) => { event.preventDefault(); props.onSubmit({ name: "Renamed" }, (mocks.withoutHandler ? undefined : mocks.refusal) as never); }}>
+  return <form aria-label="Edit form" onSubmit={(event) => { event.preventDefault(); props.onSubmit({ name: "Renamed" }, mocks.refusal); }}>
     <span>{record?.name}</span>{props.errorMessage && <p role="alert">{props.errorMessage}</p>}<button type="submit">Save changes</button>
   </form>;
 }
@@ -66,7 +66,7 @@ const dialog = (entityType: EditableEntityType, isOpen = true, onClose = vi.fn()
 function loaded() { Object.assign(mocks.query, { data: record, isFetchedAfterMount: true, isFetching: false, isSuccess: true }); }
 afterEach(cleanup);
 beforeEach(() => {
-  vi.clearAllMocks(); mocks.withoutHandler = false; mocks.update.mockResolvedValue(record);
+  vi.clearAllMocks(); mocks.update.mockResolvedValue(record);
   mocks.refusal.mockImplementation((_error: unknown, fallback: string) => fallback);
   Object.assign(mocks.query, { data: undefined, isFetchedAfterMount: false, isFetching: true, isSuccess: false, isError: false });
 });
@@ -187,15 +187,6 @@ describe("EntityEditDialog", () => {
     render(dialog("order"));
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect((await screen.findByRole("alert")).textContent).toBe("Your changes were not saved.");
-  });
-  // Every picker edit dialog now takes the handler, so a form typed to submit the data alone stands in for a legacy one.
-  it("keeps the message line when a form submits without a refusal handler", async () => {
-    loaded(); mocks.withoutHandler = true;
-    mocks.update.mockRejectedValueOnce(new ActionError({ error: "Held.", code: "certification_locked" }));
-    render(dialog("reactor"));
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("Held.");
-    expect(mocks.refusal).not.toHaveBeenCalled();
   });
   it("keeps the plain fallback for a thrown error that is not an ActionError", async () => {
     loaded();

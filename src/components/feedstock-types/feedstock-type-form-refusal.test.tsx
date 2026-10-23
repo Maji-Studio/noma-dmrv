@@ -28,9 +28,11 @@ function renderRefused(refusal: unknown) {
 afterEach(cleanup);
 
 describe("FeedstockTypeForm refused save", () => {
+  // Form contract case: the server's Zod schema validates `name` (max 255), so a Zod issue at ["name"]
+  // is a real shape. A duplicate-name SafeError carries no path and reaches the footer as the fallback.
   it("shows a name refusal at the name field with no footer", async () => {
-    renderRefused(fieldRefusal(["name"], "A feedstock type with this name already exists."));
-    await waitFor(() => expect(document.querySelector("#name-error")?.textContent).toContain("already exists"));
+    renderRefused(fieldRefusal(["name"], "Name must be less than 255 characters"));
+    await waitFor(() => expect(document.querySelector("#name-error")?.textContent).toContain("less than 255"));
     expect(screen.getByTestId("footer").textContent).toBe("none");
   });
 
