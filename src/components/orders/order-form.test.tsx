@@ -9,6 +9,8 @@
 import { errorBox } from "../../../tests/helpers/error-box-text";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
+import { useState } from "react";
+import { ActionError } from "@/lib/action-error";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { CustomerLocation, Facility, Order } from "@/db/schema";
@@ -24,6 +26,7 @@ const state = vi.hoisted(() => ({
   detailRequests: [] as { entityType: EntityType; id: string | undefined }[],
   customersById: {} as Record<string, EntityOption>,
   locationOptions: [] as EntityOption[],
+  customerOptions: [] as EntityOption[],
   formulationOptions: [] as EntityOption[],
   locations: [] as CustomerLocation[],
   /** The selected customer's detail read; archived when `archivedAt` is set. */
@@ -70,6 +73,7 @@ vi.mock("@/hooks/use-entities", () => ({
   }) => {
     state.optionRequests.push({ entityType, enabled });
     const options = entityType === "customerLocation" ? state.locationOptions
+      : entityType === "customer" ? state.customerOptions
       : entityType === "formulation" ? state.formulationOptions : [];
     return { data: enabled ? options : [], dataUpdatedAt: 0, isLoading: false, error: null };
   },
@@ -108,6 +112,7 @@ beforeEach(() => {
   state.detailRequests = [];
   state.customersById = {};
   state.locationOptions = [];
+  state.customerOptions = [];
   state.formulationOptions = [];
   state.locations = [];
   state.customer = { archivedAt: null };
@@ -140,7 +145,7 @@ describe("OrderForm product details", () => {
 
     fireEvent.change(quantity, { target: { value: "12.125" } });
     fireEvent.submit(quantity.closest("form")!);
-    await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ quantityKg: 12.125 })));
+    await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ quantityKg: 12.125 }), expect.any(Function)));
     expect(screen.queryByText("Quantity is required")).toBeNull();
     client.clear();
   });
@@ -162,7 +167,7 @@ describe("OrderForm product details", () => {
       const date = screen.getByLabelText(/^Order date/) as HTMLInputElement;
       expect(date.value).toBe("2026-09-01");
       fireEvent.submit(date.closest("form")!);
-      await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ orderDate: new Date("2026-09-01T00:00:00Z") })));
+      await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ orderDate: new Date("2026-09-01T00:00:00Z") }), expect.any(Function)));
     } finally {
       if (originalTimezone === undefined) delete process.env.TZ;
       else process.env.TZ = originalTimezone;
@@ -505,5 +510,128 @@ describe("OrderForm unsaved changes", () => {
     fireEvent.click(formulation());
     fireEvent.click(screen.getByTestId("entity-option-formulation-2"));
     await waitFor(() => expect(states.at(-1)).toBe(true));
+  });
+});
+
+describe("OrderForm save refusal (#1327)", () => {
+  const ORDER = {
+    id: "order-1", facilityId: "22222222-2222-4222-8222-222222222222",
+    customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: "11111111-1111-4111-8111-111111111111",
+    formulationId: "44444444-4444-4444-8444-444444444444",
+    orderDate: new Date("2026-09-01T00:00:00Z"), quantityKg: 1000, packaging: "loose",
+  } as Order;
+  const FALLBACK = "Order was not saved. Try again.";
+  const LOCK_REASON = "A delivery holds this quantity. Correct the delivery first.";
+  const issue = (path: string[], message: string, code = "validation_failed") => ({ path, code, message });
+
+  /** The parent's catch: `setError(onRefusal(error, fallback))`. */
+  function RefusingOrderForm({ refusal }: { refusal: unknown }) {
+    const [error, setError] = useState<string | null>(null);
+    return (
+      <OrderForm
+        order={ORDER}
+        lock={OPEN_LOCK}
+        errorMessage={error ?? undefined}
+        onSubmit={(_data, onRefusal) => { setError(onRefusal(refusal, FALLBACK)); }}
+      />
+    );
+  }
+
+  async function saveRefused(refusal: unknown, edit?: (quantity: HTMLInputElement) => void) {
+    const client = new QueryClient();
+    render(<QueryClientProvider client={client}><RefusingOrderForm refusal={refusal} /></QueryClientProvider>);
+    const quantity = screen.getByRole("spinbutton", { name: /^Requested wet mass/ }) as HTMLInputElement;
+    edit?.(quantity);
+    await act(async () => { fireEvent.submit(quantity.closest("form")!); });
+    return quantity;
+  }
+
+  it("shows a refusal that names a field at that field and not in the footer", async () => {
+    const quantity = await saveRefused(new ActionError({
+      error: "Quantity is too high.", code: "validation_failed", issues: [issue(["quantityKg"], "Quantity is too high.")],
+    }));
+    await waitFor(() => expect(document.getElementById("quantityKg-error")?.textContent).toBe("Quantity is too high."));
+    expect(quantity.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.queryByText(FALLBACK)).toBeNull();
+    expect(screen.queryAllByText(/Quantity is too high\./)).toHaveLength(1);
+  });
+
+  it("restores the saved customer and its location together when the customer is locked", async () => {
+    const LOCATION_ONE = { id: ORDER.customerLocationId, code: "", name: "North field" };
+    const LOCATION_TWO = { id: "55555555-5555-4555-8555-555555555555", code: "", name: "South field" };
+    const CUSTOMER_A = { id: ORDER.customerId, code: "", name: "Customer A" };
+    const CUSTOMER_B = { id: "66666666-6666-4666-8666-666666666666", code: "", name: "Customer B" };
+    state.customerOptions = [CUSTOMER_A, CUSTOMER_B];
+    state.customersById = { [CUSTOMER_A.id]: CUSTOMER_A, [CUSTOMER_B.id]: CUSTOMER_B };
+    state.locationOptions = [LOCATION_ONE, LOCATION_TWO];
+    const client = new QueryClient();
+    const refusal = new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [issue(["customerId"], LOCK_REASON, "certification_locked")] });
+    render(<QueryClientProvider client={client}><RefusingOrderForm refusal={refusal} /></QueryClientProvider>);
+    const customer = () => screen.getByRole("combobox", { name: /^Customer(Required)?$/ });
+    const location = () => screen.getByRole("combobox", { name: /^Customer location/ });
+    await waitFor(() => expect(location().textContent).toBe("North field"));
+
+    fireEvent.click(customer());
+    fireEvent.click(await screen.findByText("Customer B"));
+    await waitFor(() => expect(customer().textContent).toBe("Customer B"));
+    // The operator's own change clears the location until they pick one of B's.
+    await waitFor(() => expect(location().textContent).not.toBe("North field"));
+    fireEvent.click(location());
+    fireEvent.click(await screen.findByText("South field"));
+    await waitFor(() => expect(location().textContent).toBe("South field"));
+
+    await act(async () => { fireEvent.submit(customer().closest("form")!); });
+    await waitFor(() => expect(customer().textContent).toBe("Customer A"));
+    await act(async () => {});
+    expect(customer().textContent).toBe("Customer A");
+    expect(location().textContent).toBe("North field");
+    expect(document.getElementById("customerLocationId-error")?.textContent).toBe("Locked. Your change was not saved.");
+    client.clear();
+  });
+
+  it("keeps the location and stays clean when the operator re-picks the same customer", async () => {
+    const LOCATION_ONE = { id: ORDER.customerLocationId, code: "", name: "North field" };
+    const CUSTOMER_A = { id: ORDER.customerId, code: "", name: "Customer A" };
+    state.customerOptions = [CUSTOMER_A, { id: "66666666-6666-4666-8666-666666666666", code: "", name: "Customer B" }];
+    state.customersById = { [CUSTOMER_A.id]: CUSTOMER_A };
+    state.locationOptions = [LOCATION_ONE];
+    const client = new QueryClient();
+    const { states } = renderReportingDirty(<OrderForm order={ORDER} lock={OPEN_LOCK} onSubmit={noop} onCancel={noop} />, {
+      wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    });
+    const customer = () => screen.getByRole("combobox", { name: /^Customer(Required)?$/ });
+    const location = () => screen.getByRole("combobox", { name: /^Customer location/ });
+    await waitFor(() => expect(location().textContent).toBe("North field"));
+
+    fireEvent.click(customer());
+    fireEvent.click(await screen.findByTestId(`entity-option-${CUSTOMER_A.id}`));
+    await act(async () => {});
+    expect(customer().textContent).toBe("Customer A");
+    expect(location().textContent).toBe("North field");
+    expectStayedClean(states);
+    client.clear();
+  });
+
+  it("keeps a code clash in the footer, since the order form has no Code field", async () => {
+    const message = 'Code "ORD-26-001" already exists. Use a different code.';
+    await saveRefused(new ActionError({ error: message, code: "validation_failed", issues: [issue(["code"], message, "conflict")] }));
+    expect(await screen.findAllByText(new RegExp(message.slice(0, 20)))).toHaveLength(1);
+    expect(document.querySelector('[id$="-error"]')).toBeNull();
+  });
+
+  it("keeps the fallback for a refusal without issues", async () => {
+    await saveRefused(new ActionError({ error: "Nope.", code: "validation_failed" }));
+    // The error box splits the parent's fallback into a title and its detail.
+    expect(await screen.findByText(/Try again\./)).toBeTruthy();
+  });
+
+  it("sends a locked field back to the saved quantity and says why once", async () => {
+    const quantity = await saveRefused(
+      new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [issue(["quantityKg"], LOCK_REASON, "certification_locked")] }),
+      (field) => fireEvent.change(field, { target: { value: "2500" } }),
+    );
+    await waitFor(() => expect(quantity.value).toBe("1000"));
+    expect(document.getElementById("quantityKg-error")?.textContent).toBe("Locked. Your change was not saved.");
+    expect(screen.getAllByText(new RegExp(LOCK_REASON.slice(0, 25)))).toHaveLength(1);
   });
 });

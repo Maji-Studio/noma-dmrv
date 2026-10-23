@@ -23,6 +23,9 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, PackageIcon, StorefrontIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
+import { LOCKED_ERROR_TYPE } from "@/components/forms/form-error-summary";
+import { isLockRefusal, LOCKED_FIELD_MESSAGE } from "@/lib/save-refusal";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 
 import { ServerError } from "@/components/forms/server-error";
 import { Button } from "@/components/ui/button";
@@ -32,7 +35,7 @@ import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
 import { recordInUseFreeFields } from "@/lib/record-lock";
 import { MatchingOutputBins } from "./matching-output-bins";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { CustomerLocationDialog } from "@/components/customers/customer-location-dialog";
 import type { EditableCustomerLocation } from "@/components/customers/customer-location-form";
 import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
@@ -69,8 +72,8 @@ function formatPackaging(type: PackagingType): string {
 interface OrderFormProps {
   /** Existing order data for editing (undefined for create mode) */
   order?: Order;
-  /** Form submission handler */
-  onSubmit: (data: OrderFormData) => Promise<void> | void;
+  /** Form submission handler; `onRefusal` shows a refused save at its fields (#1327). */
+  onSubmit: (data: OrderFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -93,6 +96,7 @@ export function OrderForm({
   lock,
 }: OrderFormProps) {
   const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!order;
   // Fail closed: until the lock answers, fields an In use order holds stay disabled.
   const locked = (field: string) => isEditMode && isRecordFieldHeld(lock, recordInUseFreeFields("order"), field);
@@ -113,6 +117,7 @@ export function OrderForm({
     getValues,
     setValue,
     resetField,
+    setError,
     getFieldState,
     formState: { errors },
   } = useForm({
@@ -190,13 +195,28 @@ export function OrderForm({
 
   const defaultSubmitLabel = isEditMode ? "Update order" : "Create order";
 
+  const refuseAtFields = useSaveRefusal({ control, setError, resetField, formId });
+  // A lock revert sends the customer back to the saved one. The location the
+  // operator picked belongs to the customer they tried, so it goes back with it,
+  // and carries the same "Locked" marker so the error summary counts it.
+  const refuseCustomerAware: SaveRefusalHandler = (error, fallback) => {
+    const customerBefore = getValues("customerId");
+    const footer = refuseAtFields(error, fallback);
+    if (getValues("customerId") !== customerBefore) {
+      resetField("customerLocationId");
+      if (isLockRefusal(error)) {
+        setError("customerLocationId", { type: LOCKED_ERROR_TYPE, message: LOCKED_FIELD_MESSAGE });
+      }
+    }
+    return footer;
+  };
   const handleFormSubmit = latched(handleSubmit((data) => {
-    return onSubmit(data as OrderFormData);
+    return onSubmit(data as OrderFormData, refuseCustomerAware);
   }));
 
   return (
     <>
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       <FormSpine control={control}>
       {/* Order Information */}
       <FormSection
@@ -243,6 +263,14 @@ export function OrderForm({
             // this order. Require an explicit pick, matching the feedstock
             // supplier field (#379).
             autoSelectSingle={false}
+            // The location belongs to the customer, so a different pick clears
+            // it; re-picking the current customer keeps it. This is not the
+            // documented `dependsOn` cascade because that also fires on a
+            // programmatic reset (a lock revert), which restores both fields
+            // together (docs/forms.md).
+            onChange={(value) => {
+              if (value !== selectedCustomerId) setValue("customerLocationId", "", { shouldDirty: true });
+            }}
           />
 
           <FormEntitySelect
@@ -260,7 +288,6 @@ export function OrderForm({
             emptyHint={{ message: "Add a location to this customer first." }}
             disabled={isSubmitting || !selectedCustomerId || locked("customerLocationId")}
             filterBy={selectedCustomerId ? { customerId: selectedCustomerId } : undefined}
-            dependsOn={watchedCustomerId}
             autoSelectSingle
           />
         </div>

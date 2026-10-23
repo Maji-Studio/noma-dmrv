@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ActionError } from "@/lib/action-error";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SampleWithRelations } from "@/data-access/samples";
@@ -99,6 +100,7 @@ describe("SampleForm defaults and batch hydration", () => {
     fireEvent.submit(container.querySelector("form")!);
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
     expect(onSubmit.mock.calls[0][0].samplingTime).toEqual(saved.samplingTime);
+    expect(onSubmit.mock.calls[0][1]).toBeTypeOf("function");
   });
 
   it.each([null, "200_year", "1000_year"])("preserves all saved 1,000-year evidence while the batch tier loads (saved mirror %s)", async (durabilityOption) => {
@@ -201,5 +203,56 @@ describe("SampleForm unsaved changes", () => {
     const select = input(container, "creditBatchId");
     fireEvent.change(select, { target: { value: "00000000-0000-4000-8000-000000000001" } });
     await waitFor(() => expect(states.at(-1)).toBe(true));
+  });
+});
+
+describe("SampleForm save refusal (#1327)", () => {
+  const LOCK_REASON = "A Removal holds this sample. Correct the Removal first.";
+  const issue = (path: string[], message: string, code = "validation_failed") => ({ path, code, message });
+
+  /** The parent's catch: `setError(onRefusal(error, fallback))`. */
+  function RefusingSampleForm({ refusal }: { refusal: unknown }) {
+    const [error, setError] = useState<string | null>(null);
+    return (
+      <SampleForm
+        sample={saved}
+        errorMessage={error ?? undefined}
+        onSubmit={(_data, onRefusal) => { setError(onRefusal(refusal, "Sample was not saved. Try again.")); }}
+      />
+    );
+  }
+
+  async function saveRefused(refusal: unknown, edit?: (container: HTMLElement) => void) {
+    loadBatch();
+    const view = render(<RefusingSampleForm refusal={refusal} />);
+    edit?.(view.container);
+    await waitFor(() => expect(input(view.container, "labName")).not.toBeNull());
+    fireEvent.submit(view.container.querySelector("form")!);
+    return view.container;
+  }
+
+  it("shows a refusal that names a field at that field and not in the footer", async () => {
+    const container = await saveRefused(new ActionError({
+      error: "Lab was not found.", code: "validation_failed", issues: [issue(["labName"], "Lab was not found.")],
+    }));
+    await waitFor(() => expect(container.querySelector("#labName-error")?.textContent).toBe("Lab was not found."));
+    expect(container.textContent).not.toContain("Try again.");
+  });
+
+  it("keeps a code clash in the footer, since the sample form has no code field", async () => {
+    const message = 'Code "SMP-26-001" already exists. Use a different code.';
+    const container = await saveRefused(new ActionError({ error: message, code: "validation_failed", issues: [issue(["code"], message, "conflict")] }));
+    await waitFor(() => expect(container.textContent).toContain("already exists"));
+    expect(container.querySelector('[id$="-error"]')).toBeNull();
+  });
+
+  it("sends a locked field back to the saved value and says why once", async () => {
+    const container = await saveRefused(
+      new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [issue(["labName"], LOCK_REASON, "certification_locked")] }),
+      (form) => fireEvent.change(input(form, "labName"), { target: { value: "Typed lab" } }),
+    );
+    await waitFor(() => expect(container.querySelector("#labName-error")?.textContent).toBe("Locked. Your change was not saved."));
+    expect(input(container, "labName").value).toBe(String((saved as { labName?: string | null }).labName ?? ""));
+    expect(container.textContent?.split("A Removal holds this sample").length).toBe(2);
   });
 });

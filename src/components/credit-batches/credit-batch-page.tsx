@@ -33,6 +33,7 @@ import { useNavigateWithToast } from "@/hooks/use-navigate-with-toast";
 import { useRecordLock } from "@/hooks/use-record-locks";
 import { creditBatchListHref } from "@/lib/certification/batch-health-links";
 import { ConflictError } from "@/lib/conflict-ref";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { CREDIT_BATCH_TAB_PARAM } from "@/lib/credit-batch-links";
 import { certificationRemovalsHref, traceabilityBatchHref } from "@/lib/certification/links";
 import { CREATE_INTENT_PARAM } from "@/lib/create-intent";
@@ -248,7 +249,7 @@ export function CreditBatchPage({
     else router.push(certificationRemovalsHref({ facility: batch.facilityId, [CREATE_INTENT_PARAM]: "true" }));
   };
 
-  const handleUpdate = async (data: CreditBatchFormData) => {
+  const handleUpdate = async (data: CreditBatchFormData, onRefusal: SaveRefusalHandler) => {
     if (!editSnapshot) return;
     setUpdateError(null);
     const outcome = await saveCreditBatchEdit({
@@ -258,7 +259,7 @@ export function CreditBatchPage({
       update: (input) => updateCreditBatch.mutateAsync(input),
     });
     if (outcome.status === "error") {
-      setUpdateError(outcome.message);
+      setUpdateError(onRefusal(outcome.cause, outcome.message));
       return;
     }
     closeEdit();

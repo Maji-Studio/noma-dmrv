@@ -30,6 +30,7 @@ import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 
 import { useEffect, useId } from "react";
 import { useForm, useController, Controller } from "react-hook-form";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FlaskIcon, FireIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, MoistureField, makeCertFieldStatus, useSelectDefault } from "@/components/forms";
@@ -81,7 +82,8 @@ interface SampleFormProps {
   /** Pre-selected credit batch ID (e.g. from a batch detail deep link) */
   creditBatchId?: string;
   /** Form submission handler */
-  onSubmit: (data: SampleFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1327). */
+  onSubmit: (data: SampleFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -311,6 +313,7 @@ export function SampleForm({
 
   const defaultSubmitLabel = isEditMode ? "Update Sample" : "Create Sample";
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const handleFormSubmit = latched(handleSubmit((entered) => {
     if (!samplingClock.ready) {
       setError("samplingTime", { type: "validate", message: samplingClock.hint });
@@ -328,7 +331,7 @@ export function SampleForm({
       setError(error.ratio, { type: "max", message: Number.isFinite(error.value) ? RATIO_MAX_MESSAGE : error.message });
       return;
     }
-    return onSubmit(submission as unknown as SampleFormData);
+    return onSubmit(submission as unknown as SampleFormData, refuseSave);
   }));
 
   return (

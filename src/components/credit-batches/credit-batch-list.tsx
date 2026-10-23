@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ConflictError } from "@/lib/conflict-ref";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { parseAsString, useQueryState } from "nuqs";
 import {
   CertificateIcon,
@@ -303,7 +304,7 @@ export function CreditBatchList({
   );
 
   // Handlers
-  const handleCreate = async (data: CreditBatchFormData) => {
+  const handleCreate = async (data: CreditBatchFormData, onRefusal: SaveRefusalHandler) => {
     setCreateError(null);
     try {
       const { warning } = await createCreditBatch.mutateAsync(data);
@@ -318,11 +319,11 @@ export function CreditBatchList({
           ? err.message
           : "Credit batch was not created. Check the form.";
       logUnexpectedSaveError("Credit batch create error:", err);
-      setCreateError(message);
+      setCreateError(onRefusal(err, message));
     }
   };
 
-  const handleUpdate = async (data: CreditBatchFormData) => {
+  const handleUpdate = async (data: CreditBatchFormData, onRefusal: SaveRefusalHandler) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     const outcome = await saveCreditBatchEdit({
@@ -332,7 +333,7 @@ export function CreditBatchList({
       update: (input) => updateCreditBatch.mutateAsync(input),
     });
     if (outcome.status === "error") {
-      setUpdateError(outcome.message);
+      setUpdateError(onRefusal(outcome.cause, outcome.message));
       return;
     }
     closeSideSheet();
