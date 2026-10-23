@@ -200,23 +200,28 @@ describe("CustomerLocationForm", () => {
     expect(footers).toEqual([LOCK_REASON]);
   });
 
-  it("keeps the reason on screen after the next save clears the footer", async () => {
+  it("shows the reason once in the error box, then once as the lock line after the next save clears it", async () => {
     const refusals = [siteLock("name"), refusal([issue(["city"], "City is not recognised.")])];
-    const footers: Array<string | null> = [];
-    render(
-      <CustomerLocationForm
-        location={savedCustomerLocation}
-        onSubmit={async (_data, onRefusal) => { footers.push(onRefusal(refusals.shift(), "FALLBACK")); }}
-      />,
-    );
+    function Host() {
+      const [footer, setFooter] = useState<string | null>(null);
+      return (
+        <CustomerLocationForm
+          location={savedCustomerLocation}
+          errorMessage={footer ?? undefined}
+          onSubmit={async (_data, onRefusal) => { setFooter(onRefusal(refusals.shift(), "FALLBACK")); }}
+        />
+      );
+    }
+    render(<Host />);
     fireEvent.change(input("name"), { target: { value: "Renamed" } });
     await save("Update location");
     await screen.findAllByText(LOCKED);
-    expect(screen.getAllByText(LOCK_REASON).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(LOCK_REASON)).toHaveLength(1);
+    expect(document.querySelector('[data-record-lock-notice="siteLocked"]')).toBeNull();
     await save("Update location");
     expect(await screen.findByText("City is not recognised.")).toBeTruthy();
-    expect(footers).toEqual([LOCK_REASON, null]);
     expect(screen.getAllByText(LOCK_REASON)).toHaveLength(1);
+    expect(document.querySelector('[data-record-lock-notice="siteLocked"]')).not.toBeNull();
     expect(input("name").disabled).toBe(true);
   });
 

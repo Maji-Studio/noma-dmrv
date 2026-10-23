@@ -178,6 +178,7 @@ export function CustomerLocationForm({
         facility={facility}
         isSubmitting={isSubmitting}
         siteLockReason={siteLockReason}
+        siteLockReasonInBox={Boolean(siteLockReason && errorMessage?.includes(siteLockReason))}
         isCurrentDefault={location?.isDefault === true}
         idPrefix={idPrefix}
         isEditMode={isEditMode}
