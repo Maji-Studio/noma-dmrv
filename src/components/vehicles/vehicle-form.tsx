@@ -1,6 +1,7 @@
 "use client";
 
 
+import { useId } from "react";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -8,6 +9,7 @@ import { numericValue } from "@/lib/form-utils";
 import { FormField, FormInput } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { FormActions } from "@/components/forms/form-actions";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import {
   vehicleFormSchema,
   VEHICLE_TYPE_OPTIONS,
@@ -22,9 +24,13 @@ import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
 /** Native min, max and step for each number input, read from the schema. */
 const numberBounds = numberInputConstraintsFor(vehicleFormSchema);
 
+/** Server payload name (L/km) to form field (L/100 km). */
+const REFUSAL_ALIASES = { fuelConsumptionLPerKm: "fuelConsumptionLPer100Km" } as const;
+
 interface VehicleFormProps {
   vehicle?: Vehicle;
-  onSubmit: (data: VehicleFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1327). */
+  onSubmit: (data: VehicleFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
@@ -40,6 +46,7 @@ export function VehicleForm({
   submitLabel,
 }: VehicleFormProps) {
   const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!vehicle;
   const vehicleTypeField = selectOptionsForStoredValue(VEHICLE_TYPE_OPTIONS, vehicle?.vehicleType, { ignoreCase: false });
   const fuelTypeField = selectOptionsForStoredValue(FUEL_TYPE_OPTIONS, vehicle?.fuelType, { ignoreCase: true });
@@ -48,6 +55,8 @@ export function VehicleForm({
     register,
     handleSubmit,
     control,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm<VehicleFormData>({
     resolver: zodResolver(vehicleFormSchema),
@@ -63,11 +72,12 @@ export function VehicleForm({
     },
   });
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: REFUSAL_ALIASES });
   const watchedFuelType = useWatch({ control, name: "fuelType" });
   const isElectric = watchedFuelType === "Electric";
 
   return (
-    <form onSubmit={latched(handleSubmit((data) => onSubmit(data)))} className="space-y-20">
+    <form id={formId} onSubmit={latched(handleSubmit((data) => onSubmit(data, refuseSave)))} className="space-y-20">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         <FormField id="name" label="Name" error={errors.name?.message} required>
           <FormInput

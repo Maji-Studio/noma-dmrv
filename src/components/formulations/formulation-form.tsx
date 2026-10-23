@@ -13,9 +13,10 @@
 "use client";
 
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import {
   CompositionCard,
   FormActions,
@@ -49,6 +50,16 @@ import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
 
 /** Native min, max and step for each number input, read from the schema. */
 const numberBounds = numberInputConstraintsFor(formulationPercentFormSchema);
+
+/**
+ * Server path to form field. The server speaks ratios and calls the lines
+ * `lines` in its own refusals; the form speaks percent shares and `ingredients`.
+ */
+const REFUSAL_ALIASES = {
+  biocharRatio: "biocharPercent",
+  "ingredients.*.ratio": "ingredients.*.sharePercent",
+  "lines.*.feedstockTypeId": "ingredients.*.feedstockTypeId",
+} as const;
 
 const EMPTY_INGREDIENT = {
   feedstockTypeId: "",
@@ -156,7 +167,8 @@ function blendSegments({
 
 interface FormulationFormProps {
   formulation?: FormulationWithIngredients;
-  onSubmit: (data: FormulationFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1327). */
+  onSubmit: (data: FormulationFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
@@ -172,6 +184,7 @@ export function FormulationForm({
   submitLabel,
 }: FormulationFormProps) {
   const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!formulation;
 
   const {
@@ -180,6 +193,8 @@ export function FormulationForm({
     control,
     trigger,
     setValue,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(formulationPercentFormSchema),
@@ -205,10 +220,12 @@ export function FormulationForm({
     name: "ingredients",
   });
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: REFUSAL_ALIASES });
+
   const defaultSubmitLabel = isEditMode ? "Update formulation" : "Create formulation";
 
   const handleFormSubmit = latched(handleSubmit((data) => {
-    return onSubmit(percentFormToRatioPayload(data as FormulationPercentFormData));
+    return onSubmit(percentFormToRatioPayload(data as FormulationPercentFormData), refuseSave);
   }));
 
   // Watch shares for auto-balance, the allocation bar, and the total.
@@ -272,7 +289,7 @@ export function FormulationForm({
   };
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormSection divider={false}>
         <FormField

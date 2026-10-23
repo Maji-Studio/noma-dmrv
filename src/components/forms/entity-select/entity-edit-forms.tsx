@@ -93,7 +93,7 @@ export function ReactorEditFormDialog(props: EditProps<"reactor">) {
   return <PickerEditFormDialog {...props} title="Edit reactor" testId="reactor-edit-dialog"
     isPending={update.isPending}
     save={(data: CreateReactorData, record) => update.mutateAsync({ ...data, reactorId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <ReactorForm key={key} {...formProps} reactor={record} />} />;
+    renderForm={(record, { key, ...formProps }) => <ReactorForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} reactor={record} />} />;
 }
 
 export function OrderEditFormDialog(props: EditProps<"order">) {
@@ -123,7 +123,7 @@ export function FormulationEditFormDialog(props: EditProps<"formulation">) {
   return <PickerEditFormDialog {...props} title="Edit formulation" testId="formulation-edit-dialog" width="lg"
     isPending={update.isPending}
     save={(data: FormulationFormData, record) => update.mutateAsync({ ...data, formulationId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <FormulationForm key={key} {...formProps} formulation={record} />} />;
+    renderForm={(record, { key, ...formProps }) => <FormulationForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} formulation={record} />} />;
 }
 
 export function FeedstockTypeEditFormDialog(props: EditProps<"feedstockType">) {
@@ -131,5 +131,5 @@ export function FeedstockTypeEditFormDialog(props: EditProps<"feedstockType">) {
   return <PickerEditFormDialog {...props} title="Edit feedstock type" testId="feedstock-type-edit-dialog"
     isPending={update.isPending}
     save={(data: FeedstockTypeFormData, record) => update.mutateAsync({ ...data, feedstockTypeId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <FeedstockTypeForm key={key} {...formProps} feedstockType={record} stickyActions={false} guardDialogCancel />} />;
+    renderForm={(record, { key, ...formProps }) => <FeedstockTypeForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} feedstockType={record} stickyActions={false} guardDialogCancel />} />;
 }
