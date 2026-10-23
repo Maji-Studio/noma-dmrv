@@ -192,6 +192,11 @@ vi.mock("@/components/ui/delete-confirm-dialog", () => ({
   DeleteConfirmDialog: ({ isOpen, onConfirm }: { isOpen: boolean; onConfirm: () => Promise<void> }) =>
     isOpen ? <button data-testid="delete-confirm" onClick={onConfirm}>Confirm delete</button> : null,
 }));
+vi.mock("@/components/ui/in-use-delete-dialog", () => ({
+  InUseDeleteDialog: ({ label, children }: { label: string; children?: ReactNode }) => (
+    <div data-testid="in-use-dialog"><b>{label}</b>{children}</div>
+  ),
+}));
 // Renders its children only while open, so a still-mounted form proves the
 // sheet survived the refusal.
 vi.mock("@/components/ui/entity-side-sheet", () => ({
@@ -402,6 +407,37 @@ describe("FeedstockList refresh from location", () => {
     expect(mocks.updateMutation).toHaveBeenLastCalledWith(expect.objectContaining({
       feedstockId: FEEDSTOCK_ID, expectedVersion: refreshed.version,
     }));
+    act(() => renderer.unmount());
+  });
+});
+
+describe("FeedstockList in-use delete refusal", () => {
+  const inUse = () => new ActionError({
+    error: "Feedstock FS-001 was not deleted because production runs still use it.",
+    code: "certification_locked",
+    issues: [{ path: ["feedstockId"], code: "certification_locked", message: "in use", meta: { reason: "in_use" } }],
+  });
+
+  it("replaces the confirm dialog with the in-use dialog for the row", async () => {
+    mocks.deleteMutation.mockReset().mockRejectedValue(inUse());
+    const renderer = renderList();
+    await act(async () => { renderer.root.findAllByType("button").find((b) => b.children.includes("Delete"))!.props.onClick(); });
+    await act(async () => { await renderer.root.findByProps({ "data-testid": "delete-confirm" }).props.onClick(); });
+
+    expect(renderer.root.findAllByProps({ "data-testid": "delete-confirm" })).toHaveLength(0);
+    const dialog = JSON.stringify(renderer.toJSON());
+    expect(dialog).toContain("FS-001");
+    expect(dialog).toContain("production runs still use it");
+    act(() => renderer.unmount());
+  });
+
+  it("keeps an ordinary refusal in the confirm dialog", async () => {
+    mocks.deleteMutation.mockReset().mockRejectedValue(new Error("Feedstock was not deleted. Try again."));
+    const renderer = renderList();
+    await act(async () => { renderer.root.findAllByType("button").find((b) => b.children.includes("Delete"))!.props.onClick(); });
+    await act(async () => { await renderer.root.findByProps({ "data-testid": "delete-confirm" }).props.onClick(); });
+
+    expect(renderer.root.findAllByProps({ "data-testid": "in-use-dialog" })).toHaveLength(0);
     act(() => renderer.unmount());
   });
 });

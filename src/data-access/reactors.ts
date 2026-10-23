@@ -40,6 +40,7 @@ export interface PaginatedReactors {
 
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { IN_USE_DELETE_MARKER, inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { guardReactorIdentifier } from "./unique-name-guards";
 import { CODE_CONFLICT_MESSAGES, withUniqueCodeGuard } from "./code-generator";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
@@ -373,7 +374,7 @@ export async function deleteReactor(
   requireOrgScope(ctx);
 
   await db.transaction(async (tx) => {
-    const [versioned] = await tx.select({ version: reactors.version })
+    const [versioned] = await tx.select({ version: reactors.version, code: reactors.code })
       .from(reactors)
       .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)))
       .for("update");
@@ -390,8 +391,9 @@ export async function deleteReactor(
         ),
       );
     if (Number(productionRunCount) > 0) {
-      throw new SafeError(
-        "Cannot delete reactor with associated production runs. Remove the production runs first.",
+      throw inUseDeleteRefusal(
+        `Reactor ${versioned.code} ${IN_USE_DELETE_MARKER} production runs still use it. Keep this reactor.`,
+        ["reactorId"],
       );
     }
 

@@ -30,6 +30,7 @@ vi.mock("@/hooks/use-reactors", () => ({
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn() }),
 }));
+vi.mock("@/components/ui/in-use-delete-dialog", () => ({ InUseDeleteDialog: () => null }));
 vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   LightningIcon: () => <span />,
   FlaskIcon: () => <span />,
