@@ -18,6 +18,7 @@ import {
 import { Collapsible } from "@base-ui/react/collapsible";
 import { FormSection, ServerError } from "@/components/forms";
 import { Button } from "@/components/ui/button";
+import { ICON_BUTTON_TOUCH_PROPS } from "@/components/ui/touch-target";
 import { DefaultLocationBadge } from "@/components/ui/default-location-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
@@ -210,10 +211,10 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                   location={loc}
                   hint={isOnlyActive ? <InfoHint label="Why Archive is unavailable">{ONLY_ACTIVE_REASON}</InfoHint> : null}
                 />
-                <div className="flex shrink-0 items-center gap-8">
+                <div className="flex shrink-0 items-center gap-12">
                   <Button
                     variant="noOutline"
-                    size="icon"
+                    {...ICON_BUTTON_TOUCH_PROPS}
                     onClick={() => {
                       setEditingLocation(loc);
                       setIsLocationDialogOpen(true);
@@ -224,7 +225,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                   </Button>
                   <Button
                     variant="noOutline"
-                    size="icon"
+                    {...ICON_BUTTON_TOUCH_PROPS}
                     onClick={() => handleArchive(loc)}
                     disabled={isOnlyActive || archiveLocation.isPending}
                     aria-description={isOnlyActive ? ONLY_ACTIVE_REASON : undefined}
@@ -234,7 +235,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                   </Button>
                   <Button
                     variant="destructive"
-                    size="icon"
+                    {...ICON_BUTTON_TOUCH_PROPS}
                     onClick={() => setDeletingLocation(loc)}
                     aria-label={`Delete ${loc.name || loc.country}`}
                   >
@@ -261,12 +262,12 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
               <Collapsible.Panel>
                 <ul className="flex flex-col">
                   {archivedLocations.map((loc) => (
-                    <li key={loc.id} className="flex items-center justify-between gap-12 px-12 py-4 text-[var(--color-text-tertiary)]">
+                    <li key={loc.id} className="flex min-h-44 items-center justify-between gap-12 px-12 py-4 text-[var(--color-text-tertiary)]">
                       <span className="body-small truncate">{loc.name || loc.country}</span>
-                      <div className="flex shrink-0 items-center gap-8">
+                      <div className="flex shrink-0 items-center gap-12">
                         <Button
                           variant="noOutline"
-                          size="icon"
+                          {...ICON_BUTTON_TOUCH_PROPS}
                           onClick={() => handleRestore(loc)}
                           disabled={restoreLocation.isPending}
                           aria-label={`Restore ${loc.name || loc.country}`}
@@ -275,7 +276,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                         </Button>
                         <Button
                           variant="destructive"
-                          size="icon"
+                          {...ICON_BUTTON_TOUCH_PROPS}
                           onClick={() => setDeletingLocation(loc)}
                           aria-label={`Delete ${loc.name || loc.country}`}
                         >

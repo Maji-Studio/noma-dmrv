@@ -24,7 +24,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { EMISSION_LINE_STATE_LABELS } from "@/lib/certification/emission-lines";
 import { cn } from "@/lib/utils";
-import { TOUCH_TARGET } from "./emission-line-grid";
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import {
   hasRecordsFigure,
   lineRecords,
@@ -91,7 +91,7 @@ export function SourceChips({ line, ids, onEntries, interactive = true, quietTex
           href={recordsHref(records, ids)}
           onClick={(event) => event.stopPropagation()}
           aria-label={`${recordsText(records)}. ${openSourceLabel(records.source)}`}
-          className={cn(CHIP, look, TOUCH_TARGET, PHONE_LINK, "md:hover:border-[var(--color-border-primary)]")}
+          className={cn(CHIP, look, CENTRED_HIT_AREA, PHONE_LINK, "md:hover:border-[var(--color-border-primary)]")}
         >
           {body}
         </Link>
@@ -172,7 +172,7 @@ function EntryChip({ children, label, interactive, onClick, dim }: EntryChipProp
         event.stopPropagation();
         onClick();
       }}
-      className={cn(look, TOUCH_TARGET, "md:hover:border-[var(--color-border-primary)]")}
+      className={cn(look, CENTRED_HIT_AREA, "md:hover:border-[var(--color-border-primary)]")}
     >
       {children}
     </button>

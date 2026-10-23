@@ -23,6 +23,7 @@ import {
 } from "@/schemas/customers";
 import type { Customer } from "@/db/schema/parties";
 import { Button } from "@/components/ui/button";
+import { ICON_BUTTON_TOUCH_PROPS } from "@/components/ui/touch-target";
 import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
 import { DefaultLocationBadge } from "@/components/ui/default-location-badge";
 import {
@@ -320,10 +321,10 @@ function CreateModeLocationsSection({
                     </p>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-8">
+                <div className="flex shrink-0 items-center gap-12">
                   <Button
                     variant="noOutline"
-                    size="icon"
+                    {...ICON_BUTTON_TOUCH_PROPS}
                     onClick={() => {
                       setEditingLocationIndex(index);
                       setIsLocationDialogOpen(true);
@@ -334,7 +335,7 @@ function CreateModeLocationsSection({
                   </Button>
                   <Button
                     variant="destructive"
-                    size="icon"
+                    {...ICON_BUTTON_TOUCH_PROPS}
                     onClick={() => onRemove(index)}
                     aria-label={`Remove ${loc.name}`}
                   >

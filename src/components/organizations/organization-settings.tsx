@@ -15,6 +15,8 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { FormSelect } from "@/components/forms/form-select";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { formatDate } from "@/lib/format-utils";
 import { InvitationLinkNotice, type InvitationDelivery } from "./invitation-link-notice";
@@ -237,7 +239,7 @@ export function OrganizationSettings({ canManage, organizationName, canLeave }: 
                         onChange={(e) =>
                           onChangeRole(member.memberId, e.target.value)
                         }
-                        className="w-[140px]"
+                        className={cn("w-[140px]", PHONE_TOUCH_TARGET)}
                         aria-label={`Role for ${member.email}`}
                       />
                     ) : (
