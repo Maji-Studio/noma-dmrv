@@ -32,6 +32,7 @@ import {
   joinWithAnd,
   removalSheetHref,
   returnedStatementPhrase,
+  comparisonUnavailableClause,
 } from "@/lib/removal-correction-copy";
 import { lateEntryView, waitingDetail, waitingEntryTitle } from "@/lib/certification/late-entry-view";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
@@ -128,7 +129,9 @@ function removalCorrectionItem(
       title: `${code}: ${RESUBMIT_NEEDED_LABEL}`,
       detail: names.length
         ? `${joinWithAnd(names)} changed here since ${code} was sent. Resubmit the Removal to send ${names.length === 1 ? "it" : "them"}.`
-        : `Records or files changed since ${code} was sent. Resubmit the Removal to send the changes.`,
+        : correction.comparison === "unavailable"
+          ? `${comparisonUnavailableClause(code)}. Open the Removal to see why.`
+          : `Records or files changed since ${code} was sent. Resubmit the Removal to send the changes.`,
       target: { href: removalSheetHref(correction.removalId, facilityId) },
     };
   }

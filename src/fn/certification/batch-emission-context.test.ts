@@ -346,3 +346,12 @@ it("shares discovery across different Removals but reads each Removal's retained
     expect(facts.batchFacts.one).not.toHaveProperty("carryContext");
   }
 });
+
+it("does not recurse into the comparison when correction projections are suppressed", async () => {
+  const contender = { contenderKind: "correction" as const, removalId: "returned", createdAt: "2026-01-01",
+    creditBatchIds: ["one"], window: { start: "2026-01-01", end: "2026-02-01" } };
+  vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([contender]);
+  const { batchFacts: loaded } = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts, undefined, false);
+  expect(loadRemovalEntryCorrection).not.toHaveBeenCalled();
+  expect(loaded.one.corrections).toBeUndefined();
+});
