@@ -32,7 +32,7 @@ import {
   type LineRecords,
 } from "./emission-line-display";
 import type { EntryMenuItem } from "./emission-ledger-entries";
-import { TOUCH_TARGET } from "./emission-line-grid";
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import { SOURCE_ICON } from "./emission-source-chips";
 
 export const ICON = 14;
@@ -70,7 +70,7 @@ export function lineBodyModel(line: EmissionLine) {
 }
 
 const QUIET_ACTION = cn(
-  TOUCH_TARGET,
+  CENTRED_HIT_AREA,
   "inline-flex min-h-28 items-center gap-6 text-left body-small font-medium text-[var(--color-text-interaction-primary)] underline decoration-[color:var(--color-border-primary)] underline-offset-4 hover:decoration-current",
 );
 

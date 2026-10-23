@@ -95,7 +95,7 @@ it.each([false, true])("threads explicit submission enrichment freshness to faci
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/data-access/utils", async (original) => ({ ...await original<typeof import("@/data-access/utils")>(), requireOrgFacility: vi.fn() }));
 vi.mock("@/data-access/removal-codes", () => ({ getRemovalCodes: vi.fn(async () => new Map()) }));
-vi.mock("./batch-emission-context", () => ({ loadBatchEmissionContext: vi.fn(async () => ({})) }));
+vi.mock("./batch-emission-context", () => ({ loadBatchEmissionContext: vi.fn(async () => ({ batchFacts: {} })) }));
 vi.mock("@/data-access/emission-entry-contenders", () => ({ loadEmissionEntryReservations: vi.fn(async () => []) }));
 vi.mock("@/data-access/certification", () => ({ listRecentSyncEvents: vi.fn(async () => []) }));
 vi.mock("@/data-access/certifier-removals", () => ({ listRemovalsForFacility: vi.fn(), listUngroupedCreditBatches: vi.fn(async () => []), getCertifierRemovalById: vi.fn() }));
@@ -122,9 +122,9 @@ it.each([new Date(0), new Date()])("loads context, Empty lines and overview afte
   vi.mocked(getCertifierRemovalById).mockResolvedValue(removal as never);
   vi.mocked(getLatestSubmission).mockResolvedValue({ id: "crashed", status: "draft", lockedAt, metadata: null,
     payloadSnapshot: { frozenEntrySet: [{ entryId: "entry", contentRevision: 1 }] } } as never);
-  vi.mocked(loadBatchEmissionContext).mockResolvedValue({ "batch-1": { entries: [{ id: "entry", componentId: "removed-line", creditBatchId: "batch-1",
+  vi.mocked(loadBatchEmissionContext).mockResolvedValue({ batchFacts: { "batch-1": { entries: [{ id: "entry", componentId: "removed-line", creditBatchId: "batch-1",
     kind: "value", contentRevision: 2, counts: false, values: [], evidenceDocumentIds: [], occurredOn: "2026-01-02" }],
-    previousObservations: new Map(), automaticFigures: {} } } as never);
+    previousObservations: new Map(), automaticFigures: {} } } } as never);
   await expect(loadRemovalSubmissionContext(ctx, "removal-1")).resolves.toMatchObject({ latestSubmission: { id: "crashed" } });
   await expect(loadRemovalEmptyLines(ctx, "removal-1")).resolves.toMatchObject({ editable: true, batches: expect.any(Array) });
   await expect(loadCertificationOverview(scope.facilityId)).resolves.toMatchObject({ success: true, data: { removals: [{ removalId: scope.removalId }] } });
@@ -151,5 +151,11 @@ it.each([undefined, "claimed-draft"])("forwards the submission read scope for co
   vi.mocked(loadFacilityCertifierFacts).mockResolvedValue(facilityFacts);
   await loadRemovalSubmissionContext(ctx, "removal-1", { claimedSubmissionId });
   expect(loadBatchEmissionContext).toHaveBeenCalledWith(ctx, scope.facilityId, scope.memberBatches, facilityFacts,
-    { removalId: "removal-1", submissionId: claimedSubmissionId }, true);
+    { removalId: "removal-1", submissionId: claimedSubmissionId }, true, undefined, "removal-1");
+});
+
+it("suppresses correction projections while compiling the shared comparison", async () => {
+  const facilityFacts = facts(fixture as GhgEntryTemplate);
+  await buildRemovalContext(ctx, scope, facilityFacts, undefined, false, true);
+  expect(loadBatchEmissionContext).toHaveBeenCalledWith(ctx, scope.facilityId, scope.memberBatches, facilityFacts, undefined, false, undefined, scope.removalId ?? undefined);
 });

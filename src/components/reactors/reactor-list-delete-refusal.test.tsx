@@ -9,8 +9,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const REACTOR = { id: "6f1c4d3a-0f2b-4d6a-9f1e-0a1b2c3d4e5f", code: "RCT-001", identifier: "Kiln", version: 4, facilityId: "facility-1", reactorType: "fixed-bed" };
 // ServerError splits a message at its first sentence, so match on that.
-const REFUSAL = /Cannot delete reactor with associated production runs/;
-const SERVER_MESSAGE = "Cannot delete reactor with associated production runs. Remove the production runs first.";
+const REFUSAL = /The reactor is busy/;
+const SERVER_MESSAGE = "The reactor is busy. Try again in a moment.";
+const IN_USE_MESSAGE = "Reactor RCT-001 was not deleted because production runs still use it.";
 
 const harness = vi.hoisted(() => ({ remove: vi.fn() }));
 
@@ -20,7 +21,7 @@ vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => un
 vi.mock("@/hooks/use-reactors", () => ({
   useReactorStats: () => ({ data: undefined, isLoading: false, isError: false }),
   useReactors: () => ({ data: { items: [REACTOR], total: 1, totalPages: 1 }, isLoading: false, error: null }),
-  useCreateReactor: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useCreateReactor: () => ({ startDraft: vi.fn(), isPending: false, mutateAsync: vi.fn() }),
   useUpdateReactor: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useDeleteReactor: () => ({ isPending: false, mutateAsync: harness.remove }),
 }));
@@ -55,19 +56,39 @@ describe("Reactor delete refusal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Row Delete" }));
     expect(within(screen.getByRole("dialog")).queryByText(REFUSAL)).toBeNull();
-    expect(within(screen.getByRole("dialog")).getByText(/Note: Reactors/)).toBeTruthy();
 
     await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" })); });
 
     expect(harness.remove).toHaveBeenCalledWith({ reactorId: REACTOR.id, expectedVersion: 4 });
     expect(within(screen.getByRole("dialog")).getByText(REFUSAL)).toBeTruthy();
     expect(screen.getAllByText(REFUSAL)).toHaveLength(1);
-    // The rule is stated once: the grey Note gives way to the refusal.
-    expect(within(screen.getByRole("dialog")).queryByText(/Note: Reactors/)).toBeNull();
 
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
     fireEvent.click(screen.getByRole("button", { name: "Row Delete" }));
     expect(screen.queryByText(REFUSAL)).toBeNull();
+  });
+});
+
+describe("Reactor in-use delete refusal", () => {
+  it("replaces the confirm dialog with the in-use dialog, which has no Delete button", async () => {
+    const { ActionError } = await import("@/lib/action-error");
+    harness.remove.mockRejectedValue(new ActionError({
+      error: IN_USE_MESSAGE, code: "conflict",
+      issues: [{ path: ["reactorId"], code: "conflict", message: IN_USE_MESSAGE, meta: { reason: "in_use" } }],
+    }));
+    render(<ReactorList />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Row Delete" }));
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" })); });
+
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByText("RCT-001 is in use")).toBeTruthy();
+    expect(dialog.getByText(IN_USE_MESSAGE)).toBeTruthy();
+    expect(dialog.queryByRole("button", { name: "Delete" })).toBeNull();
+    expect(dialog.queryByRole("button", { name: "Archive instead" })).toBeNull();
+
+    fireEvent.click(dialog.getAllByRole("button", { name: "Close" }).at(-1)!);
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
 

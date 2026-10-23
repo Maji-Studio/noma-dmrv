@@ -74,7 +74,9 @@ test.describe("Platform Organizations", () => {
       await form.getByRole("textbox", { name: /^First Admin/ }).fill(`invite-${tag}@e2e.local`);
       await form.getByRole("button", { name: "Create organization" }).click();
       const invited = page.getByRole("article", { name: invitedOrgName });
-      await expect(invited.getByText(`invite-${tag}@e2e.local has no account yet`)).toBeVisible();
+      // CI has no Resend keys, so the email is not sent: the notice says so and keeps the link.
+      await expect(invited.getByText(`The email to invite-${tag}@e2e.local did not send`)).toBeVisible();
+      await expect(invited.getByText("The invitation is saved. Copy the link and send it another way, or check the address.")).toBeVisible();
       await expect(invited.getByRole("textbox", { name: "Invitation link" })).toHaveValue(/\/accept-invitation\/.+/);
       await expect(invited.getByText("No members yet. Nobody can sign in to this organization.")).toBeVisible();
     } finally {

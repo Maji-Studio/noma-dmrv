@@ -4,10 +4,10 @@ import { createElement, type ReactNode } from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { isUnloadWarningSuppressed, suppressUnloadWarning } from "@/lib/leave-guard";
-import { useCreateOrganization, useResetAfterOrgSwitch } from "./use-organizations";
+import { organizationKeys, useCreateOrganization, useLeaveOrganization, useResendInvitation, useResetAfterOrgSwitch } from "./use-organizations";
 
-const mocks = vi.hoisted(() => ({ assign: vi.fn(), create: vi.fn() }));
-vi.mock("@/fn/organizations", () => ({ createOrganizationAction: mocks.create }));
+const mocks = vi.hoisted(() => ({ assign: vi.fn(), create: vi.fn(), resend: vi.fn(), leave: vi.fn() }));
+vi.mock("@/fn/organizations", () => ({ createOrganizationAction: mocks.create, resendInvitationAction: mocks.resend, leaveOrganizationAction: mocks.leave }));
 vi.mock("@/fn/organization-api-access", () => ({}));
 vi.mock("@/lib/read-api/client", () => ({}));
 
@@ -76,4 +76,37 @@ it("allows the unload prompt again after a back-forward-cache restore", () => {
   expect(isUnloadWarningSuppressed()).toBe(true);
   window.dispatchEvent(Object.assign(new Event("pageshow"), { persisted: true }));
   expect(isUnloadWarningSuppressed()).toBe(false);
+});
+
+
+it("refreshes invitations after Send again, including an unsuccessful email delivery", async () => {
+  const client = new QueryClient();
+  const invalidate = vi.spyOn(client, "invalidateQueries");
+  mocks.resend.mockResolvedValue({ success: true, data: { invitationId: "fresh", acceptUrl: "/accept-invitation/fresh", emailSent: false } });
+  const { result, unmount } = renderHook(() => useResendInvitation(), {
+    wrapper: ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children),
+  });
+  await act(async () => {
+    expect(await result.current.mutateAsync("old")).toMatchObject({ invitationId: "fresh", emailSent: false });
+  });
+  expect(mocks.resend).toHaveBeenCalledWith({ invitationId: "old" });
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: organizationKeys.invitations() });
+  unmount();
+  client.clear();
+});
+
+it("refreshes organization queries after leaving and returns no active organization for navigation", async () => {
+  const client = new QueryClient();
+  const invalidate = vi.spyOn(client, "invalidateQueries");
+  mocks.leave.mockResolvedValue({ success: true, data: { organizationId: null } });
+  const { result, unmount } = renderHook(() => useLeaveOrganization(), {
+    wrapper: ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children),
+  });
+  await act(async () => {
+    expect(await result.current.mutateAsync()).toEqual({ organizationId: null });
+  });
+  expect(mocks.leave).toHaveBeenCalledOnce();
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: organizationKeys.all });
+  unmount();
+  client.clear();
 });

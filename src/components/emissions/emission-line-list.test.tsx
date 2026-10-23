@@ -291,4 +291,16 @@ describe("EmissionLineList", () => {
     await waitFor(() => expect(mocks.deleteComment).toHaveBeenCalledTimes(2));
     expect(mocks.deleteComment).toHaveBeenLastCalledWith({ facilityId: "fac", id: "c1", expectedVersion: 3 });
   });
+
+  it("shows where an entry recorded after its Removal was sent goes, and leaves other entries alone", () => {
+    const late = makeEntry({
+      id: "late", occurredOn: "2026-09-14",
+      recordedAfter: { removalId: "rm-9", removalCode: "RM-26-009" },
+      carry: { receiver: null, waitingReason: "noDraft" },
+    });
+    renderList([makeLine({ entries: [makeEntry(), late], entryPolicy: "additive" })], ["line-1"]);
+    expect(screen.getAllByText(/Recorded after/)).toHaveLength(1);
+    expect(screen.getByText(/Waiting for a Removal\. No later draft/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "New Removal" }).getAttribute("href")).toBe("/certification/removals?facility=fac&create=true");
+  });
 });

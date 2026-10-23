@@ -173,6 +173,12 @@ layout rows filter parts by `STOCK_PART_MIN_KG`; `stockWaterKg` also uses it
 as the below-solids tolerance. History changes keep their own display threshold.
 A split bay's size is wet when water is known, otherwise solids,
 otherwise dry biochar, without rounding even a tiny remaining sub-bin.
+A bay whose recorded wet is below its solids is therefore sized by solids, so its
+bands never overflow it (intended; pinned in `stock-sheet.test.tsx`).
+Split bays, the sub-bin tooltip and mix pile bands all lay out `stockParts`
+(labels come from `partLabel` in `sub-bin-card.tsx`). Split bays size by
+`stockParts(...).sizeKg`; a mix pile is still sized by the sum of its displayed
+bands. No component derives water or ingredient solids itself.
 
 Late-recorded intake can change earlier wet estimates in a mix pile. History
 recomputes each movement's wet change through the balance's posting-order

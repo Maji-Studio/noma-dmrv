@@ -10,7 +10,7 @@ import { EntitySideSheet } from "./index";
 
 vi.mock("@/components/ui/slide-over-panel", () => {
   const Wrapper = ({ children }: { children: ReactNode }) => <div>{children}</div>;
-  return { SlideOverPanel: {
+  return { FILL_CHILDREN_CLASS: "[&>*]:flex [&>*]:flex-1 [&>*]:flex-col", SlideOverPanel: {
     Root: Wrapper, Content: Wrapper, Title: Wrapper, Description: Wrapper, Footer: Wrapper, Close: Wrapper,
     Header: ({ children }: { children: ReactNode }) => <header>{children}</header>,
     Body: ({ children }: { children: ReactNode }) => <main>{children}</main>,
@@ -64,6 +64,8 @@ describe("EntitySideSheet record lock in edit mode", () => {
   it("explains a pending check above Save, which stays off, and leaves fields to the form", () => {
     act(() => { renderer = renderSheet(PENDING); });
     expect(renderer.root.findByType("fieldset").props.disabled).toBe(false);
+    // The fieldset is a flex item of the body: min-w-0 stops its min-content width from widening the sheet past a phone.
+    expect(renderer.root.findByType("fieldset").props.className).toContain("min-w-0");
     const [save] = buttonsNamed("Save changes");
     expect(save.props.disabled).toBe(true);
     const [reason] = renderer.root.findAll((node) => node.type === "div" && node.props.id === save.props["aria-describedby"]);

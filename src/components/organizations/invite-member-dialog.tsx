@@ -1,8 +1,8 @@
 /**
  * InviteMemberDialog: the Admin-only invite form, opened from the Members pane.
  * Same fields, schema and action as the inline form it replaced. On success it
- * closes and hands the accept link back to the pane, which shows it until the
- * next invitation (email delivery is best-effort, the link is the reliable path).
+ * closes and hands the accept link and the delivery result back to the pane,
+ * which shows them until the next invitation.
  */
 "use client";
 
@@ -13,9 +13,9 @@ import { inviteMemberSchema, type InviteMemberInput } from "@/schemas/organizati
 import { FormActions, FormField, FormInput, FormSelect } from "@/components/forms";
 import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { FormDialog } from "@/components/ui/form-dialog";
-import { useToast } from "@/components/ui/toast";
 import { useInviteMember } from "@/hooks/use-organizations";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
+import type { InvitationDelivery } from "./invitation-link-notice";
 import { ORG_ROLE_OPTIONS } from "./organization-roles";
 
 type InviteForm = InviteMemberInput;
@@ -29,13 +29,12 @@ export function InviteMemberDialog({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  /** Called with the accept link after the invitation is created. */
-  onInvited: (acceptUrl: string) => void;
+  /** Called with the accept link and whether the email went out, after the invitation is saved. */
+  onInvited: (invitation: InvitationDelivery) => void;
 }) {
   const titleId = useId();
   const formId = useId();
   const [serverError, setServerError] = useState("");
-  const toast = useToast();
   const inviteMember = useInviteMember();
   const latched = useLatchedSubmit();
 
@@ -58,9 +57,9 @@ export function InviteMemberDialog({
     setServerError("");
     try {
       const result = await inviteMember.mutateAsync(values);
-      onInvited(result.acceptUrl);
+      onInvited({ email: values.email, acceptUrl: result.acceptUrl, emailSent: result.emailSent });
       reset(EMPTY_INVITE);
-      toast.success("Invitation created.");
+      // The notice ("Invitation emailed to ..." or "did not send") is the confirmation in both cases.
       onClose();
     } catch (error) {
       setServerError(
@@ -120,7 +119,6 @@ export function InviteMemberDialog({
           isSubmitting={inviteMember.isPending}
           errorMessage={serverError}
           submitLabel="Send invitation"
-          submittingLabel="Sending…"
           onCancel={onClose}
           guardDialogCancel
           sticky={false}

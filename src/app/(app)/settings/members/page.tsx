@@ -7,10 +7,15 @@ import { SettingsConsole } from "@/components/settings";
 import { loadSettingsViewer } from "@/lib/settings/settings-viewer";
 
 export default async function MembersSettingsPage() {
-  const { viewer } = await loadSettingsViewer();
+  const { ctx, viewer } = await loadSettingsViewer();
   return (
     <SettingsConsole pane="members" viewer={viewer}>
-      <OrganizationSettings canManage={viewer.canManage} />
+      <OrganizationSettings
+        canManage={viewer.canManage}
+        organizationName={viewer.organizationName}
+        // A Platform Admin without a membership has nothing to leave.
+        canLeave={ctx.orgRole !== null}
+      />
     </SettingsConsole>
   );
 }
