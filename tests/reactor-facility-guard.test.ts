@@ -74,7 +74,7 @@ describe("reactor facility changes", () => {
     await expect(updateReactor(ctx, reactor.id, { expectedVersion: reactor.version, facilityId: destination.id }))
       .rejects.toThrow(/Cannot move a reactor with associated production runs/);
     await expect(deleteReactor(ctx, reactor.id, reactor.version)).rejects.toMatchObject({
-      code: "conflict", message: `Reactor ${reactor.code} was not deleted because production runs still use it. Keep this reactor.`,
+      code: "conflict", message: `Reactor ${reactor.code} was not deleted because production runs still use it. Choose another reactor on those runs, or keep this reactor.`,
       issues: [{ path: ["reactorId"], code: "conflict", meta: { reason: "in_use" } }],
     });
     const edited = await updateReactor(ctx, reactor.id, {
