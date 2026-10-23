@@ -28,9 +28,9 @@ it("keeps a reset provider failure indistinguishable from an unknown account", a
   expect(sendEmail).toHaveBeenCalledExactlyOnceWith(INPUT);
 });
 
-it("propagates a generic verification failure", async () => {
+it.each(["verify-email", "email-change-confirm"] as const)("propagates a generic %s failure", async type => {
   vi.mocked(sendEmail).mockResolvedValue({ sent: false, reason: "provider-error" });
-  await expect(sendAuthEmail({ ...INPUT, type: "verify-email" })).rejects.toThrow("Email delivery failed.");
+  await expect(sendAuthEmail({ ...INPUT, type })).rejects.toThrow("Email delivery failed.");
 });
 
 it.each(["development", "test", "production"] as const)("only logs fallback links outside production (%s)", async (mode) => {
