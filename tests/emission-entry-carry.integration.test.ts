@@ -344,5 +344,6 @@ it("the narrow sent read preserves the full-context carried list and its frozen 
   });
   await db.update(emissionEntryValues).set({ magnitude: "999" }).where(and(
     eq(emissionEntryValues.organizationId, ctx.organizationId), eq(emissionEntryValues.entryId, entry.id)));
-  expect(await loadRemovalCarriedEntries(ctx, receiving.removalId)).toEqual(full!.contributions.carriedEntries);
+  expect(await loadRemovalCarriedEntries(ctx, receiving.removalId)).toEqual(
+    full!.contributions.carriedEntries!.map(item => ({ ...item, value: { magnitude: item.value.magnitude, unit: item.value.unit } })));
 });

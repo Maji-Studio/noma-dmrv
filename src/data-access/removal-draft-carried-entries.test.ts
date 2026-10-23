@@ -16,8 +16,8 @@ vi.mock("./certification-submissions", () => ({ getLatestSubmission: mocks.lates
 const ctx = makeTestOrgContext();
 const observation = {
   id: "observation", externalTemplateId: "template", semanticFingerprint: "facts",
-  definition: { groups: [{ components: [{ id: "line", displayName: "Electricity", blueprintKey: "energy", inputs: [{ key: "energy", type: "monitored", quantityKind: "energy" }] }] }] },
-  enrichment: { line: { energy: { unit: "kWh" } } },
+  definition: { groups: [{ id: "g", key: "pyrolysis", displayName: "Group", description: "", components: [{ id: "line", displayName: "Electricity", description: null, blueprintKey: "grid_electricity_use", inputs: [{ key: "electricity_use", type: "monitored", quantityKind: "energy" }] }] }] },
+  enrichment: { line: { electricity_use: { unit: "kWh" } } },
   lineSources: { line: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } },
 } as unknown as RemovalTemplateObservation;
 const batches = [{ id: "member", code: "CB-member", removalTemplateId: "template", startDate: "2026-03-01", endDate: "2026-03-31" }];
@@ -26,7 +26,7 @@ function candidate(id: string, occurredOn = "2026-02-01") {
   return { id, creditBatchId: "origin", creditBatchCode: "CB-origin", componentId: "line", contentRevision: 1,
     kind: "value", lineRule: "additive", occurredOn, deletedAt: null, sentByRemovalId: null,
     heldForRemovalId: null, sendReservedBySubmissionId: null, confirmedForRemovalId: null, counts: true,
-    values: [{ inputKey: "energy", magnitude: "12", unit: "kWh" }], evidenceDocumentIds: ["file"],
+    values: [{ inputKey: "electricity_use", magnitude: "12", unit: "kWh" }], evidenceDocumentIds: ["file"],
     carry: { receiver, waitingReason: null }, reportedIn: null, entryObservation: observation,
   };
 }
@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 it("matches the full context for real nonempty carry candidates, filtering out unselected entries", async () => {
   const entries = [candidate("included"), candidate("outside-window", "2026-04-01"),
-    { ...candidate("wrong-unit"), unitMismatch: true, values: [{ inputKey: "energy", magnitude: "12", unit: "kg" }] },
+    { ...candidate("wrong-unit"), unitMismatch: true, values: [{ inputKey: "electricity_use", magnitude: "12", unit: "kg" }] },
     { ...candidate("other-draft"), carry: { receiver: { ...receiver, removalId: "other" } } }];
   const carry = { entries, contenders: [], ownContenders: [], batches: [] };
   mocks.carry.mockResolvedValue(carry);
