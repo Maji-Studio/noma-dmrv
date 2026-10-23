@@ -174,6 +174,14 @@ it.each(["blueprint", "formula"] as const)("ignores a deployed %s constant after
   expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline).status).toBe("changed");
   const resubmitted = generatedEvidenceFacts(ctx);
   expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), resubmitted).status).toBe("unchanged");
+  vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { generatedEvidenceFacts: resubmitted } } as never);
+  ctx.attributionByRunId.set("run", 0.5);
+  expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), resubmitted).status).toBe("changed");
+  expect(await changedGeneratedEvidence(org, "removal", ctx)).toHaveLength(1);
+  const massResubmitted = generatedEvidenceFacts(ctx);
+  vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { generatedEvidenceFacts: massResubmitted } } as never);
+  expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), massResubmitted).status).toBe("unchanged");
+  expect(await changedGeneratedEvidence(org, "removal", ctx)).toEqual([]);
 });
 
 it("treats run C model fingerprints and prior raw baselines as unknown", async () => {
@@ -182,6 +190,7 @@ it("treats run C model fingerprints and prior raw baselines as unknown", async (
     { transport: "old-model-hash", durability: "old-durability-model-hash" },
     { transport: [], durability: [] },
     { format: "ledger-inputs-v0", transport: "old", durability: null },
+    { format: "ledger-inputs-v1", transport: "old", durability: null },
   ]) {
     expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline)).toEqual({ status: "unknown", changed: [] });
     vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { generatedEvidenceFacts: baseline } } as never);
@@ -203,4 +212,35 @@ it("normalizes missing transport mass and clamped attribution like the builders"
   const attributed = generatedEvidenceFacts(ctx);
   ctx.attributionByRunId.set("run", 2);
   expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), attributed).status).toBe("unchanged");
+});
+
+
+it.each(["200_year", "1000_year"] as const)("compares batch product mass instead of run output for %s", tier => {
+  const ctx = context();
+  ctx.attributionByRunId = new Map([["run", 0.5], ["other-run", 0.5]]);
+  ctx.facilityReferenceSoilTemperature = { declaredSoilTemperatureC: 20, effectiveSoilTemperatureC: 20,
+    temperatureFloored: false, source: "facility_reference", method: "declared", warnings: [] };
+  ctx.batchesWithSamples = [{ creditBatchId: "batch", creditBatchCode: "CB-1", durabilityOption: tier,
+    samples: [{ id: "sample", hToCOrgRatio: 0.4, totalCarbonPercent: 80,
+      organicCarbonPercent: 78, inorganicCarbonPercent: 2, sReflectanceFraction: 0.5 }],
+    runs: [{ id: "run", biocharDryMassKg: 100 }, { id: "other-run", biocharDryMassKg: 100 }],
+  }] as never;
+  const baseline = generatedEvidenceFacts(ctx);
+  expect(baseline.durability).not.toBeNull();
+  const before = durabilityLedgerModel(ctx, null, "").model;
+  // Correct total output, preserving the 50 kg applied from this run.
+  ctx.batchesWithSamples[0].runs[0].biocharDryMassKg = 200;
+  ctx.attributionByRunId.set("run", 50 / 200);
+  expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline).status).toBe("unchanged");
+  expect(stableLedgerContentHash(durabilityLedgerModel(ctx, null, "").model)).toBe(stableLedgerContentHash(before));
+  // Redistributing applied mass between runs still renders the same batch mass.
+  ctx.attributionByRunId.set("run", 60 / 200);
+  ctx.attributionByRunId.set("other-run", 40 / 100);
+  expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline).status).toBe("unchanged");
+  expect(stableLedgerContentHash(durabilityLedgerModel(ctx, null, "").model)).toBe(stableLedgerContentHash(before));
+  ctx.attributionByRunId.set("run", 70 / 200);
+  expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline).status).toBe("changed");
+  expect(stableLedgerContentHash(durabilityLedgerModel(ctx, null, "").model)).not.toBe(stableLedgerContentHash(before));
+  const resubmitted = generatedEvidenceFacts(ctx);
+  expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), resubmitted).status).toBe("unchanged");
 });

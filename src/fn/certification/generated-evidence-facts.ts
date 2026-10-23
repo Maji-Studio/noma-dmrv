@@ -4,7 +4,7 @@ import type { RemovalSubmissionContext } from "./certify-context-types";
 import { TRANSPORT_EVIDENCE_LEDGER_KIND } from "@/lib/certification/evidence-ledger/types";
 import { DURABILITY_EVIDENCE_LEDGER_KIND } from "@/lib/certification/evidence-ledger/durability-types";
 import { isUsableNumber, isUsableRatio } from "@/lib/calculations/biochar-eligibility";
-import { clampFactor } from "@/lib/isometric/utils/aggregation";
+import { attributedProductMassKg } from "@/lib/isometric/utils/durability-aggregation";
 import { samplingDayOf } from "@/lib/certification/evidence-ledger/durability-build-model";
 import { samplingDay } from "@/lib/certification/evidence-ledger/durability-1000-build-model";
 import { orderedDurabilityBatches, orderedLegs } from "./evidence-ledger-models";
@@ -12,7 +12,7 @@ import { orderedDurabilityBatches, orderedLegs } from "./evidence-ledger-models"
 // A format discriminator, not a formula/mapping revision. Model-hash baselines
 // cannot be compared to input hashes and must remain unknown.
 export const generatedEvidenceFactsSchema = z.object({
-  format: z.literal("ledger-inputs-v1"),
+  format: z.literal("ledger-inputs-v2"),
   transport: z.string().nullable(),
   durability: z.string().nullable(),
 });
@@ -59,10 +59,7 @@ function durabilityInputs(ctx: RemovalSubmissionContext) {
     if (tier === "200_year" ? !batch.samples.some(s => isUsableRatio(s.hToCOrgRatio)) : !samples.length) return [];
     return [{
       samples,
-      runs: batch.runs.map(run => ({
-        dryMassKg: run.biocharDryMassKg ?? 0,
-        attribution: clampFactor(ctx.attributionByRunId?.get(run.id)),
-      })),
+      productMassKg: attributedProductMassKg(batch.runs, ctx.attributionByRunId),
     }];
   });
   if (!batches.length) return null;
@@ -82,7 +79,7 @@ function durabilityInputs(ctx: RemovalSubmissionContext) {
  * derived outputs, formula constants and blueprint versions never enter hashes.
  */
 export function generatedEvidenceFacts(ctx: RemovalSubmissionContext): GeneratedEvidenceFacts {
-  const empty: GeneratedEvidenceFacts = { format: "ledger-inputs-v1", transport: null, durability: null };
+  const empty: GeneratedEvidenceFacts = { format: "ledger-inputs-v2", transport: null, durability: null };
   if (!ctx.mapping || !ctx.memberBatches.length) return empty;
   const categories = [
     orderedLegs(ctx.transportLegs.feedstock),
