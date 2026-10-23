@@ -8,6 +8,7 @@ import { FormField, ServerError } from "@/components/forms";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
 import { formatFileSize } from "@/lib/format-utils";
@@ -119,11 +120,14 @@ export function SampleDocumentsPanel({
           Loading documents…
         </p>
       ) : uploadedDocs.length === 0 ? (
-        <p className="body-small text-[var(--color-text-secondary)]">
-          {readOnly
-            ? "No documents attached yet."
-            : "No documents attached yet. Upload a lab report or reflectance histogram below."}
-        </p>
+        readOnly ? (
+          <EmptyState
+            icon={<FileIcon size={32} weight="bold" />}
+            title="No documents"
+            description="No documents are attached."
+            padding="sm"
+          />
+        ) : null
       ) : (
         <ul className="flex flex-col gap-8">
           {uploadedDocs.map((doc) => (

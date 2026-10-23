@@ -6,6 +6,7 @@ import { MoistureSplit } from "@/components/ui/moisture-split";
 import { TransportEvidencePanel, TransportLegsSummary } from "@/components/transport-legs";
 import { distanceReadFields, isOverrideDistance } from "@/components/transport-legs/distance-override";
 import { TransportDistanceDriftNotice } from "@/components/transport-legs/transport-distance-drift";
+import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
@@ -45,6 +46,7 @@ export function feedstockSheetSections(
           locationName: feedstock.supplierName,
           derivedSource: recordedDistance.source,
           locationDefaultKm: recordedDistance.locationDefaultKm,
+          certify: certificationDetailField("feedstock", "transportDistanceKm"),
         }),
       ],
       // The saved leg reads in the step that records it, as on the form.

@@ -18,7 +18,7 @@ import { useId, useState } from "react";
 
 import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
 import { outputDrawCreditBatchPreview } from "@/components/credit-batches/record-credit-batch-preview-input";
-import { FormActions, FormEntitySelect, FormField, FormSection, FormSpine, makeCertFieldStatus, MoistureField, FieldErrorRow, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
+import { FormActions, FormEntitySelect, FormField, FormSection, FormSpine, makeCertFieldStatus, resolveCertFieldStatus, MoistureField, FieldErrorRow, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
 import { focusMoistureField, moistureFieldSelectors } from "@/components/storage-locations/reestimate-notice";
@@ -29,7 +29,7 @@ import type { Delivery } from "@/db/schema";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { DistanceOverrideField } from "@/components/transport-legs/distance-override-field";
 import { DistanceDriftAction, SAVE_BEFORE_REFRESH_REASON } from "@/components/transport-legs/transport-distance-drift";
-import { distanceOverridePatch, emptyToNullSource, hasSavedOverride, isOverrideLockRefusal, overrideDistanceError } from "@/components/transport-legs/distance-override";
+import { distanceOverridePatch, emptyToNullSource, hasSavedDistance, hasSavedOverride, isOverrideLockRefusal, overrideDistanceError } from "@/components/transport-legs/distance-override";
 import { customerLocationDistanceLink } from "@/lib/location-distance-links";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { useFacility } from "@/hooks/use-facilities";
@@ -427,6 +427,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         >
           <DistanceOverrideField
             id="distanceKmOverride"
+            certifyRequired={isDeliveryCertifyField("distanceKmOverride")}
+            certifyStatus={resolveCertFieldStatus(isEditMode && distanceRecord ? true : undefined, distanceRecord ? hasSavedDistance(distanceRecord) : false)}
             sourceId="distanceSource"
             noteId="distanceNote"
             hint="The one-way distance from this facility to the order's customer location. Override it when this trip took a different route."

@@ -3,6 +3,7 @@ import {
   distanceOverridePatch,
   distanceProvenance,
   distanceReadFields,
+  hasSavedDistance,
   hasSavedOverride,
   OVERRIDE_DISTANCE_POSITIVE_MESSAGE,
   OVERRIDE_DISTANCE_REQUIRED_MESSAGE,
@@ -149,5 +150,17 @@ describe("distanceReadFields", () => {
 
   it("leaves a missing distance to the shared empty token", () => {
     expect(distanceReadFields({ overrideKm: null, effectiveKm: null, note: null })[0]?.value).toBeNull();
+  });
+});
+
+describe("hasSavedDistance (the delivery distance CERT chip's saved state)", () => {
+  it("counts an override or a recorded pair distance", () => {
+    expect(hasSavedDistance({ distanceKmOverride: 12, recordedDistanceKm: null })).toBe(true);
+    expect(hasSavedDistance({ distanceKmOverride: null, recordedDistanceKm: 240 })).toBe(true);
+  });
+
+  it("is missing with neither, and a legacy zero override does not count", () => {
+    expect(hasSavedDistance({ distanceKmOverride: null, recordedDistanceKm: null })).toBe(false);
+    expect(hasSavedDistance({ distanceKmOverride: 0, recordedDistanceKm: null })).toBe(false);
   });
 });

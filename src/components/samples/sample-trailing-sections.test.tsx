@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 
+vi.mock("@/components/forms/use-documents-cert-status", () => ({ useDocumentsCertStatus: () => "neutral" }));
 vi.mock("@/hooks/use-record-certification-lock", () => ({ useIsRecordCertificationLocked: () => false }));
 vi.mock("./sample-documents-panel", () => ({ SampleDocumentsPanel: () => null }));
 vi.mock("@/components/transport-legs", () => ({ TransportLegsEditor: () => null }));

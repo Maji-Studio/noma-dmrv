@@ -177,6 +177,7 @@ export function deriveEntityCertifyReadiness(
   }
 
   for (const descriptor of getCertifyFieldDescriptors(entityKind)) {
+    if (descriptor.chipOnly) continue;
     if (!certifyFieldConditionApplies(descriptor, entity)) continue;
     if (descriptorSatisfied(descriptor, entity)) continue;
     if (descriptor.advisory) {

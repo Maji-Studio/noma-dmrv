@@ -384,6 +384,7 @@ describe("deriveEntityCertifyReadiness", () => {
       proofOfDeliveryCount: 1,
       status: "upcoming",
       deliveredWetMassKg: 400,
+      effectiveDistanceKm: 240,
       effectiveDistanceSource: "document",
       transportEvidenceDocumentCount: 1,
     });
@@ -399,6 +400,7 @@ describe("deriveEntityCertifyReadiness", () => {
       proofOfDeliveryCount: 1,
       status: "delivered",
       deliveredWetMassKg: 400,
+      effectiveDistanceKm: 240,
       effectiveDistanceSource: "document",
       transportEvidenceDocumentCount: 1,
     });
@@ -411,6 +413,38 @@ describe("deriveEntityCertifyReadiness", () => {
       proofOfDeliveryCount: 1,
       status: "delivered",
       deliveredWetMassKg: 400,
+      effectiveDistanceKm: 240,
+    });
+
+    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
+  });
+
+  it("gaps a delivered delivery with no one-way distance", () => {
+    const readiness = deriveEntityCertifyReadiness("delivery", {
+      proofOfDeliveryCount: 1,
+      status: "delivered",
+      deliveredWetMassKg: 400,
+      effectiveDistanceKm: null,
+    });
+
+    expect(readiness.gaps).toMatchObject([{ key: "effectiveDistanceKm" }]);
+  });
+
+  it("raises one proof gap, never a second from the chip-only descriptor", () => {
+    const readiness = deriveEntityCertifyReadiness("delivery", {
+      proofOfDeliveryCount: 0,
+      status: "delivered",
+      deliveredWetMassKg: 400,
+      effectiveDistanceKm: 240,
+    });
+
+    expect(readiness.gaps.filter((gap) => gap.key === "proofOfDelivery")).toHaveLength(1);
+  });
+
+  it("keeps a Sample without a lab report ready, with no gap and no warning", () => {
+    const readiness = deriveEntityCertifyReadiness("sample", {
+      sampling: "unsampled",
+      durabilityOption: "200_year",
     });
 
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
@@ -421,6 +455,7 @@ describe("deriveEntityCertifyReadiness", () => {
       proofOfDeliveryCount: 0,
       status: "delivered",
       deliveredWetMassKg: 400,
+      effectiveDistanceKm: 240,
       effectiveDistanceSource: "manual",
       transportEvidenceDocumentCount: 0,
     });
@@ -447,6 +482,7 @@ describe("deriveEntityCertifyReadiness", () => {
         status: "delivered",
         proofOfDeliveryCount: 1,
         deliveredWetMassKg: 400,
+      effectiveDistanceKm: 240,
         effectiveDistanceSource: "manual",
         transportEvidenceDocumentCount: 0,
       },
@@ -558,11 +594,24 @@ describe("isCertifyFormField", () => {
   });
 
   it("ignores fields outside the registry", () => {
-    expect(isCertifyFormField("delivery", "distanceKmOverride")).toBe(false);
+    expect(isCertifyFormField("delivery", "notes")).toBe(false);
+  });
+
+  it("badges the delivery distance override and no chip-only descriptor", () => {
+    expect(isCertifyFormField("delivery", "distanceKmOverride")).toBe(true);
+    expect(isCertifyFormField("delivery", "proofOfDelivery")).toBe(false);
   });
 });
 
 describe("isCertifyEntityField", () => {
+  it("badges the delivery distance, delivery evidence and the Sample lab report", () => {
+    expect(isCertifyEntityField("delivery", "effectiveDistanceKm")).toBe(true);
+    expect(isCertifyEntityField("delivery", "proofOfDelivery")).toBe(true);
+    expect(isCertifyEntityField("sample", "labReport")).toBe(true);
+    expect(isCertifyEntityField("feedstock", "transportDistanceKm")).toBe(true);
+    expect(isCertifyEntityField("feedstock", "transportEvidence")).toBe(false);
+  });
+
   it("badges persisted fields used by read-only detail surfaces", () => {
     expect(isCertifyEntityField("feedstock", "massWetKg")).toBe(false);
     expect(isCertifyEntityField("feedstock", "totalWetMassKg")).toBe(false);
@@ -570,7 +619,7 @@ describe("isCertifyEntityField", () => {
   });
 
   it("ignores non-certification detail fields", () => {
-    expect(isCertifyEntityField("delivery", "distanceKmOverride")).toBe(false);
+    expect(isCertifyEntityField("delivery", "notes")).toBe(false);
     expect(isCertifyEntityField("feedstock", "notes")).toBe(false);
   });
 });

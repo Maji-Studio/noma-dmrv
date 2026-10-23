@@ -1,6 +1,7 @@
 /** Sample side-sheet view mode: the sections config for EntitySideSheet. */
 import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
-import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
+import { certificationDetailField, isCertifyEntityField } from "@/lib/certification/certify-field-registry";
 import { formatDate, formatFacilityDateTime, formatPercent } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL, PERCENT_SCALE } from "@/lib/mass-moisture";
 import { formatDurabilityOption } from "@/schemas/samples";
@@ -24,8 +25,10 @@ export function formatSamplingTime(sample: Pick<SampleWithRelations, "samplingTi
   return formatFacilityDateTime(sample.samplingTime, sample.facilityTimezone ?? UNKNOWN_FACILITY_TIMEZONE);
 }
 
+/** `labReportStatus` is the saved lab-report state of the Sample: neutral until its files load. */
 export function sampleSheetSections(
   sample: SampleWithRelations,
+  labReportStatus: CertFieldStatus = "neutral",
 ): DetailPanelSection[] {
   const certificationContext = { sampling: sample.sampling, durabilityOption: sample.durabilityOption };
   return [
@@ -105,6 +108,8 @@ export function sampleSheetSections(
     },
     {
       title: "Evidence & documents",
+      certifyRequired: isCertifyEntityField("sample", "labReport"),
+      certifyStatus: labReportStatus,
       fields: [],
       content: <SampleDocumentsPanel sampleId={sample.id} readOnly />,
     },

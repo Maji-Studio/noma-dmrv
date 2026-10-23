@@ -71,6 +71,12 @@ export interface CertifyFieldDescriptor {
   satisfaction?: CertifyFieldSatisfaction;
   mappings?: readonly CertifySourceMapping[];
   advisory?: string;
+  /**
+   * The descriptor only drives CERT chips. The readiness walk skips it, so it
+   * never adds a gap or a warning: the requirement is already enforced
+   * elsewhere (delivery proof blocker) or is a non-blocking Check (lab report).
+   */
+  chipOnly?: boolean;
   gapDetail?: string;
 }
 
@@ -271,6 +277,16 @@ export const CERTIFY_FIELD_REGISTRY: Record<
         label: "sampled 1,000-year durability",
       },
     },
+    {
+      // Ag Soils v1.1 "Data Reporting": characterization data reaches the VVB
+      // with its raw data. Submission sends a lab report as a Source when one
+      // exists (removal-source-bindings.ts `labReport`); a missing one is the
+      // non-blocking Check "No lab report on any Sample", so chip only.
+      key: "labReport",
+      label: "Lab report",
+      kind: "derived",
+      chipOnly: true,
+    },
   ],
   feedstock: [
     {
@@ -338,6 +354,29 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "deliveredWetMassKg",
       label: "Biochar product wet mass",
       kind: "entered",
+    },
+    {
+      // The one-way distance feeds biochar transport tonne·km. Lists carry the
+      // effective distance (override, else the recorded pair); the form edits
+      // the override.
+      key: "effectiveDistanceKm",
+      label: "One-way distance",
+      kind: "entered",
+      formFields: ["distanceKmOverride"],
+      satisfaction: {
+        mode: "anyOf",
+        fields: ["effectiveDistanceKm"],
+        label: "One-way distance",
+      },
+      mappings: [mapping("biocharTransportMassDistanceTonneKm")],
+    },
+    {
+      // Proof of delivery is already a submission blocker (deliveryProofBlocker
+      // in entity-readiness.ts, decision #942 q12): chip only, no second gap.
+      key: "proofOfDelivery",
+      label: "Delivery evidence",
+      kind: "derived",
+      chipOnly: true,
     },
   ],
   application: [
