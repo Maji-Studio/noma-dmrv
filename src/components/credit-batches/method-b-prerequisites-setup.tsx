@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -11,12 +11,15 @@ import { FormActions, FormField, FormInput } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useRecordMethodBPrerequisites } from "@/hooks/use-production-processes";
 import {
   MOISTURE_PATHWAYS,
   recordMethodBPrerequisitesSchema,
   type RecordMethodBPrerequisitesInput,
 } from "@/schemas/production-process";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
 
 /** Native min, max and step for each number input, read from the schema. */
@@ -45,9 +48,14 @@ export function MethodBPrerequisitesSetup({
   const [serverError, setServerError] = useState<string | null>(null);
   const recordPrerequisites = useRecordMethodBPrerequisites();
   const toast = useToast();
+  const formId = useId();
+  const latched = useLatchedSubmit();
   const {
     register,
     handleSubmit,
+    control,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm<
     z.input<typeof recordMethodBPrerequisitesSchema>,
@@ -66,6 +74,7 @@ export function MethodBPrerequisitesSetup({
     },
   });
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const submit = handleSubmit(async (data) => {
     setServerError(null);
     try {
@@ -74,9 +83,10 @@ export function MethodBPrerequisitesSetup({
       setOpen(false);
     } catch (error) {
       setServerError(
-        error instanceof Error
-          ? error.message
-          : "The Method-B prerequisites were not recorded. Try again.",
+        refuseSave(
+          error,
+          toSaveErrorMessage(error, "The Method-B prerequisites were not recorded. Try again."),
+        ),
       );
     }
   });
@@ -97,61 +107,62 @@ export function MethodBPrerequisitesSetup({
         testId="method-b-prerequisites-dialog"
         dismissible={!recordPrerequisites.isPending}
       >
-        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
-          <FormField
-            id="method-b-moisture-pathway"
-            label="Moisture pathway"
-            error={errors.moisturePathway?.message}
-            required
-          >
-            <FormSelect
+        <form id={formId} onSubmit={latched(submit)} className="flex flex-col gap-24">
+          <div className="grid grid-cols-1 gap-x-16 gap-y-20">
+            <FormField
               id="method-b-moisture-pathway"
-              options={MOISTURE_OPTIONS}
-              error={!!errors.moisturePathway}
-              disabled={recordPrerequisites.isPending}
-              {...register("moisturePathway")}
-            />
-          </FormField>
+              label="Moisture pathway"
+              error={errors.moisturePathway?.message}
+              required
+            >
+              <FormSelect
+                id="method-b-moisture-pathway"
+                options={MOISTURE_OPTIONS}
+                error={!!errors.moisturePathway}
+                disabled={recordPrerequisites.isPending}
+                {...register("moisturePathway")}
+              />
+            </FormField>
+            <FormField
+              id="method-b-agreed-baseline"
+              label="Agreed baseline size"
+              error={errors.agreedBaselineSize?.message}
+              required
+            >
+              <FormInput
+                id="method-b-agreed-baseline"
+                type="number"
+                {...numberBounds("agreedBaselineSize")}
+                error={!!errors.agreedBaselineSize}
+                disabled={recordPrerequisites.isPending}
+                {...register("agreedBaselineSize")}
+              />
+            </FormField>
+          </div>
           <FormField
-            id="method-b-agreed-baseline"
-            label="Agreed baseline size"
-            error={errors.agreedBaselineSize?.message}
+            id="method-b-random-plan"
+            label="Random sampling plan reference"
+            error={errors.randomSamplingPlanRef?.message}
             required
+            helperText="Reference the agreed PDD or sampling-plan section."
           >
             <FormInput
-              id="method-b-agreed-baseline"
-              type="number"
-              {...numberBounds("agreedBaselineSize")}
-              error={!!errors.agreedBaselineSize}
+              id="method-b-random-plan"
+              placeholder="e.g., PDD §8.3 sampling plan"
+              error={!!errors.randomSamplingPlanRef}
               disabled={recordPrerequisites.isPending}
-              {...register("agreedBaselineSize")}
+              {...register("randomSamplingPlanRef")}
             />
           </FormField>
-        </div>
-        <FormField
-          id="method-b-random-plan"
-          label="Random sampling plan reference"
-          error={errors.randomSamplingPlanRef?.message}
-          required
-          helperText="Reference the agreed PDD or sampling-plan section."
-        >
-          <FormInput
-            id="method-b-random-plan"
-            placeholder="e.g., PDD §8.3 sampling plan"
-            error={!!errors.randomSamplingPlanRef}
-            disabled={recordPrerequisites.isPending}
-            {...register("randomSamplingPlanRef")}
+          <FormActions
+            control={control}
+            sticky={false}
+            submitLabel="Record prerequisites"
+            onCancel={() => setOpen(false)}
+            isSubmitting={recordPrerequisites.isPending}
+            errorMessage={serverError ?? undefined}
           />
-        </FormField>
-        <FormActions
-          sticky={false}
-          submitType="button"
-          onSubmitClick={submit}
-          submitLabel="Record prerequisites"
-          onCancel={() => setOpen(false)}
-          isSubmitting={recordPrerequisites.isPending}
-          errorMessage={serverError ?? undefined}
-        />
+        </form>
       </QuickAddDialogShell>
     </>
   );
