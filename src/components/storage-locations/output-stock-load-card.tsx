@@ -114,9 +114,9 @@ export function IngredientStockInfo({ preview }: { preview: Preview }) {
   const [open, setOpen] = useState(false);
   return <>
     <Button onClick={() => setOpen(true)}>More info</Button>
-    <Modal isOpen={open} onClose={() => setOpen(false)} ariaLabel="Ingredient stock basis">
+    <Modal isOpen={open} onClose={() => setOpen(false)} ariaLabelledBy="ingredient-stock-basis-title">
       <div className="space-y-16">
-        <h3 className="title-heading-3">{preview.binName}</h3>
+        <h3 id="ingredient-stock-basis-title" className="title-heading-3">{preview.binName}</h3>
         <p className="body-small">Wet stock is the recorded intake less tracked withdrawals. Ingredient withdrawals take a proportional share of this stock.</p>
         <p className="body-small">Dry solids use the recorded intake basis. The moisture used for the new product describes its ingredient addition and does not update the remaining bin.</p>
         <p className="body-small">Before: {formatMassKg(preview.beforeEstimatedWetKg)} wet stock, {formatMassKg(preview.beforeDryKg)} dry solids. After: {formatMassKg(preview.afterEstimatedWetKg)} wet stock, {formatMassKg(preview.afterDryKg)} dry solids.</p>

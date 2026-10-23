@@ -76,10 +76,10 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
     {renderTrigger ? renderTrigger(openHistory, icon) : (
       <Button type="button" variant={compact ? "noOutline" : "default"} className={compact ? "min-h-44 gap-8 px-8 normal-case" : undefined} onClick={openHistory}>{compact && icon}<span className={compact ? "body-caption normal-case" : undefined}>{triggerLabel}</span></Button>
     )}
-    <Modal isOpen={open} onClose={() => setOpen(false)} ariaLabel="Stock history" width="lg">
+    <Modal isOpen={open} onClose={() => setOpen(false)} ariaLabelledBy="stock-history-title" width="lg">
       <div className="flex flex-col gap-20">
-        <div className="flex items-center justify-between gap-12 pr-24">
-          <h3 className="flex min-w-0 items-center gap-6 title-heading-3">
+        <div className="flex items-center justify-between gap-12">
+          <h3 id="stock-history-title" className="flex min-w-0 items-center gap-6 title-heading-3">
             <span className="truncate">Stock history</span>
             <InfoHint label="About stock history">{STOCK_HISTORY_HINT}</InfoHint>
           </h3>
@@ -102,8 +102,8 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
         </div>}
       </div>
     </Modal>
-    <FormDialog isOpen={editing !== null} onClose={() => setEditing(null)} ariaLabel="Edit lost mass" width="md">
-      <h3 className="title-heading-3 mb-20">{LOST_MASS_LABEL}</h3>
+    <FormDialog isOpen={editing !== null} onClose={() => setEditing(null)} ariaLabelledBy="edit-lost-mass-title" width="md">
+      <h3 id="edit-lost-mass-title" className="title-heading-3 mb-20">{LOST_MASS_LABEL}</h3>
       {editing && <OutputStockForm key={editing.id} storageLocationId={storageLocationId} facilityId={facilityId} correction={editing}
         onCancel={() => setEditing(null)} onRecorded={() => setEditing(null)} />}
     </FormDialog>

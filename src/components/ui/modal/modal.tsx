@@ -7,6 +7,9 @@
  * a11y contract consistent and gives every instance the same affordances:
  *
  * - a built-in close button in the top-right corner (no per-instance X)
+ * - the heading named by `ariaLabelledBy` always clears that button: its
+ *   inline end padding reserves the button's width, so dialogs never add a
+ *   title workaround of their own
  * - dismiss on ESC and on outside (backdrop) click when dismissible
  * - focus trap + scroll lock + focus restore (handled by Base UI)
  *
@@ -37,6 +40,18 @@ const WIDTH_CLASSES = {
   lg: "w-full sm:w-[720px]", // dense forms / multi-column layouts
   xl: "w-full sm:w-[880px]", // rich content (previews, comparisons)
 } as const;
+
+/**
+ * The close button is `w-32 h-32` (`--spacing-32`). The labelled heading keeps
+ * that width plus a `--spacing-8` gap free at its inline end.
+ */
+const TITLE_CLEARANCE = "calc(var(--spacing-32) + var(--spacing-8))";
+
+/** CSS rule that pads the heading with this id; the id is escaped for a quoted attribute selector. */
+function titleClearanceCss(id: string): string {
+  const escaped = id.replace(/["\\]/g, "\\$&").replace(/\n/g, " ");
+  return `[id="${escaped}"]{padding-inline-end:${TITLE_CLEARANCE}}`;
+}
 
 export type ModalWidth = keyof typeof WIDTH_CLASSES;
 
@@ -180,6 +195,7 @@ export function Modal({
           >
             <CloseIcon />
           </Dialog.Close>
+          {ariaLabelledBy && <style>{titleClearanceCss(ariaLabelledBy)}</style>}
           {/* Context barrier: a dialog opened from inside a side sheet is its
               own interaction scope, so a FormActions Cancel in here must not
               navigate the sheet underneath. */}

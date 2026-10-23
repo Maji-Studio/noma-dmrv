@@ -99,8 +99,7 @@ export function ArchiveFacilityDialog({
       width="sm"
     >
       <div className="flex flex-col gap-24">
-        {/* pr-40 keeps the title clear of the Modal's built-in close button. */}
-        <div className="flex flex-col gap-12 pr-40">
+        <div className="flex flex-col gap-12">
           <h2 id={titleId} className="title-heading-3">
             Archive facility {facility?.code}
           </h2>

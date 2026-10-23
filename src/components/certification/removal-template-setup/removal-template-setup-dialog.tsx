@@ -61,7 +61,7 @@ function DialogBody({ facilityId, templateId = null, step = null, onClose, apply
 
   return (
     <div className="flex flex-col">
-      <div className={`${SETUP_GUTTER_CLASS} pb-16 pr-56 pt-20`}>
+      <div className={`${SETUP_GUTTER_CLASS} pb-16 pt-20`}>
         <h2 id={TITLE_ID} className="title-heading-3">{SETUP_DIALOG_TITLE}</h2>
       </div>
       {query.isError ? (

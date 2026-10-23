@@ -66,9 +66,9 @@ function FeedstockStockHistory({ storageLocationId, facilityId, moisturePercent,
   const timeline = entries.toReversed();
   return <>
     {renderTrigger(() => setOpen(true), <ClockCounterClockwiseIcon size={ICON_PX} aria-hidden="true" />)}
-    <Modal isOpen={open} onClose={() => setOpen(false)} ariaLabel="Stock history" width="md">
+    <Modal isOpen={open} onClose={() => setOpen(false)} ariaLabelledBy="stock-history-title" width="md">
       <div className="space-y-20">
-        <h3 className="flex min-w-0 items-center gap-6 pr-24 title-heading-3">
+        <h3 id="stock-history-title" className="flex min-w-0 items-center gap-6 title-heading-3">
           <span className="truncate">Stock history</span>
           <InfoHint label="About stock history">{HISTORY_HINT}</InfoHint>
         </h3>
@@ -88,8 +88,8 @@ function FeedstockStockHistory({ storageLocationId, facilityId, moisturePercent,
         </div>}
       </div>
     </Modal>
-    <FormDialog isOpen={editing !== null} onClose={() => setEditing(null)} ariaLabel="Edit lost mass" width="md">
-      <h3 className="title-heading-3 mb-20">{LOST_MASS_LABEL}</h3>
+    <FormDialog isOpen={editing !== null} onClose={() => setEditing(null)} ariaLabelledBy="edit-lost-mass-title" width="md">
+      <h3 id="edit-lost-mass-title" className="title-heading-3 mb-20">{LOST_MASS_LABEL}</h3>
       {editing && <FeedstockLossForm key={editing.id} storageLocationId={storageLocationId} facilityId={facilityId} correction={editing}
         availableKg={stock.data?.currentWetKg ?? null} moisturePercent={moisturePercent}
         onCancel={() => setEditing(null)} onRecorded={() => setEditing(null)} />}
