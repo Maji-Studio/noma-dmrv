@@ -27,6 +27,7 @@ import type { RemovalCorrection } from "@/lib/certification/removal-entry-correc
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { formatCalendarDate, formatTonnes } from "@/lib/format-utils";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+import { lateRunEntryDate } from "./late-run-entry-date";
 import {
   RESUBMIT_NEEDED_LABEL,
   changedComponentNames,
@@ -156,11 +157,12 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     const recordedDays = new Set(late.manualEntryDates);
     const codes = joinWithAnd(late.sentRemovalCodes);
     for (const run of late.runs) {
-      if (recordedDays.has(run.startDate)) continue;
+      const entryDate = lateRunEntryDate(run.startDate, late.batchStartDate);
+      if (recordedDays.has(entryDate)) continue;
       check.push({
         id: `late-production-run:${run.id}`,
         title: `${run.code} ran after ${codes} ${late.sentRemovalCodes.length === 1 ? "was" : "were"} sent`,
-        detail: `It is not in this credit batch. Record its diesel and power on the Emissions tab, dated ${formatCalendarDate(run.startDate)}.`,
+        detail: `It is not in this credit batch. Record its diesel and power on the Emissions tab, dated ${formatCalendarDate(entryDate)}.`,
         target: { href: creditBatchDeepLinkHref(input.creditBatchId, input.facilityId, { tab: "emissions" }) },
       });
     }

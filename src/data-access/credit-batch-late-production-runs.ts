@@ -11,6 +11,8 @@ import { requireOrgScope } from "./utils";
 
 export interface CreditBatchLateProductionRuns {
   sentRemovalCodes: string[];
+  /** First day of the batch period; entries must be dated inside it. */
+  batchStartDate: string;
   runs: { id: string; code: string; startDate: string }[];
   /** Undeleted manual value entries only; recorded zero does not resolve a run. */
   manualEntryDates: string[];
@@ -28,6 +30,7 @@ export async function loadCreditBatchesLateProductionRuns(
   const [rows, entries] = await Promise.all([
     db.selectDistinct({
       creditBatchId: creditBatches.id,
+      batchStartDate: creditBatches.startDate,
       batchFeedstockTypeId: creditBatches.feedstockTypeId,
       feedstockTypeId: feedstocks.feedstockTypeId,
       id: productionRuns.id,
@@ -64,7 +67,7 @@ export async function loadCreditBatchesLateProductionRuns(
       )),
   ]);
   const result = new Map<string, CreditBatchLateProductionRuns>(sentBatchIds.map(id => [id, {
-    sentRemovalCodes: sentByBatch.get(id)!, runs: [], manualEntryDates: [],
+    sentRemovalCodes: sentByBatch.get(id)!, batchStartDate: "", runs: [], manualEntryDates: [],
   }]));
   // Match attachment's single-feedstock rule: mixed and empty runs cannot join a cohort.
   const candidates = new Map<string, { row: typeof rows[number]; types: Set<string> }>();
@@ -76,6 +79,7 @@ export async function loadCreditBatchesLateProductionRuns(
   }
   for (const { row, types } of candidates.values()) {
     if (types.size !== 1 || !types.has(row.batchFeedstockTypeId)) continue;
+    result.get(row.creditBatchId)!.batchStartDate = row.batchStartDate;
     result.get(row.creditBatchId)!.runs.push({ id: row.id, code: row.code, startDate: row.startDate });
   }
   for (const entry of entries) result.get(entry.creditBatchId)!.manualEntryDates.push(entry.occurredOn);

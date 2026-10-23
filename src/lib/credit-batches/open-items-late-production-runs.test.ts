@@ -4,7 +4,7 @@ import { overviewBadgeCount, tabBadge } from "./batch-page";
 
 const context = { facilityId: "facility", creditBatchId: "batch", canManage: true };
 const run = { id: "run", code: "PR-112", startDate: "2026-09-09" };
-const lateProductionRuns = { sentRemovalCodes: ["RM-009"], runs: [run], manualEntryDates: [] as string[] };
+const lateProductionRuns = { sentRemovalCodes: ["RM-009"], batchStartDate: "2026-09-01", runs: [run], manualEntryDates: [] as string[] };
 
 describe("late production run Check to-dos", () => {
   it("adds a non-blocking Check with the run, sent Removal, start day and Emissions link", () => {
@@ -45,6 +45,18 @@ describe("late production run Check to-dos", () => {
       ...lateProductionRuns, manualEntryDates: ["2026-09-10"],
     } });
     expect(check.map(item => item.id)).toEqual(["late-production-run:run"]);
+  });
+
+  it("dates a run that started before the batch on the batch start and clears on that day", () => {
+    const early = { id: "early", code: "PR-100", startDate: "2026-08-31" };
+    const { check } = buildCreditBatchOpenItems({ ...context, lateProductionRuns: { ...lateProductionRuns, runs: [early] } });
+    expect(check[0].detail).toContain("dated Sep 1, 2026.");
+    expect(buildCreditBatchOpenItems({ ...context, lateProductionRuns: {
+      ...lateProductionRuns, runs: [early], manualEntryDates: ["2026-09-01"],
+    } }).check).toEqual([]);
+    expect(buildCreditBatchOpenItems({ ...context, lateProductionRuns: {
+      ...lateProductionRuns, runs: [early], manualEntryDates: ["2026-08-31"],
+    } }).check).toHaveLength(1);
   });
 
   it("does not add an item when the batch has no sent Removal", () => {
