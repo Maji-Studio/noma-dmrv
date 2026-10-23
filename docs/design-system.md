@@ -1033,7 +1033,9 @@ Fifteen list components share one shape. Copy it rather than re-deriving:
   A delete the server refuses as in use is not an inline notice: the confirm
   dialog gives way to `InUseDeleteDialog` (`@/components/ui/in-use-delete-dialog`)
   with "Archive instead" first and "Cancel" after. Omit `onArchive` where
-  archiving would be refused too; it then shows only "Close".
+  archiving would be refused too; it then shows only "Close". Customer saved
+  locations archive an in-use location automatically on Delete (see
+  design-decisions "Saved locations: Delete only").
 - **Toolbar controls are deliberately raw**: a hand-rolled `h-40` search
   `<input>` and plain `<select>`s, both needing `aria-label` — not `Input` or a
   Base UI Select. `<DataTable.Toolbar>` / `<DataTable.Pagination>` go in as

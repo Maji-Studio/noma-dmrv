@@ -1,13 +1,13 @@
 /**
  * Saved locations of a customer in the edit sheet: active locations first,
- * archived ones in their own muted group below. Archive is neutral and keeps
- * the location on stored orders; Delete stays for locations nothing uses.
+ * archived ones in their own muted group below. Delete is the one action: it
+ * removes an unused location and archives a used one (stored orders keep it),
+ * then says which happened. Archived locations can be restored.
  */
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import {
-  ArchiveIcon,
   ArrowCounterClockwiseIcon,
   CaretDownIcon,
   MapPinIcon,
@@ -22,6 +22,7 @@ import { ICON_BUTTON_TOUCH_PROPS } from "@/components/ui/touch-target";
 import { DefaultLocationBadge } from "@/components/ui/default-location-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { isActionError } from "@/lib/action-error";
 import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { useToast } from "@/components/ui/toast";
 import { InfoHint } from "@/components/ui/tooltip";
@@ -33,7 +34,7 @@ import {
 } from "@/hooks/use-customers";
 import { useLocationEditIntent } from "@/hooks/use-location-edit-intent";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { toArchiveRestoreErrorMessage, toDeleteErrorMessage } from "@/lib/stale-version";
+import { getStaleVersionConflict, toArchiveRestoreErrorMessage, toDeleteErrorMessage } from "@/lib/stale-version";
 import { CustomerLocationDialog } from "./customer-location-dialog";
 import type { EditableCustomerLocation } from "./customer-location-form";
 
@@ -41,12 +42,39 @@ type SavedLocation = EditableCustomerLocation & { archivedAt: Date | null };
 
 const ICON_SIZE = 16;
 
-const ONLY_ACTIVE_REASON = "This is the only active location, so it cannot be archived. Add or restore another location first.";
 const ARCHIVED_HINT = "Pickers hide these. Existing orders keep them. Restore a location to edit it.";
 
+/** Why a refused delete was archived instead: order blockers carry `orderCodes`; the storage-site refusal carries none. */
+const usedByPhrase = (refusal: unknown) =>
+  isActionError(refusal) && refusal.issues.some((issue) => issue.meta && "orderCodes" in issue.meta)
+    ? "used by orders"
+    : "a registered storage site";
+const archivedInsteadMessage = (name: string, refusal: unknown) => {
+  const reason = usedByPhrase(refusal);
+  return `${name} is ${reason}, so it was archived. Restore it from Archived locations.`;
+};
+
 /** An in-use refusal for the only active location: neither Delete nor Archive can work yet. */
-const onlyActiveInUseMessage = (name: string) =>
-  `${name} cannot be deleted because orders use it, and it cannot be archived because it is the only active location. Add another location first, then archive this one.`;
+const onlyActiveInUseMessage = (name: string, refusal: unknown) =>
+  `${name} cannot be deleted because it is ${usedByPhrase(refusal)}, and it cannot be archived because it is the only active location. Add or restore another location first, then delete this one again to archive it.`;
+
+/**
+ * The automatic archive after a refused delete failed: lead with the delete, then the next step.
+ * A server refusal (e.g. another operator left this the only active location) carries its own
+ * reason and next step, so it is shown as is; only an unexplained failure suggests a retry.
+ */
+const archiveFailedMessage = (name: string, refusal: unknown, archiveError: unknown) => {
+  const notDeleted = `${name} was not deleted because it is ${usedByPhrase(refusal)}, and it could not be archived`;
+  if (getStaleVersionConflict(archiveError)) return `${notDeleted} because it changed since the list loaded. Review it, then delete it again.`;
+  return isActionError(archiveError) ? `${notDeleted}. ${archiveError.message}` : `${notDeleted}. Try deleting it again.`;
+};
+
+const DELETE_CONFIRM_BASE = "Are you sure you want to delete this location?";
+/** An active location with another active one is archived when in use; any other row has no archive to fall back on. */
+const deleteConfirmMessage = (archivesWhenUsed: boolean) =>
+  archivesWhenUsed
+    ? `${DELETE_CONFIRM_BASE} A location that is in use is archived instead, and you can restore it. A location nothing uses is deleted for good.`
+    : `${DELETE_CONFIRM_BASE} This action cannot be undone.`;
 
 /**
  * Second line of a saved location row: the site description and the position,
@@ -68,7 +96,7 @@ function formatSavedLocationSummary({
   return parts.length > 0 ? parts.join(", ") : MISSING_VALUE.notRecorded;
 }
 
-function LocationIdentity({ location, hint }: { location: SavedLocation; hint?: ReactNode }) {
+function LocationIdentity({ location }: { location: SavedLocation }) {
   return (
     <div className="flex items-center gap-10 min-w-0">
       <MapPinIcon size={ICON_SIZE} className="shrink-0 text-[var(--color-text-tertiary)]" />
@@ -76,7 +104,6 @@ function LocationIdentity({ location, hint }: { location: SavedLocation; hint?: 
         <p className="body-small font-medium flex items-center gap-8 min-w-0">
           <span className="truncate">{location.name}</span>
           {location.isDefault ? <DefaultLocationBadge /> : null}
-          {hint}
         </p>
         <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
           {formatSavedLocationSummary(location)}
@@ -97,8 +124,9 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
   const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState<SavedLocation | null>(null);
   const [deletingLocation, setDeletingLocation] = useState<SavedLocation | null>(null);
-  const [deleteConflict, setDeleteConflict] = useState<SavedLocation | null>(null);
-  // The only active location, refused as in use: the dialog explains and offers no Archive.
+  // A used location that cannot be archived (the only active one, or already archived): the dialog explains and offers no Archive.
+  const [deleteConflict, setDeleteConflict] = useState<{ location: SavedLocation; refusal: unknown } | null>(null);
+  // The last restore, or automatic archive, that failed: shown in the sheet, or in the in-use dialog while it is open.
   const [lifecycleError, setLifecycleError] = useState<string | null>(null);
 
   const { data: locations, isLoading, isError } = useCustomerLocations(customerId);
@@ -108,12 +136,8 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
 
   const activeLocations = (locations ?? []).filter((location) => !location.archivedAt);
   const archivedLocations = (locations ?? []).filter((location) => location.archivedAt);
-  // The last active location cannot be archived: a customer always keeps one
-  // destination for new orders. The reason shows before anyone clicks.
+  // The last active location cannot be archived: a customer always keeps one destination for new orders.
   const isOnlyActive = activeLocations.length === 1;
-  // A later delete or archive can leave the refused location the only active one; the Archive action then gives way to the row's reason.
-  // One refusal dialog whose Archive comes and goes with eligibility, so a hidden refusal can never reopen later.
-  const canArchiveConflict = !!deleteConflict && !isOnlyActive && activeLocations.some((location) => location.id === deleteConflict.id);
 
   useLocationEditIntent(locations, (location) => {
     // An archived location is read-only: restore it before editing.
@@ -130,18 +154,6 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
     if (warnings?.length) toast.warning(warnings.join(" "));
   };
 
-  const handleArchive = async (location: SavedLocation) => {
-    setLifecycleError(null);
-    try {
-      const saved = await archiveLocation.mutateAsync({ locationId: location.id, expectedVersion: currentVersion(location) });
-      setDeleteConflict(null);
-      toast.success(`${location.name} archived. Restore it from Archived locations.`);
-      showWarnings(saved?.warnings);
-    } catch (error) {
-      setLifecycleError(toArchiveRestoreErrorMessage(error, `Location ${location.name}`, "archive", "The location was not archived. Try again."));
-    }
-  };
-
   const handleRestore = async (location: SavedLocation) => {
     setLifecycleError(null);
     try {
@@ -150,6 +162,25 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
       showWarnings(saved?.warnings);
     } catch (error) {
       setLifecycleError(toArchiveRestoreErrorMessage(error, `Location ${location.name}`, "restore", "The location was not restored. Try again."));
+    }
+  };
+
+  // A used location is archived in the same step, so Delete stays the only action.
+  // An archived one, or the only active one, cannot be archived: the in-use dialog explains.
+  const archiveInstead = async (target: SavedLocation, refusal: unknown) => {
+    const row = locations?.find((candidate) => candidate.id === target.id);
+    if (target.archivedAt || row?.archivedAt || isOnlyActive) {
+      setDeleteConflict({ location: target, refusal });
+      return;
+    }
+    try {
+      // The version the operator confirmed: the server just matched it before refusing the delete as in use, so it is current.
+      // (The render's list is stale inside this handler, so it is not re-read here.)
+      const saved = await archiveLocation.mutateAsync({ locationId: target.id, expectedVersion: target.version });
+      toast.success(archivedInsteadMessage(target.name, refusal));
+      showWarnings(saved?.warnings);
+    } catch (error) {
+      setLifecycleError(archiveFailedMessage(target.name, refusal, error));
     }
   };
 
@@ -165,14 +196,13 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
       showWarnings(deleted?.warnings);
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Location ${target.name}`, "Location was not deleted. Try again.");
-      setDeletingLocation(null);
       if (isInUseDeleteRefusal(error)) {
-        // In use: the delete dialog gives way to the in-use dialog. It offers Archive
-        // only while archiving can work: never for an archived location, and not for
-        // the only active location.
-        setDeleteConflict(target);
+        // Stay open and busy through the archive; it settles, or hands over to the Close-only dialog.
+        await archiveInstead(target, error);
+        setDeletingLocation(null);
         return;
       }
+      setDeletingLocation(null);
       toast.error(message);
     }
   };
@@ -207,10 +237,7 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
           <div className="flex flex-col gap-8">
             {activeLocations.map((loc) => (
               <div key={loc.id} className={`${ROW_CLASS} bg-[var(--color-surface-light)]`}>
-                <LocationIdentity
-                  location={loc}
-                  hint={isOnlyActive ? <InfoHint label="Why Archive is unavailable">{ONLY_ACTIVE_REASON}</InfoHint> : null}
-                />
+                <LocationIdentity location={loc} />
                 <div className="flex shrink-0 items-center gap-12">
                   <Button
                     variant="noOutline"
@@ -222,16 +249,6 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
                     aria-label={`Edit ${loc.name || loc.country}`}
                   >
                     <PencilIcon size={ICON_SIZE} />
-                  </Button>
-                  <Button
-                    variant="noOutline"
-                    {...ICON_BUTTON_TOUCH_PROPS}
-                    onClick={() => handleArchive(loc)}
-                    disabled={isOnlyActive || archiveLocation.isPending}
-                    aria-description={isOnlyActive ? ONLY_ACTIVE_REASON : undefined}
-                    aria-label={`Archive ${loc.name || loc.country}`}
-                  >
-                    <ArchiveIcon size={ICON_SIZE} />
                   </Button>
                   <Button
                     variant="destructive"
@@ -294,16 +311,16 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
 
       {deleteConflict && (
         <InUseDeleteDialog
-          label={deleteConflict.name}
-          onArchive={canArchiveConflict ? () => handleArchive(deleteConflict) : undefined}
+          label={deleteConflict.location.name}
           onClose={() => {
             setDeleteConflict(null);
             setLifecycleError(null);
           }}
-          isPending={archiveLocation.isPending}
           errorMessage={lifecycleError}
         >
-          {canArchiveConflict || deleteConflict.archivedAt ? undefined : <p>{onlyActiveInUseMessage(deleteConflict.name)}</p>}
+          {deleteConflict.location.archivedAt ? undefined : (
+            <p>{onlyActiveInUseMessage(deleteConflict.location.name, deleteConflict.refusal)}</p>
+          )}
         </InUseDeleteDialog>
       )}
 
@@ -320,10 +337,10 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
       <DeleteConfirmDialog
         isOpen={!!deletingLocation}
         title="Delete location"
-        message="Are you sure you want to delete this location? This action cannot be undone."
+        message={deleteConfirmMessage(!!deletingLocation && !deletingLocation.archivedAt && !isOnlyActive)}
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeletingLocation(null)}
-        isPending={deleteLocation.isPending}
+        isPending={deleteLocation.isPending || archiveLocation.isPending}
       />
     </FormSection>
   );
