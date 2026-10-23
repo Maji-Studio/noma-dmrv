@@ -310,3 +310,12 @@ it.each([false, true])("reuses one correction read for all member batches and th
   expect(correctionForRemoval("unrelated", states)).toBeUndefined();
   expect(correctionForRemoval("returned", [{ ...state, correction: { ...correction, windowOpen: false } }])).toBeUndefined();
 });
+
+it("does not recurse into the comparison when correction projections are suppressed", async () => {
+  const contender = { contenderKind: "correction" as const, removalId: "returned", createdAt: "2026-01-01",
+    creditBatchIds: ["one"], window: { start: "2026-01-01", end: "2026-02-01" } };
+  vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([contender]);
+  const loaded = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts, undefined, false);
+  expect(loadRemovalEntryCorrection).not.toHaveBeenCalled();
+  expect(loaded.one.corrections).toBeUndefined();
+});
