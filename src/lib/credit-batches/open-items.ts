@@ -1,3 +1,4 @@
+import { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "./application-mass";
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
@@ -33,10 +34,11 @@ import {
   returnedStatementPhrase,
   comparisonUnavailableClause,
 } from "@/lib/removal-correction-copy";
+import { lateEntryView, waitingDetail, waitingEntryTitle } from "@/lib/certification/late-entry-view";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
 
 // Five kg rounds up to the smallest visible amount at two-decimal tonne precision.
-export const MIN_VISIBLE_NOT_APPLIED_DRY_KG = 5;
+export { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "./application-mass";
 
 /** Overview rows a health check lands on: the Removal template block and the batch details. */
 export const CREDIT_BATCH_TEMPLATE_ROW = ENTITY_FOCUS_TARGETS.removalTemplate;
@@ -177,6 +179,21 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       ...(healthCheck.whyDetail ? { why: healthCheck.whyDetail } : {}),
       target,
     });
+  }
+
+  // An entry that no Removal will report yet.
+  for (const line of input.emissionLines ?? []) {
+    for (const entry of line.entries) {
+      const view = lateEntryView(entry, input.facilityId, { canManage });
+      if (view?.destination.kind !== "waiting" || !entry.occurredOn) continue;
+      const reason = waitingDetail(view.destination.reason, canManage);
+      blocking.push({
+        id: `late-entry:${entry.id ?? `${line.componentId}:${entry.occurredOn}`}`,
+        title: waitingEntryTitle(line.displayName, entry.occurredOn),
+        detail: view.recordedAfter ? `Recorded after ${view.recordedAfter.removalCode} was sent. ${reason}` : reason,
+        target: view.destination.action ? { href: view.destination.action.href } : null,
+      });
+    }
   }
 
   for (const key of new Set(input.health?.documentWarnings ?? [])) {

@@ -119,7 +119,6 @@ export function InviteMemberDialog({
           isSubmitting={inviteMember.isPending}
           errorMessage={serverError}
           submitLabel="Send invitation"
-          submittingLabel="Sending…"
           onCancel={onClose}
           guardDialogCancel
           sticky={false}

@@ -32,10 +32,6 @@ const KEYED = [
   "quick-add#createStorageLocationFn",
   "emission-entries#createEmissionEntryFn",
   API_KEY_ACTION,
-];
-
-// Creates not yet keyed; see docs/open-questions.md. Wiring and client checks apply only to KEYED.
-const PENDING = [
   "storage-locations#createStorageLocationFn",
   "facilities#createFacilityFn",
   "reactors#createReactorFn",
@@ -283,7 +279,7 @@ const actions = new Map<string, Action>(fnFiles.filter(isServerModule).flatMap(s
   [...exportedActions(source)].map(([name, fn]) => [`${moduleName(source.fileName)}#${name}`, fn] as const)));
 
 it("classifies every create candidate exactly once and rejects stale entries", () => {
-  const entries = [...KEYED, ...PENDING, ...Object.keys(EXCEPTION), ...Object.keys(NOT_CREATE)];
+  const entries = [...KEYED, ...Object.keys(EXCEPTION), ...Object.keys(NOT_CREATE)];
   expect(entries.filter((entry, index) => entries.indexOf(entry) !== index)).toEqual([]);
   expect(entries.filter(entry => !actions.has(entry)), "Stale inventory entries").toEqual([]);
   expect([...actions.keys()].filter(identity => !NON_CREATE_VERBS.test(identity.split("#")[1]) && !entries.includes(identity)), "Unclassified exports").toEqual([]);

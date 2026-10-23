@@ -8,7 +8,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { activityEvents, certificationSubmissions, certifierProjects, creditBatches, emissionEntries, emissionEntryValues, productionRuns, samples,
+import { activityEvents, certificationSubmissions, certifierProjects, creditBatches, emissionEntries, emissionEntryValues, productionProcesses, productionRuns, samples,
   removalTemplateObservations, users } from "@/db/schema";
 import { makeRemoteStatement } from "./fixtures/isometric-ghg-statement";
 import { createLineageFixture, cleanupLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
@@ -22,6 +22,7 @@ import type { IsometricClient } from "@/lib/isometric/client";
 import type { IsometricComponentBlueprint } from "@/lib/isometric";
 import type { GhgEntryTemplate } from "@/lib/isometric/template-observations";
 import { insertDocument } from "@/data-access/documents";
+import { recordEmissionZeros } from "@/data-access/emission-zeros";
 import { createEmissionEntry } from "@/data-access/emission-entries";
 import { withGhgVerifierSubmissionLock } from "@/data-access/ghg-verifier-submission-lock";
 import * as sources from "@/fn/certification/source-candidates";
@@ -174,4 +175,38 @@ it("says unavailable everywhere when a blocker stops the compile, and the guard 
   expect(await loadRemovalEntryCorrection(org, f.removalId)).toMatchObject({ comparison: "unavailable", message: NOTICE_UNAVAILABLE,
     unavailableMessages: ["Add a file for each emissions entry with a value."] });
   await expect(guard()).rejects.toThrow(/noma could not compare Removal .* with what it sent/);
+});
+
+it("says unchanged everywhere for a returned receiving Removal that sent an entry carried from another batch", async () => {
+  const f = fixture!;
+  const origin = await createLineageFixture("none");
+  try {
+    // The origin batch lives at the receiving facility and uses the same template, like a late entry carried forward.
+    const [{ id: processId }] = await db.insert(productionProcesses).values({ organizationId: org.organizationId,
+      facilityId: f.facilityId, feedstockTypeId: origin.feedstockTypeId }).returning({ id: productionProcesses.id });
+    await db.update(creditBatches).set({ facilityId: f.facilityId, productionProcessId: processId, removalTemplateId: observation!.externalTemplateId })
+      .where(and(eq(creditBatches.organizationId, org.organizationId), eq(creditBatches.id, origin.batchId)));
+    await db.update(emissionEntries).set({ creditBatchId: origin.batchId }).where(and(eq(emissionEntries.organizationId, org.organizationId), eq(emissionEntries.id, sentEntryId)));
+    // The receiving batch has no own entry, so it confirmed a zero for the line, as an operator would before sending a carried entry.
+    await recordEmissionZeros(org, { removalId: f.removalId, creditBatchId: f.batchId, componentIds: ["line"] });
+    // What the Removal sent is what the compile produces now that the sent entry belongs to the origin batch.
+    const baseline = await compileRemovalCorrectionContent(org, f.removalId, observation!);
+    expect(baseline).toMatchObject({ entryContributions: [expect.objectContaining({ componentId: "line" })] });
+    // The sent snapshot is frozen, so the Removal's submission is replaced by one that sent the carried entry.
+    await db.delete(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, org.organizationId),
+      eq(certificationSubmissions.localEntityId, f.removalId), eq(certificationSubmissions.submissionType, "removal")));
+    await db.insert(certificationSubmissions).values({ organizationId: org.organizationId, provider: "isometric", localEntityType: "removal",
+      localEntityId: f.removalId, submissionType: "removal", status: "submitted", version: 1, submittedAt: new Date("2026-06-17"),
+      externalId: "original", payloadHash: "original", payloadSnapshot: { semantic: baseline, templateObservationId: observation!.id, frozenEntrySet: [] } });
+
+    expect(await compareRemovalCurrentContent(org, f.removalId)).toMatchObject({ kind: "unchanged", state: { comparison: "unchanged", correctionNeeded: false } });
+    expect(await loadRemovalEntryCorrection(org, f.removalId)).toMatchObject({ windowOpen: true, correctionNeeded: false, comparison: "unchanged" });
+    await expect(guard()).resolves.toBeUndefined();
+  } finally {
+    await db.update(emissionEntries).set({ creditBatchId: f.batchId }).where(and(eq(emissionEntries.organizationId, org.organizationId), eq(emissionEntries.id, sentEntryId)));
+    await db.update(creditBatches).set({ facilityId: origin.facilityId, productionProcessId: origin.productionProcessId, removalTemplateId: null })
+      .where(and(eq(creditBatches.organizationId, org.organizationId), eq(creditBatches.id, origin.batchId)));
+    await db.delete(productionProcesses).where(and(eq(productionProcesses.organizationId, org.organizationId), eq(productionProcesses.facilityId, f.facilityId), eq(productionProcesses.feedstockTypeId, origin.feedstockTypeId)));
+    await cleanupLineageFixture(origin);
+  }
 });
