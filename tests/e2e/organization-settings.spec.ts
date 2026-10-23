@@ -118,6 +118,8 @@ test.describe("Organization foundation UI", () => {
       .filter({ hasText: INVITEE_EMAIL });
 
     try {
+      // CI has no Resend keys, so the email is not sent: the notice says so and keeps the link.
+      await expect(page.getByText(`The email to ${INVITEE_EMAIL} did not send`)).toBeVisible();
       await expect(shareLinkInput).toBeVisible();
       await expect(shareLinkInput).toHaveValue(
         /^https?:\/\/.+\/accept-invitation\/.+/,
