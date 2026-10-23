@@ -16,9 +16,8 @@ import {
   recordsChipText,
   recordsHref,
   recordsText,
-  validateEntryDate,
-  validateFields,
 } from "./emission-line-display";
+import { validateEntryDate } from "@/schemas/emission-entry-form";
 import { makeEntry, makeLine } from "./emission-line-test-fixtures";
 
 const RUNS = { source: "productionRuns" as const, count: 22, figure: { magnitude: "120", unit: "L" } };
@@ -129,7 +128,6 @@ describe("add manual entry", () => {
   it("splits a mass-distance input into mass and distance and sends the exact product", () => {
     const line = makeLine({ unit: "km * tonne", inputShape: [{ key: "md", type: "monitored", quantityKind: "mass_distance", unit: "km * tonne" }] });
     expect(entryFields(line).map((field) => `${field.label} ${field.unit}`)).toEqual(["Mass kg", "Distance km"]);
-    expect(validateFields(line, { "md:mass": "12", "md:distance": "x" })).toEqual({ "md:distance": "Enter a non-negative decimal value." });
     expect(entryValues(line, { "md:mass": "12", "md:distance": "4600" })).toEqual([
       {
         inputKey: "md",

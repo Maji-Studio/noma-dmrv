@@ -21,7 +21,7 @@ import { FormField } from "@/components/forms/form-field";
 import { FormTextarea } from "@/components/forms/form-textarea";
 import { InfoHint } from "@/components/ui/tooltip";
 import { emissionsBatchHref } from "@/components/emissions/emissions-overview-query";
-import { MAX_NOTE_LENGTH } from "@/components/emissions/emission-line-display";
+import { MAX_NOTE_LENGTH } from "@/schemas/emission-entry-form";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { formatDateRange, formatFacilityDateTime } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
