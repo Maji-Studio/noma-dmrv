@@ -60,6 +60,10 @@ jobs:
       STORAGE_REGION: us-east-1
       STORAGE_ACCESS_KEY_ID: e2e-build
       STORAGE_SECRET_ACCESS_KEY: e2e-build-placeholder
+      # Only satisfy the production email gate; sends fail closed (invite UI reports "did not send").
+      RESEND_API_KEY: re_e2e_build_placeholder
+      RESEND_FROM_EMAIL: "noma e2e <noreply@example.com>"
+      RESEND_REPLY_TO: support@example.com
       ISOMETRIC_ENVIRONMENT: sandbox
       ISOMETRIC_DEMO_FACILITY_ID: ${{ vars.ISOMETRIC_DEMO_FACILITY_ID }}
       # Bootstrap admin for db:ensure-admin. The same command seeds the default

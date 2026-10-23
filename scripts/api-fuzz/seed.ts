@@ -52,7 +52,7 @@ async function main(): Promise<void> {
   const outputPath = resolve(args[0]);
   const { db } = await import("@/db");
   const { organizations, users, members, facilities } = await import("@/db/schema");
-  const { createFacility } = await import("@/data-access/facilities");
+  const { createFacilityInTransaction } = await import("@/data-access/facility-mutations");
   const { createDriver, createVehicle } = await import("@/data-access/quick-add");
   const { feedstockEtag } = await import("@/lib/api/representation-etags");
   const { runOperation: runWithOptions } = await import("@/lib/operations/runner");
@@ -60,11 +60,11 @@ async function main(): Promise<void> {
   const { logFeedstockDelivery } = await import("@/lib/operations/feedstocks");
   const { formatFacilityDate } = await import("@/lib/date-utils");
   const { seedParties } = await import("./seed-parties");
-  const { createFeedstockType } = await import("@/data-access/feedstock-types");
-  const { createReactor } = await import("@/data-access/reactors");
+  const { createFeedstockTypeInTransaction } = await import("@/data-access/feedstock-types");
+  const { createReactorInTransaction } = await import("@/data-access/reactors");
   const { startProductionRun, updateProductionRun } = await import("@/lib/operations/production-runs");
   const { productionRunEtag } = await import("@/lib/api/representation-etags");
-  const { createStorageLocation } = await import("@/data-access/storage-locations");
+  const { createStorageLocationInTransaction } = await import("@/data-access/storage-locations");
   const { seedFormulations } = await import("./seed-formulations");
   const { readApiBiocharProduct } = await import("@/lib/read-models/api-biochar-products");
   const { makeBiocharProduct } = await import("@/lib/operations/biochar-products");
@@ -94,26 +94,26 @@ async function main(): Promise<void> {
   });
   const ctx = { organizationId, userId, orgRole: "admin" as const, isPlatformAdmin: false };
   // A 200-year facility. Mean R0 and TGA are optional for Samples at either tier.
-  const facility = await createFacility(ctx, {
+  const facility = await db.transaction((tx) => createFacilityInTransaction(ctx, tx, {
     ...TEST_SITE_POSITION, code: "FUZZ-FAC", name: FIXTURE_LABEL, country: "FR", timezone: FACILITY_TIME_ZONE,
     durabilityOption: "200_year",
-  });
+  }));
   const { supplier, supplierLocation, customer, customerLocation, fields: partyFields } = await seedParties(ctx, facility.id);
-  const feedstockType = await createFeedstockType(ctx, {
+  const feedstockType = await db.transaction((tx) => createFeedstockTypeInTransaction(ctx, tx, {
     code: "FUZZ-WOOD", name: FIXTURE_LABEL, category: "forestry", usage: "pyrolysis",
-  });
-  const bin = await createStorageLocation(ctx, {
+  }));
+  const bin = await db.transaction((tx) => createStorageLocationInTransaction(ctx, tx, {
     code: "FUZZ-BIN", name: FIXTURE_LABEL, type: "feedstock_bin",
     facilityId: facility.id, feedstockTypeId: feedstockType.id,
-  });
+  }));
   // The run draws from its own bin so the feedstock cases keep their stock.
-  const runBin = await createStorageLocation(ctx, {
+  const runBin = await db.transaction((tx) => createStorageLocationInTransaction(ctx, tx, {
     code: "FUZZ-RUN-BIN", name: `${FIXTURE_LABEL} run bin`, type: "feedstock_bin",
     facilityId: facility.id, feedstockTypeId: feedstockType.id,
-  });
-  const reactor = await createReactor(ctx, {
+  }));
+  const reactor = await db.transaction((tx) => createReactorInTransaction(ctx, tx, {
     code: "FUZZ-RX", identifier: "FUZZ-RX-1", facilityId: facility.id, reactorType: "fixed-bed",
-  });
+  }));
   const driver = await createDriver(ctx, { code: "FUZZ-DRV", name: FIXTURE_LABEL });
   const vehicle = await createVehicle(ctx, { code: "FUZZ-VEH", name: FIXTURE_LABEL, vehicleType: "truck" });
   const intake = await runOperation(logFeedstockDelivery, ctx, {
@@ -145,12 +145,12 @@ async function main(): Promise<void> {
     endTime: new Date(now - SEEDED_RUN_END_HOURS_AGO * MS_PER_HOUR).toISOString(),
   })).data;
   // Biochar side. Bin and formulation names are unique per facility.
-  const biocharBin = await createStorageLocation(ctx, {
+  const biocharBin = await db.transaction((tx) => createStorageLocationInTransaction(ctx, tx, {
     code: "FUZZ-BC-BIN", name: `${FIXTURE_LABEL} biochar bin`, type: "biochar_bin", facilityId: facility.id,
-  });
-  const productBin = await createStorageLocation(ctx, {
+  }));
+  const productBin = await db.transaction((tx) => createStorageLocationInTransaction(ctx, tx, {
     code: "FUZZ-PB-BIN", name: `${FIXTURE_LABEL} product bin`, type: "product_bin", facilityId: facility.id,
-  });
+  }));
   const outputRun = (await runOperation(startProductionRun, ctx, {
     facilityId: facility.id, reactorId: reactor.id, status: "complete",
     startTime: new Date(now - OUTPUT_RUN_START_HOURS_AGO * MS_PER_HOUR).toISOString(),

@@ -1,6 +1,7 @@
 import { isOAuthProductionOrigin, oauthClientIdsSchema } from "./oauth-env-validation";
 import {
   emptyToUndefined,
+  fromEmailSchema,
   isHermeticCiBuildFor,
   isometricAccessTokenSchema,
   isometricClientSecretSchema,
@@ -53,10 +54,10 @@ const envSchema = z.object({
 
   // Email (optional for local development)
   RESEND_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
-  RESEND_FROM_EMAIL: z.preprocess(
-    emptyToUndefined,
-    z.string().email().optional()
-  ),
+  // A bare address or the display-name form `noma <noreply@example.com>`.
+  RESEND_FROM_EMAIL: z.preprocess(emptyToUndefined, fromEmailSchema.optional()),
+
+  RESEND_REPLY_TO: z.preprocess(emptyToUndefined, z.email().optional()),
 
   OAUTH_PROVIDER_ENABLED: z.enum(["true", "false"]).default("false").transform(value => value === "true"),
   OAUTH_CIMD_CLIENT_IDS: oauthClientIdsSchema,
@@ -232,6 +233,18 @@ const envSchema = z.object({
       path: ["API_FUZZ_DISABLE_RATE_LIMIT"],
       message: "API_FUZZ_DISABLE_RATE_LIMIT requires NOMA_HERMETIC_CI=true in CI with an HTTP(S) loopback app URL.",
     });
+  }
+
+  if (data.NODE_ENV === "production" && !isHermeticCiBuild) {
+    const missing = (["RESEND_API_KEY", "RESEND_FROM_EMAIL", "RESEND_REPLY_TO"] as const)
+      .filter((key) => !data[key]);
+    if (missing.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["RESEND_API_KEY"],
+        message: `Production email delivery requires: ${missing.join(", ")}`,
+      });
+    }
   }
 
   if (data.NODE_ENV === "production" && !isHermeticCiBuild && !data.CRON_SECRET) {

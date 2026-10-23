@@ -3,16 +3,12 @@
  * (and Platform Admins). Invite by email (in a dialog), manage roles, remove members, and
  * revoke pending invitations. Read-only members see the roster without controls.
  *
- * Invitation delivery is best-effort email; the reliable path is the copyable
- * accept link surfaced here after an invite is created.
+ * After an invite is created the pane says whether the email went out and keeps
+ * the accept link copyable.
  */
 "use client";
 
 import { useState } from "react";
-import {
-  CheckCircleIcon,
-  CopyIcon,
-} from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
@@ -21,6 +17,7 @@ import { FormSelect } from "@/components/forms/form-select";
 import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
+import { InvitationLinkNotice, type InvitationDelivery } from "./invitation-link-notice";
 import {
   useChangeMemberRole,
   useOrgInvitations,
@@ -51,8 +48,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
   const removeMember = useRemoveMember();
   const revokeInvitation = useRevokeInvitation();
 
-  const [lastInviteLink, setLastInviteLink] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [lastInvitation, setLastInvitation] = useState<InvitationDelivery | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [removingMember, setRemovingMember] = useState<{
     memberId: string;
@@ -62,17 +58,6 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
     id: string;
     email: string;
   } | null>(null);
-
-  async function copyLink() {
-    if (!lastInviteLink) return;
-    try {
-      await navigator.clipboard.writeText(lastInviteLink);
-      setCopied(true);
-      toast.success("Invitation link copied.");
-    } catch {
-      toast.error("The invitation link was not copied. Select and copy it manually.");
-    }
-  }
 
   async function onChangeRole(memberId: string, role: string) {
     try {
@@ -132,27 +117,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
 
   return (
     <div className="flex flex-col gap-32">
-      {canManage && lastInviteLink && (
-        <Notice tone="success" title="Share this link with the invitee">
-          <div className="mt-8 flex items-center gap-8">
-            <input
-              readOnly
-              value={lastInviteLink}
-              aria-label="Invitation link"
-              onFocus={(e) => e.currentTarget.select()}
-              className="min-w-0 flex-1 border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] px-8 py-6 body-caption font-mono"
-            />
-            <Button type="button" variant="weak" size="small" onClick={copyLink}>
-              {copied ? (
-                <CheckCircleIcon size={16} weight="fill" />
-              ) : (
-                <CopyIcon size={16} />
-              )}
-              {copied ? "Copied" : "Copy"}
-            </Button>
-          </div>
-        </Notice>
-      )}
+      {canManage && lastInvitation && <InvitationLinkNotice key={lastInvitation.acceptUrl} invitation={lastInvitation} />}
 
       {/* The roster. Named "Current members" rather than "Members" because the
           pane it sits in is already titled Members. The invite button sits in
@@ -271,10 +236,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
         <InviteMemberDialog
           isOpen
           onClose={() => setInviteOpen(false)}
-          onInvited={(acceptUrl) => {
-            setLastInviteLink(acceptUrl);
-            setCopied(false);
-          }}
+          onInvited={setLastInvitation}
         />
       )}
       <DeleteConfirmDialog
