@@ -17,7 +17,9 @@ const emailMutation = vi.hoisted(() => ({ mutateAsync: vi.fn(), isPending: false
 const toast = vi.hoisted(() => ({ success: vi.fn(), warning: vi.fn() }));
 
 vi.mock("@/components/auth/sign-out-and-return", () => ({
-  SignOutAndReturn: ({ children }: { children: ReactNode }) => <button type="button">{children}</button>,
+  SignOutAndReturn: ({ children, returnTo }: { children: ReactNode; returnTo: string }) => (
+    <button type="button" data-return-to={returnTo}>{children}</button>
+  ),
 }));
 vi.mock("@/hooks/use-profile", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/hooks/use-profile")>()),
@@ -33,8 +35,9 @@ vi.mock("@/components/ui/tooltip", () => ({
 
 const NAME = "Example Operator";
 const EMAIL = "operator@example.com";
+const NEW_EMAIL = /^New email/;
 
-function type(label: string, value: string) {
+function type(label: string | RegExp, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
 
@@ -51,30 +54,30 @@ describe("ProfileSettingsPane", () => {
     render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
     expect(screen.getByText(EMAIL)).toBeTruthy();
     expect(screen.queryByDisplayValue(EMAIL)).toBeNull();
-    expect((screen.getByLabelText("New email") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText(NEW_EMAIL) as HTMLInputElement).value).toBe("");
   });
 
   it("asks for a link and shows the change as pending until it is opened", async () => {
     render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
-    type("New email", "new@example.com");
+    type(NEW_EMAIL, "new@example.com");
     fireEvent.click(screen.getByRole("button", { name: "Send link" }));
 
     await waitFor(() => expect(emailMutation.mutateAsync).toHaveBeenCalledWith({ newEmail: "new@example.com" }));
     expect(
       await screen.findByText(
-        `We sent a link to new@example.com. Your email changes when you open it. Until then, keep signing in with ${EMAIL}.`,
+        "We sent a link to new@example.com. Your email changes when you open it.",
       ),
     ).toBeTruthy();
     expect(screen.getByText(EMAIL)).toBeTruthy();
-    expect((screen.getByLabelText("New email") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText(NEW_EMAIL) as HTMLInputElement).value).toBe("");
   });
 
   it("accepts a second address after the first link was sent", async () => {
     render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
-    type("New email", "new@example.com");
+    type(NEW_EMAIL, "new@example.com");
     fireEvent.click(screen.getByRole("button", { name: "Send link" }));
     await screen.findByText(/We sent a link to new@example.com/);
-    type("New email", "other@example.com");
+    type(NEW_EMAIL, "other@example.com");
     fireEvent.click(screen.getByRole("button", { name: "Send link" }));
 
     await waitFor(() => expect(emailMutation.mutateAsync).toHaveBeenLastCalledWith({ newEmail: "other@example.com" }));
@@ -83,7 +86,7 @@ describe("ProfileSettingsPane", () => {
 
   it("refuses the current address, in any case, before calling the server", async () => {
     render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
-    type("New email", "Operator@Example.com");
+    type(NEW_EMAIL, "Operator@Example.com");
     fireEvent.click(screen.getByRole("button", { name: "Send link" }));
 
     expect((await screen.findAllByText("Enter an address different from your current email.")).length).toBeGreaterThan(0);
@@ -92,7 +95,7 @@ describe("ProfileSettingsPane", () => {
 
   it("refuses an invalid address before calling the server", async () => {
     render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
-    type("New email", "not-an-email");
+    type(NEW_EMAIL, "not-an-email");
     fireEvent.click(screen.getByRole("button", { name: "Send link" }));
 
     expect((await screen.findAllByText("Enter a valid email address.")).length).toBeGreaterThan(0);
@@ -102,19 +105,44 @@ describe("ProfileSettingsPane", () => {
   it("asks an old session to sign out and in again", async () => {
     emailMutation.mutateAsync.mockRejectedValue(new EmailChangeError("Session expired", true));
     render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
-    type("New email", "new@example.com");
+    type(NEW_EMAIL, "new@example.com");
     fireEvent.click(screen.getByRole("button", { name: "Send link" }));
 
     expect(await screen.findByText("Your sign-in is too old to change your email.")).toBeTruthy();
-    expect(screen.getByText(/Sign out, sign in again, then retry\./)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(screen.getByText(/Sign out and sign in again, then try again\./)).toBeTruthy();
+    const signOut = screen.getByRole("button", { name: "Sign out" });
+    expect(signOut.getAttribute("data-return-to")).toBe("/login?from=%2Fsettings%2Fprofile");
     expect(screen.queryByText(/We sent a link/)).toBeNull();
+  });
+
+  it("marks the new email field as required", () => {
+    render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
+    expect(screen.getByLabelText(NEW_EMAIL).closest("div")?.textContent).toMatch(/Required/);
+  });
+
+  it.each(["TOKEN_EXPIRED", "INVALID_TOKEN", "USER_NOT_FOUND", "INVALID_USER"])(
+    "explains a failed link (%s) and offers a new one",
+    (code) => {
+      render(<ProfileSettingsPane name={NAME} email={EMAIL} linkError={code} />);
+      expect(screen.getByText("This link expired or was already used. Send a new one.")).toBeTruthy();
+    },
+  );
+
+  it("asks to open the link again after a sign-in is required", () => {
+    render(<ProfileSettingsPane name={NAME} email={EMAIL} linkError="SIGN_IN_REQUIRED" />);
+    expect(screen.getByText(/Open the link again now that you are signed in/)).toBeTruthy();
+  });
+
+  it("ignores an unknown link error code", () => {
+    render(<ProfileSettingsPane name={NAME} email={EMAIL} linkError="SOMETHING_ELSE" />);
+    expect(screen.queryByText(/link expired/)).toBeNull();
+    expect(screen.queryByText(/Open the link again/)).toBeNull();
   });
 
   it("shows a generic error for any other refusal", async () => {
     emailMutation.mutateAsync.mockRejectedValue(new EmailChangeError("Too many requests", false));
     render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
-    type("New email", "new@example.com");
+    type(NEW_EMAIL, "new@example.com");
     fireEvent.click(screen.getByRole("button", { name: "Send link" }));
 
     expect((await screen.findAllByText("Your email was not changed.")).length).toBeGreaterThan(0);

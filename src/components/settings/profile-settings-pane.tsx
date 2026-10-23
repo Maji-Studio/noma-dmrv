@@ -9,6 +9,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useId, useState } from "react";
+import { SETTINGS_PROFILE_HREF } from "@/lib/settings/links";
 import { useForm } from "react-hook-form";
 import {
   FormActions,
@@ -35,9 +36,22 @@ import {
 } from "@/schemas/profile";
 
 const EMAIL_NOTE = "We send a link to the new address. Your email changes when you open it.";
-const EMAIL_SESSION_EXPIRED = "Your sign-in is too old to change your email. Sign out, sign in again, then retry.";
+const EMAIL_SESSION_EXPIRED = "Your sign-in is too old to change your email. Sign out and sign in again, then try again.";
 const EMAIL_NOT_CHANGED = "Your email was not changed. Try again.";
-const SIGN_IN_HREF = "/login";
+/** After a fresh sign-in the person lands back here, where the change was started. */
+const SIGN_IN_HREF = `/login?from=${encodeURIComponent(SETTINGS_PROFILE_HREF)}`;
+const LINK_EXPIRED_CODES = new Set(["TOKEN_EXPIRED", "INVALID_TOKEN", "USER_NOT_FOUND", "INVALID_USER"]);
+const LINK_SIGN_IN_REQUIRED_CODE = "SIGN_IN_REQUIRED";
+const LINK_EXPIRED_NOTICE = "This link expired or was already used. Send a new one.";
+const LINK_SIGN_IN_NOTICE = "Open the link again now that you are signed in. It works only for the account that asked for the change.";
+
+/** The confirmation link's failure code (`?error=`) as a message. Unknown codes show nothing. */
+function linkErrorNotice(code: string | undefined): string {
+  if (code === undefined) return "";
+  if (LINK_EXPIRED_CODES.has(code)) return LINK_EXPIRED_NOTICE;
+  if (code === LINK_SIGN_IN_REQUIRED_CODE) return LINK_SIGN_IN_NOTICE;
+  return "";
+}
 const SIGN_OUT_MINUTES = SESSION_COOKIE_CACHE_SECONDS / 60;
 const PASSWORD_NOTE = `Changing it signs you out on every other device within ${SIGN_OUT_MINUTES} minutes. This one stays signed in.`;
 const PASSWORD_CHANGED = `Password changed. Other devices are signed out within ${SIGN_OUT_MINUTES} minutes.`;
@@ -47,11 +61,20 @@ const EMPTY_PASSWORDS: ChangePasswordFormData = {
   confirmPassword: "",
 };
 
-export function ProfileSettingsPane({ name, email }: { name: string; email: string }) {
+export function ProfileSettingsPane({
+  name,
+  email,
+  linkError,
+}: {
+  name: string;
+  email: string;
+  /** `?error=` from the email change link's redirect. */
+  linkError?: string;
+}) {
   return (
     <div className="content-measure-form flex flex-col gap-32">
       <NameForm name={name} />
-      <EmailForm email={email} />
+      <EmailForm email={email} linkError={linkError} />
       <PasswordForm />
     </div>
   );
@@ -114,7 +137,8 @@ function NameForm({ name }: { name: string }) {
   );
 }
 
-function EmailForm({ email }: { email: string }) {
+function EmailForm({ email, linkError }: { email: string; linkError?: string }) {
+  const linkNotice = linkErrorNotice(linkError);
   const latched = useLatchedSubmit();
   const mutation = useChangeEmail();
   const [serverError, setServerError] = useState("");
@@ -160,12 +184,15 @@ function EmailForm({ email }: { email: string }) {
         <DetailField label="Current email" value={email} />
         {pendingEmail ? (
           <Notice tone="info">
-            {`We sent a link to ${pendingEmail}. Your email changes when you open it. Until then, keep signing in with ${email}.`}
+            {`We sent a link to ${pendingEmail}. Your email changes when you open it.`}
           </Notice>
         ) : (
-          <p className="body-small pb-8 text-[var(--color-text-secondary)]">{EMAIL_NOTE}</p>
+          <>
+            {linkNotice && <Notice tone="warning">{linkNotice}</Notice>}
+            <p className="body-small pb-8 text-[var(--color-text-secondary)]">{EMAIL_NOTE}</p>
+          </>
         )}
-        <FormField id="newEmail" label="New email" error={errors.newEmail?.message}>
+        <FormField id="newEmail" label="New email" required error={errors.newEmail?.message}>
           <FormInput
             id="newEmail"
             type="email"

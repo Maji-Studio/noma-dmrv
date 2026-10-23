@@ -7,6 +7,7 @@
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { AUTH_SIGNED_OUT_STORAGE_KEY, useAuth } from "@/lib/auth/client";
 
 interface SignOutDeps {
@@ -46,7 +47,7 @@ export function SignOutAndReturn({
 }: {
   returnTo: string;
   children: ReactNode;
-  /** Small default button, for actions inside a Notice. */
+  /** Small default button, for actions inside a Notice. A failure shows as a caption, since a Notice may not nest in a Notice. */
   compact?: boolean;
 }) {
   const { signOut } = useAuth();
@@ -70,17 +71,21 @@ export function SignOutAndReturn({
 
   return (
     <>
-      {error && <Notice tone="error">{error}</Notice>}
+      {error && !compact && <Notice tone="error">{error}</Notice>}
       <Button
         type="button"
         variant={compact ? "default" : "primary"}
         size={compact ? "small" : undefined}
+        className={compact ? PHONE_TOUCH_TARGET : undefined}
         width={compact ? undefined : "full"}
         onClick={handleClick}
         busy={pending}
       >
         {children}
       </Button>
+      {error && compact && (
+        <p role="alert" className="caption mt-8 text-[var(--color-text-secondary)]">{error}</p>
+      )}
     </>
   );
 }

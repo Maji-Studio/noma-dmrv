@@ -103,7 +103,7 @@ export async function changePasswordFn(input: unknown) {
 
 function translateEmailError(error: unknown): never {
   if (error instanceof APIError && error.body?.code === "SESSION_EXPIRED") {
-    throw new DomainError("session_expired", "Sign out and sign in again before changing your email.");
+    throw new DomainError("session_expired", "Your sign-in is too old to change your email. Sign out and sign in again, then try again.");
   }
   // Never expose or log upstream messages that may contain email addresses.
   throw new Error("Profile email request failed");

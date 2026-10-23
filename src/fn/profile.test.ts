@@ -160,7 +160,7 @@ describe("changeEmailFn", () => {
   it("translates SESSION_EXPIRED into a typed safe refusal without logging upstream PII", async () => {
     mocks.changeEmail.mockRejectedValue(new APIError("BAD_REQUEST", { code: "SESSION_EXPIRED", message: input.newEmail }));
     expect(await changeEmailFn(input)).toMatchObject({
-      success: false, code: "session_expired", error: "Sign out and sign in again before changing your email.",
+      success: false, code: "session_expired", error: "Your sign-in is too old to change your email. Sign out and sign in again, then try again.",
     });
     expect(mocks.loggerError).not.toHaveBeenCalled();
   });
