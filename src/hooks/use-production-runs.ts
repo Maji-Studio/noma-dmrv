@@ -387,7 +387,8 @@ export function useDeleteProductionRun(
     mutationFn: async (variables: DeleteProductionRunData) => {
       const result = await deleteProductionRunFn(variables);
       if (!result.success) {
-        throwProductionRunActionError(result);
+        // Not an overlap: keep the code, issues and conflict so an in-use refusal is recognised.
+        throwActionError(result);
       }
       return;
     },

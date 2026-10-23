@@ -20,6 +20,14 @@ describe("inUseDeleteRefusal", () => {
     expect(meta).toEqual({ orderCodes: ["ORD-001"], reason: "old" });
   });
 
+  it("keeps an existing certification_locked contract and still detects the reason", () => {
+    const error = inUseDeleteRefusal("Keep this record.", ["orderId"], { code: "certification_locked" });
+    expect(error).toMatchObject({ code: "certification_locked" });
+    expect(error.issues).toEqual([expect.objectContaining({ code: "certification_locked", meta: { reason: "in_use" } })]);
+    expect(isInUseDeleteRefusal(new ActionError({ error: error.message, code: error.code, issues: error.issues }))).toBe(true);
+    expect(isInUseDeleteRefusal(new ActionError({ error: "Locked.", code: "certification_locked", issues: [] }))).toBe(false);
+  });
+
   it("adds the reason when no metadata or conflict is provided", () => {
     const error = inUseDeleteRefusal("Keep this record.", ["locationId"]);
     expect(error.conflict).toBeUndefined();

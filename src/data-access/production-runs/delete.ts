@@ -4,6 +4,7 @@ import type { SnapshotStock } from "../stock-effects";
 import { runReferenceNotFound } from "@/lib/production-run-domain-errors";
 import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
 import { DomainError } from "@/lib/domain-errors";
+import { IN_USE_DELETE_MARKER, inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { db, type DbTransaction } from "@/db";
 import { outputStockRunAllocations, creditBatches, creditBatchProductionRuns, incidentReports, productionRuns, productionRunFeedstockDraws, productionRunFeedstocks, productionRunReadings } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -23,7 +24,8 @@ export class ProductionRunDependencyError extends DomainError {
   readonly conflict: ConflictRef;
 
   constructor(message: string, conflict: ConflictRef) {
-    super("conflict", message, { conflict });
+    const refusal = inUseDeleteRefusal(message, ["productionRunId"], { conflict });
+    super(refusal.code, refusal.message, { conflict, issues: refusal.issues });
     this.name = "ProductionRunDependencyError";
     this.conflict = conflict;
   }
@@ -71,6 +73,7 @@ export async function deleteProductionRunInTransaction(
   const [locked] = await tx
     .select({
       id: productionRuns.id,
+      code: productionRuns.code,
       facilityId: productionRuns.facilityId,
       version: productionRuns.version,
       biocharOutputKg: productionRuns.biocharOutputKg,
@@ -146,7 +149,7 @@ export async function deleteProductionRunInTransaction(
       : { entity: "creditBatch", ...dependentCreditBatch! };
     const conflict = { ...dependent, code: conflictCode(dependent.code) };
     throw new ProductionRunDependencyError(
-      `This production run cannot be deleted because dependent ${dependentKinds.join(" and ")} exist. Remove those records first.`,
+      `Production run ${locked.code} ${IN_USE_DELETE_MARKER} ${dependentKinds.join(" and ")} still use it. Remove those ${dependentKinds.join(" and ")} first, or keep this run.`,
       conflict,
     );
   }

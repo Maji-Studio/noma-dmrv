@@ -50,7 +50,7 @@ const cases: {
   { scenario: "foreign-reference", status: 404, code: "not_found", paths: [["supplierId"]], rowCount: 0, stock: 0, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
   { scenario: "update-validation", status: 422, code: "validation_failed", paths: [["massWetKg"]], rowCount: 1, stock: INTAKE_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
   { scenario: "stale", status: 412, code: "stale_version", paths: [], rowCount: 1, stock: INTAKE_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: NEXT_VERSION, notes: "Saved first" },
-  { scenario: "blocked-delete", status: 409, code: "certification_locked", paths: [], rowCount: 1, stock: INTAKE_WET_KG - DRAW_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
+  { scenario: "blocked-delete", status: 409, code: "certification_locked", paths: [["feedstockId"]], rowCount: 1, stock: INTAKE_WET_KG - DRAW_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
   { scenario: "stock-blocked-delete", status: 409, code: "insufficient_stock", paths: [["storageLocationId"]], rowCount: 1, stock: INTAKE_WET_KG - DRAW_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
 ];
 
@@ -194,6 +194,15 @@ describe("feedstock action, REST and MCP decoded-command parity", { timeout: SUI
     } else {
       const body = await expectFeedstockProblem(rest, testCase.status, testCase.code);
       expect(body.errors.map((issue: { pointer: string }) => pointerPath(issue.pointer))).toEqual(actionPaths);
+      if (testCase.scenario === "blocked-delete") {
+        const message = `Feedstock ${saved!.row.code} was not deleted because production runs still use it. Keep this feedstock.`;
+        expect(action.error).toBe(message);
+        expect(body.detail).toBe(message);
+        expect(mcp.structuredContent.detail).toBe(message);
+        expect(action.issues?.[0].meta).toEqual({ reason: "in_use" });
+        expect(body.errors[0].meta).toEqual({ reason: "in_use" });
+        expect(mcp.structuredContent.issues[0].meta).toEqual({ reason: "in_use" });
+      }
       if (testCase.scenario === "stock-blocked-delete") {
         const meta = { storageLocationId: fixture.binId, availableWetKg: 0, requestedWetKg: DRAW_WET_KG, unit: "kg" };
         expect(action.issues?.[0].meta).toEqual(meta);

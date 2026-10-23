@@ -1,6 +1,8 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { conflictCode } from "@/lib/conflict-ref";
+import { ActionError } from "@/lib/action-error";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
 
 const INITIAL_VERSION = 1;
@@ -60,6 +62,12 @@ vi.mock("@/components/ui/delete-confirm-dialog", () => ({
       </div>
     ) : null,
 }));
+vi.mock("@/components/ui/in-use-delete-dialog", () => ({
+  InUseDeleteDialog: ({ label, children }: { label: string; children?: ReactNode }) => (
+    <div data-testid="in-use-dialog"><b>{label}</b>{children}</div>
+  ),
+  InUseReference: ({ href, code }: { href: string; code: string }) => <a href={href}>{code}</a>,
+}));
 vi.mock("@/components/certification/entity-certify-readiness-badge", () => ({ EntityCertifyReadinessBadge: () => null }));
 vi.mock("./production-run-form", () => ({ ProductionRunForm: () => null }));
 vi.mock("./production-run-read-sections", () => ({ productionRunSheetSections: () => [], RunStatusBadge: () => null }));
@@ -118,3 +126,25 @@ for (const [label, entity, idKey, Component] of [
     });
   });
 }
+
+describe("Production run in-use delete refusal", () => {
+  it("shows the in-use dialog instead of the confirm dialog", async () => {
+    state.remove.mockRejectedValueOnce(new ActionError({
+      error: "Production run RECORD-1 was not deleted because dependent credit batches still use it.",
+      code: "conflict",
+      conflict: { entity: "creditBatch", id: "batch-1", code: conflictCode("CB-1") },
+      issues: [{ path: ["productionRunId"], code: "conflict", message: "in use", meta: { reason: "in_use" } }],
+    }));
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<ProductionRunList />); });
+    try {
+      await act(async () => { renderer.root.findByProps({ "aria-label": "Delete" }).props.onClick(); });
+      await act(async () => { await renderer.root.findByProps({ "aria-label": "Confirm delete" }).props.onClick(); });
+      expect(renderer.root.findAllByProps({ "aria-label": "Confirm delete" })).toHaveLength(0);
+      const dialog = JSON.stringify(renderer.toJSON());
+      expect(dialog).toContain("RECORD-1");
+      expect(dialog).toContain("dependent credit batches still use it");
+      expect(dialog).toContain("/credit-batches/batch-1");
+    } finally { await act(async () => renderer.unmount()); }
+  });
+});

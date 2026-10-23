@@ -11,6 +11,7 @@ import { ArchiveIcon } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms/server-error";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
 
 interface InUseDeleteDialogProps {
   /** Names the row in the title: a code ("BCF-0003") or a name. */
@@ -22,6 +23,15 @@ interface InUseDeleteDialogProps {
   errorMessage?: string | null;
   /** Replaces the default explanation. */
   children?: ReactNode;
+}
+
+/** A record that still uses the row, as a link the operator can open. */
+export function InUseReference({ href, code, kind }: { href: string; code: string; kind: string }) {
+  return (
+    <SheetLinkRows>
+      <SheetLinkRow href={href} primary={code} ariaLabel={`Open ${kind} ${code}`} />
+    </SheetLinkRows>
+  );
 }
 
 export function InUseDeleteDialog({
@@ -39,7 +49,8 @@ export function InUseDeleteDialog({
     <Modal isOpen onClose={onClose} ariaLabelledBy={titleId} ariaDescribedBy={descId} width="md">
       <div className="flex flex-col gap-24">
         <div className="flex flex-col gap-12">
-          <h2 id={titleId} className="title-heading-3">
+          {/* pr-40 keeps the title clear of the Modal's built-in close button. */}
+          <h2 id={titleId} className="title-heading-3 pr-40">
             {`${label} is in use`}
           </h2>
           <div id={descId} className="flex flex-col gap-8 body-medium text-[var(--color-text-secondary)]">

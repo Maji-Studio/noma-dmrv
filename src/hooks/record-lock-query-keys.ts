@@ -1,5 +1,6 @@
 import type { Mutation, QueryClient } from "@tanstack/react-query";
 import { isActionError } from "@/lib/action-error";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import type { RecordLockViewKind } from "@/lib/record-lock-view";
 
 /** Record locks follow almost every write, so one prefix covers every kind. */
@@ -63,7 +64,7 @@ export function invalidateRecordLocksAfter(
   const meta = mutation.meta as ReturnType<typeof recordLockMeta> | undefined;
   const touch = typeof meta?.recordLocks === "function" ? meta.recordLocks(variables) : meta?.recordLocks;
   if (!touch) return;
-  const refused = isActionError(error) && error.code === "certification_locked";
+  const refused = (isActionError(error) && error.code === "certification_locked") || isInUseDeleteRefusal(error);
   if (meta?.recordLocksOnRefusalOnly && !refused) return;
   if (touch === "all") {
     void queryClient.invalidateQueries({ queryKey: recordLockKeys.all });

@@ -53,7 +53,7 @@ export const productionRunWriteTools: WriteTool[] = [
   {
     kind: "write", name: deleteProductionRun.id, scope: "production-runs:delete", requiredScopes: () => ["production-runs:delete"], input: deleteInput, output: deleteOutput,
     annotations: { ...annotations, destructiveHint: true },
-    description: `Delete a production run by UUID and return drawn stock. Dependencies may refuse deletion. Returns deleted id and code, or data on a dry run. ${versionGuidance} ${guidance}`,
+    description: `Delete a production run by UUID and return drawn stock. Biochar products or credit batches return conflict at /productionRunId with issue metadata reason in_use and a top-level conflict reference. Certified lineage and retained stock history return certification_locked. Returns deleted id and code, or data on a dry run. ${versionGuidance} ${guidance}`,
     execute: (context, raw) => mutate(context, raw, "delete"),
     summarize(body, dryRun) {
       const code = ((body.deleted ?? body.data) as { code: string }).code;

@@ -244,7 +244,7 @@ export function buildOpenApiDocument() {
     requestBody: requestBody(patchInput, { massWetKg: 4250, notes: "Corrected weighbridge wet mass for bin B2." }),
   };
   paths["/feedstocks/{idOrCode}"].delete = {
-    ...privateOperation("delete_feedstock", "feedstocks:delete", "Delete by UUID using a strong If-Match. Locked domain guards may refuse deletion. Dry runs return the would-be deleted representation and roll back. The request body may be omitted; any supplied body must be an empty JSON object. Malformed JSON returns 400; unknown fields and other JSON values return 422.",
+    ...privateOperation("delete_feedstock", "feedstocks:delete", "Delete by UUID using a strong If-Match. Production-run usage answers 409 certification_locked at /feedstockId with issue metadata reason in_use. Certified lineage answers 409 certification_locked. Dry runs return the would-be deleted representation and roll back. The request body may be omitted; any supplied body must be an empty JSON object. Malformed JSON returns 400; unknown fields and other JSON values return 422.",
     { ...problemResponses([...WRITE_ERRORS, 412, 413, 415, 428]), ...feedstockPreconditionResponse,
       "204": { description: "Deleted, or replay of a committed deletion; no body.", headers: { ...privateHeaders, ...writeHeaders } },
       "200": jsonResponse("Dry-run deleted representation.", publishOutput(stockWriteEnvelopeSchema(feedstockRepresentationSchema)), writeHeaders) },
@@ -277,7 +277,7 @@ export function buildOpenApiDocument() {
     requestBody: requestBody(runPatchInput, { status: "complete", endTime: "2026-10-08T11:00:00Z", biocharOutputKg: 500, biocharMoisturePercent: 2, biocharStorageLocationId: "f5ce7f12-464d-4a52-a3c3-fba01dbe9b8e" }),
   };
   paths["/production-runs/{idOrCode}"].delete = {
-    ...privateOperation("delete_production_run", "production-runs:delete", "Delete by UUID using a strong If-Match and return drawn stock. Dependencies may refuse deletion. Dry runs roll back and return the deleted representation and stockEffects. A supplied body must be an empty JSON object.",
+    ...privateOperation("delete_production_run", "production-runs:delete", "Delete by UUID using a strong If-Match and return drawn stock. Biochar products or credit batches answer 409 conflict at /productionRunId with issue metadata reason in_use and a top-level conflict reference. Certified lineage and retained stock history answer 409 certification_locked. Dry runs roll back and return the deleted representation and stockEffects. A supplied body must be an empty JSON object.",
       { ...problemResponses([...WRITE_ERRORS, 412, 413, 415, 428]), ...runPreconditionResponse,
         "204": { description: "Deleted or replayed deletion; no body.", headers: { ...privateHeaders, ...writeHeaders } },
         "200": jsonResponse("Dry-run deleted representation.", publishOutput(stockWriteEnvelopeSchema(productionRunRepresentationSchema)), writeHeaders) },

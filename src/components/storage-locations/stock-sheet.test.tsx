@@ -157,7 +157,7 @@ it("deletes the latest output Lost mass with the shared dialog and a required re
   await act(async () => { renderer = create(<OutputStockHistory storageLocationId={BIN_ID} facilityId={FACILITY_ID} triggerLabel="History" />); });
   await act(async () => renderer.root.findByType("button").props.onClick());
   await act(async () => renderer.root.findAllByType("button").find(button => text(button) === "Delete")!.props.onClick());
-  expect(text(renderer.root.findByProps({ className: "title-heading-3" }))).toBe("Delete lost mass");
+  expect(text(renderer.root.findByProps({ className: "title-heading-3 pr-40" }))).toBe("Delete lost mass");
   expect(JSON.stringify(renderer.toJSON())).toContain("goes back into the bin.");
   const confirm = () => renderer.root.findAllByType("button").filter(button => text(button) === "Delete").at(-1)!.props.onClick();
   await act(async () => confirm());

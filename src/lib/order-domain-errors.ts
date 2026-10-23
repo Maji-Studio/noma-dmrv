@@ -1,4 +1,5 @@
 import { DomainError, type DomainErrorCode, type DomainIssue } from "@/lib/domain-errors";
+import { IN_USE_DELETE_MARKER, inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
 import { SafeError } from "@/lib/errors";
 import { formatStockMinimumKg } from "@/lib/stock-overdraw";
@@ -34,9 +35,11 @@ export function orderQuantityBelowAllocated(allocatedWetKg: number): DomainError
     ["quantityKg"], { allocatedWetKg, unit: "kg" });
 }
 
-export function orderHasDeliveries(delivery: { id: string; code: string }): DomainError {
-  const lock = recordLocks.order({ removals: [], dependents: [{ kind: "delivery", id: delivery.id, label: delivery.code }] });
-  return refusal("certification_locked", withRecordLockGuidance("Cannot delete an order with deliveries.", lock), ["orderId"]);
+export function orderHasDeliveries(delivery: { id: string; code: string }, orderCode?: string): DomainError {
+  return inUseDeleteRefusal(
+    `Order${orderCode ? ` ${orderCode}` : ""} ${IN_USE_DELETE_MARKER} delivery ${delivery.code} still uses it. Delete that delivery first, or keep this order.`,
+    ["orderId"], { code: "certification_locked", meta: { deliveryCode: delivery.code, deliveryId: delivery.id } },
+  );
 }
 
 /** PATCH refuses archived orders; DELETE still works when the order has no deliveries. */

@@ -845,9 +845,17 @@ and MCP `issues` gain entries without changing the HTTP 409 or top-level code.
 
 ### In-use delete refusals
 
-In-use delete refusals keep the top-level `conflict` code, HTTP 409 and issue
-`code: "conflict"`. Their issue metadata adds `meta.reason: "in_use"` alongside
-existing safe metadata. REST exposes it as `errors[].meta.reason`, MCP as
-`issues[].meta.reason`, and Server Actions as `issues[].meta.reason` on the
-client `ActionError`. Consumers use this discriminator instead of message text;
-other conflicts, such as name clashes, do not carry it.
+A delete refused because records still use the row adds `meta.reason: "in_use"` to
+its issue, next to the code that refusal already has. REST exposes it as
+`errors[].meta.reason`, MCP as `issues[].meta.reason`, and Server Actions as
+`issues[].meta.reason` on the client `ActionError`. Consumers use this
+discriminator instead of message text, whatever the code; other conflicts, such
+as name clashes, do not carry it. HTTP status is 409 for all of them.
+
+| Record | Used by | Code | Issue pointer | Safe issue metadata besides `reason` |
+|---|---|---|---|---|
+| Supplier, customer, customer location, formulation, feedstock type | Their dependents | `conflict` | the record's own id field | Dependent codes (for example `orderCodes`) where the refusal lists them |
+| Feedstock | Production runs | `certification_locked` | `/feedstockId` | None |
+| Production run | Biochar products, credit batches, or both | `conflict` | `/productionRunId` | None; the top-level `conflict` is the first dependent record |
+| Order | Deliveries, including archived ones | `certification_locked` | `/orderId` | `deliveryCode`, `deliveryId` (the delivery with the lowest code) |
+| Reactor | Production runs | `conflict` | `/reactorId` | None; Server Actions only, no REST or MCP delete |
