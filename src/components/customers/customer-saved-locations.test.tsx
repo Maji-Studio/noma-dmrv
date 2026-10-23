@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import { squashed } from "../../../tests/helpers/error-box-text";
 import { ActionError } from "@/lib/action-error";
 import { inUseDeleteRefusal } from "@/lib/delete-refusal";
 import type { ReactNode } from "react";
@@ -92,38 +91,14 @@ describe("CustomerSavedLocations", () => {
     expect(within(archivedGroup).queryByText(/-6\.9000/)).toBeNull();
 
     expect(screen.getByRole("button", { name: "Edit E2E North Block" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Archive E2E North Block" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Delete E2E North Block" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Archive E2E/ })).toBeNull();
   });
 
   it("shows no archived toggle when nothing is archived", () => {
     render(<CustomerSavedLocations customerId="c1" />);
     expect(screen.queryByRole("group", { name: "Archived locations" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Archived locations/ })).toBeNull();
-  });
-
-  it("disables Archive on the last active location and describes why before any click", () => {
-    state.locations = [location("l1", "E2E North Block", { isDefault: true }), location("l3", "E2E Old Field", { archivedAt: ARCHIVED_AT })];
-    render(<CustomerSavedLocations customerId="c1" />);
-    const archive = screen.getByRole("button", { name: "Archive E2E North Block" }) as HTMLButtonElement;
-    expect(archive.disabled).toBe(true);
-    const reason = "This is the only active location, so it cannot be archived. Add or restore another location first.";
-    expect(archive.getAttribute("aria-description")).toBe(reason);
-    expect(screen.getByRole("button", { name: "Why Archive is unavailable" }).getAttribute("aria-description")).toBe(reason);
-  });
-
-  it("gives Archive no only-active reason while two locations are active", () => {
-    render(<CustomerSavedLocations customerId="c1" />);
-    expect(screen.queryByRole("button", { name: "Why Archive is unavailable" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Archive E2E North Block" }).getAttribute("aria-description")).toBeNull();
-  });
-
-  it("archives with the row version, confirms, and shows the default move as a warning", async () => {
-    state.archive.mockResolvedValue({ warnings: ["E2E South Block is now the default location."] });
-    render(<CustomerSavedLocations customerId="c1" />);
-    fireEvent.click(screen.getByRole("button", { name: "Archive E2E North Block" }));
-    await waitFor(() => expect(state.archive).toHaveBeenCalledWith({ locationId: "l1", expectedVersion: 3 }));
-    expect(state.success).toHaveBeenCalledWith("E2E North Block archived. Restore it from Archived locations.");
-    expect(state.warning).toHaveBeenCalledWith("E2E South Block is now the default location.");
   });
 
   it("restores an archived location and shows its warnings", async () => {
@@ -137,24 +112,50 @@ describe("CustomerSavedLocations", () => {
     expect(state.warning).toHaveBeenCalledWith("E2E Old Field is now the default location.");
   });
 
-  it("shows a stale archive refusal as a message", async () => {
-    state.archive.mockRejectedValue(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "customerLocation", id: "l1", code: STALE_VERSION_CONFLICT_CODE }));
+  it("deletes an unused location and says so", async () => {
     render(<CustomerSavedLocations customerId="c1" />);
-    fireEvent.click(screen.getByRole("button", { name: "Archive E2E North Block" }));
-    expect(squashed((await screen.findByRole("alert")).textContent)).toBe(squashed("Location E2E North Block was not archived. It changed since the list loaded. Review it before archiving."));
+    fireEvent.click(screen.getByRole("button", { name: "Delete E2E South Block" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    await waitFor(() => expect(state.success).toHaveBeenCalledWith("E2E South Block deleted."));
+    expect(state.archive).not.toHaveBeenCalled();
   });
 
-  it("offers Archive instead when a delete is refused because orders use the location", async () => {
+  it("archives a used location when its delete is refused and says which happened", async () => {
     state.remove.mockRejectedValue(inUseError(IN_USE));
     render(<CustomerSavedLocations customerId="c1" />);
     fireEvent.click(screen.getByRole("button", { name: "Delete E2E South Block" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
-    expect(await screen.findByText("E2E South Block is in use")).toBeTruthy();
-    expect(state.error).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: "Archive instead" }));
     await waitFor(() => expect(state.archive).toHaveBeenCalledWith({ locationId: "l2", expectedVersion: 3 }));
-    await waitFor(() => expect(screen.queryByText("E2E South Block is in use")).toBeNull());
+    expect(state.success).toHaveBeenCalledWith("E2E South Block is used by orders, so it was archived. Restore it from Archived locations.");
+    expect(state.error).not.toHaveBeenCalled();
+    expect(screen.queryByText("E2E South Block is in use")).toBeNull();
+  });
+
+  it("names a registered storage site as the reason when that refused the delete", async () => {
+    state.remove.mockRejectedValue(inUseError("Customer location was not deleted because it is registered with Isometric as a storage site. Archive it instead."));
+    render(<CustomerSavedLocations customerId="c1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Delete E2E South Block" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    await waitFor(() => expect(state.success).toHaveBeenCalledWith("E2E South Block is a registered storage site, so it was archived. Restore it from Archived locations."));
+  });
+
+  it("archives with the version the operator confirmed, which the refused delete just matched", async () => {
+    state.remove.mockRejectedValue(inUseError(IN_USE));
+    render(<CustomerSavedLocations customerId="c1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Delete E2E South Block" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    await waitFor(() => expect(state.remove).toHaveBeenCalledWith({ locationId: "l2", expectedVersion: 3 }));
+    await waitFor(() => expect(state.archive).toHaveBeenCalledWith({ locationId: "l2", expectedVersion: 3 }));
+  });
+
+  it("shows the archive refusal as an error when the automatic archive fails", async () => {
+    state.remove.mockRejectedValue(inUseError(IN_USE));
+    state.archive.mockRejectedValue(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "customerLocation", id: "l2", code: STALE_VERSION_CONFLICT_CODE }));
+    render(<CustomerSavedLocations customerId="c1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Delete E2E South Block" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    await waitFor(() => expect(state.error).toHaveBeenCalledWith("Location E2E South Block was not archived. It changed since the list loaded. Review it before archiving."));
+    expect(state.success).not.toHaveBeenCalled();
   });
 
   it("deletes with the version the operator confirmed, not a newer one from a refetch", async () => {
@@ -166,26 +167,7 @@ describe("CustomerSavedLocations", () => {
     await waitFor(() => expect(state.remove).toHaveBeenCalledWith({ locationId: "l2", expectedVersion: 3 }));
   });
 
-  it("drops the Archive instead dialog once its location is the only active one", async () => {
-    state.remove.mockRejectedValueOnce(inUseError(IN_USE));
-    const view = render(<CustomerSavedLocations customerId="c1" />);
-    fireEvent.click(screen.getByRole("button", { name: "Delete E2E South Block" }));
-    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
-    expect(await screen.findByRole("button", { name: "Archive instead" })).toBeTruthy();
-
-    state.locations = [location("l2", "E2E South Block", { isDefault: true })];
-    view.rerender(<CustomerSavedLocations customerId="c1" />);
-    expect(screen.queryByRole("button", { name: "Archive instead" })).toBeNull();
-    expect(screen.getByText(/it cannot be archived because it is the only active location/)).toBeTruthy();
-
-    // Closed means closed: a later second active location does not bring the refusal back.
-    fireEvent.click(screen.getAllByRole("button", { name: "Close" }).find((button) => button.textContent === "Close")!);
-    state.locations = [location("l1", "E2E North Block"), location("l2", "E2E South Block", { isDefault: true })];
-    view.rerender(<CustomerSavedLocations customerId="c1" />);
-    expect(screen.queryByText(/is in use/)).toBeNull();
-  });
-
-  it("does not offer Archive instead for the only active location refused as in use", async () => {
+  it("explains instead of archiving the only active location refused as in use", async () => {
     state.locations = [location("l1", "E2E North Block", { isDefault: true })];
     state.remove.mockRejectedValue(inUseError(IN_USE));
     render(<CustomerSavedLocations customerId="c1" />);
@@ -196,6 +178,7 @@ describe("CustomerSavedLocations", () => {
       "E2E North Block cannot be deleted because orders use it, and it cannot be archived because it is the only active location. Add another location first, then archive this one.",
     )).toBeTruthy();
     expect(state.error).not.toHaveBeenCalled();
+    expect(state.archive).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Archive instead" })).toBeNull();
     fireEvent.click(screen.getAllByRole("button", { name: "Close" })[0]);
     await waitFor(() => expect(screen.queryByText("E2E North Block is in use")).toBeNull());

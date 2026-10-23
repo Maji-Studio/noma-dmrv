@@ -1,6 +1,6 @@
 /**
- * Customer location archive E2E (Phase 7c): archive and restore from the
- * customer sheet, the default moving to another active location, the last
+ * Customer location archive E2E (Phase 7c): Delete archives a used location
+ * (there is no separate Archive button), restore from the customer sheet, the default moving to another active location, the last
  * active location staying put, pickers hiding archived locations for new
  * orders, and an existing order keeping its archived destination.
  *
@@ -17,7 +17,11 @@ import { clickRowMenuItem } from "./fixtures/page-helpers";
 
 const SEARCH_TIMEOUT_MS = 15_000;
 const DEFAULT_MOVED = `${SECOND_LOCATION_NAME} is now the default location.`;
-const LAST_ACTIVE_REASON = "This is the only active location, so it cannot be archived. Add or restore another location first.";
+const archivedByDelete = (name: string) => `${name} is used by orders, so it was archived. Restore it from Archived locations.`;
+
+async function confirmDelete(page: import("@playwright/test").Page) {
+  await page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).last().click();
+}
 
 async function seedOrder(seeded: { facility: { id: string }; customer: { id: string }; formulation: { id: string } }, locationId: string, code: string) {
   const { db, pool } = createDbConnection();
@@ -52,19 +56,21 @@ async function readLocation(locationId: string) {
 }
 
 test.describe("Customer location archive", () => {
-  test("archiving the default moves it, the last active location cannot be archived, and restore brings one back", async ({ adminPage: page, seededData }) => {
+  test("deleting a used default archives it and moves the default, and restore brings one back", async ({ adminPage: page, seededData }) => {
     const { customer, customerLocation, facility } = seededData;
     const secondId = await seedSecondLocation(customer.id);
     await setDefault(customerLocation.id);
+    await seedOrder(seededData, customerLocation.id, `E2E-OR-LOC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`);
     try {
       const sheet = await openCustomerSheet(page, facility.id, customer.code);
 
-      // Two active locations: both can be archived, and no archived group exists yet.
-      await expect(sheet.getByRole("button", { name: `Archive ${SECOND_LOCATION_NAME}` })).toBeEnabled();
+      // Delete is the only action: no Archive button, and no archived group exists yet.
+      await expect(sheet.getByRole("button", { name: /^Archive / })).toHaveCount(0);
       await expect(sheet.getByRole("group", { name: "Archived locations" })).toHaveCount(0);
 
-      await sheet.getByRole("button", { name: `Archive ${customerLocation.name}` }).click();
-      await expect(page.getByText(`${customerLocation.name} archived. Restore it from Archived locations.`)).toBeVisible();
+      await sheet.getByRole("button", { name: `Delete ${customerLocation.name}` }).click();
+      await confirmDelete(page);
+      await expect(page.getByText(archivedByDelete(customerLocation.name))).toBeVisible();
       await expect(page.getByText(DEFAULT_MOVED)).toBeVisible();
 
       const archivedGroup = sheet.getByRole("group", { name: "Archived locations" });
@@ -76,15 +82,9 @@ test.describe("Customer location archive", () => {
       expect(await readLocation(customerLocation.id)).toMatchObject({ isDefault: false });
       expect(await readLocation(secondId)).toMatchObject({ isDefault: true });
 
-      // The last active location says why before anyone clicks.
-      const lastArchive = sheet.getByRole("button", { name: `Archive ${SECOND_LOCATION_NAME}` });
-      await expect(lastArchive).toBeDisabled();
-      await expect(lastArchive).toHaveAttribute("aria-description", LAST_ACTIVE_REASON);
-
       await archivedGroup.getByRole("button", { name: `Restore ${customerLocation.name}` }).click();
       await expect(page.getByText(`${customerLocation.name} restored.`)).toBeVisible();
       await expect(sheet.getByRole("group", { name: "Archived locations" })).toHaveCount(0);
-      await expect(sheet.getByRole("button", { name: `Archive ${SECOND_LOCATION_NAME}` })).not.toHaveAttribute("aria-description", LAST_ACTIVE_REASON);
       expect((await readLocation(customerLocation.id))?.archivedAt).toBeNull();
       // The restored location does not take the default back from the one that holds it.
       expect(await readLocation(customerLocation.id)).toMatchObject({ isDefault: false });
@@ -93,17 +93,16 @@ test.describe("Customer location archive", () => {
     }
   });
 
-  test("deleting a location that an order uses offers Archive instead", async ({ adminPage: page, seededData }) => {
+  test("deleting a location that an order uses archives it and says so", async ({ adminPage: page, seededData }) => {
     const { customer, customerLocation, facility } = seededData;
     const secondId = await seedSecondLocation(customer.id);
     await seedOrder(seededData, customerLocation.id, `E2E-OR-LOC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`);
     try {
       const sheet = await openCustomerSheet(page, facility.id, customer.code);
       await sheet.getByRole("button", { name: `Delete ${customerLocation.name}` }).click();
-      await page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).last().click();
+      await confirmDelete(page);
 
-      await expect(page.getByRole("dialog").getByText(`${customerLocation.name} is in use`)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
-      await page.getByRole("dialog").getByRole("button", { name: "Archive instead" }).click();
+      await expect(page.getByText(archivedByDelete(customerLocation.name))).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
       await sheet.getByRole("button", { name: "Archived locations (1)" }).click();
       await expect(sheet.getByRole("group", { name: "Archived locations" }).getByText(customerLocation.name)).toBeVisible();
       await expect(page.getByRole("dialog").getByText(`${customerLocation.name} is in use`)).toHaveCount(0);
@@ -119,8 +118,9 @@ test.describe("Customer location archive", () => {
     await seedOrder(seededData, customerLocation.id, orderCode);
     try {
       const sheet = await openCustomerSheet(page, facility.id, customer.code);
-      await sheet.getByRole("button", { name: `Archive ${customerLocation.name}` }).click();
-      await expect(page.getByText(`${customerLocation.name} archived. Restore it from Archived locations.`)).toBeVisible();
+      await sheet.getByRole("button", { name: `Delete ${customerLocation.name}` }).click();
+      await confirmDelete(page);
+      await expect(page.getByText(archivedByDelete(customerLocation.name))).toBeVisible();
       await page.keyboard.press("Escape");
 
       // A new order cannot pick the archived location.
