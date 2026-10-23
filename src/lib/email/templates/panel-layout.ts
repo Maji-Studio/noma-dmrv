@@ -43,6 +43,8 @@ const PHONE_BREAKPOINT = 600;
 const LOGO_SIZE = 40;
 const ART_WIDTH = 96;
 const ART_HEIGHT = 72;
+const CHANGE_BOX_WIDTH_PCT = 46;
+const CHANGE_ARROW_WIDTH = 32;
 const IMAGE_PATH = "/email";
 const PREHEADER_PAD = "&#847;&zwnj;&nbsp;".repeat(60);
 const DISPLAY_NONE = "display:none;max-height:0;overflow:hidden;mso-hide:all;";
@@ -123,11 +125,11 @@ const writtenLink = (url: string) =>
 /** Before → after: two blocks with an arrow between them. */
 function change(c: NonNullable<EmailContent["change"]>): string {
   const box = (value: string, strong: boolean) =>
-    `<td class="${strong ? "d-panel d-ink" : "d-hair d-t2"}" width="46%" valign="middle" style="width:46%;border:1px solid ${strong ? LIGHT.panel : LIGHT.hair};padding:10px 12px;font-family:${SANS};font-size:15px;line-height:1.4;color:${strong ? LIGHT.ink : LIGHT.text2};${strong ? "font-weight:600;" : ""}${WRAP_LINK}">${escapeHtml(value).replace("@", "@<wbr>")}</td>`;
+    `<td class="${strong ? "d-panel d-ink" : "d-hair d-t2"}" width="${CHANGE_BOX_WIDTH_PCT}%" valign="middle" style="width:${CHANGE_BOX_WIDTH_PCT}%;border:1px solid ${strong ? LIGHT.panel : LIGHT.hair};padding:10px 12px;font-family:${SANS};font-size:15px;line-height:1.4;color:${strong ? LIGHT.ink : LIGHT.text2};${strong ? "font-weight:600;" : ""}${WRAP_LINK}">${escapeHtml(value).replace("@", "@<wbr>")}</td>`;
   return `<p class="d-t2" style="margin:0 0 8px 0;font-family:${SANS};font-size:14px;line-height:1.5;color:${LIGHT.text2};">${escapeHtml(c.label)}</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px 0;"><tr>
 ${box(c.from, false)}
-<td width="32" align="center" valign="middle" class="d-t3" style="width:32px;font-family:${SANS};font-size:18px;color:${LIGHT.text3};">&rarr;</td>
+<td width="${CHANGE_ARROW_WIDTH}" align="center" valign="middle" class="d-t3" style="width:${CHANGE_ARROW_WIDTH}px;font-family:${SANS};font-size:18px;color:${LIGHT.text3};">&rarr;</td>
 ${box(c.to, true)}
 </tr></table>`;
 }

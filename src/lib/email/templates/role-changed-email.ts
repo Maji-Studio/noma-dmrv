@@ -31,7 +31,7 @@ export function roleChangedEmail(input: {
     heading: "Your role changed",
     change: { label: "Role", from: input.fromRole, to: input.toRole },
     body: [explanation ? [...sentence, ` ${explanation}`] : sentence],
-    small: `If you think this is a mistake, contact another Admin of ${org}.`,
+    small: `If you think this is a mistake, contact an Admin of ${org}.`,
     to: input.to,
     reason: `because you are a member of ${org}.`,
     appUrl: input.appUrl,

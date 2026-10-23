@@ -17,7 +17,7 @@ export function removedFromOrganizationEmail(input: {
     art: "removed",
     heading: `You no longer have access to ${org}`,
     body: [
-      [who, " removed you from ", { strong: org }, ` on ${date}. You can no longer open its records on noma.`],
+      [who, " removed you from ", { strong: org }, ` on ${date}.`],
       [`If you think this is a mistake, contact an Admin of ${org}.`],
     ],
     small: "Other organizations you belong to on noma are not affected.",

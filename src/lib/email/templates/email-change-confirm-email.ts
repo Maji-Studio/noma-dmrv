@@ -11,7 +11,7 @@ export function emailChangeConfirmEmail(input: { to: string; currentEmail: strin
     art: "email-change",
     heading: "Confirm your new email address",
     change: { label: "Email address", from: input.currentEmail, to: input.to },
-    body: [["Confirm this address to sign in to noma with it."]],
+    body: [],
     action: { label: "Confirm new email address", url: input.url },
     note: `This link expires in ${expires}. Until then, keep signing in with ${input.currentEmail}.`,
     small: "If you did not ask for this change, ignore this email.",

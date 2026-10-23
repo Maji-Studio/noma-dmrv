@@ -84,7 +84,7 @@ it("role changed: subject, before to after, role explanation, names the organiza
   expect(role.subject).toBe(`Your role in ${ORG} is now Admin`);
   expect(role.text).toContain("Role: Member → Admin");
   expect(role.text).toContain(`Amani Mushi changed your role in ${ORG} on Oct 22, 2026. As an Admin you have full control`);
-  expect(role.text).toContain(`If you think this is a mistake, contact another Admin of ${ORG}.`);
+  expect(role.text).toContain(`If you think this is a mistake, contact an Admin of ${ORG}.`);
   expect(role.text).toContain(`Sent to ${TO} because you are a member of ${ORG}.`);
   const member = roleChangedEmail({
     to: TO, organizationName: ORG, fromRole: "Admin", toRole: "Member", changedAt: WHEN, appUrl: APP,
@@ -97,7 +97,7 @@ it("role changed: subject, before to after, role explanation, names the organiza
 it("removed: subject, access sentence, mistake line, other organizations note", () => {
   expect(removed.subject).toBe(`You were removed from ${ORG}`);
   expect(removed.text).toContain(`You no longer have access to ${ORG}`);
-  expect(removed.text).toContain(`Amani Mushi removed you from ${ORG} on Oct 22, 2026. You can no longer open its records on noma.`);
+  expect(removed.text).toContain(`Amani Mushi removed you from ${ORG} on Oct 22, 2026.`);
   expect(removed.text).toContain(`If you think this is a mistake, contact an Admin of ${ORG}.`);
   expect(removed.text).toContain("Other organizations you belong to on noma are not affected.");
   expect(removed.text).toContain(`Sent to ${TO} because you were a member of ${ORG}.`);
