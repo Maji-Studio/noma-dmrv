@@ -61,8 +61,9 @@ async function lockFacilityRow(
   return locked;
 }
 
-export async function createFacility(
+export async function createFacilityInTransaction(
   ctx: OrgContext,
+  tx: DbTransaction,
   data: {
     code: string;
     name: string;
@@ -80,7 +81,7 @@ export async function createFacility(
   requireOrgScope(ctx);
 
   const [facility] = await guardFacilityName(ctx, data.name, () =>
-    db
+    tx
       .insert(facilities)
       .values({
         organizationId: ctx.organizationId,

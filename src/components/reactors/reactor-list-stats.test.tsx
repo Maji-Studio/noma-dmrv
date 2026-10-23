@@ -23,7 +23,7 @@ vi.mock("@/hooks/use-reactors", () => ({
     isLoading: false,
     error: null,
   }),
-  useCreateReactor: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useCreateReactor: () => ({ startDraft: vi.fn(), isPending: false, mutateAsync: vi.fn() }),
   useUpdateReactor: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useDeleteReactor: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));

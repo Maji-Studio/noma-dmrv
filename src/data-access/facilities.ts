@@ -298,7 +298,7 @@ export async function getFacilityById(
   return facility;
 }
 
-export { createFacility, updateFacility } from "./facility-mutations";
+export { updateFacility } from "./facility-mutations";
 
 // ============================================
 // Archive Operations (soft delete, reversible)

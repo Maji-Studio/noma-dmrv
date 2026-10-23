@@ -34,8 +34,8 @@ vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({ facilityId: mocks.facilityId, activeOrganizationId: "org-1", setFacilityId: mocks.setFacilityId }),
 }));
 vi.mock("@/hooks/use-dashboard-overview", () => ({ useDashboardOverview: () => ({ data: mocks.generatedAt ? { generatedAt: mocks.generatedAt } : undefined, isLoading: false }) }));
-vi.mock("@/hooks/use-facilities", () => ({ useCreateFacility: () => ({ mutateAsync: mocks.createFacility, isPending: false }) }));
-vi.mock("@/hooks/use-reactors", () => ({ useCreateReactor: () => ({ mutateAsync: mocks.createReactor, isPending: false }) }));
+vi.mock("@/hooks/use-facilities", () => ({ useCreateFacility: () => ({ startDraft: vi.fn(), mutateAsync: mocks.createFacility, isPending: false }) }));
+vi.mock("@/hooks/use-reactors", () => ({ useCreateReactor: () => ({ startDraft: vi.fn(), mutateAsync: mocks.createReactor, isPending: false }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn() }) }));
 vi.mock("@/components/ui/entity-side-sheet", () => ({

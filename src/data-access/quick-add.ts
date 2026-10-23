@@ -216,10 +216,10 @@ export async function createStorageLocation(
   data: CreateStorageLocationData
 ): Promise<EntityOption> {
   requireOrgScope(ctx);
-  return db.transaction((tx) => createStorageLocationInTransaction(ctx, tx, data));
+  return db.transaction((tx) => createQuickStorageLocationInTransaction(ctx, tx, data));
 }
 
-export async function createStorageLocationInTransaction(
+export async function createQuickStorageLocationInTransaction(
   ctx: OrgContext, tx: DbTransaction, data: CreateStorageLocationData,
 ): Promise<EntityOption> {
   requireOrgScope(ctx);

@@ -6,6 +6,7 @@ import { throwActionError, StaleVersionError } from "@/lib/stale-version";
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
+import { useIntentMutation } from "./use-create-intent-key";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { activityKeys } from "./activity-query-keys";
 import type { Reactor } from "@/db/schema";
@@ -92,9 +93,9 @@ export function useCreateReactor(
 ) {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (data: CreateReactorData) => {
-      const result = await createReactorFn(data);
+  return useIntentMutation({
+    mutationFn: async (data: CreateReactorData, intentKey) => {
+      const result = await createReactorFn(data, { intentKey });
       if (!result.success) {
         throwActionError(result);
       }

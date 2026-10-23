@@ -53,14 +53,6 @@ export async function listFeedstockTypes(
     .orderBy(asc(feedstockTypes.name));
 }
 
-export async function createFeedstockType(
-  ctx: OrgContext,
-  data: CreateFeedstockTypeData & { code: string },
-): Promise<FeedstockType> {
-  requireOrgScope(ctx);
-  return db.transaction((tx) => createFeedstockTypeInTransaction(ctx, tx, data));
-}
-
 export async function createFeedstockTypeInTransaction(
   ctx: OrgContext, tx: DbTransaction,
   data: CreateFeedstockTypeData & { code: string },

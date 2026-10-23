@@ -6,15 +6,10 @@
  */
 
 import { z } from "zod";
-import { type StorageLocation, storageLocations } from "@/db/schema";
-import {
-  CODE_CONFLICT_MESSAGES,
-  withAutoCode,
-} from "@/data-access/code-generator";
+import { type StorageLocation } from "@/db/schema";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
   archiveStorageLocation,
-  createStorageLocation,
   deleteStorageLocation,
   getStorageLocations as getStorageLocationsData,
   getStorageLocationWithFacility,
@@ -33,6 +28,9 @@ import {
   storageLocationFilterSchema,
 } from "@/schemas/storage-locations";
 import type { ActionResult } from "@/types/actions";
+import { createStorageLocation } from "@/lib/operations/storage-locations";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
+import { withCreate } from "./with-create";
 import { withAction } from "./with-action";
 
 const LOG_MESSAGE = "storage bin action failed";
@@ -91,36 +89,12 @@ export async function getStorageLocationFn(
  * Create a new storage bin
  */
 export async function createStorageLocationFn(
-  data: z.infer<typeof createStorageLocationSchema>
+  data: z.infer<typeof createStorageLocationSchema>,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<StorageLocation>> {
-  return withAction(async (ctx) => {
-    const validated = createStorageLocationSchema.parse(data);
-
-    const storageLocation = await withAutoCode(
-      ctx,
-      "SL",
-      storageLocations,
-      storageLocations.code,
-      undefined,
-      (code) =>
-        createStorageLocation(ctx, {
-          code,
-          name: validated.name,
-          type: validated.type,
-          facilityId: validated.facilityId,
-          capacityKg: validated.capacityKg ?? null,
-          feedstockTypeId: validated.feedstockTypeId ?? null,
-          formulationId: validated.formulationId ?? null,
-          stockMode: validated.stockMode,
-          drawOrder: validated.drawOrder,
-          storageMethod: validated.storageMethod || null,
-          storageDescription: validated.storageDescription || null,
-        }),
-      CODE_CONFLICT_MESSAGES.storageLocation,
-    );
-
-    return storageLocation;
-  }, {
+  return withCreate((_ctx, create) => {
+    return create(createStorageLocation, createStorageLocationSchema.parse(data));
+  }, options, {
     fallbackMessage: "Failed to create storage bin",
     log: { message: LOG_MESSAGE, context: { op: "storage-location:create" } },
   });

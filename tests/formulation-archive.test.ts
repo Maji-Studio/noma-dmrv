@@ -7,7 +7,7 @@ import { archiveFormulation, restoreFormulation, updateFormulation, deleteFormul
 import { runOperation, runOperationInProcess } from "@/lib/operations/runner";
 import { getFormulationById, getFormulations } from "@/data-access/formulations";
 import { getFormulationsEntity, getFormulationEntityById } from "@/data-access/entities/formulations";
-import { createStorageLocation, getStorageLocationWithFacility, updateStorageLocation } from "@/data-access/storage-locations";
+import { createStorageLocationInTransaction, getStorageLocationWithFacility, updateStorageLocation } from "@/data-access/storage-locations";
 import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
 import { createStorageLocation as quickAdd } from "@/data-access/quick-add";
 import { makeBiocharProduct } from "@/lib/operations/biochar-products";
@@ -113,7 +113,7 @@ describe("formulation archive and restore", { timeout: TIMEOUT_MS }, () => {
         sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id, biocharWetMassKg: 100, biocharMoisturePercent: 10, waterAddedKg: 0, ingredients: [] }),
       () => runOperation(recordOrder, f.ctx, { ...orderInput(f), formulationId: f.pure.id }),
       () => runOperation(updateOrder, f.ctx, { orderId: order.id, expectedVersion: order.version, formulationId: f.pure.id }),
-      () => createStorageLocation(f.ctx, bin),
+      () => db.transaction((tx) => createStorageLocationInTransaction(f.ctx, tx, bin)),
       () => quickAdd(f.ctx, bin),
       () => updateStorageLocation(f.ctx, f.bin.id, { expectedVersion: f.bin.version, formulationId: f.pure.id }),
     ];
@@ -148,9 +148,9 @@ describe("formulation archive and restore", { timeout: TIMEOUT_MS }, () => {
 
   it("refuses assigning an archived formulation to an unclaimed product bin", async () => {
     const f = await fixture();
-    const bin = await createStorageLocation(f.ctx, {
+    const bin = await db.transaction((tx) => createStorageLocationInTransaction(f.ctx, tx, {
       facilityId: f.facility.id, code: `E2E-UNCLAIMED-${f.tag}`, name: `E2E Unclaimed bin ${f.tag}`, type: "product_bin",
-    });
+    }));
     await runOperation(archiveFormulation, f.ctx, { formulationId: f.pure.id, expectedVersion: f.pure.version });
     await expect(updateStorageLocation(f.ctx, bin.id, { expectedVersion: bin.version, formulationId: f.pure.id }))
       .rejects.toMatchObject({ ...issue("not_found"), message: `Formulation ${f.pure.code} is archived. Restore it or choose another formulation.` });
@@ -159,9 +159,9 @@ describe("formulation archive and restore", { timeout: TIMEOUT_MS }, () => {
 
   it("refuses a product using an archived formulation without claiming an unclaimed bin or drawing stock", async () => {
     const f = await fixture();
-    const bin = await createStorageLocation(f.ctx, {
+    const bin = await db.transaction((tx) => createStorageLocationInTransaction(f.ctx, tx, {
       facilityId: f.facility.id, code: `E2E-UNCLAIMED-${f.tag}`, name: `E2E Unclaimed bin ${f.tag}`, type: "product_bin",
-    });
+    }));
     const sourceStock = await getOutputBinAllLayersDryKg(f.ctx, f.source.id);
     await runOperation(archiveFormulation, f.ctx, { formulationId: f.pure.id, expectedVersion: f.pure.version });
     await expect(runOperation(makeBiocharProduct, f.ctx, {

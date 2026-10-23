@@ -440,10 +440,17 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 
 ### Double submit
 
-`disabled={isSubmitting}` turns on only after a render, so a double-click sends two saves (#1238). Every form uses the latch below; runner-backed create hooks also send an intent key. The storage bin forms are the exception: they keep their own request keys (the emissions entry form likewise has its own latch).
+`disabled={isSubmitting}` turns on only after a render, so a double-click sends two saves (#1238). Every form uses the latch below; runner-backed create hooks also send an intent key. The stock-posting forms are the exception: they keep their own domain request keys (the emissions entry form likewise has its own latch).
 
 - Wrap the RHF handler: `const latched = useLatchedSubmit(); <form onSubmit={latched(handleSubmit(...))}>`. The inner handler must `return` or `await` the save, or the latch lets go before the server answers.
 - Create hooks backed by `runOperationInProcess` use `useIntentMutation` from `@/hooks/use-create-intent-key`. Its `mutationFn(variables, intentKey)` passes `{ intentKey }` to the action and throws on an unsuccessful `ActionResult` (use `unwrap` or `throwActionError`). The action uses `withCreate(callback, options, actionOptions)`; see [architecture.md](./architecture.md#layers). The helper keeps the key through failed saves, rotates it before the caller's `onSuccess`, and exposes `startDraft()` to rotate it for a new draft: call it when a create sheet or dialog opens, or when a dialog that stays mounted closes. A retry inside one open draft keeps the key and replays the first save.
+
+Facility, reactor, storage-bin sheet, feedstock-type settings and production-process
+creates use the same intent hook. List create handlers and the process confirmation
+start a new draft on open. The onboarding sheet mounts fresh per open, so its
+key is already new; the storage-bin sheet stays mounted and synchronizes draft
+rotation with its prop-driven opening. Mutation rerenders and failed saves do
+not rotate the key. Their form error handling is unchanged.
 
 All six quick-add dialogs use the key owned by `useQuickAddSubmit`: its `serverFn(data, intentKey)` forwards the key, and the hook rotates it after success. Dialogs call `startDraft()` on open; formulation calls it on close. Failed saves keep the key and existing error behaviour. A create that saves several records in a loop, such as pending Sample transport legs, passes one key per record instead of the draft key.
 

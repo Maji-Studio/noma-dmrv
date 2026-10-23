@@ -2,6 +2,7 @@
 
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 
+import { useIntentMutation } from "./use-create-intent-key";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { patchArrayListCacheByExactKeyWithSavedRow } from "./list-cache-utils";
 import type { FeedstockType } from "@/db/schema";
@@ -52,9 +53,9 @@ function useInvalidateFeedstockTypes() {
 
 export function useCreateFeedstockType() {
   const invalidate = useInvalidateFeedstockTypes();
-  return useMutation({
-    mutationFn: async (input: CreateFeedstockTypeData) => {
-      const result = await createFeedstockTypeFn(input);
+  return useIntentMutation({
+    mutationFn: async (input: CreateFeedstockTypeData, intentKey) => {
+      const result = await createFeedstockTypeFn(input, { intentKey });
       if (!result.success) throwActionError(result);
       return result.data;
     },

@@ -9,7 +9,7 @@ import { db } from "@/db";
 import { activityEvents, customers, customerLocations, customerLocationFacilityDistances, facilities, feedstocks, members, orders,
   suppliers, supplierLocations, supplierLocationFacilityDistances, users } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
-import { createFeedstockType } from "@/data-access/feedstock-types";
+import { createFeedstockTypeInTransaction } from "@/data-access/feedstock-types";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { archiveSupplier, createSupplier } from "@/lib/operations/suppliers";
 import { archiveCustomer, createCustomer } from "@/lib/operations/customers";
@@ -68,7 +68,7 @@ export async function seedPartyFixture(caseId: PartyCaseId): Promise<PartyEvalFi
       }, scriptOptions);
     }
     if (caseId === "supplier-archived-intake") {
-      await createFeedstockType(ctx, { code: "RICE", name: "Rice husk", category: "agricultural", usage: "pyrolysis" });
+      await db.transaction((tx) => createFeedstockTypeInTransaction(ctx, tx, { code: "RICE", name: "Rice husk", category: "agricultural", usage: "pyrolysis" }));
     }
     const definition = PARTY_CASES.find(({ id }) => id === caseId)!;
     const credential = await createApiKey(ctx, { name: "MCP evaluation", scopes: [...definition.scopes], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS });

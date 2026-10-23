@@ -4,6 +4,7 @@
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
+import { useIntentMutation } from "./use-create-intent-key";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import {
   keepPreviousData,
@@ -99,10 +100,10 @@ export function useCreateStorageLocation(
 ) {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIntentMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.storageLocation),
-    mutationFn: async (data: CreateStorageLocationData) => {
-      const result = await createStorageLocationFn(data);
+    mutationFn: async (data: CreateStorageLocationData, intentKey) => {
+      const result = await createStorageLocationFn(data, { intentKey });
       if (!result.success) {
         throwActionError(result);
       }

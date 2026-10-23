@@ -13,7 +13,7 @@ import { createBiocharProduct } from "@/data-access/biochar-product-create";
 import { createCustomerInTransaction } from "@/data-access/customer-writes";
 import { createFormulationInTransaction } from "@/data-access/formulation-writes";
 import { createOrderInTransaction } from "@/data-access/orders";
-import { createStorageLocation } from "@/data-access/storage-locations";
+import { createStorageLocationInTransaction } from "@/data-access/storage-locations";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { addDaysIso, combineDateAndTime, formatFacilityDate } from "@/lib/date-utils";
 import { addFixtureReactor, createIntakeFixture, type IntakeFixture } from "../../tests/helpers/operation-fixture";
@@ -70,10 +70,10 @@ export async function seedDeliveryFixture(caseId: DeliveryCaseId, now = new Date
     const { customer, locations: [location] } = await db.transaction(tx => createCustomerInTransaction(fixture.ctx, tx, { code: CUSTOMER_CODE, name: "Evaluation customer", locations: [{ ...TEST_SITE_POSITION, name: "Evaluation destination",
       isDefault: true, facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: LOCATION_DISTANCE_KM, distanceSource: "manual" }] }] }));
     const formulation = await db.transaction(tx => createFormulationInTransaction(fixture.ctx, tx, { code: FORMULATION_CODE, name: "Evaluation pure biochar", biocharRatio: PURE_BIOCHAR_RATIO }));
-    const source = await createStorageLocation(fixture.ctx, { code: SOURCE_BIN_CODE, name: SOURCE_BIN_CODE,
-      facilityId: fixture.facilityId, type: "biochar_bin", stockMode: "mix" });
-    const mixBin = await createStorageLocation(fixture.ctx, { code: DELIVERY_BIN_CODE, name: DELIVERY_BIN_CODE,
-      facilityId: fixture.facilityId, type: "product_bin", stockMode: "mix", formulationId: formulation.id });
+    const source = await db.transaction((tx) => createStorageLocationInTransaction(fixture.ctx, tx, { code: SOURCE_BIN_CODE, name: SOURCE_BIN_CODE,
+      facilityId: fixture.facilityId, type: "biochar_bin", stockMode: "mix" }));
+    const mixBin = await db.transaction((tx) => createStorageLocationInTransaction(fixture.ctx, tx, { code: DELIVERY_BIN_CODE, name: DELIVERY_BIN_CODE,
+      facilityId: fixture.facilityId, type: "product_bin", stockMode: "mix", formulationId: formulation.id }));
     const reactorId = await addFixtureReactor(fixture, caseId);
     await db.insert(productionRuns).values({ organizationId: org, facilityId: fixture.facilityId, reactorId,
       code: SOURCE_RUN_CODE, status: "complete", startTime: localInstant(SOURCE_DAYS_AGO, SOURCE_START_TIME),
@@ -88,8 +88,8 @@ export async function seedDeliveryFixture(caseId: DeliveryCaseId, now = new Date
     const products = [await place(mixBin.id, MIX_PRODUCT)];
     let splitBin: DeliveryEvalFixture["splitBin"] = null;
     if (caseId === "delivery-split-bin") {
-      splitBin = await createStorageLocation(fixture.ctx, { code: DELIVERY_SPLIT_BIN_CODE, name: DELIVERY_SPLIT_BIN_CODE,
-        facilityId: fixture.facilityId, type: "product_bin", stockMode: "split", drawOrder: "oldest_first", formulationId: formulation.id });
+      splitBin = await db.transaction((tx) => createStorageLocationInTransaction(fixture.ctx, tx, { code: DELIVERY_SPLIT_BIN_CODE, name: DELIVERY_SPLIT_BIN_CODE,
+        facilityId: fixture.facilityId, type: "product_bin", stockMode: "split", drawOrder: "oldest_first", formulationId: formulation.id }));
       for (const product of SPLIT_PRODUCTS) products.push(await place(splitBin.id, product));
     }
     const order = await db.transaction((tx) => createOrderInTransaction(fixture.ctx, tx, { code: DELIVERY_ORDER_CODE,

@@ -1,10 +1,18 @@
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { activityEvents, apiIdempotencyRecords, creditBatches, emissionEntries, emissionEntryValues, facilities, feedstockTypes, organizations, productionProcesses, removalTemplateObservations, storageLocations, users, vehicles } from "@/db/schema";
+import { activityEvents, apiIdempotencyRecords, creditBatches, emissionEntries, emissionEntryValues, facilities, feedstockTypes, organizations, productionProcesses, removalTemplateObservations, storageLocations, reactors, users, vehicles } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { createVehicle, createQuickStorageLocation } from "@/lib/operations/quick-add";
+import { createFacility } from "@/lib/operations/facilities";
+import { createReactor } from "@/lib/operations/reactors";
+import { createStorageLocation } from "@/lib/operations/storage-locations";
+import { startNewProductionProcess } from "@/lib/operations/production-processes";
+import * as facilityWriter from "@/data-access/facility-mutations";
+import * as reactorWriter from "@/data-access/reactors";
+import * as binWriter from "@/data-access/storage-locations";
+import * as typeWriter from "@/data-access/feedstock-types";
 import { createFeedstockType } from "@/lib/operations/feedstock-types";
 import { recordEmissionEntry } from "@/lib/operations/emission-entries";
 import { runOperationInProcess } from "@/lib/operations/runner";
@@ -16,6 +24,7 @@ interface Fixture {
   ctx: OrgContext;
   facility: { id: string };
   batch: { id: string };
+  type: { id: string };
   ownsUser: boolean;
 }
 const fixtures: Fixture[] = [];
@@ -38,14 +47,14 @@ async function fixture(userId?: string): Promise<Fixture> {
     enrichment: { energy: { electricity_use: { unit: "kWh" } } },
     lineSources: { energy: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } },
   });
-  const result = { ctx, facility, batch, ownsUser };
+  const result = { ctx, facility, batch, type, ownsUser };
   fixtures.push(result);
   return result;
 }
 afterEach(async () => {
   for (const f of fixtures.splice(0).reverse()) {
     const org = f.ctx.organizationId;
-    for (const table of [activityEvents, apiIdempotencyRecords, emissionEntryValues, emissionEntries, removalTemplateObservations, creditBatches, productionProcesses, storageLocations, vehicles, feedstockTypes, facilities]) {
+    for (const table of [activityEvents, apiIdempotencyRecords, emissionEntryValues, emissionEntries, removalTemplateObservations, creditBatches, productionProcesses, storageLocations, reactors, vehicles, feedstockTypes, facilities]) {
       await db.delete(table).where(eq(table.organizationId, org));
     }
     await db.delete(organizations).where(eq(organizations.id, org));
@@ -56,7 +65,13 @@ const vehicleInput = { name: "Intent vehicle", vehicleType: "truck" };
 const typeInput = { name: "Intent type", category: "forestry", usage: "pyrolysis" };
 const binInput = (f: Fixture) => ({ name: "Intent bin", facilityId: f.facility.id, type: "biochar_bin" });
 const entryInput = (f: Fixture) => ({ creditBatchId: f.batch.id, componentId: "energy", occurredOn: DAY, values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "1", unit: "kWh" }] });
+const facilityInput = { ...TEST_SITE_POSITION, name: "Intent new facility", timezone: "UTC" };
+const reactorInput = (f: Fixture) => ({ identifier: "Intent reactor", facilityId: f.facility.id, reactorType: "batch" });
 const cases = [
+  { name: "facility", table: facilities, dates: true, prefix: "FAC", run: (f: Fixture, intentKey: string, changed = false) => runOperationInProcess(createFacility, f.ctx, { ...facilityInput, name: changed ? "Changed" : facilityInput.name }, { intentKey }) },
+  { name: "reactor", table: reactors, dates: true, prefix: "R", run: (f: Fixture, intentKey: string, changed = false) => runOperationInProcess(createReactor, f.ctx, { ...reactorInput(f), identifier: changed ? "Changed" : reactorInput(f).identifier }, { intentKey }) },
+  { name: "storage location sheet", table: storageLocations, dates: true, prefix: "SL", run: (f: Fixture, intentKey: string, changed = false) => runOperationInProcess(createStorageLocation, f.ctx, { ...binInput(f), name: changed ? "Changed" : binInput(f).name, storageMethod: "covered", storageDescription: "Sheet description" }, { intentKey }) },
+  { name: "production process", table: productionProcesses, dates: true, prefix: null, run: (f: Fixture, intentKey: string, changed = false) => runOperationInProcess(startNewProductionProcess, f.ctx, { facilityId: f.facility.id, feedstockTypeId: f.type.id, notes: changed ? "Changed" : null }, { intentKey }) },
   { name: "vehicle", table: vehicles, dates: false, prefix: "VEH", run: (f: Fixture, intentKey: string, changed = false) => runOperationInProcess(createVehicle, f.ctx, { ...vehicleInput, name: changed ? "Changed" : vehicleInput.name }, { intentKey }) },
   { name: "feedstock type", table: feedstockTypes, dates: true, prefix: "FT", run: (f: Fixture, intentKey: string, changed = false) => runOperationInProcess(createFeedstockType, f.ctx, { ...typeInput, name: changed ? "Changed" : typeInput.name }, { intentKey }) },
   { name: "storage location", table: storageLocations, dates: false, prefix: "BB", run: (f: Fixture, intentKey: string, changed = false) => runOperationInProcess(createQuickStorageLocation, f.ctx, { ...binInput(f), name: changed ? "Changed" : binInput(f).name }, { intentKey }) },
@@ -109,3 +124,49 @@ describe.each(cases)("$name create intent", ({ table, run, dates, prefix }) => {
     expect(events).toHaveLength(table === emissionEntries ? 1 : 0);
   }, SUITE_TIMEOUT_MS);
 });
+
+// Commit a competing row after code generation but before the savepoint insert.
+// The real unique violation must roll back that savepoint, then generate 002.
+const collisionCases = [
+  { name: "facility", prefix: "FAC", run: (f: Fixture, key: string) => {
+    const write = facilityWriter.createFacilityInTransaction;
+    vi.spyOn(facilityWriter, "createFacilityInTransaction").mockImplementationOnce(async (ctx, tx, data) => {
+      await db.insert(facilities).values({ ...data, organizationId: ctx.organizationId, name: "Competing facility" });
+      return write(ctx, tx, data);
+    });
+    return runOperationInProcess(createFacility, f.ctx, facilityInput, { intentKey: key });
+  } },
+  { name: "reactor", prefix: "R", run: (f: Fixture, key: string) => {
+    const write = reactorWriter.createReactorInTransaction;
+    vi.spyOn(reactorWriter, "createReactorInTransaction").mockImplementationOnce(async (ctx, tx, data) => {
+      await db.insert(reactors).values({ ...data, organizationId: ctx.organizationId, identifier: "Competing reactor" });
+      return write(ctx, tx, data);
+    });
+    return runOperationInProcess(createReactor, f.ctx, reactorInput(f), { intentKey: key });
+  } },
+  { name: "storage location sheet", prefix: "SL", run: (f: Fixture, key: string) => {
+    const write = binWriter.createStorageLocationInTransaction;
+    vi.spyOn(binWriter, "createStorageLocationInTransaction").mockImplementationOnce(async (ctx, tx, data) => {
+      await db.insert(storageLocations).values({ ...data, organizationId: ctx.organizationId, name: "Competing bin" });
+      return write(ctx, tx, data);
+    });
+    return runOperationInProcess(createStorageLocation, f.ctx, binInput(f), { intentKey: key });
+  } },
+  { name: "feedstock type", prefix: "FT", run: (f: Fixture, key: string) => {
+    const write = typeWriter.createFeedstockTypeInTransaction;
+    vi.spyOn(typeWriter, "createFeedstockTypeInTransaction").mockImplementationOnce(async (ctx, tx, data) => {
+      await db.insert(feedstockTypes).values({ ...data, organizationId: ctx.organizationId, name: "Competing type" });
+      return write(ctx, tx, data);
+    });
+    return runOperationInProcess(createFeedstockType, f.ctx, typeInput, { intentKey: key });
+  } },
+];
+it.each(collisionCases)("retries a generated $name code collision inside a savepoint", async ({ run, prefix }) => {
+  const f = await fixture();
+  const key = randomUUID();
+  const result = await run(f, key);
+  const year = String(new Date().getFullYear()).slice(-2);
+  expect(result.code).toBe(`${prefix}-${year}-002`);
+  // Replaying must not reach another writer or claim a new code.
+  expect(await run(f, key)).toEqual(result);
+}, SUITE_TIMEOUT_MS);
