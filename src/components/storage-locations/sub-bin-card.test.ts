@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { outputEntryMass } from "./output-entry-mass";
 import type { OutputSubBin } from "@/types/output-stock";
 import { bayFigure } from "./sub-bin-bays";
-import { contentsRows, movementMass, subBinMoistureCaption, subBinWetText } from "./sub-bin-card";
+import { subBinContentsRows, movementMass, subBinMoistureCaption, subBinWetText } from "./sub-bin-card";
 
 const subBin = (wetEstimateKg: number | null): OutputSubBin => ({
   layerId: "l1", code: "R-1", placedAt: "2026-09-10T12:00:00.000Z", dryMassKg: 900, solidsKg: 900, wetEstimateKg,
@@ -20,16 +20,18 @@ it("shows a sub-bin without a wet figure as its known dry biochar, never a place
   expect(bayFigure(small)).toBe("0.4 kg dry biochar");
 });
 
+const rows = (values: Pick<OutputSubBin, "dryMassKg" | "solidsKg" | "ingredients" | "wetEstimateKg">) => subBinContentsRows({ ...subBin(null), ...values });
+
 it("lists a sub-bin's contents top down as the bay draws them: water, each ingredient's solids, dry biochar", () => {
-  expect(contentsRows({ dryMassKg: 90, solidsKg: 160, ingredients: [{ name: "Compost", solidsKg: 70 }], waterKg: 40 })).toEqual([
+  expect(rows({ dryMassKg: 90, solidsKg: 160, ingredients: [{ name: "Compost", solidsKg: 70 }], wetEstimateKg: 200 })).toEqual([
     { label: "Water, estimated", value: "40 kg" }, { label: "Compost solids", value: "70 kg" }, { label: "Dry biochar", value: "90 kg" },
   ]);
   // Pure biochar has no ingredient row; no wet estimate means no water row.
-  expect(contentsRows({ dryMassKg: 270, solidsKg: 270, ingredients: [], waterKg: null })).toEqual([{ label: "Dry biochar", value: "270 kg" }]);
+  expect(rows({ dryMassKg: 270, solidsKg: 270, ingredients: [], wetEstimateKg: null })).toEqual([{ label: "Dry biochar", value: "270 kg" }]);
 });
 
 it("keeps the unnamed ingredient solids as one row, so the contents still add up", () => {
-  expect(contentsRows({ dryMassKg: 90, solidsKg: 150, ingredients: [], waterKg: 40 })).toEqual([
+  expect(rows({ dryMassKg: 90, solidsKg: 150, ingredients: [], wetEstimateKg: 190 })).toEqual([
     { label: "Water, estimated", value: "40 kg" }, { label: "Ingredient solids", value: "60 kg" }, { label: "Dry biochar", value: "90 kg" },
   ]);
 });
@@ -42,4 +44,14 @@ it("says when a sub-bin has no moisture reading, and names dry biochar in a move
 
 it("names dry biochar the same way on a deleted entry's amount", () => {
   expect(outputEntryMass({ wetMassKg: null, dryMassKg: -90 })).toBe("90 kg dry biochar");
+});
+
+it("pins a split product bay's tooltip rows: water 40, compost solids 70, dry biochar 90", () => {
+  const bay: OutputSubBin = { ...subBin(200), dryMassKg: 90, solidsKg: 160, ingredients: [{ name: "Compost", solidsKg: 70 }] };
+  expect(subBinContentsRows(bay)).toEqual([
+    { label: "Water, estimated", value: "40 kg" }, { label: "Compost solids", value: "70 kg" }, { label: "Dry biochar", value: "90 kg" },
+  ]);
+  expect(subBinContentsRows({ ...bay, wetEstimateKg: null })).toEqual([
+    { label: "Compost solids", value: "70 kg" }, { label: "Dry biochar", value: "90 kg" },
+  ]);
 });

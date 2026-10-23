@@ -221,3 +221,29 @@ it("names a lone product bay's parts like the product composition, by ingredient
   await act(async () => renderer.unmount());
 });
 
+it("pins split product bays: fill sizes against the largest bay, water and compost bands, shared key", async () => {
+  const big: OutputSubBin = { layerId: "big", code: "PR-1", placedAt: INSTANT, dryMassKg: 90, solidsKg: 160, wetEstimateKg: 200, moisturePercent: 20, basis: null, recentMovements: [], ingredients: [{ name: "Compost", solidsKg: 70 }] };
+  const small: OutputSubBin = { ...big, layerId: "small", code: "PR-2", dryMassKg: 80, solidsKg: 80, wetEstimateKg: 100, ingredients: [] };
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<SubBinBays subBins={[big, small]} label="Sub-bins" timeZone="UTC" />); });
+  const fills = renderer.root.findAll(node => node.type === "span" && node.props["aria-hidden"] === "true" && node.props.style?.height?.endsWith("%"));
+  const heights = (fill: (typeof fills)[number]) => fill.findAll(node => node.type === "span" && node.props.style?.height).map(node => node.props.style.height);
+  expect(fills.map(fill => fill.props.style.height)).toEqual(["100%", "50%"]);
+  expect(fills.map(heights)).toEqual([["100%", "20%", "35%"], ["50%", "20%"]]);
+  const json = JSON.stringify(renderer.toJSON());
+  expect(json).toContain("Ingredient solids");
+  expect(json).toContain("Water, estimated");
+  await act(async () => renderer.unmount());
+});
+
+it("intended: a split bay whose wet is below its solids is sized by solids and its bands stay within the bay", async () => {
+  const bay: OutputSubBin = { layerId: "low", code: "PR-9", placedAt: INSTANT, dryMassKg: 50, solidsKg: 80, wetEstimateKg: 70, moisturePercent: 20, basis: null, recentMovements: [], ingredients: [{ name: "Compost", solidsKg: 30 }] };
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<SubBinBays subBins={[bay]} label="Sub-bins" timeZone="UTC" capacityKg={100} />); });
+  const fills = renderer.root.findAll(node => node.type === "span" && node.props["aria-hidden"] === "true" && node.props.style?.height?.endsWith("%"));
+  expect(fills.map(fill => fill.props.style.height)).toEqual(["80%"]);
+  const bands = fills[0].findAll(node => node.type === "span" && node.props.style?.height).map(node => node.props.style.height);
+  expect(bands).toEqual(["80%", "37.5%"]);
+  expect(JSON.stringify(renderer.toJSON())).not.toContain("Water, estimated");
+  await act(async () => renderer.unmount());
+});
