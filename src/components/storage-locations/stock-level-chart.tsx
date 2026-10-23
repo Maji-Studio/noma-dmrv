@@ -65,11 +65,11 @@ export function StockLevelChart({ points, modeChanges = [], timeZone, now, solid
   timeZone: string;
   now: number;
   /** The solid band: dry biochar, or a feedstock's estimated dry solids. */
-  /** Reads the estimated water and wet mass; an output bin passes whole kg, a feedstock bin keeps its decimal. */
-  formatEstimate?: EstimateFormat;
   solidLabel?: string;
   /** The stock card's shorter version. */
   compact?: boolean;
+  /** Reads the estimated water and wet mass; an output bin passes whole kg, a feedstock bin keeps its decimal. */
+  formatEstimate?: EstimateFormat;
 }) {
   // Several bin cards can share a page, so each chart needs its own pattern id.
   const hatchId = `stock-water-hatch-${useId().replace(/:/g, "")}`;
