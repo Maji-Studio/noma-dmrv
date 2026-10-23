@@ -23,10 +23,6 @@ import { hasAcceptedTransportEvidence } from "@/lib/certification/transport-evid
 import type { TransportLeg } from "@/db/schema";
 import { TransportLegForm } from "./transport-leg-form";
 import { TransportRoute } from "./transport-route";
-import {
-  deriveTransportLegCertStatuses,
-  summarizeTransportLegCertStatuses,
-} from "./transport-leg-cert-status";
 
 interface TransportLegsEditorProps {
   entityType: TransportEntityTypeValue;
@@ -180,9 +176,6 @@ export function TransportLegsEditor({
     ? deferredLegs
     : (legs ?? []);
   const controlsDisabled = dialog.open || disabled;
-  const certSummary = summarizeTransportLegCertStatuses(
-    deriveTransportLegCertStatuses(deferred ? deferredLegs : legs, !deferred, entityType),
-  );
 
   const evidenceFor = (index: number): boolean => {
     const leg = displayedLegs[index];
@@ -230,7 +223,6 @@ export function TransportLegsEditor({
         entityType={entityType}
         legs={displayedLegs}
         title={title}
-        cert={certSummary}
         emptyMessage={
           emptyMessage ??
           (readOnly

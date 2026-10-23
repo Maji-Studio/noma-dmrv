@@ -4,10 +4,6 @@ import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
 import { positiveOrNull } from "@/lib/calculations/transport-leg";
 import type { JourneyLegInput } from "./transport-journey-model";
-import {
-  deriveTransportLegCertStatuses,
-  summarizeTransportLegCertStatuses,
-} from "./transport-leg-cert-status";
 import { TransportRoute } from "./transport-route";
 
 /** An end as the caller holds it: either coordinate may be missing. */
@@ -28,21 +24,14 @@ interface TransportRoutePreviewProps {
   distanceKm: number | null | undefined;
   distanceSource: DistanceSourceValue | null | undefined;
   loadMassKg: number | null | undefined;
-  /** The values are saved, so the CERT chip may resolve. Leave false for a form draft. */
-  saved?: boolean;
   /** Evidence state; left out, the leg draws no evidence icon. */
   evidenceAttached?: boolean;
   /** Shown while there is no distance, load or pair of coordinates to draw. */
   emptyMessage: string;
   /** Override the route's accessible name. */
   title?: string;
-  /** A route before goods move (an order) has no load and no CERT chip. */
+  /** A route before goods move (an order) has no load. */
   plannedRoute?: boolean;
-  /**
-   * Show the route's CERT chip. Read views do; forms leave it off because
-   * their distance and mass inputs carry their own chips.
-   */
-  certTag?: boolean;
 }
 
 /**
@@ -61,12 +50,10 @@ export function TransportRoutePreview({
   distanceKm,
   distanceSource,
   loadMassKg,
-  saved = false,
   evidenceAttached,
   emptyMessage,
   title,
   plannedRoute = false,
-  certTag = false,
 }: TransportRoutePreviewProps) {
   const distance = positiveOrNull(distanceKm);
   const load = plannedRoute ? null : positiveOrNull(loadMassKg);
@@ -88,16 +75,11 @@ export function TransportRoutePreview({
         loadMassKg: load,
       }];
 
-  const cert = certTag && !plannedRoute
-    ? summarizeTransportLegCertStatuses(deriveTransportLegCertStatuses(legs, saved, entityType))
-    : undefined;
-
   return (
     <TransportRoute
       entityType={entityType}
       legs={legs}
       title={title}
-      cert={cert}
       hideLoad={plannedRoute}
       emptyMessage={emptyMessage}
       evidence={() => evidenceAttached}

@@ -1,20 +1,17 @@
 "use client";
 
 /**
- * The route as every transport surface shows it: a "Route" field label with
- * its CERT chip, a map for a single leg, then the legs on the route rail.
+ * The route as every transport surface shows it: a "Route" field label, a map for a single leg, then the legs on the route rail.
  * Presentational only: the editor wraps it with add/edit/delete, and
  * `TransportRoutePreview` feeds it a caller's own values.
  */
 import type { ReactNode } from "react";
-import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { ServerError } from "@/components/forms";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
 import { TransportJourney } from "./transport-journey";
 import { buildJourney, type JourneyLegInput } from "./transport-journey-model";
 import { TransportRouteMapButton } from "./transport-route-map";
-import type { TransportLegCertSummary } from "./transport-leg-cert-status";
 
 // Feedstock and biochar legs are auto-derived (supplier default location distance / delivery
 // aggregation); sample → lab stays manual. The visible label is "Route";
@@ -29,7 +26,6 @@ export function TransportRoute({
   entityType,
   legs,
   title,
-  cert,
   hideLoad = false,
   emptyMessage,
   loading = false,
@@ -42,8 +38,6 @@ export function TransportRoute({
   legs: readonly JourneyLegInput[];
   /** Override the route's accessible name. Defaults based on entityType. */
   title?: string;
-  /** The route's CERT chip; left out where the inputs around it carry their own. */
-  cert?: TransportLegCertSummary;
   /** A route before any goods move (an order) has no load to show. */
   hideLoad?: boolean;
   emptyMessage: string;
@@ -64,7 +58,6 @@ export function TransportRoute({
       <div className="flex flex-wrap items-center justify-between gap-8">
         <span className="flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
           Route
-          {cert && <CertificationFieldTag status={cert.status} description={cert.description} />}
         </span>
         <span className="flex items-center gap-8">
           {mapLeg && <TransportRouteMapButton leg={mapLeg} entityType={entityType} />}

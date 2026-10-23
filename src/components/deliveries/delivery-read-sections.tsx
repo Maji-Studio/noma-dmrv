@@ -76,7 +76,6 @@ export function deliverySheetSections(delivery: DeliverySheetRecord, facilities:
           distanceKm={delivery.effectiveDistanceKm}
           distanceSource={delivery.effectiveDistanceSource}
           loadMassKg={delivery.deliveredWetMassKg}
-          saved
           evidenceAttached={hasAcceptedTransportEvidence(delivery.transportEvidenceDocumentCount)}
           emptyMessage={ROUTE_EMPTY}
           originPoint={{ lat: delivery.facilityGpsLatitude, lng: delivery.facilityGpsLongitude }}

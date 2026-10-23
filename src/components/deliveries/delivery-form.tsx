@@ -471,7 +471,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           distanceKm={effectiveDistanceKm}
           distanceSource={effectiveDraftDistanceSource}
           loadMassKg={typeof watchWetMass === "number" ? watchWetMass : null}
-          saved={isEditMode}
           emptyMessage={ROUTE_EMPTY}
         />
       </FormSection>
