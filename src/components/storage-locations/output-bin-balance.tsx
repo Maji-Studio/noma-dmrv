@@ -14,7 +14,7 @@ import { buildStockLevelSeries } from "./stock-level-series";
 import { CardTextButton, StockCard, StockChartCard } from "./stock-card";
 import { outputStockFigure } from "./stock-preview-shared";
 import { MixPileBay, SubBinBays, type PileBand } from "./sub-bin-bays";
-import { partLabel, partRows } from "./sub-bin-card";
+import { partFigure, partLabel, partRows } from "./sub-bin-card";
 import { pileFigures, stockParts } from "@/lib/output-stock/stock-parts";
 import type { OutputSubBin } from "@/types/output-stock";
 import type { MoistureBasis } from "@/lib/output-stock/moisture-estimate";
@@ -45,7 +45,7 @@ export function mixPileBands(layers: OutputSubBin[], dryKg: number | null, wetKg
       { label: partLabel(part), value: formatMassKg(part.kg) },
     ] })),
     ...parts.rows.filter((part) => part.kind === "water").map((part) => ({ label: partLabel(part), kg: part.kg, category: "existing-water" as const, details: [
-      { label: partLabel(part), value: formatMassKg(part.kg) },
+      { label: partLabel(part), value: partFigure(part) },
       // The pile's moisture is an estimate, so without one the row is left out.
       ...(moisturePercent === null ? [] : [{ label: "Moisture", value: formatMoisturePercent(moisturePercent) }]),
     ] })),

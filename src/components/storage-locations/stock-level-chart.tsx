@@ -141,7 +141,7 @@ export function StockLevelChart({ points, modeChanges = [], timeZone, now, solid
       <figcaption className="flex flex-wrap gap-x-16 gap-y-4 body-caption text-[var(--color-text-secondary)]">
         <span className="inline-flex items-center gap-6"><span aria-hidden="true" className="inline-block h-12 w-12 bg-[var(--clr-dark-purple-80)]" />{solidLabel} {formatMassKg(last.dryKg)}</span>
         {hasIngredients && <span className="inline-flex items-center gap-6"><span aria-hidden="true" className="inline-block h-12 w-12 bg-[var(--acc-infra)]" />{INGREDIENT_SOLIDS_LABEL} {formatMassKg(last.ingredientsKg)}</span>}
-        {hasWater && <span className="inline-flex items-center gap-6"><span aria-hidden="true" className="inline-block h-12 w-12 border border-[var(--color-border-secondary)] moisture-water-hatch" />{ESTIMATED_WATER_LABEL}{last.waterKg === null ? "" : ` ${formatMassKg(last.waterKg)}`}</span>}
+        {hasWater && <span className="inline-flex items-center gap-6"><span aria-hidden="true" className="inline-block h-12 w-12 border border-[var(--color-border-secondary)] moisture-water-hatch" />{ESTIMATED_WATER_LABEL}{last.waterKg === null ? "" : ` ${estimateKg(last.waterKg)}`}</span>}
       </figcaption>
     </figure>
   );
