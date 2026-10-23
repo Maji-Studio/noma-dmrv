@@ -50,7 +50,9 @@ export async function reallocateRunsForBins(
     .where(and(
       eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
       inArray(productionRunFeedstockDraws.storageLocationId, ids),
-      ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
+      // Cancelled runs keep their history and consume no stock, so another
+      // edit never rebuilds them; their own save (onlyRunId) still does.
+      onlyRunId ? undefined : ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
       onlyRunId ? eq(productionRunFeedstockDraws.productionRunId, onlyRunId) : undefined,
       earliestStart ? gte(productionRuns.startTime, earliestStart) : undefined,
       options.facilityId ? eq(productionRuns.facilityId, options.facilityId) : undefined,
@@ -72,7 +74,7 @@ export async function reallocateRunsForBins(
   assertStockLockSnapshot(JSON.stringify(draws) === JSON.stringify(currentDraws));
 
   for (const run of runs) {
-    if (run.status === CANCELLED_PRODUCTION_RUN_STATUS) continue;
+    if (!onlyRunId && run.status === CANCELLED_PRODUCTION_RUN_STATUS) continue;
     const timezone = await getOutputStockFacilityTimezone(ctx, run.facilityId, tx);
     const cutoffDay = formatFacilityDate(run.startTime, timezone);
     const proposed: FeedstockWetAllocation[] = [];

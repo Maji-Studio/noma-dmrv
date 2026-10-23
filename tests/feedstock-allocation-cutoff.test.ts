@@ -95,6 +95,16 @@ describe("facility-day feedstock allocations", () => {
     await reallocateRunsForFacility(ctx, tx, f.facility.id);
     expect(await shares(tx, run.id)).toEqual(before);
   }));
+  it("keeps a run's intake history when the form cancels it and resubmits its draws", () => scenario(async (tx, f) => {
+    const run = await f.run();
+    const before = await shares(tx, run.id);
+    await updateProductionRunInTransaction(ctx, tx, run.id, {
+      expectedVersion: run.version, status: "cancelled", cancellationReason: "Test cancellation",
+      feedstockDraws: [{ storageLocationId: f.bins[0].id, wetMassKg: DRAW_KG }],
+    });
+    expect(await shares(tx, run.id)).toEqual(expect.arrayContaining(before));
+    expect(await shares(tx, run.id)).toHaveLength(before.length);
+  }));
   it("names the affected run when an intake edit leaves too little qualifying mass", () => scenario(async (tx, f) => {
     const run = await f.run();
     await updateProductionRunInTransaction(ctx, tx, run.id, {
