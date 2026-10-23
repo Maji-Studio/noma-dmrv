@@ -10,7 +10,7 @@ import {
 
 /** Only the frozen contribution manifest authorizes entry files and targets. */
 export function emissionEntrySourceCandidates(
-  contributions?: Pick<RemovalEntryContributions, "manifest" | "entrySet">,
+  contributions?: Pick<RemovalEntryContributions, "manifest" | "entrySet" | "carriedEntries">,
 ): { documentId: string; binding: ClassifiedRemovalSource }[] {
   const candidates = new Map<string, { documentId: string; binding: ClassifiedRemovalSource }>();
   for (const input of contributions?.manifest ?? []) {
@@ -19,6 +19,7 @@ export function emissionEntrySourceCandidates(
       if (!isInFrozenEntrySet(entry, contributions?.entrySet)) {
         throw new EmissionEntryEvidenceError(EMISSION_ENTRIES_CHANGED, { entryId: entry.entryId, componentId: input.componentId, inputKey: input.inputKey });
       }
+      const carried = contributions?.carriedEntries?.find(carried => carried.entryId === entry.entryId);
       const label = ["Emissions entry", input.componentDisplayName, entry.occurredOn, entry.creditBatchCode].filter(Boolean).join(", ");
       const target: RemovalSourceIntendedTarget = { kind: "explicit", componentId: input.componentId, inputKey: input.inputKey };
       for (const documentId of entry.evidenceDocumentIds) {
@@ -35,6 +36,7 @@ export function emissionEntrySourceCandidates(
           }
         } else {
           candidates.set(documentId, { documentId, binding: {
+            ...(carried ? { carriedEntry: { creditBatchCode: carried.creditBatchCode, occurredOn: carried.occurredOn } } : {}),
             nomaRole: "emission_entry", nomaRoleLabel: "Emissions entry",
             lineage: { entityType: "emission_entry", entityId: entry.entryId, entityLabel: label },
             intendedTarget: target, mappingRevision: SOURCE_BINDING_MAPPING_REVISION,

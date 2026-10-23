@@ -33,8 +33,8 @@ it("heals a crashed unreserved draft after a new entry is added and submits a ne
   let loadedFresh = false;
   vi.mocked(loadRemovalSubmissionContext).mockImplementation(async () => {
     const context = makeContext();
-    const frozen = frozenEntriesForAttempt(context.latestSubmission, batchFacts);
-    const entries = await loadRemovalEntryContext(org, scope, batchFacts, facility, frozen);
+    const frozen = frozenEntriesForAttempt(context.latestSubmission, { batchFacts });
+    const entries = await loadRemovalEntryContext(org, scope, { batchFacts }, facility, frozen);
     context.removalEntryContext = entries;
     loadedFresh = true;
     return context;

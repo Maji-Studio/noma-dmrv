@@ -1,4 +1,4 @@
-vi.mock("@/fn/certification/batch-emission-context", () => ({ loadBatchEmissionContext: vi.fn(async () => ({})) }));
+vi.mock("@/fn/certification/batch-emission-context", () => ({ loadBatchEmissionContext: vi.fn(async () => ({ batchFacts: {} })) }));
 vi.mock("@/data-access/transport-distance-fix-links", () => ({ getTransportDistanceFixLinks: vi.fn(async () => new Map()) }));
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations";
 import { reviewedTemplateSources } from "./helpers/template-line-sources";

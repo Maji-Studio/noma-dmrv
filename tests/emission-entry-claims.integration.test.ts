@@ -252,8 +252,8 @@ it("retries an empty frozen set after production reservation and a new entry", a
   await value();
   const [batch] = await db.select().from(creditBatches).where(eq(creditBatches.id, fixture.batchId));
   const entryFacts = await loadBatchEmissionEntryFacts(ctx, fixture.batchId, observation);
-  const frozen = frozenEntriesForAttempt(row, { [fixture.batchId]: { ...entryFacts, automaticFigures: {},
-    productionReservationSubmissionId: batch.productionEmissionsClaimReservedBySubmissionId } });
+  const frozen = frozenEntriesForAttempt(row, { batchFacts: { [fixture.batchId]: { ...entryFacts, automaticFigures: {},
+    productionReservationSubmissionId: batch.productionEmissionsClaimReservedBySubmissionId } } });
   expect(frozen).toEqual([]);
   await reserve(row);
   await markSubmissionSubmitted(ctx, row.id, { externalId: "empty-fixture", expectedLockedAt: row.lockedAt!,

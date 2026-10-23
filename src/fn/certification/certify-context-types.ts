@@ -1,3 +1,6 @@
+import type { BatchEntityReadinessIssue } from "@/lib/certification/batch-health";
+import type { EntryCorrectionState } from "@/lib/certification/removal-entry-correction";
+import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
 import type { loadRemovalEntryContext } from "./removal-entry-context";
 import type { BatchEmissionLine } from "@/lib/certification/emission-lines";
 import type { RemovalAdvisory } from "@/lib/certification/removal-blockers";
@@ -25,6 +28,7 @@ import type { FixedInputValue } from "./resolve-removal-template";
 type DurabilityOption = "200_year" | "1000_year";
 // UI-facing removal context — the lean payload React Query caches.
 export interface RemovalCertifyContext {
+  carriedEntries?: RemovalEntryContributions["carriedEntries"];
   facilityId: string;
   hasOrgCredentials: boolean;
   // Null when the credit batch is not yet grouped into a removal (a 1:1
@@ -41,7 +45,7 @@ export interface RemovalCertifyContext {
   /** Current template components without a saved, unambiguous decision. */
   undecidedLineIds?: readonly string[];
   emissionLinesByBatchId?: Record<string, BatchEmissionLine[]>;
-  entryCorrectionsByBatchId?: Record<string, import("@/lib/certification/removal-entry-correction").EntryCorrectionState[]>;
+  entryCorrectionsByBatchId?: Record<string, EntryCorrectionState[]>;
   emissionLines?: BatchEmissionLine[] | null;
   blueprintsForTemplate: IsometricComponentBlueprint[];
   unresolvedBlueprintKeys: string[];
@@ -67,7 +71,7 @@ export interface RemovalCertifyContext {
   submissionLineageBlockers: SubmissionLineageBlocker[];
   durabilityConfigurationBlockers: string[];
   templateTierBlocker?: string | null;
-  entityReadinessIssues?: import("@/lib/certification/batch-health").BatchEntityReadinessIssue[];
+  entityReadinessIssues?: BatchEntityReadinessIssue[];
   // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
   // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
   durabilityGateBlockers: string[];

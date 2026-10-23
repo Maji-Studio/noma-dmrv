@@ -92,6 +92,12 @@ export async function listEmissionEntriesForBatches(
       ),
     )
     .orderBy(asc(emissionEntries.occurredOn), asc(emissionEntries.id));
+  return hydrateEmissionEntries(ctx, entries, executor);
+}
+
+/** Hydrate an already organization-scoped entry selection without widening it to whole batches. */
+export async function hydrateEmissionEntries(ctx: OrgContext, entries: (typeof emissionEntries.$inferSelect)[], executor: Executor = db) {
+  requireOrgScope(ctx);
   if (!entries.length) return [];
   const ids = entries.map((entry) => entry.id);
   const values = await executor

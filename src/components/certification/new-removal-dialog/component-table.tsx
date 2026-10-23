@@ -55,7 +55,7 @@ export function jumpToComponentRow(componentId: string): void {
 const ROW_GRID =
   "grid grid-cols-[minmax(0,1fr)_auto] gap-x-12 gap-y-4 md:grid-cols-[minmax(0,1fr)_144px_minmax(0,200px)_minmax(0,220px)] md:items-start";
 
-function EntryFileNames({ entryId }: { entryId: string }) {
+export function EntryFileNames({ entryId }: { entryId: string }) {
   const { data } = useDocumentsForEntity(ENTRY_ENTITY_TYPE, entryId);
   return (
     <>

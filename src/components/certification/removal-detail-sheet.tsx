@@ -23,6 +23,7 @@ import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { DetailField, DetailSection } from "@/components/ui/detail-panel";
 import {
   useDeleteRemoval,
+  useRemovalCertifyContext,
   useFacilityCertifierSummary,
 } from "@/hooks/use-certification";
 import {
@@ -32,6 +33,7 @@ import {
 import { pluralize } from "@/lib/copy-utils";
 import { formatDateRange } from "@/lib/format-utils";
 import { isometricRegistry } from "@/lib/isometric/links";
+import { CarriedEntriesSection } from "./carried-entries";
 import { EnvBanner } from "./env-banner";
 import { IsometricLink } from "./isometric-link";
 import { ProductionBatchLinks } from "./production-batch-links";
@@ -182,6 +184,10 @@ export function RemovalDetailSheet({
     enrichmentStatus: summary.enrichmentStatus,
     readiness: summary.readiness,
   });
+  // Carried entries come from the full certify context, the only read that
+  // resolves them. Nothing cheaper signals them, so a replaced Removal (which
+  // never sends anything) is the one state that skips the read.
+  const { data: certifyContext } = useRemovalCertifyContext(facilityId, summary.removalId, open && workflowStatus.kind !== "superseded");
   // A returned Removal with its correction window open shows the Returned or
   // Resubmit needed status and one notice in place of #1134's lock-based one.
   const { correction } = summary;
@@ -316,6 +322,12 @@ export function RemovalDetailSheet({
                 )}
               </div>
             </DetailSection>
+
+            <CarriedEntriesSection
+              entries={certifyContext?.carriedEntries}
+              facilityId={facilityId}
+              sent={workflowStatus.kind === "submitted"}
+            />
 
             {/*
               Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant
