@@ -23,14 +23,10 @@ import type { SelectableBatch } from "@/fn/certification";
 // The link names the panel it lands on (Kenji, 2026-10-20).
 import { OPEN_TODOS_LABEL } from "@/lib/credit-batches/batch-page";
 import { cn } from "@/lib/utils";
+import { INLINE_HIT_AREA, INLINE_HIT_AREA_FROM_SM } from "@/components/ui/touch-target";
 
 const STATUS_ICON = 14;
 const LINK_ICON = 12;
-/** A 44px tall hit area around an inline link without growing its row. */
-const HIT_AREA = "relative after:absolute after:inset-x-0 after:-inset-y-12 after:content-['']";
-/** The same from sm; below it the link has its own 44px row. */
-const HIT_AREA_FROM_SM =
-  "sm:relative sm:after:absolute sm:after:inset-x-0 sm:after:top-1/2 sm:after:h-44 sm:after:-translate-y-1/2 sm:after:content-['']";
 
 
 /**
@@ -81,7 +77,7 @@ function BatchCodeLink({ batch, facilityId }: { batch: SelectableBatch; facility
       href={creditBatchDeepLinkHref(batch.id, facilityId)}
       target="_blank"
       rel="noopener noreferrer"
-      className={cn(HIT_AREA, "inline-flex items-center gap-4 body-small font-medium font-mono text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline")}
+      className={cn(INLINE_HIT_AREA, "inline-flex items-center gap-4 body-small font-medium font-mono text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline")}
     >
       {batch.code}
       <ArrowSquareOutIcon size={LINK_ICON} aria-hidden />
@@ -187,7 +183,7 @@ export function NotReadyBatchBox({
         target="_blank"
         rel="noopener noreferrer"
         aria-label={`${OPEN_TODOS_LABEL} for ${batch.code}`}
-        className={cn(HIT_AREA_FROM_SM, "col-start-1 row-start-3 inline-flex min-h-44 items-center gap-4 justify-self-start body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline sm:col-start-2 sm:row-start-2 sm:min-h-0 sm:justify-self-end")}
+        className={cn(INLINE_HIT_AREA_FROM_SM, "col-start-1 row-start-3 inline-flex min-h-44 items-center gap-4 justify-self-start body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline sm:col-start-2 sm:row-start-2 sm:min-h-0 sm:justify-self-end")}
       >
         {OPEN_TODOS_LABEL}
         <ArrowSquareOutIcon size={LINK_ICON} aria-hidden />
