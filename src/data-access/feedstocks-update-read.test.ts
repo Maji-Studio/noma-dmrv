@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { db, type DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 
+vi.mock("./feedstock-run-allocations", () => ({ reallocateRunsForBins: vi.fn() }));
 vi.mock("./record-lock-dependents", () => ({ readRecordDependents: async () => [] }));
 vi.mock("./certification-lineage-guards", () => ({
   assertCanMutateCertifiedLineage: vi.fn(),
@@ -31,6 +32,8 @@ vi.mock("./transport-legs", () => ({
 }));
 vi.mock("./documents", () => ({ retireDocumentsForEntities: vi.fn() }));
 
+import { DomainError } from "@/lib/domain-errors";
+import { reallocateRunsForBins } from "./feedstock-run-allocations";
 import { updateFeedstockInTransaction } from "./feedstocks";
 
 const ctx: OrgContext = {
@@ -45,6 +48,7 @@ const STORED_ROW = {
   id: FEEDSTOCK_ID,
   version: 1,
   status: "available",
+  deliveryDate: new Date("2026-03-01T00:00:00Z"),
   storageLocationId: "bin",
   facilityId: "facility",
   feedstockTypeId: "type",
@@ -122,8 +126,19 @@ describe("updateFeedstockInTransaction", () => {
       updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, { expectedVersion: 1, notes: "checked" }),
     ).resolves.toEqual({ ...ENRICHED_ROW, hasUsableTransportLeg: false, transportLegDistanceSource: null });
     expect(tx.update).toHaveBeenCalled();
+    expect(reallocateRunsForBins).toHaveBeenCalledWith(ctx, tx, ["bin", "bin"], { earliestDeliveryDate: STORED_ROW.deliveryDate });
     // Every read, including the locked existence check, stays on tx.
     expect(globalRead).not.toHaveBeenCalled();
+  });
+
+  it.each(["certification_locked", "insufficient_stock"] as const)("maps rebuild %s to the intake date", async code => {
+    vi.mocked(reallocateRunsForBins).mockRejectedValueOnce(new DomainError(code, "Rebuild refused"));
+    const tx = makeTx({ rows: [ENRICHED_ROW] });
+    await expect(updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, {
+      expectedVersion: 1, deliveryDate: new Date("2026-04-01T00:00:00Z"),
+    })).rejects.toMatchObject({ code, message: "Rebuild refused", issues: expect.arrayContaining([
+      { path: ["deliveryDate"], code, message: "Rebuild refused" },
+    ]) });
   });
 
   it("does not report a failed read as a feedstock that was not found", async () => {
