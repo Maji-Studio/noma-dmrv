@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { env } from "@/config/env";
 import { getBetterAuthSession } from "@/lib/auth/providers/better-auth-server";
 import { logger } from "@/lib/log";
-import { orgRoleLabel } from "@/lib/org-role-label";
+import { orgRoleLabelOf } from "@/lib/org-role-label";
 import { orgRoleSchema } from "@/schemas/organizations";
+import { getEmailAppUrl } from "./app-url";
 import { logLocalFallbackLink, sendEmail, type EmailType } from "./send";
 import { passwordChangedEmail } from "./templates/password-changed-email";
 import { roleChangedEmail } from "./templates/role-changed-email";
@@ -49,7 +49,7 @@ async function currentActor(expectedUserId?: string) {
 }
 
 export async function sendPasswordChangedNotice(recipient: NoticeRecipient): Promise<void> {
-  const appUrl = env.NEXT_PUBLIC_APP_URL;
+  const appUrl = getEmailAppUrl();
   const resetUrl = `${appUrl}/forgot-password`;
   await deliverNotice("password-changed", recipient, async () => passwordChangedEmail({
     to: recipient.email, changedAt: new Date(), resetUrl, appUrl,
@@ -62,28 +62,31 @@ export async function sendRoleChangedNotice(input: MemberNotice & {
   actorUserId?: string;
 }): Promise<void> {
   if (input.fromRole === input.toRole) return;
+  const appUrl = getEmailAppUrl();
   await deliverNotice("role-changed", input, async () => {
     const actor = await currentActor(input.actorUserId);
     return roleChangedEmail({
       to: input.email, organizationName: input.organizationName,
       actorName: actor?.name?.trim() || undefined,
-      fromRole: orgRoleLabel(orgRoleSchema.parse(input.fromRole))!,
-      toRole: orgRoleLabel(orgRoleSchema.parse(input.toRole))!,
-      changedAt: new Date(), appUrl: env.NEXT_PUBLIC_APP_URL,
+      fromRole: orgRoleLabelOf(orgRoleSchema.parse(input.fromRole)),
+      toRole: orgRoleLabelOf(orgRoleSchema.parse(input.toRole)),
+      changedAt: new Date(), appUrl,
     });
-  }, env.NEXT_PUBLIC_APP_URL);
+  }, appUrl);
 }
 
 export async function sendRemovedFromOrganizationNotice(input: MemberNotice & {
   actorUserId?: string;
 }): Promise<void> {
   if (input.actorUserId === input.userId) return;
+  const actor = await currentActor(input.actorUserId);
+  if (actor?.id === input.userId) return;
+  const appUrl = getEmailAppUrl();
   await deliverNotice("removed-from-organization", input, async () => {
-    const actor = await currentActor(input.actorUserId);
     return removedFromOrganizationEmail({
       to: input.email, organizationName: input.organizationName,
       actorName: actor?.name?.trim() || undefined,
-      removedAt: new Date(), appUrl: env.NEXT_PUBLIC_APP_URL,
+      removedAt: new Date(), appUrl,
     });
-  }, env.NEXT_PUBLIC_APP_URL);
+  }, appUrl);
 }

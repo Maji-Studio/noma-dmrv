@@ -3,7 +3,6 @@
  * Sets up authentication with email/password and admin invite
  */
 import { capturePasswordResetNotice, deliverPasswordNotice } from "./account-notice-hooks";
-import { getBetterAuthSession } from "./providers/better-auth-server";
 import { sendRoleChangedNotice, sendRemovedFromOrganizationNotice } from "@/lib/email/account-notices";
 import { createOAuthProvider } from "./oauth-provider";
 import { createOAuthCimdPlugins } from "./oauth-cimd";
@@ -327,12 +326,9 @@ export const auth = betterAuth({
         afterRemoveMember: async ({ member, user, organization }) => {
           await revokeMemberOAuthGrants(member.organizationId, member.userId, member.id);
           await disableOwnerApiKeys(member.organizationId, member.userId);
-          // Leave does not invoke this hook. Suppress self-removal here too.
-          let actorUserId: string | undefined;
-          try { actorUserId = (await getBetterAuthSession())?.user.id; } catch { /* Unknown actor. */ }
           await sendRemovedFromOrganizationNotice({
             userId: user.id, email: user.email, memberId: member.id,
-            organizationId: organization.id, organizationName: organization.name, actorUserId,
+            organizationId: organization.id, organizationName: organization.name,
           });
         },
         afterUpdateMemberRole: async ({ member, previousRole, user, organization }) => {

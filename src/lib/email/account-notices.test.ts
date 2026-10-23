@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ session: vi.fn(), warn: vi.fn(), error: vi.fn() }));
 vi.mock("@/lib/auth/providers/better-auth-server", () => ({ getBetterAuthSession: mocks.session }));
@@ -13,6 +13,8 @@ import { env } from "@/config/env";
 
 const MEMBER = { memberId: "member-id", organizationId: "organization-id", userId: "recipient-id",
   organizationName: "Private Organization", email: "recipient@example.test" };
+const APP_URL = env.NEXT_PUBLIC_APP_URL;
+afterEach(() => { env.NEXT_PUBLIC_APP_URL = APP_URL; });
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.session.mockReset().mockResolvedValue({ user: { id: "actor-id", name: "Acting Admin" } });
@@ -46,6 +48,40 @@ it("does not send a same-role notice or a self-removal notice", async () => {
   await sendRoleChangedNotice({ ...MEMBER, fromRole: "member", toRole: "member" });
   await sendRemovedFromOrganizationNotice({ ...MEMBER, actorUserId: MEMBER.userId });
   expect(sendEmail).not.toHaveBeenCalled();
+});
+it("does not notify a session actor removing their own membership", async () => {
+  mocks.session.mockResolvedValue({ user: { id: MEMBER.userId, name: "Acting Admin" } });
+  await sendRemovedFromOrganizationNotice(MEMBER);
+  expect(mocks.session).toHaveBeenCalledOnce();
+  expect(sendEmail).not.toHaveBeenCalled();
+});
+it.each([undefined, "actor-id"])("resolves the removal actor once with actorUserId=%s", async actorUserId => {
+  await sendRemovedFromOrganizationNotice({ ...MEMBER, actorUserId });
+  expect(mocks.session).toHaveBeenCalledOnce();
+  expect(sendEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    type: "removed-from-organization", text: expect.stringContaining("Acting Admin removed you"),
+  }));
+});
+it("does not name a session actor who differs from the supplied actor", async () => {
+  await sendRemovedFromOrganizationNotice({ ...MEMBER, actorUserId: "platform-admin-id" });
+  expect(mocks.session).toHaveBeenCalledOnce();
+  expect(sendEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    text: expect.stringContaining("An Admin removed you"),
+  }));
+});
+it.each(["password", "role", "removed"] as const)("normalizes a trailing app URL slash for %s notices", async notice => {
+  env.NEXT_PUBLIC_APP_URL = "https://app.example.test/";
+  if (notice === "password") await sendPasswordChangedNotice(MEMBER);
+  else if (notice === "role") await sendRoleChangedNotice({ ...MEMBER, fromRole: "member", toRole: "admin" });
+  else await sendRemovedFromOrganizationNotice(MEMBER);
+  expect(sendEmail).toHaveBeenCalledOnce();
+  const { html, text } = vi.mocked(sendEmail).mock.calls[0][0];
+  expect(html).toContain('src="https://app.example.test/');
+  expect(`${html}\n${text}`).not.toContain("https://app.example.test//");
+  if (notice === "password") {
+    expect(html).toContain('href="https://app.example.test/forgot-password"');
+    expect(text).toContain("https://app.example.test/forgot-password");
+  }
 });
 it("falls back to anonymous wording when the actor cannot be resolved", async () => {
   mocks.session.mockRejectedValue(new Error("private@example.test"));

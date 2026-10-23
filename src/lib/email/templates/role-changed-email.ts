@@ -1,7 +1,6 @@
+import type { OrgRoleLabel } from "@/lib/org-role-label";
 import { composeEmail } from "./compose-email";
 import { formatDateUtc } from "./format-duration";
-
-export type OrgRoleLabel = "Admin" | "Member";
 
 /** What each role can do, from GLOSSARY.md (Admin: full organization control; Member: day-to-day data entry). */
 const ROLE_EXPLANATION: Record<OrgRoleLabel, string> = {
