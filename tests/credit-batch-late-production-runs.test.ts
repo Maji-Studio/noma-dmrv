@@ -7,7 +7,7 @@ import {
   productionRunFeedstocks, productionRuns, reactors, removalTemplateObservations, storageLocations,
 } from "@/db/schema";
 import { loadCreditBatchesLateProductionRuns } from "@/data-access/credit-batch-late-production-runs";
-import { readCreditBatchMembershipSubmissionLock } from "@/data-access/credit-batch-certification-lock";
+import { readCreditBatchMembershipSubmissionLock, readCreditBatchesMembershipSubmissionLocks } from "@/data-access/credit-batch-certification-lock";
 import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
 import { createLineageFixture, cleanupLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
 import { cleanupFeedstockFixtureParents, feedstockFixtureValues } from "./helpers/feedstock-fixture";
@@ -64,6 +64,9 @@ describe("late production run detection (real DB)", () => {
       await db.delete(productionRuns).where(inArray(productionRuns.id, runIds));
       runIds.length = 0;
     }
+    // Tests may link the other fixture's application to the main batch too.
+    await db.delete(creditBatchApplications).where(and(eq(creditBatchApplications.creditBatchId, main.batchId),
+      eq(creditBatchApplications.applicationId, otherFacility.applicationId)));
     await cleanupLineageFixture(otherFacility);
     await cleanupLineageFixture(main);
     await db.delete(feedstocks).where(eq(feedstocks.organizationId, foreignOrgId));
@@ -94,6 +97,30 @@ describe("late production run detection (real DB)", () => {
 
   async function read() {
     return (await loadCreditBatchesLateProductionRuns(ctx, [main.batchId])).get(main.batchId)!;
+  }
+
+  async function todos() {
+    return buildCreditBatchOpenItems({ facilityId: main.facilityId,
+      creditBatchId: main.batchId, canManage: true, lateProductionRuns: await read() });
+  }
+
+  async function entryValues() {
+    const [observation] = await db.insert(removalTemplateObservations).values({
+      organizationId: ctx.organizationId, provider: "isometric", externalProjectId: "late-runs-project",
+      externalTemplateId: TEMPLATE_ID, semanticFingerprint: crypto.randomUUID(), fullFingerprint: crypto.randomUUID(),
+      definition: { groups: [] }, enrichment: {}, lineSources: {},
+    }).returning();
+    observationIds.push(observation.id);
+    return { organizationId: ctx.organizationId, creditBatchId: main.batchId,
+      removalTemplateId: TEMPLATE_ID, componentId: "diesel", observationId: observation.id,
+      inputShape: [], lineRule: "additive" as const, occurredOn: "2026-06-09" };
+  }
+
+  async function sendOtherRemoval() {
+    await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId,
+      provider: "isometric", submissionType: "removal", localEntityType: "removal",
+      localEntityId: otherFacility.removalId, externalId: `late-runs-${crypto.randomUUID()}`,
+      version: 1, status: "submitted", submittedAt: new Date("2026-06-17T00:00:00Z") });
   }
 
   it("scopes runs to the organization, facility and single feedstock, excluding archived, assigned and incomplete runs", async () => {
@@ -155,25 +182,59 @@ describe("late production run detection (real DB)", () => {
     expect(await loadCreditBatchesLateProductionRuns(ctx, [])).toEqual(new Map());
   });
 
-  it("resolves only with an undeleted value entry on the start day, even without a usable template", async () => {
+  it("keeps the Check for entries sent by either locking Removal on the run day", async () => {
+    const lateRun = await run("ALREADY-SENT");
+    await sendOtherRemoval();
+    await db.insert(creditBatchApplications).values({ organizationId: ctx.organizationId,
+      creditBatchId: main.batchId, applicationId: otherFacility.applicationId,
+      allocatedWetMassKg: WET_MASS_KG, allocatedDryMassKg: BIOCHAR_OUTPUT_KG,
+      removalId: otherFacility.removalId });
+    const locks = await readCreditBatchesMembershipSubmissionLocks(ctx, db, [main.batchId]);
+    expect(locks.get(main.batchId)?.map(removal => removal.id).sort())
+      .toEqual([main.removalId, otherFacility.removalId].sort());
+    expect(await readCreditBatchMembershipSubmissionLock(ctx, db, main.batchId)).toBe(true);
+    const values = await entryValues();
+    for (const removalId of [main.removalId, otherFacility.removalId]) {
+      await db.insert(emissionEntries).values({ ...values, kind: "value", sentByRemovalId: removalId });
+      expect((await read()).manualEntryDates).toEqual([]);
+      expect((await todos()).check.map(item => item.id)).toEqual([`late-production-run:${lateRun.id}`]);
+    }
+  });
+
+  it("keeps a clamped run's Check when a single-rule entry is dated at the batch start", async () => {
+    const lateRun = await run("CLAMPED", { startTime: new Date("2026-05-31T20:00:00Z"),
+      endTime: new Date("2026-06-01T01:00:00Z") });
+    const values = await entryValues();
+    await db.insert(emissionEntries).values({ ...values, kind: "value", lineRule: "single", occurredOn: "2026-06-01" });
+    expect((await read()).manualEntryDates).toEqual([]);
+    expect((await todos()).check).toMatchObject([{ id: `late-production-run:${lateRun.id}`,
+      detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Jun 1, 2026." }]);
+    await db.insert(emissionEntries).values({ ...values, kind: "value", occurredOn: "2026-06-01" });
+    expect((await todos()).check).toEqual([]);
+  });
+
+  it("resolves with an additive entry carried and sent by a Removal outside this batch's lock set", async () => {
+    await run("CARRIED");
+    await sendOtherRemoval();
+    const values = await entryValues();
+    await db.insert(emissionEntries).values({ ...values, kind: "value", sentByRemovalId: otherFacility.removalId });
+    // The receiver locks another batch in this same read, but not the entry's origin batch.
+    const result = await loadCreditBatchesLateProductionRuns(ctx, [main.batchId, otherFacility.batchId]);
+    expect([...result.keys()].sort()).toEqual([main.batchId, otherFacility.batchId].sort());
+    expect(result.get(main.batchId)?.manualEntryDates).toEqual(["2026-06-09"]);
+    expect(buildCreditBatchOpenItems({ facilityId: main.facilityId, creditBatchId: main.batchId,
+      canManage: true, lateProductionRuns: result.get(main.batchId) }).check).toEqual([]);
+  });
+
+  it("resolves with a new undeleted additive value on the start day, even without a usable template", async () => {
     const lateRun = await run("ENTRY");
-    const [observation] = await db.insert(removalTemplateObservations).values({
-      organizationId: ctx.organizationId, provider: "isometric", externalProjectId: "late-runs-project",
-      externalTemplateId: TEMPLATE_ID, semanticFingerprint: crypto.randomUUID(), fullFingerprint: crypto.randomUUID(),
-      definition: { groups: [] }, enrichment: {}, lineSources: {},
-    }).returning();
-    observationIds.push(observation.id);
-    const values = { organizationId: ctx.organizationId, creditBatchId: main.batchId,
-      removalTemplateId: TEMPLATE_ID, componentId: "diesel", observationId: observation.id,
-      inputShape: [], lineRule: "additive" as const, occurredOn: "2026-06-09" };
+    const values = await entryValues();
     await db.insert(emissionEntries).values([
       { ...values, componentId: "recorded-zero", kind: "zero", confirmedForRemovalId: main.removalId },
       { ...values, componentId: "deleted", kind: "value", deletedAt: new Date() },
       { ...values, componentId: "other-day", kind: "value", occurredOn: "2026-06-10" },
       { ...values, componentId: "other-batch", kind: "value", creditBatchId: otherFacility.batchId },
     ]);
-    const todos = async () => buildCreditBatchOpenItems({ facilityId: main.facilityId,
-      creditBatchId: main.batchId, canManage: true, lateProductionRuns: await read() });
     expect((await todos()).check.map(item => item.id)).toEqual([`late-production-run:${lateRun.id}`]);
     const [entry] = await db.insert(emissionEntries).values({ ...values, kind: "value" }).returning();
     await db.insert(emissionEntryValues).values({ organizationId: ctx.organizationId, entryId: entry.id,

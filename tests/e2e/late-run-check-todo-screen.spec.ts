@@ -37,7 +37,7 @@ async function shoot(page: Page, name: string, size: Size, target: Locator) {
 }
 
 test.describe("Late run Check to-do on screen", () => {
-  test("shows the run that ran after the Removal was sent", async ({ adminPage: page, seededData }) => {
+  test("shows the run that was recorded after the Removal was sent", async ({ adminPage: page, seededData }) => {
     test.setTimeout(300_000);
     const tag = crypto.randomUUID().slice(0, 6).toUpperCase();
     const seeded = await seedLateRun(seededData, tag);
@@ -47,7 +47,7 @@ test.describe("Late run Check to-do on screen", () => {
         await page.setViewportSize(WIDTHS[size]);
         await page.goto(batchUrl);
         if (size === "desktop") await waitForFacilityHydration(page, seededData.facility.name);
-        const title = `${seeded.runCode} ran after ${seeded.removalCode} was sent`;
+        const title = `${seeded.runCode} was recorded after ${seeded.removalCode} was sent`;
         if (PHASE === "before") await expect(page.getByRole("region", { name: /Open to-dos/ })).toBeVisible({ timeout: 30_000 });
         else {
           await expect(page.getByText(title).first()).toBeVisible({ timeout: 30_000 });

@@ -161,7 +161,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       if (recordedDays.has(entryDate)) continue;
       check.push({
         id: `late-production-run:${run.id}`,
-        title: `${run.code} ran after ${codes} ${late.sentRemovalCodes.length === 1 ? "was" : "were"} sent`,
+        title: `${run.code} was recorded after ${codes} ${late.sentRemovalCodes.length === 1 ? "was" : "were"} sent`,
         detail: `It is not in this credit batch. Record its diesel and power on the Emissions tab, dated ${formatCalendarDate(entryDate)}.`,
         target: { href: creditBatchDeepLinkHref(input.creditBatchId, input.facilityId, { tab: "emissions" }) },
       });
