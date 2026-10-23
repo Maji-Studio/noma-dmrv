@@ -68,7 +68,6 @@ interface FormActionsProps<
   submitVariant?: React.ComponentProps<typeof Button>["variant"];
   /** Extra classes for the submit button, for a label that must wrap on phones. */
   submitClassName?: string;
-  submittingLabel?: string;
   defaultSubmitLabel?: string;
   /** Context-specific label for the secondary action. */
   cancelLabel?: string;
@@ -111,7 +110,6 @@ export function FormActions<
   showSubmit = true,
   submitVariant = "primary",
   submitClassName,
-  submittingLabel = "Saving...",
   defaultSubmitLabel = "Save",
   cancelLabel = "Cancel",
   submitDisabled = false,
@@ -229,10 +227,11 @@ export function FormActions<
             if (submitType === "submit") skipNativeChecksUnlessUnparsed(event.currentTarget);
             onSubmitClick?.();
           }}
-          disabled={isSubmitting || submitDisabled || !!block}
+          busy={isSubmitting}
+          disabled={submitDisabled || !!block}
           aria-describedby={block ? blockedReasonId : undefined}
         >
-          {isSubmitting ? submittingLabel : submitLabel ?? defaultSubmitLabel}
+          {submitLabel ?? defaultSubmitLabel}
         </Button>}
         {handleCancel && (
           <Button type="button" variant="default" onClick={handleCancel} disabled={isSubmitting}>

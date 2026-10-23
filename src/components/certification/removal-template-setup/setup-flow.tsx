@@ -29,7 +29,6 @@ import { SETUP_GUTTER_CLASS } from "./layout";
 import { CheckStep, TemplateStep, type SetupData } from "./setup-steps";
 import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 
-const SAVING_LABEL = "Setting template…";
 const SET_LABEL = "Set template";
 const STEP_TITLES = ["Pick the template", "Check what changes"];
 const STEPS: StepFlowStep[] = [
@@ -161,7 +160,7 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
           ) : (
             // Only Set template writes, so only it is latched; the latch holds until the save settles.
             <Button variant="primary" busy={apply.isPending} className={PHONE_TOUCH_TARGET} onClick={() => void setTemplate({ preventDefault: () => undefined })}>
-              {apply.isPending ? SAVING_LABEL : SET_LABEL}
+              {SET_LABEL}
             </Button>
           )}
           {step > 0 && <Button className={PHONE_TOUCH_TARGET} variant="default" disabled={apply.isPending} onClick={back}>Back</Button>}

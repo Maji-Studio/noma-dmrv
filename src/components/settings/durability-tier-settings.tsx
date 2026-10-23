@@ -139,7 +139,6 @@ function DurabilityTierForm({
         errorMessage={serverError}
         showSubmit={changed && !blocked}
         submitLabel="Save durability tier"
-        submittingLabel="Saving…"
         sticky={false}
       />
     </form>

@@ -51,7 +51,7 @@ export function PlatformOrganizationDetail({ organization, current, switching, o
             disabled={anySwitching && switching !== "switch"}
             onClick={() => onSwitch()}
           >
-            {switching === "switch" ? "Switching…" : `Switch to ${name}`}
+            Switch to {name}
           </Button>
         )}
       </header>

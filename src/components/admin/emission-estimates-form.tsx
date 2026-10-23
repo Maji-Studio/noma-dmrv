@@ -184,11 +184,9 @@ export function EmissionEstimatesForm({
         <Button
           type="submit"
           variant="primary"
-          disabled={isSubmitting || saveMutation.isPending}
+          busy={isSubmitting || saveMutation.isPending}
         >
-          {isSubmitting || saveMutation.isPending
-            ? "Saving..."
-            : "Save estimates"}
+          Save estimates
         </Button>
       </div>
     </form>

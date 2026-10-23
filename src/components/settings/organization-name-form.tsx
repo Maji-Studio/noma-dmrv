@@ -112,7 +112,6 @@ function NameForm({ savedName }: { savedName: string }) {
         errorMessage={serverError}
         showSubmit={changed}
         submitLabel="Rename organization"
-        submittingLabel="Renaming…"
         sticky={false}
       />
     </form>

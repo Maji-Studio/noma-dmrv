@@ -219,7 +219,6 @@ function CredentialsForm({
         errorMessage={serverError}
         showSubmit={!configured || replacing.accessToken || replacing.clientSecret}
         submitLabel="Save and test connection"
-        submittingLabel="Saving and connecting…"
         sticky={false}
       />
     </form>

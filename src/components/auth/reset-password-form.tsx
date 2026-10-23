@@ -130,9 +130,9 @@ function ResetPasswordFormContent() {
             type="submit"
             variant="primary"
             width="full"
-            disabled={isSubmitting}
+            busy={isSubmitting}
           >
-            {isSubmitting ? "Resetting..." : "Reset password"}
+            Reset password
           </Button>
 
           <div className="text-center">

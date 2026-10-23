@@ -56,10 +56,10 @@ describe("RemovalTemplateSetupFlow", () => {
     expect(screen.getByRole("heading", { name: "Pick the template" })).toBeTruthy();
   });
 
-  it("shows Setting template… busy and disables Back and Cancel while the save is pending", () => {
+  it("keeps the Set template label busy and disables Back and Cancel while the save is pending", () => {
     const pending = { mutateAsync, isPending: true } as unknown as React.ComponentProps<typeof RemovalTemplateSetupFlow>["apply"];
     renderFlow(setupData({ fitting: [nothingToDecide] }), { step: "check", templateId: "tpl-ready", apply: pending });
-    expect((screen.getByRole("button", { name: "Setting template…" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Set template" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Back" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
   });

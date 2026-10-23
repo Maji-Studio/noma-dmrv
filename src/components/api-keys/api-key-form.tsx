@@ -60,7 +60,7 @@ export function CreateApiKeyForm({ onSubmit, onCancel, isPending }: {
       <Controller name="scopes" control={control} render={({ field }) => (
         <ApiKeyPermissionGrid value={field.value} onChange={field.onChange} disabled={busy} error={errors.scopes?.message} />
       )} />
-      <FormActions control={control} sticky={false} onCancel={onCancel} isSubmitting={busy} errorMessage={error} submitLabel="Create API key" submittingLabel="Creating..." />
+      <FormActions control={control} sticky={false} onCancel={onCancel} isSubmitting={busy} errorMessage={error} submitLabel="Create API key" />
     </form>
   );
 }
@@ -91,7 +91,7 @@ export function EditApiKeyForm({ apiKey, onSubmit, onCancel, isPending }: {
       <Controller name="scopes" control={control} render={({ field }) => (
         <ApiKeyPermissionGrid value={field.value} onChange={field.onChange} disabled={busy} error={errors.scopes?.message} />
       )} />
-      <FormActions control={control} sticky={false} onCancel={onCancel} isSubmitting={busy} errorMessage={error} submitLabel="Save changes" submittingLabel="Saving..." />
+      <FormActions control={control} sticky={false} onCancel={onCancel} isSubmitting={busy} errorMessage={error} submitLabel="Save changes" />
     </form>
   );
 }

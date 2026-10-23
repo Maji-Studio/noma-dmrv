@@ -24,6 +24,7 @@ vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn(),
   requireOrgRole: vi.fn(),
   requirePlatformAdmin: vi.fn(),
+  isAdmin: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/providers/better-auth-server", () => ({
@@ -336,9 +337,9 @@ describe("setActiveOrganizationAction", () => {
   });
 
   it("does not persist when the plugin rejects the switch", async () => {
-    mockSetActiveOrganization.mockRejectedValue(
-      new SafeError("You are not a member of this Organization."),
-    );
+    mockSetActiveOrganization.mockRejectedValue({
+      body: { code: "USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION", message: "User is not a member of the organization" },
+    });
 
     const result = await setActiveOrganizationAction({
       organizationId: "organization-123",
@@ -347,7 +348,7 @@ describe("setActiveOrganizationAction", () => {
     expect(mockPersistLastActiveOrganization).not.toHaveBeenCalled();
     expect(result).toEqual({
       success: false,
-      error: "You are not a member of this Organization.",
+      error: "You no longer have access to it. If you still need it, ask one of its Admins.",
     });
   });
 });

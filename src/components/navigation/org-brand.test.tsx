@@ -313,7 +313,7 @@ describe("OrgBrand", () => {
       fireEvent.click(option("Second Organization"));
       await waitFor(() => expect(option("Third Organization").disabled).toBe(false));
       expect(screen.queryByText("Switching…")).toBeNull();
-      expect(state.toastError).toHaveBeenCalledWith("Second Organization did not open. Try again.");
+      expect(state.toastError).toHaveBeenCalledWith("Second Organization did not open. No access.");
     });
   });
   describe("with unsaved changes in the open pane", () => {

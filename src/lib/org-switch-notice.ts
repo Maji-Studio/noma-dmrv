@@ -65,9 +65,17 @@ export function orgSwitchMessage(organizationName: string): string {
   return `Now working in ${organizationName}.`;
 }
 
-/** The failure toast for a switch that could not start; names the organization it aimed at. */
-export function orgSwitchFailedMessage(organizationName: string): string {
-  return `${organizationName} did not open. Try again.`;
+/**
+ * The failure toast for a switch that could not start; names the organization
+ * it aimed at. A refusal carries the server's reason (revoked access, deleted
+ * organization) and says it; only an unknown or network failure, which has no
+ * reason, falls back to "Try again."
+ */
+export function orgSwitchFailedMessage(organizationName: string, reason?: string): string {
+  const why = reason?.trim();
+  // A reason may come without a closing period; the toast always ends a sentence.
+  const sentence = why ? (/[.!?]$/.test(why) ? why : `${why}.`) : "Try again.";
+  return `${organizationName} did not open. ${sentence}`;
 }
 
 /** The discard dialog's body when a switch would leave a pane with unsaved changes. */
