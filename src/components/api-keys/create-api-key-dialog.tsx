@@ -36,7 +36,7 @@ export function CreateApiKeyDialog({ isOpen, onClose, organizationId }: {
   return (
     <Modal isOpen={isOpen} onClose={close} ariaLabelledBy="create-api-key-title" width="lg" dismissOnClickOutside={false} dismissible={!create.isPending}>
       <div className="flex flex-col gap-20">
-        <h2 id="create-api-key-title" className="title-heading-3 pr-32">{plaintext ? "API key created" : "Create API key"}</h2>
+        <h2 id="create-api-key-title" className="title-heading-3">{plaintext ? "API key created" : "Create API key"}</h2>
         {plaintext ? (
           <>
             <Notice tone="warning">Copy this key and store it securely. It will not be shown again after you close this dialog.</Notice>
