@@ -2,8 +2,8 @@
  * Vehicles and crew list page (Distribution). Protected by the (app) layout's
  * requireAuth guard; every member may manage these records.
  */
-import { VehiclesAndCrewList } from "@/components/settings";
+import { VehiclesAndCrewPage } from "@/components/vehicles-and-crew";
 
-export default function VehiclesAndCrewPage() {
-  return <VehiclesAndCrewList />;
+export default function Page() {
+  return <VehiclesAndCrewPage />;
 }

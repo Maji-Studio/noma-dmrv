@@ -5,6 +5,9 @@ export const FEEDSTOCK_TYPE_EDIT_LABEL = "Edit feedstock type";
 export const FEEDSTOCK_TYPE_QUERY_PARAM = "feedstockType";
 export const LOCATION_DEEP_LINK_PARAM = "location";
 export const SUPPLIER_QUERY_PARAM = "supplier";
+export const VEHICLE_QUERY_PARAM = "vehicle";
+export const DRIVER_QUERY_PARAM = "driver";
+export const OPERATOR_QUERY_PARAM = "operator";
 
 const FEEDSTOCK_TYPES_PATH = "/feedstock-types";
 

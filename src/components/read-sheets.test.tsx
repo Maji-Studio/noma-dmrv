@@ -59,6 +59,7 @@ import { facilitySheetSections } from "@/components/facilities/facility-read-sec
 import type { FacilityOutputStockGroup } from "@/data-access/facility-output-stock";
 import { LOAD_FAILED } from "@/lib/copy-utils";
 import { feedstockTypeSheetSections } from "@/components/feedstock-types/feedstock-type-read-sections";
+import { fleetSheetSections } from "@/components/vehicles-and-crew/fleet-kinds";
 import { feedstockSheetSections } from "@/components/feedstocks/feedstock-read-sections";
 import { formulationSheetSections } from "@/components/formulations/formulation-read-sections";
 import { productionRunSheetSections } from "@/components/production-runs/production-run-read-sections";
@@ -118,6 +119,11 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
     contactEmail: null, contactPhone: null, durabilityOption: "200_year", reactorCount: 2,
     storageSummary: { feedstockBinCount: 2, biocharBinCount: 1, productBinCount: 3 }, inventorySummary: { feedstockWetKg: 1200 },
   })) },
+  { file: "components/vehicles-and-crew/fleet-kinds.tsx", name: "vehicle", sections: fleetSheetSections("vehicle", as({
+    id: "vehicle", code: "VEH-26-001", name: "Feedstock truck", identifier: "T 123", vehicleType: "truck", fuelType: "Diesel", fuelConsumptionLPerKm: 0.3, modelYear: 2019,
+  })) },
+  { file: "components/vehicles-and-crew/fleet-kinds.tsx", name: "driver", sections: fleetSheetSections("driver", as({ id: "driver", code: "DRV-26-001", name: "Amina", licenseNumber: "L-1", contactPhone: "+255" })) },
+  { file: "components/vehicles-and-crew/fleet-kinds.tsx", name: "operator", sections: fleetSheetSections("operator", as({ id: "operator", name: "Joseph", credentials: "Kiln lead", contactPhone: "+255" })) },
   { file: "components/feedstock-types/feedstock-type-read-sections.tsx", name: "feedstock type", sections: feedstockTypeSheetSections(as({
     id: "type", name: "Maize cobs", code: "FT-001", category: "agricultural", usage: "pyrolysis", archivedAt: null, isometricFeedstockTypeId: null, registryUrl: null, description: null,
   }), { facilityId: "facility", canManage: true }, true) },
