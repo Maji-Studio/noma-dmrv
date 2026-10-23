@@ -19,6 +19,7 @@ import { EntryEvidence, ICON, RecordsSourceLink, entryAmount, lineBodyModel, use
 import { formatFigure, hasRecordsFigure, type EmissionEntry, type EmissionLine } from "./emission-line-display";
 import { EntryMenu, entryDateText, stoppedEntryMessage, useStoppedEntry } from "./emission-ledger-entries";
 import { MENU_PULL, NAME_INSET, TABLE_ROW } from "./emission-line-grid";
+import { LateEntryStatus } from "./late-entry-status";
 import type { EntryFormMode } from "./manual-entry-form";
 
 const CELL_Y = "py-10";
@@ -132,6 +133,7 @@ function EntryRow({ line, entry, scope, groupLabel, onEdit, onDelete }: {
       <span role="cell" className={DATE_CELL}>{dateText}</span>
       <span role="cell" className={DETAIL_CELL}>
         <EntryEvidence entry={entry} scope={scope} actions={actions} />
+        <LateEntryStatus entry={entry} facilityId={scope.facilityId} className="pt-4" />
       </span>
       <span role="cell" className={AMOUNT_CELL}>
         {figures.map((figure) => <span key={figure}>{figure}</span>)}

@@ -7,6 +7,7 @@ import {
   changeMemberRoleAction,
   createOrganizationAction,
   inviteMemberAction,
+  leaveOrganizationAction,
   listInvitationsFn,
   listMembersFn,
   listOrganizationsFn,
@@ -14,6 +15,7 @@ import {
   removeMemberAction,
   renameOrganizationAction,
   revokeInvitationAction,
+  resendInvitationAction,
   setActiveOrganizationAction,
 } from "@/fn/organizations";
 import { listOrganizationApiAccessFn, setOrganizationApiAccessFn } from "@/fn/organization-api-access";
@@ -203,6 +205,27 @@ export function useRevokeInvitation() {
       queryClient.invalidateQueries({
         queryKey: organizationKeys.invitations(),
       });
+    },
+  });
+}
+
+export function useResendInvitation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (invitationId: string) =>
+      unwrap(await resendInvitationAction({ invitationId })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: organizationKeys.invitations() }),
+  });
+}
+
+/** After success, useResetAfterOrgSwitch(undefined, undefined, "/") leaves the workspace. */
+export function useLeaveOrganization() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => unwrap(await leaveOrganizationAction()),
+    onSuccess: () => {
+      authClient.$store.notify("$listOrg");
+      return queryClient.invalidateQueries({ queryKey: organizationKeys.all });
     },
   });
 }

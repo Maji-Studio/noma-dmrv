@@ -12,6 +12,10 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { InUseDeleteDialog, InUseReference } from "@/components/ui/in-use-delete-dialog";
+import { deliveryDeepLinkHref } from "@/lib/delivery-links";
+import { ActionError } from "@/lib/action-error";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -43,6 +47,7 @@ import { OrderForm } from "./order-form";
 import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { orderSheetSections } from "./order-read-sections";
 import { ILLUSTRATION_SIZE, OrderArt } from "@/components/ui/illustrations";
 
@@ -198,6 +203,8 @@ export function OrderList() {
   // Error state
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A refused delete because records still use the row: its code and the server's reason.
+  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string; reference?: { href: string; code: string; kind: string } } | null>(null);
 
   const filters: Partial<OrderFilterData> = {
     search: debouncedSearch || undefined,
@@ -302,18 +309,18 @@ export function OrderList() {
   ]);
 
   // Handlers
-  const handleCreate = async (data: OrderFormData) => {
+  const handleCreate = async (data: OrderFormData, onRefusal: SaveRefusalHandler) => {
     setFormError(null);
     try {
       await createOrder.mutateAsync(data);
       closeSideSheet();
       toast.success("Order created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Order was not created. Check the form.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Order was not created. Check the form."));
     }
   };
 
-  const handleUpdate = async (data: OrderFormData) => {
+  const handleUpdate = async (data: OrderFormData, onRefusal: SaveRefusalHandler) => {
     if (!displaySideSheet?.entity) return;
     setFormError(null);
     try {
@@ -321,7 +328,7 @@ export function OrderList() {
       closeSideSheet();
       toast.success("Order updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Order was not saved. Try again.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Order was not saved. Try again."));
     }
   };
 
@@ -340,7 +347,21 @@ export function OrderList() {
       setDeletingOrderId(null);
       toast.success("Order deleted.");
     } catch (error) {
-      setDeleteError(toDeleteErrorMessage(error, "Order", "Order was not deleted. Try again."));
+      const message = toDeleteErrorMessage(error, "Order", "Order was not deleted. Try again.");
+      if (isInUseDeleteRefusal(error)) {
+        const row = orders.find((item) => item.id === deletingOrderId);
+        const meta = error instanceof ActionError ? error.issues.find((issue) => issue.meta?.reason === "in_use")?.meta : undefined;
+        const deliveryId = typeof meta?.deliveryId === "string" ? meta.deliveryId : null;
+        const deliveryCode = typeof meta?.deliveryCode === "string" ? meta.deliveryCode : null;
+        setInUseRefusal({
+          code: row?.code ?? "Order",
+          message,
+          reference: deliveryId && deliveryCode ? { href: deliveryDeepLinkHref(deliveryId, row?.facilityId), code: deliveryCode, kind: "delivery" } : undefined,
+        });
+        setDeletingOrderId(null);
+        return;
+      }
+      setDeleteError(message);
     }
   };
 
@@ -503,7 +524,14 @@ export function OrderList() {
         />
       </EntitySideSheet>
 
-      <DeleteConfirmDialog isOpen={!!deletingOrderId} title="Delete order" message={deleteError ? "Are you sure you want to delete this order? This action cannot be undone." : "Are you sure you want to delete this order? This action cannot be undone. Note: Orders with deliveries cannot be deleted."} onConfirm={handleDeleteConfirm} onCancel={() => { setDeletingOrderId(null); setDeleteError(null); }} isPending={deleteOrder.isPending} errorMessage={deleteError ?? undefined} />
+      {inUseRefusal && (
+        <InUseDeleteDialog label={inUseRefusal.code} onClose={() => setInUseRefusal(null)}>
+          <p>{inUseRefusal.message}</p>
+          {inUseRefusal.reference && <InUseReference {...inUseRefusal.reference} />}
+        </InUseDeleteDialog>
+      )}
+
+      <DeleteConfirmDialog isOpen={!!deletingOrderId} title="Delete order" message="Are you sure you want to delete this order? This action cannot be undone." onConfirm={handleDeleteConfirm} onCancel={() => { setDeletingOrderId(null); setDeleteError(null); }} isPending={deleteOrder.isPending} errorMessage={deleteError ?? undefined} />
     </div>
   );
 }

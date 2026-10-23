@@ -127,7 +127,7 @@ export function FeedstockTypeSampling({
 
       {canManage && (
         <div className="border-t border-[var(--color-border-tertiary)] pt-12">
-          <Button variant="weak" size="small" onClick={() => setConfirmOpen(true)}>
+          <Button variant="weak" size="small" onClick={() => { startNewProcess.startDraft(); setConfirmOpen(true); }}>
             <ArrowCounterClockwiseIcon size={16} weight="bold" />
             Start new process
           </Button>

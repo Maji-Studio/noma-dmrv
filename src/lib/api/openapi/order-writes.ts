@@ -49,7 +49,7 @@ export function addOrderWritePaths(paths: Paths, { publishOutput, writeErrors }:
   };
   paths["/orders/{idOrCode}"].delete = {
     ...privateOperation("delete_order", "orders:delete",
-      "Delete by UUID with a strong If-Match. Requires orders:delete, a separate scope that is off by default. Only orders with no deliveries, including archived deliveries, can be deleted; otherwise the response is 409 certification_locked. An archived order without deliveries can be deleted. Certified lineage answers 409 certification_locked. The deletion retires order documents; storage cleanup runs after commit. Dry runs roll back and return the representation that would be deleted. A supplied body must be an empty JSON object.",
+      "Delete by UUID with a strong If-Match. Requires orders:delete, a separate scope that is off by default. Only orders with no deliveries, including archived deliveries, can be deleted; otherwise the response is 409 certification_locked at /orderId with issue metadata reason in_use, deliveryCode and deliveryId. The delivery is selected by code in ascending order. An archived order without deliveries can be deleted. Certified lineage answers 409 certification_locked. The deletion retires order documents; storage cleanup runs after commit. Dry runs roll back and return the representation that would be deleted. A supplied body must be an empty JSON object.",
       {
         ...problemResponses([...writeErrors, 412, 413, 415, 428]),
         "412": { $ref: "#/components/responses/OrderProblem412" },

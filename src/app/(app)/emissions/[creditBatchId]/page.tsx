@@ -7,6 +7,8 @@
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { BatchEmissionsPage } from "@/components/emissions";
+import { TemplatePermissionProvider } from "@/components/emissions/template-permission";
+import { requireOrgContext } from "@/lib/auth/server";
 
 interface BatchEmissionsRouteProps {
   params: Promise<{ creditBatchId: string }>;
@@ -15,5 +17,10 @@ interface BatchEmissionsRouteProps {
 export default async function BatchEmissionsRoute({ params }: BatchEmissionsRouteProps) {
   const { creditBatchId } = await params;
   if (!z.uuid().safeParse(creditBatchId).success) notFound();
-  return <BatchEmissionsPage creditBatchId={creditBatchId.toLowerCase()} />;
+  const ctx = await requireOrgContext();
+  return (
+    <TemplatePermissionProvider canManage={ctx.isPlatformAdmin || ctx.orgRole === "admin"}>
+      <BatchEmissionsPage creditBatchId={creditBatchId.toLowerCase()} />
+    </TemplatePermissionProvider>
+  );
 }

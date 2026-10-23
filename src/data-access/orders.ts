@@ -414,8 +414,9 @@ export async function deleteOrderInTransaction(ctx: OrgContext, tx: DbTransactio
   assertRowVersion({ entity: "order", id: orderId, expectedVersion, actualVersion: existing.version });
   await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: "order", entityId: orderId }, "delete"), "certification_locked", ["orderId"]);
   const [delivery] = await tx.select({ id: deliveries.id, code: deliveries.code }).from(deliveries)
-    .where(and(eq(deliveries.orderId, orderId), eq(deliveries.organizationId, ctx.organizationId)));
-  if (delivery) throw orderHasDeliveries(delivery);
+    .where(and(eq(deliveries.orderId, orderId), eq(deliveries.organizationId, ctx.organizationId)))
+    .orderBy(asc(deliveries.code)).limit(1);
+  if (delivery) throw orderHasDeliveries(delivery, existing.code);
   await tx.delete(orders).where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
   await retireDocumentsForEntities(ctx, tx, [{ entityType: "order", entityId: orderId }], source);
   return existing;

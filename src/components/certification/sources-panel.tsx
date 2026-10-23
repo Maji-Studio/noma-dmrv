@@ -151,8 +151,8 @@ function PanelBodyForRemoval({
           {query.data.evidenceRefreshSubmissionId ? (
             <>
               <p className="body-caption">Review new evidence checks for an existing registry Entry, then prepares a new submission version. The original evidence and registry records are preserved.</p>
-              <Button type="button" variant="weak" disabled={refresh.isPending} onClick={() => refresh.mutate(query.data!.evidenceRefreshSubmissionId!, { onSuccess: () => toast.success("New evidence selected. Review the new version before submitting.") })}>
-                {refresh.isPending ? "Checking registry…" : "Review new evidence"}
+              <Button type="button" variant="weak" busy={refresh.isPending} onClick={() => refresh.mutate(query.data!.evidenceRefreshSubmissionId!, { onSuccess: () => toast.success("New evidence selected. Review the new version before submitting.") })}>
+                Review new evidence
               </Button>
             </>
           ) : <p className="body-caption">A registry-backed attempt requires a reviewed amendment before these files can be included.</p>}

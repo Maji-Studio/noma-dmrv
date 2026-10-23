@@ -68,6 +68,7 @@ import { parseAsString, useQueryState } from "nuqs";
 import { BIOCHAR_PRODUCT_DEEP_LINK_PARAM } from "@/lib/biochar-product-links";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useEffect, useState } from "react";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { BiocharProductForm } from "./biochar-product-form";
 import { formatSavedMassKg, productSheetSections } from "./product-read-details";
 import { ILLUSTRATION_SIZE, BiocharProductArt } from "@/components/ui/illustrations";
@@ -374,18 +375,18 @@ export function BiocharProductList() {
   };
 
   // Handlers
-  const handleCreate = async (data: BiocharProductFormData) => {
+  const handleCreate = async (data: BiocharProductFormData, onRefusal: SaveRefusalHandler) => {
     setFormError(null);
     try {
       await createProduct.mutateAsync(data);
       setSideSheet(null);
       toast.success("Biochar product created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Biochar product was not created. Check the form.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Biochar product was not created. Check the form."));
     }
   };
 
-  const handleUpdate = async (data: BiocharProductFormData) => {
+  const handleUpdate = async (data: BiocharProductFormData, onRefusal: SaveRefusalHandler) => {
     // Deep-linked edits render via `displaySideSheet` while `sideSheet` state
     // is still null — resolving the target here keeps dashboard edit links
     // saveable, not just list-opened sheets.
@@ -401,7 +402,7 @@ export function BiocharProductList() {
       setDeepLinkFocus(null);
       toast.success("Biochar product updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Biochar product was not saved. Try again.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Biochar product was not saved. Try again."));
     }
   };
 

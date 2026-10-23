@@ -13,8 +13,11 @@ import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 
 import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
 import { outputDrawCreditBatchPreview } from "@/components/credit-batches/record-credit-batch-preview-input";
-import { EntitySelect, FormActions, FormField, FormInput, FormSection, FormSpine, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
+import { EntitySelect, FormActions, FormError, FormField, FormInput, FormSection, FormSpine, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
+import { SERVER_ERROR_TYPE, useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { isActionError } from "@/lib/action-error";
+import { INSUFFICIENT_STOCK_CODE } from "@/lib/save-refusal";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import {
   StorageLocationQuickAddDialog,
@@ -24,7 +27,6 @@ import { StockChangeLabel } from "@/components/storage-locations/stock-change-la
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
-import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
 import { useProductStockPreview } from "@/hooks/use-product-stock-preview";
 import { useOutputDrawDraft } from "@/hooks/use-output-draw-draft";
 import { focusMoistureField, moistureFieldSelectors, ReestimateNotice } from "@/components/storage-locations/reestimate-notice";
@@ -32,19 +34,15 @@ import { showsReestimate } from "@/components/storage-locations/reestimate-flow"
 import { useSubBinDraw } from "@/hooks/use-sub-bin-draw";
 import { SubBinDrawField } from "@/components/storage-locations/sub-bin-draw-field";
 import { MoistureResetChange } from "@/components/storage-locations/moisture-reset-change";
-import { prepareBiocharProductSubmission } from "@/lib/biochar-composition/product-submission";
+import { BIOCHAR_PRODUCT_MASS_ISSUE_PATH, BIOCHAR_PRODUCT_REFUSAL_ALIASES, prepareBiocharProductSubmission } from "@/lib/biochar-composition/product-submission";
 import {
   deriveSourceBiocharMassKg,
   fromCompositionJsonb,
   SOURCE_BIOCHAR_MASS_ERROR,
   useBiocharComposition,
-  ZERO_SOURCE_BIOCHAR_ERROR,
 } from "@/lib/biochar-composition";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import { MASS_MOISTURE_LABELS, qualifyMassLabel, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
-import {
-  binStockOverdrawMessage,
-} from "@/lib/stock-overdraw";
 import {
   biocharProductEntrySchema,
   biocharProductFrozenEditSchema,
@@ -69,6 +67,11 @@ import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
 const numberBounds = numberInputConstraintsFor(biocharProductEntrySchema);
 
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
+
+/** The refusal says the source bin holds less than the biochar mass asked for. */
+function refusesSourceBinStock(error: unknown): boolean {
+  return isActionError(error) && error.issues.some((issue) => issue.code === INSUFFICIENT_STOCK_CODE && issue.path.join(".") === BIOCHAR_PRODUCT_MASS_ISSUE_PATH);
+}
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 
 type MassMoistureFieldsProps = ComponentProps<typeof MassMoistureFields>;
@@ -132,7 +135,8 @@ export function ProductCompositionBlock({
 
 interface BiocharProductFormProps {
   product?: BiocharProductWithRelations;
-  onSubmit: (data: BiocharProductFormData) => Promise<void> | void;
+  /** The form hands `onRefusal` on, in create and edit, so a refused save shows at its fields (#1298). */
+  onSubmit: (data: BiocharProductFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
@@ -218,8 +222,15 @@ export function BiocharProductForm({
     control,
     getValues,
     setValue,
+    setError,
+    clearErrors,
+    resetField,
     formState: { errors },
   } = form;
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: BIOCHAR_PRODUCT_REFUSAL_ALIASES });
+  // What the form held when a server error was filed at the mass, and whether it
+  // was a short source bin (the one that offers the reconciliation link).
+  const [massRefusal, setMassRefusal] = useState<{ drawFingerprint: string; shortSourceBin: boolean } | null>(null);
 
   const selectedFacilityId = useWatch({ control, name: "facilityId" }) || contextFacilityId || "";
   const placementClock = useFacilityClock(selectedFacilityId);
@@ -316,39 +327,39 @@ export function BiocharProductForm({
   const affectedBinsUnavailable = !productStockPreview.data || productStockPreview.isFetching || !!productStockPreview.error || productStockPreview.data.some(bin => !!bin.blockingMessage);
   const { canSave, submitDisabled, basisFingerprint } = gate({ unavailable: affectedBinsUnavailable, basisFingerprint: productStockPreview.data?.[0]?.basisFingerprint });
   const biocharStockError = sourcePreview.data?.blockingMessage ?? sourcePreview.error?.message;
-  const refreshStockPreview = sourcePreview.refetch;
-  useEffect(() => {
-    if (errorMessage && !isEditMode) void refreshStockPreview();
-  }, [errorMessage, isEditMode, refreshStockPreview]);
-
-  const massFieldFingerprint = [
+  // Every input the source draw is planned from; a server refusal at the mass answers for these only.
+  const drawFingerprint = [
     sourceBiocharStorageLocationId,
     selectedFormulationId,
+    watchedPlacedAt,
     watchedMassKg,
+    // A split draw carries its readings in the sources; submitting clears the single moisture.
+    draw.active ? "" : watchedMoisture,
+    JSON.stringify(draw.sources ?? null),
     ...(watchedIngredientBins ?? []).map((ingredient) => ingredient.massKg),
   ].join(":");
-  const routedServerError = useInlineStockServerError(
-    errorMessage,
-    massFieldFingerprint,
-    (message) =>
-      message === binStockOverdrawMessage("biochar") ||
-      message === SOURCE_BIOCHAR_MASS_ERROR ||
-      message === ZERO_SOURCE_BIOCHAR_ERROR,
-  );
-  const massKgError =
-    errors.massKg?.message ??
-    biocharStockError ??
-    routedServerError.inlineError;
+  const massRefusalIsStale = massRefusal !== null && massRefusal.drawFingerprint !== drawFingerprint;
+  // The draw inputs live in many components, so one effect watches them: a handler on each cannot cover them all.
+  const massErrorIsServer = errors.massKg?.type === SERVER_ERROR_TYPE;
+  useEffect(() => {
+    if (massRefusalIsStale && massErrorIsServer) clearErrors("massKg");
+  }, [massRefusalIsStale, massErrorIsServer, clearErrors]);
+  const massKgError = errors.massKg?.message ?? biocharStockError;
+  const serverRefusedMass = massErrorIsServer && !massRefusalIsStale && massRefusal?.shortSourceBin === true;
 
   const handleFormSubmit = latched(handleSubmit(async (data) => {
     if (!canSave) return;
     // A failed save needs no refetch here: the host reports the error and the
     // mutation hooks invalidate `outputStockKeys.all`, which refreshes both previews.
+    const onRefusal: SaveRefusalHandler = (error, fallback) => {
+      setMassRefusal(isActionError(error) ? { drawFingerprint, shortSourceBin: refusesSourceBinStock(error) } : null);
+      return refuseSave(error, fallback);
+    };
     await onSubmit({
       ...prepareBiocharProductSubmission(data as BiocharProductFormData, hasFrozenSourceAllocation, isEditMode ? product?.massKg ?? undefined : undefined),
       basisFingerprint: basisFingerprint ?? data.basisFingerprint,
       idempotencyKey,
-    });
+    }, onRefusal);
   }));
 
   // A stock change label only advertises a fresh, unblocked projection. The
@@ -522,8 +533,7 @@ export function BiocharProductForm({
           splitFooter={
             ((biocharStockError !== undefined &&
               biocharStockError !== SOURCE_BIOCHAR_MASS_ERROR) ||
-              routedServerError.inlineError ===
-                binStockOverdrawMessage("biochar")) && (
+              serverRefusedMass) && (
               <StockReconciliationLink facilityId={contextFacilityId} />
             )
           }
@@ -566,13 +576,19 @@ export function BiocharProductForm({
           />
         </FormField>
 
-        <IngredientBinRows
-          composition={ingredientComposition}
-          isSubmitting={isSubmitting}
-          allocationFrozen={hasFrozenSourceAllocation}
-          previews={productStockPreview.data}
-          previewsAvailable={productPreviewsAvailable}
-        />
+        {ingredientComposition.rows.length > 0 && (
+          // Named for the error summary, which reads a refusal of the whole set (a lock) from here.
+          <div role="group" aria-label="Ingredients" data-field-name="ingredientBins" tabIndex={-1} className="space-y-20">
+            <IngredientBinRows
+              composition={ingredientComposition}
+              isSubmitting={isSubmitting}
+              allocationFrozen={hasFrozenSourceAllocation}
+              previews={productStockPreview.data}
+              previewsAvailable={productPreviewsAvailable}
+            />
+            <FormError id="ingredientBins-error" message={errors.ingredientBins?.message} />
+          </div>
+        )}
       </FormSection>
 
       <FormSection
@@ -703,7 +719,7 @@ export function BiocharProductForm({
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
-        errorMessage={routedServerError.footerError}
+        errorMessage={errorMessage}
         submitDisabled={hasZeroSourceBiochar || submitDisabled}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
