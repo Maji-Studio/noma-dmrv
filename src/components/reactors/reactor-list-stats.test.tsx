@@ -23,13 +23,14 @@ vi.mock("@/hooks/use-reactors", () => ({
     isLoading: false,
     error: null,
   }),
-  useCreateReactor: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useCreateReactor: () => ({ startDraft: vi.fn(), isPending: false, mutateAsync: vi.fn() }),
   useUpdateReactor: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useDeleteReactor: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn() }),
 }));
+vi.mock("@/components/ui/in-use-delete-dialog", () => ({ InUseDeleteDialog: () => null }));
 vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   LightningIcon: () => <span />,
   FlaskIcon: () => <span />,

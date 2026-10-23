@@ -150,6 +150,7 @@ export function resolveTemplateInputs(args: {
           componentDisplayName: component.display_name,
           lineContract,
           entryContribution: contribution?.value,
+          carriedEntries: args.entryContributions?.carriedEntries?.filter(entry => entry.componentId === component.id),
           omitAutomaticProduction: omitProductionComponents,
           rtcInput,
           blueprintInput,

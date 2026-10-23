@@ -122,7 +122,6 @@ function RegistrySourceVisibilityForm({
         isSubmitting={saveMutation.isPending}
         errorMessage={errors.root?.serverError?.message}
         submitLabel="Save policy"
-        submittingLabel="Saving…"
         sticky={false}
       />
     </form>

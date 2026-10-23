@@ -1,8 +1,7 @@
 /**
  * Vehicle Quick Add Dialog
  * Inline dialog for adding a vehicle from the EntitySelect dropdown, and for
- * editing one when `vehicle` is passed (the picker's edit action and the
- * settings list). Embeds the full VehicleForm inside QuickAddDialogShell.
+ * editing one when `vehicle` is passed (the picker's edit action). Embeds the full VehicleForm inside QuickAddDialogShell.
  */
 "use client";
 
@@ -32,7 +31,7 @@ interface VehicleQuickAddDialogProps {
 const VEHICLE_NOT_SAVED = "The vehicle was not saved. Try again.";
 
 /** The form's L/100km becomes the stored L/km; blank or electric is null. */
-function toVehiclePayload(data: VehicleFormData): VehicleQuickAddData {
+export function toVehiclePayload(data: VehicleFormData): VehicleQuickAddData {
   const isElectric = data.fuelType === "Electric";
   const fuelConsumption =
     isElectric || data.fuelConsumptionLPer100Km == null

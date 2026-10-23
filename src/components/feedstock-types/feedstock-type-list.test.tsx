@@ -61,7 +61,7 @@ vi.mock("@/hooks/use-feedstock-types", () => ({
     isLoading: false,
     error: null,
   }),
-  useCreateFeedstockType: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateFeedstockType: () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useUpdateFeedstockType: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useArchiveFeedstockType: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUnarchiveFeedstockType: () => ({ mutateAsync: vi.fn(), isPending: false }),

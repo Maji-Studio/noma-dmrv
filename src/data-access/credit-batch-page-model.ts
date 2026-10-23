@@ -1,3 +1,4 @@
+import { creditBatchApplicationMass } from "@/lib/credit-batches/application-mass";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
@@ -173,13 +174,7 @@ async function loadCreditBatchPageModel(ctx: OrgContext, creditBatchId: string, 
       dryKg: sumDryGrams(slices.filter(slice => slice.removalId === row.id)) / GRAMS_PER_KG,
     };
   });
-  const runs = rollup.lineageFacts.runs;
-  const producedDryGrams = runs.length > 0 && runs.every(run => run.biocharDryMassKg !== null)
-    ? sumDryGrams(runs.map(run => ({ dryKg: run.biocharDryMassKg! })))
-    : null;
-  // Persisted slices are the frozen allocation authority, including when an
-  // application spans batches. Never use the list's wet appliedWeightTons.
-  const appliedDryGrams = sumDryGrams(slices);
+  const applicationMass = creditBatchApplicationMass(rollup.lineageFacts.runs, slices);
   const firstSubmitted = removals
     .filter(row => row.phase === "submitted" && row.submittedAt)
     .sort((a, b) => a.submittedAt!.getTime() - b.submittedAt!.getTime())
@@ -224,12 +219,10 @@ async function loadCreditBatchPageModel(ctx: OrgContext, creditBatchId: string, 
     slices,
     removals,
     mass: {
-      producedDryKg: producedDryGrams === null ? null : producedDryGrams / GRAMS_PER_KG,
-      appliedDryKg: appliedDryGrams / GRAMS_PER_KG,
+      ...applicationMass,
       inSubmittedDryKg: sumDryGrams(removals.filter(row => row.phase === "submitted")) / GRAMS_PER_KG,
       inDraftDryKg: sumDryGrams(removals.filter(row => row.phase === "draft")) / GRAMS_PER_KG,
       notInRemovalDryKg: sumDryGrams(slices.filter(slice => slice.removalId === null)) / GRAMS_PER_KG,
-      notAppliedDryKg: producedDryGrams === null ? null : Math.max(0, producedDryGrams - appliedDryGrams) / GRAMS_PER_KG,
     },
     milestones: {
       firstRemovalSubmittedAt: firstSubmitted?.submittedAt ?? null,

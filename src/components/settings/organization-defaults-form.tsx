@@ -241,7 +241,6 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
         isSubmitting={saveMutation.isPending}
         errorMessage={serverError}
         submitLabel="Save defaults"
-        submittingLabel="Saving…"
         sticky={false}
       />
     </form>

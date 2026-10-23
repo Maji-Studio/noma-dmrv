@@ -1,6 +1,6 @@
 import { CODE_CONFLICT_MESSAGES, withAutoCodes } from "@/data-access/code-generator";
 import { vehicles, storageLocations } from "@/db/schema";
-import { createVehicleInTransaction, createStorageLocationInTransaction } from "@/data-access/quick-add";
+import { createVehicleInTransaction, createQuickStorageLocationInTransaction } from "@/data-access/quick-add";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import { vehicleQuickAddSchema, storageLocationQuickAddSchema } from "@/schemas/quick-add";
 import type { Operation } from "./runner";
@@ -23,5 +23,5 @@ export const createQuickStorageLocation: Operation<typeof storageLocationQuickAd
   input: storageLocationQuickAddSchema,
   supportsDryRun: false,
   execute: ({ ctx, tx }, input) => withAutoCodes(ctx, tx, BIN_PREFIXES[input.type] ?? "PB", storageLocations, storageLocations.code, AUTO_CODE_COUNT,
-    ([code], savepoint) => createStorageLocationInTransaction(ctx, savepoint, { ...input, code }), CODE_CONFLICT_MESSAGES.storageLocation),
+    ([code], savepoint) => createQuickStorageLocationInTransaction(ctx, savepoint, { ...input, code }), CODE_CONFLICT_MESSAGES.storageLocation),
 };

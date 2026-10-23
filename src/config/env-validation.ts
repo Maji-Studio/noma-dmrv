@@ -83,3 +83,10 @@ export function refineIsometricEnvironment(
     });
   }
 }
+
+/** A sender: a bare address, or a display name with the address in angle brackets. */
+export const fromEmailSchema = z.string().refine((value) => {
+  const trimmed = value.trim();
+  const bracketed = /^[^<>]+<([^<>]+)>$/.exec(trimmed);
+  return z.email().safeParse(bracketed ? bracketed[1].trim() : trimmed).success;
+}, "Must be an email address or `Name <address>`");

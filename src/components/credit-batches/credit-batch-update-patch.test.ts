@@ -70,7 +70,7 @@ describe("saveCreditBatchEdit", () => {
       .resolves.toEqual({ status: "error", message: "Stale." });
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
     await expect(saveCreditBatchEdit({ data, saved: snapshot, membershipLocked: false, update: async () => { throw new Error("Changed by someone else."); } }))
-      .resolves.toEqual({ status: "error", message: "Changed by someone else." });
+      .resolves.toMatchObject({ status: "error", message: "Changed by someone else." });
     expect(errorLog).toHaveBeenCalled();
     errorLog.mockRestore();
   });
@@ -85,7 +85,7 @@ describe("saveCreditBatchEdit logging", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const refusal = new ActionError({ error: "Credit batch CB-1 was not changed. 1 manual entry falls outside the new dates." });
 
-    expect(await save(() => Promise.reject(refusal))).toEqual({ status: "error", message: refusal.message });
+    expect(await save(() => Promise.reject(refusal))).toEqual({ status: "error", message: refusal.message, cause: refusal });
     expect(error).not.toHaveBeenCalled();
     error.mockRestore();
   });
