@@ -330,7 +330,7 @@ export function FeedstockForm({
   };
   const refuseWithFields = useSaveRefusal({ control, setError, formId, aliases: feedstockRefusalAliases(hasEditedAllocationMass),
     // Operator changes clear the route override; programmatic restores do not.
-    dependents: { supplierId: OVERRIDE_FIELDS, facilityId: OVERRIDE_FIELDS },
+    dependents: { supplierId: OVERRIDE_FIELDS },
     resetField: (field) => {
       if ((OVERRIDE_FIELDS as readonly string[]).includes(field)) {
         setOverriding(hasSavedOverride(savedOverride));

@@ -601,7 +601,7 @@ export function ApplicationForm({
             setValue("gpsLatitude", lat, { shouldDirty: true, shouldValidate: true });
             setValue("gpsLongitude", lng, { shouldDirty: true, shouldValidate: true });
           }}
-          onDerive={() => resetFieldPosition(resetField, derivedPosition)}
+          onDerive={() => resetFieldPosition(setValue, derivedPosition)}
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
           disabled={isSubmitting}

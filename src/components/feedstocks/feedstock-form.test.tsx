@@ -38,11 +38,13 @@ vi.mock("@/components/forms", async () => {
       name,
       allowCreate,
       onCreateNew,
+      onChange,
     }: {
       control: Control<FieldValues>;
       name: string;
       allowCreate?: boolean;
       onCreateNew?: () => void;
+      onChange?: (value: string, change: { asDefault: boolean }) => void;
     }) => {
       const value = useWatch({ control, name });
       const { field } = useController({ control, name });
@@ -52,7 +54,10 @@ vi.mock("@/components/forms", async () => {
       return name === "supplierId" ? (
         <>
           <output data-testid="selected-supplier-id" data-value={String(value ?? "")} />
-          <input aria-label="Supplier" {...field} />
+          <input aria-label="Supplier" {...field} onChange={(event) => {
+            field.onChange(event);
+            onChange?.(event.target.value, { asDefault: false });
+          }} />
         </>
       ) : null;
     },
@@ -276,6 +281,25 @@ describe("FeedstockForm single-bin mass editing", () => {
       await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
       await waitFor(() => expect(input()?.value).toBe("60"));
       expect(view.getByRole("button", { name: "Reset to the location default" })).toBeTruthy();
+    } finally { cleanup(); }
+  });
+
+  it("clears the saved route override when the operator picks another supplier", async () => {
+    const saved = { ...feedstock, distanceKmOverride: 60, distanceSource: "document", distanceNote: "Detour" } as FeedstockWithRelations;
+    const nextSupplierId = "66666666-6666-4666-8666-666666666666";
+    const onSubmit = vi.fn();
+    const view = render(<FeedstockForm feedstock={saved} onSubmit={onSubmit} />);
+    try {
+      expect(view.container.querySelector<HTMLInputElement>('input[name="transportDistanceKm"]')?.value).toBe("60");
+      fireEvent.change(view.getByLabelText("Supplier"), { target: { value: nextSupplierId } });
+      expect(view.container.querySelector('input[name="transportDistanceKm"]')).toBeNull();
+      expect(view.getByRole("button", { name: "Override the one-way distance" })).toBeTruthy();
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        supplierId: nextSupplierId,
+        transportDistanceKm: null, transportDistanceSource: undefined, distanceNote: null,
+      }), expect.any(Function));
     } finally { cleanup(); }
   });
 

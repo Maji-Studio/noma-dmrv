@@ -214,7 +214,7 @@ lock revert, for example `{ customerId: ["customerLocationId"] }`. A dependent
 gets the Locked marker only if changed and on screen; otherwise it resets silently.
 Clear dependent fields from operator change handlers when a dependency cascade
 would also fire on `resetField` and erase restored values. `isChanged` can report
-operator edits held outside RHF, such as delivery sub-bin choices. Its
+operator edits held outside RHF, such as delivery sub-bin choices. `useSaveRefusal`'s
 locked-field reset uses RHF defaults, so those defaults must describe saved
 values. Delivery and feedstock initialize from the opened record. Feedstock
 resets both its total and single-bin allocation mass together. Application

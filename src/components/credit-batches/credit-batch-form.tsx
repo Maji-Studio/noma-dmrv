@@ -51,8 +51,6 @@ import { isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
 type CreditBatchFormInput = z.input<ReturnType<typeof creditBatchFormSchemaForCertifier>>;
 type CreditBatchFormResolver = Resolver<CreditBatchFormInput, unknown, CreditBatchFormData>;
 
-/** Form fields whose value decides which production runs the batch holds. */
-
 function parseWatchedDate(value: unknown): Date | null {
   if (value == null || value === "") {
     return null;
