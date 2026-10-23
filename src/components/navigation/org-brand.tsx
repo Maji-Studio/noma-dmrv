@@ -164,7 +164,7 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
       if (!result.success) {
         // Revoked access or a deleted organization resolves unsuccessfully without throwing.
         switching.release();
-        toast.error(orgSwitchFailedMessage(organizationName));
+        toast.error(orgSwitchFailedMessage(organizationName, result.error));
       }
     } catch {
       switching.release();

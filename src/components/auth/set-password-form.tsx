@@ -147,9 +147,9 @@ function SetPasswordFormContent() {
             type="submit"
             variant="primary"
             width="full"
-            disabled={isSubmitting}
+            busy={isSubmitting}
           >
-            {isSubmitting ? "Setting password..." : "Set password"}
+            Set password
           </Button>
         </>
       )}

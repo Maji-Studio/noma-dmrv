@@ -3,19 +3,19 @@ import { EmptyState, Notice } from "@/components/ui";
 import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { useOutputStockBalance, useOutputStockHistory, useOutputSubBins } from "@/hooks/use-output-stock";
-import { STOCK_PART_MIN_KG } from "@/config/output-stock";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { moistureDrawCaption } from "@/lib/output-stock/moisture-guidance";
 import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
-import { ESTIMATED_WATER_LABEL, mixPileName, WET_STOCK_DEFINITION } from "@/lib/output-stock/labels";
+import { mixPileName, WET_STOCK_DEFINITION } from "@/lib/output-stock/labels";
 import { OutputStockHistory } from "./output-stock-history";
 import { StockLevelChart } from "./stock-level-chart";
 import { buildStockLevelSeries } from "./stock-level-series";
 import { CardTextButton, StockCard, StockChartCard } from "./stock-card";
 import { outputStockFigure } from "./stock-preview-shared";
 import { MixPileBay, SubBinBays, type PileBand } from "./sub-bin-bays";
-import { contentsRows, ingredientSolidsParts } from "./sub-bin-card";
+import { partLabel, partRows } from "./sub-bin-card";
+import { pileFigures, stockParts } from "@/lib/output-stock/stock-parts";
 import type { OutputSubBin } from "@/types/output-stock";
 import type { MoistureBasis } from "@/lib/output-stock/moisture-estimate";
 import { formatFacilityDateTime } from "@/lib/format-utils";
@@ -32,28 +32,23 @@ const PERCENT = 100;
  * the card. Parts are named the way the product composition names them.
  */
 export function mixPileBands(layers: OutputSubBin[], dryKg: number | null, wetKg: number | null, moisturePercent: number | null, timeZone: string): PileBand[] {
-  const solidsKg = layers.reduce((sum, layer) => sum + layer.solidsKg, 0);
-  const ingredientsKg = solidsKg - layers.reduce((sum, layer) => sum + layer.dryMassKg, 0);
-  const byIngredient = new Map<string, number>();
-  for (const ingredient of layers.flatMap((layer) => layer.ingredients)) byIngredient.set(ingredient.name, (byIngredient.get(ingredient.name) ?? 0) + ingredient.solidsKg);
-  const ingredientBands = ingredientSolidsParts([...byIngredient].map(([name, kg]) => ({ name, solidsKg: kg })), ingredientsKg);
-  const waterKg = wetKg === null ? 0 : wetKg - solidsKg;
+  const parts = stockParts(pileFigures(layers, wetKg));
   return [
     ...layers.map((layer) => ({ label: layer.code, kg: layer.dryMassKg, details: [
       // A share is derived, so a bin without dry stock leaves the row out.
       ...(dryKg ? [{ label: "Share of dry biochar", value: `${Math.round((layer.dryMassKg / dryKg) * PERCENT)}%` }] : []),
       // A batch in a pile has no wet estimate of its own, so it has no water row.
-      ...contentsRows({ dryMassKg: layer.dryMassKg, solidsKg: layer.solidsKg, ingredients: layer.ingredients, waterKg: null }),
+      ...partRows(stockParts(pileFigures([layer], null)).rows),
       { label: "Added", value: formatFacilityDateTime(layer.placedAt, timeZone) },
     ] })),
-    ...ingredientBands.map((part) => ({ ...part, category: "ingredient-solids" as const, details: [
-      { label: part.label, value: formatMassKg(part.kg) },
+    ...parts.rows.filter((part) => part.kind === "ingredient").map((part) => ({ label: partLabel(part), kg: part.kg, category: "ingredient-solids" as const, details: [
+      { label: partLabel(part), value: formatMassKg(part.kg) },
     ] })),
-    ...(waterKg >= STOCK_PART_MIN_KG ? [{ label: ESTIMATED_WATER_LABEL, kg: waterKg, category: "existing-water" as const, details: [
-      { label: ESTIMATED_WATER_LABEL, value: formatMassKg(waterKg) },
+    ...parts.rows.filter((part) => part.kind === "water").map((part) => ({ label: partLabel(part), kg: part.kg, category: "existing-water" as const, details: [
+      { label: partLabel(part), value: formatMassKg(part.kg) },
       // The pile's moisture is an estimate, so without one the row is left out.
       ...(moisturePercent === null ? [] : [{ label: "Moisture", value: formatMoisturePercent(moisturePercent) }]),
-    ] }] : []),
+    ] })),
   ];
 }
 

@@ -23,11 +23,3 @@ export const TABLE_ROW = cn("grid items-baseline px-16", PHONE_COLUMNS, ROW_COLU
 /** Text in the open row starts where the line name does: after the row caret (14px) and its gap (6px). */
 export const NAME_INSET = "pl-20";
 
-/**
- * A 44px touch target around a compact inline control without growing the row:
- * a hit area centred on the control, as on the certification status badge.
- */
-export const TOUCH_TARGET = cn(
-  "relative before:absolute before:left-1/2 before:top-1/2 before:-translate-x-1/2 before:-translate-y-1/2",
-  "before:h-44 before:w-full before:min-w-44 before:content-['']",
-);

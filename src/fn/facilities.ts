@@ -2,6 +2,9 @@
 
 import { getFacilityStats as getFacilityStatsData, type FacilityStats } from "@/data-access/facility-stats";
 
+import { createFacility } from "@/lib/operations/facilities";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
+import { withCreate } from "./with-create";
 import { withAction } from "./with-action";
 
 /**
@@ -13,7 +16,6 @@ import { z } from "zod";
 import type { Facility } from "@/db/schema";
 import {
   archiveFacility,
-  createFacility,
   getFacilityArchiveImpact,
   restoreFacility,
   getFacilityCountries as getFacilityCountriesData,
@@ -28,11 +30,6 @@ import {
   type CreateFacilityData,
 } from "@/schemas/facilities";
 import type { ActionResult } from "@/types/actions";
-import {
-  CODE_CONFLICT_MESSAGES,
-  withAutoCode,
-} from "@/data-access/code-generator";
-import { facilities as facilitiesTable } from "@/db/schema";
 import { getFacilityOutputStock, type FacilityOutputStock } from "@/data-access/facility-output-stock";
 
 import { uuidSchema } from "@/schemas/helpers";
@@ -99,36 +96,12 @@ export async function getFacilityCountriesFn(
  * Create a new facility
  */
 export async function createFacilityFn(
-  data: CreateFacilityData
+  data: CreateFacilityData,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<Facility>> {
-  return withAction(async (ctx) => {
-    const validated = createFacilitySchema.parse(data);
-
-    const facility = await withAutoCode(
-      ctx,
-      "FAC",
-      facilitiesTable,
-      facilitiesTable.code,
-      undefined,
-      (code) =>
-        createFacility(ctx, {
-          code,
-          name: validated.name,
-          country: validated.country,
-          location: validated.location || null,
-          address: validated.address || null,
-          gpsLatitude: validated.gpsLatitude,
-          gpsLongitude: validated.gpsLongitude,
-          timezone: validated.timezone,
-          contactEmail: validated.contactEmail || null,
-          contactPhone: validated.contactPhone || null,
-          durabilityOption: validated.durabilityOption,
-        }),
-      CODE_CONFLICT_MESSAGES.facility,
-    );
-
-    return facility;
-  }, {
+  return withCreate((_ctx, create) => {
+    return create(createFacility, createFacilitySchema.parse(data));
+  }, options, {
     fallbackMessage: "Failed to create facility",
     log: { message: LOG_MESSAGE, context: { op: "facility:create" } },
   });

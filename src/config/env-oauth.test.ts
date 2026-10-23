@@ -43,6 +43,7 @@ it("rejects a misspelled flag", async () => {
 it("accepts an enabled production HTTPS origin with the other production gates satisfied", async () => {
   for (const [key, value] of Object.entries({
     NODE_ENV: "production", OAUTH_PROVIDER_ENABLED: "true", NEXT_PUBLIC_APP_URL: "https://app.noma.maji.studio",
+    RESEND_API_KEY: "synthetic", RESEND_FROM_EMAIL: "sender@example.test", RESEND_REPLY_TO: "support@example.test",
     CRON_SECRET: randomBytes(32).toString("hex"), CREDENTIALS_ENCRYPTION_KEY: randomBytes(32).toString("hex"),
     ISOMETRIC_ENVIRONMENT: "production", STORAGE_PROVIDER: "s3-compatible", STORAGE_BUCKET: "synthetic",
     STORAGE_REGION: "eu-central-1", STORAGE_ACCESS_KEY_ID: "synthetic", STORAGE_SECRET_ACCESS_KEY: "synthetic",

@@ -10,7 +10,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("@/hooks/use-facilities", () => {
-  const mutation = () => ({ mutateAsync: vi.fn(), isPending: false });
+  const mutation = () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false });
   return {
   useFacilities: () => ({ data: { items: [], total: 25, totalPages: 3 }, isLoading: false, error: null }),
   useFacilityCountries: () => ({ data: [] }),
