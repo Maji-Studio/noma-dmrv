@@ -55,3 +55,15 @@ it("pins a split product bay's tooltip rows: water 40, compost solids 70, dry bi
     { label: "Compost solids", value: "70 kg" }, { label: "Dry biochar", value: "90 kg" },
   ]);
 });
+
+it("rounds the estimated water like the wet figure, and leaves dry biochar and ingredient solids at their decimal", () => {
+  // 75 kg wet over 69.7 kg dry biochar: the water is 5.3 kg, read as "5 kg" under "75 kg" (#1382).
+  const bay: OutputSubBin = { ...subBin(75), dryMassKg: 69.7, solidsKg: 69.7 };
+  expect(subBinContentsRows(bay)).toEqual([
+    { label: "Water, estimated", value: "5 kg" }, { label: "Dry biochar", value: "69.7 kg" },
+  ]);
+  const withIngredient: OutputSubBin = { ...bay, solidsKg: 72.2, ingredients: [{ name: "Compost", solidsKg: 2.5 }] };
+  expect(subBinContentsRows(withIngredient)).toEqual([
+    { label: "Water, estimated", value: "3 kg" }, { label: "Compost solids", value: "2.5 kg" }, { label: "Dry biochar", value: "69.7 kg" },
+  ]);
+});
