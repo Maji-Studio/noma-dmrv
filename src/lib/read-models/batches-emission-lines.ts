@@ -1,5 +1,5 @@
 import type { LateEntryFacts } from "@/lib/certification/late-entry-view";
-import { recordedAfter } from "@/lib/certification/emission-entry-carry";
+import { mergeEntryCarryFacts } from "@/lib/certification/merge-entry-carry-facts";
 import { loadBatchEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 import type { OrgContext } from "@/lib/auth/server";
 import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
@@ -64,10 +64,7 @@ export async function loadBatchesEmissionLines(
     const stored = entriesByBatch.get(batch.id) ?? [];
     if (!batch.removalTemplateId) return [batch.id, { status: "blocked", blocker: "unpinnedTemplate", storedEntries: stored }];
     if (!observation) return [batch.id, { status: "blocked", blocker: "templateNotFullyRead", storedEntries: stored }];
-    const entries = deriveEmissionEntryFacts(stored, observation, byId).map(entry => {
-      const carried = carryEntries.find(item => item.id === entry.id);
-      return { ...entry, carry: carried?.carry, reportedIn: carried?.reportedIn, recordedAfter: recordedAfter(carried) };
-    });
+    const entries = mergeEntryCarryFacts(deriveEmissionEntryFacts(stored, observation, byId), carryEntries);
     const lines = buildBatchEmissionLines(observation, entries, byId, automatic[batch.id], commentsByBatch.get(batch.id));
     return [batch.id, { status: "ready", lines, storedEntries: stored }];
   }));

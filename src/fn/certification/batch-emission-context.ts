@@ -1,6 +1,6 @@
-import { recordedAfter } from "@/lib/certification/emission-entry-carry";
+import { coversBatches, type CoveredContenders } from "@/lib/certification/covered-contenders";
+import { mergeEntryCarryFacts } from "@/lib/certification/merge-entry-carry-facts";
 import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
-import { loadRemovalEntryCorrection } from "./removal-correction-core";
 import type { EntryCorrectionState } from "@/lib/certification/removal-entry-correction";
 import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
 import { isLiveEntryReservation, entriesWithoutRemoval, type EntryContender } from "@/lib/certification/removal-emission-contributions";
@@ -29,15 +29,25 @@ export interface LoadedBatchEmissionContext {
   carryContext?: Awaited<ReturnType<typeof loadFacilityEmissionEntryCarry>>;
 }
 
+export interface BatchEmissionContextOptions {
+  /** An attempt may include its own reservations in eligibility. */
+  claimedAttempt?: { removalId: string; submissionId?: string };
+  /** Optional advisory projection; omitted for comparison to prevent recursion. */
+  loadCorrection?: (ctx: OrgContext, removalId: string, coveredContenders: CoveredContenders) => Promise<EntryCorrectionState>;
+  /** Request-scoped facility carry discovery cache. */
+  carryReads?: Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>;
+  /** Include persisted entries owned by this Removal. */
+  ownedRemovalId?: string;
+  /** Reuse the outer authorized correction window instead of refreshing it. */
+  coveredContenders?: CoveredContenders;
+}
+
 /** Batch-wide facts, even when the Removal carries only some applications. */
 export async function loadBatchEmissionContext(
   ctx: OrgContext, facilityId: string,
   batches: readonly { id: string; removalTemplateId: string | null }[],
   facilityFacts: EntryTemplateContext,
-  claimedAttempt?: { removalId: string; submissionId?: string },
-  includeCorrections = true,
-  carryReads?: Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>,
-  ownedRemovalId?: string,
+  { claimedAttempt, loadCorrection, carryReads, ownedRemovalId, coveredContenders }: BatchEmissionContextOptions = {},
 ): Promise<LoadedBatchEmissionContext> {
   const result: BatchEmissionContext = {};
   const readableBatches = batches.flatMap((batch) => {
@@ -57,7 +67,7 @@ export async function loadBatchEmissionContext(
   const [storedEntries, automatic, contenders, availableApplications] = await Promise.all([
     listEmissionEntriesForBatches(ctx, ids),
     loadBatchesEmissionAutomaticFacts(ctx, ids),
-    listEmissionEntryDraftContenders(ctx, ids, undefined, claimedAttempt),
+    coversBatches(coveredContenders, ids, claimedAttempt) ? coveredContenders.contenders : listEmissionEntryDraftContenders(ctx, ids, undefined, claimedAttempt),
     listEmissionEntryAvailableApplications(ctx, ids),
   ]);
   const carryKey = JSON.stringify([ctx.organizationId, facilityId, claimedAttempt]);
@@ -91,15 +101,12 @@ export async function loadBatchEmissionContext(
     const previousObservations = new Map(stored.map((entry) =>
       [entry.observationId, observationsById.get(entry.observationId) ?? null] as const,
     ));
-    const entries = deriveEmissionEntryFacts(stored, observation, previousObservations).map(entry => {
-      const carried = carryContext.entries.find(item => item.id === entry.id);
-      return { ...entry, carry: carried?.carry, reportedIn: carried?.reportedIn, recordedAfter: recordedAfter(carried) };
-    });
+    const entries = mergeEntryCarryFacts(deriveEmissionEntryFacts(stored, observation, previousObservations), carryContext.entries);
     result[id] = { productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
       entriesWithoutRemoval: entriesWithoutRemoval(entries, contenders, liveReservationIds, availableApplications) };
   }
-  for (const contender of contenders.filter((item) => includeCorrections && item.contenderKind === "correction")) {
-    const correction = await loadRemovalEntryCorrection(ctx, contender.removalId, contenders);
+  for (const contender of contenders.filter((item) => loadCorrection && item.contenderKind === "correction")) {
+    const correction = await loadCorrection!(ctx, contender.removalId, { contenders, batchIds: ids, claimedAttempt });
     for (const id of correction.correction?.batches.map((batch) => batch.id) ?? correction.changedBatchIds ?? []) {
       if (result[id]) (result[id].corrections ??= []).push({ ...correction,
         correction: correction.correction ? { ...correction.correction,

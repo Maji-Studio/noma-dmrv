@@ -1,3 +1,5 @@
+import { loadRemovalCarriedEntries } from "@/data-access/removal-carried-entries";
+import { normalizeCarriedEntriesForHash } from "@/fn/certification/removal-entry-hash";
 import { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "@/lib/credit-batches/application-mass";
 /** Real database contracts. Run only in the configured throwaway test database. */
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
@@ -224,7 +226,7 @@ it("keeps an expired carried reservation in the resumed frozen compilation and r
   const facility = { templatesById: { [observation.externalTemplateId]: { observation } } };
   const scope = await resolveScopeForRemoval(ctx, receiving.removalId);
   const facts = await loadBatchEmissionContext(ctx, origin.facilityId, scope.memberBatches, facility,
-    { removalId: receiving.removalId }, false, undefined, receiving.removalId);
+    { claimedAttempt: { removalId: receiving.removalId }, ownedRemovalId: receiving.removalId });
   const frozen = frozenEntriesForAttempt(row, facts);
   expect(frozen).toEqual([{ entryId: entry.id, contentRevision: entry.contentRevision }]);
   const compiled = await loadRemovalEntryContext(ctx, scope, facts, facility, frozen);
@@ -316,3 +318,32 @@ it.each([0, 0.001, MIN_VISIBLE_NOT_APPLIED_DRY_KG - 0.001, MIN_VISIBLE_NOT_APPLI
       .toBe(remaining === 0 ? receiving.removalId : null);
   },
 );
+
+
+it("the narrow sheet read equals full-context selection for a real draft carry candidate", async () => {
+  const scope = await resolveScopeForRemoval(ctx, receiving.removalId);
+  const facility = { templatesById: { [observation.externalTemplateId]: { observation } } };
+  const facts = await loadBatchEmissionContext(ctx, scope.facilityId, scope.memberBatches, facility,
+    { ownedRemovalId: receiving.removalId });
+  const full = await loadRemovalEntryContext(ctx, scope, facts, facility);
+  const narrow = await loadRemovalCarriedEntries(ctx, receiving.removalId);
+  expect(narrow.map(item => item.entryId)).toEqual([entry.id]);
+  expect(narrow).toEqual(full!.contributions.carriedEntries);
+});
+
+it("the narrow sent read preserves the full-context carried list and its frozen values", async () => {
+  const scope = await resolveScopeForRemoval(ctx, receiving.removalId);
+  const facility = { templatesById: { [observation.externalTemplateId]: { observation } } };
+  const facts = await loadBatchEmissionContext(ctx, scope.facilityId, scope.memberBatches, facility,
+    { ownedRemovalId: receiving.removalId });
+  const full = await loadRemovalEntryContext(ctx, scope, facts, facility);
+  expect(full!.contributions.carriedEntries!.map(item => item.entryId)).toEqual([entry.id]);
+  await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId, provider: "isometric", submissionType: "removal",
+    localEntityType: "removal", localEntityId: receiving.removalId, version: 1, status: "submitted", submittedAt: new Date(),
+    payloadSnapshot: { templateObservationId: observation.id, semantic: { carriedEntries: normalizeCarriedEntriesForHash(full!.contributions.carriedEntries) } },
+  });
+  await db.update(emissionEntryValues).set({ magnitude: "999" }).where(and(
+    eq(emissionEntryValues.organizationId, ctx.organizationId), eq(emissionEntryValues.entryId, entry.id)));
+  expect(await loadRemovalCarriedEntries(ctx, receiving.removalId)).toEqual(
+    full!.contributions.carriedEntries!.map(item => ({ ...item, value: { magnitude: item.value.magnitude, unit: item.value.unit } })));
+});

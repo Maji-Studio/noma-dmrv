@@ -175,7 +175,7 @@ export async function getTransportLegsForEntity(
         eq(transportLegs.organizationId, ctx.organizationId),
       ),
     )
-    .orderBy(asc(transportLegs.createdAt));
+    .orderBy(asc(transportLegs.createdAt), asc(transportLegs.id));
 }
 
 // Skips per-entity facility resolution: callers (submission orchestrator,
@@ -200,7 +200,7 @@ export async function getTransportLegsForEntities(
         eq(transportLegs.organizationId, ctx.organizationId),
       ),
     )
-    .orderBy(asc(transportLegs.createdAt));
+    .orderBy(asc(transportLegs.createdAt), asc(transportLegs.id));
 }
 
 // Same access contract as `getTransportLegsForEntities` (parents validated
@@ -230,7 +230,7 @@ export async function getTransportLegsWithEvidenceForEntities(
         eq(transportLegs.organizationId, ctx.organizationId),
       ),
     )
-    .orderBy(asc(transportLegs.createdAt));
+    .orderBy(asc(transportLegs.createdAt), asc(transportLegs.id));
 }
 
 // ============================================

@@ -6,18 +6,17 @@
  */
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { createIntentHref } from "@/lib/create-intent";
-import { removalTemplatesSettingsHref } from "@/lib/certification/links";
+import { certificationRemovalsHref, OPEN_REMOVAL_TEMPLATES_LINK_LABEL, removalTemplatesSettingsHref } from "@/lib/certification/links";
 import { formatDayString } from "@/lib/format-utils";
 import { removalSheetHref } from "@/lib/removal-correction-copy";
 import {
   CARRY_WAITING_REASONS,
+  CARRY_WAITING_DETAILS,
   type CarryWaitingReason,
   type EntryCarryDestination,
   type EntryCarryDisposition,
 } from "./emission-entry-carry";
 
-const REMOVALS_PATH = "/certification/removals";
-const WAITING_PREFIX = "Waiting for a Removal. ";
 const MEMBER_TEMPLATE_TEXT = "An Admin changes it in Settings, Removal templates.";
 
 export interface LateEntryFacts {
@@ -57,15 +56,15 @@ export function waitingAction(
   facilityId: string,
   draft?: { removalId: string } | null,
 ): LateEntryAction {
-  if (reason === "noDraft") return { label: "New Removal", href: createIntentHref(REMOVALS_PATH, facilityId) };
-  if (reason === "incompatibleTemplate") return { label: "Open Removal templates", href: removalTemplatesSettingsHref(facilityId) };
+  if (reason === "noDraft") return { label: "New Removal", href: createIntentHref(certificationRemovalsHref(), facilityId) };
+  if (reason === "incompatibleTemplate") return { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: removalTemplatesSettingsHref(facilityId) };
   if (draft) return { label: "Open Removal", href: removalSheetHref(draft.removalId, facilityId) };
-  return { label: "Open Removals", href: `${REMOVALS_PATH}?facility=${encodeURIComponent(facilityId)}` };
+  return { label: "Open Removals", href: certificationRemovalsHref({ facility: facilityId }) };
 }
 
 /** The reason without its "Waiting for a Removal." lead, for places that already say so. */
 export function waitingDetail(reason: CarryWaitingReason, canManage = true): string {
-  const detail = CARRY_WAITING_REASONS[reason].replace(WAITING_PREFIX, "");
+  const detail = CARRY_WAITING_DETAILS[reason];
   return reason === "incompatibleTemplate" && !canManage ? `${detail} ${MEMBER_TEMPLATE_TEXT}` : detail;
 }
 

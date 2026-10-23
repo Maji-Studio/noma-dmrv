@@ -1,3 +1,7 @@
+import { normalizeCarriedEntriesForHash } from "@/fn/certification/removal-entry-hash";
+import * as contextBuilder from "@/fn/certification/removal-context-build";
+import { generatedEvidenceFacts } from "@/fn/certification/generated-evidence-facts";
+import { loadRemovalCarriedEntries } from "@/data-access/removal-carried-entries";
 /**
  * Real-DB regression for the one Removal comparison. The "sent" baseline is the
  * semantic payload the REAL compile produced from the sent entries, stored as the
@@ -129,11 +133,16 @@ beforeEach(async () => {
   await db.update(emissionEntries).set({ sentByRemovalId: f.removalId }).where(and(eq(emissionEntries.organizationId, org.organizationId), eq(emissionEntries.id, sent.id)));
 
   // Honest baseline: what the real compile produces for the sent entries is what was sent.
+  const buildContext = vi.spyOn(contextBuilder, "buildRemovalContext");
+  await compileRemovalCorrectionContent(org, f.removalId, observation);
+  const baselineContext = await buildContext.mock.results.at(-1)!.value;
+  buildContext.mockRestore();
   const baseline = await compileRemovalCorrectionContent(org, f.removalId, observation);
+  expect(baseline).not.toHaveProperty("changedGeneratedEvidence");
   expect(baseline).toMatchObject({ entryContributions: [expect.objectContaining({ componentId: "line" })] });
   await db.insert(certificationSubmissions).values({ organizationId: org.organizationId, provider: "isometric", localEntityType: "removal",
     localEntityId: f.removalId, submissionType: "removal", status: "submitted", version: 1, submittedAt: new Date("2026-06-17"),
-    externalId: "original", payloadHash: "original", payloadSnapshot: { semantic: baseline, templateObservationId: observation.id, frozenEntrySet: [] } });
+    externalId: "original", payloadHash: "original", payloadSnapshot: { generatedEvidenceFacts: generatedEvidenceFacts(baselineContext), semantic: baseline, templateObservationId: observation.id, frozenEntrySet: [] } });
 });
 
 const guard = () => withGhgVerifierSubmissionLock(org, fixture!.ghgStatementId!, () => assertStatementRemovalsCurrent(org, fixture!.ghgStatementId!));
@@ -192,6 +201,7 @@ it("says unchanged everywhere for a returned receiving Removal that sent an entr
     // What the Removal sent is what the compile produces now that the sent entry belongs to the origin batch.
     const baseline = await compileRemovalCorrectionContent(org, f.removalId, observation!);
     expect(baseline).toMatchObject({ entryContributions: [expect.objectContaining({ componentId: "line" })] });
+    expect(baseline).not.toHaveProperty("changedGeneratedEvidence");
     // The sent snapshot is frozen, so the Removal's submission is replaced by one that sent the carried entry.
     await db.delete(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, org.organizationId),
       eq(certificationSubmissions.localEntityId, f.removalId), eq(certificationSubmissions.submissionType, "removal")));
@@ -201,6 +211,10 @@ it("says unchanged everywhere for a returned receiving Removal that sent an entr
 
     expect(await compareRemovalCurrentContent(org, f.removalId)).toMatchObject({ kind: "unchanged", state: { comparison: "unchanged", correctionNeeded: false } });
     expect(await loadRemovalEntryCorrection(org, f.removalId)).toMatchObject({ windowOpen: true, correctionNeeded: false, comparison: "unchanged" });
+    const carried = await loadRemovalCarriedEntries(org, f.removalId);
+    // The sheet read shows each frozen entry's magnitude and unit only.
+    expect(normalizeCarriedEntriesForHash(carried)).toEqual(normalizeCarriedEntriesForHash(baseline!.carriedEntries as never)!
+      .map(item => ({ ...item, value: { magnitude: item.value.magnitude, unit: item.value.unit } })));
     await expect(guard()).resolves.toBeUndefined();
   } finally {
     await db.update(emissionEntries).set({ creditBatchId: f.batchId }).where(and(eq(emissionEntries.organizationId, org.organizationId), eq(emissionEntries.id, sentEntryId)));
@@ -209,4 +223,14 @@ it("says unchanged everywhere for a returned receiving Removal that sent an entr
     await db.delete(productionProcesses).where(and(eq(productionProcesses.organizationId, org.organizationId), eq(productionProcesses.facilityId, f.facilityId), eq(productionProcesses.feedstockTypeId, origin.feedstockTypeId)));
     await cleanupLineageFixture(origin);
   }
+});
+
+// A lineage-only change through the real context, preparation and compilation path.
+it("requires resubmission everywhere after sent sample chemistry changes without entry changes", async () => {
+  const f = fixture!;
+  await db.update(samples).set({ sReflectanceFraction: 0.6 })
+    .where(and(eq(samples.organizationId, org.organizationId), eq(samples.id, f.sampleId)));
+  expect(await compareRemovalCurrentContent(org, f.removalId)).toMatchObject({ kind: "changed", state: { correctionNeeded: true } });
+  expect(await loadRemovalEntryCorrection(org, f.removalId)).toMatchObject({ comparison: "changed", correctionNeeded: true });
+  await expect(guard()).rejects.toThrow(/Resubmit Removal .* first/);
 });

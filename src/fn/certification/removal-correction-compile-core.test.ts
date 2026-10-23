@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
-import { buildRemovalContext } from "./certify-context-core";
+import { buildRemovalContext } from "./removal-context-build";
 import { prepareRemovalSubmission } from "./removal-submission-prepare";
 import { buildRemovalSubmissionBuild } from "./removal-submission-build";
 import { compileRemovalCorrectionContent } from "./removal-correction-compile-core";
@@ -11,7 +11,7 @@ vi.mock("./removal-scope", () => ({ resolveScopeForRemoval: vi.fn(async () => ({
 vi.mock("@/data-access/facilities", () => ({ getFacilityById: vi.fn(async () => ({ timezone: "UTC" })) }));
 vi.mock("@/data-access/certification", () => ({ getCertifierProjectByFacility: vi.fn(async () => ({})) }));
 vi.mock("./stored-removal-template", () => ({ storedRemovalTemplateFacts: vi.fn(() => ({})) }));
-vi.mock("./certify-context-core", () => ({ buildRemovalContext: vi.fn() }));
+vi.mock("./removal-context-build", () => ({ buildRemovalContext: vi.fn() }));
 vi.mock("./removal-submission-prepare", () => ({ prepareRemovalSubmission: vi.fn() }));
 vi.mock("./removal-submission-build", () => ({ buildRemovalSubmissionBuild: vi.fn() }));
 
