@@ -1,3 +1,4 @@
+import type { EntryContender } from "@/lib/certification/removal-emission-contributions";
 import { env } from "@/config/env";
 import {
   getLatestSubmission,
@@ -26,7 +27,7 @@ import {
   buildSoilTemperatureGate,
   resolveFacilityReferenceSoilTemperature,
 } from "@/lib/isometric/utils/durability-aggregation";
-import { loadBatchEmissionContext } from "./batch-emission-context";
+import { loadBatchEmissionContext, type BatchEmissionContextOptions } from "./batch-emission-context";
 import { buildCertifyEntityReadiness } from "./certify-entity-readiness";
 import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
 import {
@@ -68,17 +69,19 @@ export interface BuildRemovalContextOptions {
   /** Request-scoped facility carry discovery cache. */
   carryReads?: Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>;
   /** Advisory projection supplied by the outer orchestration layer. */
-  loadCorrection?: import("./batch-emission-context").BatchEmissionContextOptions["loadCorrection"];
+  loadCorrection?: BatchEmissionContextOptions["loadCorrection"];
   /** Already-authorized contenders from the outer correction window. */
-  contenders?: import("@/lib/certification/removal-emission-contributions").EntryContender[];
+  contenders?: EntryContender[];
+  /** Batch IDs covered by the contender query, including empty results. */
+  contendersBatchIds?: readonly string[];
 }
 
-// Composes one removal's scope, submission, lineage, transport, and mass facts.
+// Composes one Removal; defaults to no advisory corrections unless a loader is supplied.
 export async function buildRemovalContext(
   orgCtx: OrgContext,
   scope: RemovalScope,
   facilityFacts: FacilityCertifierFacts,
-  { claimedSubmissionId, submissionRead = false, correctionRead = false, carryReads, loadCorrection, contenders }: BuildRemovalContextOptions = {},
+  { claimedSubmissionId, submissionRead = false, correctionRead = false, carryReads, loadCorrection, contenders, contendersBatchIds }: BuildRemovalContextOptions = {},
 ): Promise<RemovalSubmissionContext> {
   // Load removal-owned facts up-front so every short-circuit carries them.
   const [latestSubmission, hasFinalized, linkedGhgStatement] =
@@ -102,7 +105,7 @@ export async function buildRemovalContext(
       loadLinkedGhgStatementStatus(orgCtx, scope.removal),
     ]);
   const emissionContext = await loadBatchEmissionContext(orgCtx, scope.facilityId, scope.memberBatches, facilityFacts,
-    { claimedAttempt: (claimedSubmissionId || submissionRead) && scope.removalId ? { removalId: scope.removalId, submissionId: claimedSubmissionId } : undefined, loadCorrection: correctionRead ? undefined : loadCorrection, carryReads, ownedRemovalId: scope.removalId ?? undefined, contenders });
+    { claimedAttempt: (claimedSubmissionId || submissionRead) && scope.removalId ? { removalId: scope.removalId, submissionId: claimedSubmissionId } : undefined, loadCorrection: correctionRead ? undefined : loadCorrection, carryReads, ownedRemovalId: scope.removalId ?? undefined, contenders, contendersBatchIds });
   const batchEmissionFacts = emissionContext.batchFacts;
   // Entry recovery may exclude its own draft from eligibility. Evidence retries
   // must still retain the operator files frozen when that draft was claimed.

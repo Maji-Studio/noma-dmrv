@@ -1,3 +1,4 @@
+import { removalEntryOwner } from "@/lib/certification/removal-emission-contributions";
 import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 import { loadRemovalEntryCorrection } from "./removal-correction-core";
 import { buildRemovalCorrection, deriveEntryCorrection, correctionForRemoval } from "@/lib/certification/removal-entry-correction";
@@ -295,7 +296,7 @@ it.each([false, true])("reuses one correction read for all member batches and th
   });
   vi.mocked(loadRemovalEntryCorrection).mockResolvedValue({ ...state, removalId: "returned", removalCode: "RM-001", correction });
   const { batchFacts: loaded } = await loadBatchEmissionContext(ctx, "facility", batches, facilityFacts, { loadCorrection: loadRemovalEntryCorrection });
-  expect(loadRemovalEntryCorrection).toHaveBeenCalledExactlyOnceWith(ctx, "returned", [contender]);
+  expect(loadRemovalEntryCorrection).toHaveBeenCalledExactlyOnceWith(ctx, "returned", [contender], batches.map(batch => batch.id));
   expect(loaded.one.corrections?.[0].correction).toEqual(correction);
   expect(loaded.two.corrections?.[0].correction).toEqual({ ...correction, changed: [] });
   expect(loaded.unrelated.corrections).toBeUndefined();
@@ -359,7 +360,24 @@ it("does not recurse into the comparison when correction projections are suppres
 it("reuses supplied correction contenders without refreshing their registry window", async () => {
   const contenders = [{ contenderKind: "correction" as const, removalId: "returned", createdAt: "2026-01-01",
     creditBatchIds: ["one"], window: { start: "2026-01-01", end: "2026-02-01" } }];
-  const result = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts, { contenders });
+  const result = await loadBatchEmissionContext(makeTestOrgContext(), "facility", [{ id: "one", removalTemplateId: "template" }], facilityFacts, { contenders, contendersBatchIds: ["one"] });
   expect(listEmissionEntryDraftContenders).not.toHaveBeenCalled();
   expect(result.batchFacts.one.contenders).toBe(contenders);
+});
+
+it("refreshes an A-only contender set for a Removal covering A+B, retaining B's earlier winner", async () => {
+  const returned = { contenderKind: "correction" as const, removalId: "R", createdAt: "2026-01-01",
+    creditBatchIds: ["one", "two"], window: { start: "2026-01-01", end: "2026-03-01" } };
+  const earlier = { ...returned, removalId: "R2", creditBatchIds: ["two"], window: { start: "2026-01-01", end: "2026-02-01" } };
+  vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([returned, earlier]);
+  const batches = ["one", "two"].map(id => ({ id, removalTemplateId: "template" }));
+  const advisory = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facilityFacts,
+    { contenders: [returned], contendersBatchIds: ["one"] });
+  const guard = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facilityFacts);
+  expect(listEmissionEntryDraftContenders).toHaveBeenCalledTimes(2);
+  expect(advisory.batchFacts.two.contenders).toEqual(guard.batchFacts.two.contenders);
+  expect(advisory.batchFacts.two.contenders).toContainEqual(earlier);
+  const entry = { creditBatchId: "two", occurredOn: "2026-01-15", kind: "value" } as never;
+  expect(removalEntryOwner(entry, advisory.batchFacts.two.contenders!)).toBe("R2");
+  expect(removalEntryOwner(entry, guard.batchFacts.two.contenders!)).toBe("R2");
 });

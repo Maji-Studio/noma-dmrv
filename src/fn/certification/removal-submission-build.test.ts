@@ -601,8 +601,12 @@ describe("buildRemovalSubmissionBuild", () => {
       },
     ] as const;
 
+    const evidenceFacts = { transport: [], durability: { memberBatchIds: ["batch-1"], declaredSoilTemperatureC: null, batches: [] } };
+    const semanticPayload = { removalId: "removal-1" };
     const snapshot = materializeRemovalSubmissionSnapshot({
       compiled: {
+        generatedEvidenceFacts: evidenceFacts,
+        semanticPayload,
         templateObservationId: "observation",
         frozenEntrySet: [{ entryId: "entry", contentRevision: 7 }],
         monitored: [],
@@ -627,6 +631,9 @@ describe("buildRemovalSubmissionBuild", () => {
       supersedePreviousId: null,
     });
 
+    expect(snapshot.payloadSnapshot.generatedEvidenceFacts).toEqual(evidenceFacts);
+    expect(snapshot.payloadSnapshot.semantic).toBe(semanticPayload);
+    expect(snapshot.payloadSnapshot.semantic).not.toHaveProperty("generatedEvidenceFacts");
     expect(snapshot.payloadSnapshot.templateObservationId).toBe("observation");
     expect(snapshot.payloadSnapshot.frozenEntrySet).toEqual([{ entryId: "entry", contentRevision: 7 }]);
     expect(snapshot.payloadSnapshot.sourceBindingPlan).toEqual(

@@ -59,7 +59,7 @@ it("uses persisted pinned observations while registry calls fail", async () => {
   }]);
   expect(mocks.observations).toHaveBeenCalledExactlyOnceWith(ctx, "isometric", ["template"]);
   expect(mocks.facts).toHaveBeenCalledWith(ctx, "facility", scope.memberBatches,
-    { templatesById: { template: { observation } } }, { ownedRemovalId: "removal", loadCorrection: expect.any(Function) });
+    { templatesById: { template: { observation } } }, { ownedRemovalId: "removal" });
   expect(mocks.registry).not.toHaveBeenCalled();
 });
 it("returns no entry contributions before a local observation exists", async () => {

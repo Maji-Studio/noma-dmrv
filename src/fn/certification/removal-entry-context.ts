@@ -1,9 +1,6 @@
 import { isCarriedToRemoval } from "@/lib/certification/emission-entry-carry";
 import { emissionEntryCounts, entryLine } from "@/lib/certification/emission-entry-rules";
 import { EMISSION_ENTRIES_CHANGED } from "@/lib/certification/emission-entry-messages";
-import type { certificationSubmissions } from "@/db/schema/certification";
-import { readRemovalEntrySnapshot } from "@/lib/certification/removal-entry-snapshot";
-import { getMetadataValue, SUBMISSION_METADATA_KEYS, SUBMISSION_EXTERNAL_MUTATIONS } from "@/lib/certification/submission-metadata";
 import { omittedProductionSources } from "@/lib/certification/removal-emission-lines";
 import type { OrgContext } from "@/lib/auth/server";
 import { loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
@@ -58,18 +55,4 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   return { contributions, batchFacts, observationId: observation.id, semanticFingerprint: observation.semanticFingerprint };
 }
 
-/** A crashed, unreserved draft must not hide fresh facts from reads or the resume gate. */
-export function frozenEntriesForAttempt(submission: typeof certificationSubmissions.$inferSelect | null, context: LoadedBatchEmissionContext) {
-  const { batchFacts: facts, carryContext } = context;
-  if (!submission || submission.status !== "draft" || !submission.payloadSnapshot ||
-    typeof submission.payloadSnapshot !== "object" || !("frozenEntrySet" in submission.payloadSnapshot)) return undefined;
-  const frozen = readRemovalEntrySnapshot(submission).frozenEntrySet;
-  const entries = [...Object.values(facts).flatMap((batch) => batch.entries),
-    ...(carryContext?.entries ?? [])];
-  // Both claim sets commit together, so production ownership also freezes an empty entry set.
-  const productionReserved = Object.values(facts).some((batch) => batch.productionReservationSubmissionId === submission.id);
-  const reserved = productionReserved || frozen.length > 0 && frozen.every((item) => entries.some((entry) =>
-    entry.id === item.entryId && entry.sendReservedBySubmissionId === submission.id));
-  const mutation = getMetadataValue(submission.metadata, SUBMISSION_METADATA_KEYS.externalMutation);
-  return reserved || mutation === SUBMISSION_EXTERNAL_MUTATIONS.possible || mutation === SUBMISSION_EXTERNAL_MUTATIONS.confirmed ? frozen : undefined;
-}
+export { frozenEntriesForAttempt } from "@/lib/certification/frozen-removal-entries";

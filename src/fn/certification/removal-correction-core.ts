@@ -7,8 +7,8 @@ import { deriveEntryCorrection, buildRemovalCorrection, type EntryCorrectionStat
 import { compareRemovalCurrentContent } from "./removal-content-comparison-core";
 
 /** Advisory projection inside the correction window; never authorizes mutations. */
-export async function loadRemovalEntryCorrection(orgCtx: OrgContext, removalId: string, suppliedContenders?: EntryContender[]): Promise<EntryCorrectionState> {
-  const loaded = await loadRemovalCorrectionFacts(orgCtx, removalId, suppliedContenders);
+export async function loadRemovalEntryCorrection(orgCtx: OrgContext, removalId: string, suppliedContenders?: EntryContender[], contendersBatchIds?: readonly string[]): Promise<EntryCorrectionState> {
+  const loaded = await loadRemovalCorrectionFacts(orgCtx, removalId, suppliedContenders, contendersBatchIds);
   if (!loaded) return deriveEntryCorrection(false, [], []);
   const { batches, correction, identity } = loaded;
   const comparison = await compareRemovalCurrentContent(orgCtx, removalId, loaded);

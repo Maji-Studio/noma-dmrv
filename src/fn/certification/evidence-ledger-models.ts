@@ -1,3 +1,4 @@
+import type { TransportLeg } from "@/db/schema";
 import { createHash } from "node:crypto";
 import type { RemovalSubmissionContext } from "./certify-context-types";
 import { buildLedgerModel } from "@/lib/certification/evidence-ledger/build-model";
@@ -13,13 +14,23 @@ export function stableLedgerContentHash<M extends { generatedAtIso: string }>(
   return createHash("sha256").update(JSON.stringify(stable)).digest("hex");
 }
 
-/** Shared inputs for generation and DB-only correction comparison. */
+/** Retain the historical created-at ordering, resolving ties by stable identity. */
+function orderedLegs(legs: TransportLeg[]) {
+  return [...legs].sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0) || a.id.localeCompare(b.id));
+}
+
+/** Deterministic render inputs; correction reads compare source facts separately. */
 export function transportLedgerModel(ctx: RemovalSubmissionContext, facilityName: string | null, generatedAtIso: string) {
   const memberBatchCodes =
-    ctx.memberBatches.map((b) => b.code).join(" · ") || null;
+    [...ctx.memberBatches].sort((a, b) => a.id.localeCompare(b.id)).map((b) => b.code).join(" · ") || null;
 
   return buildLedgerModel({
-    legsByCategory: ctx.transportLegs,
+    legsByCategory: {
+      feedstock: orderedLegs(ctx.transportLegs.feedstock),
+      // Delivery-derived legs have always been ordered by delivery identity.
+      biochar: [...ctx.transportLegs.biochar].sort((a, b) => a.id.localeCompare(b.id)),
+      sample: orderedLegs(ctx.transportLegs.sample),
+    },
     memberBatchCodes,
     facilityName,
     externalProjectId: ctx.mapping!.externalProjectId,
@@ -29,10 +40,14 @@ export function transportLedgerModel(ctx: RemovalSubmissionContext, facilityName
 }
 export function durabilityLedgerModel(ctx: RemovalSubmissionContext, facilityName: string | null, generatedAtIso: string) {
   const memberBatchCodes =
-    ctx.memberBatches.map((b) => b.code).join(" · ") || null;
+    [...ctx.memberBatches].sort((a, b) => a.id.localeCompare(b.id)).map((b) => b.code).join(" · ") || null;
 
   const commonModelArgs = {
-    batches: ctx.batchesWithSamples,
+    batches: [...ctx.batchesWithSamples].sort((a, b) => a.creditBatchId.localeCompare(b.creditBatchId)).map(batch => ({
+      ...batch,
+      samples: [...batch.samples].sort((a, b) => a.id.localeCompare(b.id)),
+      runs: [...batch.runs].sort((a, b) => a.id.localeCompare(b.id)),
+    })),
     attributionByRunId: ctx.attributionByRunId,
     memberBatchCodes,
     facilityName,

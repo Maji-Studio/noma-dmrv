@@ -25,7 +25,6 @@
  */
 import type { OrgContext } from "@/lib/auth/server";
 import { createHash } from "node:crypto";
-export { stableLedgerContentHash } from "./evidence-ledger-models";
 import {
   deleteDocumentUploadByDocument,
   getDocumentUploadByDocument,
@@ -43,6 +42,8 @@ import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
 import type { logger } from "@/lib/log";
 import { getStorageProvider } from "@/lib/storage";
 import { mirrorDocumentToSourceForUser } from "./sources-mirror-core";
+
+export { stableLedgerContentHash } from "./evidence-ledger-models";
 
 const PDF_MIME = "application/pdf";
 

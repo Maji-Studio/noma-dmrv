@@ -1,5 +1,6 @@
 import type { OrgContext } from "@/lib/auth/server";
-import { listDocumentsByKindForRemoval } from "@/data-access/documents";
+import { getSentRemovalForComparison } from "@/data-access/removal-entry-correction";
+import { generatedEvidenceFacts, generatedEvidenceFactsSchema, compareGeneratedEvidenceFacts } from "./generated-evidence-facts";
 import { TRANSPORT_EVIDENCE_LEDGER_KIND } from "@/lib/certification/evidence-ledger/types";
 import { DURABILITY_EVIDENCE_LEDGER_KIND } from "@/lib/certification/evidence-ledger/durability-types";
 import type { RemovalSubmissionContext } from "./certify-context-types";
@@ -19,15 +20,12 @@ export function currentEvidenceLedgerHashes(ctx: RemovalSubmissionContext, facil
   ];
 }
 
-/** The persisted document hash is the same hash used for submit-time reuse. */
-export async function changedGeneratedEvidence(ctx: OrgContext, removalId: string, context: RemovalSubmissionContext, facilityName: string | null) {
-  const hashes = currentEvidenceLedgerHashes(context, facilityName);
-  const changed = await Promise.all(hashes.map(async ({ kind, hash }) => {
-    const documents = await listDocumentsByKindForRemoval(ctx, kind, removalId);
-    const metadata = documents[0]?.metadata;
-    const storedHash = metadata && typeof metadata === "object" && "contentHash" in metadata ? metadata.contentHash : null;
-    const matches = hash === null ? documents.length === 0 : documents.length === 1 && storedHash === hash;
-    return matches ? [] : [{ kind, hash }];
-  }));
-  return changed.flat();
+/** Only the immutable sent snapshot is authoritative; active documents may be newer. */
+export async function changedGeneratedEvidence(ctx: OrgContext, removalId: string, context: RemovalSubmissionContext) {
+  const sent = await getSentRemovalForComparison(ctx, removalId);
+  const snapshot = sent?.payloadSnapshot;
+  const baseline = snapshot && typeof snapshot === "object" && "generatedEvidenceFacts" in snapshot
+    ? snapshot.generatedEvidenceFacts : undefined;
+  if (!generatedEvidenceFactsSchema.safeParse(baseline).success) return [];
+  return compareGeneratedEvidenceFacts(generatedEvidenceFacts(context), baseline).changed;
 }

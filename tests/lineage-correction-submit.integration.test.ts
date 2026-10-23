@@ -213,7 +213,7 @@ it("detects a run-only correction, fences the statement, supersedes and relocks 
   // Snapshots are frozen once a row leaves draft, so insert the sent attempt with its snapshot.
   const [prior] = await db.insert(certificationSubmissions).values({ organizationId: org.organizationId, provider: "isometric", localEntityType: "removal",
     localEntityId: f.removalId, submissionType: "removal", status: "submitted", version: 1, submittedAt: new Date("2026-01-01"), externalId: originalId, payloadHash: "original",
-    payloadSnapshot: { semantic: baseline.semanticPayload, templateObservationId: observation.id, frozenEntrySet: [] } }).returning();
+    payloadSnapshot: { generatedEvidenceFacts: baseline.generatedEvidenceFacts, semantic: baseline.semanticPayload, templateObservationId: observation.id, frozenEntrySet: [] } }).returning();
   expect(await loadRemovalEntryCorrection(org, f.removalId)).toMatchObject({ windowOpen: true, correctionNeeded: false });
 
   // Exercise the real mutation guard and update path, not a direct fixture SQL edit.

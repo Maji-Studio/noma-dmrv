@@ -40,7 +40,7 @@ it.each([null, { remotePeriodEndOn: "2026-06-30", remotePeriodEndIsSynthetic: tr
     const result = await loadRemovalEntryCorrection(makeTestOrgContext(), "removal", [{
       removalId: "removal", contenderKind: "correction", createdAt: "2026-04-01", creditBatchIds: ["batch"],
       window: { start: "2026-04-01", end: "2026-06-30" }, returnedStatement: { id: "statement", status: "FAILED_VERIFICATION" },
-    }]);
+    }], ["batch"]);
     expect(compareRemovalCurrentContent).toHaveBeenCalledExactlyOnceWith(makeTestOrgContext(), "removal", expect.objectContaining({
       submitted: { payloadSnapshot: { semantic: { entryContributions: [] } } },
       batches: [{ id: "batch", code: "CB-001", removalTemplateId: "template" }],
@@ -50,3 +50,19 @@ it.each([null, { remotePeriodEndOn: "2026-06-30", remotePeriodEndIsSynthetic: tr
       reportingPeriodStartOn: "2026-04-01", reportingPeriodEndOn: "2026-06-30" });
   },
 );
+
+it("refreshes A-only page contenders before comparing returned R's full A+B membership", async () => {
+  const returned = { removalId: "R", contenderKind: "correction" as const, createdAt: "2026-01-01", creditBatchIds: ["A", "B"],
+    window: { start: "2026-01-01", end: "2026-03-01" }, returnedStatement: { id: "statement", status: "FAILED_VERIFICATION" as const } };
+  const earlier = { ...returned, removalId: "R2", creditBatchIds: ["B"], window: { start: "2026-01-01", end: "2026-02-01" } };
+  mocks.select.mockReturnValueOnce(query([{ payloadSnapshot: { semantic: {} } }]))
+    .mockReturnValueOnce(query([{ code: "RM-R", reportingPeriodStartOn: "2026-01-01", reportingPeriodEndOn: "2026-03-01", metadata: {} }]));
+  vi.mocked(getCreditBatchesByRemovalId).mockResolvedValue([{ id: "A", code: "CB-A" }, { id: "B", code: "CB-B" }] as never);
+  vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([returned, earlier]);
+  vi.mocked(compareRemovalCurrentContent).mockResolvedValue({ kind: "unchanged", components: [], state: { windowOpen: true, correctionNeeded: false } } as never);
+  await loadRemovalEntryCorrection(makeTestOrgContext(), "R", [returned], ["A"]);
+  expect(listEmissionEntryDraftContenders).toHaveBeenCalledExactlyOnceWith(makeTestOrgContext(), ["A", "B"]);
+  expect(compareRemovalCurrentContent).toHaveBeenCalledWith(makeTestOrgContext(), "R", expect.objectContaining({
+    contenders: [returned, earlier], contendersBatchIds: ["A", "B"],
+  }));
+});

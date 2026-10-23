@@ -32,13 +32,15 @@ export interface BatchEmissionContextOptions {
   /** An attempt may include its own reservations in eligibility. */
   claimedAttempt?: { removalId: string; submissionId?: string };
   /** Optional advisory projection; omitted for comparison to prevent recursion. */
-  loadCorrection?: (ctx: OrgContext, removalId: string, contenders: EntryContender[]) => Promise<EntryCorrectionState>;
+  loadCorrection?: (ctx: OrgContext, removalId: string, contenders: EntryContender[], contendersBatchIds: readonly string[]) => Promise<EntryCorrectionState>;
   /** Request-scoped facility carry discovery cache. */
   carryReads?: Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>;
   /** Include persisted entries owned by this Removal. */
   ownedRemovalId?: string;
   /** Reuse the outer authorized correction window instead of refreshing it. */
   contenders?: EntryContender[];
+  /** IDs covered by the supplied contender query. */
+  contendersBatchIds?: readonly string[];
 }
 
 /** Batch-wide facts, even when the Removal carries only some applications. */
@@ -46,7 +48,7 @@ export async function loadBatchEmissionContext(
   ctx: OrgContext, facilityId: string,
   batches: readonly { id: string; removalTemplateId: string | null }[],
   facilityFacts: EntryTemplateContext,
-  { claimedAttempt, loadCorrection, carryReads, ownedRemovalId, contenders: suppliedContenders }: BatchEmissionContextOptions = {},
+  { claimedAttempt, loadCorrection, carryReads, ownedRemovalId, contenders: suppliedContenders, contendersBatchIds }: BatchEmissionContextOptions = {},
 ): Promise<LoadedBatchEmissionContext> {
   const result: BatchEmissionContext = {};
   const readableBatches = batches.flatMap((batch) => {
@@ -66,7 +68,7 @@ export async function loadBatchEmissionContext(
   const [storedEntries, automatic, contenders, availableApplications] = await Promise.all([
     listEmissionEntriesForBatches(ctx, ids),
     loadBatchesEmissionAutomaticFacts(ctx, ids),
-    suppliedContenders ?? listEmissionEntryDraftContenders(ctx, ids, undefined, claimedAttempt),
+    suppliedContenders && ids.every(id => contendersBatchIds?.includes(id)) ? suppliedContenders : listEmissionEntryDraftContenders(ctx, ids, undefined, claimedAttempt),
     listEmissionEntryAvailableApplications(ctx, ids),
   ]);
   const carryKey = JSON.stringify([ctx.organizationId, facilityId, claimedAttempt]);
@@ -105,7 +107,7 @@ export async function loadBatchEmissionContext(
       entriesWithoutRemoval: entriesWithoutRemoval(entries, contenders, liveReservationIds, availableApplications) };
   }
   for (const contender of contenders.filter((item) => loadCorrection && item.contenderKind === "correction")) {
-    const correction = await loadCorrection!(ctx, contender.removalId, contenders);
+    const correction = await loadCorrection!(ctx, contender.removalId, contenders, ids);
     for (const id of correction.correction?.batches.map((batch) => batch.id) ?? correction.changedBatchIds ?? []) {
       if (result[id]) (result[id].corrections ??= []).push({ ...correction,
         correction: correction.correction ? { ...correction.correction,

@@ -1,4 +1,3 @@
-import { durabilityLedgerModel } from "./evidence-ledger-models";
 /**
  * Durability evidence-ledger generation, storage, and Source mirroring.
  *
@@ -17,6 +16,7 @@ import { durabilityLedgerModel } from "./evidence-ledger-models";
  * Server-internal core (no "use server" — takes an explicit `orgCtx`, called from
  * the submit pipeline which already resolved the caller).
  */
+import { durabilityLedgerModel } from "./evidence-ledger-models";
 import { getFacilityById } from "@/data-access/facilities";
 import type { OrgContext } from "@/lib/auth/server";
 import { CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION } from "@/lib/calculations/biochar-removal";
