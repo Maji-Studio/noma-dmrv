@@ -1,6 +1,6 @@
-import { env } from "@/config/env";
 import type { OrgRole } from "@/lib/auth/server";
 import { orgRoleLabel } from "@/lib/org-role-label";
+import { getEmailAppUrl } from "./app-url";
 import { invitationEmail } from "./templates/invitation-email";
 import { logLocalFallbackLink, sendEmail } from "./send";
 
@@ -16,7 +16,7 @@ export async function sendOrganizationInvitation(input: {
   /** Name of whoever sent the invitation; wording drops it when unknown. */
   inviterName?: string | null;
 }): Promise<{ acceptUrl: string; emailSent: boolean }> {
-  const base = env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  const base = getEmailAppUrl();
   const acceptUrl = `${base}/accept-invitation/${input.invitationId}`;
   const { subject, html, text } = invitationEmail({
     to: input.email,

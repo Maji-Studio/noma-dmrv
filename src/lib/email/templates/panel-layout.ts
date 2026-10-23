@@ -43,6 +43,8 @@ const PHONE_BREAKPOINT = 600;
 const LOGO_SIZE = 40;
 const ART_WIDTH = 96;
 const ART_HEIGHT = 72;
+const CHANGE_BOX_WIDTH_PCT = 46;
+const CHANGE_ARROW_WIDTH = 32;
 const IMAGE_PATH = "/email";
 const PREHEADER_PAD = "&#847;&zwnj;&nbsp;".repeat(60);
 const DISPLAY_NONE = "display:none;max-height:0;overflow:hidden;mso-hide:all;";
@@ -120,7 +122,33 @@ const writtenLink = (url: string) =>
   `<p class="d-t2" style="margin:20px 0 0 0;font-family:${SANS};font-size:14px;line-height:1.5;color:${LIGHT.text2};">If the button does not work, open this link:<br>
 <a href="${escapeHtml(url)}" class="d-t2" style="color:${LIGHT.text2};text-decoration:underline;${WRAP_LINK}">${escapeHtml(url)}</a></p>`;
 
+/** Before → after: two blocks with an arrow between them. */
+function change(c: NonNullable<EmailContent["change"]>): string {
+  const box = (value: string, strong: boolean) =>
+    `<td class="${strong ? "d-panel d-ink" : "d-hair d-t2"}" width="${CHANGE_BOX_WIDTH_PCT}%" valign="middle" style="width:${CHANGE_BOX_WIDTH_PCT}%;border:1px solid ${strong ? LIGHT.panel : LIGHT.hair};padding:10px 12px;font-family:${SANS};font-size:15px;line-height:1.4;color:${strong ? LIGHT.ink : LIGHT.text2};${strong ? "font-weight:600;" : ""}${WRAP_LINK}">${escapeHtml(value).replace("@", "@<wbr>")}</td>`;
+  return `<p class="d-t2" style="margin:0 0 8px 0;font-family:${SANS};font-size:14px;line-height:1.5;color:${LIGHT.text2};">${escapeHtml(c.label)}</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px 0;"><tr>
+${box(c.from, false)}
+<td width="${CHANGE_ARROW_WIDTH}" align="center" valign="middle" class="d-t3" style="width:${CHANGE_ARROW_WIDTH}px;font-family:${SANS};font-size:18px;color:${LIGHT.text3};">&rarr;</td>
+${box(c.to, true)}
+</tr></table>`;
+}
+
+/** The last body paragraph, with the plain link on the line below it. */
+const paragraphWithLink = (html: string, link: { text: string; url: string }) =>
+  paragraph(`${html}<br><a href="${escapeHtml(link.url)}" class="d-ink" style="color:${LIGHT.ink};text-decoration:underline;${WRAP_LINK}">${escapeHtml(link.text)}</a>`);
+
 const footerStyle = `margin:0 0 4px 0;font-family:${SANS};font-size:13px;line-height:1.5;color:${LIGHT.text3};`;
+
+const actionBlock = (a: { label: string; url: string }) =>
+  `<div style="height:8px;line-height:8px;font-size:8px;">&nbsp;</div>${button(a.label, a.url)}${writtenLink(a.url)}\n`;
+
+const noteBlock = (text: string, hasSmall: boolean) =>
+  `<p class="d-t2" style="margin:12px 0 ${hasSmall ? 16 : 0}px 0;font-family:${SANS};font-size:14px;line-height:1.5;color:${LIGHT.text2};">${escapeHtml(text)}</p>\n`;
+
+const smallBlock = (text: string) =>
+  `<div class="d-hair" style="border-top:1px solid ${LIGHT.hair};margin:24px 0 16px 0;font-size:0;line-height:0;">&nbsp;</div>
+<p class="d-t3" style="margin:0;font-family:${SANS};font-size:14px;line-height:1.5;color:${LIGHT.text3};">${escapeHtml(text)}</p>\n`;
 
 export function renderHtml(e: EmailContent): string {
   const base = e.appUrl.replace(/\/$/, "");
@@ -135,12 +163,8 @@ ${preheader(e.preheader)}
 ${image(base, e.art, { w: ART_WIDTH, h: ART_HEIGHT }, "")}
 <div style="height:24px;line-height:24px;font-size:24px;">&nbsp;</div>
 <h1 class="h1 d-ink" style="margin:0 0 16px 0;font-family:${SANS};font-size:24px;line-height:1.25;font-weight:600;color:${LIGHT.ink};">${escapeHtml(e.heading)}</h1>
-${e.body.map((p) => paragraph(inline(p))).join("")}
-<div style="height:8px;line-height:8px;font-size:8px;">&nbsp;</div>${button(e.action.label, e.action.url)}${writtenLink(e.action.url)}
-<p class="d-t2" style="margin:12px 0 16px 0;font-family:${SANS};font-size:14px;line-height:1.5;color:${LIGHT.text2};">${escapeHtml(e.note)}</p>
-<div class="d-hair" style="border-top:1px solid ${LIGHT.hair};margin:24px 0 16px 0;font-size:0;line-height:0;">&nbsp;</div>
-<p class="d-t3" style="margin:0;font-family:${SANS};font-size:14px;line-height:1.5;color:${LIGHT.text3};">${escapeHtml(e.small)}</p>
-</td></tr>
+${e.change ? change(e.change) : ""}${e.body.map((p, i) => (e.link && i === e.body.length - 1 ? paragraphWithLink(inline(p), e.link) : paragraph(inline(p)))).join("")}
+${e.action ? actionBlock(e.action) : ""}${e.note ? noteBlock(e.note, Boolean(e.small)) : ""}${e.small ? smallBlock(e.small) : ""}</td></tr>
 <tr><td style="padding:24px 0 0 0;">
 <p class="d-t3" style="${footerStyle}">${escapeHtml(sentToLine(e.to, e.reason))}</p>
 <p class="d-t3" style="${footerStyle}margin-bottom:0;">${escapeHtml(REPLY_LINE)}</p>

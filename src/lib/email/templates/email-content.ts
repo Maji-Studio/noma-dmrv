@@ -4,7 +4,14 @@
 export type Inline = string | { strong: string };
 
 /** Drawings shipped in public/email as `<name>.png` and `<name>-dark.png`. */
-export type EmailArt = "invitation" | "password-reset" | "verify-email";
+export type EmailArt =
+  | "invitation"
+  | "password-reset"
+  | "verify-email"
+  | "password-changed"
+  | "role-changed"
+  | "removed"
+  | "email-change";
 
 export type EmailContent = {
   subject: string;
@@ -12,13 +19,18 @@ export type EmailContent = {
   preheader: string;
   art: EmailArt;
   heading: string;
+  /** Before → after block above the body, e.g. a role or address change. */
+  change?: { label: string; from: string; to: string };
   /** Paragraphs above the button. */
   body: Inline[][];
-  action: { label: string; url: string };
+  /** Plain link line right after the last body paragraph (notices without a button). */
+  link?: { text: string; url: string };
+  /** Primary button; a notice that needs no action omits it. */
+  action?: { label: string; url: string };
   /** Deadline line under the written-out link. */
-  note: string;
+  note?: string;
   /** Last paragraph, after a divider. */
-  small: string;
+  small?: string;
   /** Recipient address. */
   to: string;
   /** Completes "Sent to <address> ...". */

@@ -1,0 +1,13 @@
+Verify your email address
+
+Verify invitee@example.test to finish setting up your noma account.
+
+Verify email address:
+https://app.noma.example/verify?token=abc.def&x=%2F
+
+This link expires in 24 hours.
+
+If you did not create a noma account, ignore this email.
+
+Sent to invitee@example.test about your noma account.
+Questions? Reply to this email.

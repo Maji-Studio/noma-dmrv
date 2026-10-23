@@ -92,6 +92,15 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
   per-entry correction-dependency reads so opening history does not repeatedly
   fetch later movements from the same bin.
 
+## Account suspension across organizations (#1391 section 4) - **deferred**
+
+- Decided 2026-10-22: defer until after the first production deployment.
+  `src/db/schema/auth.ts:users` has no suspend field today, so an Admin can only
+  remove a member from one organization at a time.
+- Options to weigh later: a `users.suspended` flag checked where
+  `src/lib/auth/better-auth.ts` creates a session (`databaseHooks.session`), or
+  removing all of the user's memberships in one action.
+
 ## Activity recording gaps (`activity/deferred-writers`) - **deferred**
 
 - `src/data-access/certifier-removals.ts:updateRemovalDates` changes Removal dates

@@ -73,13 +73,14 @@ vi.mock("@/lib/email/send", async (importOriginal) => ({
   sendEmail: vi.fn(),
 }));
 import { sendEmail } from "@/lib/email/send";
+import { changePasswordFn } from "@/fn/profile";
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: async () => ({ userId: "actor", organizationId: "org", orgRole: memory.member.find(row => row.userId === "actor")?.role ?? null, isPlatformAdmin: false }),
   requireOrgRole: (ctx: { orgRole: string | null }) => {
     if (ctx.orgRole !== "admin") throw new SafeError("Admin access is required.");
   },
 }));
-import { changeMemberRoleAction, inviteMemberAction, leaveOrganizationAction, resendInvitationAction } from "@/fn/organizations";
+import { changeMemberRoleAction, inviteMemberAction, leaveOrganizationAction, removeMemberAction, resendInvitationAction, revokeInvitationAction } from "@/fn/organizations";
 const ORIGIN = "http://localhost:3100";
 const SESSION_LIFETIME_MS = 60_000;
 const MILLISECONDS_PER_SECOND = 1_000;
@@ -319,4 +320,119 @@ it.each([false, true])("preserves membership/session and credentials on last-Adm
   expect(memory.session[0].activeOrganizationId).toBe("org");
   expect(revokeDeletedMemberOAuthGrants).not.toHaveBeenCalled();
   expect(cookieStore.delete).not.toHaveBeenCalled();
+});
+
+
+function addNoticeMember(role = "member") {
+  memory.member.push({ id: "other-member", userId: "other", organizationId: "org", role, createdAt: new Date() });
+}
+
+it("sends one role notice through the real plugin and action to the changed member", async () => {
+  addNoticeMember();
+  memory.user[0].name = "Acting Admin";
+  memory.user[1].name = "Recipient Name";
+  expect(await changeMemberRoleAction({ memberId: "other-member", role: "admin" })).toMatchObject({ success: true });
+  expect(sendEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    type: "role-changed", userId: "other", to: "other@example.test",
+    subject: "Your role in Test is now Admin", text: expect.stringContaining("Acting Admin changed your role"),
+  }));
+});
+
+it("sends nothing for a same-role update", async () => {
+  addNoticeMember();
+  expect(await changeMemberRoleAction({ memberId: "other-member", role: "member" })).toMatchObject({ success: true });
+  expect(sendEmail).not.toHaveBeenCalled();
+});
+
+it("sends one removal notice through the real plugin and action", async () => {
+  addNoticeMember();
+  expect(await removeMemberAction({ memberIdOrEmail: "other-member" })).toMatchObject({ success: true });
+  expect(sendEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    type: "removed-from-organization", userId: "other", to: "other@example.test",
+    subject: "You were removed from Test",
+  }));
+});
+
+it("sends no removal notice when leaving or revoking a pending invitation", async () => {
+  addNoticeMember("admin");
+  memory.invitation.push({ id: "pending", email: "invite@example.test", organizationId: "org", inviterId: "actor",
+    role: "member", status: "pending", expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS) });
+  expect(await revokeInvitationAction({ invitationId: "pending" })).toMatchObject({ success: true });
+  expect(await leaveOrganizationAction()).toMatchObject({ success: true });
+  expect(sendEmail).not.toHaveBeenCalled();
+});
+
+it.each(["role", "remove"] as const)("keeps the %s action successful on resolved and thrown delivery failures", async path => {
+  for (const thrown of [false, true]) {
+    addNoticeMember();
+    if (thrown) vi.mocked(sendEmail).mockRejectedValue(new Error("private@example.test"));
+    else vi.mocked(sendEmail).mockResolvedValue({ sent: false, reason: "provider-error" });
+    const result = path === "role"
+      ? await changeMemberRoleAction({ memberId: "other-member", role: "admin" })
+      : await removeMemberAction({ memberIdOrEmail: "other-member" });
+    expect(result).toMatchObject({ success: true });
+    expect(memory.member.find(row => row.id === "other-member")?.role).toBe(path === "role" ? "admin" : undefined);
+    memory.member.splice(1);
+  }
+});
+
+const NOTICE_OLD_PASSWORD = "old-password-for-notice";
+const NOTICE_NEW_PASSWORD = "new-password-for-notice";
+async function addNoticeCredential() {
+  const context = await auth.$context;
+  memory.account.push({ id: "credential", userId: "actor", accountId: "actor", providerId: "credential",
+    password: await context.password.hash(NOTICE_OLD_PASSWORD), createdAt: new Date(), updatedAt: new Date() });
+}
+async function postAuth(path: string, body: Record<string, unknown>) {
+  return auth.handler(new Request(`${ORIGIN}/api/auth/${path}`, {
+    method: "POST", headers: await sessionHeaders(), body: JSON.stringify(body),
+  }));
+}
+it("sends exactly one password notice after Profile changes the password", async () => {
+  await addNoticeCredential();
+  expect(await changePasswordFn({ currentPassword: NOTICE_OLD_PASSWORD, newPassword: NOTICE_NEW_PASSWORD,
+    confirmPassword: NOTICE_NEW_PASSWORD })).toMatchObject({ success: true });
+  expect(sendEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    type: "password-changed", userId: "actor", to: "actor@example.test",
+    subject: "Your noma password was changed", text: expect.stringContaining(`${ORIGIN}/forgot-password`),
+  }));
+});
+it.each([false, true])("direct password changes remain successful when delivery throws=%s", async thrown => {
+  await addNoticeCredential();
+  if (thrown) vi.mocked(sendEmail).mockRejectedValue(new Error("private@example.test"));
+  else vi.mocked(sendEmail).mockResolvedValue({ sent: false, reason: "provider-error" });
+  expect((await postAuth("change-password", { currentPassword: NOTICE_OLD_PASSWORD,
+    newPassword: NOTICE_NEW_PASSWORD, revokeOtherSessions: false })).status).toBe(200);
+  expect(sendEmail).toHaveBeenCalledOnce();
+});
+it.each(["sent", "provider-error", "throw"] as const)("reset sends one notice and succeeds with delivery=%s", async delivery => {
+  await addNoticeCredential();
+  memory.verification.push({ id: "reset-verification", identifier: "reset-password:notice-token", value: "actor",
+    expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS), createdAt: new Date(), updatedAt: new Date() });
+  if (delivery === "throw") vi.mocked(sendEmail).mockRejectedValue(new Error("private@example.test"));
+  else if (delivery === "provider-error") vi.mocked(sendEmail).mockResolvedValue({ sent: false, reason: "provider-error" });
+  expect((await postAuth("reset-password", { token: "notice-token", newPassword: NOTICE_NEW_PASSWORD })).status).toBe(200);
+  expect(sendEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    type: "password-changed", to: "actor@example.test", subject: "Your noma password was changed",
+  }));
+});
+it("does not notify on refused password changes or resets", async () => {
+  await addNoticeCredential();
+  expect((await postAuth("change-password", { currentPassword: "wrong-password", newPassword: NOTICE_NEW_PASSWORD })).status).toBe(400);
+  expect((await postAuth("reset-password", { token: "invalid", newPassword: NOTICE_NEW_PASSWORD })).status).toBe(400);
+  expect(sendEmail).not.toHaveBeenCalled();
+});
+it("does not treat a first password established through a reset token as a change", async () => {
+  memory.verification.push({ id: "first-verification", identifier: "reset-password:first-token", value: "actor",
+    expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS), createdAt: new Date(), updatedAt: new Date() });
+  expect((await postAuth("reset-password", { token: "first-token", newPassword: NOTICE_NEW_PASSWORD })).status).toBe(200);
+  expect(memory.account).toHaveLength(1);
+  expect(sendEmail).not.toHaveBeenCalled();
+});
+
+
+it("does not send a removal notice when an Admin removes their own membership", async () => {
+  addNoticeMember("admin");
+  expect(await removeMemberAction({ memberIdOrEmail: "actor-member" })).toMatchObject({ success: true });
+  expect(sendEmail).not.toHaveBeenCalled();
 });

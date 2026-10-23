@@ -2,7 +2,7 @@ import { Resend } from "resend";
 import { env } from "@/config/env";
 import { logger } from "@/lib/log";
 
-export type EmailType = "reset-password" | "verify-email" | "org-invite";
+export type EmailType = "reset-password" | "verify-email" | "org-invite" | "password-changed" | "role-changed" | "removed-from-organization";
 export type EmailResult =
   | { sent: true; id: string }
   | { sent: false; reason: "not-configured" | "provider-error" };
@@ -11,6 +11,7 @@ type EmailInput = {
   type: EmailType;
   userId?: string;
   invitationId?: string;
+  memberId?: string;
   organizationId?: string;
   idempotencyKey?: string;
   to: string;
