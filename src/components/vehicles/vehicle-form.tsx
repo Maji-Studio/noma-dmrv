@@ -13,6 +13,7 @@ import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-
 import {
   vehicleFormSchema,
   VEHICLE_TYPE_OPTIONS,
+  VEHICLE_REFUSAL_ALIASES,
   FUEL_TYPE_OPTIONS,
   lPerKmToLPer100Km,
   selectOptionsForStoredValue,
@@ -23,9 +24,6 @@ import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
 
 /** Native min, max and step for each number input, read from the schema. */
 const numberBounds = numberInputConstraintsFor(vehicleFormSchema);
-
-/** Server payload name (L/km) to form field (L/100 km). */
-const REFUSAL_ALIASES = { fuelConsumptionLPerKm: "fuelConsumptionLPer100Km" } as const;
 
 interface VehicleFormProps {
   vehicle?: Vehicle;
@@ -72,7 +70,7 @@ export function VehicleForm({
     },
   });
 
-  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: REFUSAL_ALIASES });
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: VEHICLE_REFUSAL_ALIASES });
   const watchedFuelType = useWatch({ control, name: "fuelType" });
   const isElectric = watchedFuelType === "Electric";
 

@@ -38,6 +38,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import {
   formulationPercentFormSchema,
+  FORMULATION_REFUSAL_ALIASES,
   percentFormToRatioPayload,
   ratioToPercent,
   FORMULATION_LINE_FEEDSTOCK_USAGE,
@@ -50,16 +51,6 @@ import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
 
 /** Native min, max and step for each number input, read from the schema. */
 const numberBounds = numberInputConstraintsFor(formulationPercentFormSchema);
-
-/**
- * Server path to form field. The server speaks ratios and calls the lines
- * `lines` in its own refusals; the form speaks percent shares and `ingredients`.
- */
-const REFUSAL_ALIASES = {
-  biocharRatio: "biocharPercent",
-  "ingredients.*.ratio": "ingredients.*.sharePercent",
-  "lines.*.feedstockTypeId": "ingredients.*.feedstockTypeId",
-} as const;
 
 const EMPTY_INGREDIENT = {
   feedstockTypeId: "",
@@ -220,7 +211,7 @@ export function FormulationForm({
     name: "ingredients",
   });
 
-  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: REFUSAL_ALIASES });
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: FORMULATION_REFUSAL_ALIASES });
 
   const defaultSubmitLabel = isEditMode ? "Update formulation" : "Create formulation";
 

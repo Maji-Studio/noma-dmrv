@@ -56,8 +56,10 @@ function isReactorType(value: string | null | undefined): value is ReactorType {
 interface ReactorFormProps {
   /** Existing reactor data for editing (undefined for create mode) */
   reactor?: Reactor;
-  /** Form submission handler — receives data with nominalThroughputTph */
-  /** `onRefusal` shows a refused save at the fields it names (#1327). */
+  /**
+   * Form submission handler — receives data with nominalThroughputTph.
+   * `onRefusal` shows a refused save at the fields it names (#1327).
+   */
   onSubmit: (data: CreateReactorData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
