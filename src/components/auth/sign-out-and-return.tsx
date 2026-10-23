@@ -42,9 +42,12 @@ export async function signOutAndReturn(
 export function SignOutAndReturn({
   returnTo,
   children,
+  compact = false,
 }: {
   returnTo: string;
   children: ReactNode;
+  /** Small default button, for actions inside a Notice. */
+  compact?: boolean;
 }) {
   const { signOut } = useAuth();
   const [error, setError] = useState("");
@@ -69,13 +72,14 @@ export function SignOutAndReturn({
     <>
       {error && <Notice tone="error">{error}</Notice>}
       <Button
-      type="button"
-      variant="primary"
-      width="full"
-      onClick={handleClick}
-      busy={pending}
-    >
-      {children}
+        type="button"
+        variant={compact ? "default" : "primary"}
+        size={compact ? "small" : undefined}
+        width={compact ? undefined : "full"}
+        onClick={handleClick}
+        busy={pending}
+      >
+        {children}
       </Button>
     </>
   );

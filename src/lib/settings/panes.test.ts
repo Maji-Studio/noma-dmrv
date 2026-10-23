@@ -57,7 +57,7 @@ describe("settings console rail", () => {
 
   it("puts Profile first under You, changeable only by you", () => {
     expect(SETTINGS_PANES[0]).toMatchObject({ key: "profile", group: "you", href: "/settings/profile", audience: "everyone" });
-    expect(settingsPane("profile").access).toBe("Only you can change your name and password.");
+    expect(settingsPane("profile").access).toBe("Only you can change your name, email and password.");
     expect(keys(platformAdmin)[0]).toBe("profile");
   });
 

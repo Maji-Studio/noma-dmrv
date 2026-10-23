@@ -1,9 +1,9 @@
 /**
- * Settings, You, Profile (#1277 wave 2, decisions 3 and 4): your name, your
- * email (shown, not editable: a new address comes as a new invitation), and a
- * password change that signs out every other device. Two forms, because a
- * name save must never send a password and a password change must ask for
- * the current one.
+ * Settings, You, Profile (#1277 wave 2, decisions 3 and 4; #1391): your name,
+ * your email (changed by a link sent to the new address), and a password
+ * change that signs out every other device. Three forms, because a name save
+ * must never send a password or an address, and a password change must ask
+ * for the current one.
  */
 "use client";
 
@@ -18,19 +18,26 @@ import {
   ResolvedErrorRevalidator,
 } from "@/components/forms";
 import { useSaveRefusal } from "@/components/forms/use-save-refusal";
+import { SignOutAndReturn } from "@/components/auth/sign-out-and-return";
 import { DetailField } from "@/components/ui/detail-panel";
+import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
-import { useChangePassword, useUpdateProfileName } from "@/hooks/use-profile";
+import { EmailChangeError, useChangeEmail, useChangePassword, useUpdateProfileName } from "@/hooks/use-profile";
 import { AUTH_PASSWORD_MIN_LENGTH, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
 import {
+  changeEmailSchema,
   changePasswordSchema,
   profileNameSchema,
+  type ChangeEmailFormData,
   type ChangePasswordFormData,
   type ProfileNameFormData,
 } from "@/schemas/profile";
 
-const EMAIL_NOTE = "To use another email, ask an Admin to invite that address.";
+const EMAIL_NOTE = "We send a link to the new address. Your email changes when you open it.";
+const EMAIL_SESSION_EXPIRED = "Your sign-in is too old to change your email. Sign out, sign in again, then retry.";
+const EMAIL_NOT_CHANGED = "Your email was not changed. Try again.";
+const SIGN_IN_HREF = "/login";
 const SIGN_OUT_MINUTES = SESSION_COOKIE_CACHE_SECONDS / 60;
 const PASSWORD_NOTE = `Changing it signs you out on every other device within ${SIGN_OUT_MINUTES} minutes. This one stays signed in.`;
 const PASSWORD_CHANGED = `Password changed. Other devices are signed out within ${SIGN_OUT_MINUTES} minutes.`;
@@ -43,13 +50,14 @@ const EMPTY_PASSWORDS: ChangePasswordFormData = {
 export function ProfileSettingsPane({ name, email }: { name: string; email: string }) {
   return (
     <div className="content-measure-form flex flex-col gap-32">
-      <NameForm name={name} email={email} />
+      <NameForm name={name} />
+      <EmailForm email={email} />
       <PasswordForm />
     </div>
   );
 }
 
-function NameForm({ name, email }: { name: string; email: string }) {
+function NameForm({ name }: { name: string }) {
   const toast = useToast();
   const latched = useLatchedSubmit();
   const mutation = useUpdateProfileName();
@@ -94,16 +102,85 @@ function NameForm({ name, email }: { name: string; email: string }) {
             {...register("name")}
           />
         </FormField>
-        <div className="flex flex-col gap-4">
-          <DetailField label="Email" value={email} />
-          <p className="body-caption text-[var(--color-text-tertiary)]">{EMAIL_NOTE}</p>
-        </div>
       </FormSection>
       <FormActions
         control={control}
         isSubmitting={mutation.isPending}
         errorMessage={serverError}
         submitLabel="Save name"
+        sticky={false}
+      />
+    </form>
+  );
+}
+
+function EmailForm({ email }: { email: string }) {
+  const latched = useLatchedSubmit();
+  const mutation = useChangeEmail();
+  const [serverError, setServerError] = useState("");
+  const [sessionExpired, setSessionExpired] = useState(false);
+  // Held only for this page session: the server stores nothing about a pending change.
+  const [pendingEmail, setPendingEmail] = useState("");
+  const {
+    control,
+    register,
+    handleSubmit,
+    setValue,
+    trigger,
+    formState: { errors },
+  } = useForm<ChangeEmailFormData>({
+    resolver: zodResolver(changeEmailSchema(email)),
+    defaultValues: { newEmail: "" },
+  });
+
+  const onSubmit = latched(
+    handleSubmit(async (values) => {
+      setServerError("");
+      setSessionExpired(false);
+      try {
+        await mutation.mutateAsync(values);
+        setPendingEmail(values.newEmail);
+        setValue("newEmail", "");
+      } catch (error) {
+        setPendingEmail("");
+        if (error instanceof EmailChangeError && error.sessionExpired) {
+          setSessionExpired(true);
+          setServerError(EMAIL_SESSION_EXPIRED);
+        } else {
+          setServerError(EMAIL_NOT_CHANGED);
+        }
+      }
+    }),
+  );
+
+  return (
+    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-24">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
+      <FormSection title="Email">
+        <DetailField label="Current email" value={email} />
+        {pendingEmail ? (
+          <Notice tone="info">
+            {`We sent a link to ${pendingEmail}. Your email changes when you open it. Until then, keep signing in with ${email}.`}
+          </Notice>
+        ) : (
+          <p className="body-small pb-8 text-[var(--color-text-secondary)]">{EMAIL_NOTE}</p>
+        )}
+        <FormField id="newEmail" label="New email" error={errors.newEmail?.message}>
+          <FormInput
+            id="newEmail"
+            type="email"
+            autoComplete="email"
+            error={!!errors.newEmail}
+            {...register("newEmail")}
+          />
+        </FormField>
+      </FormSection>
+      <FormActions
+        control={control}
+        isSubmitting={mutation.isPending}
+        errorMessage={serverError}
+        errorAction={sessionExpired ? <SignOutAndReturn returnTo={SIGN_IN_HREF} compact>Sign out</SignOutAndReturn> : undefined}
+        submitLabel="Send link"
         sticky={false}
       />
     </form>

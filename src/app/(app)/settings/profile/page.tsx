@@ -1,5 +1,5 @@
 /**
- * Settings, Profile: your own name and password. Every signed-in person sees
+ * Settings, Profile: your own name, email and password. Every signed-in person sees
  * it, Platform Admins included; it changes nothing in the organization.
  */
 import { ProfileSettingsPane, SettingsConsole } from "@/components/settings";
