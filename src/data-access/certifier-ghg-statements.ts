@@ -1,3 +1,4 @@
+import { REMOVAL_MEMBERSHIP_STATUSES } from "@/lib/certification/removal-membership";
 import {
   and,
   desc,
@@ -809,11 +810,7 @@ export async function reconcileRemovalMembership(
           eq(certificationSubmissions.submissionType, "removal"),
           eq(certificationSubmissions.localEntityType, "removal"),
           inArray(certificationSubmissions.externalId, externalRemovalIds),
-          inArray(certificationSubmissions.status, [
-            "submitted",
-            "accepted",
-            "superseded",
-          ]),
+          inArray(certificationSubmissions.status, REMOVAL_MEMBERSHIP_STATUSES),
           eq(certificationSubmissions.organizationId, ctx.organizationId),
         ),
       );

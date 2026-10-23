@@ -36,7 +36,8 @@ beforeEach(() => {
   } as never);
 });
 
-it.each(["file-only", "entry-only", "compile-refusal", "missing-observation", "unchanged"])("gives both callers the same verdict for %s", async scenario => {
+it.each(["generated-ledger", "file-only", "entry-only", "compile-refusal", "missing-observation", "unchanged"])("gives both callers the same verdict for %s", async scenario => {
+  if (scenario === "generated-ledger") vi.mocked(compileRemovalCorrectionContent).mockResolvedValue({ ...semantic, changedGeneratedEvidence: [{ kind: "transport_evidence_ledger", hash: "changed-per-leg-facts" }] });
   if (scenario === "file-only") vi.mocked(compileRemovalCorrectionContent).mockResolvedValue({ ...semantic, sourceIds: ["current-file"] });
   if (scenario === "entry-only") vi.mocked(compileRemovalCorrectionContent).mockResolvedValue({ ...semantic,
     entryContributions: [{ componentId: "energy", inputKey: "fuel", entries: [{ entryId: "entry", creditBatchId: "batch",
@@ -64,7 +65,7 @@ it.each(["file-only", "entry-only", "compile-refusal", "missing-observation", "u
   const guard = assertStatementRemovalsCurrent(ctx, "statement");
   if (unchanged) await expect(guard).resolves.toBeUndefined();
   else await expect(guard).rejects.toThrow(unavailable ? "noma could not compare Removal R-12" : "Resubmit Removal R-12 first");
-  if (scenario !== "missing-observation") expect(compileRemovalCorrectionContent).toHaveBeenCalledWith(ctx, "removal", observation);
+  if (scenario !== "missing-observation") expect(compileRemovalCorrectionContent).toHaveBeenCalledWith(ctx, "removal", observation, undefined);
   expect(getLatestTemplateObservation).not.toHaveBeenCalled();
 });
 

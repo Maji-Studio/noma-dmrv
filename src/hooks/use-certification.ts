@@ -117,6 +117,7 @@ export function getRemovalPreflightRefetchInterval(
 }
 
 export const certificationKeys = {
+  removalCarriedEntries: (removalId: string) => ["certification", "removal-carried-entries", removalId] as const,
   removalEmptyLines: (removalId: string) => ["certification", "removal-empty-lines", removalId] as const,
   removalTemplateReviewEntry: (facilityId: string, templateId: string) => ["certification", "removal-template-review-entry", facilityId, templateId] as const,
   removalTemplateSetup: (facilityId: string) => ["certification", "removal-template-setup", facilityId] as const,

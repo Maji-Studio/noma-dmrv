@@ -17,13 +17,13 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { useRemovalCarriedEntries } from "@/hooks/use-removal-carried-entries";
 import { useRemovalDeleteAccess } from "@/hooks/use-removal-delete-access";
 import { useToast } from "@/components/ui/toast";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { DetailField, DetailSection } from "@/components/ui/detail-panel";
 import {
   useDeleteRemoval,
-  useRemovalCertifyContext,
   useFacilityCertifierSummary,
 } from "@/hooks/use-certification";
 import {
@@ -184,10 +184,9 @@ export function RemovalDetailSheet({
     enrichmentStatus: summary.enrichmentStatus,
     readiness: summary.readiness,
   });
-  // Carried entries come from the full certify context, the only read that
-  // resolves them. Nothing cheaper signals them, so a replaced Removal (which
-  // never sends anything) is the one state that skips the read.
-  const { data: certifyContext } = useRemovalCertifyContext(facilityId, summary.removalId, open && workflowStatus.kind !== "superseded");
+  // A replaced Removal never sends anything, so it is the one state that
+  // skips the carried-entries read.
+  const { data: carriedEntries } = useRemovalCarriedEntries(summary.removalId, { enabled: open && workflowStatus.kind !== "superseded" });
   // A returned Removal with its correction window open shows the Returned or
   // Resubmit needed status and one notice in place of #1134's lock-based one.
   const { correction } = summary;
@@ -324,7 +323,7 @@ export function RemovalDetailSheet({
             </DetailSection>
 
             <CarriedEntriesSection
-              entries={certifyContext?.carriedEntries}
+              entries={carriedEntries}
               facilityId={facilityId}
               sent={workflowStatus.kind === "submitted"}
             />

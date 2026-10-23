@@ -9,12 +9,15 @@ export interface CarryContender extends EntryContender {
   /** `creditBatchIds` (from EntryContender) lines up with these codes, so each can link to its batch. */
   observation: EntryObservation | null;
 }
-export const CARRY_WAITING_REASONS = {
-  noDraft: "Waiting for a Removal. No later draft is available at this facility.",
-  templateUnknown: "Waiting for a Removal. noma has not read the next draft's template yet. Open the Removal to load it.",
-  incompatibleTemplate: "Waiting for a Removal. The next draft's template cannot take this component.",
+export const CARRY_WAITING_DETAILS = {
+  noDraft: "No later draft is available at this facility.",
+  templateUnknown: "noma has not read the next draft's template yet. Open the Removal to load it.",
+  incompatibleTemplate: "The next draft's template cannot take this component.",
 } as const;
-export type CarryWaitingReason = keyof typeof CARRY_WAITING_REASONS;
+export type CarryWaitingReason = keyof typeof CARRY_WAITING_DETAILS;
+export const CARRY_WAITING_REASONS = Object.fromEntries(
+  Object.entries(CARRY_WAITING_DETAILS).map(([reason, detail]) => [reason, `Waiting for a Removal. ${detail}`]),
+) as Record<CarryWaitingReason, string>;
 export interface EntryCarryDestination {
   removalId: string;
   removalCode: string;

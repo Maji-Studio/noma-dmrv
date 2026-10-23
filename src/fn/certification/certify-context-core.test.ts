@@ -151,11 +151,11 @@ it.each([undefined, "claimed-draft"])("forwards the submission read scope for co
   vi.mocked(loadFacilityCertifierFacts).mockResolvedValue(facilityFacts);
   await loadRemovalSubmissionContext(ctx, "removal-1", { claimedSubmissionId });
   expect(loadBatchEmissionContext).toHaveBeenCalledWith(ctx, scope.facilityId, scope.memberBatches, facilityFacts,
-    { removalId: "removal-1", submissionId: claimedSubmissionId }, true, undefined, "removal-1");
+    expect.objectContaining({ claimedAttempt: { removalId: "removal-1", submissionId: claimedSubmissionId }, loadCorrection: expect.any(Function), ownedRemovalId: "removal-1" }));
 });
 
 it("suppresses correction projections while compiling the shared comparison", async () => {
   const facilityFacts = facts(fixture as GhgEntryTemplate);
-  await buildRemovalContext(ctx, scope, facilityFacts, undefined, false, true);
-  expect(loadBatchEmissionContext).toHaveBeenCalledWith(ctx, scope.facilityId, scope.memberBatches, facilityFacts, undefined, false, undefined, scope.removalId ?? undefined);
+  await buildRemovalContext(ctx, scope, facilityFacts, { correctionRead: true });
+  expect(loadBatchEmissionContext).toHaveBeenCalledWith(ctx, scope.facilityId, scope.memberBatches, facilityFacts, expect.objectContaining({ loadCorrection: undefined, ownedRemovalId: scope.removalId ?? undefined }));
 });

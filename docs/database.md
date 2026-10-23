@@ -584,6 +584,8 @@ refreshes still determine whether the window is open. Descriptive fields do not 
 uses the current attached operator evidence and restores Sent. Statement submission
 checks member Removals under its artifact lock and refuses until their corrections
 have been resubmitted; advisory status alone never authorizes that write.
+Generated-ledger comparisons use ledger source facts frozen as versioned, tier-specific input fingerprints in generation row order in the sent snapshot, outside the submission payload hash. Computed outputs, formula/blueprint versions and display labels are excluded; older model-fingerprint baselines are unknown and do not force resubmission.
+A missing or invalid frozen baseline is unknown and never forces a resubmit by itself.
 
 Numeric consumers remain In use after reopening. Output entries share the correction dependency resolver between browser and server; unrelated intake does not lock them. Feedstock retains ADR 0027 wet-lane checks, so an intake edit may still proceed if all withdrawals fit. These rules need no schema migration. Free-field declarations describe current accepted updates, subject to field validation, membership and stock-sufficiency checks. They do not authorize bypassing those guards. Independent master-data, document, Removal lifecycle and deletion guards remain; see [record-lock follow-ups](./open-questions.md#record-lock-follow-ups) for independent guards and registry return evidence.
 

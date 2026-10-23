@@ -36,7 +36,7 @@ export const CURRENT_1000_YEAR_SEMANTICS_LABEL =
 export const LEGACY_1000_YEAR_SEMANTICS_LABEL =
   "Legacy total-carbon basis with uncapped durability";
 
-function samplingDay(
+export function samplingDay(
   value: unknown,
   facilityTimezone: string | null | undefined,
 ): string | null {

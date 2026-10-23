@@ -80,6 +80,17 @@ export interface DurabilityBatchRun {
   biocharDryMassKg: number | null;
 }
 
+/** Attributed product mass shared by ledger builders and their input fingerprint. */
+export function attributedProductMassKg(
+  runs: DurabilityBatchRun[],
+  attributionByRunId?: Map<string, number>,
+): number {
+  return runs.reduce(
+    (sum, run) => sum + (run.biocharDryMassKg ?? 0) * clampFactor(attributionByRunId?.get(run.id)),
+    0,
+  );
+}
+
 /**
  * A credit batch's durability inputs: its pooled lab Samples (keyed on
  * `samples.creditBatchId`, across member runs/days) plus the member runs whose
@@ -127,12 +138,7 @@ export function buildPerBatchDurabilityData(
   attributionByRunId?: Map<string, number>,
 ): PerBatchDurabilityDatapoint[] {
   return batches.map((batch) => {
-    const productMassKg = batch.runs.reduce(
-      (sum, run) =>
-        sum +
-        (run.biocharDryMassKg ?? 0) * clampFactor(attributionByRunId?.get(run.id)),
-      0,
-    );
+    const productMassKg = attributedProductMassKg(batch.runs, attributionByRunId);
 
     const hValues = batch.samples
       .map((s) => s.hToCOrgRatio)

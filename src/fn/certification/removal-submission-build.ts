@@ -1,3 +1,4 @@
+import { generatedEvidenceFacts, type GeneratedEvidenceFacts } from "./generated-evidence-facts";
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 export { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
@@ -76,6 +77,7 @@ export interface RemovalSubmissionBuild {
   datapointSourceIds: string[];
   sourceBindingPlan: RemovalSourceBindingPlanEntry[];
   semanticPayload: Record<string, unknown>;
+  generatedEvidenceFacts?: GeneratedEvidenceFacts;
   templateObservationId?: string;
   frozenEntrySet?: { entryId: string; contentRevision: number }[];
   monitored: ResolvedMonitoredInput[];
@@ -173,6 +175,7 @@ export interface MaterializedRemovalSubmissionSnapshot {
     templateObservationId?: string;
     frozenEntrySet?: { entryId: string; contentRevision: number }[];
     semantic: Record<string, unknown>;
+    generatedEvidenceFacts?: GeneratedEvidenceFacts;
     memberCreditBatchIds: string[];
     sourceBindingPlan: RemovalSourceBindingPlanEntry[];
     transport: {
@@ -584,6 +587,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
     payloadSnapshot: {
       __mappingRevision: MAPPING_REVISION,
       semantic: compiled.semanticPayload,
+      generatedEvidenceFacts: compiled.generatedEvidenceFacts,
       ...(compiled.templateObservationId ? { templateObservationId: compiled.templateObservationId,
         frozenEntrySet: compiled.frozenEntrySet ?? [] } : {}),
       memberCreditBatchIds: compiled.memberCreditBatchIds,
@@ -873,6 +877,7 @@ export async function buildRemovalSubmissionBuild(args: {
     datapointSourceIds,
     sourceBindingPlan,
     semanticPayload,
+    generatedEvidenceFacts: generatedEvidenceFacts(ctx),
     templateObservationId: ctx.removalEntryContext?.observationId,
     frozenEntrySet: ctx.removalEntryContext?.contributions.entrySet,
     monitored,

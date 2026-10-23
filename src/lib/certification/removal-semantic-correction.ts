@@ -55,7 +55,7 @@ export function deriveRemovalSemanticCorrection(args: {
   const lineageChanged = new Set<string>();
   const previous = args.previous;
   const current = args.current;
-  const sharedKeys = ["startedOn", "completedOn", "sourceProductionRunIds", "biocharApplicationIntents", "templateId", "externalProjectId"];
+  const sharedKeys = ["changedGeneratedEvidence", "startedOn", "completedOn", "sourceProductionRunIds", "biocharApplicationIntents", "templateId", "externalProjectId"];
   const sharedChanged = !current || (sharedKeys.some(key => canonical(previous[key]) !== canonical(current[key])) || canonical(sharedEvidence(previous)) !== canonical(sharedEvidence(current)));
   for (const id of current ? ids : []) {
     const inputs = (semantic: Record<string, unknown>) => rows(semantic.inputs).filter(input => input.rtcId === id);
