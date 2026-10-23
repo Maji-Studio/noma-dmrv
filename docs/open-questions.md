@@ -643,7 +643,6 @@ before allowing confirmation to convert stored entry values to the new unit.
   - Forms not yet migrated keep typed values after a Sent refusal.
   - A Sent production run keeps typed values too: its lineage guard in
     `src/data-access/production-runs/mutations.ts` is not wrapped in `withLockedFieldIssues`.
-- Delivery update posting refusals at `occurredAt` and `wetMassKg` show in the footer and need aliases (follow-up PR).
 - Registered customer locations have no lock-read kind; their refusal-specific
   disabling belongs to the customer forms migration.
 
