@@ -58,12 +58,15 @@ const archivedInsteadMessage = (name: string, refusal: unknown) => {
 const onlyActiveInUseMessage = (name: string, refusal: unknown) =>
   `${name} cannot be deleted because it is ${usedByPhrase(refusal)}, and it cannot be archived because it is the only active location. Add or restore another location first, then delete this one again to archive it.`;
 
-/** The automatic archive after a refused delete failed: lead with the delete, then the next step. */
+/**
+ * The automatic archive after a refused delete failed: lead with the delete, then the next step.
+ * A server refusal (e.g. another operator left this the only active location) carries its own
+ * reason and next step, so it is shown as is; only an unexplained failure suggests a retry.
+ */
 const archiveFailedMessage = (name: string, refusal: unknown, archiveError: unknown) => {
-  const reason = usedByPhrase(refusal);
-  return getStaleVersionConflict(archiveError)
-    ? `${name} was not deleted because it is ${reason}, and it could not be archived because it changed since the list loaded. Review it, then delete it again.`
-    : `${name} was not deleted because it is ${reason}, and it could not be archived. Try deleting it again.`;
+  const notDeleted = `${name} was not deleted because it is ${usedByPhrase(refusal)}, and it could not be archived`;
+  if (getStaleVersionConflict(archiveError)) return `${notDeleted} because it changed since the list loaded. Review it, then delete it again.`;
+  return isActionError(archiveError) ? `${notDeleted}. ${archiveError.message}` : `${notDeleted}. Try deleting it again.`;
 };
 
 const DELETE_CONFIRM_BASE = "Are you sure you want to delete this location?";

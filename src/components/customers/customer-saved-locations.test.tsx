@@ -224,6 +224,17 @@ describe("CustomerSavedLocations", () => {
     expect(state.error).not.toHaveBeenCalled();
   });
 
+  it("shows the server's reason when the automatic archive is refused", async () => {
+    // Another operator archived the sibling after the list loaded, so the server refuses the last active location.
+    const LAST_ACTIVE = "E2E South Block is the only active location. Add or restore another location first.";
+    state.remove.mockRejectedValue(inUseError(IN_USE));
+    state.archive.mockRejectedValue(new ActionError({ error: LAST_ACTIVE, code: "conflict" }));
+    render(<CustomerSavedLocations customerId="c1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Delete E2E South Block" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    expect(((await screen.findByRole("alert")).textContent ?? "").replace(/\s+/g, " ").trim()).toContain(`E2E South Block was not deleted because it is used by orders, and it could not be archived. ${LAST_ACTIVE}`);
+  });
+
   it("deletes with the version the operator confirmed, not a newer one from a refetch", async () => {
     const view = render(<CustomerSavedLocations customerId="c1" />);
     fireEvent.click(screen.getByRole("button", { name: "Delete E2E South Block" }));
