@@ -7,8 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
 import { CustomerSavedLocations } from "./customer-saved-locations";
 
-function inUseError(message: string): ActionError {
-  return new ActionError({ error: message, ...inUseDeleteRefusal(message, []) });
+/** Order blockers carry `orderCodes`, as `customerLocationHasOrders` sends them; the storage-site refusal carries none. */
+function inUseError(message: string, meta: Record<string, unknown> = { orderCodes: ["ORD-1"] }): ActionError {
+  return new ActionError({ error: message, ...inUseDeleteRefusal(message, [], { meta }) });
 }
 
 const state = vi.hoisted(() => ({
@@ -132,7 +133,7 @@ describe("CustomerSavedLocations", () => {
   });
 
   it("names a registered storage site as the reason when that refused the delete", async () => {
-    state.remove.mockRejectedValue(inUseError("Customer location was not deleted because it is registered with Isometric as a storage site. Archive it instead."));
+    state.remove.mockRejectedValue(inUseError("Customer location was not deleted because it is registered with Isometric as a storage site. Archive it instead.", {}));
     render(<CustomerSavedLocations customerId="c1" />);
     fireEvent.click(screen.getByRole("button", { name: "Delete E2E South Block" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));

@@ -22,6 +22,7 @@ import { ICON_BUTTON_TOUCH_PROPS } from "@/components/ui/touch-target";
 import { DefaultLocationBadge } from "@/components/ui/default-location-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { isActionError } from "@/lib/action-error";
 import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { useToast } from "@/components/ui/toast";
 import { InfoHint } from "@/components/ui/tooltip";
@@ -43,10 +44,11 @@ const ICON_SIZE = 16;
 
 const ARCHIVED_HINT = "Pickers hide these. Existing orders keep them. Restore a location to edit it.";
 
-/** Why a refused delete was archived instead, taken from the refusal's own wording. */
-const STORAGE_SITE_MARKER = "storage site";
+/** Why a refused delete was archived instead: order blockers carry `orderCodes`; the storage-site refusal carries none. */
 const usedByPhrase = (refusal: unknown) =>
-  refusal instanceof Error && refusal.message.includes(STORAGE_SITE_MARKER) ? "a registered storage site" : "used by orders";
+  isActionError(refusal) && refusal.issues.some((issue) => issue.meta && "orderCodes" in issue.meta)
+    ? "used by orders"
+    : "a registered storage site";
 const archivedInsteadMessage = (name: string, refusal: unknown) => {
   const reason = usedByPhrase(refusal);
   return `${name} is ${reason}, so it was archived. Restore it from Archived locations.`;
