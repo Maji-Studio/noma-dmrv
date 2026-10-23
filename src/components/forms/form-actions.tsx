@@ -246,7 +246,7 @@ export function FormActions<
 }
 
 /** What a lock refusal says at the top; the lock line below keeps the reason. */
-const TOP_REFUSAL_TITLE = "Your changes were not saved.";
+export const TOP_REFUSAL_TITLE = "Your changes were not saved.";
 
 /**
  * The refusal of a record that turned read-only. The Save button that held
@@ -285,7 +285,18 @@ function LockAwareTopRefusal<TFieldValues extends FieldValues, TContext, TTransf
   return <TopRefusalBox locked={locked} message={message} action={action} />;
 }
 
-function TopRefusalBox({ locked, message, action }: { locked: boolean; message: string; action?: React.ReactNode }) {
+export function TopRefusalBox({
+  locked,
+  message,
+  action,
+  lead,
+}: {
+  locked: boolean;
+  message: string;
+  action?: React.ReactNode;
+  /** A title for a form with no lock line of its own: `message` becomes the detail under it. */
+  lead?: string;
+}) {
   const boxRef = React.useRef<HTMLDivElement>(null);
   const textId = React.useId();
   // Sanctioned useEffect: focus and scroll are imperative DOM work.
@@ -294,7 +305,7 @@ function TopRefusalBox({ locked, message, action }: { locked: boolean; message: 
     box?.scrollIntoView?.({ block: "nearest" });
     box?.focus({ preventScroll: true });
   }, []);
-  const { title, detail } = locked ? { title: TOP_REFUSAL_TITLE, detail: null } : splitErrorMessage(message);
+  const { title, detail } = lead ? { title: lead, detail: message } : locked ? { title: TOP_REFUSAL_TITLE, detail: null } : splitErrorMessage(message);
   return (
     <div ref={boxRef} tabIndex={-1} role="group" aria-labelledby={textId} data-top-refusal="">
       <Notice tone="error" live={false} id={textId} title={title}>

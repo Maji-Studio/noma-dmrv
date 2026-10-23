@@ -15,6 +15,7 @@ import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ChatTextIcon } from "@phosphor-icons/react/dist/ssr";
+import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
 import { FormError } from "@/components/forms/form-error";
 import { FormTextarea } from "@/components/forms/form-textarea";
 import { ServerError } from "@/components/forms/server-error";
@@ -158,6 +159,7 @@ function CommentEditor({ line, scope, onDone }: { line: EmissionLine; scope: Emi
     setError: setFieldError,
     setFocus,
     resetField,
+    trigger,
     formState: { errors },
   } = useForm<EmissionLineCommentFormInput, unknown, EmissionLineCommentFormData>({
     resolver: zodResolver(emissionLineCommentFormSchema),
@@ -191,6 +193,7 @@ function CommentEditor({ line, scope, onDone }: { line: EmissionLine; scope: Emi
     <form id={formId} noValidate className={COMMENT_ROW} onSubmit={submit}>
       <CommentLabel htmlFor={id} />
       <div className={cn(BODY_CELL, "flex flex-col gap-8")}>
+        <ResolvedErrorRevalidator control={control} trigger={trigger} />
         <div>
           <FormTextarea
             id={id}

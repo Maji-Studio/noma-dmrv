@@ -124,14 +124,25 @@ describe("ManualEntryForm whole-entry lock", () => {
     renderForm({ kind: "edit", entry: makeEntry() });
     fireEvent.change(energy(), { target: { value: "9" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    const message = await screen.findByText("This emissions entry is reserved or sent.");
+    const message = await screen.findByText("Your changes were not saved.");
     expect(screen.getAllByText(/reserved or sent/)).toHaveLength(1);
+    expect(screen.getAllByText(/Your changes were not saved/)).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
     expect(energy().matches(":disabled")).toBe(true);
     expect(screen.getByLabelText("Note").matches(":disabled")).toBe(true);
     // Above the fields.
     expect(message.compareDocumentPosition(energy()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // A named group, not a live alert; the typed value went back to the saved one.
+    const group = screen.getByRole("group", { name: /Your changes were not saved\./ });
+    expect(group.textContent).toBe("Your changes were not saved. This emissions entry is reserved or sent. It cannot be changed.");
+    expect(group.querySelector("[role='alert']")).toBeNull();
+    expect(energy()).toHaveProperty("value", "42.5");
+    await waitFor(() => expect(document.activeElement).toBe(group));
+    // A re-render does not pull focus back.
+    group.blur();
+    fireEvent.change(energy(), { target: { value: "7" } });
+    expect(document.activeElement).not.toBe(group);
   });
 });
 

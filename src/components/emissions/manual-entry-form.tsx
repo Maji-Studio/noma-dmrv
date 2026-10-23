@@ -60,6 +60,8 @@ import {
   type EmissionEntryFormData,
   type EmissionEntryFormInput,
 } from "@/schemas/emission-entry-form";
+import { TOP_REFUSAL_TITLE, TopRefusalBox } from "@/components/forms/form-actions";
+import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
 import { isActionError } from "@/lib/action-error";
 import { FormErrorSummary } from "@/components/forms/form-error-summary";
 import { readFieldDirectory, type FieldDirectory } from "@/components/forms/form-error-summary-dom";
@@ -106,6 +108,8 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
     setValue,
     clearErrors,
     resetField,
+    reset,
+    trigger,
     formState: { errors },
   } = useForm<EmissionEntryFormInput, unknown, EmissionEntryFormData>({
     resolver: zodResolver(
@@ -170,7 +174,11 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
       const footer = refuseSave(error, toSaveErrorMessage(error, SAVE_FALLBACK));
       setServerError(footer);
       // The lock names no field (lockWritableEmissionEntry), so the footer carries it.
-      if (footer !== null && isActionError(error) && error.code === LOCK_CODE) setLocked(true);
+      if (footer !== null && isActionError(error) && error.code === LOCK_CODE) {
+        // Back to the saved entry: the typed values were not saved.
+        reset(undefined, { keepErrors: true });
+        setLocked(true);
+      }
     }
   });
 
@@ -200,7 +208,8 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
       </SlideOverPanelHeader>
       <SlideOverPanelBody>
         <form id={formId} noValidate className="flex flex-col gap-20" onSubmit={submit}>
-          {locked && serverError && <TopRefusal message={serverError} />}
+          {locked && serverError && <TopRefusalBox locked={false} lead={TOP_REFUSAL_TITLE} message={serverError} />}
+          <ResolvedErrorRevalidator control={control} trigger={trigger} />
           {/* `contents` keeps the fields laid out as before; disabled makes the locked form read-only. */}
           <fieldset disabled={locked} className="contents">
           {mode.kind === "again" && (
@@ -275,20 +284,5 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
         {!locked && <Button variant="primary" type="submit" form={formId} busy={saving}>Save</Button>}
       </SlideOverPanelFooter>
     </>
-  );
-}
-
-/** The refusal of an entry that turned read-only: at the top, taking the focus Save held. */
-function TopRefusal({ message }: { message: string }) {
-  return (
-    <div
-      tabIndex={-1}
-      ref={(box) => {
-        box?.scrollIntoView?.({ block: "nearest" });
-        box?.focus({ preventScroll: true });
-      }}
-    >
-      <ServerError message={message} />
-    </div>
   );
 }
