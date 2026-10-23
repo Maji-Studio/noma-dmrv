@@ -3,6 +3,8 @@ import { Fragment, type ReactNode } from "react";
 import { buttonVariants } from "@/components/ui";
 import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { cn } from "@/lib/utils";
+import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { Notice } from "@/components/ui/notice";
 import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
 import type { RemovalCorrection } from "@/lib/certification/removal-entry-correction";
@@ -37,6 +39,16 @@ function JoinedParts({ parts }: { parts: { key: string; node: ReactNode }[] }) {
 
 function BatchLink({ batch, facilityId }: { batch: { id: string; code: string }; facilityId: string }) {
   return <Link href={correctionBatchEmissionsHref(batch.id, facilityId)} className={LINK_CLASS}>{batch.code}</Link>;
+}
+
+/** A batch the Removal sheet returns to: the code opens the batch page, "Emissions" its Emissions tab. */
+function BatchPageLink({ batch, facilityId }: { batch: { id: string; code: string }; facilityId: string }) {
+  return (
+    <>
+      <Link href={creditBatchDeepLinkHref(batch.id, facilityId)} className={RECORD_CODE_LINK}>{batch.code}</Link>
+      {" ("}<Link href={correctionBatchEmissionsHref(batch.id, facilityId)} className={LINK_CLASS}>Emissions</Link>{")"}
+    </>
+  );
 }
 
 /**
@@ -80,7 +92,7 @@ export function RemovalResubmitNotice({ correction, facilityId }: { correction: 
       {statement} {returnedStatementPhrase(correction.statement.status)}. Correct the records or emissions entries on{" "}
       <JoinedParts parts={correction.batches.map((batch) => ({
         key: batch.id,
-        node: <BatchLink batch={batch} facilityId={facilityId} />,
+        node: <BatchPageLink batch={batch} facilityId={facilityId} />,
       }))} />, then resubmit this Removal.
     </Notice>
   );
