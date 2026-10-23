@@ -964,9 +964,10 @@ stays as a preview whose lead footer action opens the page
   bottom left (primary Edit, then a destructive one), then `Close`
   (`variant="default"` in `SlideOverPanel.Close`) last. A sheet with no action
   keeps a footer with Close alone. The header X and Escape stay. The read-only
-  edit footer (record turned Sent mid-edit) is `Back to view` alone, same
-  layout. Never `flex-1` or `justify-stretch`. Edit and create mode use
-  `FormActions`.
+  edit footer (record turned Sent mid-edit) is `Back to view` alone: full
+  width on phones (below `sm`, `max-sm:flex-1`), natural width from `sm` up.
+  Never `flex-1` or `justify-stretch` in the view-mode footer. Edit and create
+  mode use `FormActions`.
 - Side sheets: header title = entity code (or `Create X` in create mode — **no
   filler subtitle in create mode**); view/edit subtitle = the identifying
   secondary. **Storage bins invert this**: the name is the title and the code
