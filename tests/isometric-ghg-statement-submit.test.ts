@@ -53,9 +53,15 @@ import type { GhgStatement } from "@/lib/isometric";
 // Module mocks — declared before the system under test imports.
 // ---------------------------------------------------------------------------
 
-// The member-Removal guard has its own tests; these cover the submit steps.
-vi.mock("@/fn/certification/statement-removal-correction-core", () => ({
-  assertStatementRemovalsCurrent: vi.fn(async () => undefined),
+// Keep the statement guard real; content comparison has its own agreement tests.
+vi.mock("@/fn/certification/removal-content-comparison-core", () => ({
+  compareRemovalCurrentContent: vi.fn(async () => ({ kind: "unchanged", components: [],
+    state: { windowOpen: true, correctionNeeded: false, changedComponentIds: [], message: null },
+  })),
+}));
+vi.mock("@/data-access/removal-entry-correction", () => ({
+  listNomaSentRemovalsForRemoteEntries: vi.fn(async () => []),
+  listStatementRemovalIdentities: vi.fn(async () => [{ id: "member", code: "R-12" }]),
 }));
 vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");

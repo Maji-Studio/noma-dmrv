@@ -153,3 +153,9 @@ it.each([undefined, "claimed-draft"])("forwards the submission read scope for co
   expect(loadBatchEmissionContext).toHaveBeenCalledWith(ctx, scope.facilityId, scope.memberBatches, facilityFacts,
     { removalId: "removal-1", submissionId: claimedSubmissionId }, true);
 });
+
+it("suppresses correction projections while compiling the shared comparison", async () => {
+  const facilityFacts = facts(fixture as GhgEntryTemplate);
+  await buildRemovalContext(ctx, scope, facilityFacts, undefined, false, true);
+  expect(loadBatchEmissionContext).toHaveBeenCalledWith(ctx, scope.facilityId, scope.memberBatches, facilityFacts, undefined, false);
+});

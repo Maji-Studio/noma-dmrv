@@ -6,7 +6,6 @@ import { certificationSubmissions, certifierRemovals, certifierGhgStatements } f
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 import { listEmissionEntryDraftContenders } from "./emission-entry-contenders";
-import { getLatestTemplateObservation } from "./removal-template-observations";
 import { getCreditBatchesByRemovalId } from "./certifier-removals";
 
 /** Advisory state only. Mutation authorization comes from the locked lineage loader. */
@@ -19,8 +18,6 @@ export async function loadRemovalCorrectionFacts(ctx: OrgContext, removalId: str
   const contenders = suppliedContenders ?? await listEmissionEntryDraftContenders(ctx, ids);
   const correction = contenders.find((item) => item.removalId === removalId && item.contenderKind === "correction");
   if (!correction) return null;
-  const pin = batches[0]?.removalTemplateId;
-  const observation = pin ? await getLatestTemplateObservation(ctx, "isometric", pin) : null;
   if (!correction.returnedStatement) return null;
   const [identity] = await db.select({ code: certifierRemovals.code,
     reportingPeriodStartOn: certifierGhgStatements.reportingPeriodStartOn,
@@ -31,7 +28,7 @@ export async function loadRemovalCorrectionFacts(ctx: OrgContext, removalId: str
       eq(certifierGhgStatements.id, correction.returnedStatement.id)))
     .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, removalId)));
   if (!identity) return null;
-  return { submitted, batches, contenders, correction, observation, identity: {
+  return { submitted, batches, contenders, correction, identity: {
     ...identity, reportingPeriodEndOn: getEffectiveReportingPeriodEndOn(identity),
   } };
 }

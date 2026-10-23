@@ -1,6 +1,14 @@
 import type { EntryInputManifest } from "./removal-emission-contributions";
 
-export interface EntryCorrectionState {
+export type RemovalComparisonReason = "invalid_snapshot" | "missing_observation" | "invalid_compile" | "compile_refused";
+
+export interface RemovalComparisonStatus {
+  comparison?: "changed" | "unchanged" | "unavailable";
+  unavailableReason?: RemovalComparisonReason;
+  unavailableMessages?: string[];
+}
+
+export interface EntryCorrectionState extends RemovalComparisonStatus {
   removalId?: string;
   removalCode?: string;
   correction?: RemovalCorrection;
@@ -40,7 +48,7 @@ export function deriveEntryCorrection(windowOpen: boolean, previous: readonly En
     message: count ? `Resubmit needed: ${count} ${count === 1 ? "component" : "components"} changed since this Removal was sent.` : null };
 }
 
-export interface RemovalCorrection {
+export interface RemovalCorrection extends RemovalComparisonStatus {
   removalId: string;
   removalCode: string;
   windowOpen: boolean;
@@ -67,6 +75,8 @@ export function buildRemovalCorrection(args: {
   return {
     removalId: args.removalId, removalCode: args.removalCode,
     windowOpen: args.state.windowOpen, resubmitNeeded: args.state.correctionNeeded,
+    comparison: args.state.comparison, unavailableReason: args.state.unavailableReason,
+    unavailableMessages: args.state.unavailableMessages,
     statement: args.statement, batches: args.batches,
     changed: (args.state.changedPairs ?? []).map(({ componentId, batchId }) => ({
       componentId, batchId,
