@@ -26,7 +26,7 @@ beforeEach(() => {
 });
 afterEach(() => { env.RESEND_FROM_EMAIL = "sender@example.test"; });
 
-it.each(["reset-password", "verify-email", "org-invite"] as const)("sends %s with configured from and replyTo", async (type) => {
+it.each(["reset-password", "verify-email", "org-invite", "password-changed", "role-changed", "removed-from-organization"] as const)("sends %s with configured from and replyTo", async (type) => {
   expect(await sendEmail({ ...INPUT, type })).toEqual({ sent: true, id: "message-123" });
   expect(mocks.send).toHaveBeenCalledExactlyOnceWith({
     to: INPUT.to, subject: INPUT.subject, html: INPUT.html, text: INPUT.text,

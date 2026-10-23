@@ -26,6 +26,7 @@ import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { invalidateCertificationReadiness } from "./use-certification";
 import { transportLegKeys } from "./use-transport-legs";
 import { productionRunKeys } from "./use-production-runs";
+import { sampleKeys } from "./use-samples";
 import { activityKeys } from "./activity-query-keys";
 
 function unwrap<T>(result: ActionResult<T>): T {
@@ -49,6 +50,9 @@ function invalidateTransportEvidenceOwner(
   }
   if (row.entityType === "delivery") {
     queryClient.invalidateQueries({ queryKey: deliveryKeys.all });
+  }
+  if (row.entityType === "sample") {
+    queryClient.invalidateQueries({ queryKey: sampleKeys.lists() });
   }
 }
 

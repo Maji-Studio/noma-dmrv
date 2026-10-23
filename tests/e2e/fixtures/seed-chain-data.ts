@@ -211,8 +211,9 @@ export async function seedChainData(
         modelYear: 2022,
       });
 
-      // Intake date
-      const deliveryDate = new Date();
+      // Intake date: before every run date the specs use (2025-06-15 and
+      // later), since a run only draws intakes delivered by its start day.
+      const deliveryDate = new Date("2025-01-01T00:00:00.000Z");
 
       // 11. Feedstock (needs facility + supplier + type)
       await tx.insert(schema.feedstocks).values({

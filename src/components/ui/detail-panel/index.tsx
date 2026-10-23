@@ -110,6 +110,9 @@ interface DetailSectionProps {
   hint?: React.ReactNode;
   /** Tables or arithmetic behind the section's figures: the title's one ⓘ opens them, after the hint. */
   explanation?: React.ReactNode;
+  /** CERT chip beside the title, for a section that is one certification requirement. */
+  certifyRequired?: boolean;
+  certifyStatus?: CertFieldStatus;
 }
 
 function DetailSection({
@@ -120,8 +123,10 @@ function DetailSection({
   spine,
   hint,
   explanation,
+  certifyRequired,
+  certifyStatus,
 }: DetailSectionProps) {
-  const label = title != null ? <SectionLabel hint={hint} explanation={explanation} explanationTitle={title}>{title}</SectionLabel> : null;
+  const label = title != null ? <SectionLabel hint={hint} explanation={explanation} explanationTitle={title} certifyRequired={certifyRequired} certifyStatus={certifyStatus}>{title}</SectionLabel> : null;
 
   if (spine) {
     return (
@@ -391,6 +396,9 @@ export type DetailPanelSection = {
   fields: DetailPanelField[];
   /** Optional extension content that belongs inside this mirrored section. */
   content?: React.ReactNode;
+  /** CERT chip beside the title, mirroring the form section's. */
+  certifyRequired?: boolean;
+  certifyStatus?: CertFieldStatus;
 } & (
   | { id: string; title?: string; explanation?: never }
   | {
@@ -422,6 +430,8 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
           title={section.title}
           hint={section.hint}
           explanation={section.explanation}
+          certifyRequired={section.certifyRequired}
+          certifyStatus={section.certifyStatus}
           divider={!numbered && sectionIdx > 0}
           spine={
             numbered

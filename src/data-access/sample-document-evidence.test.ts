@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { getBatchesWithLabReports, getBatchesWithReflectanceHistograms } from "./sample-document-evidence";
+import { getBatchesWithLabReports, getBatchesWithReflectanceHistograms, getSamplesWithLabReports } from "./sample-document-evidence";
+import { isLabReportDocument } from "@/lib/certification/lab-report";
 import { db } from "@/db";
 import { documents } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -8,6 +9,34 @@ import { PgDialect } from "drizzle-orm/pg-core";
 vi.mock("@/db", () => ({ db: { select: vi.fn() } }));
 
 const ctx = { organizationId: "org-a", userId: "user-a" } as OrgContext;
+
+describe("getSamplesWithLabReports", () => {
+  it("scopes list evidence to the organization and requested Samples, using the chip's criteria", async () => {
+    const queries: unknown[] = [];
+    vi.mocked(db.select).mockReturnValue({
+      from: () => ({ where: (query: unknown) => {
+        queries.push(query);
+        return Promise.resolve([{ entityId: "sample-a" }, { entityId: "sample-a" }]);
+      } }),
+    } as unknown as ReturnType<typeof db.select>);
+
+    expect(await getSamplesWithLabReports(ctx, ["sample-a", "sample-b"])).toEqual(new Set(["sample-a"]));
+    const dialect = new PgDialect();
+    const query = dialect.sqlToQuery(queries[0] as Parameters<typeof dialect.sqlToQuery>[0]);
+    expect(query.params).toEqual(["org-a", "sample", "sample-a", "sample-b", "uploaded", "lab_report"]);
+    for (const column of [documents.organizationId, documents.entityType, documents.entityId, documents.uploadStatus, documents.documentType]) {
+      expect(query.sql).toContain(column.name);
+    }
+    expect(isLabReportDocument({ uploadStatus: "uploaded", documentType: "lab_report" })).toBe(true);
+  });
+
+  it("does not query an empty page and still requires organization scope", async () => {
+    vi.mocked(db.select).mockClear();
+    expect(await getSamplesWithLabReports(ctx, [])).toEqual(new Set());
+    expect(db.select).not.toHaveBeenCalled();
+    await expect(getSamplesWithLabReports({ ...ctx, organizationId: "" }, [])).rejects.toThrow();
+  });
+});
 
 describe("getBatchesWithLabReports", () => {
   it("scopes both reads and counts only uploaded lab reports for the requested batch or its Samples", async () => {
