@@ -12,6 +12,8 @@ import Link from "next/link";
 import { CertificateIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/ui/popover";
+import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
+import { cn } from "@/lib/utils";
 import { formatDateRange } from "@/lib/format-utils";
 import { FormFooterPreview } from "@/components/forms/form-footer-preview";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
@@ -54,7 +56,7 @@ function MoreBatches({ batches, rest, facilityId }: { batches: CreditBatchLineBa
           <button
             type="button"
             aria-label={`Show all ${batches.length} credit batches`}
-            className="relative cursor-pointer text-[var(--clr-dark-purple)] after:absolute after:left-0 after:top-1/2 after:h-44 after:w-full after:min-w-24 after:-translate-y-1/2 after:content-[''] underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-interaction)]"
+            className={cn(INLINE_HIT_AREA, "after:min-w-24 cursor-pointer text-[var(--clr-dark-purple)] underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-interaction)]")}
           >
             +{rest}
           </button>

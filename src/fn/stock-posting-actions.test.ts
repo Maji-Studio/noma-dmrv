@@ -123,7 +123,12 @@ describe("product posting boundary", () => {
   it("validates before running the operation, and refuses a blend with no biochar", async () => {
     expect(await createBiocharProductFn({ ...product, formulationId: "invalid" })).toMatchObject({ success: false });
     const allIngredient = { formulationIngredientId: id, feedstockTypeId: id, feedstockTypeName: "Compost", feedstockTypeCategory: "compost", massKg: 100, moistureContentPercent: 30 };
-    expect(await createBiocharProductFn({ ...product, ingredientBins: [allIngredient] })).toEqual({ success: false, error: "A product requires positive source biochar." });
+    expect(await createBiocharProductFn({ ...product, ingredientBins: [allIngredient] })).toEqual({
+      success: false,
+      error: "A product requires positive source biochar.",
+      code: "validation_failed",
+      issues: [{ path: ["biocharWetMassKg"], code: "validation_failed", message: "A product requires positive source biochar." }],
+    });
     expect(mocks.run).not.toHaveBeenCalled();
   });
   it("requires organization authentication", async () => {

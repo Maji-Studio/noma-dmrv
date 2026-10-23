@@ -14,6 +14,8 @@ import Link from "next/link";
 import { DotsThreeVerticalIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
+import { ICON_BUTTON_TOUCH_PROPS } from "@/components/ui/touch-target";
+import { cn } from "@/lib/utils";
 
 interface RowAction {
   label: string;
@@ -46,9 +48,9 @@ function RowActionsMenu({ label, actions, className }: RowActionsMenuProps) {
           render={
             <Button
               variant="noOutline"
-              size="icon"
+              {...ICON_BUTTON_TOUCH_PROPS}
               aria-label={label}
-              className="text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
+              className={cn(ICON_BUTTON_TOUCH_PROPS.className, "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]")}
             />
           }
         >

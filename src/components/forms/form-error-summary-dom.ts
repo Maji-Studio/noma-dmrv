@@ -29,6 +29,8 @@ const CONTROL_SELECTOR = [
   "[role='slider']",
   "[role='spinbutton']",
   "[role='textbox']",
+  // A named group the form files one error on, such as a set of rows.
+  "[role='group'][data-field-name]",
 ].join(",");
 
 /** A field array or object refine reports at `<path>.root`. */

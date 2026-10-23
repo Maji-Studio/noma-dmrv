@@ -35,7 +35,6 @@ const ACTIVITY_COVERAGE = {
     deleteCreditBatchApplicationSlices: { status: "exempt", reason: "Internal slice cleanup; deleteCreditBatch records the batch lifecycle event." },
   },
   "facilities.ts": {
-    createFacility: { status: "exempt", reason: "Facility reference-data lifecycle has no entity activity type." },
     updateFacility: { status: "exempt", reason: "Facility reference-data edits have no entity activity type." },
     archiveFacility: { status: "direct" },
     restoreFacility: { status: "direct" },
