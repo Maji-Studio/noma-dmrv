@@ -16,15 +16,13 @@ export const CENTRED_HIT_AREA =
 const ICON_BUTTON_HIT_AREA = `shrink-0 ${CENTRED_HIT_AREA}`;
 
 /**
- * Spread on an icon-only `Button` to keep its 32px square and give it the 44px
- * hit area: `<Button variant="noOutline" {...ICON_BUTTON_TOUCH_PROPS} />`.
- * `width="square"` is part of the bundle because the default `width` variant
- * (`w-auto`) beats the icon size's `w-[32px]` and collapses the button to its
- * glyph. To add classes, merge: `cn(ICON_BUTTON_TOUCH_PROPS.className, "...")`.
+ * Spread on an icon-only `Button`: `size="icon"` is already a 32px square, and
+ * the bundle adds the 44px hit area and `shrink-0` so a flex row cannot squeeze
+ * it: `<Button variant="noOutline" {...ICON_BUTTON_TOUCH_PROPS} />`.
+ * To add classes, merge: `cn(ICON_BUTTON_TOUCH_PROPS.className, "...")`.
  */
 export const ICON_BUTTON_TOUCH_PROPS = {
   size: "icon",
-  width: "square",
   className: ICON_BUTTON_HIT_AREA,
 } as const;
 
