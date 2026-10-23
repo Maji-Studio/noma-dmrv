@@ -200,11 +200,11 @@ describe("TransportLegsEditor route rail", () => {
     expect(rendered).toContain("1 leg has no recorded distance.");
   });
 
-  it("carries one CERT chip on the Route label rather than one per leg", () => {
+  it("carries no CERT chip; One-way distance carries it on the read sheet", () => {
     mocks.legs = [savedLeg(), savedLeg({ id: "leg-2", originName: "E2E Regional collection hub" })];
     const html = renderEditor({ readOnly: true });
 
-    expect(html.match(/data-cert-field=/g)?.length).toBe(1);
+    expect(html).not.toContain("data-cert-field=");
   });
 
   it("keeps the add button and a per-leg actions menu in edit mode", () => {

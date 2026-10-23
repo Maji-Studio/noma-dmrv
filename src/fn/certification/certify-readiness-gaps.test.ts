@@ -57,6 +57,21 @@ function productionRun(
 }
 
 describe("buildEntityReadinessResult", () => {
+  it.each([true, false])("does not duplicate the batch lab-report Check when hasLabReport=%s", (hasLabReport) => {
+    const batch = {
+      ...batchWithSamples([labSample("s1", "S-001"), labSample("s2", "S-002")]),
+      creditBatchCode: "CB-001",
+      hasLabReport,
+    };
+    const result = buildEntityReadinessResult([], [batch], { feedstock: [], biochar: [], sample: [] }, []);
+
+    expect(result.gaps).toEqual([]);
+    expect(result.issues).toEqual([]);
+    expect(result.warnings).toEqual(hasLabReport ? [] : [
+      "Credit batch CB-001 has no lab report document. Upload a lab report to one of its Samples. You can still submit the Removal.",
+    ]);
+  });
+
   it("reports moisture on the same Sample walk used by submission and keeps documents advisory", () => {
     const batch = { ...batchWithSamples([labSample("s1", "S-001", { moistureContentPercent: null })]), creditBatchCode: "CB-001", hasLabReport: false };
     const result = buildEntityReadinessResult([], [batch], { feedstock: [], biochar: [], sample: [] }, []);

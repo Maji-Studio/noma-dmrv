@@ -7,6 +7,9 @@
 
 import { PaperclipIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormSection } from "@/components/forms";
+import { useDocumentsCertStatus } from "@/components/forms/use-documents-cert-status";
+import { isProofOfDeliveryDocument } from "@/lib/certification/delivery-evidence";
+import { isCertifyEntityField } from "@/lib/certification/certify-field-registry";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import { SPINE_SECTION_TAG, type SpineMeta } from "@/components/forms/form-spine";
 import {
@@ -40,10 +43,13 @@ export function DeliveryEvidenceSection({
 }: DeliveryEvidenceSectionProps) {
   // The evidence panel shows the lock notice; queued retries must not run either.
   const locked = useIsRecordCertificationLocked("delivery", isEditMode ? delivery?.id : undefined);
+  const proofStatus = useDocumentsCertStatus("delivery", isEditMode ? delivery?.id : undefined, isProofOfDeliveryDocument);
   return (
     <FormSection
       title="Delivery evidence"
       hint={TRANSPORT_EVIDENCE_HINTS.delivery}
+      certifyRequired={isCertifyEntityField("delivery", "proofOfDelivery")}
+      certifyStatus={proofStatus}
       icon={<PaperclipIcon size={14} weight="bold" />}
       __spine={__spine}
     >

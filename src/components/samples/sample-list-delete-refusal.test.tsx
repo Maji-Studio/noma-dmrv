@@ -24,6 +24,7 @@ const harness = vi.hoisted(() => ({
   rowActions: null as Array<{ label: string; onSelect?: () => void }> | null,
 }));
 
+vi.mock("@/components/forms/use-documents-cert-status", () => ({ useDocumentsCertStatus: () => "neutral" }));
 vi.mock("nuqs", () => ({
   parseAsString: { withOptions: () => ({}) },
   useQueryState: () => [null, () => Promise.resolve(new URLSearchParams())],

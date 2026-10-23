@@ -74,6 +74,8 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useState } from "react";
 import { DeliveryForm } from "./delivery-form";
+import { useDocumentsCertStatus } from "@/components/forms/use-documents-cert-status";
+import { isProofOfDeliveryDocument } from "@/lib/certification/delivery-evidence";
 import { deliverySheetSections, type DeliverySheetRecord } from "./delivery-read-sections";
 import { ILLUSTRATION_SIZE, DeliveryTruckArt } from "@/components/ui/illustrations";
 
@@ -394,6 +396,7 @@ export function DeliveryList() {
   const displaySideSheet = liveViewEntity
     ? ({ entity: liveViewEntity, mode: "view" } as const)
     : sideSheet ?? deepLinkedSideSheet;
+  const proofStatus = useDocumentsCertStatus("delivery", displaySideSheet?.entity?.id, isProofOfDeliveryDocument);
 
   // Side sheet helpers
   const openCreate = () => {
@@ -703,7 +706,7 @@ export function DeliveryList() {
         editLabel="Edit delivery"
         sections={
           sideSheetEntity
-            ? deliverySheetSections(sideSheetEntity, facilities)
+            ? deliverySheetSections(sideSheetEntity, facilities, proofStatus)
             : undefined
         }
       >

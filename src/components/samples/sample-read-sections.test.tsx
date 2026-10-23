@@ -46,7 +46,11 @@ describe("Sample read-view certification chips", () => {
       organicCarbonPercent: 75, hToCOrgRatio: 0.24, oToCOrgRatio: 0.06,
       sReflectanceFraction: 0.9, nutrientClaimEnabled: false,
     } as unknown as SampleWithRelations;
-    const fields = sampleSheetSections(sample).flatMap((section) => section.fields);
+    const sections = sampleSheetSections(sample, "missing");
+    const evidence = sections.find((section) => section.title === "Evidence & documents");
+    expect(evidence?.certifyRequired).toBe(sampling === "sampled");
+    expect(evidence?.certifyStatus).toBe("missing");
+    const fields = sections.flatMap((section) => section.fields);
     for (const label of ["Organic carbon", "H:C org ratio", "O:C org ratio"]) {
       const field = fields.find((field) => field.label === label)!;
       const markup = renderToStaticMarkup(<DetailField {...field} />);

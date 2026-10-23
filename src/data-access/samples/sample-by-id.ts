@@ -55,6 +55,8 @@ export interface SampleWithRelations {
   oToCOrgRatio: number | null;
   durabilityOption: "200_year" | "1000_year";
   sampling: CreditBatchSampling;
+  /** Undefined means document evidence was not loaded; list reads populate it. */
+  hasLabReport?: boolean;
 
   // 1000-year durability
   randomReflectanceR0Percent: number | null;

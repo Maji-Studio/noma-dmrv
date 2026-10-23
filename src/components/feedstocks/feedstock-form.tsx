@@ -517,7 +517,6 @@ export function FeedstockForm({
             distanceKm={effectiveDistance.distanceKm}
             distanceSource={effectiveDistance.source}
             loadMassKg={typeof watchWetMass === "number" ? watchWetMass : null}
-            saved={isEditMode}
             emptyMessage={ROUTE_EMPTY}
           />
         </FormSection>

@@ -32,6 +32,7 @@ import {
   type SampleWithRelations,
 } from "./samples/sample-by-id";
 import { updateSampleInTransaction } from "./samples/update";
+import { getSamplesWithLabReports } from "./sample-document-evidence";
 import type { CreateSampleRequest, UpdateSampleRequest } from "./samples/write-values";
 
 export { getSampleById, type SampleWithRelations };
@@ -148,7 +149,11 @@ export async function getSamples(
     .limit(pageSize)
     .offset(offset);
 
-  const items: SampleWithRelations[] = sampleList.map(toSampleWithRelations);
+  const samplesWithLabReports = await getSamplesWithLabReports(ctx, sampleList.map((sample) => sample.id));
+  const items: SampleWithRelations[] = sampleList.map((sample) => ({
+    ...toSampleWithRelations(sample),
+    hasLabReport: samplesWithLabReports.has(sample.id),
+  }));
 
   return {
     items,

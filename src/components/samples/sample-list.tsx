@@ -58,6 +58,8 @@ import {
   type SampleFilterData,
 } from "@/schemas/samples";
 import type { SampleWithRelations } from "@/data-access/samples";
+import { useDocumentsCertStatus } from "@/components/forms/use-documents-cert-status";
+import { isLabReportDocument } from "@/lib/certification/lab-report";
 import { formatLabPercent, formatSamplingTime, RATIO_DIGITS, sampleSheetSections } from "./sample-read-sections";
 import {
   leaveSampleCreateIntent,
@@ -362,6 +364,7 @@ export function SampleList({
     : null;
   const displaySideSheet =
     sideSheet ?? createIntentSideSheet ?? deepLinkedSideSheet;
+  const labReportStatus = useDocumentsCertStatus("sample", displaySideSheet?.entity?.id, isLabReportDocument);
   const sampleLocks = useRecordLocks("sample", samples.map((sample) => sample.id));
   // A lock that arrives as Sent keeps an open draft, read-only, with the way
   // back (`submitBlock`).
@@ -696,7 +699,7 @@ export function SampleList({
         {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit Sample"
-        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity) : undefined}
+        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity, labReportStatus) : undefined}
       >
         {isResolvingCreateContext ? (
           <div
