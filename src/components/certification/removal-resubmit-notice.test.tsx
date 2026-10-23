@@ -24,7 +24,7 @@ describe("RemovalResubmitNotice", () => {
     expect(notice.textContent).toBe(
       "Diesel use (CB-26-001) and Transport to field (CB-26-002) changed since this Removal was sent. Resubmit it, then resubmit GHG Statement Jul 1 to Sep 30, 2026.",
     );
-    expect(screen.getByRole("link", { name: "CB-26-001" }).getAttribute("href")).toBe("/credit-batches/batch-1?facility=facility-1&tab=emissions");
+    expect(screen.getByRole("link", { name: "CB-26-001" }).getAttribute("href")).toBe("/credit-batches/batch-1?facility=facility-1");
     expect(screen.getByRole("link", { name: "GHG Statement Jul 1 to Sep 30, 2026" }).getAttribute("href"))
       .toBe("/certification/ghg-statements?facility=facility-1&statement=statement-1");
     // The status badge already says it, so the notice carries no title and no action link.
@@ -46,10 +46,9 @@ describe("RemovalResubmitNotice", () => {
     render(<RemovalResubmitNotice correction={correction({ statement: { ...correction().statement, status } })} facilityId={FACILITY} />);
     const notice = screen.getByRole("status");
     expect(notice.textContent).toContain("Returned by Isometric");
-    expect(notice.textContent).toContain(`GHG Statement Jul 1 to Sep 30, 2026 ${phrase}. Correct the records or emissions entries on CB-26-001 (Emissions) and CB-26-002 (Emissions), then resubmit this Removal.`);
+    expect(notice.textContent).toContain(`GHG Statement Jul 1 to Sep 30, 2026 ${phrase}. Correct the records or emissions entries on CB-26-001 and CB-26-002, then resubmit this Removal.`);
     expect(screen.getByRole("link", { name: "CB-26-002" }).getAttribute("href")).toBe("/credit-batches/batch-2?facility=facility-1");
-    expect(screen.getAllByRole("link", { name: "Emissions" }).map((link) => link.getAttribute("href")))
-      .toEqual(["/credit-batches/batch-1?facility=facility-1&tab=emissions", "/credit-batches/batch-2?facility=facility-1&tab=emissions"]);
+    expect(screen.queryByRole("link", { name: "Emissions" })).toBeNull();
     expect(screen.getByRole("link", { name: "Open GHG Statement" }).getAttribute("href"))
       .toBe("/certification/ghg-statements?facility=facility-1&statement=statement-1");
   });

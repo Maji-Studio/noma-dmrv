@@ -1,5 +1,4 @@
 import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { certificationRemovalsHref } from "@/lib/certification/links";
 import type { RemovalCorrection } from "@/lib/certification/removal-entry-correction";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
@@ -53,11 +52,6 @@ export function joinWithAnd(items: readonly string[]): string {
 
 export function correctionStatementHref(correction: RemovalCorrection, facilityId: string): string {
   return ghgStatementDeepLinkHref(correction.statement.id, facilityId);
-}
-
-/** Where the sent entries of a credit batch are corrected. */
-export function correctionBatchEmissionsHref(batchId: string, facilityId: string): string {
-  return creditBatchDeepLinkHref(batchId, facilityId, { tab: "emissions" });
 }
 
 /** The Removal's own sheet on the Removals list. */

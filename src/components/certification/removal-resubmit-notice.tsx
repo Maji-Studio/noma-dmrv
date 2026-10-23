@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 import { buttonVariants } from "@/components/ui";
-import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
+import { INLINE_HIT_AREA, PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { cn } from "@/lib/utils";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
@@ -11,7 +11,6 @@ import type { RemovalCorrection } from "@/lib/certification/removal-entry-correc
 import {
   OPEN_GHG_STATEMENT_LABEL,
   RESUBMIT_REMOVAL_LABEL,
-  correctionBatchEmissionsHref,
   correctionStatementHref,
   correctionStatementLabel,
   removalResubmitHref,
@@ -37,18 +36,9 @@ function JoinedParts({ parts }: { parts: { key: string; node: ReactNode }[] }) {
   );
 }
 
+/** A batch code in the notice: opens the batch page, whose to-dos lead on to what needs correcting. */
 function BatchLink({ batch, facilityId }: { batch: { id: string; code: string }; facilityId: string }) {
-  return <Link href={correctionBatchEmissionsHref(batch.id, facilityId)} className={LINK_CLASS}>{batch.code}</Link>;
-}
-
-/** A batch the Removal sheet returns to: the code opens the batch page, "Emissions" its Emissions tab. */
-function BatchPageLink({ batch, facilityId }: { batch: { id: string; code: string }; facilityId: string }) {
-  return (
-    <>
-      <Link href={creditBatchDeepLinkHref(batch.id, facilityId)} className={RECORD_CODE_LINK}>{batch.code}</Link>
-      {" ("}<Link href={correctionBatchEmissionsHref(batch.id, facilityId)} className={LINK_CLASS}>Emissions</Link>{")"}
-    </>
-  );
+  return <Link href={creditBatchDeepLinkHref(batch.id, facilityId)} className={cn(RECORD_CODE_LINK, INLINE_HIT_AREA)}>{batch.code}</Link>;
 }
 
 /**
@@ -92,7 +82,7 @@ export function RemovalResubmitNotice({ correction, facilityId }: { correction: 
       {statement} {returnedStatementPhrase(correction.statement.status)}. Correct the records or emissions entries on{" "}
       <JoinedParts parts={correction.batches.map((batch) => ({
         key: batch.id,
-        node: <BatchPageLink batch={batch} facilityId={facilityId} />,
+        node: <BatchLink batch={batch} facilityId={facilityId} />,
       }))} />, then resubmit this Removal.
     </Notice>
   );
