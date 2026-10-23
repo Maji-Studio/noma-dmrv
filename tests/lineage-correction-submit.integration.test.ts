@@ -1,3 +1,5 @@
+import { makeContext, makeTemplate, fakeExternalIds, makeInventorySourceDocument } from "./fixtures/submit-removal-orchestrator";
+// The harness registers its module mocks on import, so it must load before any module that pulls in the mocked ones.
 import type { TransportLeg } from "@/db/schema";
 import { generatedEvidenceFacts } from "@/fn/certification/generated-evidence-facts";
 import { compareRemovalCurrentContent } from "@/fn/certification/removal-content-comparison-core";
@@ -7,7 +9,6 @@ import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
 import { logger } from "@/lib/log";
 import * as comparisonContext from "@/fn/certification/removal-context-build";
 vi.mock("@/fn/certification/removal-context-build");
-import { makeContext, makeTemplate, fakeExternalIds, makeInventorySourceDocument } from "./fixtures/submit-removal-orchestrator";
 import { submitGhgStatementToVerifierCore } from "@/fn/certification/submit-ghg-statement";
 import { makeRemoteStatement } from "./fixtures/isometric-ghg-statement";
 import { loadRemovalEntryCorrection } from "@/fn/certification/removal-correction-core";
