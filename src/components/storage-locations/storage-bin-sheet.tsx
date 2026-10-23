@@ -21,7 +21,7 @@ import {
 } from "@/hooks/use-storage-locations";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import type { StorageLocationFormData } from "@/schemas/storage-locations";
-import { useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { StorageLocationForm } from "./storage-location-form";
 import { storageLocationSheetSections } from "./storage-location-read-sections";
 import { recordLockSheetProps } from "@/components/record-locks";
@@ -49,6 +49,12 @@ export function StorageBinSheet({
   const [formError, setFormError] = useState<string | null>(null);
   const createStorageLocation = useCreateStorageLocation();
   const updateStorageLocation = useUpdateStorageLocation();
+  const creating = state?.mode === "create";
+  const startDraft = useEffectEvent(() => createStorageLocation.startDraft());
+  useEffect(() => {
+    if (creating) startDraft();
+  }, [creating]);
+
   const toast = useToast();
   const { lock, status: lockStatus, retry: retryLock, retrying: lockRetrying } = useRecordLock("storageLocation", state?.entity?.id);
 
