@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
+import { render } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   buildProductionRunFeedstockDetailField,
@@ -15,7 +16,7 @@ type Intake = {
 const withMass = (intakes: Intake[]) =>
   intakes.map((intake) => ({ ...intake, wetMassUsedKg: 50 }));
 const textOf = (node: ReactNode) =>
-  renderToStaticMarkup(<>{node}</>).replace(/<[^>]+>/g, "");
+  render(<>{node}</>).container.textContent;
 const feedstockText = (intakes: Intake[]) =>
   textOf(buildProductionRunFeedstockDetailField(withMass(intakes)).value);
 
@@ -59,9 +60,13 @@ describe("production run detail certification fields", () => {
         { feedstockCode: "FS-26-002", feedstockTypeName: "Pine Off-cuts" },
       ]),
     );
-    expect(renderToStaticMarkup(<>{field.value}</>)).toContain(
-      '<span class="whitespace-nowrap">FS-26-001</span> and <span class="whitespace-nowrap">FS-26-002</span>',
+    const codes = render(<>{field.value}</>).container.querySelectorAll(
+      ".whitespace-nowrap",
     );
+    expect([...codes].map((code) => code.textContent)).toEqual([
+      "FS-26-001",
+      "FS-26-002",
+    ]);
   });
 
   it("lists the intakes behind the summary, by code, with the wet mass each gave", () => {
