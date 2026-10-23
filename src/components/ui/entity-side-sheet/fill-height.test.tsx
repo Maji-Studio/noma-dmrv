@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { FILL_CHILDREN_CLASS } from "@/components/ui/slide-over-panel";
 import { EntitySideSheet } from "./index";
 
 vi.mock("@/components/ui/slide-over-panel", async (importOriginal) => {
@@ -26,7 +25,7 @@ afterEach(() => act(() => renderer?.unmount()));
 
 // jsdom cannot measure layout, so pin the classes that make the fill work.
 describe("EntitySideSheet form fill", () => {
-  it("passes the body's fill on to the form through the fieldset", () => {
+  it("fills the body and passes the fill down to the sheet footer", () => {
     act(() => {
       renderer = create(
         <EntitySideSheet open mode="edit" onModeChange={() => undefined} onOpenChange={() => undefined} title="X"
@@ -38,20 +37,8 @@ describe("EntitySideSheet form fill", () => {
     const fieldset = renderer.root.findByType("fieldset").props.className as string;
     expect(fieldset).not.toContain("contents");
     expect(fieldset).toContain("min-w-0");
-    expect(FILL_CHILDREN_CLASS).toContain("[&>*]:flex-1");
-    expect(fieldset).toContain(FILL_CHILDREN_CLASS);
-  });
-
-  it("keeps the edit notice at natural height", () => {
-    act(() => {
-      renderer = create(
-        <EntitySideSheet open mode="edit" onModeChange={() => undefined} onOpenChange={() => undefined} title="X"
-          editNotice={<p>Notice</p>}>
-          <form />
-        </EntitySideSheet>,
-      );
-    });
-    const notice = renderer.root.findAll((n) => n.type === "div" && String(n.props.className).includes("pb-20"))[0];
-    expect(notice.props.className).toContain("flex-none!");
+    expect(fieldset).toContain("flex-1");
+    expect(fieldset).toContain("flex-col");
+    expect(fieldset).toContain("[&_:has([data-sheet-footer])]:flex-1");
   });
 });

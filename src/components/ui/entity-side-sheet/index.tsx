@@ -13,22 +13,17 @@
 "use client";
 
 import * as React from "react";
-import { SlideOverPanel, FILL_CHILDREN_CLASS } from "@/components/ui/slide-over-panel";
+import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { DiscardChangesDialog } from "@/components/ui/discard-changes-dialog";
 import {
   DetailSpine,
   type DetailPanelSection,
 } from "@/components/ui/detail-panel";
 import { SideSheetActionsContext } from "./side-sheet-context";
+import { SHEET_FORM_FILL } from "./sheet-form-fill";
 import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-block-context";
 import { RefusalSlotContext } from "@/components/ui/refusal-slot-context";
-
-// The fieldset is the body's flex child (`[&>*]:flex` beats `contents`), so it
-// passes the body's fill on to the form inside it. `min-w-0` undoes the
-// fieldset's default min-content width.
-const SHEET_FIELDSET_CLASS = cn("min-w-0", FILL_CHILDREN_CLASS);
 
 /* -------------------------------------------------------------------------------------------------
  * Back Arrow Icon
@@ -287,22 +282,12 @@ function EntitySideSheet({
             <SideSheetActionsContext.Provider value={sheetActions}>
               <SubmitBlockContext.Provider value={editBlock}>
                <RefusalSlotContext.Provider value={refusalSlot}>
-                {mode === "edit" && <div ref={setRefusalSlot} className="flex-none! empty:hidden pb-12" />}
+                {mode === "edit" && <div ref={setRefusalSlot} className="empty:hidden pb-12" />}
                 {mode === "edit" && editNotice ? (
-                  // flex-none!: the body's `[&>*]:flex-1` would grow the notice.
-                  <div className="flex flex-none! flex-col gap-12 pb-20">{editNotice}</div>
+                  <div className="flex flex-col gap-12 pb-20">{editNotice}</div>
                 ) : null}
-                {/* Always mounted, so turning read-only never remounts the form.
-                    The body's `[&>*]:flex` beats `contents`, so the fieldset is
-                    the flex child; it passes the fill on to the form inside so
-                    FormActions' `mt-auto` still pins the buttons to the bottom. */}
-                <fieldset
-                  disabled={!!editBlock?.readOnly}
-                  className={SHEET_FIELDSET_CLASS}
-                  data-submit-block-fieldset
-                >
-                  {children}
-                </fieldset>
+                {/* Always mounted, so turning read-only never remounts the form. */}
+                <fieldset disabled={!!editBlock?.readOnly} className={SHEET_FORM_FILL} data-submit-block-fieldset>{children}</fieldset>
                </RefusalSlotContext.Provider>
               </SubmitBlockContext.Provider>
             </SideSheetActionsContext.Provider>
@@ -364,5 +349,5 @@ function EntitySideSheetSections({
  * Export
  * -----------------------------------------------------------------------------------------------*/
 
-export { EntitySideSheet, EntitySideSheetSections };
+export { EntitySideSheet, EntitySideSheetSections, SHEET_FORM_FILL };
 export type { EntitySideSheetProps, SideSheetMode };
