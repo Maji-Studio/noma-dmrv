@@ -16,7 +16,7 @@ import { sendEmail } from "./send";
 
 const INPUT = {
   type: "org-invite" as const, invitationId: "invite-123", organizationId: "org-123",
-  to: "recipient@example.test", subject: "Invitation for a private name", html: "<p>Private body</p>",
+  to: "recipient@example.test", subject: "Invitation for a private name", html: "<p>Private body</p>", text: "Private body",
 };
 
 beforeEach(() => {
@@ -29,7 +29,7 @@ afterEach(() => { env.RESEND_FROM_EMAIL = "sender@example.test"; });
 it.each(["reset-password", "verify-email", "org-invite"] as const)("sends %s with configured from and replyTo", async (type) => {
   expect(await sendEmail({ ...INPUT, type })).toEqual({ sent: true, id: "message-123" });
   expect(mocks.send).toHaveBeenCalledExactlyOnceWith({
-    to: INPUT.to, subject: INPUT.subject, html: INPUT.html,
+    to: INPUT.to, subject: INPUT.subject, html: INPUT.html, text: INPUT.text,
     from: env.RESEND_FROM_EMAIL, replyTo: env.RESEND_REPLY_TO,
   }, undefined);
   expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ messageId: "message-123", emailType: type }), "email sent");
@@ -39,7 +39,7 @@ it("passes an idempotency key to Resend when provided", async () => {
   const idempotencyKey = "org-invite/invite-123";
   expect(await sendEmail({ ...INPUT, idempotencyKey })).toEqual({ sent: true, id: "message-123" });
   expect(mocks.send).toHaveBeenCalledExactlyOnceWith({
-    to: INPUT.to, subject: INPUT.subject, html: INPUT.html,
+    to: INPUT.to, subject: INPUT.subject, html: INPUT.html, text: INPUT.text,
     from: env.RESEND_FROM_EMAIL, replyTo: env.RESEND_REPLY_TO,
   }, { idempotencyKey });
 });
@@ -72,7 +72,7 @@ it("handles thrown exceptions without logging PII, bodies or raw error objects",
     userId: undefined, statusCode: 503,
   }, "email provider failed");
   const logs = JSON.stringify([mocks.error.mock.calls, mocks.warn.mock.calls, mocks.info.mock.calls]);
-  for (const pii of [INPUT.to, env.RESEND_FROM_EMAIL, env.RESEND_REPLY_TO, INPUT.subject, INPUT.html, "Private Name"]) {
+  for (const pii of [INPUT.to, env.RESEND_FROM_EMAIL, env.RESEND_REPLY_TO, INPUT.subject, INPUT.html, INPUT.text, "Private Name"]) {
     expect(logs).not.toContain(pii);
   }
 });

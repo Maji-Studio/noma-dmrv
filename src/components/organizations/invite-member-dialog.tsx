@@ -13,7 +13,6 @@ import { inviteMemberSchema, type InviteMemberInput } from "@/schemas/organizati
 import { FormActions, FormField, FormInput, FormSelect } from "@/components/forms";
 import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { FormDialog } from "@/components/ui/form-dialog";
-import { useToast } from "@/components/ui/toast";
 import { useInviteMember } from "@/hooks/use-organizations";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import type { InvitationDelivery } from "./invitation-link-notice";
@@ -36,7 +35,6 @@ export function InviteMemberDialog({
   const titleId = useId();
   const formId = useId();
   const [serverError, setServerError] = useState("");
-  const toast = useToast();
   const inviteMember = useInviteMember();
   const latched = useLatchedSubmit();
 
@@ -61,8 +59,7 @@ export function InviteMemberDialog({
       const result = await inviteMember.mutateAsync(values);
       onInvited({ email: values.email, acceptUrl: result.acceptUrl, emailSent: result.emailSent });
       reset(EMPTY_INVITE);
-      // A not-sent invitation is reported by the warning notice; a second green toast would contradict it.
-      if (result.emailSent) toast.success("Invitation created.");
+      // The notice ("Invitation emailed to ..." or "did not send") is the confirmation in both cases.
       onClose();
     } catch (error) {
       setServerError(

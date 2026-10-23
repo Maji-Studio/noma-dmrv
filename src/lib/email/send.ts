@@ -16,6 +16,8 @@ type EmailInput = {
   to: string;
   subject: string;
   html: string;
+  /** Plain-text alternative; every email sends both. */
+  text: string;
 };
 
 const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
@@ -55,6 +57,7 @@ export async function sendEmail(input: EmailInput): Promise<EmailResult> {
       to: input.to,
       subject: input.subject,
       html: input.html,
+      text: input.text,
     }, input.idempotencyKey === undefined ? undefined : { idempotencyKey: input.idempotencyKey });
     if (error || !data?.id) {
       logger.error({ ...context, statusCode: errorStatus(error) }, "email provider failed");
