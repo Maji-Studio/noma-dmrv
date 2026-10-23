@@ -108,6 +108,19 @@ it("keeps carried batch, component and earlier Removal labels out of both hashes
   }
 });
 
+it("leaves the carriedEntries key out of payloads that carry none", async () => {
+  const without = await build(observation("Electricity"), "CB-001", "value");
+  expect(without.semanticPayload).not.toHaveProperty("carriedEntries");
+  const { carriedEntries: _absent, ...rest } = without.semanticPayload as Record<string, unknown>;
+  expect(payloadHash(without.semanticPayload)).toBe(payloadHash(rest));
+  const withCarried = await build(observation("Electricity"), "CB-001", "value", 1, "document", "RM-001");
+  expect((withCarried.semanticPayload as Record<string, unknown>).carriedEntries).toEqual(
+    normalizeCarriedEntriesForHash([{ entryId: "entry", creditBatchId: "batch", creditBatchCode: "CB-001", componentId: "entry-component",
+      componentName: "Electricity", occurredOn: "2026-01-02", value: { magnitude: "2", unit: "kWh" },
+      evidenceDocumentIds: ["document"], earlierRemovalId: "earlier-removal", earlierRemovalCode: "RM-001" }]),
+  );
+});
+
 it("hashes carried semantic fields and canonical evidence order", () => {
   const entry = { entryId: "entry", creditBatchId: "batch", componentId: "component", occurredOn: "2026-01-02",
     value: { magnitude: "2", unit: "kWh" }, evidenceDocumentIds: ["b", "a"], earlierRemovalId: "earlier",

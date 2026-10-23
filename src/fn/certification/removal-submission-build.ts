@@ -809,11 +809,12 @@ export async function buildRemovalSubmissionBuild(args: {
       )
     : [];
 
+  const carriedEntriesForHash = normalizeCarriedEntriesForHash(ctx.removalEntryContext?.contributions.carriedEntries) ?? [];
   const semanticPayload = {
     removalId,
     mappingRevision: MAPPING_REVISION,
     ...(ctx.removalEntryContext ? { templateSemanticFingerprint: ctx.removalEntryContext.semanticFingerprint,
-      carriedEntries: normalizeCarriedEntriesForHash(ctx.removalEntryContext.contributions.carriedEntries),
+      ...(carriedEntriesForHash.length > 0 ? { carriedEntries: carriedEntriesForHash } : {}),
       entryContributions: normalizeEntryContributionsForHash(ctx.removalEntryContext.contributions.manifest) } : {}),
     externalProjectId,
     templateId: removalTemplate.id,
