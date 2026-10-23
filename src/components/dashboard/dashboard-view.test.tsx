@@ -5,6 +5,10 @@ import { deriveSetupProgress } from "@/components/onboarding/use-setup-steps";
 import { DashboardView } from "./dashboard-view";
 import { RegistryConnectionDialog } from "@/components/certification/registry-connection-dialog";
 import type { OnboardingStatus } from "@/data-access/onboarding";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+
+/** The form's refusal handler with nothing to route: the sheet shows its own fallback. */
+const keepFallback: SaveRefusalHandler = (_error, fallback) => fallback;
 
 const mocks = vi.hoisted(() => ({
   facilityId: null as string | null,
@@ -42,10 +46,10 @@ vi.mock("@/components/ui/entity-side-sheet", () => ({
   EntitySideSheet: ({ title, children }: { title: string; children: ReactNode }) => <section aria-label={title}>{children}</section>,
 }));
 vi.mock("@/components/facilities/facility-form", () => ({
-  FacilityForm: ({ onSubmit, errorMessage }: { onSubmit: (data: object) => void; errorMessage?: string }) => <><button onClick={() => onSubmit({ name: "Facility", timezone: "UTC" })}>Create facility</button><p role="alert">{errorMessage}</p></>,
+  FacilityForm: ({ onSubmit, errorMessage }: { onSubmit: (data: object, onRefusal: SaveRefusalHandler) => void; errorMessage?: string }) => <><button onClick={() => onSubmit({ name: "Facility", timezone: "UTC" }, keepFallback)}>Create facility</button><p role="alert">{errorMessage}</p></>,
 }));
 vi.mock("@/components/reactors/reactor-form", () => ({
-  ReactorForm: ({ onSubmit }: { onSubmit: (data: object) => void }) => <button onClick={() => onSubmit({ identifier: "Reactor", facilityId: mocks.facilityId })}>Create reactor</button>,
+  ReactorForm: ({ onSubmit }: { onSubmit: (data: object, onRefusal: SaveRefusalHandler) => void }) => <button onClick={() => onSubmit({ identifier: "Reactor", facilityId: mocks.facilityId }, keepFallback)}>Create reactor</button>,
 }));
 vi.mock("@/components/certification/registry-connection-dialog", () => ({ RegistryConnectionDialog: () => <section aria-label="Registry connection" /> }));
 let renderer: ReactTestRenderer;

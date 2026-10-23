@@ -1,8 +1,10 @@
 "use client";
 
+import { useId } from "react";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import {
   FormActions,
   FormField,
@@ -34,7 +36,8 @@ function resolveTimezone(zone: string | null | undefined): string | undefined {
 
 interface FacilityFormProps {
   facility?: Facility;
-  onSubmit: (data: FacilityFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1327). */
+  onSubmit: (data: FacilityFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
@@ -52,6 +55,7 @@ export function FacilityForm({
   cancelLabel,
 }: FacilityFormProps) {
   const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!facility;
   // Organization operating defaults seed create mode only; an existing record
   // always wins. Warmed once per session in FacilityProvider, so this is a
@@ -65,6 +69,8 @@ export function FacilityForm({
     trigger,
     watch,
     setValue,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(facilityFormSchema),
@@ -87,6 +93,8 @@ export function FacilityForm({
     },
   });
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
+
   const defaultSubmitLabel = isEditMode ? "Update facility" : "Create facility";
 
   const gpsLatitude = watch("gpsLatitude") as number | null | undefined;
@@ -96,10 +104,10 @@ export function FacilityForm({
   const timezoneField = register("timezone");
 
   // `latched` holds a double-click (QA: one created two facilities) until the save settles.
-  const handleFormSubmit = latched(handleSubmit((data) => onSubmit(data as FacilityFormData)));
+  const handleFormSubmit = latched(handleSubmit((data) => onSubmit(data as FacilityFormData, refuseSave)));
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormSection title="Site" divider={false}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
