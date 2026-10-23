@@ -39,10 +39,6 @@ const PENDING: Record<string, string> = {
   "organizations/invitation-bootstrap-form.tsx": "PR K1: preserve ActionError from result",
   "api-keys/api-key-form.tsx": "PR K1: API key refusal",
   "admin/emission-estimates-form.tsx": "PR K1: emission estimate refusal",
-  "credit-batches/method-b-prerequisites-setup.tsx": "PR K2: prerequisite refusal",
-  "certification/facility-certifier-dialog.tsx": "PR K2: certifier setup refusal",
-  "certification/ghg-statement-create-dialog.tsx": "PR K2: GHG statement create refusal",
-  "certification/ghg-statement-submit-dialog.tsx": "PR K2: GHG statement submit refusal",
 };
 
 /** Deliberate exclusions, including non-RHF forms named in the issue inventory. */

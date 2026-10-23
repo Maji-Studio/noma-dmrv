@@ -92,6 +92,15 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
   per-entry correction-dependency reads so opening history does not repeatedly
   fetch later movements from the same bin.
 
+## Account suspension across organizations (#1391 section 4) - **deferred**
+
+- Decided 2026-10-22: defer until after the first production deployment.
+  `src/db/schema/auth.ts:users` has no suspend field today, so an Admin can only
+  remove a member from one organization at a time.
+- Options to weigh later: a `users.suspended` flag checked where
+  `src/lib/auth/better-auth.ts` creates a session (`databaseHooks.session`), or
+  removing all of the user's memberships in one action.
+
 ## Activity recording gaps (`activity/deferred-writers`) - **deferred**
 
 - `src/data-access/certifier-removals.ts:updateRemovalDates` changes Removal dates
@@ -634,7 +643,6 @@ before allowing confirmation to convert stored entry values to the new unit.
   - Forms not yet migrated keep typed values after a Sent refusal.
   - A Sent production run keeps typed values too: its lineage guard in
     `src/data-access/production-runs/mutations.ts` is not wrapped in `withLockedFieldIssues`.
-- Delivery update posting refusals at `occurredAt` and `wetMassKg` show in the footer and need aliases (follow-up PR).
 - Registered customer locations have no lock-read kind; their refusal-specific
   disabling belongs to the customer forms migration.
 

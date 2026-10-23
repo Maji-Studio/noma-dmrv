@@ -180,10 +180,18 @@ export async function hasBlockingFacilitySubmission(
 // DB-level backstop for the (provider, external_facility_id) 1:1 anchor. The
 // serial in-transaction probe in upsertCertifierProject cannot see a concurrent
 // upsert (each only row-locks its own facility), so the unique index fires for
-// the loser. Relabel that one 23505 as a clear SafeError; every other error
+// the loser. Relabel that one 23505 as the `validation_failed` DomainError at
+// `externalFacilityId` (via `facilityIdInUse`); every other error
 // (including the entity-version 23505 handled elsewhere) propagates unchanged.
 const CERTIFIER_EXTERNAL_FACILITY_CONSTRAINT =
   "certifier_projects_provider_external_facility_unique";
+
+/** Refusal shown at the form's Isometric facility ID field (`validation_failed` with one issue). */
+function facilityIdInUse(message: string): DomainError {
+  return new DomainError("validation_failed", message, {
+    issues: [{ path: ["externalFacilityId"], code: "validation_failed", message }],
+  });
+}
 
 async function withExternalFacilityConflictGuard<T>(
   externalFacilityId: string,
@@ -193,7 +201,7 @@ async function withExternalFacilityConflictGuard<T>(
     return await fn();
   } catch (err) {
     if (isPgUniqueViolation(err, CERTIFIER_EXTERNAL_FACILITY_CONSTRAINT)) {
-      throw new SafeError(
+      throw facilityIdInUse(
         `Isometric facility ID ${externalFacilityId} is already linked to another facility. Each Isometric facility maps to exactly one facility here.`,
       );
     }
@@ -268,7 +276,7 @@ export async function upsertCertifierProject(
         )
         .limit(1);
       if (collision) {
-        throw new SafeError(
+        throw facilityIdInUse(
           `Isometric facility ID ${values.externalFacilityId} is already linked to ${collision.code}: ${collision.name}. Each Isometric facility maps to one noma facility.`,
         );
       }

@@ -15,9 +15,9 @@ import {
   MASS_KG_INPUT_STEP,
 } from "@/schemas/helpers";
 import {
-  allocateFeedstockWetMass,
   assertFeedstockWetDrawWithinStock,
 } from "../feedstock-wet-stock";
+import { reallocateRunsForBins } from "../feedstock-run-allocations";
 import { requireOrgScope } from "../utils";
 
 const drawValidationError = (message: string, index?: number, field?: keyof ProductionRunFeedstockDrawInput) =>
@@ -240,22 +240,7 @@ export async function replaceProductionRunFeedstockDraws(
     );
   }
 
-  for (const [index, draw] of draws.entries()) {
-    const allocations = await withProductionRunErrors(() => allocateFeedstockWetMass(
-      ctx,
-      tx,
-      draw.storageLocationId,
-      draw.wetMassKg,
-    ), ["feedstockDraws", index, "storageLocationId"]);
-    await tx.insert(productionRunFeedstocks).values(
-      allocations.map((allocation) => ({
-        organizationId: ctx.organizationId,
-        productionRunId: params.productionRunId,
-        feedstockId: allocation.feedstockId,
-        wetMassUsedKg: allocation.wetMassUsedKg,
-      })),
-    );
-  }
+  await reallocateRunsForBins(ctx, tx, draws.map((draw) => draw.storageLocationId), { onlyRunId: params.productionRunId });
 
   return sumProductionRunFeedstockDraws(draws);
 }

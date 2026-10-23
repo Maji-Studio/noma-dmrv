@@ -63,6 +63,21 @@ export type OrganizationSummary = {
   memberCount: number;
 };
 
+/** Recipient captured in the committed Platform Admin membership transaction. */
+export type PlatformAdminMemberNotice = {
+  memberId: string;
+  userId: string;
+  email: string;
+  organizationId: string;
+  organizationName: string;
+  actorUserId: string;
+};
+
+export type PlatformAdminRoleChangeNotice = PlatformAdminMemberNotice & {
+  fromRole: string;
+  toRole: OrgRole;
+};
+
 function requirePlatformAdminOverride(ctx: OrgContext): void {
   requireOrgScope(ctx);
   if (!ctx.isPlatformAdmin) {
@@ -269,21 +284,24 @@ export async function updateMemberRoleAsPlatformAdmin(
   ctx: OrgContext,
   memberId: string,
   role: OrgRole
-): Promise<void> {
+): Promise<PlatformAdminRoleChangeNotice> {
   requirePlatformAdminOverride(ctx);
-  await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     // The trigger serializes Admin losses after the member write, matching
     // plugin lock order. This pre-count only supplies the sequential refusal.
     const [member] = await tx
-      .select({ id: members.id, role: members.role, userId: members.userId })
+      .select({ id: members.id, role: members.role, userId: members.userId, email: users.email, organizationName: organizations.name })
       .from(members)
+      .innerJoin(users, eq(users.id, members.userId))
+      .innerJoin(organizations, eq(organizations.id, members.organizationId))
       .where(
         and(
           eq(members.id, memberId),
           eq(members.organizationId, ctx.organizationId)
         )
       )
-      .limit(1);
+      .limit(1)
+      .for("update", { of: members });
     if (!member) {
       throw new SafeError("Member not found.");
     }
@@ -320,6 +338,8 @@ export async function updateMemberRoleAsPlatformAdmin(
     if (!canOwnApiKey(role)) {
       await disableOwnerApiKeys(ctx.organizationId, member.userId, tx);
     }
+    return { ...member, memberId, organizationId: ctx.organizationId, actorUserId: ctx.userId,
+      fromRole: member.role, toRole: role };
   }).catch(rethrowLastAdmin);
 }
 
@@ -327,21 +347,24 @@ export async function updateMemberRoleAsPlatformAdmin(
 export async function removeMemberAsPlatformAdmin(
   ctx: OrgContext,
   memberId: string
-): Promise<void> {
+): Promise<PlatformAdminMemberNotice> {
   requirePlatformAdminOverride(ctx);
-  await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     // The trigger serializes Admin losses after the member write, matching
     // plugin lock order. This pre-count only supplies the sequential refusal.
     const [member] = await tx
-      .select({ id: members.id, role: members.role, userId: members.userId })
+      .select({ id: members.id, role: members.role, userId: members.userId, email: users.email, organizationName: organizations.name })
       .from(members)
+      .innerJoin(users, eq(users.id, members.userId))
+      .innerJoin(organizations, eq(organizations.id, members.organizationId))
       .where(
         and(
           eq(members.id, memberId),
           eq(members.organizationId, ctx.organizationId)
         )
       )
-      .limit(1);
+      .limit(1)
+      .for("update", { of: members });
     if (!member) {
       throw new SafeError("Member not found.");
     }
@@ -373,6 +396,7 @@ export async function removeMemberAsPlatformAdmin(
     }
     await disableOwnerApiKeys(ctx.organizationId, member.userId, tx);
     await revokeMemberOAuthGrants(ctx.organizationId, member.userId, memberId, tx);
+    return { ...member, memberId, organizationId: ctx.organizationId, actorUserId: ctx.userId };
   }).catch(rethrowLastAdmin);
 }
 

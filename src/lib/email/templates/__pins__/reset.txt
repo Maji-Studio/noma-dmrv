@@ -1,0 +1,13 @@
+Reset your password
+
+We got a request to reset the password for invitee@example.test.
+
+Choose a new password:
+https://app.noma.example/reset/tok?a=1&b=2
+
+This link expires in 1 hour.
+
+If you did not ask for this, ignore this email. Your password stays the same.
+
+Sent to invitee@example.test about your noma account.
+Questions? Reply to this email.

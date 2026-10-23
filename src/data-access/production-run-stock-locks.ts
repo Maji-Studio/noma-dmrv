@@ -10,7 +10,7 @@ import {
 } from "./bin-stock-guards";
 import {
   assertStockLockSnapshot,
-  lockBinStocks,
+  lockBinStock,
 } from "./lock-bin-stocks";
 
 interface ProductionRunStockSnapshot {
@@ -20,6 +20,7 @@ interface ProductionRunStockSnapshot {
 
 interface ProductionRunStockUpdate {
   facilityId?: string;
+  startTime?: Date;
   feedstockDraws?: ReadonlyArray<{ storageLocationId: string }>;
   biocharStorageLocationId?: string | null;
   biocharOutputKg?: number | null;
@@ -42,9 +43,12 @@ export async function lockProductionRunUpdateStock(
 ): Promise<void> {
   requireOrgScope(ctx);
   const feedstockStockChanged =
-    data.feedstockDraws !== undefined || data.facilityId !== undefined || data.status !== undefined;
+    data.feedstockDraws !== undefined || data.facilityId !== undefined || data.status !== undefined || data.startTime !== undefined;
 
-  await lockBinStocks(ctx, tx, [
+  const startOnlyFeedstockChange = data.startTime !== undefined &&
+    data.feedstockDraws === undefined && data.facilityId === undefined && data.status === undefined;
+  const biocharBinIds = [snapshot.biocharStorageLocationId, data.biocharStorageLocationId ?? snapshot.biocharStorageLocationId];
+  const binIds = [
     ...(feedstockStockChanged
       ? [
           ...snapshot.feedstockStorageLocationIds,
@@ -54,7 +58,15 @@ export async function lockProductionRunUpdateStock(
       : []),
     snapshot.biocharStorageLocationId,
     data.biocharStorageLocationId ?? snapshot.biocharStorageLocationId,
-  ]);
+  ];
+  // Keep one globally sorted lock batch, allowing archives only for historical
+  // feedstock sources. Biochar sources retain their active-bin guard.
+  const sortedIds = [...new Set(binIds.filter((id): id is string => id != null))].sort();
+  for (const binId of sortedIds) {
+    await lockBinStock(ctx, tx, binId, {
+      allowArchived: startOnlyFeedstockChange && !biocharBinIds.includes(binId),
+    });
+  }
 }
 
 /** Reject a discovery read invalidated while its bin batch was acquired. */
@@ -64,7 +76,7 @@ export function assertProductionRunStockSnapshot(
   data: ProductionRunStockUpdate,
 ): void {
   const feedstockStockChanged =
-    data.feedstockDraws !== undefined || data.facilityId !== undefined || data.status !== undefined;
+    data.feedstockDraws !== undefined || data.facilityId !== undefined || data.status !== undefined || data.startTime !== undefined;
 
   assertStockLockSnapshot(
     (!feedstockStockChanged ||

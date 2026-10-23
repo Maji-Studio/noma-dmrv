@@ -1,3 +1,4 @@
+import { reallocateRunsForBins } from "../feedstock-run-allocations";
 import { readRecordDependents } from "../record-lock-dependents";
 import { assertRecordLockFields } from "@/lib/record-lock-fields";
 import { recordLocks } from "@/lib/record-lock";
@@ -783,6 +784,8 @@ export async function updateProductionRunInTransaction(
         facilityId: lockedTargetFacilityId,
         draws: normalizedFeedstockDraws,
       });
+    } else if (lockedTargetStartTime.getTime() !== locked.startTime.getTime() || lockedTargetFacilityId !== locked.facilityId) {
+      await reallocateRunsForBins(ctx, tx, lockedFeedstockStorageLocationIds, { onlyRunId: productionRunId });
     }
 
     const savedDraws = feedstockDrawsChanged
