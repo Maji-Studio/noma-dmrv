@@ -11,6 +11,10 @@ vi.mock("@/lib/auth/server", async importOriginal => ({
   requireOrgContext: vi.fn(), requireOrgRole: vi.fn(), requirePlatformAdmin: vi.fn(),
 }));
 vi.mock("@/db/org-defaults", () => ({ seedOrgDefaults: vi.fn() }));
+vi.mock("@/lib/auth/providers/better-auth-server", async importOriginal => ({
+  ...(await importOriginal<typeof import("@/lib/auth/providers/better-auth-server")>()),
+  getBetterAuthSession: vi.fn(),
+}));
 vi.mock("@/lib/email/send", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/email/send")>()),
   sendEmail: vi.fn(),
@@ -21,6 +25,7 @@ import { requireOrgContext, requirePlatformAdmin } from "@/lib/auth/server";
 import { findPendingOrgInvitation, listOrgInvitations, replacePendingInvitation } from "@/data-access/organizations";
 import { INVITATION_EXPIRES_IN_SECONDS, ORGANIZATION_INVITATION_LIMIT } from "@/config/auth";
 import { sendEmail } from "@/lib/email/send";
+import { getBetterAuthSession } from "@/lib/auth/providers/better-auth-server";
 
 const MILLISECONDS_PER_SECOND = 1_000;
 const EXPIRY_OFFSET_MS = 60_000;
@@ -34,6 +39,7 @@ beforeEach(async () => {
   await db.insert(users).values({ id: adminId, email: `${adminId}@example.test`, name: "Test", role: "admin" });
   vi.mocked(requirePlatformAdmin).mockResolvedValue({ id: adminId } as never);
   vi.mocked(sendEmail).mockResolvedValue({ sent: false, reason: "provider-error" });
+  vi.mocked(getBetterAuthSession).mockResolvedValue(null);
 });
 afterEach(async () => {
   if (organizationIds.length) await db.delete(organizations).where(inArray(organizations.id, organizationIds));
@@ -93,6 +99,19 @@ it.each([
   expect(fresh).toMatchObject({ status: "pending", email: "invitee@example.test", role: "admin", inviterId: adminId });
   expect(fresh.expiresAt!.getTime()).toBeGreaterThanOrEqual(now + INVITATION_EXPIRES_IN_SECONDS * MILLISECONDS_PER_SECOND);
   expect(sendEmail).toHaveBeenCalledOnce();
+});
+
+it("names the admin who sends an invitation again", async () => {
+  const organizationId = randomUUID();
+  organizationIds.push(organizationId);
+  await db.insert(organizations).values({ id: organizationId, name: "Test", slug: `mail-${organizationId}` });
+  vi.mocked(requireOrgContext).mockResolvedValue({ userId: adminId, organizationId, orgRole: null, isPlatformAdmin: true });
+  vi.mocked(getBetterAuthSession).mockResolvedValue({ user: { name: "Amani Mushi" } } as never);
+  const oldId = randomUUID();
+  await db.insert(invitations).values({ id: oldId, organizationId, inviterId: adminId, email: "invitee@example.test",
+    role: "member", status: "pending", expiresAt: new Date(Date.now() - EXPIRY_OFFSET_MS) });
+  await resendInvitationAction({ invitationId: oldId });
+  expect(vi.mocked(sendEmail).mock.calls[0]?.[0]).toMatchObject({ subject: "Amani Mushi invited you to Test" });
 });
 
 it("lists expired pending rows with server expiry and hides completed and foreign invitations", async () => {

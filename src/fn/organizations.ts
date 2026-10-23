@@ -361,7 +361,7 @@ export async function createOrganizationAction(
   firstAdmin: { kind: "member" } | { kind: "invited"; acceptUrl: string; emailSent: boolean };
 }>> {
   return toResult(async () => {
-    await requirePlatformAdmin();
+    const platformAdmin = await requirePlatformAdmin();
     const values = createOrganizationSchema.parse(input);
     const intentKey = parseCreateIntentKey(options);
     const organization = await createOrganizationWithAdmin({ ...values, organizationId: intentKey });
@@ -373,6 +373,7 @@ export async function createOrganizationAction(
             invitationId: organization.firstAdmin.invitationId,
             organizationId: organization.id,
             organizationName: organization.name,
+            inviterName: platformAdmin?.name,
             email: values.adminEmail,
             role: "admin",
           }),

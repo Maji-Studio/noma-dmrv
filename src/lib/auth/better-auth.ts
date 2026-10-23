@@ -23,9 +23,10 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
 import { asc, eq } from "drizzle-orm";
-import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH, INVITATION_EXPIRES_IN_SECONDS, ORGANIZATION_INVITATION_LIMIT, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
+import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH, EMAIL_VERIFICATION_EXPIRES_IN_SECONDS, INVITATION_EXPIRES_IN_SECONDS, ORGANIZATION_INVITATION_LIMIT, PASSWORD_RESET_EXPIRES_IN_SECONDS, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
 import { env } from "@/config/env";
-import { escapeHtml } from "@/lib/email/escape-html";
+import { resetPasswordEmail } from "@/lib/email/templates/reset-password-email";
+import { verifyEmailEmail } from "@/lib/email/templates/verify-email-email";
 import { sendAuthEmail } from "@/lib/email/auth-email";
 import { sendOrganizationInvitation } from "@/lib/email/organization-invitation";
 import { db } from "@/db";
@@ -148,6 +149,7 @@ export const auth = betterAuth({
     enabled: true,
     disableSignUp: true,
     requireEmailVerification: true,
+    resetPasswordTokenExpiresIn: PASSWORD_RESET_EXPIRES_IN_SECONDS,
     minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
     maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
     sendResetPassword: async ({ user, url }) => {
@@ -155,21 +157,14 @@ export const auth = betterAuth({
         type: "reset-password",
         userId: user.id,
         to: user.email,
-        subject: "Reset your password",
         url,
-        html: `
-            <p>Hello ${escapeHtml(user.name || "there")},</p>
-            <p>Use the link below to choose a new password:</p>
-            <p><a href="${url}">Choose a new password</a></p>
-            <p>This link expires in 24 hours.</p>
-            <p>If you did not request a password reset, ignore this email.</p>
-          `,
+        ...resetPasswordEmail({ to: user.email, url, appUrl: env.NEXT_PUBLIC_APP_URL }),
       });
     },
   },
   emailVerification: {
     sendOnSignUp: true,
-    expiresIn: 60 * 60 * 24, // 24 hours
+    expiresIn: EMAIL_VERIFICATION_EXPIRES_IN_SECONDS,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
       await sendAuthEmail({
@@ -177,13 +172,7 @@ export const auth = betterAuth({
         userId: user.id,
         to: user.email,
         url,
-        subject: "Verify your email",
-        html: `
-            <p>Hello ${escapeHtml(user.name || "there")},</p>
-            <p>Use the link below to verify your email address:</p>
-            <p><a href="${url}">Verify email</a></p>
-            <p>This link expires in 24 hours.</p>
-          `,
+        ...verifyEmailEmail({ to: user.email, url, appUrl: env.NEXT_PUBLIC_APP_URL }),
       });
     },
   },
@@ -369,6 +358,7 @@ export const auth = betterAuth({
           invitationId: data.id,
           organizationId: data.organization.id,
           organizationName: data.organization.name,
+          inviterName: data.inviter?.user?.name,
           email: data.email,
           role: data.role,
         });
