@@ -72,6 +72,7 @@ export function throwRecordLossError(result: ActionFailure & { field?: "lossMass
   if (result.conflict && (result.code === undefined || result.code === "conflict")) {
     throw new RecordLossConflictError(result.error, result.conflict, result.blockers);
   }
+  // Not throwActionError: it would turn the locked entry's `conflict` (its bin) into a ConflictError, reading as a reused key.
   // Any other refusal keeps its issues, so the form can show them at its fields.
   throw new ActionError(result);
 }
