@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { db, type DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 
+vi.mock("./feedstock-run-allocations", () => ({ reallocateRunsForBins: vi.fn() }));
 vi.mock("./record-lock-dependents", () => ({ readRecordDependents: async () => [] }));
 vi.mock("./certification-lineage-guards", () => ({
   assertCanMutateCertifiedLineage: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock("./transport-legs", () => ({
 }));
 vi.mock("./documents", () => ({ retireDocumentsForEntities: vi.fn() }));
 
+import { reallocateRunsForBins } from "./feedstock-run-allocations";
 import { updateFeedstockInTransaction } from "./feedstocks";
 
 const ctx: OrgContext = {
@@ -122,6 +124,7 @@ describe("updateFeedstockInTransaction", () => {
       updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, { expectedVersion: 1, notes: "checked" }),
     ).resolves.toEqual({ ...ENRICHED_ROW, hasUsableTransportLeg: false, transportLegDistanceSource: null });
     expect(tx.update).toHaveBeenCalled();
+    expect(reallocateRunsForBins).toHaveBeenCalledWith(ctx, tx, ["bin", "bin"]);
     // Every read, including the locked existence check, stays on tx.
     expect(globalRead).not.toHaveBeenCalled();
   });

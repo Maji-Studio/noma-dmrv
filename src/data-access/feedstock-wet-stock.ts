@@ -1,7 +1,8 @@
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, lt } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { feedstocks } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { addDaysIso } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
 import { deriveLaneStock } from "./lane-stock-derivation";
@@ -13,7 +14,7 @@ type FeedstockStockReader = Pick<typeof db, "select">;
 
 const MASS_PRECISION_FACTOR = 1_000;
 const EMPTY_FEEDSTOCK_BIN_MESSAGE =
-  "Selected feedstock bin has no complete feedstock batches with wet mass";
+  "This bin has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.";
 
 export interface FeedstockWetAllocation {
   feedstockId: string;
@@ -84,6 +85,7 @@ export async function allocateFeedstockWetMass(
   executor: FeedstockStockReader,
   storageLocationId: string,
   totalWetMassKg: number,
+  cutoffDay: string,
 ): Promise<FeedstockWetAllocation[]> {
   requireOrgScope(ctx);
   const batches = await executor
@@ -98,6 +100,8 @@ export async function allocateFeedstockWetMass(
         eq(feedstocks.organizationId, ctx.organizationId),
         eq(feedstocks.status, "complete"),
         gt(feedstocks.massWetKg, 0),
+        // Delivery timestamps encode calendar dates, not facility instants.
+        lt(feedstocks.deliveryDate, new Date(`${addDaysIso(cutoffDay, 1)}T00:00:00Z`)),
       ),
     )
     .orderBy(asc(feedstocks.id));

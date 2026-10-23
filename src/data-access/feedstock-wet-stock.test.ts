@@ -17,7 +17,7 @@ it("reports the available stock from the locked guard", async () => {
 
 it.each([{ batches: [] }, { batches: [{ id: "intake", massWetKg: 0 }] }])("reports an empty allocation basis as insufficient stock", async ({ batches }) => {
   const tx = { select: () => ({ from: () => ({ where: () => ({ orderBy: async () => batches }) }) }) } as unknown as DbTransaction;
-  await expect(withProductionRunErrors(() => allocateFeedstockWetMass(ctx, tx, "bin", 100), path))
+  await expect(withProductionRunErrors(() => allocateFeedstockWetMass(ctx, tx, "bin", 100, "2026-03-20"), path))
     .rejects.toMatchObject({ code: "insufficient_stock", issues: [{ path,
       meta: { storageLocationId: "bin", availableWetKg: 0, requestedWetKg: 100, unit: "kg" } }] });
 });

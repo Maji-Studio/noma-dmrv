@@ -1,3 +1,4 @@
+import { reallocateRunsForBins } from "./feedstock-run-allocations";
 import { readRecordDependents } from "./record-lock-dependents";
 import { assertRecordLockFields, withLockedFieldIssues } from "@/lib/record-lock-fields";
 import { recordLocks } from "@/lib/record-lock";
@@ -594,6 +595,8 @@ export async function createFeedstockInTransaction(
     },
   );
 
+  await reallocateRunsForBins(ctx, tx, binIds);
+
   // Generate warning if allocated wet mass > total delivery wet mass
   let warning: string | null = null;
   if (allocationsExceedDelivery) {
@@ -732,7 +735,10 @@ export async function updateFeedstockInTransaction(
     (feedstockData.storageLocationId !== undefined &&
       feedstockData.storageLocationId !== locked.storageLocationId);
 
-  if (stockDerivationChanged || storageReferenceNeedsValidation) {
+  const allocationChanged = stockDerivationChanged ||
+    (feedstockData.deliveryDate !== undefined && feedstockData.deliveryDate.getTime() !== locked.deliveryDate.getTime());
+
+  if (allocationChanged || storageReferenceNeedsValidation) {
     await lockBinStocks(ctx, tx, [
       locked.storageLocationId,
       effectiveStorageLocationId,
@@ -774,6 +780,10 @@ export async function updateFeedstockInTransaction(
       (binId) => binId === locked.storageLocationId && effectiveStorageLocationId === locked.storageLocationId
         ? ["massWetKg"] : ["storageLocationId"],
     );
+  }
+
+  if (allocationChanged) {
+    await reallocateRunsForBins(ctx, tx, [locked.storageLocationId, effectiveStorageLocationId]);
   }
 
   await syncFeedstockTransportLeg(ctx, tx, feedstockId, {

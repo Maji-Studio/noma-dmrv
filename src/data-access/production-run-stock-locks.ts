@@ -20,6 +20,7 @@ interface ProductionRunStockSnapshot {
 
 interface ProductionRunStockUpdate {
   facilityId?: string;
+  startTime?: Date;
   feedstockDraws?: ReadonlyArray<{ storageLocationId: string }>;
   biocharStorageLocationId?: string | null;
   biocharOutputKg?: number | null;
@@ -42,7 +43,7 @@ export async function lockProductionRunUpdateStock(
 ): Promise<void> {
   requireOrgScope(ctx);
   const feedstockStockChanged =
-    data.feedstockDraws !== undefined || data.facilityId !== undefined || data.status !== undefined;
+    data.feedstockDraws !== undefined || data.facilityId !== undefined || data.status !== undefined || data.startTime !== undefined;
 
   await lockBinStocks(ctx, tx, [
     ...(feedstockStockChanged
@@ -64,7 +65,7 @@ export function assertProductionRunStockSnapshot(
   data: ProductionRunStockUpdate,
 ): void {
   const feedstockStockChanged =
-    data.feedstockDraws !== undefined || data.facilityId !== undefined || data.status !== undefined;
+    data.feedstockDraws !== undefined || data.facilityId !== undefined || data.status !== undefined || data.startTime !== undefined;
 
   assertStockLockSnapshot(
     (!feedstockStockChanged ||

@@ -255,8 +255,14 @@ so their row version and draw masses share a statement snapshot. The public run
 representation carries reference IDs; clients resolve codes and facility zones
 through lookups. Its strong ETag covers the run version and representation
 revision. Feedstock edits change bin stock and their own version, but do not
-rewrite the run's measured moisture, draws or batch allocations and do not bump
+rewrite the run's measured moisture or draws and do not bump
 the run version. A change to the run itself bumps its version.
+
+Run draws are allocated proportionally across complete intakes delivered on or
+before the run’s facility-local start day, including same-day deliveries. Run
+start/facility changes and intake date, bin, mass or status changes rebuild the
+allocations transactionally; an empty qualifying basis or a change to Sent
+lineage refuses the edit.
 
 Application writers use `src/data-access/application-write-scope.ts`: unlocked
 discovery, sorted lineage artifacts, facilities `FOR SHARE`, runs `FOR SHARE`,
