@@ -2,7 +2,7 @@
 
 import { LOST_MASS_LABEL } from "@/lib/output-stock/labels";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
-import { SHEET_FORM_FILL } from "@/components/ui/entity-side-sheet/sheet-form-fill";
+import { SHEET_FORM_FILL } from "@/components/ui/entity-side-sheet";
 import { cn } from "@/lib/utils";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { binCurrentMassKg } from "./bin-display";

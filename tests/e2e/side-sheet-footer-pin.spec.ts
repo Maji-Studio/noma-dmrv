@@ -12,8 +12,8 @@ const TALL_DESKTOP = { width: 1440, height: 1200 };
 const PHONE = { width: 390, height: 844 };
 /** Pixels of tolerance for sub-pixel layout rounding. */
 const EDGE_TOLERANCE_PX = 1;
-/** The form's own space between the error box and the footer row. */
-const ERROR_GAP_PX = 24;
+/** The form's space-y-20 margin under the error box; the footer drops its own top margin after it. */
+const ERROR_GAP_PX = 20;
 
 async function expectFooterOnSheetBottom(page: Page) {
   const sheet = page.getByRole("dialog");
@@ -102,13 +102,14 @@ test.describe("Side sheet footer pinning", () => {
       await expect(errorBox).toBeVisible();
       await expectFooterOnSheetBottom(page);
       const footer = sheet.locator("[data-sheet-footer]").last();
-      await expect
-        .poll(async () => {
-          const errorBoxRect = await errorBox.boundingBox();
-          const footerBox = await footer.boundingBox();
-          return errorBoxRect && footerBox ? footerBox.y - (errorBoxRect.y + errorBoxRect.height) : Infinity;
-        })
-        .toBeLessThanOrEqual(ERROR_GAP_PX);
+      const errorToFooterGap = async () => {
+        const errorBoxRect = await errorBox.boundingBox();
+        const footerBox = await footer.boundingBox();
+        return errorBoxRect && footerBox ? footerBox.y - (errorBoxRect.y + errorBoxRect.height) : Infinity;
+      };
+      await expect.poll(errorToFooterGap).toBeLessThanOrEqual(ERROR_GAP_PX + EDGE_TOLERANCE_PX);
+      // The footer is sticky, so also rule out the error box sliding under it.
+      expect(await errorToFooterGap()).toBeGreaterThanOrEqual(-EDGE_TOLERANCE_PX);
     }
   });
 });

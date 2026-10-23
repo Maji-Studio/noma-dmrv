@@ -349,5 +349,5 @@ function EntitySideSheetSections({
  * Export
  * -----------------------------------------------------------------------------------------------*/
 
-export { EntitySideSheet, EntitySideSheetSections };
+export { EntitySideSheet, EntitySideSheetSections, SHEET_FORM_FILL };
 export type { EntitySideSheetProps, SideSheetMode };
