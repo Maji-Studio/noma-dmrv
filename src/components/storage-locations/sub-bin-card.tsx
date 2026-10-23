@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
 import { InfoIcon } from "@phosphor-icons/react/dist/ssr";
 import { cloneElement, useState, type MouseEvent, type ReactElement } from "react";
-import { STOCK_PART_MIN_KG } from "@/config/output-stock";
 import { NO_MOISTURE_READING } from "@/lib/copy-utils";
 import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { DRY_BIOCHAR_LABEL, ingredientSolidsLabel } from "@/components/biochar-products/product-composition-components";
 import { ESTIMATED_WATER_LABEL, ESTIMATED_WET_LABEL, INGREDIENT_SOLIDS_LABEL } from "@/lib/output-stock/labels";
+import { stockParts, subBinFigures, type StockPart } from "@/lib/output-stock/stock-parts";
 import type { OutputSubBin, SubBinMovement } from "@/types/output-stock";
 import { formatWetEstimate, outputStockFigure } from "./stock-preview-shared";
 
@@ -50,33 +50,25 @@ type TapTrigger = ReactElement<{ onClick?: (event: MouseEvent) => void }>;
 
 export interface DetailRow { label: string; value: string }
 
-/**
- * The ingredient solids of a bin, sub-bin or batch as parts, named the way the
- * product composition names them. `ingredientsKg` is all of them (solids less
- * dry biochar); whatever the named parts leave out (rounding, a product read
- * without its lines) stays one "Ingredient solids" part, so the parts still add
- * up and every surface lists the same ones.
- */
-export function ingredientSolidsParts(ingredients: readonly { name: string; solidsKg: number }[], ingredientsKg: number): { label: string; kg: number }[] {
-  const named = ingredients.filter((ingredient) => ingredient.solidsKg >= STOCK_PART_MIN_KG)
-    .map((ingredient) => ({ label: ingredientSolidsLabel(ingredient.name), kg: ingredient.solidsKg }));
-  const restKg = ingredientsKg - named.reduce((sum, part) => sum + part.kg, 0);
-  return restKg >= STOCK_PART_MIN_KG ? [...named, { label: INGREDIENT_SOLIDS_LABEL, kg: restKg }] : named;
+/** A stock part named the way the product composition names it. */
+export function partLabel(part: StockPart): string {
+  if (part.kind === "ingredient") return part.name === null ? INGREDIENT_SOLIDS_LABEL : ingredientSolidsLabel(part.name);
+  return part.kind === "water" ? ESTIMATED_WATER_LABEL : DRY_BIOCHAR_LABEL;
 }
 
 /**
  * What a sub-bin or batch is made of, as the product composition names the
- * parts, top down in the order the bay draws them: the water its wet estimate
- * holds over its solids, each ingredient's solids, then its dry biochar. Pure
- * biochar has no ingredient row, and a batch with no wet estimate has no water
- * row: there is nothing to subtract.
+ * parts, top down in the order the bay draws them (`stockParts`): water, each
+ * ingredient's solids, then dry biochar. A batch with no wet estimate has no
+ * water row: there is nothing to subtract.
  */
-export function contentsRows({ dryMassKg, solidsKg, ingredients, waterKg }: Pick<OutputSubBin, "dryMassKg" | "solidsKg" | "ingredients"> & { waterKg: number | null }): DetailRow[] {
-  return [
-    ...(waterKg !== null && waterKg >= STOCK_PART_MIN_KG ? [{ label: ESTIMATED_WATER_LABEL, value: formatMassKg(waterKg) }] : []),
-    ...ingredientSolidsParts(ingredients, Math.max(solidsKg - dryMassKg, 0)).map((part) => ({ label: part.label, value: formatMassKg(part.kg) })),
-    { label: DRY_BIOCHAR_LABEL, value: formatMassKg(dryMassKg) },
-  ];
+export function partRows(parts: readonly StockPart[]): DetailRow[] {
+  return parts.map((part) => ({ label: partLabel(part), value: formatMassKg(part.kg) }));
+}
+
+/** A sub-bin's contents rows as its tooltip lists them. */
+export function subBinContentsRows(subBin: OutputSubBin): DetailRow[] {
+  return partRows(stockParts(subBinFigures(subBin)).rows);
 }
 
 /**
@@ -136,12 +128,11 @@ export function SubBinTooltip({ subBin, timeZone, trigger }: { subBin: OutputSub
     { label: ESTIMATED_WET_LABEL, value: `${formatWetEstimate(subBin.wetEstimateKg)} kg` },
     { label: "Moisture", value: subBinMoistureText(subBin) },
   ];
-  const waterKg = subBin.wetEstimateKg === null ? null : Math.max(subBin.wetEstimateKg - subBin.solidsKg, 0);
   return (
     <DetailsTooltip title={subBin.code} trigger={trigger}
       rows={[...wet, { label: "Added", value: formatFacilityDateTime(subBin.placedAt, timeZone) }]}
       groups={[
-        { label: CONTENTS_LABEL, rows: contentsRows({ dryMassKg: subBin.dryMassKg, solidsKg: subBin.solidsKg, ingredients: subBin.ingredients, waterKg }) },
+        { label: CONTENTS_LABEL, rows: subBinContentsRows(subBin) },
         { label: MOVEMENTS_LABEL, rows: subBin.recentMovements.map((movement) => ({
           label: formatFacilityDateTime(movement.occurredAt, timeZone), value: `${MOVEMENT_LABELS[movement.kind]} ${movementMass(movement)}`,
         })) },
