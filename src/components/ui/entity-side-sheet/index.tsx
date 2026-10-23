@@ -295,8 +295,8 @@ function EntitySideSheet({
 
         {/* A read-only edit form hides its own actions; the way back stays. */}
         {mode === "edit" && editBlock?.readOnly && (
-          <SlideOverPanel.Footer className="justify-stretch">
-            <Button variant="default" className="flex-1" onClick={backToView}>
+          <SlideOverPanel.Footer>
+            <Button variant="default" onClick={backToView}>
               Back to view
             </Button>
           </SlideOverPanel.Footer>
