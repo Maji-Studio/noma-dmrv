@@ -4,6 +4,7 @@ import { db } from "@/db";
 import {
   certifierCredentials, certifierProjects, creditBatches, facilities, feedstockTypes,
   organizations, productionProcesses, removalTemplateObservations, samples, emissionEntries, emissionEntryValues,
+  productionRuns, productionRunFeedstocks,
 } from "@/db/schema";
 import { upsertCertifierCredentials } from "@/data-access/certifier-credentials";
 import { updateRemovalDates } from "@/data-access/certifier-removals";
@@ -24,6 +25,7 @@ import type { IsometricClient } from "@/lib/isometric/client";
 import * as batchSamples from "@/data-access/credit-batch-samples";
 import * as batchEmissionLines from "@/lib/read-models/batches-emission-lines";
 import * as facilityFacts from "@/fn/certification/facility-certifier-facts";
+import * as lateProductionRuns from "@/data-access/credit-batch-late-production-runs";
 import templateFixture from "./fixtures/isometric/sandbox-template-2026-10-15.json";
 import enrichmentFixture from "./fixtures/isometric/sandbox-enrichment-2026-10-15.json";
 import { ensureTestOrg, makeTestOrgContext, TEST_SITE_POSITION } from "./helpers/test-org";
@@ -56,6 +58,9 @@ const REVIEW_BLOCKER = "health:templateLines:templateLineReview";
 const READ_BLOCKER = "health:templateLines:templateLines";
 const PIN_BLOCKER = "health:templateSet:templateSetup";
 const MIXED_CHECKS = [...DOCUMENT_IDS, "outlier:TODO-OUTLIER", "unpaired:TODO-UNPAIRED", `emission:${COMPONENT_ID}`];
+const LATE_RUN_BIOCHAR_OUTPUT_KG = 30;
+const LATE_RUN_MOISTURE_PERCENT = 10;
+const LATE_RUN_FEEDSTOCK_WET_KG = 100;
 
 beforeEach(async () => {
   vi.clearAllMocks();
@@ -250,9 +255,11 @@ it("loads facility facts once through the real list action for pinned and unpinn
   const spy = vi.spyOn(facilityFacts, "loadFacilityCertifierFacts");
   const linesSpy = vi.spyOn(batchEmissionLines, "loadBatchesEmissionLines");
   const samplesSpy = vi.spyOn(batchSamples, "getCreditBatchesWithSamples");
+  const lateRunsSpy = vi.spyOn(lateProductionRuns, "loadCreditBatchesLateProductionRuns");
   const result = await loadCreditBatchHealthSummaries(facilityId, [batch.id, sibling.id]);
   assert(result.success, JSON.stringify(result));
   expect(spy).toHaveBeenCalledExactlyOnceWith(ctx, facilityId);
+  expect(lateRunsSpy).toHaveBeenCalledExactlyOnceWith(ctx, [batch.id, sibling.id]);
   expect(linesSpy).toHaveBeenCalledExactlyOnceWith(ctx, [
     expect.objectContaining({ id: batch.id, removalTemplateId: batch.removalTemplateId }),
     expect.objectContaining({ id: sibling.id, removalTemplateId: sibling.removalTemplateId }),
@@ -336,4 +343,35 @@ it.each(["none", "removal"] as const)("keeps raw counts for a batch in a %s Remo
       expect(creditBatchStateOf(summary).openTodoCount).toBe(summary.issueCount + summary.checkCount);
     }
   }, submission);
+});
+
+it("projects a late run Check through the shared page and list read without adding a blocker", async () => {
+  await ensureTestOrg();
+  await withLineageFixture(async (lineage) => {
+    const lineageCtx = makeTestOrgContext();
+    vi.mocked(requireOrgContext).mockResolvedValue(lineageCtx);
+    const [lateRun] = await db.insert(productionRuns).values({
+      organizationId: lineageCtx.organizationId, facilityId: lineage.facilityId, reactorId: lineage.reactorId,
+      code: `PR-LATE-TODO-${crypto.randomUUID()}`, status: "complete",
+      startTime: new Date("2026-06-18T08:00:00Z"), endTime: new Date("2026-06-18T12:00:00Z"),
+      biocharStorageLocationId: lineage.biocharBinId, biocharOutputKg: LATE_RUN_BIOCHAR_OUTPUT_KG,
+      biocharMoisturePercent: LATE_RUN_MOISTURE_PERCENT,
+    }).returning();
+    try {
+      await db.insert(productionRunFeedstocks).values({ organizationId: lineageCtx.organizationId,
+        productionRunId: lateRun.id, feedstockId: lineage.feedstockId, wetMassUsedKg: LATE_RUN_FEEDSTOCK_WET_KG });
+      const { todos, summaries } = await parity([{ id: lineage.batchId, removalTemplateId: null }], [{
+        blocking: [PIN_BLOCKER, "health:carbon:carbon+lab-samples", "health:entityReadiness:production-runs",
+          "health:entityReadiness:submission-deliveryEvidence"],
+        check: [...DOCUMENT_IDS, `late-production-run:${lateRun.id}`],
+      }], { ctx: lineageCtx, facilityId: lineage.facilityId });
+      expect(summaries[lineage.batchId].checkCount).toBe(DOCUMENT_IDS.length + 1);
+      expect(todos.get(lineage.batchId)?.check.find(item => item.id === `late-production-run:${lateRun.id}`))
+        .toMatchObject({ title: expect.stringContaining(lateRun.code),
+          detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Jun 18, 2026." });
+    } finally {
+      await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, lateRun.id));
+      await db.delete(productionRuns).where(eq(productionRuns.id, lateRun.id));
+    }
+  }, "removal");
 });

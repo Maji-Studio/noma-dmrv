@@ -1,4 +1,4 @@
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import {
   certifierRemovals,
@@ -126,8 +126,42 @@ export async function readCreditBatchMembershipSubmissionLock(
   creditBatchId: string,
 ): Promise<boolean> {
   requireOrgScope(ctx);
-  const removals = await readCreditBatchRemovals(ctx, executor, creditBatchId, false);
-  return (await readMembershipLock(ctx, executor, removals)).level === "sent";
+  return (await readCreditBatchesMembershipSubmissionLocks(ctx, executor, [creditBatchId])).has(creditBatchId.toLowerCase());
+}
+
+/** Set-based version of the read-only membership lock, with the sent Removal codes. */
+export async function readCreditBatchesMembershipSubmissionLocks(
+  ctx: OrgContext,
+  executor: Pick<DbTransaction, "select">,
+  creditBatchIds: readonly string[],
+): Promise<Map<string, string[]>> {
+  requireOrgScope(ctx);
+  if (!creditBatchIds.length) return new Map();
+  const rows = await executor.select({
+    creditBatchId: creditBatchApplications.creditBatchId,
+    id: certifierRemovals.id,
+    code: certifierRemovals.code,
+    ghgStatementId: certifierRemovals.ghgStatementId,
+  }).from(creditBatchApplications).innerJoin(certifierRemovals, and(
+    eq(certifierRemovals.id, creditBatchApplications.removalId),
+    eq(certifierRemovals.organizationId, ctx.organizationId),
+  )).where(and(
+    inArray(creditBatchApplications.creditBatchId, [...creditBatchIds]),
+    eq(creditBatchApplications.organizationId, ctx.organizationId),
+  )).orderBy(certifierRemovals.code, certifierRemovals.id);
+  const facts = await readRecordLockLineage(ctx, executor, rows.map(row => ({
+    removalId: row.id, ghgStatementId: row.ghgStatementId,
+  })));
+  const factsById = new Map(facts.map(fact => [fact.id, fact]));
+  const codesByBatch = new Map<string, string[]>();
+  for (const row of rows) {
+    const fact = factsById.get(row.id)!;
+    if (recordLocks.creditBatch({ removals: [fact], dependents: [] }).level !== "sent") continue;
+    const codes = codesByBatch.get(row.creditBatchId) ?? [];
+    if (!codes.includes(row.code)) codes.push(row.code);
+    codesByBatch.set(row.creditBatchId, codes);
+  }
+  return codesByBatch;
 }
 
 export async function isCreditBatchMembershipLockedBySubmission(ctx: OrgContext, tx: DbTransaction, creditBatchId: string, lockedRemovals: CreditBatchRemovals): Promise<boolean> {

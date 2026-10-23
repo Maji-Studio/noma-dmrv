@@ -1,5 +1,6 @@
 import { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "./application-mass";
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
+import type { CreditBatchLateProductionRuns } from "@/data-access/credit-batch-late-production-runs";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
   O_TO_C_ORG_ELIGIBILITY_MAX,
@@ -24,7 +25,8 @@ import type { SampleDocumentWarningKey } from "@/lib/certification/sample-docume
 import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
 import type { RemovalCorrection } from "@/lib/certification/removal-entry-correction";
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
-import { formatTonnes } from "@/lib/format-utils";
+import { formatCalendarDate, formatTonnes } from "@/lib/format-utils";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import {
   RESUBMIT_NEEDED_LABEL,
   changedComponentNames,
@@ -63,6 +65,7 @@ export interface CreditBatchOpenItemsInput {
   health?: BatchHealth;
   durability?: DurabilityBatchSummary;
   emissionLines?: readonly BatchEmissionLine[];
+  lateProductionRuns?: CreditBatchLateProductionRuns;
   /** Admin. Members get no link to decide components, which only Admins can do. */
   canManage: boolean;
 }
@@ -147,6 +150,21 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
   const canManage = input.canManage;
   const blocking: CreditBatchOpenItem[] = [];
   const check: CreditBatchOpenItem[] = [];
+
+  const late = input.lateProductionRuns;
+  if (late?.sentRemovalCodes.length) {
+    const recordedDays = new Set(late.manualEntryDates);
+    const codes = joinWithAnd(late.sentRemovalCodes);
+    for (const run of late.runs) {
+      if (recordedDays.has(run.startDate)) continue;
+      check.push({
+        id: `late-production-run:${run.id}`,
+        title: `${run.code} ran after ${codes} ${late.sentRemovalCodes.length === 1 ? "was" : "were"} sent`,
+        detail: `It is not in this credit batch. Record its diesel and power on the Emissions tab, dated ${formatCalendarDate(run.startDate)}.`,
+        target: { href: creditBatchDeepLinkHref(input.creditBatchId, input.facilityId, { tab: "emissions" }) },
+      });
+    }
+  }
 
   for (const healthCheck of input.health?.checks ?? []) {
     if (healthCheck.status !== "unmet") continue;
