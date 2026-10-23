@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { productionRunFeedstockDraws, productionRunFeedstocks, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -10,6 +10,8 @@ import { assertStockLockSnapshot, lockBinStocks } from "./lock-bin-stocks";
 import { getOutputStockFacilityTimezone } from "./output-stock-dates";
 import { requireOrgScope } from "./utils";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /**
  * Rebuild provenance in the caller's transaction. Callers hold the changed bin
  * locks before changing inputs. Lock every other source bin before reading its
@@ -17,24 +19,38 @@ import { requireOrgScope } from "./utils";
  * intake-row/bin lock inversion shared with production-run writers.
  *
  * A run writer can restrict this to its own run; an intake writer visits every
- * run drawing from either bin, including runs without an existing intake link.
+ * potentially affected run drawing from either bin, including runs without an
+ * existing intake link. Facility edits hold the facility row first, then bins,
+ * then runs, matching run writers. These locks never authorize stock writes;
+ * callers validate active bins for their own stock mutations.
  */
 export async function reallocateRunsForBins(
   ctx: OrgContext,
   tx: DbTransaction,
   binIds: readonly (string | null)[],
   onlyRunId?: string,
+  options: { earliestDeliveryDate?: Date; facilityId?: string } = {},
 ): Promise<void> {
   requireOrgScope(ctx);
   const ids = [...new Set(binIds.filter((id): id is string => id !== null))];
   if (!ids.length) return;
-  await lockBinStocks(ctx, tx, ids);
+  await lockBinStocks(ctx, tx, ids, { allowArchived: true });
+  // Delivery dates are UTC-midnight calendar values. One day of padding covers
+  // every facility offset; the per-run allocation still uses the exact day.
+  const earliestStart = options.earliestDeliveryDate && !onlyRunId
+    ? new Date(options.earliestDeliveryDate.getTime() - DAY_MS) : undefined;
   const affected = await tx.select({ runId: productionRunFeedstockDraws.productionRunId })
     .from(productionRunFeedstockDraws)
+    .innerJoin(productionRuns, and(
+      eq(productionRuns.id, productionRunFeedstockDraws.productionRunId),
+      eq(productionRuns.organizationId, ctx.organizationId),
+    ))
     .where(and(
       eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
       inArray(productionRunFeedstockDraws.storageLocationId, ids),
       onlyRunId ? eq(productionRunFeedstockDraws.productionRunId, onlyRunId) : undefined,
+      earliestStart ? gte(productionRuns.startTime, earliestStart) : undefined,
+      options.facilityId ? eq(productionRuns.facilityId, options.facilityId) : undefined,
     ));
   const runIds = [...new Set(affected.map(row => row.runId))].sort();
   if (!runIds.length) return;
@@ -43,7 +59,7 @@ export async function reallocateRunsForBins(
     eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
     inArray(productionRunFeedstockDraws.productionRunId, runIds),
   )).orderBy(productionRunFeedstockDraws.productionRunId, productionRunFeedstockDraws.storageLocationId);
-  await lockBinStocks(ctx, tx, draws.map(draw => draw.storageLocationId));
+  await lockBinStocks(ctx, tx, draws.map(draw => draw.storageLocationId), { allowArchived: true });
   const runs = await tx.select().from(productionRuns).where(and(
     eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.id, runIds),
   )).orderBy(productionRuns.id).for("update");
@@ -87,4 +103,18 @@ export async function reallocateRunsForBins(
       ...row, organizationId: ctx.organizationId, productionRunId: run.id,
     })));
   }
+}
+
+/** Caller holds the facility FOR UPDATE through the timezone write and rebuild. */
+export async function reallocateRunsForFacility(ctx: OrgContext, tx: DbTransaction, facilityId: string): Promise<void> {
+  requireOrgScope(ctx);
+  const draws = await tx.select({ binId: productionRunFeedstockDraws.storageLocationId })
+    .from(productionRunFeedstockDraws).innerJoin(productionRuns, and(
+      eq(productionRuns.id, productionRunFeedstockDraws.productionRunId),
+      eq(productionRuns.organizationId, ctx.organizationId),
+    )).where(and(
+      eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
+      eq(productionRuns.facilityId, facilityId),
+    ));
+  await reallocateRunsForBins(ctx, tx, draws.map(draw => draw.binId), undefined, { facilityId });
 }

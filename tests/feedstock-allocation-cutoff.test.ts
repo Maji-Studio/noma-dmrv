@@ -1,11 +1,12 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
-import { facilities, feedstocks, feedstockTypes, productionRunFeedstocks, productionRuns, reactors, storageLocations } from "@/db/schema";
+import { facilities, feedstocks, feedstockTypes, productionRunFeedstockDraws, productionRunFeedstocks, productionRuns, reactors, storageLocations } from "@/db/schema";
 import { createProductionRunInTransaction, updateProductionRunInTransaction } from "@/data-access/production-runs/mutations";
-import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
+import { updateFacility } from "@/data-access/facility-mutations";
+import { createFeedstockInTransaction, updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { reallocateRunsForBins } from "@/data-access/feedstock-run-allocations";
-import { feedstockFixtureValues } from "./helpers/feedstock-fixture";
+import { cleanupFeedstockFixtureParents, feedstockFixtureValues } from "./helpers/feedstock-fixture";
 import { cleanupLineageFixture, createLineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
 
@@ -34,7 +35,7 @@ async function fixture(tx: DbTransaction) {
     return createProductionRunInTransaction(ctx, executor, { code: `CUT-${id}`, facilityId: facility.id,
       reactorId: reactor.id, status: "running", startTime, endTime: null, feedstockDraws: [{ storageLocationId: binId, wetMassKg: DRAW_KG }] });
   }
-  return { facility, bins, intakes, run };
+  return { facility, type, bins, intakes, run };
 }
 async function shares(tx: Pick<DbTransaction, "select">, runId: string) {
   return tx.select({ feedstockId: productionRunFeedstocks.feedstockId, wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg })
@@ -57,6 +58,59 @@ describe("facility-day feedstock allocations", () => {
     const run = await f.run(new Date("2026-03-14T22:00:00Z"));
     expect(await shares(tx, run.id)).toHaveLength(2);
     expect((await shares(tx, run.id)).map(row => row.feedstockId)).toContain(f.intakes[1].id);
+  }));
+  it("keeps previous-UTC-day runs in intake discovery for same-facility-day arrivals", () => scenario(async (tx, f) => {
+    const run = await f.run(new Date("2026-03-14T22:00:00Z"));
+    const created = await createFeedstockInTransaction(ctx, tx, {
+      facilityId: f.facility.id, feedstockTypeId: f.type.id, supplierId: f.intakes[0].supplierId!,
+      deliveryDate: date("2026-03-15"), totalWetMassKg: INTAKE_KG, moisturePercent: 0,
+      allocations: [{ storageLocationId: f.bins[0].id, allocatedWetMassKg: INTAKE_KG }],
+    });
+    const allocated = await shares(tx, run.id);
+    expect(allocated).toHaveLength(3);
+    expect(allocated.map(row => row.feedstockId)).toContain(created.feedstocks[0].id);
+    expect(allocated.reduce((total, row) => total + row.wetMassUsedKg, 0)).toBeCloseTo(DRAW_KG);
+  }));
+  it("rebuilds after a saved facility timezone change", async () => {
+    const f = await db.transaction(tx => fixture(tx));
+    try {
+      const run = await db.transaction(tx => f.run(new Date("2026-03-14T22:00:00Z"), undefined, tx));
+      expect(await shares(db, run.id)).toHaveLength(2);
+      await updateFacility(ctx, f.facility.id, { expectedVersion: f.facility.version, timezone: "UTC" });
+      expect(await shares(db, run.id)).toEqual([{ feedstockId: f.intakes[0].id, wetMassUsedKg: DRAW_KG }]);
+    } finally {
+      const runIds = db.select({ id: productionRuns.id }).from(productionRuns).where(and(
+        eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.facilityId, f.facility.id)));
+      await db.delete(productionRunFeedstocks).where(and(eq(productionRunFeedstocks.organizationId, TEST_ORG_ID), inArray(productionRunFeedstocks.productionRunId, runIds)));
+      await db.delete(productionRunFeedstockDraws).where(and(eq(productionRunFeedstockDraws.organizationId, TEST_ORG_ID), inArray(productionRunFeedstockDraws.productionRunId, runIds)));
+      await db.delete(productionRuns).where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.facilityId, f.facility.id)));
+      await db.delete(reactors).where(and(eq(reactors.organizationId, TEST_ORG_ID), eq(reactors.facilityId, f.facility.id)));
+      await db.delete(feedstocks).where(and(eq(feedstocks.organizationId, TEST_ORG_ID), eq(feedstocks.facilityId, f.facility.id)));
+      await db.delete(storageLocations).where(and(eq(storageLocations.organizationId, TEST_ORG_ID), eq(storageLocations.facilityId, f.facility.id)));
+      await cleanupFeedstockFixtureParents(db);
+      await db.delete(feedstockTypes).where(and(eq(feedstockTypes.organizationId, TEST_ORG_ID), eq(feedstockTypes.id, f.type.id)));
+      await db.delete(facilities).where(and(eq(facilities.organizationId, TEST_ORG_ID), eq(facilities.id, f.facility.id)));
+    }
+  });
+  it("allows an unrelated edit when another historical draw bin is archived", () => scenario(async (tx, f) => {
+    await updateFeedstockInTransaction(ctx, tx, f.intakes[2].id, {
+      expectedVersion: f.intakes[2].version, storageLocationId: f.bins[1].id, deliveryDate: date("2026-03-01"),
+    });
+    const run = await f.run();
+    await updateProductionRunInTransaction(ctx, tx, run.id, { expectedVersion: run.version,
+      feedstockDraws: f.bins.map(bin => ({ storageLocationId: bin.id, wetMassKg: DRAW_KG })),
+    });
+    const before = await shares(tx, run.id);
+    await tx.update(storageLocations).set({ archivedAt: new Date() }).where(and(
+      eq(storageLocations.organizationId, TEST_ORG_ID), eq(storageLocations.id, f.bins[1].id)));
+    // Both dates qualify, so the historical allocation itself stays unchanged.
+    await updateFeedstockInTransaction(ctx, tx, f.intakes[1].id, {
+      expectedVersion: f.intakes[1].version, deliveryDate: date("2026-03-16"),
+    });
+    expect(await shares(tx, run.id)).toEqual(before);
+    await expect(tx.transaction(savepoint => updateFeedstockInTransaction(ctx, savepoint, f.intakes[2].id, {
+      expectedVersion: f.intakes[2].version + 1, massWetKg: INTAKE_KG + 1,
+    }))).rejects.toThrow(/not found or is archived/);
   }));
   it("rebuilds when only startTime changes", () => scenario(async (tx, f) => {
     const run = await f.run();
@@ -94,11 +148,49 @@ describe("facility-day feedstock allocations", () => {
     const run = await f.run(new Date("2026-03-10T08:00:00Z"));
     const before = await shares(tx, run.id);
     await expect(tx.transaction(savepoint => updateFeedstockInTransaction(ctx, savepoint, f.intakes[0].id,
-      { expectedVersion: f.intakes[0].version, deliveryDate: date("2026-04-02") }))).rejects.toMatchObject({ code: "insufficient_stock" });
+      { expectedVersion: f.intakes[0].version, deliveryDate: date("2026-04-02") }))).rejects.toMatchObject({ code: "insufficient_stock", issues: [expect.objectContaining({ path: ["deliveryDate"], code: "insufficient_stock" })] });
     expect(await shares(tx, run.id)).toEqual(before);
     const [intake] = await tx.select().from(feedstocks).where(eq(feedstocks.id, f.intakes[0].id));
     expect(intake.deliveryDate).toEqual(f.intakes[0].deliveryDate);
   }));
+  it("later intake create and edit leave Sent runs unchanged and unlocked", async () => {
+    const f = await createLineageFixture();
+    try {
+      const rows = () => db.select().from(productionRunFeedstocks).where(and(
+        eq(productionRunFeedstocks.organizationId, TEST_ORG_ID), eq(productionRunFeedstocks.productionRunId, f.productionRunId)));
+      const before = await rows();
+      const [original] = await db.select().from(feedstocks).where(and(
+        eq(feedstocks.organizationId, TEST_ORG_ID), eq(feedstocks.id, f.feedstockId)));
+      await expect(db.transaction(async tx => {
+        const created = await createFeedstockInTransaction(ctx, tx, {
+          facilityId: f.facilityId, feedstockTypeId: f.feedstockTypeId, supplierId: original.supplierId!,
+          deliveryDate: date("2026-07-01"), totalWetMassKg: INTAKE_KG, moisturePercent: 0,
+          allocations: [{ storageLocationId: f.feedstockBinId, allocatedWetMassKg: INTAKE_KG }],
+        });
+        await updateFeedstockInTransaction(ctx, tx, created.feedstocks[0].id, {
+          expectedVersion: created.feedstocks[0].version, deliveryDate: date("2026-07-02"),
+        });
+        // A second writer can acquire this row immediately while the intake
+        // transaction is still open: discovery excluded it before row locking.
+        await db.transaction(async other => {
+          const locked = await other.select({ id: productionRuns.id }).from(productionRuns).where(and(
+            eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, f.productionRunId),
+          )).for("update", { noWait: true });
+          expect(locked).toHaveLength(1);
+        });
+        expect(await rows()).toEqual(before);
+        throw ROLLBACK;
+      })).rejects.toBe(ROLLBACK);
+      expect(await rows()).toEqual(before);
+      await expect(db.transaction(tx => createFeedstockInTransaction(ctx, tx, {
+        facilityId: f.facilityId, feedstockTypeId: f.feedstockTypeId, supplierId: original.supplierId!,
+        deliveryDate: date("2026-03-01"), totalWetMassKg: INTAKE_KG, moisturePercent: 0,
+        allocations: [{ storageLocationId: f.feedstockBinId, allocatedWetMassKg: INTAKE_KG }],
+      }))).rejects.toMatchObject({ code: "certification_locked", issues: expect.arrayContaining([
+        expect.objectContaining({ path: ["deliveryDate"], code: "certification_locked" }),
+      ]) });
+    } finally { await cleanupLineageFixture(f); }
+  });
   it("refuses changing a Sent run through a newly qualifying intake", async () => {
     const f = await createLineageFixture();
     try {
@@ -112,7 +204,7 @@ describe("facility-day feedstock allocations", () => {
           deliveryDate: date("2026-07-01"), massWetKg: INTAKE_KG, massDryKg: INTAKE_KG,
         })).returning();
         await updateFeedstockInTransaction(ctx, tx, extra.id, { expectedVersion: extra.version, deliveryDate: date("2026-03-01") });
-      })).rejects.toMatchObject({ code: "certification_locked" });
+      })).rejects.toMatchObject({ code: "certification_locked", issues: [expect.objectContaining({ path: ["deliveryDate"], code: "certification_locked" })] });
       expect(await savedRows()).toEqual(before);
       await db.transaction(tx => reallocateRunsForBins(ctx, tx, [f.feedstockBinId]));
       expect(await savedRows()).toEqual(before);
