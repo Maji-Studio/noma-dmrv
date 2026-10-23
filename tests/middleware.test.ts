@@ -12,6 +12,19 @@ vi.mock("@/lib/auth/better-auth", () => ({
 }));
 
 describe("Auth middleware", () => {
+  it.each(["SIGN_IN_REQUIRED", "TOKEN_EXPIRED", "INVALID_TOKEN", "WRONG_ACCOUNT"])(
+    "preserves the Profile link error %s through the login redirect", async code => {
+      getSessionMock.mockResolvedValueOnce(null);
+      const { updateSession } = await import("@/lib/auth/middleware");
+      const path = `/settings/profile?error=${code}`;
+      const response = await updateSession(new NextRequest(`http://localhost:3100${path}`));
+      expect(response.status).toBe(307);
+      const location = new URL(response.headers.get("location")!);
+      expect(location.pathname).toBe("/login");
+      expect(location.searchParams.get("from")).toBe(path);
+    },
+  );
+
   it("returns 401 for unauthenticated protected API routes", async () => {
     getSessionMock.mockResolvedValueOnce(null);
 

@@ -8,7 +8,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ActionError } from "@/lib/action-error";
-import { EmailChangeError } from "@/hooks/use-profile";
+import { SESSION_EXPIRED } from "@/lib/domain-errors";
 import { ProfileSettingsPane } from "./profile-settings-pane";
 
 const nameMutation = vi.hoisted(() => ({ mutateAsync: vi.fn(), isPending: false }));
@@ -103,7 +103,7 @@ describe("ProfileSettingsPane", () => {
   });
 
   it("asks an old session to sign out and in again", async () => {
-    emailMutation.mutateAsync.mockRejectedValue(new EmailChangeError("Session expired", true));
+    emailMutation.mutateAsync.mockRejectedValue(new ActionError({ code: SESSION_EXPIRED, error: "Your sign-in is too old to change your email. Sign out and sign in again, then try again." }));
     render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
     type(NEW_EMAIL, "new@example.com");
     fireEvent.click(screen.getByRole("button", { name: "Send link" }));
@@ -139,14 +139,29 @@ describe("ProfileSettingsPane", () => {
     expect(screen.queryByText(/Open the link again/)).toBeNull();
   });
 
-  it("shows a generic error for any other refusal", async () => {
-    emailMutation.mutateAsync.mockRejectedValue(new EmailChangeError("Too many requests", false));
+  it("shows the server message and wait time for other refusals", async () => {
+    emailMutation.mutateAsync.mockRejectedValue(new ActionError({ error: "Too many requests. Try again in 30 seconds." }));
     render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
     type(NEW_EMAIL, "new@example.com");
     fireEvent.click(screen.getByRole("button", { name: "Send link" }));
 
-    expect((await screen.findAllByText("Your email was not changed.")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("Too many requests.")).toBeTruthy();
+    expect(screen.getByText("Try again in 30 seconds.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
+  });
+
+  it.each([new Error(""), undefined])("uses the fallback when a refusal has no message (%s)", async error => {
+    emailMutation.mutateAsync.mockRejectedValue(error);
+    render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
+    type(NEW_EMAIL, "new@example.com");
+    fireEvent.click(screen.getByRole("button", { name: "Send link" }));
+    expect(await screen.findByText("Your email was not changed.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
+  });
+
+  it("explains that the link belongs to another account", () => {
+    render(<ProfileSettingsPane name={NAME} email={EMAIL} linkError="WRONG_ACCOUNT" />);
+    expect(screen.getByText("This link is for another account. Sign in as that account, then open the link again.")).toBeTruthy();
   });
 
   it("saves only the name and keeps it as the new baseline", async () => {

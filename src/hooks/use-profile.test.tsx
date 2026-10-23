@@ -4,7 +4,9 @@ import { cleanup, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { changeEmailFn } from "@/fn/profile";
-import { EmailChangeError, useChangeEmail } from "./use-profile";
+import { ActionError } from "@/lib/action-error";
+import { SESSION_EXPIRED } from "@/lib/domain-errors";
+import { useChangeEmail } from "./use-profile";
 
 vi.mock("@/fn/profile", () => ({ changeEmailFn: vi.fn(), changePasswordFn: vi.fn(), updateProfileNameFn: vi.fn() }));
 vi.mock("@/hooks/use-organizations", () => ({ invalidateOrgMembers: vi.fn() }));
@@ -29,14 +31,13 @@ it("unwraps a successful server action", async () => {
   expect(changeEmailFn).toHaveBeenCalledExactlyOnceWith(INPUT);
 });
 
-it.each([
-  { code: "session_expired" as const, sessionExpired: true },
-  { code: "validation_failed" as const, sessionExpired: false },
-  { code: undefined, sessionExpired: false },
-])("preserves EmailChangeError for action refusal $code", async ({ code, sessionExpired }) => {
-  vi.mocked(changeEmailFn).mockResolvedValue({ success: false, code, error: "Safe refusal" });
-  const result = emailMutation();
-  const refusal = result.current.mutateAsync(INPUT);
-  await expect(refusal).rejects.toBeInstanceOf(EmailChangeError);
-  await expect(refusal).rejects.toMatchObject({ name: "EmailChangeError", message: "Safe refusal", sessionExpired });
-});
+it.each([SESSION_EXPIRED, "validation_failed", undefined] as const)(
+  "preserves ActionError code and issues for action refusal %s", async code => {
+    const issues = [{ path: ["newEmail"], code: "validation_failed", message: "Safe field refusal" }];
+    vi.mocked(changeEmailFn).mockResolvedValue({ success: false, code, error: "Safe refusal", issues });
+    const result = emailMutation();
+    const refusal = result.current.mutateAsync(INPUT);
+    await expect(refusal).rejects.toBeInstanceOf(ActionError);
+    await expect(refusal).rejects.toMatchObject({ name: "ActionError", message: "Safe refusal", code, issues });
+  },
+);

@@ -3,7 +3,7 @@ import { createHmac } from "node:crypto";
 import { createEmailVerificationToken } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { signJWT } from "better-auth/crypto";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn() }));
 const memory = vi.hoisted(() => ({
@@ -12,7 +12,11 @@ const memory = vi.hoisted(() => ({
   account: [] as Record<string, unknown>[],
   verification: [] as Record<string, unknown>[],
 }));
-vi.mock("@/db", () => ({ db: {} }));
+// Session creation consults the app database for an organization preference.
+// This auth-only store has no organization rows.
+vi.mock("@/db", () => ({
+  db: { select: () => ({ from: () => ({ where: () => ({ limit: async () => [] }) }) }) },
+}));
 vi.mock("@/db/org-defaults", () => ({ seedOrgDefaults: vi.fn() }));
 vi.mock("better-auth/adapters/drizzle", async () => {
   const { memoryAdapter } = await import("better-auth/adapters/memory");
@@ -60,6 +64,8 @@ beforeEach(() => {
     expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS), createdAt: new Date(), updatedAt: new Date(),
   });
 });
+
+afterEach(() => { vi.useRealTimers(); });
 
 async function sessionHeaders(token = SESSION_TOKEN) {
   const ctx = await auth.$context;
@@ -239,10 +245,26 @@ it("refuses a confirmation signed in as another user without changing either acc
   expect((await requestChange()).status).toBe(200);
   memory.user.push({ ...memory.user[0], id: "other-user", email: "other@example.test" });
   memory.session.push({ ...memory.session[0], id: "other-session", userId: "other-user", token: "other-token" });
-  await expectConfirmationRefused(confirmationUrl(), await sessionHeaders("other-token"));
+  await expectConfirmationRefused(confirmationUrl(), await sessionHeaders("other-token"), "/settings/profile?error=WRONG_ACCOUNT");
 });
 
-it("password reset revokes all sessions, preserves the notice and cancels a pending change", async () => {
+it("refuses an already-used link with INVALID_TOKEN and no cookie", async () => {
+  await requestChange();
+  const link = confirmationUrl();
+  const response = await auth.handler(new Request(link, { headers: await sessionHeaders() }));
+  expect(response.status).toBe(302);
+  expect(memory.user[0].email).toBe(NEW_EMAIL);
+  const sessionsBefore = memory.session.map(row => row.id);
+  const replay = await auth.handler(new Request(link, { headers: await sessionHeaders() }));
+  expect(replay.status).toBe(302);
+  expect(replay.headers.get("location")).toBe("/settings/profile?error=INVALID_TOKEN");
+  expect(replay.headers.get("set-cookie")).toBeNull();
+  expect(memory.user[0].email).toBe(NEW_EMAIL);
+  expect(memory.session.map(row => row.id)).toEqual(sessionsBefore);
+});
+
+it("password reset cancels a pending change even after a fresh sign-in", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
   const ctx = await auth.$context;
   memory.account[0].password = await ctx.password.hash("old-password-for-reset");
   memory.session.push({ ...memory.session[0], id: "second-session", token: "second-token" });
@@ -267,6 +289,17 @@ it("password reset revokes all sessions, preserves the notice and cancels a pend
   expect(memory.session).toHaveLength(0);
   expect(sendEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ type: "password-changed", userId: USER_ID }));
   await expectConfirmationRefused(link, oldHeaders);
+  vi.setSystemTime(Date.now() + MILLISECONDS_PER_SECOND);
+  const signIn = await auth.handler(new Request(`${ORIGIN}/api/auth/sign-in/email`, {
+    method: "POST", headers: { origin: ORIGIN, "content-type": "application/json" },
+    body: JSON.stringify({ email: OLD_EMAIL, password: "new-password-after-reset" }),
+  }));
+  expect(signIn.status).toBe(200);
+  expect(memory.session).toHaveLength(1);
+  expect(memory.session[0].id).not.toBe("session-id");
+  const freshHeaders = new Headers({ cookie: signIn.headers.getSetCookie().map(cookie => cookie.split(";")[0]).join("; ") });
+  expect(freshHeaders.get("cookie")).toContain(ctx.authCookies.sessionToken.name);
+  await expectConfirmationRefused(link, freshHeaders, "/settings/profile?error=INVALID_TOKEN");
 });
 
 it.each([

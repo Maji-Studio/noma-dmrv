@@ -9,6 +9,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useId, useState } from "react";
+import { ActionError } from "@/lib/action-error";
+import { SESSION_EXPIRED } from "@/lib/domain-errors";
 import { SETTINGS_PROFILE_HREF } from "@/lib/settings/links";
 import { useForm } from "react-hook-form";
 import {
@@ -24,7 +26,7 @@ import { DetailField } from "@/components/ui/detail-panel";
 import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
-import { EmailChangeError, useChangeEmail, useChangePassword, useUpdateProfileName } from "@/hooks/use-profile";
+import { useChangeEmail, useChangePassword, useUpdateProfileName } from "@/hooks/use-profile";
 import { AUTH_PASSWORD_MIN_LENGTH, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
 import {
   changeEmailSchema,
@@ -36,12 +38,13 @@ import {
 } from "@/schemas/profile";
 
 const EMAIL_NOTE = "We send a link to the new address. Your email changes when you open it.";
-const EMAIL_SESSION_EXPIRED = "Your sign-in is too old to change your email. Sign out and sign in again, then try again.";
 const EMAIL_NOT_CHANGED = "Your email was not changed. Try again.";
 /** After a fresh sign-in the person lands back here, where the change was started. */
 const SIGN_IN_HREF = `/login?from=${encodeURIComponent(SETTINGS_PROFILE_HREF)}`;
 const LINK_EXPIRED_CODES = new Set(["TOKEN_EXPIRED", "INVALID_TOKEN", "USER_NOT_FOUND", "INVALID_USER"]);
 const LINK_SIGN_IN_REQUIRED_CODE = "SIGN_IN_REQUIRED";
+const LINK_WRONG_ACCOUNT_CODE = "WRONG_ACCOUNT";
+const LINK_WRONG_ACCOUNT_NOTICE = "This link is for another account. Sign in as that account, then open the link again.";
 const LINK_EXPIRED_NOTICE = "This link expired or was already used. Send a new one.";
 const LINK_SIGN_IN_NOTICE = "Open the link again now that you are signed in. It works only for the account that asked for the change.";
 
@@ -49,6 +52,7 @@ const LINK_SIGN_IN_NOTICE = "Open the link again now that you are signed in. It 
 function linkErrorNotice(code: string | undefined): string {
   if (code === undefined) return "";
   if (LINK_EXPIRED_CODES.has(code)) return LINK_EXPIRED_NOTICE;
+  if (code === LINK_WRONG_ACCOUNT_CODE) return LINK_WRONG_ACCOUNT_NOTICE;
   if (code === LINK_SIGN_IN_REQUIRED_CODE) return LINK_SIGN_IN_NOTICE;
   return "";
 }
@@ -167,12 +171,8 @@ function EmailForm({ email, linkError }: { email: string; linkError?: string }) 
         setValue("newEmail", "");
       } catch (error) {
         setPendingEmail("");
-        if (error instanceof EmailChangeError && error.sessionExpired) {
-          setSessionExpired(true);
-          setServerError(EMAIL_SESSION_EXPIRED);
-        } else {
-          setServerError(EMAIL_NOT_CHANGED);
-        }
+        setSessionExpired(error instanceof ActionError && error.code === SESSION_EXPIRED);
+        setServerError(error instanceof Error && error.message ? error.message : EMAIL_NOT_CHANGED);
       }
     }),
   );

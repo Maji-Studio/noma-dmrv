@@ -27,7 +27,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
 import { asc, eq } from "drizzle-orm";
-import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH, EMAIL_VERIFICATION_EXPIRES_IN_SECONDS, INVITATION_EXPIRES_IN_SECONDS, ORGANIZATION_INVITATION_LIMIT, PASSWORD_RESET_EXPIRES_IN_SECONDS, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
+import { CHANGE_EMAIL_MAX_ATTEMPTS, CHANGE_EMAIL_WINDOW_SECONDS, AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH, EMAIL_VERIFICATION_EXPIRES_IN_SECONDS, INVITATION_EXPIRES_IN_SECONDS, ORGANIZATION_INVITATION_LIMIT, PASSWORD_RESET_EXPIRES_IN_SECONDS, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
 import { env } from "@/config/env";
 import { resetPasswordEmail } from "@/lib/email/templates/reset-password-email";
 import { verifyEmailEmail } from "@/lib/email/templates/verify-email-email";
@@ -237,7 +237,7 @@ export const auth = betterAuth({
       "/sign-in/email": { window: 15 * 60, max: 10 },
       "/sign-up/email": { window: 60 * 60, max: 3 },
       "/request-password-reset": { window: 15 * 60, max: 5 },
-      "/change-email": { window: 15 * 60, max: 5 },
+      "/change-email": { window: CHANGE_EMAIL_WINDOW_SECONDS, max: CHANGE_EMAIL_MAX_ATTEMPTS },
       "/reset-password": { window: 15 * 60, max: 10 },
     },
   },

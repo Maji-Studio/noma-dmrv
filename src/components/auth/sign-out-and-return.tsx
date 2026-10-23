@@ -84,7 +84,7 @@ export function SignOutAndReturn({
         {children}
       </Button>
       {error && compact && (
-        <p role="alert" className="caption mt-8 text-[var(--color-text-secondary)]">{error}</p>
+        <p role="alert" className="body-caption mt-8 text-[var(--color-text-secondary)]">{error}</p>
       )}
     </>
   );
