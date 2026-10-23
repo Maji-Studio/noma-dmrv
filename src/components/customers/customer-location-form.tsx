@@ -9,7 +9,12 @@ import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { facilityDistanceDefaults } from "@/lib/facility-distance-defaults";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { Notice } from "@/components/ui/notice";
+import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { FACILITY_DISTANCE_REFUSAL_ALIASES } from "@/lib/facility-distance-changes";
+import { isActionError } from "@/lib/action-error";
+import { REGISTERED_SITE_LOCKED_FIELDS } from "@/lib/party-domain-errors";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormActions } from "@/components/forms";
 import {
@@ -26,6 +31,16 @@ import { CustomerLocationFields } from "./customer-location-fields";
 // ============================================
 // Component
 // ============================================
+
+/**
+ * The reason a registered storage site froze this location, when the refusal is
+ * that lock (a lock on one of the site's fields), not any other certification lock.
+ */
+function storageSiteLockReason(error: unknown): string | null {
+  if (!isActionError(error)) return null;
+  const frozen: readonly unknown[] = REGISTERED_SITE_LOCKED_FIELDS;
+  return error.issues.find((issue) => issue.code === "certification_locked" && issue.path.length === 1 && frozen.includes(issue.path[0]))?.message ?? null;
+}
 
 /** Fields the form pre-fills from: a saved location or a pending one. */
 export type CustomerLocationInitialValues = Pick<CustomerLocation, "country"> &
@@ -72,8 +87,8 @@ interface CustomerLocationFormProps {
   initialIsDefault?: boolean;
   /** Prefix field IDs when the form opens above another form with overlapping IDs. */
   idPrefix?: string;
-  /** Form submission handler */
-  onSubmit: (data: CustomerLocationFormData) => Promise<void> | void;
+  /** Form submission handler; `onRefusal` shows a refused save at its fields (#1327). */
+  onSubmit: (data: CustomerLocationFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -126,12 +141,31 @@ export function CustomerLocationForm({
 
   const defaultSubmitLabel = isEditMode ? "Update location" : "Add location";
 
+  const formId = useId();
+  // Registered locations are not a lock-read kind, so the storage-site refusal's
+  // message is the lock. It stays until the dialog reopens or switches location
+  // (the form remounts); the hook has already reverted the changed fields.
+  const [siteLockReason, setSiteLockReason] = useState<string | null>(null);
+  const refuseWithFields = useSaveRefusal({
+    control: form.control,
+    setError: form.setError,
+    resetField: form.resetField,
+    formId,
+    aliases: FACILITY_DISTANCE_REFUSAL_ALIASES,
+  });
+  const refuseSave: SaveRefusalHandler = (error, fallback) => {
+    const footer = refuseWithFields(error, fallback);
+    const reason = storageSiteLockReason(error);
+    if (reason) setSiteLockReason(reason);
+    return footer;
+  };
   const handleFormSubmit = latched(form.handleSubmit((data) => {
-    return onSubmit(data);
+    return onSubmit(data, refuseSave);
   }));
 
   return (
     <form
+      id={formId}
       onSubmit={(event) => {
         event.stopPropagation();
         return handleFormSubmit(event);
@@ -143,6 +177,8 @@ export function CustomerLocationForm({
         form={form}
         facility={facility}
         isSubmitting={isSubmitting}
+        siteLockReason={siteLockReason}
+        siteLockReasonInBox={Boolean(siteLockReason && errorMessage?.includes(siteLockReason))}
         isCurrentDefault={location?.isDefault === true}
         idPrefix={idPrefix}
         isEditMode={isEditMode}
@@ -151,6 +187,7 @@ export function CustomerLocationForm({
 
       <FormActions
         control={form.control}
+        formId={formId}
         sticky={false}
         onCancel={onCancel}
         isSubmitting={isSubmitting}

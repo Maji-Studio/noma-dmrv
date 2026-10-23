@@ -13,6 +13,7 @@ import {
   PositionPicker,
 } from "@/components/forms";
 import type { Facility } from "@/db/schema";
+import { Notice } from "@/components/ui/notice";
 import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
 import {
   customerLocationFormSchema,
@@ -34,6 +35,10 @@ interface CustomerLocationFieldsProps {
   /** Contextual editors restrict distances to this facility; standalone forms show all active facilities. */
   facility?: Facility;
   isSubmitting?: boolean;
+  /** A registered storage site refused a change: name and GPS stay as saved, for this reason. */
+  siteLockReason?: string | null;
+  /** The error box already says the reason, so the lock line stays out until it does not. */
+  siteLockReasonInBox?: boolean;
   /** The edited location is the party's default; it stays checked until another is set. */
   isCurrentDefault?: boolean;
   idPrefix?: string;
@@ -49,6 +54,8 @@ export function CustomerLocationFields({
   form,
   facility,
   isSubmitting = false,
+  siteLockReason = null,
+  siteLockReasonInBox = false,
   isCurrentDefault = false,
   idPrefix,
   isEditMode,
@@ -91,8 +98,11 @@ export function CustomerLocationFields({
     : "facilityDistances";
   const defaultId = idPrefix ? fieldId(idPrefix, "default") : "isDefault";
 
+  const siteLocked = siteLockReason !== null;
+
   return (
     <>
+      {siteLockReason && !siteLockReasonInBox ? <Notice tone="info" boxed data-record-lock-notice="siteLocked">{siteLockReason}</Notice> : null}
       <FormSection title="Location details" divider={false}>
         <FormField
           id={nameId}
@@ -104,7 +114,7 @@ export function CustomerLocationFields({
             id={nameId}
             type="text"
             placeholder="e.g., Coffee Block A"
-            disabled={isSubmitting}
+            disabled={isSubmitting || siteLocked}
             error={!!errors.name}
             {...register("name")}
           />
@@ -189,7 +199,7 @@ export function CustomerLocationFields({
           }}
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
-          disabled={isSubmitting}
+          disabled={isSubmitting || siteLocked}
         />
       </FormSection>
 

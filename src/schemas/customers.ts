@@ -180,6 +180,9 @@ export { PARTY_MAX_LOCATIONS as MAX_PENDING_CUSTOMER_LOCATIONS } from "@/config/
  * Schema for creating a customer together with its locations in one
  * transaction (server action).
  */
+/** Create sends `{ customer, locations }`, so refusals of the customer name `customer.*`; the form names `*`. */
+export const CUSTOMER_REFUSAL_ALIASES = { "customer.*": "*" } as const;
+
 export const createCustomerWithLocationsSchema = z.object({
   customer: createCustomerSchema,
   locations: z

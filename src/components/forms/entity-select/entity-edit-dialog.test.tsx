@@ -191,7 +191,7 @@ describe("EntityEditDialog", () => {
   it("does not hand a legacy dialog's form the refusal handler, so its message line stays", async () => {
     loaded();
     mocks.update.mockRejectedValueOnce(new ActionError({ error: "Held.", code: "certification_locked" }));
-    render(dialog("customer"));
+    render(dialog("reactor"));
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect((await screen.findByRole("alert")).textContent).toBe("Held.");
     expect(mocks.refusal).not.toHaveBeenCalled();

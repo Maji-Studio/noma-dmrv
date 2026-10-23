@@ -217,7 +217,7 @@ fails: the parent adopts the returned row and calls the form's committed-record
 callback, which uses `reset(committedValues, { keepValues: true, keepSubmitCount: true, keepIsSubmitted: true, keepDirty: true })`. Typed input
 stays on screen; a background refetch never re-syncs the form. A stale-version
 refusal does not replace that snapshot. The profile password pane also wires
-`resetField`, although it has no record-lock read.
+`resetField`, although it has no record-lock read. The customer location has no lock-read kind, so after a lock refusal its form disables name and GPS from local state until the dialog reopens or switches location.
 
 Mutations declare affected kinds with `recordLockMeta`. A `certification_locked`
 `ActionError` refreshes those kinds even though the write failed; unrelated

@@ -30,6 +30,7 @@ import {
 } from "@/hooks/use-list-pagination";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
@@ -272,6 +273,7 @@ export function SupplierList() {
   // Handlers
   const handleCreate = async (
     data: SupplierFormData,
+    onRefusal: SaveRefusalHandler,
     pendingLocations?: PendingSupplierLocation[]
   ) => {
     setCreateError(null);
@@ -283,13 +285,14 @@ export function SupplierList() {
       closeSideSheet();
       toast.success("Supplier created.");
     } catch (error) {
-      setCreateError(
-        error instanceof Error ? error.message : "Supplier was not created. Check the form."
-      );
+      setCreateError(onRefusal(
+        error,
+        error instanceof Error ? error.message : "Supplier was not created. Check the form.",
+      ));
     }
   };
 
-  const handleUpdate = async (data: SupplierFormData) => {
+  const handleUpdate = async (data: SupplierFormData, onRefusal: SaveRefusalHandler) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
@@ -305,7 +308,7 @@ export function SupplierList() {
     } catch (error) {
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      setUpdateError(toSaveErrorMessage(error, "Supplier was not saved. Try again."));
+      setUpdateError(onRefusal(error, toSaveErrorMessage(error, "Supplier was not saved. Try again.")));
     }
   };
 

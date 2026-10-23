@@ -98,7 +98,7 @@ describe("customer storage-site registration fence", () => {
       .where(eq(customerLocations.id, f.location.id));
     await expect(runOperationInProcess(updateCustomerLocation, f.ctx, { ...version(f), expectedVersion: kept.version,
       name: f.location.name, gpsLatitude: f.location.gpsLatitude + 0.0000005, gpsLongitude: f.location.gpsLongitude }))
-      .rejects.toMatchObject({ code: "certification_locked", issues: [{ path: ["name"] }] });
+      .rejects.toMatchObject({ code: "certification_locked", issues: [{ path: ["name"] }, { path: ["gpsLatitude"] }] });
     const repaired = await runOperationInProcess(updateCustomerLocation, f.ctx, { ...version(f), expectedVersion: kept.version,
       name: f.location.name, gpsLatitude: f.location.gpsLatitude, gpsLongitude: f.location.gpsLongitude });
     expect(repaired.name).toBe(f.location.name);
@@ -117,14 +117,14 @@ describe("customer storage-site registration fence", () => {
   });
 
   it.each([
-    { gpsLatitude: 20, gpsLongitude: 30, field: "gpsLatitude" },
-    { gpsLatitude: undefined, gpsLongitude: 30, field: "gpsLongitude" },
-  ])("points at the first changed coordinate ($field)", async ({ gpsLatitude, gpsLongitude, field }) => {
+    { gpsLatitude: 20, gpsLongitude: 30, fields: ["gpsLatitude", "gpsLongitude"] },
+    { gpsLatitude: undefined, gpsLongitude: 30, fields: ["gpsLongitude"] },
+  ])("points at every changed coordinate ($fields)", async ({ gpsLatitude, gpsLongitude, fields }) => {
     const f = await fixture();
     await mapping(f);
     await expect(runOperationInProcess(updateCustomerLocation, f.ctx, { ...version(f),
       gpsLatitude: gpsLatitude ?? f.location.gpsLatitude, gpsLongitude }))
-      .rejects.toMatchObject({ code: "certification_locked", issues: [{ path: [field] }] });
+      .rejects.toMatchObject({ code: "certification_locked", issues: fields.map(field => ({ path: [field] })) });
   });
 
   it("refuses delete retryably while the dedicated session fence is held", async () => {

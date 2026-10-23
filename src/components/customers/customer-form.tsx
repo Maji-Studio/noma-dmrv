@@ -5,8 +5,9 @@
  */
 "use client";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   MapPinIcon,
@@ -17,6 +18,7 @@ import {
 import { FormField, FormInput, FormTextarea, FormActions, FormSection } from "@/components/forms";
 import {
   customerFormSchema,
+  CUSTOMER_REFUSAL_ALIASES,
   MAX_PENDING_CUSTOMER_LOCATIONS,
   type CustomerFormData,
   type CustomerLocationFormData,
@@ -41,6 +43,7 @@ import { CustomerLocationForm } from "./customer-location-form";
 
 export type PendingLocation = CustomerLocationFormData;
 
+
 function formatPendingLocationSummary({
   city,
   stateRegion,
@@ -62,8 +65,16 @@ interface CustomerFormProps {
   customer?: Customer;
   /** Customer ID — passed separately so locations section renders in edit mode */
   customerId?: string;
-  /** Form submission handler */
-  onSubmit: (data: CustomerFormData, pendingLocations?: PendingLocation[]) => Promise<void> | void;
+  /**
+   * Form submission handler. `onRefusal` shows a refused save at the fields it
+   * names (#1327); it comes second so a picker edit dialog can hand the same
+   * `(data, onRefusal)` pair to every migrated form.
+   */
+  onSubmit: (
+    data: CustomerFormData,
+    onRefusal: SaveRefusalHandler,
+    pendingLocations?: PendingLocation[],
+  ) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -87,11 +98,14 @@ export function CustomerForm({
   const isEditMode = !!customer;
   const [pendingLocations, setPendingLocations] = useState<PendingLocation[]>([]);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const formId = useId();
 
   const {
     control,
     register,
     handleSubmit,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(customerFormSchema),
@@ -106,13 +120,14 @@ export function CustomerForm({
 
   const defaultSubmitLabel = isEditMode ? "Update customer" : "Create customer";
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: CUSTOMER_REFUSAL_ALIASES });
   const handleFormSubmit = latched(handleSubmit((data) => {
     if (!isEditMode && pendingLocations.length === 0) {
       setLocationError("At least one location is required");
       return;
     }
     setLocationError(null);
-    return onSubmit(data as CustomerFormData, isEditMode ? undefined : pendingLocations);
+    return onSubmit(data as CustomerFormData, refuseSave, isEditMode ? undefined : pendingLocations);
   }));
 
   const handleAddPendingLocation = (loc: PendingLocation) => {
@@ -130,7 +145,7 @@ export function CustomerForm({
   };
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       {/* Section 1: the customer itself */}
       <FormSection title="Customer" divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
@@ -218,6 +233,7 @@ export function CustomerForm({
 
       <FormActions
         control={control}
+        formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}
