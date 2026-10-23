@@ -16,8 +16,9 @@ import { useLocationEditIntent } from "@/hooks/use-location-edit-intent";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 import { useToast } from "@/components/ui/toast";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   MapPinIcon,
@@ -39,11 +40,13 @@ import {
 } from "@/hooks/use-suppliers";
 import {
   supplierFormSchema,
+  SUPPLIER_REFUSAL_ALIASES,
   type SupplierFormData,
   type SupplierLocationFormData,
 } from "@/schemas/suppliers";
 import type { Supplier, SupplierLocation } from "@/db/schema/parties";
 import { Button } from "@/components/ui/button";
+import { ICON_BUTTON_TOUCH_PROPS } from "@/components/ui/touch-target";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { DefaultLocationBadge } from "@/components/ui/default-location-badge";
 import {
@@ -110,9 +113,14 @@ interface SupplierFormProps {
   supplier?: Supplier;
   /** Supplier ID — passed separately so the locations section renders in edit mode */
   supplierId?: string;
-  /** Form submission handler */
+  /**
+   * Form submission handler. `onRefusal` shows a refused save at the fields it
+   * names (#1327); it comes second so a picker edit dialog can hand the same
+   * `(data, onRefusal)` pair to every migrated form.
+   */
   onSubmit: (
     data: SupplierFormData,
+    onRefusal: SaveRefusalHandler,
     pendingLocations?: PendingSupplierLocation[]
   ) => Promise<void> | void;
   /** Cancel button handler */
@@ -138,11 +146,14 @@ export function SupplierForm({
   const isEditMode = !!supplier;
   const [pendingLocations, setPendingLocations] = useState<PendingSupplierLocation[]>([]);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const formId = useId();
 
   const {
     control,
     register,
     handleSubmit,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(supplierFormSchema),
@@ -165,6 +176,7 @@ export function SupplierForm({
   // without an id would otherwise show the pending-list builder yet drop it here.
   const managesLiveLocations = isEditMode && !!supplierId;
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: SUPPLIER_REFUSAL_ALIASES });
   const handleFormSubmit = latched(handleSubmit((data) => {
     if (!managesLiveLocations && pendingLocations.length === 0) {
       setLocationError("At least one location is required");
@@ -173,6 +185,7 @@ export function SupplierForm({
     setLocationError(null);
     return onSubmit(
       data as SupplierFormData,
+      refuseSave,
       managesLiveLocations ? undefined : pendingLocations
     );
   }));
@@ -195,7 +208,7 @@ export function SupplierForm({
   };
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       {/* Supplier name leads the sheet at full width, no section for one field. */}
       <FormField id="name" label="Supplier name" required error={errors.name?.message}>
         <FormInput
@@ -322,6 +335,7 @@ export function SupplierForm({
 
       <FormActions
         control={control}
+        formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}
@@ -416,10 +430,10 @@ function CreateModeLocationsSection({
                     </p>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-8">
+                <div className="flex shrink-0 items-center gap-12">
                   <Button
                     variant="noOutline"
-                    size="icon"
+                    {...ICON_BUTTON_TOUCH_PROPS}
                     onClick={() => {
                       setEditingLocationIndex(index);
                       setIsLocationDialogOpen(true);
@@ -430,7 +444,7 @@ function CreateModeLocationsSection({
                   </Button>
                   <Button
                     variant="destructive"
-                    size="icon"
+                    {...ICON_BUTTON_TOUCH_PROPS}
                     onClick={() => onRemove(index)}
                     aria-label={`Remove ${title}`}
                   >
@@ -559,10 +573,10 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
                   </p>
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-8">
+              <div className="flex shrink-0 items-center gap-12">
                 <Button
                   variant="noOutline"
-                  size="icon"
+                  {...ICON_BUTTON_TOUCH_PROPS}
                   onClick={() => {
                     setEditingLocation(loc);
                     setIsLocationDialogOpen(true);
@@ -573,7 +587,7 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
                 </Button>
                 <Button
                   variant="destructive"
-                  size="icon"
+                  {...ICON_BUTTON_TOUCH_PROPS}
                   onClick={() => setDeletingLocation(loc)}
                   aria-label={`Delete ${loc.name || loc.country}`}
                 >

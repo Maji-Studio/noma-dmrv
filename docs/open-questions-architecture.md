@@ -53,24 +53,6 @@ these areas; the entry rules and invariants live in
   gives `invalid_grant`, which claude.ai turns into a sign-in prompt. Only a
   dropped CIMD client gives `invalid_client`.
 
-### Touch targets outside the roster slot (`ui/touch-target-gaps`, opened 2026-10-22)
-
-- **Anchor:** `src/components/ui/touch-target.ts:ROW_ACTION_HIT_AREA` gives roster
-  row action buttons a 44px hit area. These controls do not get it:
-  - `src/components/organizations/organization-settings.tsx:OrganizationSettings`:
-    the Members role `FormSelect` stays 40px; a select cannot take `::after`.
-  - `src/components/customers/customer-saved-locations.tsx:CustomerSavedLocations`:
-    Edit, Archive and Delete are 32px icon buttons at `gap-8`.
-  - `src/components/ui/row-actions-menu/index.tsx:RowActionsMenu`: the trigger is
-    a 32px icon button.
-- **Duplicate recipes to consolidate** into one shared helper:
-  `src/components/emissions/emission-line-grid.ts:TOUCH_TARGET` (centred
-  `::before`), `src/components/certification/new-removal-dialog/batch-box.tsx:HIT_AREA`,
-  `src/components/credit-batches/credit-batch-line.tsx:MoreBatches` (inline
-  `::after`) and
-  `src/components/certification/certification-status-badge.tsx:CertificationStatusBadge`
-  (centred `::before`).
-
 ### Party write adapters per kind (`api/party-write-adapters`, opened 2026-10-17)
 
 - **Anchor:** `src/lib/mcp/tools/party-tools.ts:partyWriteTools`,

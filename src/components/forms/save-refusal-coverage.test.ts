@@ -5,28 +5,10 @@ import { describe, expect, it } from "vitest";
 const COMPONENTS_DIR = resolve(process.cwd(), "src/components");
 
 /** Parent submit seams the component-form scan cannot see; remove when migrated. */
-const PENDING_SEAMS = [
-  {
-    file: "src/hooks/use-picker-edit-submit.ts",
-    reason: "PR E: usePickerEditSubmit catches without the form's refusal handler",
-    pending: /setError\(toSaveErrorMessage\(cause,/,
-  },
-];
+const PENDING_SEAMS: { file: string; reason: string; pending: RegExp }[] = [];
 
 /** #1327: remove each entry when its form moves to the shared refusal handler. */
 const PENDING: Record<string, string> = {
-  "orders/order-form.tsx": "PR E: order sheet and picker edit",
-  "samples/sample-form.tsx": "PR E: sample code alias and parent catches",
-  "credit-batches/credit-batch-form.tsx": "PR E: credit batch sheets",
-  "production-runs/production-run-form.tsx": "PR F: run overlap catch and parent catches",
-  "production-runs/production-incident-form.tsx": "PR F: incident child editor",
-  "production-runs/production-sample-form.tsx": "PR F: in-process sample child editor",
-  "biochar-products/biochar-product-form.tsx": "PR G: replace inline stock routing with aliases",
-  "customers/customer-form.tsx": "PR I: nested customer aliases",
-  "customers/customer-location-form.tsx": "PR I: registered location refusals",
-  "suppliers/supplier-form.tsx": "PR I: nested supplier aliases",
-  "suppliers/supplier-location-form.tsx": "PR I: supplier location refusal",
-  "forms/entity-select/supplier-quick-add-dialog.tsx": "PR I: locations.0.* aliases and active-payload guard",
   "reactors/reactor-form.tsx": "PR J: reactor sheet and picker edit",
   "facilities/facility-form.tsx": "PR J: facility sheet and onboarding",
   "feedstock-types/feedstock-type-form.tsx": "PR J: feedstock type sheet and picker edit",
@@ -42,10 +24,6 @@ const PENDING: Record<string, string> = {
   "organizations/invitation-bootstrap-form.tsx": "PR K1: preserve ActionError from result",
   "api-keys/api-key-form.tsx": "PR K1: API key refusal",
   "admin/emission-estimates-form.tsx": "PR K1: emission estimate refusal",
-  "credit-batches/method-b-prerequisites-setup.tsx": "PR K2: prerequisite refusal",
-  "certification/facility-certifier-dialog.tsx": "PR K2: certifier setup refusal",
-  "certification/ghg-statement-create-dialog.tsx": "PR K2: GHG statement create refusal",
-  "certification/ghg-statement-submit-dialog.tsx": "PR K2: GHG statement submit refusal",
 };
 
 /** Deliberate exclusions, including non-RHF forms named in the issue inventory. */
@@ -54,8 +32,6 @@ const EXCLUDED: Record<string, string> = {
   "auth/login-form.tsx": "Better Auth result, not ActionError",
   "auth/reset-password-form.tsx": "Better Auth result, not ActionError",
   "auth/set-password-form.tsx": "Better Auth result, not ActionError",
-  "emissions/manual-entry-form.tsx": "Non-RHF emissions entry",
-  "emissions/emission-line-comment.tsx": "Non-RHF comment editor",
   "oauth/organization-picker.tsx": "Non-RHF organization selection",
   "forms/entity-select/quick-add-dialog.tsx": "Non-RHF quick-add shell delegates to entity forms",
   "certification/new-removal-dialog/index.tsx": "Non-RHF New Removal flow uses toast results",
@@ -102,5 +78,19 @@ describe("save refusal coverage", () => {
   it.each(PENDING_SEAMS)("keeps the parent seam pending: $reason", ({ file, pending }) => {
     const source = readFileSync(resolve(process.cwd(), file), "utf8");
     expect(source, `${file} no longer uses the pending error route; remove its seam entry`).toMatch(pending);
+  });
+
+  it("hands every migrated form's picker edit dialog onSubmitWithRefusal, not the legacy onSubmit", () => {
+    const dialogs = readFileSync(resolve(COMPONENTS_DIR, "forms/entity-select/entity-edit-forms.tsx"), "utf8");
+    // One dialog entry per exported function; each renders a single entity form.
+    const entries = dialogs.split(/^export function /m).slice(1);
+    const migrated = entries.flatMap((entry) => {
+      const form = /<(\w+Form)\b/.exec(entry)?.[1];
+      const file = [...sources].find(([, source]) => form && new RegExp(`export function ${form}\\b`).test(source));
+      return form && file && usesRefusal(file[1]) ? [{ form, entry }] : [];
+    });
+    expect(migrated.length, "no migrated picker dialog found; the scan is stale").toBeGreaterThan(0);
+    const legacy = migrated.filter(({ entry }) => !/onSubmit=\{formProps\.onSubmitWithRefusal\}/.test(entry)).map(({ form }) => form);
+    expect(legacy, "these migrated forms must take onSubmitWithRefusal in entity-edit-forms.tsx").toEqual([]);
   });
 });

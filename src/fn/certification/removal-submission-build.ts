@@ -1,3 +1,4 @@
+import { generatedEvidenceFacts, type GeneratedEvidenceFacts } from "./generated-evidence-facts";
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 export { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
@@ -60,7 +61,7 @@ import {
   productionClaimContribution,
 } from "./production-claim-policy";
 import { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
-import { normalizeEntryContributionsForHash, normalizeEntrySourceBindingForHash } from "./removal-entry-hash";
+import { normalizeCarriedEntriesForHash, normalizeEntryContributionsForHash, normalizeEntrySourceBindingForHash } from "./removal-entry-hash";
 import { planRemovalEvidence } from "./removal-evidence-plan";
 import { removalSubmissionBindingOptions, type PreparedRemovalSubmission } from "./removal-submission-prepare";
 
@@ -76,6 +77,7 @@ export interface RemovalSubmissionBuild {
   datapointSourceIds: string[];
   sourceBindingPlan: RemovalSourceBindingPlanEntry[];
   semanticPayload: Record<string, unknown>;
+  generatedEvidenceFacts?: GeneratedEvidenceFacts;
   templateObservationId?: string;
   frozenEntrySet?: { entryId: string; contentRevision: number }[];
   monitored: ResolvedMonitoredInput[];
@@ -173,6 +175,7 @@ export interface MaterializedRemovalSubmissionSnapshot {
     templateObservationId?: string;
     frozenEntrySet?: { entryId: string; contentRevision: number }[];
     semantic: Record<string, unknown>;
+    generatedEvidenceFacts?: GeneratedEvidenceFacts;
     memberCreditBatchIds: string[];
     sourceBindingPlan: RemovalSourceBindingPlanEntry[];
     transport: {
@@ -584,6 +587,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
     payloadSnapshot: {
       __mappingRevision: MAPPING_REVISION,
       semantic: compiled.semanticPayload,
+      generatedEvidenceFacts: compiled.generatedEvidenceFacts,
       ...(compiled.templateObservationId ? { templateObservationId: compiled.templateObservationId,
         frozenEntrySet: compiled.frozenEntrySet ?? [] } : {}),
       memberCreditBatchIds: compiled.memberCreditBatchIds,
@@ -809,10 +813,12 @@ export async function buildRemovalSubmissionBuild(args: {
       )
     : [];
 
+  const carriedEntriesForHash = normalizeCarriedEntriesForHash(ctx.removalEntryContext?.contributions.carriedEntries) ?? [];
   const semanticPayload = {
     removalId,
     mappingRevision: MAPPING_REVISION,
     ...(ctx.removalEntryContext ? { templateSemanticFingerprint: ctx.removalEntryContext.semanticFingerprint,
+      ...(carriedEntriesForHash.length > 0 ? { carriedEntries: carriedEntriesForHash } : {}),
       entryContributions: normalizeEntryContributionsForHash(ctx.removalEntryContext.contributions.manifest) } : {}),
     externalProjectId,
     templateId: removalTemplate.id,
@@ -871,6 +877,7 @@ export async function buildRemovalSubmissionBuild(args: {
     datapointSourceIds,
     sourceBindingPlan,
     semanticPayload,
+    generatedEvidenceFacts: generatedEvidenceFacts(ctx),
     templateObservationId: ctx.removalEntryContext?.observationId,
     frozenEntrySet: ctx.removalEntryContext?.contributions.entrySet,
     monitored,

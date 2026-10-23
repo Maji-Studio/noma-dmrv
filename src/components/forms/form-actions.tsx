@@ -68,7 +68,6 @@ interface FormActionsProps<
   submitVariant?: React.ComponentProps<typeof Button>["variant"];
   /** Extra classes for the submit button, for a label that must wrap on phones. */
   submitClassName?: string;
-  submittingLabel?: string;
   defaultSubmitLabel?: string;
   /** Context-specific label for the secondary action. */
   cancelLabel?: string;
@@ -111,7 +110,6 @@ export function FormActions<
   showSubmit = true,
   submitVariant = "primary",
   submitClassName,
-  submittingLabel = "Saving...",
   defaultSubmitLabel = "Save",
   cancelLabel = "Cancel",
   submitDisabled = false,
@@ -192,14 +190,19 @@ export function FormActions<
     )}
     {!block?.readOnly && (showSubmit || handleCancel || errorMessage) && <div
       ref={sticky ? reserveStickyFooterSpace : undefined}
+      // EntitySideSheet's fieldset stretches every ancestor of this marker so
+      // `mt-auto!` pins the row to the sheet bottom (SHEET_FORM_FILL).
+      data-sheet-footer={sticky ? "" : undefined}
       className={cn(
         "flex flex-col gap-16 border-t border-[var(--color-border-secondary)]",
         sticky
           // `mt-auto!` pins the footer to the bottom of a fill-height flex-column
-          // form on short forms (overriding the form's `space-y` margin); on
+          // form on short forms. A visible error box right before it takes the
+          // auto margin instead (`data-form-error-box`), so the error stays
+          // directly above Save. On
           // long forms there is no free space, so `sticky bottom-0` keeps the
           // action error and CTA in view while the body scrolls.
-          ? "sticky bottom-0 z-20 mt-auto! -mx-24 px-24 py-20 bg-[var(--color-background-white)]"
+          ? "sticky bottom-0 z-20 mt-auto! [[data-form-error-box]:not(:empty)+&]:mt-0! -mx-24 px-24 py-20 bg-[var(--color-background-white)]"
           : "pt-20"
       )}
     >
@@ -229,10 +232,11 @@ export function FormActions<
             if (submitType === "submit") skipNativeChecksUnlessUnparsed(event.currentTarget);
             onSubmitClick?.();
           }}
-          disabled={isSubmitting || submitDisabled || !!block}
+          busy={isSubmitting}
+          disabled={submitDisabled || !!block}
           aria-describedby={block ? blockedReasonId : undefined}
         >
-          {isSubmitting ? submittingLabel : submitLabel ?? defaultSubmitLabel}
+          {submitLabel ?? defaultSubmitLabel}
         </Button>}
         {handleCancel && (
           <Button type="button" variant="default" onClick={handleCancel} disabled={isSubmitting}>
@@ -246,7 +250,7 @@ export function FormActions<
 }
 
 /** What a lock refusal says at the top; the lock line below keeps the reason. */
-const TOP_REFUSAL_TITLE = "Your changes were not saved.";
+export const TOP_REFUSAL_TITLE = "Your changes were not saved.";
 
 /**
  * The refusal of a record that turned read-only. The Save button that held
@@ -285,7 +289,18 @@ function LockAwareTopRefusal<TFieldValues extends FieldValues, TContext, TTransf
   return <TopRefusalBox locked={locked} message={message} action={action} />;
 }
 
-function TopRefusalBox({ locked, message, action }: { locked: boolean; message: string; action?: React.ReactNode }) {
+export function TopRefusalBox({
+  locked,
+  message,
+  action,
+  lead,
+}: {
+  locked: boolean;
+  message: string;
+  action?: React.ReactNode;
+  /** A title for a form with no lock line of its own: `message` becomes the detail under it. */
+  lead?: string;
+}) {
   const boxRef = React.useRef<HTMLDivElement>(null);
   const textId = React.useId();
   // Sanctioned useEffect: focus and scroll are imperative DOM work.
@@ -294,7 +309,7 @@ function TopRefusalBox({ locked, message, action }: { locked: boolean; message: 
     box?.scrollIntoView?.({ block: "nearest" });
     box?.focus({ preventScroll: true });
   }, []);
-  const { title, detail } = locked ? { title: TOP_REFUSAL_TITLE, detail: null } : splitErrorMessage(message);
+  const { title, detail } = lead ? { title: lead, detail: message } : locked ? { title: TOP_REFUSAL_TITLE, detail: null } : splitErrorMessage(message);
   return (
     <div ref={boxRef} tabIndex={-1} role="group" aria-labelledby={textId} data-top-refusal="">
       <Notice tone="error" live={false} id={textId} title={title}>
@@ -318,7 +333,7 @@ function ScrolledServerError({ message, action }: { message?: string; action?: R
   }, [message]);
   if (!message) return null;
   return (
-    <div ref={boxRef}>
+    <div ref={boxRef} data-form-error-box="" className="mt-auto!">
       <ServerError message={message} action={action} />
     </div>
   );

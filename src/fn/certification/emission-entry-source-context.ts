@@ -15,7 +15,8 @@ export async function loadEntrySourceContributions(ctx: OrgContext, removalId: s
     [...new Set(scope.memberBatches.flatMap((batch) => batch.removalTemplateId ? [batch.removalTemplateId] : []))]);
   const facility = { templatesById: Object.fromEntries(observations.map((observation) =>
     [observation.externalTemplateId, { observation }])) };
-  const facts = await loadBatchEmissionContext(ctx, scope.facilityId, scope.memberBatches, facility);
+  // Source selection needs ownership, not advisory correction projections.
+  const facts = await loadBatchEmissionContext(ctx, scope.facilityId, scope.memberBatches, facility, { ownedRemovalId: scope.removalId ?? undefined });
   const latest = await getLatestSubmission(ctx, { provider: ISOMETRIC_PROVIDER,
     submissionType: REMOVAL_SUBMISSION_TYPE, localEntityType: REMOVAL_ENTITY_TYPE, localEntityId: removalId });
   return (await loadRemovalEntryContext(ctx, scope, facts, facility, frozenEntriesForAttempt(latest, facts)))?.contributions;

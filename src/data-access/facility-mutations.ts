@@ -14,6 +14,7 @@ import { assertRowVersion, nextVersion } from "./row-version";
 import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
 import { guardFacilityName } from "./unique-name-guards";
 import { requireOrgScope } from "./utils";
+import { reallocateRunsForFacility } from "./feedstock-run-allocations";
 import { resolveFacilityTimezoneEdit } from "./facility-timezone-guard";
 
 /** Entity key on a facility's expected-version conflict. */
@@ -61,8 +62,9 @@ async function lockFacilityRow(
   return locked;
 }
 
-export async function createFacility(
+export async function createFacilityInTransaction(
   ctx: OrgContext,
+  tx: DbTransaction,
   data: {
     code: string;
     name: string;
@@ -80,7 +82,7 @@ export async function createFacility(
   requireOrgScope(ctx);
 
   const [facility] = await guardFacilityName(ctx, data.name, () =>
-    db
+    tx
       .insert(facilities)
       .values({
         organizationId: ctx.organizationId,
@@ -104,7 +106,7 @@ export async function createFacility(
 
 async function updateFacilityRow(
   ctx: OrgContext,
-  executor: typeof db | DbTransaction,
+  executor: DbTransaction,
   facilityId: string,
   data: FacilityUpdateData,
 ): Promise<Facility> {
@@ -134,6 +136,8 @@ async function updateFacilityRow(
     ),
   );
   if (!updated) throw new SafeError("Facility not found");
+  // resolveFacilityTimezoneEdit returns undefined for unchanged zones/aliases.
+  if (data.timezone !== undefined) await reallocateRunsForFacility(ctx, executor, facilityId);
   return updated;
 }
 

@@ -21,6 +21,7 @@ import {
   type DetailPanelSection,
 } from "@/components/ui/detail-panel";
 import { SideSheetActionsContext } from "./side-sheet-context";
+import { SHEET_FORM_FILL } from "./sheet-form-fill";
 import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-block-context";
 import { RefusalSlotContext } from "@/components/ui/refusal-slot-context";
 
@@ -286,7 +287,7 @@ function EntitySideSheet({
                   <div className="flex flex-col gap-12 pb-20">{editNotice}</div>
                 ) : null}
                 {/* Always mounted, so turning read-only never remounts the form. */}
-                <fieldset disabled={!!editBlock?.readOnly} className="contents" data-submit-block-fieldset>{children}</fieldset>
+                <fieldset disabled={!!editBlock?.readOnly} className={SHEET_FORM_FILL} data-submit-block-fieldset>{children}</fieldset>
                </RefusalSlotContext.Provider>
               </SubmitBlockContext.Provider>
             </SideSheetActionsContext.Provider>
@@ -295,8 +296,8 @@ function EntitySideSheet({
 
         {/* A read-only edit form hides its own actions; the way back stays. */}
         {mode === "edit" && editBlock?.readOnly && (
-          <SlideOverPanel.Footer className="justify-stretch">
-            <Button variant="default" className="flex-1" onClick={backToView}>
+          <SlideOverPanel.Footer>
+            <Button variant="default" onClick={backToView} className="max-sm:flex-1">
               Back to view
             </Button>
           </SlideOverPanel.Footer>
@@ -348,5 +349,5 @@ function EntitySideSheetSections({
  * Export
  * -----------------------------------------------------------------------------------------------*/
 
-export { EntitySideSheet, EntitySideSheetSections };
+export { EntitySideSheet, EntitySideSheetSections, SHEET_FORM_FILL };
 export type { EntitySideSheetProps, SideSheetMode };

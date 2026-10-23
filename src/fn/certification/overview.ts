@@ -1,5 +1,7 @@
 "use server";
 
+import type { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
+
 
 import { correctionForRemoval, type RemovalCorrection } from "@/lib/certification/removal-entry-correction";
 import { getRemovalCodes } from "@/data-access/removal-codes";
@@ -154,11 +156,12 @@ async function buildRemovalPreflightSummary(
   orgCtx: Parameters<typeof resolveScopeForRemoval>[0],
   removalId: string,
   facilityFacts: Awaited<ReturnType<typeof loadFacilityCertifierFacts>>,
+  carryReads?: Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>,
 ): Promise<RemovalPreflightSummary> {
   const scope = await resolveScopeForRemoval(orgCtx, removalId);
   if (!scope.removal) throw new SafeError("Removal not found.");
   const [ctx, recentSyncEvents] = await Promise.all([
-    buildRemovalContext(orgCtx, scope, facilityFacts),
+    buildRemovalContext(orgCtx, scope, facilityFacts, { carryReads }),
     listRecentSyncEvents(orgCtx, {
       entityType: REMOVAL_ENTITY_TYPE,
       entityId: removalId,
@@ -258,13 +261,14 @@ export async function loadCertificationOverview(
 
     // Process in bounded chunks (order-preserving) rather than one unbounded
     // Promise.all over every removal — see READINESS_CONCURRENCY above.
+    const carryReads = new Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>();
     const removals: RemovalPreflightSummary[] = [];
     for (let i = 0; i < removalRows.length; i += READINESS_CONCURRENCY) {
       const summaries = await Promise.all(
         removalRows
           .slice(i, i + READINESS_CONCURRENCY)
           .map((removal) =>
-            buildRemovalPreflightSummary(orgCtx, removal.id, facilityFacts),
+            buildRemovalPreflightSummary(orgCtx, removal.id, facilityFacts, carryReads),
           ),
       );
       removals.push(...summaries);
@@ -279,7 +283,7 @@ export async function loadCertificationOverview(
       orgCtx,
       readyBatchIds,
       facilityFacts,
-      { unassignedOnly: true },
+      { unassignedOnly: true, carryReads },
     );
     const readyToStartBatchCount = readyBatchIds.filter((batchId) => {
       const health = deriveBatchHealth(

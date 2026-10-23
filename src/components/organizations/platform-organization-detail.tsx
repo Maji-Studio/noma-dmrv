@@ -1,12 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowRightIcon, CheckCircleIcon, CopyIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon, CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useToast } from "@/components/ui/toast";
 import { SETTINGS_MEMBERS_HREF } from "@/lib/settings/links";
+import { InvitationLinkNotice, type InvitationDelivery } from "./invitation-link-notice";
 import { OrganizationCertifierCredentials } from "./organization-certifier-credentials";
 import { PlatformOrganizationApiAccess } from "./platform-organization-api-access";
 import { adminsLabel, membersLabel, type PlatformOrganization } from "./platform-organization-rows";
@@ -19,7 +18,7 @@ interface PlatformOrganizationDetailProps {
   switching: "switch" | "members" | "other" | null;
   onSwitch: (landingHref?: string) => void;
   /** The invitation link for a first Admin who had no account, right after create. */
-  invitation: { email: string; acceptUrl: string } | null;
+  invitation: InvitationDelivery | null;
 }
 
 /**
@@ -52,12 +51,12 @@ export function PlatformOrganizationDetail({ organization, current, switching, o
             disabled={anySwitching && switching !== "switch"}
             onClick={() => onSwitch()}
           >
-            {switching === "switch" ? "Switching…" : `Switch to ${name}`}
+            Switch to {name}
           </Button>
         )}
       </header>
 
-      {invitation && <FirstAdminInvitation invitation={invitation} />}
+      {invitation && <div className="border-b border-[var(--color-border-secondary)] p-24"><InvitationLinkNotice key={invitation.acceptUrl} invitation={invitation} /></div>}
 
       <section aria-labelledby={`org-keys-${id}`} className="flex flex-col gap-12 border-b border-[var(--color-border-secondary)] p-24">
         <div className="flex flex-wrap items-center justify-between gap-12">
@@ -104,37 +103,3 @@ export function PlatformOrganizationDetail({ organization, current, switching, o
   );
 }
 
-function FirstAdminInvitation({ invitation }: { invitation: { email: string; acceptUrl: string } }) {
-  const toast = useToast();
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(invitation.acceptUrl);
-      setCopied(true);
-      toast.success("Invitation link copied.");
-    } catch {
-      toast.error("The invitation link was not copied. Select and copy it manually.");
-    }
-  }
-
-  return (
-    <div className="border-b border-[var(--color-border-secondary)] p-24">
-      <Notice tone="success" title={`${invitation.email} has no account yet`}>
-        Send them this link to join as Admin.
-        <div className="mt-8 flex items-center gap-8">
-          <input
-            readOnly
-            aria-label="Invitation link"
-            value={invitation.acceptUrl}
-            onFocus={(event) => event.currentTarget.select()}
-            className="body-caption min-w-0 flex-1 border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] px-8 py-6 font-mono"
-          />
-          <Button type="button" variant="weak" size="small" onClick={copy}>
-            <CopyIcon size={14} aria-hidden /> {copied ? "Copied" : "Copy"}
-          </Button>
-        </div>
-      </Notice>
-    </div>
-  );
-}

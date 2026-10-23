@@ -250,7 +250,8 @@ export function FormErrorSummary<
       <div
         ref={boxRef}
         tabIndex={-1}
-        className="empty:hidden"
+        data-form-error-box=""
+        className="mt-auto! empty:hidden"
         // Focus reads a named group (the count, then the reason and the fields);
         // the message-only box is an alert already. A label that held the field
         // names would also match the fields' own label lookups.

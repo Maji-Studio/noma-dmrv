@@ -290,10 +290,11 @@ interface SlideOverPanelBodyProps
   /** Remove bottom padding so sticky/flush footers inside have no gap */
   noPaddingBottom?: boolean;
   /**
-   * Stretch the single child (a form root) to fill the body height so its
-   * `mt-auto` CTA row is pinned to the bottom even when the form is short.
-   * The child still grows past the viewport on long forms — the body scrolls
-   * and the sticky footer keeps the CTA in view. Used by edit/create forms.
+   * Make the body a flex column so its one filling child (EntitySideSheet's
+   * fieldset, or a bin sheet's wrapper) can take `flex-1` and pin a `mt-auto`
+   * CTA row to the bottom even when the form is short. The child still grows
+   * past the viewport on long forms: the body scrolls and the sticky footer
+   * keeps the CTA in view. The child opts in with its own `flex-1`.
    */
   fillHeight?: boolean;
 }
@@ -309,9 +310,7 @@ const Body = React.forwardRef<HTMLDivElement, SlideOverPanelBodyProps>(
         className={cn(
           "flex-1 overflow-y-auto",
           noPaddingBottom ? "p-24 pb-0" : "p-24",
-          // Form-root child fills the body as a flex column so FormActions'
-          // `mt-auto` can pin the CTA row to the bottom on short forms.
-          fillHeight && "flex flex-col [&>*]:flex [&>*]:flex-1 [&>*]:flex-col",
+          fillHeight && "flex flex-col",
           className
         )}
       >

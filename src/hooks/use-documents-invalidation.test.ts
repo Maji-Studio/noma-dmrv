@@ -2,12 +2,28 @@ import type { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { certificationKeys } from "./use-certification";
 import { productionRunKeys } from "./use-production-runs";
+import { sampleKeys } from "./use-samples";
 import {
   invalidateDeletedDocumentOwner,
   invalidateDocumentOwner,
 } from "./use-documents";
 
 describe("invalidateDeletedDocumentOwner", () => {
+  it.each(["upload", "delete"])("refreshes Sample list and submission readiness after %s", async (mutation) => {
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    const queryClient = { invalidateQueries } as unknown as QueryClient;
+    const owner = { entityType: "sample", entityId: "sample-1" } as const;
+
+    if (mutation === "upload") {
+      await invalidateDocumentOwner(queryClient, owner);
+    } else {
+      await invalidateDeletedDocumentOwner(queryClient, owner);
+    }
+
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: sampleKeys.lists() });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: certificationKeys.all });
+  });
+
   it.each(["sample", "credit_batch"] as const)("refreshes readiness after deleting %s evidence", (entityType) => {
     const invalidateQueries = vi.fn();
     invalidateDeletedDocumentOwner({ invalidateQueries } as unknown as QueryClient, { entityType, entityId: "record-1" });

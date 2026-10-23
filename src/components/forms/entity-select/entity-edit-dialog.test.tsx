@@ -3,12 +3,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ActionError } from "@/lib/action-error";
 import { EntityEditDialog } from "./entity-edit-dialog";
 import type { EditableEntityType } from "@/hooks/use-entity-edit-record";
 
 const mocks = vi.hoisted(() => ({
   query: { data: undefined as unknown, isFetchedAfterMount: false, isFetching: true, isSuccess: false, isError: false, refetch: vi.fn() },
-  load: vi.fn(), update: vi.fn(), toast: vi.fn(), restore: vi.fn(), restoreSupplier: vi.fn(), restoreCustomer: vi.fn(), success: vi.fn(),
+  load: vi.fn(), update: vi.fn(), toast: vi.fn(), restore: vi.fn(), restoreSupplier: vi.fn(), restoreCustomer: vi.fn(), success: vi.fn(), refusal: vi.fn(),
 }));
 vi.mock("@/hooks/use-entity-edit-record", () => ({ useEntityEditRecord: (...args: unknown[]) => { mocks.load(...args); return mocks.query; } }));
 vi.mock("@/hooks/use-record-locks", async () => (await import("../../../../tests/helpers/record-lock-mocks")).openRecordLocksModule);
@@ -31,14 +32,14 @@ vi.mock("@/hooks/use-formulations", () => ({
 vi.mock("@/hooks/use-feedstock-types", () => ({ useUpdateFeedstockType: () => ({ mutateAsync: mocks.update, isPending: false }) }));
 
 interface FormProps {
-  onSubmit: (data: { name: string }) => void;
+  onSubmit: (data: { name: string }, onRefusal: (error: unknown, fallback: string) => string | null) => void;
   errorMessage?: string;
   customer?: { name: string }; reactor?: { name: string }; order?: { name: string };
   supplier?: { name: string }; formulation?: { name: string }; feedstockType?: { name: string };
 }
 function EditForm(props: FormProps) {
   const record = props.customer ?? props.reactor ?? props.order ?? props.supplier ?? props.formulation ?? props.feedstockType;
-  return <form aria-label="Edit form" onSubmit={(event) => { event.preventDefault(); props.onSubmit({ name: "Renamed" }); }}>
+  return <form aria-label="Edit form" onSubmit={(event) => { event.preventDefault(); props.onSubmit({ name: "Renamed" }, mocks.refusal); }}>
     <span>{record?.name}</span>{props.errorMessage && <p role="alert">{props.errorMessage}</p>}<button type="submit">Save changes</button>
   </form>;
 }
@@ -66,6 +67,7 @@ function loaded() { Object.assign(mocks.query, { data: record, isFetchedAfterMou
 afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks(); mocks.update.mockResolvedValue(record);
+  mocks.refusal.mockImplementation((_error: unknown, fallback: string) => fallback);
   Object.assign(mocks.query, { data: undefined, isFetchedAfterMount: false, isFetching: true, isSuccess: false, isError: false });
 });
 
@@ -162,6 +164,44 @@ describe("EntityEditDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(close).toHaveBeenCalledOnce());
     expect(mocks.update).toHaveBeenLastCalledWith(expect.objectContaining({ expectedVersion: 7 }));
+  });
+  it("hands the order form's refusal handler the ActionError the save threw, with the dialog's fallback", async () => {
+    loaded();
+    const refusal = new ActionError({ error: "Quantity is too high.", code: "validation_failed", issues: [{ path: ["quantityKg"], code: "validation_failed", message: "Quantity is too high." }] });
+    mocks.update.mockRejectedValueOnce(refusal);
+    // Every reason sits at a field, so the handler leaves nothing for the footer.
+    mocks.refusal.mockReturnValueOnce(null);
+    const close = vi.fn();
+    render(dialog("order", true, close));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(mocks.refusal).toHaveBeenCalledOnce());
+    expect(mocks.refusal.mock.calls[0][0]).toBe(refusal);
+    expect(mocks.refusal.mock.calls[0][1]).toBe("Quantity is too high.");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(close).not.toHaveBeenCalled();
+  });
+  it("shows the footer the order form's handler returns for the rest of a refusal", async () => {
+    loaded();
+    mocks.update.mockRejectedValueOnce(new ActionError({ error: "Held.", code: "certification_locked" }));
+    mocks.refusal.mockReturnValueOnce("Your changes were not saved.");
+    render(dialog("order"));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Your changes were not saved.");
+  });
+  it("does not hand a legacy dialog's form the refusal handler, so its message line stays", async () => {
+    loaded();
+    mocks.update.mockRejectedValueOnce(new ActionError({ error: "Held.", code: "certification_locked" }));
+    render(dialog("reactor"));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Held.");
+    expect(mocks.refusal).not.toHaveBeenCalled();
+  });
+  it("keeps the plain fallback for a thrown error that is not an ActionError", async () => {
+    loaded();
+    mocks.update.mockRejectedValueOnce("offline");
+    render(dialog("order"));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("The record was not saved. Try again.");
   });
   it("discards the closed session and ignores a load that finishes after close", () => {
     const view = render(dialog("storageLocation"));

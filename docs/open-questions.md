@@ -60,6 +60,7 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
 
 ## Late production runs after submission (`credit-batches/late-runs`) - **parked**
 
+- The batch now shows a Check to-do to record each excluded run's diesel and power as manual entries dated on the later of the run's start day and the batch's first day; crediting remains parked.
 - `src/data-access/credit-batch-membership.ts:assertNoOverlappingCreditBatchCohort`
   keeps one credit batch per facility and feedstock for any day. Since PR 5
   (Kenji, 2026-10-22), a run completed while its batch's Removal is a draft or
@@ -91,6 +92,15 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
 - `src/data-access/output-stock-history.ts:getOutputStockHistory`: batch the
   per-entry correction-dependency reads so opening history does not repeatedly
   fetch later movements from the same bin.
+
+## Account suspension across organizations (#1391 section 4) - **deferred**
+
+- Decided 2026-10-22: defer until after the first production deployment.
+  `src/db/schema/auth.ts:users` has no suspend field today, so an Admin can only
+  remove a member from one organization at a time.
+- Options to weigh later: a `users.suspended` flag checked where
+  `src/lib/auth/better-auth.ts` creates a session (`databaseHooks.session`), or
+  removing all of the user's memberships in one action.
 
 ## Activity recording gaps (`activity/deferred-writers`) - **deferred**
 
@@ -631,29 +641,12 @@ before allowing confirmation to convert stored entry values to the new unit.
   - Delivery sub-bin readings and selections (P1/P2 moisture) are not reset, and `draw.changed` stays true.
   - Application manual position and GIS boundary are not RHF-registered, so `resetField` cannot restore them.
   - Feedstock: a supplier change plus a lock refusal restores the supplier, then clears the restored override.
-  - Unmigrated forms keep typed values after a Sent refusal.
-- Delivery update posting refusals at `occurredAt` and `wetMassKg` show in the footer and need aliases (follow-up PR).
+  - Forms not yet migrated keep typed values after a Sent refusal.
+  - A Sent production run keeps typed values too: its lineage guard in
+    `src/data-access/production-runs/mutations.ts` is not wrapped in `withLockedFieldIssues`.
 - Registered customer locations have no lock-read kind; their refusal-specific
   disabling belongs to the customer forms migration.
 
-## Creates without a retry key (#1302) - **deferred**
+## Stale versions on delete dialogs - **deferred**
 
-- Five creates still run without `withCreate`: `createStorageLocationFn`
-  (storage-locations); `createFacilityFn`; `createReactorFn`; `createFeedstockTypeFn`
-  (feedstock-types); `startNewProductionProcessFn`. These remain for the settings
-  create (#1302).
-  Each needs a writer that takes `tx` plus an app-only runner operation, so the key
-  and the record of the save commit together. They sit in the PENDING table of
-  `src/fn/create-action-coverage.test.ts` until then (#1302).
-
-## In-use delete refusals on the remaining lists - **deferred**
-
-- The rule: an "in use" delete refusal opens `InUseDeleteDialog` (`src/components/ui/in-use-delete-dialog.tsx`), with no Delete button and "Archive instead" where archiving exists. Customers, suppliers, formulations and feedstock types already follow it: their data-access deletes throw `inUseDeleteRefusal(...)` and the callers branch on `isInUseDeleteRefusal` (`src/lib/delete-refusal.ts`), as `customer-list.tsx` does.
-- The lists below show the refusal reason inside `DeleteConfirmDialog` (#1395), but the dialog keeps an active Delete that fails again, because the server refusal is untagged. Grep-checked refusals that are really "in use":
-  - `src/data-access/feedstocks.ts:deleteFeedstockInTransaction` (feedstock used in production runs, `certification_locked`), caller `feedstock-list`.
-  - `src/data-access/reactors.ts:deleteReactor` (reactor with production runs, plain `SafeError`), caller `reactor-list`.
-  - `src/data-access/production-runs/delete.ts:deleteProductionRunInTransaction` (dependent biochar products or credit batches, `ProductionRunDependencyError`), caller `production-run-list`.
-  - `src/lib/order-domain-errors.ts:orderHasDeliveries` (raised from `src/data-access/orders.ts:deleteOrderInTransaction`), caller `order-list`.
-- Not in-use refusals, so they stay in `DeleteConfirmDialog`: `biochar-product-delete.ts:deleteBiocharProductInTransaction` and the stock-history branch of `production-runs/delete.ts:deleteProductionRunInTransaction` (certification lock or stock history, already `certification_locked` with record-lock guidance), `document-mutations.ts:deleteDocumentInTransaction` (certification-owned documents). `deleteApplicationInTransaction` and `deleteTransportLeg` have no in-use refusal.
-- Fix: tag each real one with `inUseDeleteRefusal(...)`, then switch its caller to `InUseDeleteDialog` like `customer-list.tsx`. Reword the advice at that point: "Remove production run associations first" and "Remove the production runs first" should say what the operator can do instead, and offer Archive where the record can be archived.
-- Stale versions: `application-list`, `order-list`, `transport-legs-editor` and the document panels keep the dialog open on a stale version, so Delete retries the same saved version and fails again; `sample-list` closes the dialog instead. Unify when the in-use follow-up lands.
+- Stale versions: `application-list`, `order-list`, `transport-legs-editor` and the document panels keep the dialog open on a stale version, so Delete retries the same saved version and fails again; `sample-list` closes the dialog instead. Unify them.

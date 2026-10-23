@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import type { ModalWidth } from "@/components/ui/modal";
 import { useOpenSnapshot } from "@/hooks/use-open-snapshot";
 import { usePickerEditSubmit } from "@/hooks/use-picker-edit-submit";
@@ -44,7 +45,15 @@ interface PickerEditFormDialogProps<R extends { id: string }, D> {
   width?: ModalWidth;
   renderForm: (record: R, props: {
     key: string;
+    /**
+     * For forms that still show a message line. It drops the form's refusal
+     * handler, though a form typed `(data, onRefusal)` still accepts it. A form
+     * migrated to the shared save refusal must take `onSubmitWithRefusal`, or it
+     * silently loses field routing.
+     */
     onSubmit: (data: D) => Promise<void>;
+    /** For forms on the shared save refusal: hands the form's handler to the save. */
+    onSubmitWithRefusal: (data: D, onRefusal: SaveRefusalHandler) => Promise<void>;
     onCancel: () => void;
     isSubmitting: boolean;
     errorMessage?: string;
@@ -64,7 +73,7 @@ function PickerEditFormDialog<R extends { id: string }, D>({
     <QuickAddDialogShell isOpen={isOpen} onClose={onClose} onOpen={resetError}
       title={title} testId={testId} dismissible={!isPending} width={width}>
       {renderForm(record, {
-        key: sessionKey, onSubmit: handleSubmit, onCancel: onClose,
+        key: sessionKey, onSubmit: (data) => handleSubmit(data), onSubmitWithRefusal: handleSubmit, onCancel: onClose,
         isSubmitting: isPending, errorMessage: error, submitLabel: "Save changes",
       })}
     </QuickAddDialogShell>
@@ -76,7 +85,7 @@ export function CustomerEditFormDialog(props: EditProps<"customer">) {
   return <PickerEditFormDialog {...props} title="Edit customer" testId="customer-edit-dialog"
     isPending={update.isPending}
     save={(data: CustomerFormData, record) => update.mutateAsync({ ...data, customerId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <CustomerForm key={key} {...formProps} customer={record} customerId={record.id} />} />;
+    renderForm={(record, { key, ...formProps }) => <CustomerForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} customer={record} customerId={record.id} />} />;
 }
 
 export function ReactorEditFormDialog(props: EditProps<"reactor">) {
@@ -96,7 +105,7 @@ export function OrderEditFormDialog(props: EditProps<"order">) {
     save={(data: OrderFormData, record) => update.mutateAsync({ ...data, orderId: record.id, expectedVersion: record.version })}
     renderForm={(record, { key, ...formProps }) => (
       <RecordLockFormFrame lock={lock} status={status} retry={retry} retrying={retrying}>
-        <OrderForm key={key} {...formProps} order={record} lock={lock} />
+        <OrderForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} order={record} lock={lock} />
       </RecordLockFormFrame>
     )} />;
 }
@@ -106,7 +115,7 @@ export function SupplierEditFormDialog(props: EditProps<"supplier">) {
   return <PickerEditFormDialog {...props} title="Edit supplier" testId="supplier-edit-dialog"
     isPending={update.isPending}
     save={(data: SupplierFormData, record) => update.mutateAsync({ ...data, supplierId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <SupplierForm key={key} {...formProps} supplier={record} supplierId={record.id} />} />;
+    renderForm={(record, { key, ...formProps }) => <SupplierForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} supplier={record} supplierId={record.id} />} />;
 }
 
 export function FormulationEditFormDialog(props: EditProps<"formulation">) {

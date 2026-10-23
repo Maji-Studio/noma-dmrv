@@ -1,3 +1,5 @@
+import { withIntakeAllocationIssues } from "@/lib/feedstock-allocation-errors";
+import { reallocateRunsForBins } from "./feedstock-run-allocations";
 import { readRecordDependents } from "./record-lock-dependents";
 import { assertRecordLockFields, withLockedFieldIssues } from "@/lib/record-lock-fields";
 import { recordLocks } from "@/lib/record-lock";
@@ -44,6 +46,7 @@ import {
 import { resolveDistanceSource, type DistanceSourceValue } from "@/schemas/distance-source";
 import { SafeError } from "@/lib/errors";
 import { DomainError } from "@/lib/domain-errors";
+import { IN_USE_DELETE_MARKER, inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 import { retireDocumentsForEntities } from "./documents";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
@@ -594,6 +597,8 @@ export async function createFeedstockInTransaction(
     },
   );
 
+  await withIntakeAllocationIssues(() => reallocateRunsForBins(ctx, tx, binIds, { earliestDeliveryDate: data.deliveryDate }), {}, data);
+
   // Generate warning if allocated wet mass > total delivery wet mass
   let warning: string | null = null;
   if (allocationsExceedDelivery) {
@@ -687,18 +692,20 @@ export async function updateFeedstockInTransaction(
 
   // Compare operation names, including overrides stripped from feedstockData.
   // Zero distance and an empty note both mean clearing the saved override.
-  await withLockedFieldIssues(() => withFeedstockErrors(() => assertCanMutateCertifiedLineage(
-    ctx, tx, { entityType: "feedstock", entityId: feedstockId }, "update",
-  ), "certification_locked"), {
+  const previousFields = {
     ...locked,
     transportDistanceKm: locked.distanceKmOverride,
     transportDistanceSource: locked.distanceKmOverride == null ? null : locked.distanceSource,
-  }, {
+  };
+  const changedFields = {
     ...data,
     transportDistanceKm: distanceColumns.distanceKmOverride,
     transportDistanceSource: distanceColumns.distanceSource,
     distanceNote: distanceColumns.distanceNote,
-  });
+  };
+  await withLockedFieldIssues(() => withFeedstockErrors(() => assertCanMutateCertifiedLineage(
+    ctx, tx, { entityType: "feedstock", entityId: feedstockId }, "update",
+  ), "certification_locked"), previousFields, changedFields);
 
   assertRecordLockFields(recordLocks.feedstock({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "feedstock", entityId: feedstockId }) }), locked, feedstockData);
   if (transportDistanceKm === undefined && transportDistanceSource != null
@@ -732,7 +739,10 @@ export async function updateFeedstockInTransaction(
     (feedstockData.storageLocationId !== undefined &&
       feedstockData.storageLocationId !== locked.storageLocationId);
 
-  if (stockDerivationChanged || storageReferenceNeedsValidation) {
+  const allocationChanged = stockDerivationChanged ||
+    (feedstockData.deliveryDate !== undefined && feedstockData.deliveryDate.getTime() !== locked.deliveryDate.getTime());
+
+  if (allocationChanged || storageReferenceNeedsValidation) {
     await lockBinStocks(ctx, tx, [
       locked.storageLocationId,
       effectiveStorageLocationId,
@@ -776,6 +786,13 @@ export async function updateFeedstockInTransaction(
     );
   }
 
+  if (allocationChanged) {
+    const earliestDeliveryDate = new Date(Math.min(locked.deliveryDate.getTime(), saved.deliveryDate.getTime()));
+    await withIntakeAllocationIssues(() => reallocateRunsForBins(
+      ctx, tx, [locked.storageLocationId, effectiveStorageLocationId], { earliestDeliveryDate },
+    ), previousFields, changedFields);
+  }
+
   await syncFeedstockTransportLeg(ctx, tx, feedstockId, {
     refreshFromLocation: (transportDistanceKm !== undefined && locked.distanceKmOverride != null && distanceColumns.distanceKmOverride === null) || routeAnchorChanged,
   });
@@ -804,6 +821,7 @@ export async function deleteFeedstockInTransaction(
   const [locked] = await tx
     .select({
       id: feedstocks.id,
+      code: feedstocks.code,
       facilityId: feedstocks.facilityId,
       version: feedstocks.version,
       status: feedstocks.status,
@@ -842,8 +860,10 @@ export async function deleteFeedstockInTransaction(
     .where(and(eq(productionRunFeedstocks.feedstockId, feedstockId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
 
   if (Number(usageCount.count) > 0) {
-    throw new DomainError("certification_locked",
-      "Cannot delete feedstock that is used in production runs. Remove production run associations first."
+    throw inUseDeleteRefusal(
+      `Feedstock ${locked.code} ${IN_USE_DELETE_MARKER} production runs still use it. Keep this feedstock.`,
+      ["feedstockId"],
+      { code: "certification_locked" },
     );
   }
 

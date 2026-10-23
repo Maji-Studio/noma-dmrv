@@ -59,11 +59,14 @@ describe("EntitySideSheet record lock in edit mode", () => {
     expect(text()).toContain("Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026.");
     expect(buttonsNamed("Save changes")).toHaveLength(0);
     expect(buttonsNamed("Back to view")).toHaveLength(1);
+    expect(buttonsNamed("Back to view")[0].props.className).toContain("max-sm:flex-1");
   });
 
   it("explains a pending check above Save, which stays off, and leaves fields to the form", () => {
     act(() => { renderer = renderSheet(PENDING); });
     expect(renderer.root.findByType("fieldset").props.disabled).toBe(false);
+    // The fieldset is a flex item of the body: min-w-0 stops its min-content width from widening the sheet past a phone.
+    expect(renderer.root.findByType("fieldset").props.className).toContain("min-w-0");
     const [save] = buttonsNamed("Save changes");
     expect(save.props.disabled).toBe(true);
     const [reason] = renderer.root.findAll((node) => node.type === "div" && node.props.id === save.props["aria-describedby"]);

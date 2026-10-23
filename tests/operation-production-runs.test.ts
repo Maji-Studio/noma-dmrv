@@ -22,7 +22,7 @@ let outputBinId: string;
 let fixture: Awaited<ReturnType<typeof createProductionRunFixture>>;
 const input = () => ({
   facilityId: fixture.facilityId, reactorId: fixture.reactorId,
-  startTime: new Date("2026-01-01T10:00:00Z"),
+  startTime: new Date("2026-10-07T10:00:00Z"),
   endTime: null,
   feedstockDraws: [{ storageLocationId: fixture.binId, wetMassKg: DRAW_KG }],
 });
@@ -85,7 +85,7 @@ describe("production operations at pool size one", { timeout: SUITE_TIMEOUT_MS }
 
   it("reports source wet/dry loss and completed output dry gain before rollback", async () => {
     const result = await runOperation(startProductionRun, fixture.ctx, {
-      ...input(), status: "complete", endTime: new Date("2026-01-01T11:00:00Z"), biocharStorageLocationId: outputBinId,
+      ...input(), status: "complete", endTime: new Date("2026-10-07T11:00:00Z"), biocharStorageLocationId: outputBinId,
       biocharOutputKg: OUTPUT_KG, biocharMoisturePercent: OUTPUT_MOISTURE, feedstockMoisturePercent: 32.5,
     }, { dryRun: true });
     expect(result.stockEffects).toHaveLength(2);

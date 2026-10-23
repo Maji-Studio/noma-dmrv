@@ -1,7 +1,9 @@
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, lt } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { feedstocks } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { addDaysIso } from "@/lib/date-utils";
+import { formatMassKg } from "@/lib/format-utils";
 import { SafeError } from "@/lib/errors";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
 import { deriveLaneStock } from "./lane-stock-derivation";
@@ -13,7 +15,7 @@ type FeedstockStockReader = Pick<typeof db, "select">;
 
 const MASS_PRECISION_FACTOR = 1_000;
 const EMPTY_FEEDSTOCK_BIN_MESSAGE =
-  "Selected feedstock bin has no complete feedstock batches with wet mass";
+  "This bin has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.";
 
 export interface FeedstockWetAllocation {
   feedstockId: string;
@@ -84,6 +86,7 @@ export async function allocateFeedstockWetMass(
   executor: FeedstockStockReader,
   storageLocationId: string,
   totalWetMassKg: number,
+  cutoffDay: string,
 ): Promise<FeedstockWetAllocation[]> {
   requireOrgScope(ctx);
   const batches = await executor
@@ -98,6 +101,8 @@ export async function allocateFeedstockWetMass(
         eq(feedstocks.organizationId, ctx.organizationId),
         eq(feedstocks.status, "complete"),
         gt(feedstocks.massWetKg, 0),
+        // Delivery timestamps encode calendar dates, not facility instants.
+        lt(feedstocks.deliveryDate, new Date(`${addDaysIso(cutoffDay, 1)}T00:00:00Z`)),
       ),
     )
     .orderBy(asc(feedstocks.id));
@@ -111,6 +116,14 @@ export async function allocateFeedstockWetMass(
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
   if (totalWeight === 0) {
     throw new StockOverdrawError(EMPTY_FEEDSTOCK_BIN_MESSAGE, { storageLocationId, availableWetKg: 0, requestedWetKg: totalWetMassKg });
+  }
+
+  const availableWetKg = totalWeight / MASS_PRECISION_FACTOR;
+  if (totalUnits > totalWeight) {
+    throw new StockOverdrawError(
+      `By the run's start day this bin had received ${formatMassKg(availableWetKg)}, less than the ${formatMassKg(totalWetMassKg)} drawn. Lower the draw or move the run's start.`,
+      { storageLocationId, availableWetKg, requestedWetKg: totalWetMassKg },
+    );
   }
 
   let allocatedUnits = 0;

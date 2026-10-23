@@ -1,4 +1,5 @@
-import type { EntryContender } from "@/lib/certification/removal-emission-contributions";
+import { REMOVAL_MEMBERSHIP_STATUSES } from "@/lib/certification/removal-membership";
+import { coversBatches, type CoveredContenders } from "@/lib/certification/covered-contenders";
 import { getEffectiveReportingPeriodEndOn } from "./certifier-ghg-statements";
 import { and, desc, eq, isNotNull, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -6,21 +7,18 @@ import { certificationSubmissions, certifierRemovals, certifierGhgStatements } f
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 import { listEmissionEntryDraftContenders } from "./emission-entry-contenders";
-import { getLatestTemplateObservation } from "./removal-template-observations";
 import { getCreditBatchesByRemovalId } from "./certifier-removals";
 
 /** Advisory state only. Mutation authorization comes from the locked lineage loader. */
-export async function loadRemovalCorrectionFacts(ctx: OrgContext, removalId: string, suppliedContenders?: EntryContender[]) {
+export async function loadRemovalCorrectionFacts(ctx: OrgContext, removalId: string, coveredContenders?: CoveredContenders) {
   requireOrgScope(ctx);
   const submitted = await getSentRemovalForComparison(ctx, removalId);
   if (!submitted) return null;
   const batches = await getCreditBatchesByRemovalId(ctx, removalId);
   const ids = batches.map((batch) => batch.id);
-  const contenders = suppliedContenders ?? await listEmissionEntryDraftContenders(ctx, ids);
+  const contenders = coversBatches(coveredContenders, ids) ? coveredContenders.contenders : await listEmissionEntryDraftContenders(ctx, ids);
   const correction = contenders.find((item) => item.removalId === removalId && item.contenderKind === "correction");
   if (!correction) return null;
-  const pin = batches[0]?.removalTemplateId;
-  const observation = pin ? await getLatestTemplateObservation(ctx, "isometric", pin) : null;
   if (!correction.returnedStatement) return null;
   const [identity] = await db.select({ code: certifierRemovals.code,
     reportingPeriodStartOn: certifierGhgStatements.reportingPeriodStartOn,
@@ -31,7 +29,7 @@ export async function loadRemovalCorrectionFacts(ctx: OrgContext, removalId: str
       eq(certifierGhgStatements.id, correction.returnedStatement.id)))
     .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, removalId)));
   if (!identity) return null;
-  return { submitted, batches, contenders, correction, observation, identity: {
+  return { submitted, batches, coveredContenders: { contenders, batchIds: ids }, correction, identity: {
     ...identity, reportingPeriodEndOn: getEffectiveReportingPeriodEndOn(identity),
   } };
 }
@@ -62,7 +60,7 @@ export async function getSentRemovalForComparison(ctx: OrgContext, removalId: st
   return submitted ?? null;
 }
 
-/** Use the same ledger identities and statuses as reconcileStatementRemovals. */
+/** Use the same ledger identities and statuses as reconcileRemovalMembership. */
 export async function listNomaSentRemovalsForRemoteEntries(ctx: OrgContext, statementId: string, externalIds: readonly string[]) {
   requireOrgScope(ctx);
   if (!externalIds.length) return [];
@@ -75,6 +73,6 @@ export async function listNomaSentRemovalsForRemoteEntries(ctx: OrgContext, stat
     .where(and(eq(certificationSubmissions.organizationId, ctx.organizationId),
       eq(certificationSubmissions.provider, "isometric"), eq(certificationSubmissions.submissionType, "removal"),
       eq(certificationSubmissions.localEntityType, "removal"),
-      inArray(certificationSubmissions.status, ["submitted", "accepted", "superseded"]),
+      inArray(certificationSubmissions.status, REMOVAL_MEMBERSHIP_STATUSES),
       inArray(certificationSubmissions.externalId, [...externalIds])));
 }

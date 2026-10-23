@@ -56,6 +56,7 @@ const PRE_637_FIELD_SOURCES: Record<string, string[]> = {
   // #1021: the biochar leg loads each Removal's frozen application slice, not the delivery mass.
   "application.biocharAppliedTons": ["biocharTransportMassDistanceTonneKm"],
   "customerLocation.facilityDistances": ["biocharTransportMassDistanceTonneKm"],
+  "delivery.effectiveDistanceKm": ["biocharTransportMassDistanceTonneKm"],
   "supplierLocation.facilityDistances": ["feedstockTransportMassDistanceTonneKm"],
 };
 
@@ -113,6 +114,7 @@ const RESOLVED_FIELD_TUPLES: Record<string, string[]> = {
   "transportLeg.loadMassKg": TRANSPORT_TUPLES,
   "application.biocharAppliedTons": [BIOCHAR_MASS_DISTANCE],
   "customerLocation.facilityDistances": [BIOCHAR_MASS_DISTANCE],
+  "delivery.effectiveDistanceKm": [BIOCHAR_MASS_DISTANCE],
   "supplierLocation.facilityDistances": [FEEDSTOCK_MASS_DISTANCE],
 };
 

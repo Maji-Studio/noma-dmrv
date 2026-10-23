@@ -1,5 +1,6 @@
 /** DB-backed claim/freshness/reservation regression. Registry I/O uses the orchestrator harness. */
 import { makeContext, makeTemplate, fakeExternalIds, makeInventorySourceDocument } from "./fixtures/submit-removal-orchestrator";
+import { loadRemovalEntryCorrection } from "@/fn/certification/removal-correction-core";
 import { afterEach, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -114,7 +115,7 @@ it.each([false, true])("submits a returned Removal through claim and freshness, 
   vi.mocked(context.resolveScopeForRemoval).mockResolvedValue({ memberBatches: [] } as unknown as RemovalScope);
   vi.mocked(context.loadRemovalSubmissionContext).mockImplementation(async (_org, _id, options) => {
     const facts = await loadBatchEmissionContext(org, f.facilityId, scope.memberBatches, facilityFacts,
-      { removalId: f.removalId, submissionId: options?.claimedSubmissionId });
+      { claimedAttempt: { removalId: f.removalId, submissionId: options?.claimedSubmissionId }, loadCorrection: loadRemovalEntryCorrection });
     const entries = await loadRemovalEntryContext(org, scope, facts, facilityFacts);
     const result = makeContext(undefined, { facilityId: f.facilityId, removalId: f.removalId, removalTemplate: template, lineSources,
       latestSubmission: null, memberBatchClaims: [], batchesWithSamples, removalEntryContext: entries });

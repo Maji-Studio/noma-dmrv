@@ -18,7 +18,7 @@ import { useId, useState } from "react";
 
 import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
 import { outputDrawCreditBatchPreview } from "@/components/credit-batches/record-credit-batch-preview-input";
-import { FormActions, FormEntitySelect, FormField, FormSection, FormSpine, makeCertFieldStatus, MoistureField, FieldErrorRow, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
+import { FormActions, FormEntitySelect, FormField, FormSection, FormSpine, makeCertFieldStatus, resolveCertFieldStatus, MoistureField, FieldErrorRow, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
 import { focusMoistureField, moistureFieldSelectors } from "@/components/storage-locations/reestimate-notice";
@@ -30,6 +30,7 @@ import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-chan
 import { DistanceOverrideField } from "@/components/transport-legs/distance-override-field";
 import { DistanceDriftAction, SAVE_BEFORE_REFRESH_REASON } from "@/components/transport-legs/transport-distance-drift";
 import { distanceOverridePatch, emptyToNullSource, hasSavedOverride, isOverrideLockRefusal, overrideDistanceError } from "@/components/transport-legs/distance-override";
+import { resolveDeliveryTransportRoute } from "@/lib/calculations/transport-leg";
 import { customerLocationDistanceLink } from "@/lib/location-distance-links";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { useFacility } from "@/hooks/use-facilities";
@@ -159,6 +160,14 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
   // CERT chips reflect the saved record (frozen), neutral while creating.
   const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
+  const savedDistanceKm = distanceRecord ? resolveDeliveryTransportRoute({
+    distanceKmOverride: distanceRecord.distanceKmOverride,
+    distanceSource: distanceRecord.distanceSource,
+    location: {
+      distanceKm: distanceRecord.recordedDistanceKm ?? null,
+      distanceSource: distanceRecord.recordedDistanceSource ?? null,
+    },
+  }).distanceKm : null;
 
   const watchWetMass = useWatch({ control, name: "deliveredWetMassKg" });
   const watchSources = useWatch({ control, name: "sources" });
@@ -285,8 +294,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   }));
 
   return (
-    // The wrapper div absorbs the side-sheet Body's direct-child flex-col
-    // override so the sticky CTA row keeps its own layout (see sample-form).
     <div className="space-y-20">
       <FormSpine control={control}>
       <form id={formId} onSubmit={(event) => {
@@ -427,6 +434,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         >
           <DistanceOverrideField
             id="distanceKmOverride"
+            certifyRequired={isDeliveryCertifyField("distanceKmOverride")}
+            certifyStatus={resolveCertFieldStatus(isEditMode && distanceRecord ? true : undefined, savedDistanceKm != null)}
             sourceId="distanceSource"
             noteId="distanceNote"
             hint="The one-way distance from this facility to the order's customer location. Override it when this trip took a different route."
@@ -469,7 +478,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           distanceKm={effectiveDistanceKm}
           distanceSource={effectiveDraftDistanceSource}
           loadMassKg={typeof watchWetMass === "number" ? watchWetMass : null}
-          saved={isEditMode}
           emptyMessage={ROUTE_EMPTY}
         />
       </FormSection>

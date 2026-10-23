@@ -187,7 +187,7 @@ export function FeedstockLossForm({
   });
 
   return (
-    <form id={formId} onSubmit={onSubmit} className="flex flex-1 flex-col space-y-20">
+    <form id={formId} onSubmit={onSubmit} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormField
         id="occurredAt"

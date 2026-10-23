@@ -85,9 +85,9 @@ export function ForgotPasswordForm() {
             type="submit"
             variant="primary"
             width="full"
-            disabled={isSubmitting}
+            busy={isSubmitting}
           >
-            {isSubmitting ? "Sending..." : "Send reset link"}
+            Send reset link
           </Button>
 
           <div className="text-center">

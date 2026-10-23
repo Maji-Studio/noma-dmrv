@@ -58,12 +58,15 @@ import {
   type SampleFilterData,
 } from "@/schemas/samples";
 import type { SampleWithRelations } from "@/data-access/samples";
+import { useDocumentsCertStatus } from "@/components/forms/use-documents-cert-status";
+import { isLabReportDocument } from "@/lib/certification/lab-report";
 import { formatLabPercent, formatSamplingTime, RATIO_DIGITS, sampleSheetSections } from "./sample-read-sections";
 import {
   leaveSampleCreateIntent,
   resolveSampleCreateCreditBatchId,
   SAMPLE_CREATE_CREDIT_BATCH_PARAM,
 } from "@/lib/sample-create-intent";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ILLUSTRATION_SIZE, SampleVialArt } from "@/components/ui/illustrations";
 
@@ -361,6 +364,7 @@ export function SampleList({
     : null;
   const displaySideSheet =
     sideSheet ?? createIntentSideSheet ?? deepLinkedSideSheet;
+  const labReportStatus = useDocumentsCertStatus("sample", displaySideSheet?.entity?.id, isLabReportDocument);
   const sampleLocks = useRecordLocks("sample", samples.map((sample) => sample.id));
   // A lock that arrives as Sent keeps an open draft, read-only, with the way
   // back (`submitBlock`).
@@ -369,14 +373,14 @@ export function SampleList({
   const createWithEvidence = useCreateWithEvidence({
     entityType: "sample",
     entityNoun: "Sample",
-    executeCreate: async (data: SampleFormData) => {
+    executeCreate: async ({ data }: { data: SampleFormData; onRefusal: SaveRefusalHandler }) => {
       const sample = await createSample.mutateAsync(data);
       return { entities: [sample], result: sample };
     },
     setError: setFormError,
     setUpdateError: setFormError,
-    getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "Sample was not created. Check the form.",
+    getCreateErrorMessage: (error, { onRefusal }) =>
+      onRefusal(error, error instanceof Error ? error.message : "Sample was not created. Check the form."),
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this Sample.",
     openEditOnFailure: (sample) =>
@@ -393,7 +397,8 @@ export function SampleList({
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
-  const handleCreate = createWithEvidence.handleCreate;
+  const handleCreate = (data: SampleFormData, onRefusal: SaveRefusalHandler) =>
+    createWithEvidence.handleCreate({ data, onRefusal });
 
   // Keep the post-create "failed to save" banner in sync when the user retries
   // or removes individual failures inline: recompute it from the remaining
@@ -434,7 +439,7 @@ export function SampleList({
     setCreateFailureBanner(remainingFailed);
   };
 
-  const handleUpdate = async (data: SampleFormData) => {
+  const handleUpdate = async (data: SampleFormData, onRefusal: SaveRefusalHandler) => {
     // A deep-linked edit sheet (?sample=...&mode=edit) has no local sheet
     // state, so the target comes from the displayed sheet, not `sideSheet`.
     if (displaySideSheet?.mode !== "edit") return;
@@ -449,7 +454,7 @@ export function SampleList({
       closeSideSheet();
       toast.success("Sample updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Sample was not saved. Try again.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Sample was not saved. Try again."));
     }
   };
 
@@ -694,7 +699,7 @@ export function SampleList({
         {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
         canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit Sample"
-        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity) : undefined}
+        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity, labReportStatus) : undefined}
       >
         {isResolvingCreateContext ? (
           <div

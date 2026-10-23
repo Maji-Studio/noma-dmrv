@@ -18,6 +18,8 @@ import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
@@ -276,6 +278,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   // error can show them next to the draft instead of only a sentence.
   const [updateBlockers, setUpdateBlockers] = useState<ConflictRef[]>([]);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A refused delete because records still use the row: its code and the server's reason.
+  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string } | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const { feedstockTypeId, setFeedstockTypeId } = useFeedstockTypeFilter();
   const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
@@ -383,7 +387,10 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       setDeleting(null);
       toast.success("Feedstock deleted.");
     } catch (error) {
-      if (error instanceof StaleVersionError) {
+      if (isInUseDeleteRefusal(error)) {
+        setInUseRefusal({ code: deleting.code, message: error instanceof Error ? error.message : "" });
+        setDeleting(null);
+      } else if (error instanceof StaleVersionError) {
         setDeleting(null);
         setDeleteError(staleDeleteMessage(`Feedstock ${deleting.code}`));
       } else {
@@ -655,12 +662,17 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       {/* Delete Error */}
       {deleteError && !deleting && <ServerError message={deleteError} />}
 
+      {inUseRefusal && (
+        <InUseDeleteDialog label={inUseRefusal.code} onClose={() => setInUseRefusal(null)}>
+          <p>{inUseRefusal.message}</p>
+        </InUseDeleteDialog>
+      )}
+
       {/* Delete Confirmation */}
       <DeleteConfirmDialog
         isOpen={!!deleting}
         title="Delete feedstock"
-        // Once the server refuses, its reason says the rule; the Note would repeat it.
-        message={deleteError ? "Are you sure you want to delete this feedstock? This action cannot be undone." : "Are you sure you want to delete this feedstock? This action cannot be undone. Note: Feedstocks used in production runs cannot be deleted."}
+        message="Are you sure you want to delete this feedstock? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeleting(null); setDeleteError(null); }}
         isPending={deleteFeedstock.isPending}

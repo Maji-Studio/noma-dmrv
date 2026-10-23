@@ -19,6 +19,11 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
 
+// No DOM here, which the refusal hook needs: show the failure in the footer as before.
+vi.mock("@/components/forms/use-save-refusal", () => ({
+  useSaveRefusal: () => (_error: unknown, fallback: string) => fallback,
+}));
+
 vi.mock("react-hook-form", () => ({
   useForm: () => ({
     register: () => ({}),

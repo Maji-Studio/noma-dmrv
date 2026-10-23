@@ -46,6 +46,13 @@ Read these first. Each one fails quietly rather than loudly.
   connected apps, API keys and the platform-admin organization rows. Text
   buttons need nothing extra; two 32px icon buttons side by side need a 12px
   gap or their hit areas overlap.
+- **Other controls use the shared recipes in `touch-target.ts`.**
+  `ICON_BUTTON_TOUCH_PROPS` for a standalone icon-only `Button` (spread it:
+  `size="icon"` is a 32px square by default; the bundle adds the 44px hit area and
+  `shrink-0`; row menus, location rows; keep 12px between neighbours). `CENTRED_HIT_AREA` (`::before`) for chips and badges.
+  `INLINE_HIT_AREA` (`::after`, `_FROM_SM` variant) for inline links.
+  `PHONE_TOUCH_TARGET` for a footer button or a select that must be 44px tall
+  on a phone. A `<select>` cannot take a pseudo-element, so it grows instead.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
   the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),
@@ -557,9 +564,11 @@ Always use `Button`; never a raw `<button>` with manual styling.
   `isPending={mutation.isPending || navigation.isPending}`. Never toast, close
   the dialog and then push. Deletes that stay on the page toast as the request
   returns.
-- **Quiet icon button:** `size="icon"` with `variant="noOutline"` (or
-  `variant="destructive"` for a delete row action), plus an `aria-label`. Use
-  this rather than `width="square"`, which yields a differently-sized control.
+- **Quiet icon button:** spread `ICON_BUTTON_TOUCH_PROPS`
+  (`src/components/ui/touch-target.ts`; see the touch-target bullet under
+  "The invariants that break code silently") with `variant="noOutline"` (or `variant="destructive"` for a
+  delete row action) and an `aria-label`. `size="icon"` is a 32px
+  square by default; `ICON_BUTTON_TOUCH_PROPS` adds the 44px hit area.
 - There is **no `asChild` / Slot polymorphism** — `Button` is a plain
   `forwardRef` over `<button>`. To style a link, style the `<Link>` directly.
 - Disabled is `disabled:opacity-40`, handled by the component.
@@ -953,8 +962,11 @@ stays as a preview whose lead footer action opens the page
 - Side sheet footer (view mode): the sheet's actions first at natural width,
   bottom left (primary Edit, then a destructive one), then `Close`
   (`variant="default"` in `SlideOverPanel.Close`) last. A sheet with no action
-  keeps a footer with Close alone. The header X and Escape stay. Never
-  `flex-1` or `justify-stretch`. Edit and create mode use `FormActions`.
+  keeps a footer with Close alone. The header X and Escape stay. The read-only
+  edit footer (record turned Sent mid-edit) is `Back to view` alone: full
+  width on phones (below `sm`, `max-sm:flex-1`), natural width from `sm` up.
+  Never `flex-1` or `justify-stretch` in the view-mode footer. Edit and create
+  mode use `FormActions`.
 - Side sheets: header title = entity code (or `Create X` in create mode — **no
   filler subtitle in create mode**); view/edit subtitle = the identifying
   secondary. **Storage bins invert this**: the name is the title and the code
@@ -1020,7 +1032,9 @@ Fifteen list components share one shape. Copy it rather than re-deriving:
   A delete the server refuses as in use is not an inline notice: the confirm
   dialog gives way to `InUseDeleteDialog` (`@/components/ui/in-use-delete-dialog`)
   with "Archive instead" first and "Cancel" after. Omit `onArchive` where
-  archiving would be refused too; it then shows only "Close".
+  archiving would be refused too; it then shows only "Close". Customer saved
+  locations archive an in-use location automatically on Delete (see
+  design-decisions "Saved locations: Delete only").
 - **Toolbar controls are deliberately raw**: a hand-rolled `h-40` search
   `<input>` and plain `<select>`s, both needing `aria-label` — not `Input` or a
   Base UI Select. `<DataTable.Toolbar>` / `<DataTable.Pagination>` go in as

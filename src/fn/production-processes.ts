@@ -4,7 +4,6 @@ import { z } from "zod";
 import {
   getMethodBEligibility,
   recordMethodBPrerequisites,
-  startNewProductionProcess,
   type MethodBEligibility,
 } from "@/data-access/production-processes";
 import type { ProductionProcess } from "@/db/schema";
@@ -15,6 +14,9 @@ import {
   startNewProcessSchema,
 } from "@/schemas/production-process";
 import type { ActionResult } from "@/types/actions";
+import { startNewProductionProcess } from "@/lib/operations/production-processes";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
+import { withCreate } from "./with-create";
 import { withAction } from "./with-action";
 
 const methodBEligibilityInputSchema = z.object({
@@ -45,9 +47,10 @@ export async function recordMethodBPrerequisitesFn(
 
 export async function startNewProductionProcessFn(
   input: unknown,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<ProductionProcess>> {
-  return withAction((ctx) => {
+  return withCreate((ctx, create) => {
     requireOrgRole(ctx, "admin");
-    return startNewProductionProcess(ctx, startNewProcessSchema.parse(input));
-  });
+    return create(startNewProductionProcess, startNewProcessSchema.parse(input));
+  }, options);
 }

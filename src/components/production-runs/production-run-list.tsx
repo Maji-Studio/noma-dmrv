@@ -35,6 +35,11 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { InUseDeleteDialog, InUseReference } from "@/components/ui/in-use-delete-dialog";
+import { ActionError } from "@/lib/action-error";
+import { biocharProductDeepLinkHref } from "@/lib/biochar-product-links";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { MassPair } from "@/components/ui/mass-pair";
@@ -49,7 +54,8 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
-import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { footerForRefusedSave } from "./production-run-refusal";
 import { StaleVersionError, toDeleteErrorMessage, toSaveErrorMessage } from "@/lib/stale-version";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
@@ -284,6 +290,8 @@ export function ProductionRunList() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A refused delete because records still use the row: its code and the server's reason.
+  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string; reference?: { href: string; code: string; kind: string } } | null>(null);
 
   const filters: Partial<ProductionRunFilterData> = {
     ids: affectedRunIds.length > 0 ? affectedRunIds : undefined,
@@ -326,19 +334,20 @@ export function ProductionRunList() {
   const createWithEvidence = useCreateWithEvidence({
     entityType: "production_run",
     entityNoun: "Production run",
-    executeCreate: async (data: ProductionRunSubmitData) => {
+    executeCreate: async ({ data }: { data: ProductionRunSubmitData; onRefusal: SaveRefusalHandler }) => {
       const run = await createRun.mutateAsync(data as CreateProductionRunData);
       return { entities: [run], result: run };
     },
     setError: setCreateError,
     setUpdateError,
-    getCreateErrorMessage: (error) => {
+    getCreateErrorMessage: (error, { onRefusal }) => {
       // Let the form surface an overlap conflict inline (on the start field,
       // with a link to the conflicting run); show other errors as a banner.
-      if (getRunConflict(error)) throw error;
-      return error instanceof Error
-        ? error.message
-        : "Production run was not created. Check the form.";
+      return footerForRefusedSave(
+        error,
+        error instanceof Error ? error.message : "Production run was not created. Check the form.",
+        onRefusal,
+      );
     },
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachment before saving this production run.",
@@ -350,9 +359,11 @@ export function ProductionRunList() {
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
-  const handleCreate = createWithEvidence.handleCreate;
+  const handleCreate = async (data: ProductionRunSubmitData, onRefusal: SaveRefusalHandler) => {
+    await createWithEvidence.handleCreate({ data, onRefusal });
+  };
 
-  const handleUpdate = async (data: ProductionRunSubmitData) => {
+  const handleUpdate = async (data: ProductionRunSubmitData, onRefusal: SaveRefusalHandler) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     if (createWithEvidence.guardUpdate()) return;
@@ -377,10 +388,10 @@ export function ProductionRunList() {
       closeSideSheet();
       toast.success("Production run updated.");
     } catch (error) {
-      if (getRunConflict(error)) throw error;
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      setUpdateError(toSaveErrorMessage(error, "Production run was not saved. Try again."));
+      const fallback = toSaveErrorMessage(error, "Production run was not saved. Try again.");
+      setUpdateError(footerForRefusedSave(error, fallback, onRefusal));
     }
   };
 
@@ -400,8 +411,20 @@ export function ProductionRunList() {
       setDeletingRunId(null);
       toast.success("Production run deleted.");
     } catch (error) {
+      const message = toDeleteErrorMessage(error, `Production run ${deleting.code}`, "Production run was not deleted. Try again.");
+      if (isInUseDeleteRefusal(error)) {
+        const blocker = error instanceof ActionError ? error.conflict : undefined;
+        const reference = blocker?.entity === "biocharProduct"
+          ? { href: biocharProductDeepLinkHref(blocker.id, deleting.facilityId), code: blocker.code, kind: "biochar product" }
+          : blocker?.entity === "creditBatch"
+            ? { href: creditBatchDeepLinkHref(blocker.id, deleting.facilityId), code: blocker.code, kind: "credit batch" }
+            : undefined;
+        setInUseRefusal({ code: deleting.code, message, reference });
+        setDeletingRunId(null);
+        return;
+      }
       if (error instanceof StaleVersionError) setDeleting(null);
-      setDeleteError(toDeleteErrorMessage(error, `Production run ${deleting.code}`, "Production run was not deleted. Try again."));
+      setDeleteError(message);
     }
   };
 
@@ -660,11 +683,17 @@ export function ProductionRunList() {
 
       {deleteError && !deleting && <ServerError message={deleteError} />}
 
+      {inUseRefusal && (
+        <InUseDeleteDialog label={inUseRefusal.code} onClose={() => setInUseRefusal(null)}>
+          <p>{inUseRefusal.message}</p>
+          {inUseRefusal.reference && <InUseReference {...inUseRefusal.reference} />}
+        </InUseDeleteDialog>
+      )}
+
       <DeleteConfirmDialog
         isOpen={!!deletingRunId}
         title="Delete production run"
-        // Once the server refuses, its reason says the rule; the Note would repeat it.
-        message={deleteError ? "Are you sure you want to delete this production run? This action cannot be undone." : "Are you sure you want to delete this production run? This action cannot be undone. Note: Production runs with dependent biochar products or credit batches cannot be deleted."}
+        message="Are you sure you want to delete this production run? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingRunId(null); setDeleteError(null); }}
         isPending={deleteRun.isPending}
