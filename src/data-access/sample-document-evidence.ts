@@ -2,9 +2,35 @@ import { and, eq, inArray, or } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { documents, samples } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { LAB_REPORT_DOCUMENT_CRITERIA } from "@/lib/certification/lab-report";
 import { requireOrgScope } from "./utils";
 
 type LoadedSamples = ReadonlyArray<{ id: string; creditBatchId: string | null }>;
+
+function uploadedDocumentConditions(documentType: "lab_report" | "reflectance_histogram") {
+  return and(
+    eq(documents.uploadStatus, LAB_REPORT_DOCUMENT_CRITERIA.uploadStatus),
+    eq(documents.documentType, documentType),
+  );
+}
+
+/** Per-Sample evidence for list readiness. Batch-owned reports do not satisfy a Sample's chip. */
+export async function getSamplesWithLabReports(
+  ctx: OrgContext,
+  sampleIds: string[],
+  reader: DbTransaction | typeof db = db,
+): Promise<Set<string>> {
+  requireOrgScope(ctx);
+  if (sampleIds.length === 0) return new Set();
+  const rows = await reader.select({ entityId: documents.entityId })
+    .from(documents).where(and(
+      eq(documents.organizationId, ctx.organizationId),
+      eq(documents.entityType, "sample"),
+      inArray(documents.entityId, sampleIds),
+      uploadedDocumentConditions(LAB_REPORT_DOCUMENT_CRITERIA.documentType),
+    ));
+  return new Set(rows.map((row) => row.entityId));
+}
 
 async function getBatchesWithSampleDocuments(
   ctx: OrgContext,
@@ -23,8 +49,7 @@ async function getBatchesWithSampleDocuments(
   const rows = await reader.select({ entityId: documents.entityId, entityType: documents.entityType })
     .from(documents).where(and(
       eq(documents.organizationId, ctx.organizationId),
-      eq(documents.uploadStatus, "uploaded"),
-      eq(documents.documentType, documentType),
+      uploadedDocumentConditions(documentType),
       or(
         includeCreditBatchOwners
           ? and(eq(documents.entityType, "credit_batch"), inArray(documents.entityId, batchIds))
@@ -47,7 +72,7 @@ export async function getBatchesWithLabReports(
   reader: DbTransaction | typeof db = db,
   loadedSamples?: LoadedSamples,
 ): Promise<Set<string>> {
-  return getBatchesWithSampleDocuments(ctx, batchIds, "lab_report", true, reader, loadedSamples);
+  return getBatchesWithSampleDocuments(ctx, batchIds, LAB_REPORT_DOCUMENT_CRITERIA.documentType, true, reader, loadedSamples);
 }
 
 /** Histogram evidence belongs only to a Sample. Pending and failed uploads never count. */

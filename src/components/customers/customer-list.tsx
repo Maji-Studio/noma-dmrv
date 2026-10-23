@@ -29,6 +29,7 @@ import {
 } from "@/hooks/use-list-pagination";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { CustomerDeleteDialog } from "./customer-delete-dialog";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
@@ -310,7 +311,7 @@ export function CustomerList() {
   ]);
 
   // Handlers
-  const handleCreate = async (data: CustomerFormData, pendingLocations?: PendingLocation[]) => {
+  const handleCreate = async (data: CustomerFormData, onRefusal: SaveRefusalHandler, pendingLocations?: PendingLocation[]) => {
     setCreateError(null);
     try {
       // One transaction on the server: a location that fails takes the customer
@@ -322,15 +323,16 @@ export function CustomerList() {
       closeSideSheet();
       toast.success("Customer created.");
     } catch (error) {
-      setCreateError(
+      setCreateError(onRefusal(
+        error,
         error instanceof Error
           ? error.message
           : "The customer and its locations were not created. Check the form and save again.",
-      );
+      ));
     }
   };
 
-  const handleUpdate = async (data: CustomerFormData) => {
+  const handleUpdate = async (data: CustomerFormData, onRefusal: SaveRefusalHandler) => {
     if (!displaySideSheet?.entity) return;
     setUpdateError(null);
     try {
@@ -346,7 +348,7 @@ export function CustomerList() {
     } catch (error) {
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      setUpdateError(toSaveErrorMessage(error, "Customer was not saved. Try again."));
+      setUpdateError(onRefusal(error, toSaveErrorMessage(error, "Customer was not saved. Try again.")));
     }
   };
 

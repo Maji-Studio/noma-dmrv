@@ -27,6 +27,7 @@ import {
   deleteFeedstockFn,
 } from "@/fn/feedstocks";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
+import { productionRunKeys } from "./use-production-runs";
 import { storageLocationKeys } from "./use-storage-locations";
 import { unwrap, type MutationCallbacks } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
@@ -122,6 +123,7 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
       queryClient.invalidateQueries({
         predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
       });
+      queryClient.invalidateQueries({ queryKey: productionRunKeys.all });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
@@ -155,6 +157,7 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
       queryClient.invalidateQueries({
         predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
       });
+      queryClient.invalidateQueries({ queryKey: productionRunKeys.all });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });

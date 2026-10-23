@@ -1,7 +1,6 @@
 import type { DetailPanelField } from "@/components/ui/detail-panel";
 import { resolveCertFieldStatus } from "@/components/forms/cert-field-status";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
-import type { ProductionRunFeedstockWithDetails } from "@/data-access/production-runs";
 import type { ProductionRunStatus } from "@/schemas/production-runs";
 import { formatDayString } from "@/lib/format-utils";
 import {
@@ -49,31 +48,6 @@ export function buildProductionRunWindowDetailFields(
       value: productionRunTimezoneHelperText(facilities, run.facilityId),
     },
   ];
-}
-
-export function buildProductionRunFeedstockDetailField(
-  feedstocks: ReadonlyArray<
-    Pick<
-      ProductionRunFeedstockWithDetails,
-      "feedstockCode" | "feedstockTypeName"
-    >
-  >,
-): DetailPanelField {
-  const labels = feedstocks.flatMap((feedstock) => {
-    if (feedstock.feedstockTypeName && feedstock.feedstockCode) {
-      return [
-        `${feedstock.feedstockTypeName} (${feedstock.feedstockCode})`,
-      ];
-    }
-    if (feedstock.feedstockTypeName) return [feedstock.feedstockTypeName];
-    if (feedstock.feedstockCode) return [feedstock.feedstockCode];
-    return [];
-  });
-
-  return {
-    label: "Feedstock",
-    value: labels.length > 0 ? labels.join(", ") : null,
-  };
 }
 
 export function productionRunStatusCertStatus(

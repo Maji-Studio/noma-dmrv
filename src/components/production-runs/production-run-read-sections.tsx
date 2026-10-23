@@ -7,7 +7,7 @@ import { flowBarWidthPercent, flowScaleKg } from "./production-run-flow-scale";
 import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { ProductionSampleTable } from "./production-sample-table";
-import { buildProductionRunFeedstockDetailField, buildProductionRunWindowDetailFields, productionRunStatusCertStatus } from "./production-run-detail-fields";
+import { buildProductionRunWindowDetailFields, productionRunStatusCertStatus } from "./production-run-detail-fields";
 import type { ReactNode } from "react";
 import { CheckCircleIcon, ClockIcon, ProhibitIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -53,7 +53,6 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
     {
       title: "Feedstock & processing",
       fields: [
-        buildProductionRunFeedstockDetailField(run.feedstocks),
         ...run.feedstockDraws.map((draw, index) => ({
           label: `Source bin ${index + 1}`,
           value: `${draw.storageLocationName}: ${formatMassKg(draw.wetMassKg)}`,

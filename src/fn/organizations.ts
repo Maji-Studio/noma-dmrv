@@ -33,6 +33,7 @@ import { parseCreateIntentKey } from "./with-create";
 import { withAction } from "@/fn/with-action";
 import { createAndDeliverInvitation } from "@/fn/organization-invitation-core";
 import { sendOrganizationInvitation } from "@/lib/email/organization-invitation";
+import { sendRoleChangedNotice, sendRemovedFromOrganizationNotice } from "@/lib/email/account-notices";
 import {
   cancelInvitationAsPlatformAdmin,
   createInvitationAsPlatformAdmin,
@@ -234,7 +235,8 @@ export async function changeMemberRoleAction(
         headers: await headers(),
       });
     } else {
-      await updateMemberRoleAsPlatformAdmin(ctx, memberId, role);
+      const notice = await updateMemberRoleAsPlatformAdmin(ctx, memberId, role);
+      await sendRoleChangedNotice(notice);
     }
     return { memberId };
   }, "Failed to change member role.");
@@ -255,7 +257,8 @@ export async function removeMemberAction(
         headers: await headers(),
       });
     } else {
-      await removeMemberAsPlatformAdmin(ctx, memberIdOrEmail);
+      const notice = await removeMemberAsPlatformAdmin(ctx, memberIdOrEmail);
+      await sendRemovedFromOrganizationNotice(notice);
     }
     return { memberIdOrEmail };
   }, "Failed to remove member.");

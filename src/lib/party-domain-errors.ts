@@ -42,8 +42,16 @@ export function customerLocationHasOrders(orderCodes: string[] = [], archived = 
 export function customerLocationHasStorageSite(archived = false): DomainError {
   return inUseDeleteRefusal(`Customer location ${IN_USE_DELETE_MARKER} it is registered with Isometric as a storage site.${archived ? "" : " Archive it instead."}`, ["locationId"]);
 }
-export function customerLocationCertificationLocked(field: "name" | "gpsLatitude" | "gpsLongitude"): DomainError {
-  return partyRefusal("certification_locked", "This location is registered with Isometric as a storage site, so its name and coordinates cannot change. Add a new location instead.", [field]);
+/** What a registered storage site freezes; the form locks the same fields. */
+export const REGISTERED_SITE_LOCKED_FIELDS = ["name", "gpsLatitude", "gpsLongitude"] as const;
+export type RegisteredSiteLockedField = (typeof REGISTERED_SITE_LOCKED_FIELDS)[number];
+
+/** One issue per changed frozen field, in field order, so a form can mark each of them. */
+export function customerLocationCertificationLocked(fields: readonly RegisteredSiteLockedField[]): DomainError {
+  const message = new SafeError("This location is registered with Isometric as a storage site, so its name and coordinates cannot change. Add a new location instead.").message;
+  return new DomainError("certification_locked", message, {
+    issues: fields.map(field => ({ path: [field], code: "certification_locked" as const, message })),
+  });
 }
 export function storageSiteRegistrationBusy(): DomainError {
   const message = "This location is being registered with Isometric. Try again in a moment.";

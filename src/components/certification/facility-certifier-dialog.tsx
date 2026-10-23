@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useContext, useState } from "react";
+import { useContext, useId, useState } from "react";
 import { useController, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormDialogContext } from "@/components/ui/form-dialog-context";
@@ -22,6 +22,8 @@ import {
 } from "@/schemas/certification";
 import { useSaveFacilityCertifierMapping } from "@/hooks/use-certification";
 import type { FacilityCertifierMapping } from "@/fn/certification/facility-mapping";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 import { DEFAULT_PROTOCOL_SLUG } from "@/config/certification";
 import { ProductionConfirmation } from "./production-confirmation";
 import { ConfirmActionDialog } from "./confirm-action-dialog";
@@ -95,12 +97,15 @@ export function FacilityCertifierForm({
     setValue,
     setError,
     reset,
+    resetField,
     formState: { errors, isSubmitting },
   } = useForm<SaveMappingInput>({
     resolver: zodResolver(saveMappingSchema),
     defaultValues,
   });
 
+  const formId = useId();
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const dialogActions = useContext(FormDialogContext);
   const toast = useToast();
   const saveMutation = useSaveFacilityCertifierMapping();
@@ -174,13 +179,8 @@ export function FacilityCertifierForm({
       toast.success("Certifier mapping saved");
       onSaved?.();
     } catch (error) {
-      setError("root.serverError", {
-        type: "server",
-        message:
-          error instanceof Error
-            ? error.message
-            : "The mapping was not saved. Try again.",
-      });
+      const footer = refuseSave(error, toSaveErrorMessage(error, "The mapping was not saved. Try again."));
+      if (footer) setError("root.serverError", { type: "server", message: footer });
     }
   };
 
@@ -188,6 +188,7 @@ export function FacilityCertifierForm({
 
   return (
     <form
+      id={formId}
       onSubmit={handleSubmit(onSubmit)}
       className="flex flex-col gap-24"
     >

@@ -537,7 +537,11 @@ describe("upsertCertifierProject credit batch adoption", () => {
     await expect(upsertCertifierProject(ctx, {
       facilityId, provider: "isometric", externalProjectId: owner.externalProjectId,
       externalFacilityId: owner.externalFacilityId,
-    })).rejects.toThrow(/already linked/);
+    })).rejects.toMatchObject({
+      message: expect.stringMatching(/already linked/),
+      code: "validation_failed",
+      issues: [expect.objectContaining({ path: ["externalFacilityId"], code: "validation_failed" })],
+    });
     expect(await storedBatch(batch.id)).toMatchObject({ certifier: null, version: batch.version });
     expect(await getCertifierProjectByFacility(ctx, facilityId)).toBeNull();
   });

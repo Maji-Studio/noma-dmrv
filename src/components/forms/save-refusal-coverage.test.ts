@@ -24,11 +24,6 @@ const PENDING: Record<string, string> = {
   "storage-locations/output-stock-form.tsx": "PR H: output stock refusal",
   "storage-locations/feedstock-loss-form.tsx": "PR H: feedstock loss refusal",
   "transport-legs/transport-leg-form.tsx": "PR H: transport child editor",
-  "customers/customer-form.tsx": "PR I: nested customer aliases",
-  "customers/customer-location-form.tsx": "PR I: registered location refusals",
-  "suppliers/supplier-form.tsx": "PR I: nested supplier aliases",
-  "suppliers/supplier-location-form.tsx": "PR I: supplier location refusal",
-  "forms/entity-select/supplier-quick-add-dialog.tsx": "PR I: locations.0.* aliases and active-payload guard",
   "reactors/reactor-form.tsx": "PR J: reactor sheet and picker edit",
   "facilities/facility-form.tsx": "PR J: facility sheet and onboarding",
   "feedstock-types/feedstock-type-form.tsx": "PR J: feedstock type sheet and picker edit",
@@ -44,10 +39,6 @@ const PENDING: Record<string, string> = {
   "organizations/invitation-bootstrap-form.tsx": "PR K1: preserve ActionError from result",
   "api-keys/api-key-form.tsx": "PR K1: API key refusal",
   "admin/emission-estimates-form.tsx": "PR K1: emission estimate refusal",
-  "credit-batches/method-b-prerequisites-setup.tsx": "PR K2: prerequisite refusal",
-  "certification/facility-certifier-dialog.tsx": "PR K2: certifier setup refusal",
-  "certification/ghg-statement-create-dialog.tsx": "PR K2: GHG statement create refusal",
-  "certification/ghg-statement-submit-dialog.tsx": "PR K2: GHG statement submit refusal",
 };
 
 /** Deliberate exclusions, including non-RHF forms named in the issue inventory. */

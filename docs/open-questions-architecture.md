@@ -53,16 +53,6 @@ these areas; the entry rules and invariants live in
   gives `invalid_grant`, which claude.ai turns into a sign-in prompt. Only a
   dropped CIMD client gives `invalid_client`.
 
-### Icon button width (`ui/button-icon-width`, opened 2026-10-22)
-
-- **Anchor:** `src/components/ui/button/index.tsx:buttonVariants`. `size="icon"` sets
-  `w-[32px]`, but the `width` variant default `w-auto` wins the class merge, so every
-  icon-only `Button` is as wide as its glyph (16px) and a flex row can shrink it
-  further. 51 call sites use `size="icon"`; the touch-target fix works around it with
-  `ICON_BUTTON_TOUCH_PROPS` (`touch-target.ts`) on the row menu trigger and the location
-  rows only. Fix at the source (drop `w-auto`
-  from the `width` default) and check the 51 sites.
-
 ### Party write adapters per kind (`api/party-write-adapters`, opened 2026-10-17)
 
 - **Anchor:** `src/lib/mcp/tools/party-tools.ts:partyWriteTools`,
