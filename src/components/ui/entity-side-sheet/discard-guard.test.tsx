@@ -9,7 +9,7 @@ import { useSideSheetActions } from "./side-sheet-context";
 
 vi.mock("@/components/ui/slide-over-panel", () => {
   const Wrapper = ({ children }: { children: ReactNode }) => <div>{children}</div>;
-  return { SlideOverPanel: {
+  return { FILL_CHILDREN_CLASS: "[&>*]:flex [&>*]:flex-1 [&>*]:flex-col", SlideOverPanel: {
     Root: ({ children, onOpenChange }: { children: ReactNode; onOpenChange: (open: boolean) => void }) => <div><button onClick={() => onOpenChange(false)}>Close sheet</button>{children}</div>,
     Content: Wrapper, Title: Wrapper, Description: Wrapper, Footer: Wrapper, Close: Wrapper, FooterClose: () => null,
     Header: ({ children }: { children: ReactNode }) => <header>{children}</header>,

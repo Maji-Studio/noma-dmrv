@@ -23,7 +23,7 @@ vi.mock("@/components/ui/slide-over-panel", () => {
   const Footer = ({ children, preview }: { children?: React.ReactNode; preview?: React.ReactNode }) => (
     <div>{preview}{children}</div>
   );
-  return {
+  return { FILL_CHILDREN_CLASS: "",
     SlideOverPanelBody: Plain,
     SlideOverPanelDescription: Plain,
     SlideOverPanelFooter: Footer,

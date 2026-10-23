@@ -298,6 +298,9 @@ interface SlideOverPanelBodyProps
   fillHeight?: boolean;
 }
 
+/** Makes each direct child fill its flex-column parent (also used by EntitySideSheet's fieldset). */
+export const FILL_CHILDREN_CLASS = "[&>*]:flex [&>*]:flex-1 [&>*]:flex-col";
+
 // forwardRef + div-prop passthrough: EntitySideSheet owns the scrollport, so
 // it needs the element to reset scroll and move focus on mode changes.
 const Body = React.forwardRef<HTMLDivElement, SlideOverPanelBodyProps>(
@@ -311,7 +314,7 @@ const Body = React.forwardRef<HTMLDivElement, SlideOverPanelBodyProps>(
           noPaddingBottom ? "p-24 pb-0" : "p-24",
           // Form-root child fills the body as a flex column so FormActions'
           // `mt-auto` can pin the CTA row to the bottom on short forms.
-          fillHeight && "flex flex-col [&>*]:flex [&>*]:flex-1 [&>*]:flex-col",
+          fillHeight && cn("flex flex-col", FILL_CHILDREN_CLASS),
           className
         )}
       >
