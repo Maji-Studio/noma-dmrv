@@ -25,7 +25,7 @@ export const ORGANIZATION_SETTINGS_ROLES = "Admins";
 
 export const SETTINGS_ACCESS = {
   organization: `${ORGANIZATION_SETTINGS_ROLES} can change these.`,
-  self: "Only you can change your name and password.",
+  self: "Only you can change your name, email and password.",
   you: `You and organization ${ORGANIZATION_SETTINGS_ROLES} can change these.`,
 } as const;
 
@@ -81,7 +81,7 @@ export const SETTINGS_PANES: readonly SettingsPaneMeta[] = [
     label: "Profile",
     href: SETTINGS_PROFILE_HREF,
     scope: "you",
-    caption: "Your name and password, the same in every organization you belong to.",
+    caption: "Your name, email and password, the same in every organization you belong to.",
     access: SETTINGS_ACCESS.self,
     audience: "everyone",
   },

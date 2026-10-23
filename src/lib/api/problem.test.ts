@@ -16,6 +16,7 @@ beforeEach(() => { env.OAUTH_PROVIDER_ENABLED = false; });
 
 // Independent expectations from the REST plan, section 4 (Errors).
 const expectedActionStatuses = {
+  session_expired: 401,
   validation_failed: 422,
   not_found: 404,
   stale_version: 412,

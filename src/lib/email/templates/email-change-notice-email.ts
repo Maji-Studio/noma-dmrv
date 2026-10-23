@@ -10,7 +10,8 @@ export function emailChangeNoticeEmail(input: { to: string; newEmail: string; re
     change: { label: "Email address", from: input.to, to: input.newEmail },
     body: [
       ["We sent a confirmation link to the new address. Until it is confirmed, you sign in with this one."],
-      ["If you did not ask for this, reset your password now."],
+      ["If you did not ask for this, reset your password now. That cancels the change."],
+      ["If you can no longer sign in, reply to this email."],
     ],
     link: { text: input.resetUrl, url: input.resetUrl },
     to: input.to,

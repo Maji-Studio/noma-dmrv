@@ -26,7 +26,7 @@ beforeEach(() => {
 });
 afterEach(() => { env.RESEND_FROM_EMAIL = "sender@example.test"; });
 
-it.each(["reset-password", "verify-email", "org-invite", "password-changed", "role-changed", "removed-from-organization"] as const)("sends %s with configured from and replyTo", async (type) => {
+it.each(["reset-password", "verify-email", "email-change-confirm", "email-change-notice", "org-invite", "password-changed", "role-changed", "removed-from-organization"] as const)("sends %s with configured from and replyTo", async (type) => {
   expect(await sendEmail({ ...INPUT, type })).toEqual({ sent: true, id: "message-123" });
   expect(mocks.send).toHaveBeenCalledExactlyOnceWith({
     to: INPUT.to, subject: INPUT.subject, html: INPUT.html, text: INPUT.text,
@@ -62,13 +62,13 @@ it.each([
   expect(mocks.info).not.toHaveBeenCalled();
 });
 
-it("handles thrown exceptions without logging PII, bodies or raw error objects", async () => {
+it.each(["org-invite", "email-change-confirm", "email-change-notice"] as const)("handles thrown %s exceptions without logging PII, bodies or raw error objects", async type => {
   mocks.send.mockRejectedValue(Object.assign(new Error("recipient@example.test and sender@example.test"), {
     name: "Private Name recipient@example.test", statusCode: 503,
   }));
-  expect(await sendEmail(INPUT)).toEqual({ sent: false, reason: "provider-error" });
+  expect(await sendEmail({ ...INPUT, type })).toEqual({ sent: false, reason: "provider-error" });
   expect(mocks.error).toHaveBeenCalledExactlyOnceWith({
-    emailType: "org-invite", invitationId: "invite-123", organizationId: "org-123",
+    emailType: type, invitationId: "invite-123", organizationId: "org-123",
     userId: undefined, statusCode: 503,
   }, "email provider failed");
   const logs = JSON.stringify([mocks.error.mock.calls, mocks.warn.mock.calls, mocks.info.mock.calls]);

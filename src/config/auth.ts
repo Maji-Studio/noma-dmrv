@@ -4,6 +4,9 @@ export const AUTH_PASSWORD_MAX_LENGTH = 72;
 
 export const PROFILE_NAME_MAX_LENGTH = 100;
 
+export const CHANGE_EMAIL_MAX_ATTEMPTS = 5;
+export const CHANGE_EMAIL_WINDOW_SECONDS = 15 * 60;
+
 /**
  * How long a browser trusts its signed session snapshot before asking the
  * database again. A session revoked elsewhere (another device signed out by a

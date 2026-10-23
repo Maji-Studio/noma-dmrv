@@ -12,6 +12,7 @@ import { IDEMPOTENCY_RETRY_AFTER_SECONDS } from "@/config/operations";
 import type { ApiHttpError } from "./http-error";
 
 export const ACTION_STATUS = {
+  session_expired: 401,
   validation_failed: 422, not_found: 404, stale_version: 412,
   concurrent_write_retry: 409, conflict: 409, certification_locked: 409, insufficient_stock: 409, stock_basis_changed: 409, cascade_changed: 409,
   forbidden: 403, reference_not_found: 422, reference_ambiguous: 422,

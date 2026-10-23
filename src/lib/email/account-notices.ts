@@ -8,6 +8,7 @@ import { logLocalFallbackLink, sendEmail, type EmailType } from "./send";
 import { passwordChangedEmail } from "./templates/password-changed-email";
 import { roleChangedEmail } from "./templates/role-changed-email";
 import { removedFromOrganizationEmail } from "./templates/removed-from-organization-email";
+import { emailChangeNoticeEmail } from "./templates/email-change-notice-email";
 
 type NoticeRecipient = { userId: string; email: string };
 type MemberNotice = NoticeRecipient & {
@@ -16,7 +17,7 @@ type MemberNotice = NoticeRecipient & {
   organizationName: string;
 };
 
-/** Everything here is best-effort and must be called only after commit. */
+/** Best-effort delivery after commit, or after sending an email-change confirmation. */
 async function deliverNotice(
   type: EmailType,
   recipient: NoticeRecipient & { memberId?: string; organizationId?: string },
@@ -28,7 +29,7 @@ async function deliverNotice(
     const content = await compose();
     const result = await sendEmail({
       type, ...context, to: recipient.email, ...content,
-      // Every committed event gets a new key, including repeated role cycles.
+      // Every account event gets a new key, including repeated role cycles.
       idempotencyKey: `${type}/${recipient.memberId ?? recipient.userId}/${randomUUID()}`,
     });
     if (!result.sent) logger.warn(context, "account notice was not sent");
@@ -53,6 +54,15 @@ export async function sendPasswordChangedNotice(recipient: NoticeRecipient): Pro
   const resetUrl = `${appUrl}/forgot-password`;
   await deliverNotice("password-changed", recipient, async () => passwordChangedEmail({
     to: recipient.email, changedAt: new Date(), resetUrl, appUrl,
+  }), resetUrl);
+}
+
+/** Notify the current address when confirmation is sent to the new address. */
+export async function sendEmailChangeNotice(input: NoticeRecipient & { newEmail: string }): Promise<void> {
+  const appUrl = getEmailAppUrl();
+  const resetUrl = `${appUrl}/forgot-password`;
+  await deliverNotice("email-change-notice", input, async () => emailChangeNoticeEmail({
+    to: input.email, newEmail: input.newEmail, resetUrl, appUrl,
   }), resetUrl);
 }
 
