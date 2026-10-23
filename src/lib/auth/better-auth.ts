@@ -23,7 +23,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
 import { asc, eq } from "drizzle-orm";
-import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH, EMAIL_VERIFICATION_EXPIRES_IN_SECONDS, INVITATION_EXPIRES_IN_SECONDS, PASSWORD_RESET_EXPIRES_IN_SECONDS, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
+import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH, EMAIL_VERIFICATION_EXPIRES_IN_SECONDS, INVITATION_EXPIRES_IN_SECONDS, ORGANIZATION_INVITATION_LIMIT, PASSWORD_RESET_EXPIRES_IN_SECONDS, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
 import { env } from "@/config/env";
 import { resetPasswordEmail } from "@/lib/email/templates/reset-password-email";
 import { verifyEmailEmail } from "@/lib/email/templates/verify-email-email";
@@ -346,6 +346,7 @@ export const auth = betterAuth({
         },
       },
       invitationExpiresIn: INVITATION_EXPIRES_IN_SECONDS,
+      invitationLimit: ORGANIZATION_INVITATION_LIMIT,
       // Re-inviting the same email cancels the stale pending invite so the
       // pending list never shows duplicates.
       cancelPendingInvitationsOnReInvite: true,

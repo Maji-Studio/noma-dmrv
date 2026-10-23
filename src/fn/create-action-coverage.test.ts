@@ -53,6 +53,7 @@ const EXCEPTION: Record<string, string> = {
   "certification/ghg-statements#createGhgStatementDraft": "External POST adopts or refuses a matching remote statement under a facility lock.",
   "certification/sources#mirrorDocumentToSource": "Reconciles external uploads and uses insert-or-get locally.",
   "organizations#inviteMemberAction": "Owner-approved retry replaces the pending invitation through Better Auth.",
+  "organizations#resendInvitationAction": "Replaces one pending invitation in a transaction; a retry replaces it again and the newest link wins.",
   "documents#requestUpload": "Duplicates leave pending uploads reclaimed by the upload sweep; evidence create is single-flight.",
   "production-run-reading-imports#importProductionRunReadingsFromDocumentFn": "Seed-only unmounted importer deduplicates timestamps.",
   "bin-movements#recordStockTakeFn": "Legacy unmounted action; useRecordStockTake has no caller.",
@@ -65,6 +66,7 @@ const EXCEPTION: Record<string, string> = {
 
 const NOT_CREATE: Record<string, string> = {
   "organizations#renameOrganizationAction": "Renames an existing organization.",
+  "organizations#leaveOrganizationAction": "Removes the caller's own existing membership.",
   "applications#getApplicationStatsFn": "Reads application totals without creating a domain record.",
   "customers#getCustomerStatsFn": "Reads customer totals without creating a domain record.",
   "facilities#getFacilityStatsFn": "Reads facility totals without creating a domain record.",

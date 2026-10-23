@@ -3,9 +3,9 @@
 /**
  * Server actions for the Organization foundation (multi-tenancy PR 1):
  * org switching, member management, invitations, and Platform-Admin org
- * lifecycle. Member/invitation mutations use the Better Auth organization
- * plugin for real org members and scoped data-access overrides for Platform
- * Admins, who deliberately have no membership rows.
+ * lifecycle. Most member/invitation mutations use Better Auth for real org
+ * members and scoped overrides for Platform Admins. Invitation replacement
+ * uses one scoped transaction for both roles.
  */
 import { cookies, headers } from "next/headers";
 import { eq } from "drizzle-orm";
@@ -31,13 +31,14 @@ import { saveOrgPreference } from "@/fn/org-preference";
 import type { CreateIntentOptions } from "@/schemas/create-intent";
 import { parseCreateIntentKey } from "./with-create";
 import { withAction } from "@/fn/with-action";
+import { createAndDeliverInvitation } from "@/fn/organization-invitation-core";
 import { sendOrganizationInvitation } from "@/lib/email/organization-invitation";
 import {
   cancelInvitationAsPlatformAdmin,
   createInvitationAsPlatformAdmin,
   createOrganizationWithAdmin,
   findMembershipRole,
-  getActiveOrganization,
+  replacePendingInvitation,
   listAllOrganizations,
   listPlatformOrganizationDirectory,
   type PlatformOrganizationDirectoryRow,
@@ -54,6 +55,7 @@ import type { ActionResult } from "@/types/actions";
 import {
   createOrganizationSchema,
   inviteMemberSchema,
+  invitationIdSchema,
   orgRoleSchema,
   renameOrganizationSchema,
 } from "@/schemas/organizations";
@@ -156,19 +158,6 @@ export async function listPlatformOrganizationsFn(): Promise<ActionResult<Platfo
 
 // --- Member management ----------------------------------------------------
 
-/**
- * The signed-in user's name for invitation wording. The invitation is already
- * saved when this runs, so a failed lookup must never fail the action: the
- * email then falls back to wording without a name.
- */
-async function currentUserName(): Promise<string | undefined> {
-  try {
-    return (await getBetterAuthSession())?.user.name || undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 export async function inviteMemberAction(
   input: unknown
 ): Promise<ActionResult<{ invitationId: string; acceptUrl: string; emailSent: boolean }>> {
@@ -176,24 +165,15 @@ export async function inviteMemberAction(
     const { email, role } = inviteMemberSchema.parse(input);
     const ctx = await requireOrgContext();
     requireOrgRole(ctx, "admin");
-    const organization = await getActiveOrganization(ctx);
-    if (!organization) throw new SafeError("Organization not found.");
-    const result =
-      ctx.orgRole !== null
+    return createAndDeliverInvitation(ctx, async () => {
+      const result = ctx.orgRole !== null
         ? await auth.api.createInvitation({
-            body: { email, role, organizationId: ctx.organizationId },
-            headers: await headers(),
-          })
+          body: { email, role, organizationId: ctx.organizationId },
+          headers: await headers(),
+        })
         : await createInvitationAsPlatformAdmin(ctx, { email, role });
-    const delivery = await sendOrganizationInvitation({
-      invitationId: result.id,
-      organizationId: ctx.organizationId,
-      organizationName: organization.name,
-      inviterName: await currentUserName(),
-      email,
-      role,
+      return { id: result.id, email, role };
     });
-    return { invitationId: result.id, ...delivery };
   }, "Failed to send invitation.");
 }
 
@@ -216,6 +196,27 @@ export async function revokeInvitationAction(
     }
     return { invitationId };
   }, "Failed to revoke invitation.");
+}
+
+export async function resendInvitationAction(
+  input: unknown,
+): Promise<ActionResult<{ invitationId: string; acceptUrl: string; emailSent: boolean }>> {
+  return withAction(async (ctx) => {
+    const { invitationId } = invitationIdSchema.parse(input);
+    requireOrgRole(ctx, "admin");
+    return createAndDeliverInvitation(ctx, () =>
+      replacePendingInvitation(ctx, { invitationId }).catch(rethrowOrganizationApiError));
+  }, {
+    fallbackMessage: "Failed to send invitation.",
+    log: { message: LOG_MESSAGE, context: { op: "organization:resend-invitation" } },
+  });
+}
+
+/** Translate only the plugin's intentional messages, preserving unexpected failures. */
+function rethrowOrganizationApiError(error: unknown): never {
+  const message = extractApiErrorMessage(error);
+  if (message) throw new SafeError(message);
+  throw error;
 }
 
 export async function changeMemberRoleAction(
@@ -258,6 +259,25 @@ export async function removeMemberAction(
     }
     return { memberIdOrEmail };
   }, "Failed to remove member.");
+}
+
+/** Clear the active organization; the caller must hard-navigate out of its workspace. */
+export async function leaveOrganizationAction(): Promise<ActionResult<{ organizationId: null }>> {
+  return withAction(async (ctx) => {
+    if (ctx.orgRole === null) {
+      throw new SafeError("You are not a member of this organization, so you cannot leave it.");
+    }
+    // The plugin enforces the last-Admin rule and clears the stored active org.
+    // Our /organization/leave after hook revokes OAuth grants and API keys.
+    await auth.api.leaveOrganization({
+      body: { organizationId: ctx.organizationId }, headers: await headers(),
+    }).catch(rethrowOrganizationApiError);
+    await clearSessionDataCookies();
+    return { organizationId: null };
+  }, {
+    fallbackMessage: "Failed to leave organization.",
+    log: { message: LOG_MESSAGE, context: { op: "organization:leave" } },
+  });
 }
 
 // --- Org switching --------------------------------------------------------
@@ -355,6 +375,10 @@ async function setActiveOrgForPlatformAdmin(
     .update(sessions)
     .set({ activeOrganizationId: organizationId })
     .where(eq(sessions.id, sessionId));
+  await clearSessionDataCookies();
+}
+
+async function clearSessionDataCookies(): Promise<void> {
   // Drop the cookie-cached session snapshot so the next getSession reads the
   // new active org from the database instead of the 5-minute cache.
   const cookieStore = await cookies();

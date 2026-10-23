@@ -12,6 +12,8 @@ vi.mock("@/lib/auth/better-auth", () => ({
   auth: {
     api: {
       createInvitation: vi.fn(),
+      cancelInvitation: vi.fn(),
+      leaveOrganization: vi.fn(),
       acceptInvitation: (...args: unknown[]) => mockAcceptInvitation(...args),
       setActiveOrganization: (...args: unknown[]) =>
         mockSetActiveOrganization(...args),
@@ -37,6 +39,7 @@ vi.mock("@/data-access/organizations", () => ({
   createOrganizationWithAdmin: (...args: unknown[]) =>
     mockCreateOrganizationWithAdmin(...args),
   findMembershipRole: vi.fn(),
+  replacePendingInvitation: vi.fn(),
   getActiveOrganization: vi.fn(),
   listAllOrganizations: vi.fn(),
   listOrgInvitations: vi.fn(),
@@ -75,11 +78,14 @@ import {
   createInvitationAsPlatformAdmin,
   renameActiveOrganization,
   findMembershipRole,
+  replacePendingInvitation,
   listOrgInvitations,
   listOrgMembers,
 } from "@/data-access/organizations";
 import {
   inviteMemberAction,
+  resendInvitationAction,
+  leaveOrganizationAction,
   renameOrganizationAction,
   acceptInvitationAction,
   createOrganizationAction,
@@ -438,5 +444,73 @@ describe("inviteMemberAction delivery", () => {
     expect(auth.api.createInvitation).not.toHaveBeenCalled();
     expect(createInvitationAsPlatformAdmin).not.toHaveBeenCalled();
     expect(sendEmail).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Members page actions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireOrgRole).mockReset();
+    vi.mocked(requireOrgContext).mockResolvedValue(ORG_CONTEXT);
+    vi.mocked(getActiveOrganization).mockResolvedValue({ name: VALID_INPUT.name } as never);
+    vi.mocked(replacePendingInvitation).mockReset().mockResolvedValue({ id: "fresh-invite", email: "invitee@example.test", role: "member" });
+    vi.mocked(auth.api.cancelInvitation).mockResolvedValue({} as never);
+    vi.mocked(auth.api.createInvitation).mockResolvedValue({ id: "fresh-invite" } as never);
+    vi.mocked(createInvitationAsPlatformAdmin).mockResolvedValue({ id: "fresh-invite" });
+    vi.mocked(sendEmail).mockResolvedValue({ sent: true, id: "message" });
+  });
+
+  it.each([
+    { platform: false, sent: true }, { platform: false, sent: false },
+    { platform: true, sent: true }, { platform: true, sent: false },
+  ])("uses the atomic writer and sends once (platform=$platform, sent=$sent)", async ({ platform, sent }) => {
+    const ctx = { ...ORG_CONTEXT, orgRole: platform ? null : "admin" as const, isPlatformAdmin: platform };
+    vi.mocked(requireOrgContext).mockResolvedValue(ctx);
+    vi.mocked(sendEmail).mockResolvedValue(sent ? { sent: true, id: "message" } : { sent: false, reason: "provider-error" });
+    expect(await resendInvitationAction({ invitationId: "old-invite" })).toEqual({ success: true, data: {
+      invitationId: "fresh-invite", acceptUrl: "http://localhost:3100/accept-invitation/fresh-invite", emailSent: sent,
+    } });
+    expect(requireOrgRole).toHaveBeenCalledWith(ctx, "admin");
+    expect(replacePendingInvitation).toHaveBeenCalledExactlyOnceWith(ctx, { invitationId: "old-invite" });
+    expect(createInvitationAsPlatformAdmin).not.toHaveBeenCalled();
+    expect(auth.api.createInvitation).not.toHaveBeenCalled();
+    expect(auth.api.cancelInvitation).not.toHaveBeenCalled();
+    expect(sendEmail).toHaveBeenCalledOnce();
+    expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ invitationId: "fresh-invite", to: "invitee@example.test" }));
+    expect(vi.mocked(replacePendingInvitation).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(sendEmail).mock.invocationCallOrder[0]);
+  });
+
+  it("validates the invitation id before looking it up", async () => {
+    expect(await resendInvitationAction({ invitationId: " " })).toMatchObject({ success: false, code: "validation_failed" });
+    expect(replacePendingInvitation).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not send when the atomic writer refuses the replacement", async () => {
+    vi.mocked(replacePendingInvitation).mockRejectedValueOnce(new SafeError("Invitation limit reached."));
+    expect(await resendInvitationAction({ invitationId: "old-invite" })).toEqual({ success: false, error: "Invitation limit reached." });
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("refuses a Member before replacing or delivering", async () => {
+    vi.mocked(requireOrgContext).mockResolvedValue({ ...ORG_CONTEXT, orgRole: "member" });
+    vi.mocked(requireOrgRole).mockImplementation(() => { throw new SafeError("Admin access is required."); });
+    expect(await resendInvitationAction({ invitationId: "old-invite" })).toEqual({ success: false, error: "Admin access is required." });
+    expect(replacePendingInvitation).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not deliver after a failed replacement insert", async () => {
+    vi.mocked(replacePendingInvitation).mockRejectedValueOnce(new Error("Insert failed"));
+    expect(await resendInvitationAction({ invitationId: "old-invite" })).toMatchObject({ success: false });
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("clearly refuses a Platform Admin who is not a member leaving", async () => {
+    vi.mocked(requireOrgContext).mockResolvedValue({ ...ORG_CONTEXT, orgRole: null, isPlatformAdmin: true });
+    expect(await leaveOrganizationAction()).toEqual({ success: false, error: "You are not a member of this organization, so you cannot leave it." });
+    expect(auth.api.leaveOrganization).not.toHaveBeenCalled();
   });
 });
