@@ -596,7 +596,7 @@ export async function createFeedstockInTransaction(
     },
   );
 
-  await withIntakeAllocationIssues(() => reallocateRunsForBins(ctx, tx, binIds, undefined, { earliestDeliveryDate: data.deliveryDate }), {}, data);
+  await withIntakeAllocationIssues(() => reallocateRunsForBins(ctx, tx, binIds, { earliestDeliveryDate: data.deliveryDate }), {}, data);
 
   // Generate warning if allocated wet mass > total delivery wet mass
   let warning: string | null = null;
@@ -788,7 +788,7 @@ export async function updateFeedstockInTransaction(
   if (allocationChanged) {
     const earliestDeliveryDate = new Date(Math.min(locked.deliveryDate.getTime(), saved.deliveryDate.getTime()));
     await withIntakeAllocationIssues(() => reallocateRunsForBins(
-      ctx, tx, [locked.storageLocationId, effectiveStorageLocationId], undefined, { earliestDeliveryDate },
+      ctx, tx, [locked.storageLocationId, effectiveStorageLocationId], { earliestDeliveryDate },
     ), previousFields, changedFields);
   }
 

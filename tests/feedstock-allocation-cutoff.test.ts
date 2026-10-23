@@ -5,7 +5,8 @@ import { facilities, feedstocks, feedstockTypes, productionRunFeedstockDraws, pr
 import { createProductionRunInTransaction, updateProductionRunInTransaction } from "@/data-access/production-runs/mutations";
 import { updateFacility } from "@/data-access/facility-mutations";
 import { createFeedstockInTransaction, updateFeedstockInTransaction } from "@/data-access/feedstocks";
-import { reallocateRunsForBins } from "@/data-access/feedstock-run-allocations";
+import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
+import { reallocateRunsForBins, reallocateRunsForFacility } from "@/data-access/feedstock-run-allocations";
 import { cleanupFeedstockFixtureParents, feedstockFixtureValues } from "./helpers/feedstock-fixture";
 import { cleanupLineageFixture, createLineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
@@ -49,6 +50,64 @@ async function scenario(work: (tx: DbTransaction, f: Awaited<ReturnType<typeof f
 
 beforeAll(() => ensureTestOrg());
 describe("facility-day feedstock allocations", () => {
+  it("refuses a draw above the cutoff total even when current stock covers it", () => scenario(async (tx, f) => {
+    const run = await f.run();
+    const before = await shares(tx, run.id);
+    await expect(tx.transaction(savepoint => updateProductionRunInTransaction(ctx, savepoint, run.id, {
+      expectedVersion: run.version, feedstockDraws: [{ storageLocationId: f.bins[0].id, wetMassKg: 25_000 }],
+    }))).rejects.toMatchObject({ code: "insufficient_stock",
+      message: expect.stringMatching(/^By the run's start day/),
+      issues: [expect.objectContaining({ path: ["feedstockDraws", 0, "storageLocationId"],
+        meta: { storageLocationId: f.bins[0].id, availableWetKg: 20_000, requestedWetKg: 25_000, unit: "kg" } })],
+    });
+    expect(await shares(tx, run.id)).toEqual(before);
+  }));
+  it("allows a start-only edit against an archived historical source bin", () => scenario(async (tx, f) => {
+    const run = await f.run();
+    await tx.update(storageLocations).set({ archivedAt: new Date() }).where(and(
+      eq(storageLocations.organizationId, TEST_ORG_ID), eq(storageLocations.id, f.bins[0].id)));
+    await updateProductionRunInTransaction(ctx, tx, run.id, {
+      expectedVersion: run.version, startTime: new Date("2026-03-10T08:00:00Z"),
+    });
+    expect(await shares(tx, run.id)).toEqual([{ feedstockId: f.intakes[0].id, wetMassUsedKg: DRAW_KG }]);
+    await expect(tx.transaction(savepoint => updateProductionRunInTransaction(ctx, savepoint, run.id, {
+      expectedVersion: run.version + 1, startTime: new Date("2026-03-11T08:00:00Z"),
+      feedstockDraws: [{ storageLocationId: f.bins[0].id, wetMassKg: DRAW_KG }],
+    }))).rejects.toThrow(/archived/);
+  }));
+  it("keeps cancelled draws as history without consuming stock or blocking intake and timezone edits", () => scenario(async (tx, f) => {
+    const run = await f.run(new Date("2026-03-10T08:00:00Z"));
+    const before = await shares(tx, run.id);
+    await updateProductionRunInTransaction(ctx, tx, run.id, {
+      expectedVersion: run.version, status: "cancelled", cancellationReason: "Test cancellation",
+    });
+    expect(await deriveFeedstockWetStockKg(ctx, tx, f.bins[0].id)).toBe(3 * INTAKE_KG);
+    const draws = await tx.select().from(productionRunFeedstockDraws).where(and(
+      eq(productionRunFeedstockDraws.organizationId, TEST_ORG_ID), eq(productionRunFeedstockDraws.productionRunId, run.id)));
+    expect(draws).toHaveLength(1);
+    await updateFeedstockInTransaction(ctx, tx, f.intakes[0].id, {
+      expectedVersion: f.intakes[0].version, deliveryDate: date("2026-04-02"),
+    });
+    await tx.select().from(facilities).where(and(
+      eq(facilities.organizationId, TEST_ORG_ID), eq(facilities.id, f.facility.id))).for("update");
+    await tx.update(facilities).set({ timezone: "UTC" }).where(and(
+      eq(facilities.organizationId, TEST_ORG_ID), eq(facilities.id, f.facility.id)));
+    await reallocateRunsForFacility(ctx, tx, f.facility.id);
+    expect(await shares(tx, run.id)).toEqual(before);
+  }));
+  it("names the affected run when an intake edit leaves too little qualifying mass", () => scenario(async (tx, f) => {
+    const run = await f.run();
+    await updateProductionRunInTransaction(ctx, tx, run.id, {
+      expectedVersion: run.version, feedstockDraws: [{ storageLocationId: f.bins[0].id, wetMassKg: 15_000 }],
+    });
+    await expect(tx.transaction(savepoint => updateFeedstockInTransaction(ctx, savepoint, f.intakes[1].id, {
+      expectedVersion: f.intakes[1].version, deliveryDate: date("2026-04-02"),
+    }))).rejects.toMatchObject({ code: "insufficient_stock",
+      message: expect.stringContaining(`Run ${run.code}:`),
+      issues: [expect.objectContaining({ path: ["deliveryDate"], message: expect.stringContaining(`Run ${run.code}:`),
+        meta: { storageLocationId: f.bins[0].id, availableWetKg: INTAKE_KG, requestedWetKg: 15_000, unit: "kg" } })],
+    });
+  }));
   it("splits 5 t across March intakes and excludes April", () => scenario(async (tx, f) => {
     const run = await f.run();
     expect(await shares(tx, run.id)).toEqual(expect.arrayContaining(f.intakes.slice(0, 2).map(intake => ({ feedstockId: intake.id, wetMassUsedKg: 2_500 }))));
@@ -148,7 +207,7 @@ describe("facility-day feedstock allocations", () => {
     const run = await f.run(new Date("2026-03-10T08:00:00Z"));
     const before = await shares(tx, run.id);
     await expect(tx.transaction(savepoint => updateFeedstockInTransaction(ctx, savepoint, f.intakes[0].id,
-      { expectedVersion: f.intakes[0].version, deliveryDate: date("2026-04-02") }))).rejects.toMatchObject({ code: "insufficient_stock", issues: [expect.objectContaining({ path: ["deliveryDate"], code: "insufficient_stock" })] });
+      { expectedVersion: f.intakes[0].version, deliveryDate: date("2026-04-02") }))).rejects.toMatchObject({ code: "insufficient_stock", issues: [expect.objectContaining({ path: ["deliveryDate"], code: "insufficient_stock", message: expect.stringContaining(`Run ${run.code}:`) })] });
     expect(await shares(tx, run.id)).toEqual(before);
     const [intake] = await tx.select().from(feedstocks).where(eq(feedstocks.id, f.intakes[0].id));
     expect(intake.deliveryDate).toEqual(f.intakes[0].deliveryDate);

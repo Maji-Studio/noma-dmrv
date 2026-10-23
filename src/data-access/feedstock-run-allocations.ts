@@ -1,7 +1,9 @@
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, ne } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { productionRunFeedstockDraws, productionRunFeedstocks, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { DomainError } from "@/lib/domain-errors";
+import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { formatFacilityDate } from "@/lib/date-utils";
 import { withProductionRunErrors } from "@/lib/production-run-domain-errors";
 import { assertLockedLineagesAllowMutation, tryLockCertifiedLineageArtifacts } from "./certification-lineage-guards";
@@ -28,10 +30,10 @@ export async function reallocateRunsForBins(
   ctx: OrgContext,
   tx: DbTransaction,
   binIds: readonly (string | null)[],
-  onlyRunId?: string,
-  options: { earliestDeliveryDate?: Date; facilityId?: string } = {},
+  options: { onlyRunId?: string; earliestDeliveryDate?: Date; facilityId?: string } = {},
 ): Promise<void> {
   requireOrgScope(ctx);
+  const { onlyRunId } = options;
   const ids = [...new Set(binIds.filter((id): id is string => id !== null))];
   if (!ids.length) return;
   await lockBinStocks(ctx, tx, ids, { allowArchived: true });
@@ -48,6 +50,7 @@ export async function reallocateRunsForBins(
     .where(and(
       eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
       inArray(productionRunFeedstockDraws.storageLocationId, ids),
+      ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
       onlyRunId ? eq(productionRunFeedstockDraws.productionRunId, onlyRunId) : undefined,
       earliestStart ? gte(productionRuns.startTime, earliestStart) : undefined,
       options.facilityId ? eq(productionRuns.facilityId, options.facilityId) : undefined,
@@ -55,31 +58,41 @@ export async function reallocateRunsForBins(
   const runIds = [...new Set(affected.map(row => row.runId))].sort();
   if (!runIds.length) return;
 
-  const draws = await tx.select().from(productionRunFeedstockDraws).where(and(
+  const readDrawSnapshot = () => tx.select().from(productionRunFeedstockDraws).where(and(
     eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
     inArray(productionRunFeedstockDraws.productionRunId, runIds),
   )).orderBy(productionRunFeedstockDraws.productionRunId, productionRunFeedstockDraws.storageLocationId);
+  const draws = await readDrawSnapshot();
   await lockBinStocks(ctx, tx, draws.map(draw => draw.storageLocationId), { allowArchived: true });
   const runs = await tx.select().from(productionRuns).where(and(
     eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.id, runIds),
   )).orderBy(productionRuns.id).for("update");
   // A concurrent writer may have changed another source while we acquired it.
-  const currentDraws = await tx.select().from(productionRunFeedstockDraws).where(and(
-    eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
-    inArray(productionRunFeedstockDraws.productionRunId, runIds),
-  )).orderBy(productionRunFeedstockDraws.productionRunId, productionRunFeedstockDraws.storageLocationId);
+  const currentDraws = await readDrawSnapshot();
   assertStockLockSnapshot(JSON.stringify(draws) === JSON.stringify(currentDraws));
 
   for (const run of runs) {
+    if (run.status === CANCELLED_PRODUCTION_RUN_STATUS) continue;
     const timezone = await getOutputStockFacilityTimezone(ctx, run.facilityId, tx);
     const cutoffDay = formatFacilityDate(run.startTime, timezone);
     const proposed: FeedstockWetAllocation[] = [];
     const runDraws = draws.filter(draw => draw.productionRunId === run.id);
     if (onlyRunId) runDraws.sort((a, b) => ids.indexOf(a.storageLocationId) - ids.indexOf(b.storageLocationId));
     for (const [index, draw] of runDraws.entries()) {
-      proposed.push(...await withProductionRunErrors(() => allocateFeedstockWetMass(
-        ctx, tx, draw.storageLocationId, draw.wetMassKg, cutoffDay,
-      ), ["feedstockDraws", index, "storageLocationId"]));
+      try {
+        proposed.push(...await withProductionRunErrors(() => allocateFeedstockWetMass(
+          ctx, tx, draw.storageLocationId, draw.wetMassKg, cutoffDay,
+        ), ["feedstockDraws", index, "storageLocationId"]));
+      } catch (error) {
+        if (run.id !== onlyRunId && error instanceof DomainError) {
+          throw new DomainError(error.code, `Run ${run.code}: ${error.message}`, {
+            ...error,
+            issues: error.issues.map(issue => ({ ...issue, message: `Run ${run.code}: ${issue.message}` })),
+            cause: error,
+          });
+        }
+        throw error;
+      }
     }
     const saved = await tx.select({ feedstockId: productionRunFeedstocks.feedstockId, wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg })
       .from(productionRunFeedstocks).where(and(
@@ -116,5 +129,5 @@ export async function reallocateRunsForFacility(ctx: OrgContext, tx: DbTransacti
       eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
       eq(productionRuns.facilityId, facilityId),
     ));
-  await reallocateRunsForBins(ctx, tx, draws.map(draw => draw.binId), undefined, { facilityId });
+  await reallocateRunsForBins(ctx, tx, draws.map(draw => draw.binId), { facilityId });
 }

@@ -9,12 +9,13 @@ describe("intake allocation refusal fields", () => {
     ["massWetKg", 100, 0],
     ["moistureContentPercent", 20, null],
   ])("maps insufficient stock to changed %s", async (field, previous, next) => {
+    const meta = { storageLocationId: "bin", availableWetKg: 0, requestedWetKg: 100, unit: "kg" };
     const error = new DomainError("insufficient_stock", "No qualifying intake", {
-      issues: [{ path: ["feedstockDraws", 0, "storageLocationId"], code: "insufficient_stock", message: "No qualifying intake" }],
+      issues: [{ path: ["feedstockDraws", 0, "storageLocationId"], code: "insufficient_stock", message: "No qualifying intake", meta }],
     });
     await expect(withIntakeAllocationIssues(() => Promise.reject(error), { [field]: previous }, { [field]: next }))
       .rejects.toMatchObject({ code: error.code, message: error.message,
-        issues: [{ path: [field], code: error.code, message: error.message }] });
+        issues: [{ path: [field], code: error.code, message: error.message, meta }] });
   });
   it("includes only changed intake fields in a lineage refusal", async () => {
     await expect(withIntakeAllocationIssues(() => Promise.reject(new DomainError("certification_locked", "Sent lineage")),

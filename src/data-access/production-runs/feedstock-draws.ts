@@ -240,7 +240,7 @@ export async function replaceProductionRunFeedstockDraws(
     );
   }
 
-  await reallocateRunsForBins(ctx, tx, draws.map((draw) => draw.storageLocationId), params.productionRunId);
+  await reallocateRunsForBins(ctx, tx, draws.map((draw) => draw.storageLocationId), { onlyRunId: params.productionRunId });
 
   return sumProductionRunFeedstockDraws(draws);
 }

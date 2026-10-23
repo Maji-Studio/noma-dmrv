@@ -785,7 +785,7 @@ export async function updateProductionRunInTransaction(
         draws: normalizedFeedstockDraws,
       });
     } else if (lockedTargetStartTime.getTime() !== locked.startTime.getTime() || lockedTargetFacilityId !== locked.facilityId) {
-      await reallocateRunsForBins(ctx, tx, lockedFeedstockStorageLocationIds, productionRunId);
+      await reallocateRunsForBins(ctx, tx, lockedFeedstockStorageLocationIds, { onlyRunId: productionRunId });
     }
 
     const savedDraws = feedstockDrawsChanged

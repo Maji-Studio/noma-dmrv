@@ -18,7 +18,7 @@ export async function withIntakeAllocationIssues<T>(
         !recordFieldEqual(key, before.get(key), after.get(key))) ?? "deliveryDate";
       throw new DomainError(error.code, error.message, {
         ...error, cause: error,
-        issues: [{ path: [field], code: error.code, message: error.message }],
+        issues: [{ ...error.issues[0], path: [field], code: error.code, message: error.message }],
       });
     }
   }, previous, changes);

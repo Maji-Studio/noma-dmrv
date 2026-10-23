@@ -126,7 +126,7 @@ describe("updateFeedstockInTransaction", () => {
       updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, { expectedVersion: 1, notes: "checked" }),
     ).resolves.toEqual({ ...ENRICHED_ROW, hasUsableTransportLeg: false, transportLegDistanceSource: null });
     expect(tx.update).toHaveBeenCalled();
-    expect(reallocateRunsForBins).toHaveBeenCalledWith(ctx, tx, ["bin", "bin"], undefined, { earliestDeliveryDate: STORED_ROW.deliveryDate });
+    expect(reallocateRunsForBins).toHaveBeenCalledWith(ctx, tx, ["bin", "bin"], { earliestDeliveryDate: STORED_ROW.deliveryDate });
     // Every read, including the locked existence check, stays on tx.
     expect(globalRead).not.toHaveBeenCalled();
   });

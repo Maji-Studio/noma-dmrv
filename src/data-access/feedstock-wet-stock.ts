@@ -3,6 +3,7 @@ import { db, type DbTransaction } from "@/db";
 import { feedstocks } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { addDaysIso } from "@/lib/date-utils";
+import { formatMassKg } from "@/lib/format-utils";
 import { SafeError } from "@/lib/errors";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
 import { deriveLaneStock } from "./lane-stock-derivation";
@@ -115,6 +116,14 @@ export async function allocateFeedstockWetMass(
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
   if (totalWeight === 0) {
     throw new StockOverdrawError(EMPTY_FEEDSTOCK_BIN_MESSAGE, { storageLocationId, availableWetKg: 0, requestedWetKg: totalWetMassKg });
+  }
+
+  const availableWetKg = totalWeight / MASS_PRECISION_FACTOR;
+  if (totalUnits > totalWeight) {
+    throw new StockOverdrawError(
+      `By the run's start day this bin had received ${formatMassKg(availableWetKg)}, less than the ${formatMassKg(totalWetMassKg)} drawn. Lower the draw or move the run's start.`,
+      { storageLocationId, availableWetKg, requestedWetKg: totalWetMassKg },
+    );
   }
 
   let allocatedUnits = 0;
