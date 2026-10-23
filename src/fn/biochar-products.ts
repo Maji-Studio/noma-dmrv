@@ -20,7 +20,8 @@ import { z } from "zod";
 
 import { requireOrgFacility } from "@/data-access/utils";
 import { deriveSourceBiocharMassKg, toCompositionJsonb } from "@/lib/biochar-composition/composition";
-import { SafeError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
+import { BIOCHAR_PRODUCT_MASS_ISSUE_PATH } from "@/lib/biochar-composition/product-submission";
 import { makeBiocharProduct, updateBiocharProduct } from "@/lib/operations/biochar-products";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import {
@@ -35,6 +36,13 @@ import type { ActionResult } from "@/types/actions";
 const LOG_MESSAGE = "biochar product action failed";
 
 const ZERO_SOURCE_BIOCHAR_MESSAGE = "A product requires positive source biochar.";
+
+/** The refusal for a product without source biochar, filed on the biochar mass the operation names it by. */
+function zeroSourceBiocharRefusal(): DomainError {
+  return new DomainError("validation_failed", ZERO_SOURCE_BIOCHAR_MESSAGE, {
+    issues: [{ path: [BIOCHAR_PRODUCT_MASS_ISSUE_PATH], code: "validation_failed", message: ZERO_SOURCE_BIOCHAR_MESSAGE }],
+  });
+}
 
 // ============================================
 // Biochar Product List/Query Operations
@@ -114,7 +122,7 @@ export async function createBiocharProductFn(
     const validated = createBiocharProductSchema.parse(data);
     const ingredientBins = validated.ingredientBins ?? [];
     const biocharWetMassKg = deriveSourceBiocharMassKg(validated.massKg, ingredientBins);
-    if (biocharWetMassKg == null || biocharWetMassKg <= 0) throw new SafeError(ZERO_SOURCE_BIOCHAR_MESSAGE);
+    if (biocharWetMassKg == null || biocharWetMassKg <= 0) throw zeroSourceBiocharRefusal();
 
     const created = await runOperationInProcess(makeBiocharProduct, ctx, {
       facilityId: validated.facilityId,
