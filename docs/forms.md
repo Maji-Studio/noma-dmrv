@@ -372,6 +372,7 @@ A `SectionLabel` title over a `space-y-16` field stack, with a `pt-16` hairline 
 
 The only CTA row — left-aligned, primary action first, sticky by default, nothing renders after it.
 
+- Inside a record sheet, every ancestor of a sticky `FormActions` becomes a filling flex column (`SHEET_FORM_FILL`, [design-decisions](design-decisions.md) "Sheet actions pinned to the bottom"), so never place it inside a grid row, and never keep a `FormActions` mounted inside an element hidden with `hidden`: the fill rule's `display: flex` outranks it.
 - Never stack a parent dialog or step-flow footer beneath `FormActions`. The
   embedded form owns the one action row. Give its secondary action the
   context-specific label (for example, `cancelLabel="Not now"`) and omit the

@@ -66,10 +66,6 @@ const SECTIONS = [
 
 type SectionKey = (typeof SECTIONS)[number]["key"];
 
-// Each wrapper between the sheet body and FormActions fills its parent, so the
-// footer's `mt-auto` pins the buttons to the bottom of the sheet.
-const FILL_COLUMN = "flex flex-1 flex-col";
-
 const getSelectorId = (key: SectionKey) => `feedstock-type-selector-${key}`;
 const getPanelId = (key: SectionKey) => `feedstock-type-panel-${key}`;
 
@@ -325,7 +321,6 @@ export function FeedstockTypeForm({
 
       <form
         onSubmit={latched(handleSubmit((data) => onSubmit(data)))}
-        className={cn(FILL_COLUMN, "gap-20")}
       >
         <ResolvedErrorRevalidator control={control} trigger={trigger} />
         <div
@@ -333,10 +328,10 @@ export function FeedstockTypeForm({
           aria-labelledby={
             showSourceSelector ? getSelectorId("general") : undefined
           }
-          className={cn(visibleActiveSection === "general" ? FILL_COLUMN : "hidden")}
+          className={cn(visibleActiveSection !== "general" && "hidden")}
         >
           {visibleActiveSection === "general" && (
-            <div className={cn(FILL_COLUMN, "space-y-20")}>
+            <div className="space-y-20">
               {registryMappingRequired && (
                 <FormField
                   id="isometricFeedstockTypeId"
@@ -449,10 +444,10 @@ export function FeedstockTypeForm({
           aria-labelledby={
             showSourceSelector ? getSelectorId("isometric") : undefined
           }
-          className={cn(visibleActiveSection === "isometric" ? FILL_COLUMN : "hidden")}
+          className={cn(visibleActiveSection !== "isometric" && "hidden")}
         >
           {visibleActiveSection === "isometric" && (
-            <div className={cn(FILL_COLUMN, "space-y-20")}>
+            <div className="space-y-20">
               {/* Only fetch once the section has first been opened. */}
               {hasOpenedIsometric && (
                 <IsometricFeedstockBrowser
@@ -462,7 +457,7 @@ export function FeedstockTypeForm({
               )}
 
               {selectedIsometricFeedstock && (
-                <div className={cn(FILL_COLUMN, "space-y-20 border-t border-[var(--color-border-secondary)] pt-20")}>
+                <div className="space-y-20 border-t border-[var(--color-border-secondary)] pt-20">
                   <FormField
                     id="isometric-category"
                     label="Local category"
