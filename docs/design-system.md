@@ -48,8 +48,8 @@ Read these first. Each one fails quietly rather than loudly.
   gap or their hit areas overlap.
 - **Other controls use the shared recipes in `touch-target.ts`.**
   `ICON_BUTTON_TOUCH_PROPS` for a standalone icon-only `Button` (spread it:
-  size, `width="square"` and the hit area in one; row menus, location rows; keep 12px between
-  neighbours). `CENTRED_HIT_AREA` (`::before`) for chips and badges.
+  `size="icon"` is a 32px square by default; the bundle adds the 44px hit area and
+  `shrink-0`; row menus, location rows; keep 12px between neighbours). `CENTRED_HIT_AREA` (`::before`) for chips and badges.
   `INLINE_HIT_AREA` (`::after`, `_FROM_SM` variant) for inline links.
   `PHONE_TOUCH_TARGET` for a footer button or a select that must be 44px tall
   on a phone. A `<select>` cannot take a pseudo-element, so it grows instead.
@@ -567,9 +567,8 @@ Always use `Button`; never a raw `<button>` with manual styling.
 - **Quiet icon button:** spread `ICON_BUTTON_TOUCH_PROPS`
   (`src/components/ui/touch-target.ts`; see the touch-target bullet under
   "The invariants that break code silently") with `variant="noOutline"` (or `variant="destructive"` for a
-  delete row action) and an `aria-label`. The bundle carries `size="icon"`,
-  `width="square"` and the 44px hit area; `width="square"` stays in it until
-  the `ui/button-icon-width` open question drops the `w-auto` default.
+  delete row action) and an `aria-label`. `size="icon"` is a 32px
+  square by default; `ICON_BUTTON_TOUCH_PROPS` adds the 44px hit area.
 - There is **no `asChild` / Slot polymorphism** — `Button` is a plain
   `forwardRef` over `<button>`. To style a link, style the `<Link>` directly.
 - Disabled is `disabled:opacity-40`, handled by the component.
