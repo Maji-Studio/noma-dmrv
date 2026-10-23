@@ -29,7 +29,7 @@ vi.mock("@/components/ui/slide-over-panel", () => {
   };
 });
 vi.mock("@/hooks/use-deferred-attachments", () => ({
-  useDeferredAttachments: () => ({ attachments: [], hasHeld: false, add: vi.fn(), remove: vi.fn(), flush: vi.fn() }),
+  useDeferredAttachments: () => ({ attachments: [], hasHeld: false, add: vi.fn(), remove: vi.fn(), flush: vi.fn(), clear: vi.fn() }),
 }));
 
 const SCOPE = { facilityId: "fac", creditBatchId: "cb" };
@@ -143,6 +143,23 @@ describe("ManualEntryForm whole-entry lock", () => {
     group.blur();
     fireEvent.change(energy(), { target: { value: "7" } });
     expect(document.activeElement).not.toBe(group);
+  });
+});
+
+describe("ManualEntryForm saved values after the lock", () => {
+  it("shows the saved value, date and note again, not the typed ones", async () => {
+    mutations.update.mockRejectedValue(new ActionError({ error: "This emissions entry is reserved or sent. It cannot be changed.", code: "certification_locked" }));
+    renderForm({ kind: "edit", entry: makeEntry({ occurredOn: "2026-09-12", note: "Saved note" }) });
+    const date = () => screen.getByLabelText("Date");
+    expect(date()).toHaveProperty("value", "2026-09-12");
+    fireEvent.change(energy(), { target: { value: "9" } });
+    fireEvent.change(date(), { target: { value: "2026-09-15" } });
+    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Typed note" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByRole("group", { name: /Your changes were not saved/ });
+    expect(energy()).toHaveProperty("value", "42.5");
+    expect(date()).toHaveProperty("value", "2026-09-12");
+    expect(screen.getByLabelText("Note")).toHaveProperty("value", "Saved note");
   });
 });
 

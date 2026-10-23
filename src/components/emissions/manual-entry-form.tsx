@@ -108,7 +108,6 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
     setValue,
     clearErrors,
     resetField,
-    reset,
     trigger,
     formState: { errors },
   } = useForm<EmissionEntryFormInput, unknown, EmissionEntryFormData>({
@@ -175,8 +174,12 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
       setServerError(footer);
       // The lock names no field (lockWritableEmissionEntry), so the footer carries it.
       if (footer !== null && isActionError(error) && error.code === LOCK_CODE) {
-        // Back to the saved entry: the typed values were not saved.
-        reset(undefined, { keepErrors: true });
+        // Back to the saved entry: nothing typed or attached was saved. Field by field, not
+        // `reset()`: that resets the whole <form> element and left the date input blank in the browser.
+        for (const name of [...fields.map((_, index) => entryFieldName(index)), "date", "note"]) {
+          resetField(name, { keepError: true });
+        }
+        attachments.clear();
         setLocked(true);
       }
     }
