@@ -397,7 +397,13 @@ export function ApplicationForm({
     overdrawError: applicationStockError,
   });
 
-  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: APPLICATION_REFUSAL_ALIASES });
+  register("gpsLatitude");
+  register("gpsLongitude");
+  register("gisBoundary");
+
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: APPLICATION_REFUSAL_ALIASES,
+    dependents: { gpsLatitude: ["gpsLongitude"], gpsLongitude: ["gpsLatitude"] },
+  });
   const handleFormSubmit = latched(handleSubmit(async (data) => {
     if (applicationStockError) return;
 

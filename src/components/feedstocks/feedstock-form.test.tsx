@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/components/forms", async () => {
   const { FormError } = await import("@/components/forms/form-error");
-  const { useWatch } = await vi.importActual<
+  const { useWatch, useController } = await vi.importActual<
     typeof import("react-hook-form")
   >("react-hook-form");
   const Wrapper = ({ children }: { children: ReactNode }) => children;
@@ -45,14 +45,15 @@ vi.mock("@/components/forms", async () => {
       onCreateNew?: () => void;
     }) => {
       const value = useWatch({ control, name });
+      const { field } = useController({ control, name });
       if (name === "supplierId") {
         mocks.supplierSelectProps = { allowCreate, onCreateNew };
       }
       return name === "supplierId" ? (
-        <output
-          data-testid="selected-supplier-id"
-          data-value={String(value ?? "")}
-        />
+        <>
+          <output data-testid="selected-supplier-id" data-value={String(value ?? "")} />
+          <input aria-label="Supplier" {...field} />
+        </>
       ) : null;
     },
     FormField: Wrapper,
@@ -274,6 +275,28 @@ describe("FeedstockForm single-bin mass editing", () => {
       fireEvent.submit(view.container.querySelector("form")!);
       await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
       await waitFor(() => expect(input()?.value).toBe("60"));
+      expect(view.getByRole("button", { name: "Reset to the location default" })).toBeTruthy();
+    } finally { cleanup(); }
+  });
+
+  it("keeps the saved override after reverting a changed supplier", async () => {
+    const saved = { ...feedstock, distanceKmOverride: 60, distanceSource: "document", distanceNote: "Detour" } as FeedstockWithRelations;
+    const onSubmit = vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+      error: "Sent to a Removal.", code: "certification_locked",
+      issues: [{ path: ["supplierId"], code: "certification_locked", message: "Sent to a Removal." }],
+    }), "Feedstock was not saved."));
+    const view = render(<FeedstockForm feedstock={saved} onSubmit={onSubmit} />);
+    const input = () => view.container.querySelector<HTMLInputElement>('input[name="transportDistanceKm"]');
+    try {
+      await act(async () => {
+        mocks.supplierDialogProps?.onSuccess({ id: "66666666-6666-4666-8666-666666666666", code: "SUP-2", name: "Supplier B" });
+      });
+      expect(input()?.value).not.toBe("60");
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      await waitFor(() => expect(input()?.value).toBe("60"));
+      await act(async () => {});
+      expect(input()?.value).toBe("60");
       expect(view.getByRole("button", { name: "Reset to the location default" })).toBeTruthy();
     } finally { cleanup(); }
   });

@@ -391,6 +391,7 @@ describe("CreditBatchForm save refusal (#1327)", () => {
 
       await act(async () => {});
       expect(container.textContent).not.toContain("Saving removes a claimed production run");
+      expect(container.textContent).toContain("Not saved. 1 field is locked.");
     } finally {
       batch.productionRunIds = [];
     }
@@ -418,6 +419,7 @@ describe("CreditBatchForm save refusal (#1327)", () => {
 
       await act(async () => {});
       expect(container.textContent).not.toContain("Saving removes a claimed production run");
+      expect(container.textContent).toContain("Not saved. 1 field is locked.");
     } finally {
       batch.productionRunIds = [];
     }

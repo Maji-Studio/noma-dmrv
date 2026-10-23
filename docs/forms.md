@@ -209,6 +209,12 @@ Prefer the `PositionPicker` component (map preview + address search + manual lat
 ## Saved values after a lock refusal
 
 `useSaveRefusal` requires the form's `resetField` alongside `setError`. Its
+optional `dependents` map restores registered dependent fields once after a parent
+lock revert, for example `{ customerId: ["customerLocationId"] }`. A dependent
+gets the Locked marker only if changed and on screen; otherwise it resets silently.
+Clear dependent fields from operator change handlers when a dependency cascade
+would also fire on `resetField` and erase restored values. `isChanged` can report
+operator edits held outside RHF, such as delivery sub-bin choices. Its
 locked-field reset uses RHF defaults, so those defaults must describe saved
 values. Delivery and feedstock initialize from the opened record. Feedstock
 resets both its total and single-bin allocation mass together. Application
