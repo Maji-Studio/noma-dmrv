@@ -5,6 +5,7 @@ import { DomainError } from "@/lib/domain-errors";
 import { ActionConflictError } from "@/lib/errors";
 import { planSaveRefusal } from "@/lib/save-refusal";
 import { DELIVERY_REFUSAL_ALIASES } from "@/schemas/deliveries";
+import { outputStockCommandSchema } from "@/schemas/output-stock";
 import type { OrgContext } from "@/lib/auth/server";
 
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), autoCode: vi.fn(), log: vi.fn(), run: vi.fn(), update: vi.fn() }));
@@ -180,15 +181,21 @@ describe("delivery action field mapping and partial notes", () => {
     mocks.run.mockRejectedValue(new DomainError("validation_failed", "Date and time cannot be in the future.", { issues: [{ path: ["deliveredAt"], code: "validation_failed", message: "Date and time cannot be in the future." }] }));
     expect(await createDeliveryFn(delivery)).toMatchObject({ success: false, issues: [{ path: ["deliveredAt"] }] });
   });
+  /** The exception a cleared load mass really raises: the posting schema rejects `wetMassKg: null`. */
+  const clearedMassError = () => {
+    const parsed = outputStockCommandSchema.safeParse({ storageLocationId: id, facilityId: id, kind: "delivery", occurredAt: "2026-10-02T09:30:00.000Z", wetMassKg: null, moisturePercent: 10, idempotencyKey: "key", reason: "Delivery" });
+    if (parsed.success) throw new Error("Expected the cleared mass to fail");
+    return parsed.error;
+  };
   it.each([
-    ["occurredAt", "deliveryDate", "Date and time cannot be in the future. Enter a time at or before now."],
-    ["wetMassKg", "deliveredWetMassKg", "Enter a valid mass."],
-  ])("sends the posting path %s on an edit and the form maps it to %s", async (path, field, message) => {
+    ["occurredAt", "deliveryDate", () => new DomainError("validation_failed", "Date and time cannot be in the future. Enter a time at or before now.", { issues: [{ path: ["occurredAt"], code: "validation_failed", message: "Date and time cannot be in the future. Enter a time at or before now." }] }), "Date and time cannot be in the future. Enter a time at or before now."],
+    ["wetMassKg", "deliveredWetMassKg", clearedMassError, "Enter the wet mass."],
+  ])("sends the posting path %s on an edit and the form maps it to %s", async (path, field, makeError, message) => {
     // Stock posting names these two paths; the update action does not rename them.
-    mocks.update.mockRejectedValueOnce(new DomainError("validation_failed", message, { issues: [{ path: [path], code: "validation_failed", message }] }));
+    mocks.update.mockRejectedValueOnce(makeError());
     const result = await updateDeliveryFn({ deliveryId: id, expectedVersion: 1 });
     if (result.success) throw new Error("Expected a posting refusal");
-    expect(result).toMatchObject({ success: false, issues: [{ path: [path] }] });
+    expect(result).toMatchObject({ success: false, code: "validation_failed", issues: [{ path: [path], code: path === "wetMassKg" ? "invalid_type" : "validation_failed", message }] });
     try { throwActionError(result); expect.fail("Expected the action refusal to throw"); }
     catch (error) {
       expect(planSaveRefusal(error, { aliases: DELIVERY_REFUSAL_ALIASES, isShown: () => true, isChanged: () => true }))

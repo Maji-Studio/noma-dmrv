@@ -302,7 +302,7 @@ export type DeleteDeliveryData = z.infer<typeof deleteDeliverySchema>;
 /**
  * Operation and posting issue paths to the delivery form fields that show them.
  * `occurredAt` and `wetMassKg` are the stock posting's names for the delivery
- * date and load mass on an edit (and a load-mass shortage on create).
+ * date and load mass on an edit.
  */
 export const DELIVERY_REFUSAL_ALIASES = {
   deliveredAt: "deliveryDate",
