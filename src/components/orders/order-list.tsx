@@ -43,6 +43,7 @@ import { OrderForm } from "./order-form";
 import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { orderSheetSections } from "./order-read-sections";
 import { ILLUSTRATION_SIZE, OrderArt } from "@/components/ui/illustrations";
 
@@ -302,18 +303,18 @@ export function OrderList() {
   ]);
 
   // Handlers
-  const handleCreate = async (data: OrderFormData) => {
+  const handleCreate = async (data: OrderFormData, onRefusal: SaveRefusalHandler) => {
     setFormError(null);
     try {
       await createOrder.mutateAsync(data);
       closeSideSheet();
       toast.success("Order created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Order was not created. Check the form.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Order was not created. Check the form."));
     }
   };
 
-  const handleUpdate = async (data: OrderFormData) => {
+  const handleUpdate = async (data: OrderFormData, onRefusal: SaveRefusalHandler) => {
     if (!displaySideSheet?.entity) return;
     setFormError(null);
     try {
@@ -321,7 +322,7 @@ export function OrderList() {
       closeSideSheet();
       toast.success("Order updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Order was not saved. Try again.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Order was not saved. Try again."));
     }
   };
 

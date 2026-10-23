@@ -18,8 +18,10 @@ import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { useFeedstockTypeList } from "@/hooks/use-feedstock-types";
 import { useMethodBEligibility } from "@/hooks/use-production-processes";
 
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import { useForm, useWatch, type Resolver } from "react-hook-form";
+import { LOCKED_ERROR_TYPE } from "@/components/forms/form-error-summary";
+import { SERVER_ERROR_TYPE, useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import type { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -49,6 +51,9 @@ import { isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
 type CreditBatchFormInput = z.input<ReturnType<typeof creditBatchFormSchemaForCertifier>>;
 type CreditBatchFormResolver = Resolver<CreditBatchFormInput, unknown, CreditBatchFormData>;
 
+/** Form fields whose value decides which production runs the batch holds. */
+const MEMBERSHIP_INPUTS = ["startDate", "endDate", "feedstockTypeId", "facilityId"] as const;
+
 function parseWatchedDate(value: unknown): Date | null {
   if (value == null || value === "") {
     return null;
@@ -75,7 +80,8 @@ interface CreditBatchFormProps {
     appliedWeightTons?: number;
   };
   /** Form submission handler */
-  onSubmit: (data: CreditBatchFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1327). */
+  onSubmit: (data: CreditBatchFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Called when the user edits the date range — used to clear a stale submit-time server error (e.g. an overlap message that no longer applies) */
   onClearServerError?: () => void;
   /** Cancel button handler */
@@ -116,6 +122,7 @@ export function CreditBatchForm({
   lock,
 }: CreditBatchFormProps) {
   const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!creditBatch;
   // Fail closed: the definition stays fixed until the lock answers, so a
   // lock that arrives Held can never meet an edited membership.
@@ -129,9 +136,11 @@ export function CreditBatchForm({
     handleSubmit,
     control,
     trigger,
+    getValues,
     formState: { errors, isSubmitted, dirtyFields },
     setValue,
     resetField,
+    setError,
   } = useForm<CreditBatchFormInput, unknown, CreditBatchFormData>({
     resolver: resolveBatch,
     defaultValues: {
@@ -201,7 +210,11 @@ export function CreditBatchForm({
 
   // ResolvedErrorRevalidator covers value changes, but not policy query updates.
   // Recheck only surfaced errors or a submitted form when the policy changes.
-  const shouldRevalidateEndDate = isSubmitted || Boolean(errors.endDate);
+  // A refused save names the end date for a reason the client cannot recompute
+  // (a lock, the server's rule): revalidating would clear it at once. The next
+  // edit of the field clears it, as for any server error.
+  const endDateRefused = errors.endDate?.type === SERVER_ERROR_TYPE || errors.endDate?.type === LOCKED_ERROR_TYPE;
+  const shouldRevalidateEndDate = !endDateRefused && (isSubmitted || Boolean(errors.endDate));
   useEffect(() => {
     if (hasBothDates && shouldRevalidateEndDate) void trigger("endDate");
   }, [certifier, effectiveFacilityId, hasBothDates, shouldRevalidateEndDate, trigger]);
@@ -328,17 +341,33 @@ export function CreditBatchForm({
     ? "Update credit batch"
     : "Create credit batch";
 
+  const refuseCreditBatchSave = useSaveRefusal({ control, setError, resetField, formId });
+  // Every input that decides which runs belong to the batch (the window, the
+  // feedstock type, the facility) prunes the cohort when it changes. A lock
+  // revert that restores any of them therefore restores the saved cohort too.
+  const refuseSave: SaveRefusalHandler = (error, fallback) => {
+    const before = getValues(MEMBERSHIP_INPUTS);
+    const footer = refuseCreditBatchSave(error, fallback);
+    const after = getValues(MEMBERSHIP_INPUTS);
+    if (after.some((value, index) => value !== before[index])) {
+      // setValue tells the watchers (resetField alone does not reach the
+      // unregistered cohort field); resetField then clears its dirty mark.
+      setValue("productionRunIds", creditBatch?.productionRunIds ?? [], { shouldValidate: true });
+      resetField("productionRunIds");
+    }
+    return footer;
+  };
   const handleFormSubmit = latched(handleSubmit((data) => {
     const sampling =
       isEditMode ||
       (showSamplingControl && methodBEligibility.data?.unsampledAllowed)
         ? data.sampling
         : "sampled";
-    return onSubmit({ ...data, sampling });
+    return onSubmit({ ...data, sampling }, refuseSave);
   }));
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {/* ── Batch definition ── */}
       <FormSection title="Batch definition" divider={false}>
