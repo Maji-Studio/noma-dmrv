@@ -85,7 +85,7 @@ export function CustomerEditFormDialog(props: EditProps<"customer">) {
   return <PickerEditFormDialog {...props} title="Edit customer" testId="customer-edit-dialog"
     isPending={update.isPending}
     save={(data: CustomerFormData, record) => update.mutateAsync({ ...data, customerId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <CustomerForm key={key} {...formProps} customer={record} customerId={record.id} />} />;
+    renderForm={(record, { key, ...formProps }) => <CustomerForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} customer={record} customerId={record.id} />} />;
 }
 
 export function ReactorEditFormDialog(props: EditProps<"reactor">) {
@@ -115,7 +115,7 @@ export function SupplierEditFormDialog(props: EditProps<"supplier">) {
   return <PickerEditFormDialog {...props} title="Edit supplier" testId="supplier-edit-dialog"
     isPending={update.isPending}
     save={(data: SupplierFormData, record) => update.mutateAsync({ ...data, supplierId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <SupplierForm key={key} {...formProps} supplier={record} supplierId={record.id} />} />;
+    renderForm={(record, { key, ...formProps }) => <SupplierForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} supplier={record} supplierId={record.id} />} />;
 }
 
 export function FormulationEditFormDialog(props: EditProps<"formulation">) {
