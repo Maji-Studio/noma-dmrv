@@ -4,7 +4,9 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 
+import { useId } from "react";
 import { useForm, useWatch, type Resolver } from "react-hook-form";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -56,7 +58,8 @@ const MERGE_TIME_HINT =
 
 interface StorageLocationFormProps {
   storageLocation?: StorageLocation;
-  onSubmit: (data: StorageLocationFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1327). */
+  onSubmit: (data: StorageLocationFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
@@ -113,6 +116,7 @@ export function StorageLocationForm({
   }));
 
   const latched = useLatchedSubmit();
+  const formId = useId();
   const {
     register,
     handleSubmit,
@@ -120,6 +124,7 @@ export function StorageLocationForm({
     trigger,
     setValue,
     setError,
+    resetField,
     formState: { errors },
   } = useForm<StorageLocationFormValues, unknown, StorageLocationFormData>({
     resolver: resolveStorageLocation,
@@ -142,6 +147,7 @@ export function StorageLocationForm({
     },
   });
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const watchedType = useWatch({ control, name: "type" });
   const showFeedstockType = isFeedstockBinType(watchedType);
   const showFormulation = watchedType === "product_bin";
@@ -180,11 +186,11 @@ export function StorageLocationForm({
       setError("mergedAt", { message: MERGE_TIME_REQUIRED_MESSAGE });
       return;
     }
-    return onSubmit(normalized);
+    return onSubmit(normalized, refuseSave);
   }));
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         {fixedType ? (
