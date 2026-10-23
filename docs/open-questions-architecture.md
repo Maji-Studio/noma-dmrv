@@ -63,18 +63,6 @@ these areas; the entry rules and invariants live in
   rows only. Fix at the source (drop `w-auto`
   from the `width` default) and check the 51 sites.
 
-### Sheet footer pinning on short forms (`ui/sheet-footer-fill-height`, opened 2026-10-22)
-
-- **Anchor:** `src/components/ui/slide-over-panel/index.tsx:Body` (`fillHeight`) and
-  `src/components/ui/entity-side-sheet/index.tsx:EntitySideSheet`: the `mt-auto!` footer
-  pinning in `src/components/forms/form-actions.tsx:FormActions` never reaches the
-  footer, because the form inside the sheet's fieldset does not fill the sheet. At 1440px
-  the Save footer sits under the last field on short forms: a supplier edit sheet shows
-  it at y=905 in an 1100px dialog, a feedstock-type sheet at y=595. Both direct-child
-  forms (`supplier-form.tsx:SupplierForm`) and `div`-wrapped forms
-  (`feedstock-type-form.tsx:FeedstockTypeForm`) need the fill-height treatment, so it
-  should land as one change across all sheets, not per form.
-
 ### Party write adapters per kind (`api/party-write-adapters`, opened 2026-10-17)
 
 - **Anchor:** `src/lib/mcp/tools/party-tools.ts:partyWriteTools`,
