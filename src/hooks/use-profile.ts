@@ -5,15 +5,15 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { changePasswordFn, updateProfileNameFn } from "@/fn/profile";
+import { changeEmailFn, changePasswordFn, updateProfileNameFn } from "@/fn/profile";
 import { unwrap } from "@/hooks/types";
 import { invalidateOrgMembers } from "@/hooks/use-organizations";
-import { authClient, refreshSession } from "@/lib/auth/client";
-import { SETTINGS_PROFILE_HREF } from "@/lib/settings/links";
+import { refreshSession } from "@/lib/auth/client";
+import { ActionError } from "@/lib/action-error";
 import type { ChangeEmailFormData, ChangePasswordFormData, ProfileNameFormData } from "@/schemas/profile";
 
 /** Better Auth refuses an email change from a session older than 24 hours. */
-const SESSION_EXPIRED_CODE = "SESSION_EXPIRED";
+const SESSION_EXPIRED_CODE = "session_expired";
 
 export class EmailChangeError extends Error {
   readonly sessionExpired: boolean;
@@ -51,12 +51,13 @@ export function useChangePassword() {
  */
 export function useChangeEmail() {
   return useMutation({
-    mutationFn: async ({ newEmail }: ChangeEmailFormData) => {
-      const result = await authClient.changeEmail({ newEmail, callbackURL: SETTINGS_PROFILE_HREF });
-      if (result.error) {
+    mutationFn: async (input: ChangeEmailFormData) => {
+      try {
+        return unwrap(await changeEmailFn(input));
+      } catch (error) {
         throw new EmailChangeError(
-          result.error.message ?? "",
-          result.error.code === SESSION_EXPIRED_CODE,
+          error instanceof Error ? error.message : "The confirmation link was not sent. Try again.",
+          error instanceof ActionError && error.code === SESSION_EXPIRED_CODE,
         );
       }
     },

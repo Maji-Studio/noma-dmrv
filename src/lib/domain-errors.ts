@@ -5,6 +5,7 @@ import { IDEMPOTENCY_RETRY_AFTER_SECONDS } from "@/config/operations";
 
 export type DomainErrorCode =
   | "validation_failed"
+  | "session_expired"
   | "not_found"
   | "stale_version"
   | "conflict"

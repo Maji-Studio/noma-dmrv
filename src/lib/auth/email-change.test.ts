@@ -61,12 +61,12 @@ beforeEach(() => {
   });
 });
 
-async function sessionHeaders() {
+async function sessionHeaders(token = SESSION_TOKEN) {
   const ctx = await auth.$context;
-  const signature = createHmac("sha256", ctx.secret).update(SESSION_TOKEN).digest("base64");
+  const signature = createHmac("sha256", ctx.secret).update(token).digest("base64");
   return new Headers({
     origin: ORIGIN, "content-type": "application/json",
-    cookie: `${ctx.authCookies.sessionToken.name}=${encodeURIComponent(`${SESSION_TOKEN}.${signature}`)}`,
+    cookie: `${ctx.authCookies.sessionToken.name}=${encodeURIComponent(`${token}.${signature}`)}`,
   });
 }
 
@@ -123,6 +123,10 @@ it("keeps normal verification on the existing template without a change notice",
   const url = input.text.split("\n").find(line => line.startsWith(`${ORIGIN}/api/auth/verify-email?`));
   expect(url).toBeDefined();
   expect(input).toMatchObject(verifyEmailEmail({ to: OLD_EMAIL, url: url!, appUrl: env.NEXT_PUBLIC_APP_URL }));
+  const verified = await auth.handler(new Request(url!, { headers: await sessionHeaders() }));
+  expect(verified.status).toBe(302);
+  expect(verified.headers.get("location")).toBe(CALLBACK_URL);
+  expect(memory.user[0]).toMatchObject({ email: OLD_EMAIL, emailVerified: true });
 });
 
 it("silently sends neither email when the requested address already belongs to an account", async () => {
@@ -207,4 +211,104 @@ it("requires a valid server signature and matching new address before delivering
   const mismatch = await createEmailVerificationToken(env.BETTER_AUTH_SECRET, OLD_EMAIL, "different@example.test", undefined, { requestType: "change-email-verification" });
   await expect(send({ user, url: CALLBACK_URL, token: mismatch })).rejects.toThrow("Invalid email verification token.");
   expect(sendEmail).not.toHaveBeenCalled();
+});
+
+function confirmationUrl(): URL {
+  const confirmation = vi.mocked(sendEmail).mock.calls.find(([input]) => input.type === "email-change-confirm")![0];
+  return new URL(confirmation.text.match(/http[^\s]+\/api\/auth\/verify-email\?[^\s]+/)![0]);
+}
+
+async function expectConfirmationRefused(url: URL, headers?: Headers, location = "/settings/profile?error=SIGN_IN_REQUIRED") {
+  const sessionsBefore = memory.session.map(row => row.id);
+  const usersBefore = memory.user.map(row => ({ ...row }));
+  const response = await auth.handler(new Request(url, { headers }));
+  expect(response.status).toBe(302);
+  expect(response.headers.get("location")).toBe(location);
+  expect(response.headers.get("set-cookie")).toBeNull();
+  expect(memory.session.map(row => row.id)).toEqual(sessionsBefore);
+  expect(memory.user).toEqual(usersBefore);
+  expect(memory.user[0].email).toBe(OLD_EMAIL);
+}
+
+it("refuses a confirmation without a session and never creates a session or cookie", async () => {
+  expect((await requestChange()).status).toBe(200);
+  await expectConfirmationRefused(confirmationUrl());
+});
+
+it("refuses a confirmation signed in as another user without changing either account", async () => {
+  expect((await requestChange()).status).toBe(200);
+  memory.user.push({ ...memory.user[0], id: "other-user", email: "other@example.test" });
+  memory.session.push({ ...memory.session[0], id: "other-session", userId: "other-user", token: "other-token" });
+  await expectConfirmationRefused(confirmationUrl(), await sessionHeaders("other-token"));
+});
+
+it("password reset revokes all sessions, preserves the notice and cancels a pending change", async () => {
+  const ctx = await auth.$context;
+  memory.account[0].password = await ctx.password.hash("old-password-for-reset");
+  memory.session.push({ ...memory.session[0], id: "second-session", token: "second-token" });
+  expect((await requestChange()).status).toBe(200);
+  const link = confirmationUrl();
+  const oldHeaders = await sessionHeaders();
+  // Include the signed snapshot too: revocation must defeat cookie caching.
+  const sessionResponse = await auth.handler(new Request(`${ORIGIN}/api/auth/get-session`, { headers: oldHeaders }));
+  const cachedCookies = sessionResponse.headers.getSetCookie().map(cookie => cookie.split(";")[0]);
+  expect(cachedCookies.some(cookie => cookie.startsWith(`${ctx.authCookies.sessionData.name}=`))).toBe(true);
+  oldHeaders.set("cookie", [oldHeaders.get("cookie"), ...cachedCookies].join("; "));
+  memory.verification.push({
+    id: "reset-verification", identifier: "reset-password:reset-token", value: USER_ID,
+    expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS), createdAt: new Date(), updatedAt: new Date(),
+  });
+  vi.mocked(sendEmail).mockClear();
+  const reset = await auth.handler(new Request(`${ORIGIN}/api/auth/reset-password`, {
+    method: "POST", headers: { origin: ORIGIN, "content-type": "application/json" },
+    body: JSON.stringify({ token: "reset-token", newPassword: "new-password-after-reset" }),
+  }));
+  expect(reset.status).toBe(200);
+  expect(memory.session).toHaveLength(0);
+  expect(sendEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ type: "password-changed", userId: USER_ID }));
+  await expectConfirmationRefused(link, oldHeaders);
+});
+
+it.each([
+  ["/settings/profile?tab=email#email", "/settings/profile?tab=email&error=SIGN_IN_REQUIRED#email"],
+  ["https://attacker.example/path", "/settings/profile?error=SIGN_IN_REQUIRED"],
+  ["//attacker.example/path", "/settings/profile?error=SIGN_IN_REQUIRED"],
+  ["/safe/..//attacker.example/path", "/settings/profile?error=SIGN_IN_REQUIRED"],
+  ["/safe/%2e%2e//attacker.example/path", "/settings/profile?error=SIGN_IN_REQUIRED"],
+  ["/\\attacker.example/path", "/settings/profile?error=SIGN_IN_REQUIRED"],
+  ["/\t/attacker.example/path", "/settings/profile?error=SIGN_IN_REQUIRED"],
+  [CALLBACK_URL, "/settings/profile?error=SIGN_IN_REQUIRED"],
+])("refuses safely with callback %s", async (callback, location) => {
+  await requestChange();
+  const url = confirmationUrl();
+  url.searchParams.set("callbackURL", callback);
+  await expectConfirmationRefused(url, undefined, location);
+});
+
+it.each(["expired", "invalid"])("leaves %s tokens to Better Auth", async kind => {
+  const token = kind === "expired"
+    ? await signJWT({ email: OLD_EMAIL, updateTo: NEW_EMAIL, requestType: "change-email-verification" }, env.BETTER_AUTH_SECRET, -ONE_HOUR_SECONDS)
+    : "not-a-signed-token";
+  const url = new URL(`${ORIGIN}/api/auth/verify-email`);
+  url.searchParams.set("token", token);
+  url.searchParams.set("callbackURL", "/settings/profile");
+  const response = await auth.handler(new Request(url));
+  expect(response.status).toBe(302);
+  expect(response.headers.get("location")).toBe(`/settings/profile?error=${kind === "expired" ? "TOKEN_EXPIRED" : "INVALID_TOKEN"}`);
+  expect(memory.user[0].email).toBe(OLD_EMAIL);
+});
+
+it("runs the freshness before-hook for direct auth.api.changeEmail calls", async () => {
+  const ctx = await auth.$context;
+  memory.session[0].createdAt = new Date(Date.now() - ctx.sessionConfig.freshAge * MILLISECONDS_PER_SECOND);
+  await expect(auth.api.changeEmail({
+    body: { newEmail: NEW_EMAIL, callbackURL: "/settings/profile" }, headers: await sessionHeaders(),
+  })).rejects.toMatchObject({ body: { code: "SESSION_EXPIRED" } });
+  expect(sendEmail).not.toHaveBeenCalled();
+  expect(memory.user[0].email).toBe(OLD_EMAIL);
+});
+
+it("configures the HTTP email change limit and password-reset revocation", () => {
+  expect(auth.options.rateLimit.customRules["/change-email"]).toEqual({ window: 15 * 60, max: 5 });
+  expect(auth.options.emailAndPassword.revokeSessionsOnPasswordReset).toBe(true);
 });

@@ -5,7 +5,7 @@
 import { capturePasswordResetNotice, deliverPasswordNotice } from "./account-notice-hooks";
 import { sendRoleChangedNotice, sendRemovedFromOrganizationNotice, sendEmailChangeNotice } from "@/lib/email/account-notices";
 import { randomUUID } from "node:crypto";
-import { verifyJWT } from "better-auth/crypto";
+import { guardEmailChangeVerification, readEmailVerificationToken } from "./email-change-guard";
 import { createOAuthProvider } from "./oauth-provider";
 import { createOAuthCimdPlugins } from "./oauth-cimd";
 import { oauthBefore } from "./oauth-hooks";
@@ -77,11 +77,6 @@ function buildTrustedOrigins(): string[] {
 }
 
 const removedMemberResult = z.object({ id: z.string(), organizationId: z.string(), userId: z.string() });
-const verificationEmailPayload = z.object({
-  email: z.email(),
-  updateTo: z.email().optional(),
-  requestType: z.string().optional(),
-});
 const MILLISECONDS_PER_SECOND = 1000;
 
 const apiKeyActions = ["create", "read", "update", "delete"] as const;
@@ -102,6 +97,7 @@ export const auth = betterAuth({
           throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.SESSION_EXPIRED);
         }
       }
+      if (ctx.path === "/verify-email") await guardEmailChangeVerification(ctx);
       await capturePasswordResetNotice(ctx);
       // HTTP callers cannot bypass the guarded application actions. Block reads
       // too, so plugin responses cannot expose credential hashes or metadata.
@@ -177,6 +173,7 @@ export const auth = betterAuth({
     enabled: true,
     disableSignUp: true,
     requireEmailVerification: true,
+    revokeSessionsOnPasswordReset: true,
     resetPasswordTokenExpiresIn: PASSWORD_RESET_EXPIRES_IN_SECONDS,
     minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
     maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
@@ -197,11 +194,10 @@ export const auth = betterAuth({
     sendVerificationEmail: async ({ user, url, token }) => {
       // Only the server-signed token identifies an email-change request.
       // Never infer the old address from client input or an unverified decode.
-      const payload = await verifyJWT<unknown>(token, env.BETTER_AUTH_SECRET);
-      const verification = verificationEmailPayload.safeParse(payload);
-      if (!verification.success) throw new Error("Invalid email verification token.");
-      if (verification.data.requestType === "change-email-verification") {
-        const { email: currentEmail, updateTo } = verification.data;
+      const verification = await readEmailVerificationToken(token, env.BETTER_AUTH_SECRET);
+      if (!verification) throw new Error("Invalid email verification token.");
+      if (verification.requestType === "change-email-verification") {
+        const { email: currentEmail, updateTo } = verification;
         if (updateTo !== user.email) throw new Error("Invalid email verification token.");
         const appUrl = getEmailAppUrl();
         await sendAuthEmail({
@@ -241,6 +237,7 @@ export const auth = betterAuth({
       "/sign-in/email": { window: 15 * 60, max: 10 },
       "/sign-up/email": { window: 60 * 60, max: 3 },
       "/request-password-reset": { window: 15 * 60, max: 5 },
+      "/change-email": { window: 15 * 60, max: 5 },
       "/reset-password": { window: 15 * 60, max: 10 },
     },
   },
