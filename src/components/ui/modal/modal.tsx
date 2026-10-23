@@ -7,7 +7,7 @@
  * a11y contract consistent and gives every instance the same affordances:
  *
  * - a built-in close button in the top-right corner (no per-instance X)
- * - the heading named by `ariaLabelledBy` always clears that button: its
+ * - the heading named by `titleId` (default `ariaLabelledBy`) always clears that button: its
  *   inline end padding reserves the button's width, so dialogs never add a
  *   title workaround of their own
  * - dismiss on ESC and on outside (backdrop) click when dismissible
@@ -41,16 +41,16 @@ const WIDTH_CLASSES = {
   xl: "w-full sm:w-[880px]", // rich content (previews, comparisons)
 } as const;
 
-/**
- * The close button is `w-32 h-32` (`--spacing-32`). The labelled heading keeps
- * that width plus a `--spacing-8` gap free at its inline end.
- */
-const TITLE_CLEARANCE = "calc(var(--spacing-32) + var(--spacing-8))";
+/** The close button's width and height: the one source for its size and the title clearance. */
+const CLOSE_SIZE = "var(--spacing-32)";
+/** The title keeps the close button's width plus a gap free at its inline end. */
+const TITLE_CLEARANCE = `calc(${CLOSE_SIZE} + var(--spacing-8))`;
+const POPUP_SELECTOR = '[data-overlay-layer="dialog"]';
 
-/** CSS rule that pads the heading with this id; the id is escaped for a quoted attribute selector. */
+/** CSS rule that pads the heading with this id inside the dialog; the id is escaped for a quoted attribute selector. */
 function titleClearanceCss(id: string): string {
   const escaped = id.replace(/["\\]/g, "\\$&").replace(/\n/g, " ");
-  return `[id="${escaped}"]{padding-inline-end:${TITLE_CLEARANCE}}`;
+  return `${POPUP_SELECTOR} [id="${escaped}"]{padding-inline-end:${TITLE_CLEARANCE}}`;
 }
 
 export type ModalWidth = keyof typeof WIDTH_CLASSES;
@@ -66,6 +66,12 @@ export interface ModalProps {
   ariaLabelledBy?: string;
   /** Accessible label fallback when no heading element is present. */
   ariaLabel?: string;
+  /**
+   * ID of the title heading that must clear the close button. Defaults to
+   * `ariaLabelledBy`; pass it when the dialog is named by `ariaLabel` (or the
+   * heading holds more than the name) so the accessible name stays as is.
+   */
+  titleId?: string;
   /** ID of the descriptive element inside the modal (e.g., warning copy). */
   ariaDescribedBy?: string;
   /** Width token. Defaults to "md" (560px) — matches most existing dialogs. */
@@ -105,6 +111,7 @@ export function Modal({
   onOpen,
   ariaLabelledBy,
   ariaLabel,
+  titleId = ariaLabelledBy,
   ariaDescribedBy,
   width = "md",
   className,
@@ -180,10 +187,11 @@ export function Modal({
           <Dialog.Close
             aria-label="Close"
             disabled={!dismissible}
+            style={{ width: CLOSE_SIZE, height: CLOSE_SIZE }}
             className={cn(
               "absolute top-16 right-16 z-10",
               "flex items-center justify-center",
-              "w-32 h-32 shrink-0",
+              "shrink-0",
               "text-[var(--color-text-tertiary)]",
               "hover:text-[var(--color-text-primary)]",
               "hover:bg-[var(--color-background-medium)]",
@@ -195,7 +203,7 @@ export function Modal({
           >
             <CloseIcon />
           </Dialog.Close>
-          {ariaLabelledBy && <style>{titleClearanceCss(ariaLabelledBy)}</style>}
+          {titleId && <style>{titleClearanceCss(titleId)}</style>}
           {/* Context barrier: a dialog opened from inside a side sheet is its
               own interaction scope, so a FormActions Cancel in here must not
               navigate the sheet underneath. */}

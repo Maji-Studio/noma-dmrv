@@ -8,7 +8,7 @@
 "use client";
 
 import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
 import { Notice } from "@/components/ui/notice";
@@ -59,6 +59,8 @@ function FeedstockStockHistory({ storageLocationId, facilityId, moisturePercent,
 }) {
   const clock = useFacilityClock(facilityId);
   const [open, setOpen] = useState(false);
+  const historyTitleId = useId();
+  const lostMassTitleId = useId();
   const [editing, setEditing] = useState<FeedstockLedgerEntry | null>(null);
   const [deleting, setDeleting] = useState<FeedstockLedgerEntry | null>(null);
   const stock = useFeedstockBinStock(storageLocationId);
@@ -66,9 +68,9 @@ function FeedstockStockHistory({ storageLocationId, facilityId, moisturePercent,
   const timeline = entries.toReversed();
   return <>
     {renderTrigger(() => setOpen(true), <ClockCounterClockwiseIcon size={ICON_PX} aria-hidden="true" />)}
-    <Modal isOpen={open} onClose={() => setOpen(false)} ariaLabelledBy="stock-history-title" width="md">
+    <Modal isOpen={open} onClose={() => setOpen(false)} ariaLabel="Stock history" titleId={historyTitleId} width="md">
       <div className="space-y-20">
-        <h3 id="stock-history-title" className="flex min-w-0 items-center gap-6 title-heading-3">
+        <h3 id={historyTitleId} className="flex min-w-0 items-center gap-6 title-heading-3">
           <span className="truncate">Stock history</span>
           <InfoHint label="About stock history">{HISTORY_HINT}</InfoHint>
         </h3>
@@ -88,8 +90,8 @@ function FeedstockStockHistory({ storageLocationId, facilityId, moisturePercent,
         </div>}
       </div>
     </Modal>
-    <FormDialog isOpen={editing !== null} onClose={() => setEditing(null)} ariaLabelledBy="edit-lost-mass-title" width="md">
-      <h3 id="edit-lost-mass-title" className="title-heading-3 mb-20">{LOST_MASS_LABEL}</h3>
+    <FormDialog isOpen={editing !== null} onClose={() => setEditing(null)} ariaLabel="Edit lost mass" titleId={lostMassTitleId} width="md">
+      <h3 id={lostMassTitleId} className="title-heading-3 mb-20">{LOST_MASS_LABEL}</h3>
       {editing && <FeedstockLossForm key={editing.id} storageLocationId={storageLocationId} facilityId={facilityId} correction={editing}
         availableKg={stock.data?.currentWetKg ?? null} moisturePercent={moisturePercent}
         onCancel={() => setEditing(null)} onRecorded={() => setEditing(null)} />}
