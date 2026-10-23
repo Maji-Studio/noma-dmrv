@@ -74,7 +74,8 @@ it("email change notice: goes to the old address, points at the new one and rese
   expect(notice.subject).toBe("Your noma email address is changing");
   expect(notice.text).toContain(`Email address: ${TO} → ${NEW_TO}`);
   expect(notice.text).toContain("Until it is confirmed, you sign in with this one.");
-  expect(notice.text).toContain(`If you did not ask for this, reset your password now.\n${RESET_URL}\n`);
+  expect(notice.text).toContain("If you did not ask for this, reset your password now. That cancels the change.");
+  expect(notice.text).toContain(`If you can no longer sign in, reply to this email.\n${RESET_URL}\n`);
   expect(notice.text).toContain(`Sent to ${TO} about your noma account.`);
   expect(notice.preheader).toBe(`A confirmation link went to ${NEW_TO}.`);
   expect(notice.html).not.toContain("<a href=\"\"");

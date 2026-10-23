@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   requireOrgContext: vi.fn(),
   updateUser: vi.fn(),
   changePassword: vi.fn(),
+  changeEmail: vi.fn(),
   revokeOtherSessions: vi.fn(),
   loggerError: vi.fn(),
   loggerWarn: vi.fn(),
@@ -15,14 +16,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/server", () => ({ requireOrgContext: mocks.requireOrgContext }));
-vi.mock("@/lib/auth/better-auth", () => ({ auth: { api: { updateUser: mocks.updateUser, changePassword: mocks.changePassword, revokeOtherSessions: mocks.revokeOtherSessions } } }));
+vi.mock("@/lib/auth/better-auth", () => ({ auth: { api: { updateUser: mocks.updateUser, changeEmail: mocks.changeEmail, changePassword: mocks.changePassword, revokeOtherSessions: mocks.revokeOtherSessions } } }));
 vi.mock("next/headers", () => ({ headers: mocks.headers }));
 vi.mock("@/lib/log", () => ({
   logger: { error: mocks.loggerError, warn: mocks.loggerWarn },
   sanitizeErrorMessage: (error: unknown) => error instanceof Error ? error.message : String(error),
 }));
 
-import { changePasswordFn, updateProfileNameFn } from "./profile";
+import { changeEmailFn, changePasswordFn, updateProfileNameFn } from "./profile";
 
 const USER_ID = "user-1";
 const WINDOW_MS = 15 * 60 * 1000;
@@ -130,5 +131,58 @@ describe("profile actions", () => {
     expect(await updateProfileNameFn({ name: "Example" })).toEqual({ success: false, error: "Your name was not saved. Try again." });
     expect(await changePasswordFn(PASSWORD_INPUT)).toEqual({ success: false, error: "Your password was not changed. Try again." });
     expect(JSON.stringify(mocks.loggerError.mock.calls)).not.toContain(sensitiveMessage);
+  });
+});
+
+
+describe("changeEmailFn", () => {
+  const input = { newEmail: "new@example.test" };
+
+  it("validates and forwards only the new address and fixed callback with session headers", async () => {
+    expect(await changeEmailFn({ newEmail: "  new@example.test  ", callbackURL: "https://attacker.test", userId: "other-user" }))
+      .toEqual({ success: true, data: { status: true } });
+    expect(mocks.changeEmail).toHaveBeenCalledExactlyOnceWith({
+      body: { ...input, callbackURL: "/settings/profile" }, headers: REQUEST_HEADERS,
+    });
+  });
+
+  it("rejects malformed addresses on the server", async () => {
+    expect(await changeEmailFn({ newEmail: "invalid" })).toMatchObject({ success: false, code: "validation_failed" });
+    expect(mocks.changeEmail).not.toHaveBeenCalled();
+  });
+
+  it("requires authentication", async () => {
+    mocks.requireOrgContext.mockRejectedValue(new SafeError("Sign in to continue."));
+    expect(await changeEmailFn(input)).toEqual({ success: false, error: "Sign in to continue." });
+    expect(mocks.changeEmail).not.toHaveBeenCalled();
+  });
+
+  it("translates SESSION_EXPIRED into a typed safe refusal without logging upstream PII", async () => {
+    mocks.changeEmail.mockRejectedValue(new APIError("BAD_REQUEST", { code: "SESSION_EXPIRED", message: input.newEmail }));
+    expect(await changeEmailFn(input)).toMatchObject({
+      success: false, code: "session_expired", error: "Your sign-in is too old to change your email. Sign out and sign in again, then try again.",
+    });
+    expect(mocks.loggerError).not.toHaveBeenCalled();
+  });
+
+  it("sanitizes unexpected failures", async () => {
+    mocks.changeEmail.mockRejectedValue(new Error(input.newEmail));
+    expect(await changeEmailFn(input)).toEqual({ success: false, error: "The confirmation link was not sent. Try again." });
+    expect(JSON.stringify(mocks.loggerError.mock.calls)).not.toContain(input.newEmail);
+  });
+
+  it("limits attempts per user across organizations for 15 minutes", async () => {
+    vi.useFakeTimers();
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) await changeEmailFn(input);
+    mocks.requireOrgContext.mockResolvedValue({ userId: USER_ID, organizationId: "org-2", orgRole: "member", isPlatformAdmin: false });
+    expect(await changeEmailFn(input)).toEqual({ success: false, error: "Too many attempts. Try again in 900s." });
+    expect(mocks.changeEmail).toHaveBeenCalledTimes(MAX_ATTEMPTS);
+    mocks.requireOrgContext.mockResolvedValue({ userId: "user-2", organizationId: "org-2", orgRole: "member", isPlatformAdmin: false });
+    await changeEmailFn(input);
+    expect(mocks.changeEmail).toHaveBeenCalledTimes(MAX_ATTEMPTS + 1);
+    mocks.requireOrgContext.mockResolvedValue({ userId: USER_ID, organizationId: "org-1", orgRole: "member", isPlatformAdmin: false });
+    vi.advanceTimersByTime(WINDOW_MS);
+    await changeEmailFn(input);
+    expect(mocks.changeEmail).toHaveBeenCalledTimes(MAX_ATTEMPTS + 2);
   });
 });

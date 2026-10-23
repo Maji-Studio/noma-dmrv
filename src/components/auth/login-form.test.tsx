@@ -41,6 +41,14 @@ it.each(["/settings", "", "settings", "//evil.test", "https://evil.test", "/path
   await waitFor(() => expect(mocks.push).toHaveBeenCalledWith(from === "/settings" ? from : "/"));
   expect(mocks.assign).not.toHaveBeenCalled();
 });
+it.each(["SIGN_IN_REQUIRED", "TOKEN_EXPIRED"])("keeps the Profile error %s after sign-in", async code => {
+  const from = `/settings/profile?error=${code}`;
+  mocks.search = new URLSearchParams({ from });
+  mocks.signIn.mockResolvedValue({ success: true });
+  await submit();
+  await waitFor(() => expect(mocks.push).toHaveBeenCalledWith(from));
+  expect(mocks.assign).not.toHaveBeenCalled();
+});
 it("fully navigates to the provider continuation after OAuth sign-in", async () => {
   mocks.search = new URLSearchParams("sig=test&ba_param=client_id&client_id=app&from=/settings");
   mocks.signIn.mockResolvedValue({ success: true, redirectUrl: "/oauth/organization?signed=test" });

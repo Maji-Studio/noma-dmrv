@@ -65,6 +65,7 @@ const EXCEPTION: Record<string, string> = {
 };
 
 const NOT_CREATE: Record<string, string> = {
+  "profile#changeEmailFn": "Requests confirmation to change the caller’s existing account email.",
   "organizations#renameOrganizationAction": "Renames an existing organization.",
   "organizations#leaveOrganizationAction": "Removes the caller's own existing membership.",
   "applications#getApplicationStatsFn": "Reads application totals without creating a domain record.",
