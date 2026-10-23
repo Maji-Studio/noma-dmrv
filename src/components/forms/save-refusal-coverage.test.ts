@@ -20,9 +20,6 @@ const PENDING_SEAMS = [
 
 /** #1327: remove each entry when its form moves to the shared refusal handler. */
 const PENDING: Record<string, string> = {
-  "production-runs/production-run-form.tsx": "PR F: run overlap catch and parent catches",
-  "production-runs/production-incident-form.tsx": "PR F: incident child editor",
-  "production-runs/production-sample-form.tsx": "PR F: in-process sample child editor",
   "biochar-products/biochar-product-form.tsx": "PR G: replace inline stock routing with aliases",
   "storage-locations/storage-location-form.tsx": "PR H: storage bin sheet and quick-add",
   "storage-locations/output-stock-form.tsx": "PR H: output stock refusal",

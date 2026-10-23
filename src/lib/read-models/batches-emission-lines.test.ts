@@ -1,3 +1,5 @@
+import { loadBatchEmissionEntryCarry } from "@/data-access/emission-entry-carry";
+vi.mock("@/data-access/emission-entry-carry", () => ({ loadBatchEmissionEntryCarry: vi.fn() }));
 import { assert, beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
@@ -31,6 +33,7 @@ const stored = { id: "stored", creditBatchId: "unread", observationId: "previous
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(loadBatchEmissionEntryCarry).mockResolvedValue([]);
   vi.mocked(getLatestTemplateObservations).mockResolvedValue([observation] as never);
   vi.mocked(getTemplateObservationsByIds).mockResolvedValue([]);
   vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([stored] as never);
@@ -117,4 +120,19 @@ it("avoids all reads for an empty set", async () => {
   expect(listEmissionEntriesForBatches).not.toHaveBeenCalled();
   expect(listEmissionLineCommentsForBatches).not.toHaveBeenCalled();
   expect(loadBatchesEmissionAutomaticFacts).not.toHaveBeenCalled();
+});
+
+it("exposes carry destinations, waiting reasons and actual senders on the existing batch lines", async () => {
+  const destination = { removalId: "receiver", removalCode: "RM-010", creditBatchCodes: ["CB-010"], creditBatchIds: ["cb-010"], anotherCreditBatch: true };
+  const carry = { receiver: destination, waitingReason: null };
+  const entry = { id: "carry-entry", creditBatchId: "ready", observationId: observation.id, componentId: "electricity", kind: "value",
+    values: [{ inputKey: "electricity_use", magnitude: "120", unit: "kWh" }], documentCount: 1 };
+  vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([entry] as never);
+  for (const state of [{ carry, reportedIn: null }, { carry: { receiver: null, waitingReason: "noDraft" }, reportedIn: null },
+    { carry: { receiver: null, waitingReason: null }, reportedIn: destination }]) {
+    vi.mocked(loadBatchEmissionEntryCarry).mockResolvedValue([{ ...entry, ...state }] as never);
+    const result = (await loadBatchesEmissionLines(ctx, [batches[0]])).get("ready")!;
+    assert(result.status === "ready");
+    expect(result.lines[0].entries[0]).toMatchObject(state);
+  }
 });

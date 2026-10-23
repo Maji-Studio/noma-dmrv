@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import type { Pool } from "pg";
 import { db } from "@/db";
 import { formulations, orders } from "@/db/schema";
-import { createStorageLocation, updateStorageLocation } from "@/data-access/storage-locations";
+import { createStorageLocationInTransaction, updateStorageLocation } from "@/data-access/storage-locations";
 import { createStorageLocation as quickAdd } from "@/data-access/quick-add";
 import { archiveFormulation, updateFormulation, deleteFormulation } from "@/lib/operations/formulations";
 import { makeBiocharProduct } from "@/lib/operations/biochar-products";
@@ -66,7 +66,7 @@ describe("formulation archive serialization", { timeout: TIMEOUT_MS }, () => {
           }, { pool: writers });
           case "order": return runOperation(recordOrder, f.ctx, { ...orderInput(f), formulationId: row.id }, { pool: writers });
           case "order repoint": return runOperation(updateOrder, f.ctx, { orderId: order!.id, expectedVersion: order!.version, formulationId: row.id }, { pool: writers });
-          case "bin create": return createStorageLocation(f.ctx, bin);
+          case "bin create": return db.transaction((tx) => createStorageLocationInTransaction(f.ctx, tx, bin));
           case "bin reassign": return updateStorageLocation(f.ctx, f.bin.id, { expectedVersion: f.bin.version, formulationId: row.id });
           case "quick-add": return quickAdd(f.ctx, bin);
         }

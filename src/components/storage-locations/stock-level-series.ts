@@ -1,5 +1,5 @@
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
-import { stockWaterKg } from "@/lib/output-stock/stock-parts";
+import { stockParts, stockWaterKg } from "@/lib/output-stock/stock-parts";
 import { replayStock } from "@/lib/output-stock/stock-replay";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 
@@ -32,7 +32,7 @@ export function buildStockLevelSeries(entries: readonly OutputStockHistoryEntry[
     if (points.length === 0) points.push({ t, dryKg: 0, waterKg: 0, wetKg: 0, label: "Before" });
     const { dryKg, solidsKg, wetKg } = after;
     points.push({ t, dryKg: Math.max(dryKg, 0),
-      ingredientsKg: solidsKg === null ? undefined : Math.max(solidsKg - dryKg, 0),
+      ingredientsKg: stockParts(after).ingredientSolidsKg ?? undefined,
       waterKg: stockWaterKg(after), wetKg: wetKg === null ? null : Math.max(wetKg, 0),
       label: outputStockEventLabel(entry.kind === "replacement" ? entry.eventKind ?? entry.kind : entry.kind),
     });

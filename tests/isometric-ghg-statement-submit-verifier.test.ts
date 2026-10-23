@@ -13,9 +13,15 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// The member-Removal guard has its own tests; these cover the submit steps.
-vi.mock("@/fn/certification/statement-removal-correction-core", () => ({
-  assertStatementRemovalsCurrent: vi.fn(async () => undefined),
+// Keep the statement guard real; content comparison has its own agreement tests.
+vi.mock("@/fn/certification/removal-content-comparison-core", () => ({
+  compareRemovalCurrentContent: vi.fn(async () => ({ kind: "unchanged", components: [],
+    state: { windowOpen: true, correctionNeeded: false, changedComponentIds: [], message: null },
+  })),
+}));
+vi.mock("@/data-access/removal-entry-correction", () => ({
+  listNomaSentRemovalsForRemoteEntries: vi.fn(async () => []),
+  listStatementRemovalIdentities: vi.fn(async () => [{ id: "member", code: "R-12" }]),
 }));
 vi.mock("@/data-access/certifier-credentials", () => ({
   resolveIsometricClient: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),

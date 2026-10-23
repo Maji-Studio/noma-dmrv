@@ -1,3 +1,6 @@
+import type { LateEntryFacts } from "@/lib/certification/late-entry-view";
+import { recordedAfter } from "@/lib/certification/emission-entry-carry";
+import { loadBatchEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 import type { OrgContext } from "@/lib/auth/server";
 import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
 import { getLatestTemplateObservations, getTemplateObservationsByIds } from "@/data-access/removal-template-observations";
@@ -37,10 +40,11 @@ export async function loadBatchesEmissionLines(
   const readyIdSet = new Set(readyIds);
   const previousIds = [...new Set(storedEntries.filter((entry) => readyIdSet.has(entry.creditBatchId))
     .map((entry) => entry.observationId))].filter((id) => !byId.has(id));
-  const [previous, automatic, storedComments] = await Promise.all([
+  const [previous, automatic, storedComments, carryEntries] = await Promise.all([
     getTemplateObservationsByIds(ctx, previousIds),
     loadBatchesEmissionAutomaticFacts(ctx, readyIds),
     comments && readyIds.length ? listEmissionLineCommentsForBatches(ctx, readyIds) : [],
+    loadBatchEmissionEntryCarry(ctx, readyIds),
   ]);
   for (const observation of previous) byId.set(observation.id, observation);
   const entriesByBatch = new Map<string, typeof storedEntries>();
@@ -60,7 +64,10 @@ export async function loadBatchesEmissionLines(
     const stored = entriesByBatch.get(batch.id) ?? [];
     if (!batch.removalTemplateId) return [batch.id, { status: "blocked", blocker: "unpinnedTemplate", storedEntries: stored }];
     if (!observation) return [batch.id, { status: "blocked", blocker: "templateNotFullyRead", storedEntries: stored }];
-    const entries = deriveEmissionEntryFacts(stored, observation, byId);
+    const entries = deriveEmissionEntryFacts(stored, observation, byId).map(entry => {
+      const carried = carryEntries.find(item => item.id === entry.id);
+      return { ...entry, carry: carried?.carry, reportedIn: carried?.reportedIn, recordedAfter: recordedAfter(carried) };
+    });
     const lines = buildBatchEmissionLines(observation, entries, byId, automatic[batch.id], commentsByBatch.get(batch.id));
     return [batch.id, { status: "ready", lines, storedEntries: stored }];
   }));
@@ -69,7 +76,7 @@ export async function loadBatchesEmissionLines(
 /** The same display derivation is used by the detail page and facility overview. */
 export function buildBatchEmissionLines(
   observation: EntryObservation,
-  entries: ReturnType<typeof deriveEmissionEntryFacts>,
+  entries: readonly (ReturnType<typeof deriveEmissionEntryFacts>[number] & LateEntryFacts)[],
   previousObservations: ReadonlyMap<string, EntryObservation | null>,
   automaticFacts: Pick<BatchEmissionLineFacts, "automaticFigures" | "automaticRecordCounts">,
   comments: Awaited<ReturnType<typeof listEmissionLineCommentsForBatches>> = [],

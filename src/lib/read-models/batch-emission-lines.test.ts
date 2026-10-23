@@ -1,3 +1,5 @@
+import { loadBatchEmissionEntryCarry } from "@/data-access/emission-entry-carry";
+vi.mock("@/data-access/emission-entry-carry", () => ({ loadBatchEmissionEntryCarry: vi.fn() }));
 import { legacyTransportObservation } from "../../../tests/helpers/legacy-transport-observation";
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntriesForBatches: vi.fn() }));
 vi.mock("@/data-access/emission-line-comments", () => ({ listEmissionLineCommentsForBatches: vi.fn() }));
@@ -39,6 +41,7 @@ import { withTemplateOrder } from "@/lib/isometric/template-observations/templat
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(loadBatchEmissionEntryCarry).mockResolvedValue([]);
   vi.mocked(listEmissionLineCommentsForBatches).mockResolvedValue([]);
   vi.mocked(getCreditBatchById).mockResolvedValue({
     id: "batch", removalTemplateId: "template",

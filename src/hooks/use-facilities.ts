@@ -5,6 +5,7 @@ import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
+import { useIntentMutation } from "./use-create-intent-key";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Facility } from "@/db/schema";
 import type { FacilityFilterData, CreateFacilityData, UpdateFacilityData } from "@/schemas/facilities";
@@ -177,9 +178,9 @@ export function useCreateFacility(
 ) {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (data: CreateFacilityData) => {
-      const result = await createFacilityFn(data);
+  return useIntentMutation({
+    mutationFn: async (data: CreateFacilityData, intentKey) => {
+      const result = await createFacilityFn(data, { intentKey });
       if (!result.success) {
         throwActionError(result);
       }

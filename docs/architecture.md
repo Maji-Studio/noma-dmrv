@@ -53,9 +53,8 @@ components (UI)
   may use that property. The keyed action shape is
   `withCreate((_ctx, create) => create(op, schema.parse(input)), intent, options)`.
   `create-action-coverage.test.ts` checks the inventory, wrapper wiring, single
-  parse point and client keys. Creates in its PENDING table are not keyed yet (see
-  [open-questions.md](./open-questions.md));
-  domain stock-posting keys and documented exceptions keep their existing paths.
+  parse point and client keys. Every create is keyed or a documented exception;
+  domain stock-posting keys keep their existing paths.
   `src/lib/operations/registry.ts` is the explicit allowlist of exposed
   operations; its keys match operation ids. Feedstock, production-run, biochar-product and
   output-stock movement, lab sample and order writes use this layer (`make_biochar_product`,
@@ -74,6 +73,14 @@ components (UI)
   `record_production_incident`, `record_transport_leg`, `create_driver`,
   `create_operator`, `create_credit_batch`) so their forms can send an intent
   key; the credit batch roll-up still runs after the runner returns.
+  Facility, reactor, storage-bin sheet and production-process starts also use
+  app-only operations (`create_facility`, `create_reactor`,
+  `create_storage_location`, `start_new_production_process`). Settings and
+  quick-add share `create_feedstock_type`. The storage-bin sheet keeps its own
+  operation because it accepts storage method/description and generates `SL`
+  codes; quick-add uses `FB`/`BB`/`PB` and returns an enriched option.
+  All their reference reads, locks and inserts use the runner transaction;
+  generated-code retries use savepoints. These reference creates add no activity.
 - The runner owns the transaction. Data-access ...InTransaction(ctx, tx, ...)
   functions and the helpers they call read and write only through `tx`,
   including reference checks and result enrichment. After-commit hooks run
