@@ -65,3 +65,10 @@ describe("ResubmitRemovalAction", () => {
     expect(nothing.container.textContent).toBe("");
   });
 });
+
+it.each([{ unavailableMessages: [] }, { unavailableMessages: ["Add a file for each emissions entry with a value.", "Second blocker."] }])("shows unavailable comparison copy and only the first blocker: %j", ({ unavailableMessages }) => {
+  render(<RemovalResubmitNotice correction={correction({ resubmitNeeded: true, comparison: "unavailable", unavailableMessages })} facilityId={FACILITY} />);
+  expect(screen.getByRole("status").textContent).toBe(
+    `noma could not compare this Removal with what it sent.${unavailableMessages[0] ? ` ${unavailableMessages[0]}` : ""} Resubmit it, then resubmit GHG Statement Jul 1 to Sep 30, 2026.`,
+  );
+});
