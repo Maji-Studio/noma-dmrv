@@ -861,7 +861,7 @@ export async function deleteFeedstockInTransaction(
 
   if (Number(usageCount.count) > 0) {
     throw inUseDeleteRefusal(
-      `Feedstock ${locked.code} ${IN_USE_DELETE_MARKER} production runs still use it. Remove its draw from those production runs first, or keep this feedstock.`,
+      `Feedstock ${locked.code} ${IN_USE_DELETE_MARKER} production runs still use it. Move their draws to another feedstock first, or keep this feedstock.`,
       ["feedstockId"],
       { code: "certification_locked" },
     );
