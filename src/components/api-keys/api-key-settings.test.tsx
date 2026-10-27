@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import type { ReactNode } from "react";
 import { squashed } from "../../../tests/helpers/error-box-text";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";

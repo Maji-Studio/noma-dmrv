@@ -183,14 +183,14 @@ describe("SettingsConsole unsaved changes", () => {
     renderPane();
     edit();
     fireEvent.click(screen.getByRole("button", { name: "Save estimates" }));
-    await waitFor(() => expect(temperature().readOnly).toBe(true));
+    await waitFor(() => expect(temperature().disabled).toBe(true));
 
     goToRegistry();
 
     expect(confirmation()).toBeNull();
     expect(router.push).not.toHaveBeenCalled();
     finish();
-    await waitFor(() => expect(temperature().readOnly).toBe(false));
+    await waitFor(() => expect(temperature().disabled).toBe(false));
   });
 
   it("lets a modified click open the pane in a new tab without asking", () => {
@@ -258,7 +258,7 @@ describe("app-wide leave guard (the sidebar organization switcher)", () => {
     renderPane();
     edit();
     fireEvent.click(screen.getByRole("button", { name: "Save estimates" }));
-    await waitFor(() => expect(temperature().readOnly).toBe(true));
+    await waitFor(() => expect(temperature().disabled).toBe(true));
     const leave = vi.fn();
 
     act(() => requestAppLeave(leave, OPTIONS));

@@ -51,6 +51,8 @@ interface DurabilityTierSelectProps {
   /** Force display-only — the tier is shown as read-only info. */
   readOnly?: boolean;
   "aria-label"?: string;
+  /** The form field this group answers to, so a refused save can mark and focus it. */
+  fieldName?: string;
 }
 
 export function DurabilityTierSelect({
@@ -59,6 +61,7 @@ export function DurabilityTierSelect({
   disabled = false,
   readOnly = false,
   "aria-label": ariaLabel = "Durability tier",
+  fieldName,
 }: DurabilityTierSelectProps) {
   // Editable forms show the full tier catalogue, including pathways that are
   // not selectable yet. Read-only surfaces keep the active tier as compact
@@ -100,6 +103,7 @@ export function DurabilityTierSelect({
       className="grid grid-cols-1 md:grid-cols-2 gap-12"
       role="radiogroup"
       aria-label={ariaLabel}
+      data-field-name={fieldName}
     >
       {TIERS.map((tier) => {
         const isActive = tier.value === value;

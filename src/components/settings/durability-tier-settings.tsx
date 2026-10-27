@@ -18,10 +18,11 @@
  */
 "use client";
 
-import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useId, useState } from "react";
+import { useController, useForm } from "react-hook-form";
 import { DurabilityTierSelect } from "@/components/certification/durability-tier-select";
 import { FormActions, FormField } from "@/components/forms";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
 import type { Facility } from "@/db/schema";
@@ -88,15 +89,19 @@ function DurabilityTierForm({
 }) {
   const toast = useToast();
   const updateFacility = useUpdateFacility(undefined, { optimistic: false });
+  const formId = useId();
   const [serverError, setServerError] = useState("");
-  const { control, handleSubmit, setValue, reset } = useForm<{ durabilityOption: DurabilityOption }>({
+  const { control, handleSubmit, reset, resetField, setError, formState: { errors } } = useForm<{ durabilityOption: DurabilityOption }>({
     defaultValues: { durabilityOption: savedTier },
     // A refetched tier (another tab, a saved change) replaces the baseline
     // without overwriting a tier the operator has picked and not saved.
     values: { durabilityOption: savedTier },
     resetOptions: { keepDirtyValues: true },
   });
-  const tier = useWatch({ control, name: "durabilityOption" }) ?? savedTier;
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
+  // A registered field, so a lock refusal can put the saved tier back.
+  const { field } = useController({ control, name: "durabilityOption" });
+  const tier = field.value ?? savedTier;
   const changed = tier !== savedTier;
   const blocked = changed && !!blockedReason;
 
@@ -115,18 +120,19 @@ function DurabilityTierForm({
       reset({ durabilityOption });
       toast.success(`Durability tier saved for ${facility.code}.`);
     } catch (error) {
-      setServerError(toSaveErrorMessage(error, "The durability tier was not saved. Try again."));
+      setServerError(refuseSave(error, toSaveErrorMessage(error, "The durability tier was not saved. Try again.")) ?? "");
     }
   }));
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-16">
-      <FormField id="facility-durability-tier" label="Durability tier" hint={DURABILITY_TIER_HINT}>
+    <form id={formId} onSubmit={onSubmit} className="flex flex-col gap-16">
+      <FormField id="facility-durability-tier" label="Durability tier" hint={DURABILITY_TIER_HINT} error={errors.durabilityOption?.message}>
         <DurabilityTierSelect
+          fieldName="durabilityOption"
           value={tier}
           onChange={(value) => {
             setServerError("");
-            setValue("durabilityOption", value, { shouldDirty: true });
+            field.onChange(value);
           }}
           disabled={updateFacility.isPending}
           aria-label="Facility durability tier"

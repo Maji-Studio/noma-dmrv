@@ -15,9 +15,10 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { FormActions, FormField, FormInput } from "@/components/forms";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { DetailField } from "@/components/ui/detail-panel";
 import { useToast } from "@/components/ui/toast";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
@@ -43,6 +44,7 @@ function NameForm({ savedName }: { savedName: string }) {
   const router = useRouter();
   const toast = useToast();
   const rename = useRenameOrganization();
+  const formId = useId();
   const [serverError, setServerError] = useState("");
   // The name this form last saved, ahead of the refreshed prop, so Rename does
   // not come back between the save and the page refresh.
@@ -57,6 +59,8 @@ function NameForm({ savedName }: { savedName: string }) {
     register,
     handleSubmit,
     reset,
+    resetField,
+    setError,
     formState: { errors },
   } = useForm<RenameOrganizationInput>({
     resolver: zodResolver(renameOrganizationSchema),
@@ -66,6 +70,7 @@ function NameForm({ savedName }: { savedName: string }) {
     values: { name: savedName },
     resetOptions: { keepDirtyValues: true },
   });
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const typed = useWatch({ control, name: "name" }) ?? baseline;
   const changed = typed.trim() !== baseline;
 
@@ -79,14 +84,15 @@ function NameForm({ savedName }: { savedName: string }) {
       toast.success(`Organization renamed to ${renamed.name}.`);
       router.refresh();
     } catch (error) {
-      setServerError(
+      setServerError(refuseSave(
+        error,
         error instanceof Error ? error.message : "The organization was not renamed. Try again.",
-      );
+      ) ?? "");
     }
   }));
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-16">
+    <form id={formId} onSubmit={onSubmit} className="flex flex-col gap-16">
       <FormField
         id="organization-name"
         label="Name"
