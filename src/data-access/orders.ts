@@ -59,7 +59,7 @@ export interface PaginatedOrders {
 // ============================================
 
 import { SafeError } from "@/lib/errors";
-import { orderArchived, orderCustomerLocationMismatch, orderHasDeliveries, orderReferenceNotFound, orderRelationshipFrozen, type OrderRelationshipField } from "@/lib/order-domain-errors";
+import { ORDER_DELIVERY_NAME_CAP, orderArchived, orderCustomerLocationMismatch, orderHasDeliveries, orderReferenceNotFound, orderRelationshipFrozen, type OrderRelationshipField } from "@/lib/order-domain-errors";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 import { formulationArchived } from "@/lib/formulation-domain-errors";
 import { lockCustomerReference, lockCustomerLocationReference } from "./party-reference-guards";
@@ -413,10 +413,14 @@ export async function deleteOrderInTransaction(ctx: OrgContext, tx: DbTransactio
   if (!existing) throw orderReferenceNotFound("orderId");
   assertRowVersion({ entity: "order", id: orderId, expectedVersion, actualVersion: existing.version });
   await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: "order", entityId: orderId }, "delete"), "certification_locked", ["orderId"]);
-  const [delivery] = await tx.select({ id: deliveries.id, code: deliveries.code }).from(deliveries)
+  const blockingDeliveries = await tx.select({ id: deliveries.id, code: deliveries.code }).from(deliveries)
     .where(and(eq(deliveries.orderId, orderId), eq(deliveries.organizationId, ctx.organizationId)))
-    .orderBy(asc(deliveries.code)).limit(1);
-  if (delivery) throw orderHasDeliveries(delivery, existing.code);
+    .orderBy(asc(deliveries.code)).limit(ORDER_DELIVERY_NAME_CAP);
+  if (blockingDeliveries.length > 0) {
+    const [{ total }] = await tx.select({ total: count() }).from(deliveries)
+      .where(and(eq(deliveries.orderId, orderId), eq(deliveries.organizationId, ctx.organizationId)));
+    throw orderHasDeliveries(blockingDeliveries, existing.code, total);
+  }
   await tx.delete(orders).where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
   await retireDocumentsForEntities(ctx, tx, [{ entityType: "order", entityId: orderId }], source);
   return existing;
