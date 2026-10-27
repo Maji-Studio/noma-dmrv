@@ -32,6 +32,15 @@ describe("CreditBatchLateEntries", () => {
     expect(container.textContent).toContain("Goes into RM-26-010 of credit batch CB-26-010.");
   });
 
+  it("says a late entry goes into the revision of its own earlier Removal", () => {
+    const revisionOf = { removalId: "rm-9", removalCode: "RM-26-009" };
+    lines.mockReturnValue(line(entry("late", { recordedAfter: revisionOf, revisionOf })));
+    const { container } = render(<CreditBatchLateEntries facilityId="f1" creditBatchId="cb" canManage />);
+    expect(container.textContent).toContain("Goes into the revision of RM-26-009.");
+    expect(screen.getAllByRole("link", { name: "RM-26-009" }).map(link => link.getAttribute("href")))
+      .toEqual(["/certification/removals?facility=f1&removal=rm-9", "/certification/removals?facility=f1&removal=rm-9"]);
+  });
+
   it("joins several earlier Removals", () => {
     lines.mockReturnValue(line(
       entry("a", { recordedAfter: { removalId: "rm-8", removalCode: "RM-26-008" }, carry: receiver }),

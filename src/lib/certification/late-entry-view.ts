@@ -22,6 +22,7 @@ const MEMBER_TEMPLATE_TEXT = "An Admin changes it in Settings, Removal templates
 export interface LateEntryFacts {
   carry?: EntryCarryDisposition;
   reportedIn?: EntryCarryDestination | null;
+  revisionOf?: { removalId: string; removalCode: string } | null;
   recordedAfter?: { removalId: string; removalCode: string } | null;
 }
 
@@ -31,6 +32,7 @@ export interface LateEntryBatch { code: string; href: string }
 
 export type LateEntryDestination =
   | { kind: "draft" | "reported"; removalCode: string; removalHref: string; creditBatches: LateEntryBatch[]; anotherCreditBatch: boolean }
+  | { kind: "revision"; removalCode: string; removalHref: string }
   | { kind: "waiting"; reason: CarryWaitingReason; text: string; action: LateEntryAction | null };
 
 export interface LateEntryView {
@@ -69,8 +71,8 @@ export function waitingDetail(reason: CarryWaitingReason, canManage = true): str
 }
 
 /**
- * Null for every entry that no other credit batch's Removal reports and none is
- * going to: an entry sent by a Removal of its own batch is not a late one.
+ * Includes late entries returning to their own Removal's revision. An entry
+ * already sent by a Removal of its own batch is not a late one.
  */
 export function lateEntryView(entry: LateEntryFacts, facilityId: string, options: LateEntryOptions = {}): LateEntryView | null {
   const canManage = options.canManage ?? false;
@@ -85,6 +87,10 @@ export function lateEntryView(entry: LateEntryFacts, facilityId: string, options
   }
   if (receiver) {
     return { recordedAfter, destination: { kind: "draft", removalCode: receiver.removalCode, removalHref: removalSheetHref(receiver.removalId, facilityId), creditBatches: destinationBatches(receiver, facilityId), anotherCreditBatch: receiver.anotherCreditBatch } };
+  }
+  if (entry.revisionOf) {
+    return { recordedAfter, destination: { kind: "revision", removalCode: entry.revisionOf.removalCode,
+      removalHref: removalSheetHref(entry.revisionOf.removalId, facilityId) } };
   }
   if (reason) {
     const memberOnly = reason === "incompatibleTemplate" && !canManage;

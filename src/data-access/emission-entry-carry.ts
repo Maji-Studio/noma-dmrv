@@ -7,8 +7,9 @@ import { facilityToday } from "@/lib/date-utils";
 import { creditBatchApplicationMass, isCreditBatchFullyApplied } from "@/lib/credit-batches/application-mass";
 import { removalEntryCarryOwner, type CarryContender, type EntryCarryDestination } from "@/lib/certification/emission-entry-carry";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
-import { deriveRemovalEntryWindow, isLiveEntryReservation } from "@/lib/certification/removal-emission-contributions";
+import { deriveRemovalEntryWindow, isLiveEntryReservation, removalEntryOwner } from "@/lib/certification/removal-emission-contributions";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
+import { hasReturnedStatementStatus } from "@/lib/record-lock";
 import { readRecordLockLineage } from "./record-lock-lineage";
 import type { EntryContender } from "@/lib/certification/removal-emission-contributions";
 import { requireOrgScope } from "./utils";
@@ -108,7 +109,15 @@ export async function loadFacilityEmissionEntryCarry(
     if (retained && destination?.anotherCreditBatch) carry.receiver = destination;
     const earlier = attempts.filter(attempt => attempt.submittedAt && attempt.submittedAt <= entry.createdAt && slices.some(slice => slice.creditBatchId === entry.creditBatchId && slice.removalId === attempt.localEntityId))
       .sort((a, b) => b.submittedAt!.getTime() - a.submittedAt!.getTime() || a.id.localeCompare(b.id))[0];
-    return [{ ...resolved, carry, reportedIn: entry.sentByRemovalId ? destination : null,
+    // Display only: an uncertain conservative owner must not announce a returned revision.
+    const ownerId = removalEntryOwner(resolved, ownContenders);
+    const owner = ownContenders.find(contender => contender.removalId === ownerId && contender.contenderKind === "correction");
+    const revisionRemoval = !entry.deletedAt && entry.kind === "value" && !entry.sentByRemovalId && !entry.heldForRemovalId &&
+      !retained && resolved.reservationKnownInactive && owner && earlier?.localEntityId === owner.removalId &&
+      lineage.find(fact => fact.id === owner.removalId)?.statements.some(hasReturnedStatementStatus)
+      ? removals.find(removal => removal.id === owner.removalId) : null;
+    const revisionOf = revisionRemoval ? { removalId: revisionRemoval.id, removalCode: revisionRemoval.code } : null;
+    return [{ ...resolved, revisionOf, carry, reportedIn: entry.sentByRemovalId ? destination : null,
       earlierRemovalCode: removals.find(removal => removal.id === earlier?.localEntityId)?.code,
       earlierRemovalId: removals.find(removal => removal.id === earlier?.localEntityId)?.id,
       creditBatchCode: batch.code, entryObservation: observation }];
@@ -119,6 +128,7 @@ export async function loadFacilityEmissionEntryCarry(
 type CarryEntry = ReturnType<typeof deriveEmissionEntryFacts>[number] & {
   reservedByRemovalId: string | null; reservationKnownInactive: boolean;
   carry: ReturnType<typeof removalEntryCarryOwner>; reportedIn: EntryCarryDestination | null;
+  revisionOf: { removalId: string; removalCode: string } | null;
   earlierRemovalCode: string | undefined; earlierRemovalId?: string; creditBatchCode: string;
   entryObservation: Awaited<ReturnType<typeof getTemplateObservationsByIds>>[number];
 };

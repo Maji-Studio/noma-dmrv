@@ -3,7 +3,7 @@
  * or will report, each with its date, figure and where it goes (#1059). When
  * every entry was recorded after a sent Removal the heading names it ("Recorded
  * after RM-26-009 was sent"); otherwise each entry says so itself when it can.
- * The Blocking to-do carries the action, so the list says where each one stands.
+ * The Check to-do carries the action, so the list says where each one stands.
  */
 "use client";
 

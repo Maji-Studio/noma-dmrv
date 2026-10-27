@@ -75,9 +75,13 @@ function isIdleAttempt(submission: RecordLockSubmission): boolean {
   return !submission.inFlight && isTerminalAttemptStatus(submission.status);
 }
 
+/** Persisted return status is a display fact, not authorization to edit. */
+export function hasReturnedStatementStatus(statement: Pick<RecordLockStatement, "status" | "submittedToVerifier">): boolean {
+  return statement.status === "FAILED_VERIFICATION" || (statement.status === "DRAFT" && statement.submittedToVerifier);
+}
+
 export function isReturnedStatement(statement: RecordLockStatement): boolean {
-  return statement.fresh && !statement.inFlight &&
-    (statement.status === "FAILED_VERIFICATION" || (statement.status === "DRAFT" && statement.submittedToVerifier));
+  return statement.fresh && !statement.inFlight && hasReturnedStatementStatus(statement);
 }
 
 /** Client-safe facts. Callers resolve dependencies and every ledger version. */

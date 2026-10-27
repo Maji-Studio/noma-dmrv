@@ -326,7 +326,8 @@ it("the narrow sheet read equals full-context selection for a real draft carry c
   const facts = await loadBatchEmissionContext(ctx, scope.facilityId, scope.memberBatches, facility,
     { ownedRemovalId: receiving.removalId });
   const full = await loadRemovalEntryContext(ctx, scope, facts, facility);
-  const narrow = await loadRemovalCarriedEntries(ctx, receiving.removalId);
+  const { carriedEntries: narrow, lateEntries } = await loadRemovalCarriedEntries(ctx, receiving.removalId);
+  expect(lateEntries).toEqual([]);
   expect(narrow.map(item => item.entryId)).toEqual([entry.id]);
   expect(narrow).toEqual(full!.contributions.carriedEntries);
 });
@@ -344,6 +345,40 @@ it("the narrow sent read preserves the full-context carried list and its frozen 
   });
   await db.update(emissionEntryValues).set({ magnitude: "999" }).where(and(
     eq(emissionEntryValues.organizationId, ctx.organizationId), eq(emissionEntryValues.entryId, entry.id)));
-  expect(await loadRemovalCarriedEntries(ctx, receiving.removalId)).toEqual(
+  expect((await loadRemovalCarriedEntries(ctx, receiving.removalId)).carriedEntries).toEqual(
     full!.contributions.carriedEntries!.map(item => ({ ...item, value: { magnitude: item.value.magnitude, unit: item.value.unit } })));
+});
+
+it.each(["FAILED_VERIFICATION", "DRAFT", null])("discovers the own-batch revision from persisted returned lineage (%s)", async status => {
+  // A sent snapshot is frozen, so the origin attempt is recreated as sent before the entry was recorded.
+  await db.delete(certificationSubmissions).where(and(
+    eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityId, origin.removalId),
+    eq(certificationSubmissions.submissionType, "removal"),
+  ));
+  await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId, provider: "isometric", submissionType: "removal",
+    localEntityType: "removal", localEntityId: origin.removalId, version: 1, status: "submitted", submittedAt: new Date("2026-07-01"),
+    externalId: "origin-sent", payloadSnapshot: { semantic: {} } });
+  const [statement] = await db.insert(certifierGhgStatements).values({ organizationId: ctx.organizationId,
+    facilityId: origin.facilityId, reportingPeriodEndOn: "2026-06-30" }).returning();
+  origin.ghgStatementId = statement.id;
+  await db.update(certifierRemovals).set({ ghgStatementId: statement.id }).where(and(
+    eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, origin.removalId),
+  ));
+  await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId, provider: "isometric", submissionType: "ghg_statement",
+    localEntityType: "ghgStatement", localEntityId: statement.id, version: 1, status: "submitted", externalId: "returned-origin", submittedAt: new Date(),
+    metadata: { remoteStatus: status, submittedToVerifierAt: "2026-07-02T00:00:00Z", removalIds: ["origin-sent"] } });
+  registry.getGhgStatement.mockClear(); registry.resolveClient.mockClear();
+  const discovery = await loadFacilityEmissionEntryCarry(ctx, origin.facilityId, db, undefined, { ownedBatchIds: [origin.batchId] });
+  const discovered = discovery.entries.find(item => item.id === entry.id)!;
+  expect(discovery.ownContenders).toContainEqual(expect.objectContaining({ contenderKind: "correction", removalId: origin.removalId }));
+  expect(discovered.carry).toMatchObject({ receiver: null, waitingReason: null });
+  expect(discovered.revisionOf).toEqual(status ? { removalId: origin.removalId, removalCode: discovered.earlierRemovalCode } : null);
+  const own = await loadRemovalCarriedEntries(ctx, origin.removalId);
+  expect(own.carriedEntries).toEqual([]);
+  expect(own.lateEntries.map(item => item.entryId)).toEqual(status ? [entry.id] : []);
+  if (status) expect(own.lateEntries[0]).toMatchObject({ creditBatchId: origin.batchId, componentName: "Electricity",
+    occurredOn: "2026-06-10", value: { magnitude: "120", unit: "kWh" }, earlierRemovalId: origin.removalId });
+  expect((await loadRemovalCarriedEntries(ctx, receiving.removalId)).carriedEntries).toEqual([]);
+  expect(registry.getGhgStatement).not.toHaveBeenCalled();
+  expect(registry.resolveClient).not.toHaveBeenCalled();
 });

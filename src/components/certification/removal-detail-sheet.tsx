@@ -186,7 +186,8 @@ export function RemovalDetailSheet({
   });
   // A replaced Removal never sends anything, so it is the one state that
   // skips the carried-entries read.
-  const { data: carriedEntries } = useRemovalCarriedEntries(summary.removalId, { enabled: open && workflowStatus.kind !== "superseded" });
+  const { data: removalEntries } = useRemovalCarriedEntries(summary.removalId, { enabled: open && workflowStatus.kind !== "superseded" });
+  const carriedEntries = removalEntries?.carriedEntries;
   // A returned Removal with its correction window open shows the Returned or
   // Resubmit needed status and one notice in place of #1134's lock-based one.
   const { correction } = summary;
