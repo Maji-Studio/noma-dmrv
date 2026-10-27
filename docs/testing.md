@@ -595,7 +595,8 @@ comment-only `// @live` marker will **not** be excluded by `--grep-invert`.
 `removal-lineage-correction-screen` need the app server to answer the registry reads with
 `tests/e2e/helpers/returned-removal-registry-stub.cjs`, so PR CI (hermetic, no preload) skips
 them with a reason. Run them with `pnpm test:e2e:returned` (needs `CREDENTIALS_ENCRYPTION_KEY`
-in the environment; one worker, they share the served template). Their seed
+in the environment; one worker, they share the served template). Stop any dev server on the
+worktree port first: Playwright reuses a running server, which would not have the preload. Their seed
 (`fixtures/returned-removal-seed.ts`) must stay submit-ready: the sent snapshot comes from a
 real `compileRemovalCorrectionContent` run, so a hand-made snapshot or a missing proof of
 delivery, readings, sample or storage component turns every Removal into "Resubmit needed".
