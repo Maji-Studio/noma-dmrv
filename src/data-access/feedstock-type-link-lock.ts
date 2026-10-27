@@ -12,26 +12,25 @@ import { requireOrgScope } from "./utils";
 
 export interface FeedstockTypeLinkLock {
   locked: boolean;
-  removals: { id: string; label?: string; facilityId: string }[];
+  removals: { id: string; code: string; facilityId: string }[];
 }
 
 /** Each Removal opens on its own facility's list, which may not be the one selected. */
 async function withRemovalFacilities(
   ctx: OrgContext,
   tx: Pick<DbTransaction, "select">,
-  labels: ReadonlyMap<string, string | undefined>,
+  removalIds: Iterable<string>,
 ): Promise<FeedstockTypeLinkLock["removals"]> {
-  if (!labels.size) return [];
+  const ids = [...new Set(removalIds)];
+  if (!ids.length) return [];
   const rows = await tx
-    .select({ id: certifierRemovals.id, facilityId: certifierRemovals.facilityId })
+    .select({ id: certifierRemovals.id, code: certifierRemovals.code, facilityId: certifierRemovals.facilityId })
     .from(certifierRemovals)
     .where(and(
       eq(certifierRemovals.organizationId, ctx.organizationId),
-      inArray(certifierRemovals.id, [...labels.keys()]),
+      inArray(certifierRemovals.id, ids),
     ));
-  return rows
-    .map(row => ({ id: row.id, facilityId: row.facilityId, ...(labels.get(row.id) ? { label: labels.get(row.id) } : {}) }))
-    .sort((a, b) => a.id.localeCompare(b.id));
+  return rows.sort((a, b) => a.code.localeCompare(b.code));
 }
 
 /** Advisory read, also used inside the feedstock-type update transaction. */
@@ -68,11 +67,11 @@ export async function getFeedstockTypeLinkLock(
     entityType: "productionRun",
     entityId: run.id,
   })), { sentOnly: true });
-  const removals = new Map<string, string | undefined>();
+  const removals = new Set<string>();
   for (const lock of locks) {
     if (lock.level !== "sent") continue;
     for (const holder of lock.heldBy) {
-      if (holder.kind === "removal") removals.set(holder.id, holder.label);
+      if (holder.kind === "removal") removals.add(holder.id);
     }
   }
   return {
@@ -110,9 +109,9 @@ export async function getLockedFeedstockTypeLinkLock(
     ))
     .orderBy(creditBatchProductionRuns.creditBatchId);
   const lineage = await getLockedCertifiedLineageForBatches(ctx, tx, batches.map(batch => batch.id));
-  const removals = new Map<string, string | undefined>();
+  const removals = new Set<string>();
   for (const row of lineage.filter(isSubmittedLineageRow)) {
-    removals.set(row.removalId, row.recordLockRemoval.label);
+    removals.add(row.removalId);
   }
   return {
     locked: removals.size > 0,

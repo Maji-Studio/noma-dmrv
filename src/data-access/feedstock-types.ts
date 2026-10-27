@@ -18,6 +18,7 @@ import { isPgUniqueViolation } from "@/db/errors";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { conflictCode } from "@/lib/conflict-ref";
 import { SafeError } from "@/lib/errors";
+import { joinWithAnd } from "@/lib/removal-correction-copy";
 import { DomainError } from "@/lib/domain-errors";
 import {
   getFeedstockTypeDeleteDecision,
@@ -121,7 +122,7 @@ export async function updateFeedstockType(
       if (locked.isometricFeedstockTypeId !== null && changes.isometricFeedstockTypeId !== locked.isometricFeedstockTypeId) {
         const linkLock = await getLockedFeedstockTypeLinkLock(ctx, tx, feedstockTypeId);
         if (linkLock.locked) {
-          const removalNames = linkLock.removals.map(removal => removal.label || removal.id).join(", ");
+          const removalNames = joinWithAnd(linkLock.removals.map(removal => removal.code));
           const removalDescription = linkLock.removals.length === 1 ? "a sent Removal" : "sent Removals";
           const message = `The Isometric link cannot change because production runs of this feedstock type are in ${removalDescription} (${removalNames}).`;
           throw new DomainError("certification_locked", message, {

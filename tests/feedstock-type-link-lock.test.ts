@@ -20,10 +20,13 @@ vi.mock("@/lib/auth/server", async (importOriginal) => ({
 }));
 
 const ctx = makeTestOrgContext();
-const REMOVAL_START = "2026-06-01";
-const REMOVAL_END = "2026-06-30";
-const REMOVAL_LABEL = `${REMOVAL_START} to ${REMOVAL_END}`;
 const NOT_FOUND_MESSAGE = "Feedstock type was not found.";
+
+async function removalCode(removalId: string): Promise<string> {
+  const [row] = await db.select({ code: certifierRemovals.code }).from(certifierRemovals)
+    .where(and(eq(certifierRemovals.id, removalId), eq(certifierRemovals.organizationId, ctx.organizationId)));
+  return row.code;
+}
 
 async function withFeedstockTypeFixture(
   blockingVia: "removal" | "none",
@@ -41,12 +44,6 @@ async function withFeedstockTypeFixture(
           eq(feedstockTypes.organizationId, ctx.organizationId),
         ));
     }
-    await db.update(certifierRemovals)
-      .set({ startedOn: REMOVAL_START, completedOn: REMOVAL_END })
-      .where(and(
-        eq(certifierRemovals.id, fixture.removalId),
-        eq(certifierRemovals.organizationId, ctx.organizationId),
-      ));
     await run(fixture, await getFeedstockTypeById(ctx, fixture.feedstockTypeId));
   } finally {
     await cleanupLineageFixture(fixture);
@@ -66,7 +63,7 @@ describe("feedstock type Isometric link lock", () => {
     ["clearing with whitespace", "   "],
   ] as const)("refuses %s a linked type in a sent Removal", async (_label, link) => {
     await withFeedstockTypeFixture("removal", true, async (fixture, type) => {
-      const message = `The Isometric link cannot change because production runs of this feedstock type are in a sent Removal (${REMOVAL_LABEL}).`;
+      const message = `The Isometric link cannot change because production runs of this feedstock type are in a sent Removal (${await removalCode(fixture.removalId)}).`;
       await expect(updateFeedstockType(ctx, {
         feedstockTypeId: fixture.feedstockTypeId,
         expectedVersion: type.version,
@@ -155,29 +152,10 @@ describe("feedstock type Isometric link lock", () => {
   it("reports the lock and Removal reference to an ordinary org member", async () => {
     await withFeedstockTypeFixture("removal", true, async (fixture) => {
       vi.mocked(requireOrgContext).mockResolvedValue({ ...ctx, orgRole: "member" });
-      const expected = { locked: true, removals: [{ id: fixture.removalId, label: REMOVAL_LABEL, facilityId: fixture.facilityId }] };
+      const expected = { locked: true, removals: [{ id: fixture.removalId, code: await removalCode(fixture.removalId), facilityId: fixture.facilityId }] };
       expect(await getFeedstockTypeLinkLock(ctx, db, fixture.feedstockTypeId)).toEqual(expected);
       expect(await getFeedstockTypeLinkLockFn({ feedstockTypeId: fixture.feedstockTypeId }))
         .toEqual({ success: true, data: expected });
-    });
-  });
-
-  it("falls back to the Removal id when its lock has no label", async () => {
-    await withFeedstockTypeFixture("removal", true, async (fixture, type) => {
-      await db.update(certifierRemovals).set({ startedOn: null, completedOn: null }).where(and(
-        eq(certifierRemovals.id, fixture.removalId),
-        eq(certifierRemovals.organizationId, ctx.organizationId),
-      ));
-      expect(await getFeedstockTypeLinkLock(ctx, db, fixture.feedstockTypeId))
-        .toEqual({ locked: true, removals: [{ id: fixture.removalId, facilityId: fixture.facilityId }] });
-      await expect(updateFeedstockType(ctx, {
-        feedstockTypeId: fixture.feedstockTypeId,
-        expectedVersion: type.version,
-        isometricFeedstockTypeId: null,
-      })).rejects.toMatchObject({
-        code: "certification_locked",
-        message: `The Isometric link cannot change because production runs of this feedstock type are in a sent Removal (${fixture.removalId}).`,
-      });
     });
   });
 

@@ -32,6 +32,7 @@ import { useFeedstockTypeLinkLock } from "@/hooks/use-feedstock-types";
 import { removalSheetHref } from "@/lib/removal-correction-copy";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { IsometricFeedstockBrowser } from "./isometric-feedstock-browser";
 import type { IsometricFeedstockType } from "@/lib/isometric";
@@ -286,12 +287,14 @@ export function FeedstockTypeForm({
     <Notice tone="success" title={`${isEditMode ? "Linked to" : "Selected from"} Isometric: ${selectedIsometricFeedstock.name}`}>
       <div className="flex flex-col gap-2">
         <p className="body-caption flex items-center gap-4 font-mono text-[var(--color-text-tertiary)]">
-          <span>
-            {selectedIsometricFeedstock.id}
-            {selectedIsometricFeedstock.supplier_reference_id
-              ? ` · ref ${selectedIsometricFeedstock.supplier_reference_id}`
-              : ""}
-          </span>
+          {!isEditMode && (
+            <span>
+              {selectedIsometricFeedstock.id}
+              {selectedIsometricFeedstock.supplier_reference_id
+                ? ` · ref ${selectedIsometricFeedstock.supplier_reference_id}`
+                : ""}
+            </span>
+          )}
           {selectedIsometricHref && <IsometricLink href={selectedIsometricHref} />}
         </p>
         {selectedIsometricNameChanged && (
@@ -377,25 +380,30 @@ export function FeedstockTypeForm({
                   certifyRequired={registryMappingRequired}
                   certifyStatus={certStatus("isometricFeedstockTypeId")}
                 >
-                  <output id="isometricFeedstockTypeId" className="body-small">
+                  <output id="isometricFeedstockTypeId" className="body-small inline-flex items-center gap-4">
                     {selectedIsometricId
                       ? isEditMode && linkedIsometricName
-                        ? `${linkedIsometricName} (${selectedIsometricId})`
+                        ? linkedIsometricName
                         : selectedIsometricId
                       : MISSING_VALUE.notSet}
+                    {isEditMode && selectedIsometricId && linkedIsometricName && (
+                      <ExplanationInfo title="Isometric registry ID">
+                        <span className="font-mono">{selectedIsometricId}</span>
+                      </ExplanationInfo>
+                    )}
                   </output>
                   {selectedIsometricSummary}
                   {linkAction === "locked" && (
                     <Notice tone="info">
                       {ISOMETRIC_LINK_LOCKED_REASON}{" "}
-                      {linkLock.data?.removals.map((removal, index) => (
+                      {linkLock.data?.removals.map((removal, index, all) => (
                         <span key={removal.id}>
-                          {index > 0 && ", "}
+                          {index > 0 && (index === all.length - 1 ? " and " : ", ")}
                           <Link
                             href={removalSheetHref(removal.id, removal.facilityId)}
                             className="underline"
                           >
-                            Removal {removal.label ?? removal.id}
+                            Removal {removal.code}
                           </Link>
                         </span>
                       ))}

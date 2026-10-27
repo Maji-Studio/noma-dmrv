@@ -9,7 +9,7 @@ vi.mock("@/hooks/use-certification", async (importOriginal) => ({
   useFacilityCertifierSummary: () => ({ data: { mapping: { provider: "isometric" } } }),
   useIsometricFeedstockTypes: () => ({ data: [{ id: "fst_1", name: "Registry wood chips" }] }),
 }));
-const linkLock = vi.hoisted(() => ({ data: undefined as undefined | { locked: boolean; removals: { id: string; label?: string; facilityId: string }[] } }));
+const linkLock = vi.hoisted(() => ({ data: undefined as undefined | { locked: boolean; removals: { id: string; code: string; facilityId: string }[] } }));
 vi.mock("@/hooks/use-feedstock-types", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-feedstock-types")>(),
   useFeedstockTypeLinkLock: () => linkLock,
@@ -51,15 +51,16 @@ describe("FeedstockTypeForm certification marker", () => {
   it("shows the registry name beside the id and offers a change while unlocked", () => {
     linkLock.data = { locked: false, removals: [] };
     const html = renderToStaticMarkup(<FeedstockTypeForm onSubmit={vi.fn()} feedstockType={{ ...savedType, isometricFeedstockTypeId: "fst_1" }} />);
-    expect(html).toContain("Registry wood chips (fst_1)");
+    expect(html).toContain("Registry wood chips");
+    expect(html).not.toContain("(fst_1)");
     expect(html).toContain("Change Isometric link");
   });
 
   it("shows a locked link read-only with the Removal as a link", () => {
-    linkLock.data = { locked: true, removals: [{ id: "rem-1", label: "REM-001", facilityId: "facility-2" }] };
+    linkLock.data = { locked: true, removals: [{ id: "rem-1", code: "REM-001", facilityId: "facility-2" }] };
     const html = renderToStaticMarkup(<FeedstockTypeForm onSubmit={vi.fn()} feedstockType={{ ...savedType, isometricFeedstockTypeId: "fst_1" }} />);
     expect(html).toContain("were sent in");
-    expect(html).toContain("REM-001");
+    expect(html).toContain("Removal REM-001");
     expect(html).toContain("removal=rem-1");
     expect(html).toContain("facility=facility-2");
     expect(html).not.toContain("Change Isometric link");
