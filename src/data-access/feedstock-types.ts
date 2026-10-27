@@ -18,6 +18,7 @@ import { isPgUniqueViolation } from "@/db/errors";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { conflictCode } from "@/lib/conflict-ref";
 import { SafeError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
 import {
   getFeedstockTypeDeleteDecision,
   type FeedstockTypeDeleteConflict,
@@ -32,6 +33,7 @@ import {
 } from "@/schemas/feedstock-types";
 import { requireOrgScope } from "./utils";
 import { hasCertifierCredentials } from "./certifier-credentials";
+import { getFeedstockTypeLinkLock } from "./feedstock-type-link-lock";
 
 export const FEEDSTOCK_TYPE_MANAGE_ROLE = "admin";
 
@@ -88,6 +90,7 @@ export async function updateFeedstockType(
         version: feedstockTypes.version,
         category: feedstockTypes.category,
         usage: feedstockTypes.usage,
+        isometricFeedstockTypeId: feedstockTypes.isometricFeedstockTypeId,
       })
       .from(feedstockTypes)
       .where(
@@ -100,6 +103,21 @@ export async function updateFeedstockType(
 
     if (!locked) throw new SafeError("Feedstock type not found.");
     assertRowVersion({ entity: FEEDSTOCK_TYPE_CONFLICT_ENTITY, id: feedstockTypeId, expectedVersion, actualVersion: locked.version });
+
+    if (changes.isometricFeedstockTypeId !== undefined) {
+      changes.isometricFeedstockTypeId = changes.isometricFeedstockTypeId?.trim() || null;
+      if (locked.isometricFeedstockTypeId !== null && changes.isometricFeedstockTypeId !== locked.isometricFeedstockTypeId) {
+        const linkLock = await getFeedstockTypeLinkLock(ctx, tx, feedstockTypeId);
+        if (linkLock.locked) {
+          const removalNames = linkLock.removals.map(removal => removal.label || removal.id).join(", ");
+          const removalDescription = linkLock.removals.length === 1 ? "a sent Removal" : "sent Removals";
+          const message = `The Isometric link cannot change because production runs of this feedstock type are in ${removalDescription} (${removalNames}).`;
+          throw new DomainError("certification_locked", message, {
+            issues: [{ path: ["isometricFeedstockTypeId"], code: "certification_locked", message }],
+          });
+        }
+      }
+    }
 
     if (changes.usage !== undefined && changes.usage !== "blend" && changes.usage !== locked.usage) {
       const [used] = await tx.select({ name: formulations.name }).from(formulationIngredients)

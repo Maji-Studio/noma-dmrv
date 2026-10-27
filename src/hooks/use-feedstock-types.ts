@@ -11,6 +11,7 @@ import {
   archiveFeedstockTypeFn,
   createFeedstockTypeFn,
   deleteFeedstockTypeFn,
+  getFeedstockTypeLinkLockFn,
   importIsometricFeedstockTypeFn,
   listFeedstockTypesFn,
   unarchiveFeedstockTypeFn,
@@ -26,6 +27,7 @@ import { certificationKeys } from "./use-certification";
 export const feedstockTypeKeys = {
   all: ["feedstock-types"] as const,
   canManage: () => [...feedstockTypeKeys.all, "can-manage"] as const,
+  linkLock: (id: string) => [...feedstockTypeKeys.all, "link-lock", id] as const,
   detail: (id: string) => ["feedstock-types", "detail", id] as const,
   list: () => ["feedstock-types", "list"] as const,
 };
@@ -39,6 +41,19 @@ export function useFeedstockTypeList(enabled = true) {
       return result.data;
     },
     enabled,
+  });
+}
+
+/** Whether a sent Removal holds the type's Isometric link, and which Removals. */
+export function useFeedstockTypeLinkLock(feedstockTypeId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: feedstockTypeKeys.linkLock(feedstockTypeId ?? ""),
+    queryFn: async () => {
+      const result = await getFeedstockTypeLinkLockFn({ feedstockTypeId });
+      if (!result.success) throwActionError(result);
+      return result.data;
+    },
+    enabled: enabled && !!feedstockTypeId,
   });
 }
 

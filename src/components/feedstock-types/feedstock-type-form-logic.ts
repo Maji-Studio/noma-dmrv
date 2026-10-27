@@ -80,3 +80,35 @@ export function shouldShowCertifiedFeedstockWarning(
 /** Tooltip on the Local category field in the Isometric flows. */
 export const LOCAL_CATEGORY_HINT =
   "Used inside noma only, for example in bin and delivery subtitles. It is not sent to Isometric.";
+
+/**
+ * Picking a registry entry names a new type after it. A saved type keeps the
+ * operator's own name; the registry name is shown next to it as the link.
+ */
+export function shouldOverwriteNameOnIsometricSelection(isEditMode: boolean): boolean {
+  return !isEditMode;
+}
+
+export type IsometricLinkAction = "link" | "change" | "locked";
+
+/**
+ * What the Isometric field of a saved pyrolysis type offers: link an unlinked
+ * type, change a link nothing has locked, or show the link read-only once a
+ * sent Removal holds it. Nothing for a new type (the create flow has its own
+ * picker) or a facility whose certifier is not Isometric.
+ */
+export function isometricLinkAction(input: {
+  isEditMode: boolean;
+  hasIsometricCertifier: boolean;
+  usage: FeedstockTypeUsage | undefined;
+  isLinked: boolean;
+  isLocked: boolean;
+}): IsometricLinkAction | null {
+  if (!input.isEditMode || !input.hasIsometricCertifier || input.usage !== "pyrolysis") return null;
+  if (input.isLocked && input.isLinked) return "locked";
+  return input.isLinked ? "change" : "link";
+}
+
+/** The one line shown with a locked link. Names the Removal(s) it points at separately. */
+export const ISOMETRIC_LINK_LOCKED_REASON =
+  "This link is fixed because production runs of this feedstock type were sent in";

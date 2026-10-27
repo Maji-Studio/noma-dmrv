@@ -6,11 +6,13 @@ import { FeedstockTypeEditFormDialog } from "./entity-edit-forms";
 
 vi.mock("@/hooks/use-feedstock-types", () => ({
   useUpdateFeedstockType: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useFeedstockTypeLinkLock: () => ({ data: undefined }),
 }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: null }) }));
 vi.mock("@/hooks/use-certification", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-certification")>(),
   useFacilityCertifierSummary: () => ({ data: null }),
+  useIsometricFeedstockTypes: () => ({ data: undefined }),
 }));
 afterEach(cleanup);
 

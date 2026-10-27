@@ -27,12 +27,19 @@ import {
 } from "@/schemas/feedstock-types";
 import type { FeedstockType } from "@/db/schema/feedstock";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useFacilityCertifierSummary } from "@/hooks/use-certification";
+import { useFacilityCertifierSummary, useIsometricFeedstockTypes } from "@/hooks/use-certification";
+import { useFeedstockTypeLinkLock } from "@/hooks/use-feedstock-types";
+import { removalSheetHref } from "@/lib/removal-correction-copy";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { IsometricFeedstockBrowser } from "./isometric-feedstock-browser";
 import type { IsometricFeedstockType } from "@/lib/isometric";
 import {
+  ISOMETRIC_LINK_LOCKED_REASON,
   LOCAL_CATEGORY_HINT,
+  isometricLinkAction,
+  shouldOverwriteNameOnIsometricSelection,
   feedstockTypeUsageOptionsFor,
   initialFeedstockTypeUsage,
   shouldClearCategoryForIsometricSelection,
@@ -122,11 +129,16 @@ export function FeedstockTypeForm({
   // Fetch the registry browser lazily on first open; React Query keeps the
   // catalogue warm if the operator switches sections.
   const [hasOpenedIsometric, setHasOpenedIsometric] = useState(false);
-  const showIsometricSection = shouldShowIsometricFeedstockSection(
-    hasIsometricCertifier,
-    lockUsage,
-    defaultUsage,
+  const savedIsometricId = feedstockType?.isometricFeedstockTypeId ?? "";
+  const linkLock = useFeedstockTypeLinkLock(
+    feedstockType?.id,
+    isEditMode && hasIsometricCertifier && !!savedIsometricId,
   );
+  // A saved link a sent Removal holds can no longer be picked again.
+  const linkIsLocked = !!savedIsometricId && !!linkLock.data?.locked;
+  const showIsometricSection =
+    shouldShowIsometricFeedstockSection(hasIsometricCertifier, lockUsage, defaultUsage) &&
+    !linkIsLocked;
   const sections = showIsometricSection
     ? SECTIONS
     : SECTIONS.filter((section) => section.key === "general");
@@ -199,6 +211,19 @@ export function FeedstockTypeForm({
   const registryMappingRequired = hasIsometricCertifier && isCertifyFormField(
     "feedstockType", "isometricFeedstockTypeId", { usage: selectedUsage },
   );
+  const linkAction = isometricLinkAction({
+    isEditMode,
+    hasIsometricCertifier,
+    usage: selectedUsage,
+    isLinked: !!savedIsometricId,
+    isLocked: linkIsLocked,
+  });
+  const catalogue = useIsometricFeedstockTypes(
+    hasIsometricCertifier && !!selectedIsometricId,
+  );
+  const linkedIsometricName =
+    selectedIsometricFeedstock?.name ??
+    catalogue.data?.find((entry) => entry.id === selectedIsometricId)?.name;
   const categoryOptions =
     selectedUsage === "blend"
       ? BLEND_FEEDSTOCK_CATEGORY_OPTIONS
@@ -207,7 +232,7 @@ export function FeedstockTypeForm({
     feedstockTypeUsageOptionsFor(lockUsage, defaultUsage);
   const selectedIsometricNameChanged =
     !!selectedIsometricFeedstock &&
-    selectedName.trim() !== selectedIsometricFeedstock.name.trim();
+    !isEditMode && selectedName.trim() !== selectedIsometricFeedstock.name.trim();
   const showCertifiedFeedstockWarning =
     shouldShowCertifiedFeedstockWarning(
       hasIsometricCertifier,
@@ -232,11 +257,13 @@ export function FeedstockTypeForm({
         });
       }
     }
-    setValue("name", type.name, {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
+    if (shouldOverwriteNameOnIsometricSelection(isEditMode)) {
+      setValue("name", type.name, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    }
     setValue("isometricFeedstockTypeId", type.id, {
       shouldDirty: true,
       shouldTouch: true,
@@ -253,7 +280,7 @@ export function FeedstockTypeForm({
       })
     : null;
   const selectedIsometricSummary = selectedIsometricFeedstock && (
-    <Notice tone="success" title={`Selected from Isometric: ${selectedIsometricFeedstock.name}`}>
+    <Notice tone="success" title={`${isEditMode ? "Linked to" : "Selected from"} Isometric: ${selectedIsometricFeedstock.name}`}>
       <div className="flex flex-col gap-2">
         <p className="body-caption flex items-center gap-4 font-mono text-[var(--color-text-tertiary)]">
           <span>
@@ -348,9 +375,46 @@ export function FeedstockTypeForm({
                   certifyStatus={certStatus("isometricFeedstockTypeId")}
                 >
                   <output id="isometricFeedstockTypeId" className="body-small">
-                    {selectedIsometricId || MISSING_VALUE.notSet}
+                    {selectedIsometricId
+                      ? isEditMode && linkedIsometricName
+                        ? `${linkedIsometricName} (${selectedIsometricId})`
+                        : selectedIsometricId
+                      : MISSING_VALUE.notSet}
                   </output>
                   {selectedIsometricSummary}
+                  {linkAction === "locked" && (
+                    <Notice tone="info">
+                      {ISOMETRIC_LINK_LOCKED_REASON}{" "}
+                      {linkLock.data?.removals.map((removal, index) => (
+                        <span key={removal.id}>
+                          {index > 0 && ", "}
+                          {facilityId ? (
+                            <Link
+                              href={removalSheetHref(removal.id, facilityId)}
+                              className="underline"
+                            >
+                              Removal {removal.label ?? removal.id}
+                            </Link>
+                          ) : (
+                            `Removal ${removal.label ?? removal.id}`
+                          )}
+                        </span>
+                      ))}
+                      .
+                    </Notice>
+                  )}
+                  {(linkAction === "link" || linkAction === "change") && (
+                    <div>
+                      <Button
+                        variant={linkAction === "link" ? "default" : "weak"}
+                        size="small"
+                        onClick={() => selectSection("isometric")}
+                      >
+                        <SealCheckIcon aria-hidden className="size-16" weight="bold" />
+                        {linkAction === "link" ? "Link to Isometric" : "Change Isometric link"}
+                      </Button>
+                    </div>
+                  )}
                   {showCertifiedFeedstockWarning && (
                     <Notice tone="warning">{CERTIFIED_FEEDSTOCK_WARNING}</Notice>
                   )}

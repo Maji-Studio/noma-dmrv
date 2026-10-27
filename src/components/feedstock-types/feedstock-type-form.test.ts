@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   feedstockTypeUsageOptionsFor,
   initialFeedstockTypeUsage,
+  isometricLinkAction,
+  shouldOverwriteNameOnIsometricSelection,
   shouldClearCategoryForIsometricSelection,
   shouldSetUsageToPyrolysisForIsometricSelection,
   shouldShowCertifiedFeedstockWarning,
@@ -150,5 +152,35 @@ describe("shouldShowCertifiedFeedstockWarning", () => {
     expect(
       shouldShowCertifiedFeedstockWarning(true, true, "pyrolysis", false),
     ).toBe(false);
+  });
+});
+
+describe("shouldOverwriteNameOnIsometricSelection", () => {
+  it("renames a new type after the registry entry", () => {
+    expect(shouldOverwriteNameOnIsometricSelection(false)).toBe(true);
+  });
+
+  it("keeps the operator's own name on a saved type", () => {
+    expect(shouldOverwriteNameOnIsometricSelection(true)).toBe(false);
+  });
+});
+
+describe("isometricLinkAction", () => {
+  const base = { isEditMode: true, hasIsometricCertifier: true, usage: "pyrolysis" as const, isLinked: false, isLocked: false };
+
+  it("offers a link on an unlinked saved type, even when a Removal is sent", () => {
+    expect(isometricLinkAction(base)).toBe("link");
+    expect(isometricLinkAction({ ...base, isLocked: true })).toBe("link");
+  });
+
+  it("offers a change on an unlocked link and read-only on a locked one", () => {
+    expect(isometricLinkAction({ ...base, isLinked: true })).toBe("change");
+    expect(isometricLinkAction({ ...base, isLinked: true, isLocked: true })).toBe("locked");
+  });
+
+  it("offers nothing for a new type, a blend type or another certifier", () => {
+    expect(isometricLinkAction({ ...base, isEditMode: false })).toBeNull();
+    expect(isometricLinkAction({ ...base, usage: "blend" })).toBeNull();
+    expect(isometricLinkAction({ ...base, hasIsometricCertifier: false })).toBeNull();
   });
 });
