@@ -584,6 +584,7 @@ restore for free.
   opened from a sheet dim the sheet as part of its underlying context. Keep
   this ordering in the shared `--z-layer-sheet-*` and `--z-layer-dialog-*`
   tokens; feature components must not set their own competing layers.
+- **Titles clear the close button by themselves.** `Modal` pads the heading named by `ariaLabelledBy` at its inline end with the close button's width plus a gap (`--spacing-32` + `--spacing-8`). Give the title an id and pass it; never add `pr-*` to a title. A dialog named by `ariaLabel` passes `titleId` for the same clearance, so its accessible name stays as is.
 - Width tokens: `sm` 400px (confirmations) · `md` 560px (default: forms,
   wizards) · `lg` 720px (dense forms) · `xl` 880px (rich content). All are
   full-width below `sm`.

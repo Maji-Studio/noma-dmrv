@@ -49,8 +49,7 @@ export function InUseDeleteDialog({
     <Modal isOpen onClose={onClose} ariaLabelledBy={titleId} ariaDescribedBy={descId} width="md">
       <div className="flex flex-col gap-24">
         <div className="flex flex-col gap-12">
-          {/* pr-40 keeps the title clear of the Modal's built-in close button. */}
-          <h2 id={titleId} className="title-heading-3 pr-40">
+          <h2 id={titleId} className="title-heading-3">
             {`${label} is in use`}
           </h2>
           <div id={descId} className="flex flex-col gap-8 body-medium text-[var(--color-text-secondary)]">

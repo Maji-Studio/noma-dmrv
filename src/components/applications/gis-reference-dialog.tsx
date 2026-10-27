@@ -146,7 +146,7 @@ function DialogBody({
 
   return (
     <div className="flex flex-col gap-16">
-      <div className="flex flex-col gap-4 pr-32">
+      <div className="flex flex-col gap-4">
         <h2
           id={DIALOG_TITLE_ID}
           className="body-large font-medium text-[var(--color-text-primary)]"
