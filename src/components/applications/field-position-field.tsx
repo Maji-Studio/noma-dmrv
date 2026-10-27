@@ -28,7 +28,7 @@ type SetPositionField = (
   options: { shouldValidate: boolean; shouldDirty: boolean },
 ) => void;
 
-export function resetFieldPosition(
+export function setFieldPosition(
   setValue: SetPositionField,
   derived: DerivedPosition | null,
 ): void {

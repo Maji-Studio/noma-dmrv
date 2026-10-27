@@ -279,6 +279,10 @@ export function FeedstockForm({
     setValue("transportDistanceSource", null, { shouldDirty: true });
     setValue("distanceNote", "", { shouldDirty: true });
   };
+  // Operator route changes clear the distance override (lock reverts do not).
+  const changeRoute = (next: string | undefined, current: string) => {
+    if (next !== current && overriding) clearOverride();
+  };
 
   // Auto-set facility from context
   useEffect(() => {
@@ -389,7 +393,7 @@ export function FeedstockForm({
               <FormEntitySelect
                 control={formControl}
                 name="facilityId"
-                onChange={(value) => { if (value !== watchedFacilityId && overriding) clearOverride(); }}
+                onChange={(value) => changeRoute(value, watchedFacilityId)}
                 label="Facility"
                 entityType="facility"
                 placeholder="Select facility..."
@@ -418,7 +422,7 @@ export function FeedstockForm({
             <FormEntitySelect
               control={formControl}
               name="supplierId"
-              onChange={(value) => { if (value !== watchedSupplierId && overriding) clearOverride(); }}
+              onChange={(value) => changeRoute(value, watchedSupplierId)}
               label="Supplier"
               entityType="supplier"
               allowEdit
@@ -707,7 +711,7 @@ export function FeedstockForm({
         isOpen={supplierDialog.isOpen}
         onClose={supplierDialog.close}
         onSuccess={(supplier) => {
-          if (supplier.id !== getValues("supplierId") && overriding) clearOverride();
+          changeRoute(supplier.id, getValues("supplierId"));
           setValue("supplierId", supplier.id, SET_VALUE_OPTS);
           supplierDialog.close();
         }}

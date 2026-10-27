@@ -54,7 +54,7 @@ import { ApplicationSupportingEvidencePanel } from "./application-supporting-evi
 import { resolveApplicationDateDefault, resolveApplicationEvidenceMethodDefault } from "./application-form-defaults";
 import {
   FieldPositionField,
-  resetFieldPosition,
+  setFieldPosition,
 } from "./field-position-field";
 import type { FieldPositionMode } from "./field-position-field";
 import {
@@ -601,7 +601,7 @@ export function ApplicationForm({
             setValue("gpsLatitude", lat, { shouldDirty: true, shouldValidate: true });
             setValue("gpsLongitude", lng, { shouldDirty: true, shouldValidate: true });
           }}
-          onDerive={() => resetFieldPosition(setValue, derivedPosition)}
+          onDerive={() => setFieldPosition(setValue, derivedPosition)}
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
           disabled={isSubmitting}

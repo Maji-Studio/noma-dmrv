@@ -10,7 +10,7 @@ import {
   FieldPositionField,
   type FieldPositionMode,
   applyFieldPositionMode,
-  resetFieldPosition,
+  setFieldPosition,
 } from "./field-position-field";
 
 type PositionValues = { gpsLatitude: number | null; gpsLongitude: number | null };
@@ -25,7 +25,7 @@ function PositionRefusalHarness() {
   const [mode, setMode] = useState<FieldPositionMode>("manual");
   const { register, setValue, resetField, setError, control, handleSubmit, formState: { isDirty } } = useForm<PositionValues>({ defaultValues: SAVED_POSITION });
   const refuse = useSaveRefusal({ control, resetField, setError, formId: FORM_ID });
-  const derive = () => resetFieldPosition(setValue, CUSTOMER_POSITION);
+  const derive = () => setFieldPosition(setValue, CUSTOMER_POSITION);
   return (
     <form id={FORM_ID} onSubmit={handleSubmit(() => refuse(new ActionError({
       error: LOCK_REASON, code: "certification_locked",
@@ -95,12 +95,12 @@ describe("applyFieldPositionMode", () => {
       return { form, isDirty, dirtyFields, defaultValues };
     });
     try {
-      await act(async () => resetFieldPosition(result.current.form.setValue, derived));
+      await act(async () => setFieldPosition(result.current.form.setValue, derived));
       expect(result.current.form.getValues()).toEqual(derived ?? { gpsLatitude: null, gpsLongitude: null });
       expect(result.current.isDirty).toBe(true);
       expect(result.current.dirtyFields).toEqual({ gpsLatitude: true, gpsLongitude: true });
       expect(result.current.defaultValues).toEqual(SAVED_POSITION);
-      await act(async () => resetFieldPosition(result.current.form.setValue, SAVED_POSITION));
+      await act(async () => setFieldPosition(result.current.form.setValue, SAVED_POSITION));
       expect(result.current.isDirty).toBe(false);
     } finally { unmount(); }
   });

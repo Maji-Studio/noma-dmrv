@@ -60,6 +60,10 @@ const SET_VALUE_OPTS = {
 
 /** The override fields: reset together on a refusal, cleared together with the override. */
 const OVERRIDE_FIELDS = ["distanceKmOverride", "distanceSource", "distanceNote"] as const;
+// Lock reverts of these fields restore the saved sub-bin draw.
+const DRAW_RESTORE_FIELDS = [
+  "deliveredWetMassKg", "sources", "storageLocationId", "deliveryDate", "moistureContentPercent",
+];
 const ROUTE_EMPTY = "Select an order and enter the delivered wet mass to see the route.";
 
 const isDeliveryCertifyField = (field: string) =>
@@ -270,7 +274,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       if ((OVERRIDE_FIELDS as readonly string[]).includes(field)) restoreSavedOverride();
       else {
         resetField(field);
-        if (["deliveredWetMassKg", "sources", "storageLocationId", "deliveryDate", "moistureContentPercent"].includes(field)) {
+        if (DRAW_RESTORE_FIELDS.includes(field)) {
           draw.restoreSaved();
           resetField("sources");
         }
