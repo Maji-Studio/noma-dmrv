@@ -1,5 +1,4 @@
 import { samplingDay, selectThousandYearLedgerSamples } from "./input-selection";
-export { samplingDay } from "./input-selection";
 import {
   CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION,
   computeBlueprint1000YearDurability,

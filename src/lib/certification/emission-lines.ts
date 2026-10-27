@@ -1,5 +1,4 @@
-import type { EntryRevisionDestination } from "@/lib/certification/emission-entry-carry";
-import type { EntryCarryDisposition, EntryCarryDestination } from "./emission-entry-carry";
+import type { EntryCarryDisposition, EntryCarryDestination, EntryRevisionDestination } from "./emission-entry-carry";
 import { EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages";
 import { DomainError } from "@/lib/domain-errors";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";

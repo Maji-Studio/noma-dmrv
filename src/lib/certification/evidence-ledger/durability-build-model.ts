@@ -12,7 +12,6 @@
  */
 import { evaluateRunEligibility } from "@/lib/calculations/biochar-eligibility";
 import { selectTwoHundredYearLedgerSamples } from "./input-selection";
-export { samplingDayOf } from "./input-selection";
 import {
   buildPerBatchDurabilityData,
   type CreditBatchDurabilityInput,

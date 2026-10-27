@@ -1,5 +1,4 @@
 import { orderedTransportLedgerLegs } from "@/lib/certification/evidence-ledger/input-selection";
-export { orderedLegs } from "@/lib/certification/evidence-ledger/input-selection";
 import { createHash } from "node:crypto";
 import type { RemovalSubmissionContext } from "./certify-context-types";
 import { buildLedgerModel } from "@/lib/certification/evidence-ledger/build-model";

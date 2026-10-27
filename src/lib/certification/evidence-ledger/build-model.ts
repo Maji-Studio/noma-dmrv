@@ -1,4 +1,3 @@
-import { transportLedgerInput } from "./input-selection";
 /**
  * Pure builder: removal transport legs → Evidence Ledger view model.
  *
@@ -12,6 +11,7 @@ import { transportLedgerInput } from "./input-selection";
  * mass per delivery, so no global applied-share scaling is needed.
  */
 import { SafeError } from "@/lib/errors";
+import { transportLedgerInput } from "./input-selection";
 import type { TransportLeg } from "@/db/schema";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { countedRoundTripKm } from "@/lib/calculations/round-trip";

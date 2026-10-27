@@ -1,4 +1,3 @@
-import type { EntryRevisionDestination } from "@/lib/certification/emission-entry-carry";
 /**
  * What a late emissions entry shows (#1059): another credit batch's Removal
  * reports or will report it, or it goes into the revision of its own returned
@@ -17,6 +16,7 @@ import {
   type CarryWaitingReason,
   type EntryCarryDestination,
   type EntryCarryDisposition,
+  type EntryRevisionDestination,
 } from "./emission-entry-carry";
 
 const MEMBER_TEMPLATE_TEXT = "An Admin changes it in Settings, Removal templates.";

@@ -1,4 +1,3 @@
-import type { EntryRevisionDestination } from "@/lib/certification/emission-entry-carry";
 import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE, REMOVAL_SUBMISSION_TYPE } from "@/lib/isometric/utils/constants";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -6,7 +5,7 @@ import { creditBatches, creditBatchApplications, certifierRemovals, certificatio
 import type { OrgContext } from "@/lib/auth/server";
 import { facilityToday } from "@/lib/date-utils";
 import { creditBatchApplicationMass, isCreditBatchFullyApplied } from "@/lib/credit-batches/application-mass";
-import { removalEntryCarryOwner, type CarryContender, type EntryCarryDestination } from "@/lib/certification/emission-entry-carry";
+import { removalEntryCarryOwner, type CarryContender, type EntryCarryDestination, type EntryRevisionDestination } from "@/lib/certification/emission-entry-carry";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 import { deriveRemovalEntryWindow, isLiveEntryReservation, removalEntryOwner } from "@/lib/certification/removal-emission-contributions";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
