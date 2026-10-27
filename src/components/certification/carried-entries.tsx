@@ -9,6 +9,7 @@
 "use client";
 
 import Link from "next/link";
+import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { PaperclipIcon } from "@phosphor-icons/react/dist/ssr";
 import { DetailSection } from "@/components/ui/detail-panel";
 import { InfoHint } from "@/components/ui/tooltip";
@@ -29,7 +30,6 @@ const PANEL_TITLE = "Emissions from other credit batches";
 const PANEL_CAPTION = "Included automatically. Each stays part of its own credit batch, and Isometric gets a note saying so.";
 const SHEET_STATE = { draft: "Included automatically. Sent when this Removal is submitted.", sent: "Sent with this Removal." } as const;
 const FALLBACK_NAME = "Emissions entry";
-const CODE_LINK = "font-mono underline decoration-[color:var(--color-border-primary)] underline-offset-4 hover:decoration-current";
 // Phone: component and figure, then batch and date, then source. Desktop: five columns.
 const ROW_GRID =
   "grid grid-cols-[minmax(0,1fr)_auto] gap-x-12 gap-y-4 md:grid-cols-[minmax(0,1fr)_120px_120px_96px_minmax(0,180px)] md:items-start";
@@ -43,7 +43,7 @@ function RecordedAfter({ entry, facilityId, newTab }: { entry: CarriedEntry; fac
       {newTab ? (
         <NewTabLink href={href} mono tall className="text-[var(--color-text-primary)]">{entry.earlierRemovalCode}</NewTabLink>
       ) : (
-        <Link href={href} className={cn(CODE_LINK, "text-[var(--color-text-primary)]")}>{entry.earlierRemovalCode}</Link>
+        <Link href={href} className={RECORD_CODE_LINK}>{entry.earlierRemovalCode}</Link>
       )}{" "}
       was sent.
     </span>
@@ -55,7 +55,7 @@ function BatchLink({ entry, facilityId, newTab }: { entry: CarriedEntry; facilit
   return newTab ? (
     <NewTabLink href={href} mono tall>{entry.creditBatchCode}</NewTabLink>
   ) : (
-    <Link href={href} className={cn(CODE_LINK, "text-[var(--color-text-primary)]")}>{entry.creditBatchCode}</Link>
+    <Link href={href} className={RECORD_CODE_LINK}>{entry.creditBatchCode}</Link>
   );
 }
 

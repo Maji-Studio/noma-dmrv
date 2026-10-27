@@ -8,6 +8,7 @@
 "use client";
 
 import { Fragment } from "react";
+import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import Link from "next/link";
 import { ArrowBendDownRightIcon, CheckIcon, ClockIcon } from "@phosphor-icons/react/dist/ssr";
 import { lateEntryView, type LateEntryDestination, type LateEntryFacts } from "@/lib/certification/late-entry-view";
@@ -15,7 +16,6 @@ import { cn } from "@/lib/utils";
 import { useCanManageTemplates } from "./template-permission";
 
 const ICON = 14;
-const CODE_LINK = "whitespace-nowrap font-mono underline decoration-[color:var(--color-border-primary)] underline-offset-4 hover:decoration-current hover:text-[var(--color-text-primary)]";
 const ACTION_LINK = "inline-flex min-h-44 items-center font-medium md:min-h-24 text-[var(--color-text-interaction-primary)] underline decoration-[color:var(--color-border-primary)] underline-offset-4 hover:decoration-current";
 const LINE = "flex items-start gap-x-4 body-caption";
 
@@ -25,7 +25,7 @@ function stop(event: { stopPropagation: () => void }) {
 }
 
 function CodeLink({ href, children }: { href: string; children: string }) {
-  return <Link href={href} className={CODE_LINK} onClick={stop}>{children}</Link>;
+  return <Link href={href} className={RECORD_CODE_LINK} onClick={stop}>{children}</Link>;
 }
 
 /** "Goes into RM-26-010 of credit batch CB-26-010." or "Reported in RM-26-010 of credit batch CB-26-010." */
