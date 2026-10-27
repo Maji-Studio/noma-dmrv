@@ -54,6 +54,22 @@ export function returnedRemovalSeedsEnabled(): boolean {
   return Boolean(process.env.CREDENTIALS_ENCRYPTION_KEY) && process.env.RETURNED_STATEMENT_STUB === "1";
 }
 
+type Db = ReturnType<typeof createDbConnection>["db"];
+
+/** Entries go with their files and values, after the replacement links that would block the delete. */
+async function deleteEmissionEntries(db: Db, entryIds: string[]): Promise<void> {
+  if (!entryIds.length) return;
+  await db.delete(schema.documents).where(and(
+    eq(schema.documents.organizationId, DEC_ORG_ID), eq(schema.documents.entityType, "emission_entry"),
+    inArray(schema.documents.entityId, entryIds)));
+  await db.update(schema.emissionEntries).set({ replacesEntryId: null }).where(and(
+    eq(schema.emissionEntries.organizationId, DEC_ORG_ID), inArray(schema.emissionEntries.id, entryIds)));
+  await db.delete(schema.emissionEntryValues).where(and(
+    eq(schema.emissionEntryValues.organizationId, DEC_ORG_ID), inArray(schema.emissionEntryValues.entryId, entryIds)));
+  await db.delete(schema.emissionEntries).where(and(
+    eq(schema.emissionEntries.organizationId, DEC_ORG_ID), inArray(schema.emissionEntries.id, entryIds)));
+}
+
 export interface ReturnedRemovalOptions {
   adminUserId: string;
   /** True: the sent components changed since the Removal was sent. */
@@ -107,17 +123,7 @@ export async function seedReturnedRemoval(
       }
       const entryIds = (await conn.db.select({ id: schema.emissionEntries.id }).from(schema.emissionEntries).where(and(
         eq(schema.emissionEntries.organizationId, DEC_ORG_ID), eq(schema.emissionEntries.creditBatchId, grouped.creditBatch.id)))).map((row) => row.id);
-      if (entryIds.length) {
-        await conn.db.delete(schema.documents).where(and(
-          eq(schema.documents.organizationId, DEC_ORG_ID), eq(schema.documents.entityType, "emission_entry"),
-          inArray(schema.documents.entityId, entryIds)));
-        await conn.db.update(schema.emissionEntries).set({ replacesEntryId: null }).where(and(
-          eq(schema.emissionEntries.organizationId, DEC_ORG_ID), inArray(schema.emissionEntries.id, entryIds)));
-        await conn.db.delete(schema.emissionEntryValues).where(and(
-          eq(schema.emissionEntryValues.organizationId, DEC_ORG_ID), inArray(schema.emissionEntryValues.entryId, entryIds)));
-        await conn.db.delete(schema.emissionEntries).where(and(
-          eq(schema.emissionEntries.organizationId, DEC_ORG_ID), inArray(schema.emissionEntries.id, entryIds)));
-      }
+      await deleteEmissionEntries(conn.db, entryIds);
       await conn.db.update(schema.certifierRemovals).set({ ghgStatementId: null })
         .where(and(eq(schema.certifierRemovals.organizationId, DEC_ORG_ID), eq(schema.certifierRemovals.id, grouped.removalId)));
       await conn.db.delete(schema.certifierGhgStatements).where(and(
@@ -282,16 +288,7 @@ export async function seedReturnedConnection(facilityId: string): Promise<() => 
       if (observationIds.length) {
         const strayIds = (await observations.db.select({ id: schema.emissionEntries.id }).from(schema.emissionEntries).where(and(
           eq(schema.emissionEntries.organizationId, DEC_ORG_ID), inArray(schema.emissionEntries.observationId, observationIds)))).map((row) => row.id);
-        if (strayIds.length) {
-          await observations.db.delete(schema.documents).where(and(
-            eq(schema.documents.organizationId, DEC_ORG_ID), eq(schema.documents.entityType, "emission_entry"), inArray(schema.documents.entityId, strayIds)));
-          await observations.db.update(schema.emissionEntries).set({ replacesEntryId: null }).where(and(
-            eq(schema.emissionEntries.organizationId, DEC_ORG_ID), inArray(schema.emissionEntries.id, strayIds)));
-          await observations.db.delete(schema.emissionEntryValues).where(and(
-            eq(schema.emissionEntryValues.organizationId, DEC_ORG_ID), inArray(schema.emissionEntryValues.entryId, strayIds)));
-          await observations.db.delete(schema.emissionEntries).where(and(
-            eq(schema.emissionEntries.organizationId, DEC_ORG_ID), inArray(schema.emissionEntries.id, strayIds)));
-        }
+        await deleteEmissionEntries(observations.db, strayIds);
       }
       await observations.db.delete(schema.removalTemplateObservations).where(and(
         eq(schema.removalTemplateObservations.organizationId, DEC_ORG_ID),
