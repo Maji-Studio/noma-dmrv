@@ -63,8 +63,9 @@ export function validateLineSources(definition: TemplateDefinition, lineSources:
 
 /**
  * The one check for whether a pending proposal can be accepted as is; the
- * Accept proposal control and any bulk accept use it. Accepting every
- * acceptable proposal together adds no problem: collisions are reported on
+ * guided setup's defaults (`setupPlan`, applied together by Set template)
+ * use it. Accepting every acceptable proposal together adds no problem:
+ * collisions are reported on
  * every owner of a figure, including pending proposals, so no two acceptable
  * proposals share one. The save still checks the whole template, so it also
  * needs every other line free of problems.
