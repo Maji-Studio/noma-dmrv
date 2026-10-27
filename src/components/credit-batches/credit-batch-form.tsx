@@ -493,9 +493,10 @@ export function CreditBatchForm({
         facilityId={effectiveFacilityId || undefined}
         {...(canAddRuns
           ? {
-              hint: "Runs in this batch stay with it while a Removal holds it. A missed run of the same feedstock type and dates can be added.",
+              hint: "A Removal holds this batch, so its runs stay. Use Add run to include a missed completed run of this feedstock type within the production window.",
               removableRunIds: pendingAddedRunIds,
               onRemoveRun: undoAddedRun,
+              disabled: isSubmitting,
               footer: (
                 <CreditBatchAddRuns
                   runs={addableRuns}

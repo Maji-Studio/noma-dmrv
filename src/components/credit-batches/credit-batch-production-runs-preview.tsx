@@ -14,11 +14,9 @@ import { formatWetDryMass } from "@/lib/mass-moisture";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { Notice } from "@/components/ui/notice";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
-
-/** The Production Runs list opened on one run. */
-export function productionRunHref(facilityId: string, runId: string): string {
-  return `/production-runs?facility=${facilityId}&run=${runId}`;
-}
+import { CENTRED_HIT_AREA, INLINE_HIT_AREA } from "@/components/ui/touch-target";
+import { productionRunDeepLinkHref } from "@/lib/certification/links";
+import { cn } from "@/lib/utils";
 
 export interface RetainedProductionRunPreview {
   id: string;
@@ -45,6 +43,8 @@ interface CreditBatchProductionRunsPreviewProps {
   onRemoveRun?: (runId: string) => void;
   /** Add-run control shown under the rows. */
   footer?: ReactNode;
+  /** Disables Undo while the form saves. */
+  disabled?: boolean;
 }
 
 export function ProductionRunCaption({
@@ -61,10 +61,10 @@ export function ProductionRunCaption({
   return (
     <span className="body-caption text-[var(--color-text-tertiary)]">
       <Link
-        href={productionRunHref(facilityId, run.id)}
+        href={productionRunDeepLinkHref(run.id, facilityId)}
         target="_blank"
         rel="noopener noreferrer"
-        className={RECORD_CODE_LINK}
+        className={cn(INLINE_HIT_AREA, RECORD_CODE_LINK)}
       >
         {run.code}
       </Link>
@@ -78,11 +78,13 @@ function ProductionRunPreviewRow({
   currentCreditBatchId,
   facilityId,
   onRemove,
+  disabled,
 }: {
   run: CreditBatchProductionRunOption;
   currentCreditBatchId?: string;
   facilityId?: string;
   onRemove?: () => void;
+  disabled?: boolean;
 }) {
   const assignedElsewhere =
     !!run.assignedCreditBatchId &&
@@ -127,7 +129,15 @@ function ProductionRunPreviewRow({
           </span>
         </span>
         {onRemove && (
-          <Button type="button" variant="noOutline" size="small" onClick={onRemove}>
+          <Button
+            type="button"
+            variant="noOutline"
+            size="small"
+            className={CENTRED_HIT_AREA}
+            disabled={disabled}
+            aria-label={`Undo adding ${run.code}`}
+            onClick={onRemove}
+          >
             Undo
           </Button>
         )}
@@ -173,6 +183,7 @@ export function CreditBatchProductionRunsPreview({
   removableRunIds,
   onRemoveRun,
   footer,
+  disabled,
 }: CreditBatchProductionRunsPreviewProps) {
   const retainedKnownRuns = retainedRuns.flatMap(({ run }) => (run ? [run] : []));
   const unavailableRunIds = retainedRuns.flatMap(({ id, run }) =>
@@ -232,7 +243,7 @@ export function CreditBatchProductionRunsPreview({
         />
       ) : (
         <div className="space-y-8">
-          {matchingRuns.length === 0 && retainedRuns.length > 0 && (
+          {matchingRuns.length === 0 && retainedRuns.length > 0 && !footer && (
             <p className="body-caption text-[var(--color-text-tertiary)]">
               No additional runs of this feedstock type fall within the
               production window.
@@ -255,6 +266,7 @@ export function CreditBatchProductionRunsPreview({
                 run={run}
                 currentCreditBatchId={currentCreditBatchId}
                 facilityId={facilityId}
+                disabled={disabled}
                 onRemove={
                   onRemoveRun && removableRunIds?.has(run.id)
                     ? () => onRemoveRun(run.id)

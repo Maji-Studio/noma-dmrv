@@ -467,7 +467,7 @@ describe("CreditBatchForm held batch: add a missed run", () => {
     const { container } = await renderHeld("in_use");
     expect(screen.getByRole("button", { name: "Add run PR-0415" })).toBeTruthy();
     expect(container.querySelectorAll('[data-testid="credit-batch-production-run-preview"]').length).toBe(1);
-    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Undo adding/ })).toBeNull();
     expect(container.querySelector('a[href*="run=' + SAVED_ID + '"]')?.textContent).toBe("PR-0412");
   });
 
@@ -477,7 +477,7 @@ describe("CreditBatchForm held batch: add a missed run", () => {
     await act(async () => {});
     expect(container.querySelectorAll('[data-testid="credit-batch-production-run-preview"]').length).toBe(2);
     expect(screen.queryByRole("button", { name: "Add run PR-0415" })).toBeNull();
-    expect(screen.getAllByRole("button", { name: "Undo" }).length).toBe(1);
+    expect(screen.getAllByRole("button", { name: /^Undo adding/ }).length).toBe(1);
     await act(async () => { fireEvent.submit(container.querySelector("form")!); });
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect(new Set(onSubmit.mock.calls[0][0].productionRunIds)).toEqual(new Set([SAVED_ID, MISSED_ID]));

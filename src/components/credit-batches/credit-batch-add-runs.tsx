@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import type { CreditBatchProductionRunOption } from "@/data-access/credit-batches";
 import { formatDate } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import { ProductionRunCaption } from "./credit-batch-production-runs-preview";
 
 interface CreditBatchAddRunsProps {
@@ -47,6 +48,7 @@ export function CreditBatchAddRuns({ runs, facilityId, onAdd, disabled = false }
               type="button"
               variant="noOutline"
               size="small"
+              className={CENTRED_HIT_AREA}
               disabled={disabled}
               aria-label={`Add run ${run.code}`}
               onClick={() => onAdd(run.id)}
