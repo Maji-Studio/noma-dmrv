@@ -33,7 +33,7 @@ import {
 import { pluralize } from "@/lib/copy-utils";
 import { formatDateRange } from "@/lib/format-utils";
 import { isometricRegistry } from "@/lib/isometric/links";
-import { CarriedEntriesSection } from "./carried-entries";
+import { CarriedEntriesSection, RevisionLateEntriesSection } from "./carried-entries";
 import { EnvBanner } from "./env-banner";
 import { IsometricLink } from "./isometric-link";
 import { ProductionBatchLinks } from "./production-batch-links";
@@ -188,6 +188,7 @@ export function RemovalDetailSheet({
   // skips the carried-entries read.
   const { data: removalEntries } = useRemovalCarriedEntries(summary.removalId, { enabled: open && workflowStatus.kind !== "superseded" });
   const carriedEntries = removalEntries?.carriedEntries;
+  const lateEntries = removalEntries?.lateEntries;
   // A returned Removal with its correction window open shows the Returned or
   // Resubmit needed status and one notice in place of #1134's lock-based one.
   const { correction } = summary;
@@ -328,6 +329,7 @@ export function RemovalDetailSheet({
               facilityId={facilityId}
               sent={workflowStatus.kind === "submitted"}
             />
+            <RevisionLateEntriesSection entries={lateEntries} facilityId={facilityId} removalCode={summary.code} />
 
             {/*
               Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant
