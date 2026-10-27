@@ -278,7 +278,7 @@ export function CreditBatchForm({
   // missed one. The runs it holds are fixed; only an addition made in this
   // edit can be taken back.
   const canAddRuns =
-    isEditMode && membershipLocked && !!lock && canAddCreditBatchRuns(lock);
+    isEditMode && membershipLocked && canAddCreditBatchRuns(lock);
   const savedRunIdSet = new Set(creditBatch?.productionRunIds ?? []);
   const pendingAddedRunIds = new Set(
     selectedProductionRunIds.filter((id) => !savedRunIdSet.has(id)),

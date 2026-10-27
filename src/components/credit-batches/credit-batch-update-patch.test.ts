@@ -46,7 +46,8 @@ describe("credit batch update patch", () => {
     const draft = { ...FORM, productionRunIds: ["run-2", "run-1", "missed"] };
     expect(creditBatchOnlyAddsRuns(draft, SAVED)).toBe(true);
     expect(canAddCreditBatchRuns(lock("inUse", ["removal"]))).toBe(true);
-    expect(canAddCreditBatchRuns(undefined)).toBe(true);
+    expect(canAddCreditBatchRuns(undefined)).toBe(false);
+    expect(creditBatchUpdatePatch(draft, SAVED, undefined)).toEqual(draft);
     expect(canAddCreditBatchRuns(lock("sent", ["removal"]))).toBe(false);
     expect(creditBatchUpdatePatch(draft, SAVED, lock("inUse", ["removal"])))
       .toEqual({ productionRunIds: draft.productionRunIds, siteManagementNotes: "Wet season" });

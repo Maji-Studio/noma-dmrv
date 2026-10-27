@@ -1,8 +1,10 @@
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
-import { applicationOutputAllocations, creditBatchApplications } from "@/db/schema";
+import { applicationOutputAllocations, creditBatchApplications, facilities } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { removalSplitsApplicationsByBatch } from "@/lib/certification/removal-application-policy";
 import { DomainError } from "@/lib/domain-errors";
+import { SafeError } from "@/lib/errors";
 import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
 import {
   findMatchingUnassignedProductionRunIds,
@@ -33,23 +35,36 @@ export async function assertAddedCreditBatchRunsFit(
     lockedRuns.filter(run => addedIds.includes(run.id) && eligible.has(run.id)));
   if (addedIds.length === 0) return;
 
+  const [facility] = await tx.select({ durabilityOption: facilities.durabilityOption })
+    .from(facilities)
+    .where(and(eq(facilities.id, cohort.facilityId), eq(facilities.organizationId, ctx.organizationId)));
+  if (!facility) throw new SafeError("Facility not found.");
+  const splitsApplicationsByBatch = removalSplitsApplicationsByBatch(facility.durabilityOption);
+
   // The caller holds lineage artifacts, the requested runs and the batch.
   // Application writers serialize on those locks before changing allocations.
-  // Reconciliation cannot enlarge an assigned slice, so refuse before membership changes.
-  const [assignedSlice] = await tx.select({ removalId: creditBatchApplications.removalId })
+  // Reconciliation cannot enlarge an assigned slice. Unless Applications split
+  // by batch, it also cannot create an unassigned sibling of a held slice.
+  const [assignedSlice] = await tx.select({
+    removalId: creditBatchApplications.removalId, creditBatchId: creditBatchApplications.creditBatchId,
+  })
     .from(applicationOutputAllocations)
     .innerJoin(creditBatchApplications, and(
       eq(creditBatchApplications.applicationId, applicationOutputAllocations.applicationId),
-      eq(creditBatchApplications.creditBatchId, creditBatchId),
       eq(creditBatchApplications.organizationId, ctx.organizationId),
     ))
     .where(and(
       inArray(applicationOutputAllocations.productionRunId, addedIds),
       eq(applicationOutputAllocations.organizationId, ctx.organizationId),
       isNotNull(creditBatchApplications.removalId),
-    )).limit(1);
+      splitsApplicationsByBatch ? eq(creditBatchApplications.creditBatchId, creditBatchId) : undefined,
+    ))
+    .orderBy(desc(eq(creditBatchApplications.creditBatchId, creditBatchId)))
+    .limit(1);
   if (!assignedSlice) return;
   const lock = recordLocks.creditBatch({ removals: [], dependents: [{ kind: "removal", id: assignedSlice.removalId! }] });
   throw new DomainError("certification_locked", withRecordLockGuidance(
-    "Cannot change this credit batch's production membership because its applied mass belongs to a Removal.", lock));
+    assignedSlice.creditBatchId === creditBatchId
+      ? "Cannot change this credit batch's production membership because its applied mass belongs to a Removal."
+      : "Cannot add this run because its biochar is in an Application a Removal already holds through another credit batch.", lock));
 }

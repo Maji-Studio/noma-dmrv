@@ -18,11 +18,9 @@ export function isCreditBatchMembershipLocked(lock: RecordLockView | undefined):
 
 /**
  * Free, draft and returned batches accept additions; Sent batches do not.
- * Undefined also returns true; the form separately requires a loaded lock
- * (`!!lock`) before offering held additions.
  */
 export function canAddCreditBatchRuns(lock: RecordLockView | undefined): boolean {
-  return lock?.level !== "sent";
+  return !!lock && lock.level !== "sent";
 }
 
 function sameRuns(next: readonly string[] | undefined, saved: readonly string[] | undefined): boolean {

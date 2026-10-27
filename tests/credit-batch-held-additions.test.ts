@@ -1,9 +1,9 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import {
   activityEvents, applicationOutputAllocations, certificationSubmissions, certifierRemovals, creditBatchApplications, creditBatchProductionRuns,
-  creditBatches, productionRunFeedstocks, productionRuns,
+  creditBatches, facilities, productionRunFeedstocks, productionRuns,
 } from "@/db/schema";
 import { getCreditBatchProductionRunOptions, updateCreditBatch } from "@/data-access/credit-batches";
 import { withLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
@@ -138,6 +138,67 @@ describe("manual additions to held credit batches", () => {
         });
         expect(options).toContainEqual(expect.objectContaining({ id: unrequestedRunId, assignedCreditBatchId: null }));
       }, SECOND_MISSED_RUN_START);
+    });
+  });
+
+  it.each([
+    { durabilityOption: "200_year", outcome: "refuses" },
+    { durabilityOption: "1000_year", outcome: "accepts" },
+  ] as const)("$outcome an added run whose Application is held through another batch at $durabilityOption", async ({ durabilityOption }) => {
+    await withMissedRun(async (f, runId, batch) => {
+      await db.update(facilities).set({ durabilityOption }).where(and(
+        eq(facilities.id, f.facilityId), eq(facilities.organizationId, TEST_ORG_ID),
+      ));
+      await withLineageFixture(async other => {
+        const [originalShare] = await db.select().from(applicationOutputAllocations)
+          .where(eq(applicationOutputAllocations.applicationId, other.applicationId));
+        // Application X keeps half its mass in B2's held slice; the missed
+        // run supplies the other half without yet belonging to any batch.
+        await db.update(applicationOutputAllocations).set({
+          wetMassKg: SHARED_APPLICATION_WET_MASS_KG, dryMassKg: SHARED_APPLICATION_DRY_MASS_KG,
+        }).where(eq(applicationOutputAllocations.id, originalShare.id));
+        await db.update(creditBatchApplications).set({
+          allocatedWetMassKg: Number(SHARED_APPLICATION_WET_MASS_KG), allocatedDryMassKg: Number(SHARED_APPLICATION_DRY_MASS_KG),
+        }).where(eq(creditBatchApplications.creditBatchId, other.batchId));
+        const [addedShare] = await db.insert(applicationOutputAllocations).values({
+          ...originalShare, id: crypto.randomUUID(), productionRunId: runId,
+          wetMassKg: SHARED_APPLICATION_WET_MASS_KG, dryMassKg: SHARED_APPLICATION_DRY_MASS_KG,
+        }).returning();
+        const readState = () => Promise.all([
+          db.select().from(creditBatches).where(inArray(creditBatches.id, [batch.id, other.batchId])).orderBy(creditBatches.id),
+          db.select().from(creditBatchProductionRuns).where(inArray(creditBatchProductionRuns.creditBatchId, [batch.id, other.batchId]))
+            .orderBy(creditBatchProductionRuns.productionRunId),
+          db.select().from(creditBatchApplications).where(inArray(creditBatchApplications.creditBatchId, [batch.id, other.batchId]))
+            .orderBy(creditBatchApplications.id),
+          db.select().from(applicationOutputAllocations).where(inArray(applicationOutputAllocations.applicationId, [f.applicationId, other.applicationId]))
+            .orderBy(applicationOutputAllocations.id),
+          db.select().from(activityEvents).where(inArray(activityEvents.creditBatchId, [batch.id, other.batchId])).orderBy(activityEvents.id),
+        ]);
+        try {
+          const before = await readState();
+          if (durabilityOption === "200_year") {
+            await expect(updateCreditBatch(ctx, batch.id, {
+              expectedVersion: batch.version, productionRunIds: [f.productionRunId, runId],
+            })).rejects.toMatchObject({ code: "certification_locked", message: expect.stringContaining("through another credit batch") });
+            expect(await readState()).toEqual(before);
+          } else {
+            await expectAccepted(f, runId, batch);
+            expect(await db.select().from(creditBatchApplications).where(and(
+              eq(creditBatchApplications.creditBatchId, batch.id), eq(creditBatchApplications.applicationId, other.applicationId),
+            ))).toEqual([expect.objectContaining({
+              removalId: null, allocatedWetMassKg: Number(SHARED_APPLICATION_WET_MASS_KG),
+              allocatedDryMassKg: Number(SHARED_APPLICATION_DRY_MASS_KG),
+            })]);
+            expect(await db.select().from(creditBatchApplications).where(eq(creditBatchApplications.creditBatchId, other.batchId)))
+              .toEqual(before[2].filter(slice => slice.creditBatchId === other.batchId));
+          }
+        } finally {
+          await db.delete(creditBatchApplications).where(and(
+            eq(creditBatchApplications.creditBatchId, batch.id), eq(creditBatchApplications.applicationId, other.applicationId),
+          ));
+          await db.delete(applicationOutputAllocations).where(eq(applicationOutputAllocations.id, addedShare.id));
+        }
+      }, "none");
     });
   });
 
