@@ -108,8 +108,8 @@ importers:
         specifier: 16.4.1
         version: 16.4.1(@babel/core@7.29.7(supports-color@10.2.2))(@playwright/test@1.58.2)(@types/node@20.19.33)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       nuqs:
-        specifier: ^2.8.9
-        version: 2.8.9(next@16.4.1(@babel/core@7.29.7(supports-color@10.2.2))(@playwright/test@1.58.2)(@types/node@20.19.33)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)
+        specifier: ^2.10.2
+        version: 2.10.2(next@16.4.1(@babel/core@7.29.7(supports-color@10.2.2))(@playwright/test@1.58.2)(@types/node@20.19.33)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)
       pg:
         specifier: ^8.18.0
         version: 8.18.0
@@ -1817,9 +1817,6 @@ packages:
 
   '@stablelib/base64@1.0.1':
     resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
-
-  '@standard-schema/spec@1.0.0':
-    resolution: {integrity: sha512-m2bOd0f2RT9k8QJx1JN85cZYyH1RqFBdlwtkSlf4tBDYLCiiZnv1fIIwacK6cqwXavOydf0NPToMQgpKq+dVlA==}
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
@@ -3689,14 +3686,14 @@ packages:
     resolution: {integrity: sha512-S48WzZW777zhNIrn7gxOlISNAqi9ZC/uQFnRdbeIHhZhCA6UqpkOT8T1G7BvfdgP4Er8gF4sUbaS0i7QvIfCWw==}
     engines: {node: '>=8'}
 
-  nuqs@2.8.9:
-    resolution: {integrity: sha512-8ou6AEwsxMWSYo2qkfZtYFVzngwbKmg4c00HVxC1fF6CEJv3Fwm6eoZmfVPALB+vw8Udo7KL5uy96PFcYe1BIQ==}
+  nuqs@2.10.2:
+    resolution: {integrity: sha512-HaLMCr9H2wywEnTu3j+QW98EteDT3Kfmx3SJJ6JfcvCvkFi/g/fKd/oCXa5DF0x1s1l4zcFtzsq9bflj6RcM6A==}
     peerDependencies:
       '@remix-run/react': '>=2'
       '@tanstack/react-router': ^1
       next: '>=14.2.0'
       react: '>=18.2.0 || ^19.0.0-0'
-      react-router: ^5 || ^6 || ^7
+      react-router: ^5 || ^6 || ^7 || ^8
       react-router-dom: ^5 || ^6 || ^7
     peerDependenciesMeta:
       '@remix-run/react':
@@ -6039,8 +6036,6 @@ snapshots:
 
   '@stablelib/base64@1.0.1': {}
 
-  '@standard-schema/spec@1.0.0': {}
-
   '@standard-schema/spec@1.1.0': {}
 
   '@standard-schema/utils@0.3.0': {}
@@ -8027,9 +8022,9 @@ snapshots:
     dependencies:
       path-key: 3.1.1
 
-  nuqs@2.8.9(next@16.4.1(@babel/core@7.29.7(supports-color@10.2.2))(@playwright/test@1.58.2)(@types/node@20.19.33)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3):
+  nuqs@2.10.2(next@16.4.1(@babel/core@7.29.7(supports-color@10.2.2))(@playwright/test@1.58.2)(@types/node@20.19.33)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3):
     dependencies:
-      '@standard-schema/spec': 1.0.0
+      '@standard-schema/spec': 1.1.0
       react: 19.2.3
     optionalDependencies:
       next: 16.4.1(@babel/core@7.29.7(supports-color@10.2.2))(@playwright/test@1.58.2)(@types/node@20.19.33)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)

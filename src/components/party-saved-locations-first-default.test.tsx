@@ -12,6 +12,10 @@ import { SupplierForm } from "./suppliers/supplier-form";
 
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams() }));
 
+// nuqs 2.10 reads location.pathname when the adapter gives no pathname, and
+// NuqsTestingAdapter gives none. This file renders in the node environment.
+vi.stubGlobal("location", new URL("http://localhost/"));
+
 const harness = vi.hoisted(() => ({
   query: { data: undefined as unknown[] | undefined, isLoading: false, isError: false },
   isFirstLocation: undefined as boolean | undefined,
