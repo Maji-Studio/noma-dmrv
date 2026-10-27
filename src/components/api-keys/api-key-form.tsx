@@ -38,7 +38,7 @@ export function CreateApiKeyForm({ onSubmit, onCancel, isPending }: {
 }) {
   const latched = useLatchedSubmit();
   const formId = useId();
-  const [error, setFooter] = useState("");
+  const [serverError, setServerError] = useState("");
   const { register, control, handleSubmit, setError, resetField, formState: { errors, isSubmitting } } = useForm<CreateApiKeyFormInput, unknown, CreateApiKeyInput>({
     resolver: zodResolver(createApiKeySchema),
     defaultValues: { name: "", scopes: [...API_KEY_DEFAULT_SCOPES], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS },
@@ -47,9 +47,9 @@ export function CreateApiKeyForm({ onSubmit, onCancel, isPending }: {
   const busy = isPending || isSubmitting;
 
   async function submit(values: CreateApiKeyInput) {
-    setFooter("");
+    setServerError("");
     try { await onSubmit(values); }
-    catch (error) { setFooter(refuseSave(error, toSaveErrorMessage(error, "The API key was not created. Try again.")) ?? ""); }
+    catch (error) { setServerError(refuseSave(error, toSaveErrorMessage(error, "The API key was not created. Try again.")) ?? ""); }
   }
 
   return (
@@ -63,7 +63,7 @@ export function CreateApiKeyForm({ onSubmit, onCancel, isPending }: {
       <Controller name="scopes" control={control} render={({ field }) => (
         <ApiKeyPermissionGrid value={field.value} onChange={field.onChange} disabled={busy} error={errors.scopes?.message} />
       )} />
-      <FormActions control={control} sticky={false} onCancel={onCancel} isSubmitting={busy} errorMessage={error} submitLabel="Create API key" />
+      <FormActions control={control} sticky={false} onCancel={onCancel} isSubmitting={busy} errorMessage={serverError} submitLabel="Create API key" />
     </form>
   );
 }
@@ -76,7 +76,7 @@ export function EditApiKeyForm({ apiKey, onSubmit, onCancel, isPending }: {
 }) {
   const latched = useLatchedSubmit();
   const formId = useId();
-  const [error, setFooter] = useState("");
+  const [serverError, setServerError] = useState("");
   const { register, control, handleSubmit, setError, resetField, formState: { errors, isSubmitting } } = useForm<UpdateApiKeyInput>({
     resolver: zodResolver(updateApiKeySchema),
     defaultValues: { id: apiKey.id, expectedVersion: apiKey.version, name: apiKey.name ?? "", scopes: scopesFromPermissions(apiKey.permissions) },
@@ -85,9 +85,9 @@ export function EditApiKeyForm({ apiKey, onSubmit, onCancel, isPending }: {
   const busy = isPending || isSubmitting;
 
   async function submit(values: UpdateApiKeyInput) {
-    setFooter("");
+    setServerError("");
     try { await onSubmit(values); }
-    catch (error) { setFooter(refuseSave(error, toSaveErrorMessage(error, "The API key was not saved. Try again.")) ?? ""); }
+    catch (error) { setServerError(refuseSave(error, toSaveErrorMessage(error, "The API key was not saved. Try again.")) ?? ""); }
   }
 
   return (
@@ -96,7 +96,7 @@ export function EditApiKeyForm({ apiKey, onSubmit, onCancel, isPending }: {
       <Controller name="scopes" control={control} render={({ field }) => (
         <ApiKeyPermissionGrid value={field.value} onChange={field.onChange} disabled={busy} error={errors.scopes?.message} />
       )} />
-      <FormActions control={control} sticky={false} onCancel={onCancel} isSubmitting={busy} errorMessage={error} submitLabel="Save changes" />
+      <FormActions control={control} sticky={false} onCancel={onCancel} isSubmitting={busy} errorMessage={serverError} submitLabel="Save changes" />
     </form>
   );
 }
