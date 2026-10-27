@@ -45,6 +45,7 @@ import {
   useUpdateFeedstockType,
 } from "@/hooks/use-feedstock-types";
 import type { FeedstockTypeFormData } from "@/schemas/feedstock-types";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   ENTITY_DEEP_LINK_EDIT_MODE,
@@ -312,18 +313,18 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     setFormError(null);
   };
 
-  const handleCreate = async (data: FeedstockTypeFormData) => {
+  const handleCreate = async (data: FeedstockTypeFormData, onRefusal: SaveRefusalHandler) => {
     setFormError(null);
     try {
       await createFeedstockType.mutateAsync(data);
       setSideSheet(null);
       toast.success("Feedstock type created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Feedstock type was not created. Check the form.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Feedstock type was not created. Check the form."));
     }
   };
 
-  const handleUpdate = async (data: FeedstockTypeFormData) => {
+  const handleUpdate = async (data: FeedstockTypeFormData, onRefusal: SaveRefusalHandler) => {
     const editing =
       displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
     if (!editing) return;
@@ -339,7 +340,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       void setDeepLinkMode(null);
       toast.success("Feedstock type updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Feedstock type was not saved. Try again.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Feedstock type was not saved. Try again."));
     }
   };
 

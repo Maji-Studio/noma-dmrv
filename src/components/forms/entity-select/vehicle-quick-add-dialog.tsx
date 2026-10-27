@@ -16,6 +16,7 @@ import { useQuickAddSubmit } from "@/hooks/use-quick-add-submit";
 import { useUpdateVehicle } from "@/hooks/use-fleet";
 import { useOpenSnapshot } from "@/hooks/use-open-snapshot";
 import { toSaveErrorMessage } from "@/lib/stale-version";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { QuickAddDialogShell, stopSubmitBubbling } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
 
@@ -66,7 +67,7 @@ export function VehicleQuickAddDialog({
   const update = useUpdateVehicle();
   const [editError, setEditError] = useState<string | null>(null);
 
-  const handleEdit = async (data: VehicleFormData) => {
+  const handleEdit = async (data: VehicleFormData, onRefusal: SaveRefusalHandler) => {
     if (!vehicle) return;
     setEditError(null);
     try {
@@ -77,7 +78,7 @@ export function VehicleQuickAddDialog({
       });
       onClose();
     } catch (error) {
-      setEditError(toSaveErrorMessage(error, VEHICLE_NOT_SAVED));
+      setEditError(onRefusal(error, toSaveErrorMessage(error, VEHICLE_NOT_SAVED)));
     }
   };
 

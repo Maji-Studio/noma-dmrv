@@ -12,9 +12,10 @@ import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { FormField, FormInput, FormActions, FormSection } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import {
@@ -30,6 +31,9 @@ import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
 
 /** Native min, max and step for each number input, read from the schema. */
 const numberBounds = numberInputConstraintsFor(reactorFormSchema);
+
+/** Server payload name to form field, where they differ. */
+const REFUSAL_ALIASES = { nominalThroughputTph: "capacityTph" } as const;
 
 // ============================================
 // Constants for select options
@@ -52,8 +56,11 @@ function isReactorType(value: string | null | undefined): value is ReactorType {
 interface ReactorFormProps {
   /** Existing reactor data for editing (undefined for create mode) */
   reactor?: Reactor;
-  /** Form submission handler — receives data with nominalThroughputTph */
-  onSubmit: (data: CreateReactorData) => Promise<void> | void;
+  /**
+   * Form submission handler — receives data with nominalThroughputTph.
+   * `onRefusal` shows a refused save at the fields it names (#1327).
+   */
+  onSubmit: (data: CreateReactorData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -76,6 +83,7 @@ export function ReactorForm({
   cancelLabel,
 }: ReactorFormProps) {
   const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!reactor;
   const { facilityId: contextFacilityId } = useFacilityContext();
   const defaultReactorType = isReactorType(reactor?.reactorType)
@@ -88,6 +96,8 @@ export function ReactorForm({
     handleSubmit,
     getValues,
     setValue,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(reactorFormSchema),
@@ -99,6 +109,8 @@ export function ReactorForm({
       specifications: undefined,
     },
   });
+
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: REFUSAL_ALIASES });
 
   useEffect(() => {
     if (!reactor?.facilityId && contextFacilityId) {
@@ -116,11 +128,11 @@ export function ReactorForm({
     return onSubmit({
       ...rest,
       nominalThroughputTph: capacityTph ?? null,
-    });
+    }, refuseSave);
   }));
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       <FormSection divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
