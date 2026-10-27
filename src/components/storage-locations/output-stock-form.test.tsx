@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { type ReactNode } from "react";

@@ -8,6 +8,7 @@
 "use client";
 
 import { Fragment } from "react";
+import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import Link from "next/link";
 import { useBatchEmissionLines } from "@/hooks/use-emission-entries";
 import { InfoHint } from "@/components/ui/tooltip";
@@ -18,7 +19,6 @@ import { formatDayString } from "@/lib/format-utils";
 import { MUTED_TEXT } from "./credit-batch-page-parts";
 import { cn } from "@/lib/utils";
 
-const CODE_LINK = "whitespace-nowrap font-mono underline decoration-[color:var(--color-border-primary)] underline-offset-4 hover:decoration-current";
 const WHY = "An entry that another Removal reports stays part of this credit batch. The next Removal of this facility includes it, and Isometric gets a note that it belongs to this credit batch.";
 
 const PLAIN_HEADING = "Emissions for other Removals";
@@ -29,7 +29,7 @@ function RemovalLinks({ removals }: { removals: { removalCode: string; removalHr
       {removals.map((removal, index) => (
         <Fragment key={removal.removalHref}>
           {index > 0 && (index === removals.length - 1 ? " and " : ", ")}
-          <Link href={removal.removalHref} className={CODE_LINK}>{removal.removalCode}</Link>
+          <Link href={removal.removalHref} className={RECORD_CODE_LINK}>{removal.removalCode}</Link>
         </Fragment>
       ))}
     </>

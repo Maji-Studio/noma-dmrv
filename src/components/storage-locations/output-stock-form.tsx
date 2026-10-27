@@ -11,8 +11,9 @@ import { useSubBinDraw } from "@/hooks/use-sub-bin-draw";
 import { toNumberOrNull } from "@/schemas/helpers";
 import { outputStockPostSchema, outputStockPreviewSchema } from "@/schemas/output-stock";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { OutputStockHistory } from "./output-stock-history";
 import { OutputStockPreview } from "./output-stock-preview";
 import { focusMoistureField, moistureFieldSelectors } from "./reestimate-notice";
@@ -33,9 +34,10 @@ export function OutputStockForm({ storageLocationId, facilityId, correction, onC
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [serverError, setServerError] = useState<string>();
   const [attempted, setAttempted] = useState(false);
+  const formId = useId();
   const mutation = usePostOutputStock();
   const clock = useFacilityClock(facilityId);
-  const { control, register, handleSubmit, setValue, trigger, formState: { errors } } = useForm({
+  const { control, register, handleSubmit, setValue, setError, resetField, trigger, formState: { errors } } = useForm({
     resolver: zodResolver(outputStockPostSchema),
     mode: "onTouched",
     defaultValues: {
@@ -48,6 +50,7 @@ export function OutputStockForm({ storageLocationId, facilityId, correction, onC
       reason: "",
     },
   });
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const values = useWatch({ control });
   const wetMassKg = values.wetMassKg;
   // Split losses read each reached sub-bin; mix losses use one reading.
@@ -70,11 +73,11 @@ export function OutputStockForm({ storageLocationId, facilityId, correction, onC
       setIdempotencyKey(crypto.randomUUID());
       onRecorded();
     } catch (error) {
-      setServerError(error instanceof Error ? error.message : "Stock was not recorded. Try again.");
+      setServerError(refuseSave(error, error instanceof Error ? error.message : "Stock was not recorded. Try again.") ?? undefined);
       void preview.refetch();
     }
   });
-  return <form onSubmit={(event) => {
+  return <form id={formId} onSubmit={(event) => {
     event.stopPropagation();
     setAttempted(true);
     beginSubmit();

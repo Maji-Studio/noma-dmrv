@@ -68,7 +68,7 @@ export function IsometricFeedstockImportDialog({
       dismissOnClickOutside={false}
     >
       <div className="flex flex-col gap-20">
-        <div className="flex flex-col gap-6 pr-40">
+        <div className="flex flex-col gap-6">
           <div className="flex items-center gap-8">
             <SealCheckIcon size={20} weight="bold" aria-hidden />
             <h2 id={TITLE_ID} className="title-heading-3">

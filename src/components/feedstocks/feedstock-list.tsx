@@ -314,7 +314,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const createWithEvidence = useCreateWithEvidence({
     entityType: "feedstock",
     entityNoun: "Feedstock",
-    executeCreate: async (data: FeedstockFormData) => {
+    executeCreate: async ({ data }: { data: FeedstockFormData; onRefusal: SaveRefusalHandler }) => {
       const result = await createFeedstock.mutateAsync(
         createFeedstockSchema.parse(data),
       );
@@ -322,8 +322,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     },
     setError: setCreateError,
     setUpdateError,
-    getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "Feedstock was not created. Check the form.",
+    getCreateErrorMessage: (error, { onRefusal }) =>
+      onRefusal(error, error instanceof Error ? error.message : "Feedstock was not created. Check the form."),
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this feedstock.",
     openEditOnFailure: (feedstock) =>
@@ -344,7 +344,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   } = createWithEvidence;
 
   // Handlers
-  const handleCreate = createWithEvidence.handleCreate;
+  const handleCreate = (data: FeedstockFormData, onRefusal: SaveRefusalHandler) =>
+    createWithEvidence.handleCreate({ data, onRefusal });
 
   const handleUpdate = async (data: FeedstockFormData, onRefusal?: SaveRefusalHandler) => {
     const editing =

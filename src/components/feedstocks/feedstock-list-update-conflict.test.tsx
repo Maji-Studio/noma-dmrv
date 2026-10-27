@@ -92,6 +92,9 @@ const mocks = vi.hoisted(() => ({
   deleteMutation: vi.fn(),
   updateMutation: vi.fn(),
   fetch: vi.fn(),
+  createOptions: undefined as undefined | {
+    getCreateErrorMessage: (error: unknown, input: { data: unknown; onRefusal: (error: unknown, fallback: string) => string | null }) => string | null;
+  },
 }));
 
 vi.mock("nuqs", () => ({
@@ -125,7 +128,7 @@ vi.mock("@/hooks/use-feedstocks", () => ({
   useDeleteFeedstock: () => ({ mutateAsync: mocks.deleteMutation, isPending: false }),
 }));
 vi.mock("@/hooks/use-create-with-evidence", () => ({
-  useCreateWithEvidence: () => ({
+  useCreateWithEvidence: (options: NonNullable<typeof mocks.createOptions>) => (mocks.createOptions = options, {
     deferredAttachments: undefined,
     createdEntityIds: [],
     isFlushing: false,
@@ -408,6 +411,22 @@ describe("FeedstockList refresh from location", () => {
       feedstockId: FEEDSTOCK_ID, expectedVersion: refreshed.version,
     }));
     act(() => renderer.unmount());
+  });
+});
+
+describe("FeedstockList refused create shown at fields", () => {
+  it("hands a create refusal to the form's handler with the create message as fallback", () => {
+    renderList();
+    const refused = new ActionError({ error: "Refused", issues: [{ path: ["feedstockTypeId"], code: "validation_failed", message: "Choose a feedstock type." }] });
+    const onRefusal = vi.fn<(error: unknown, fallback: string) => string | null>(() => null);
+
+    expect(mocks.createOptions?.getCreateErrorMessage(refused, { data: draft, onRefusal })).toBeNull();
+    expect(onRefusal).toHaveBeenCalledWith(refused, "Refused");
+
+    onRefusal.mockClear();
+    onRefusal.mockReturnValue("Fallback shown");
+    expect(mocks.createOptions?.getCreateErrorMessage("not an error", { data: draft, onRefusal })).toBe("Fallback shown");
+    expect(onRefusal).toHaveBeenCalledWith("not an error", "Feedstock was not created. Check the form.");
   });
 });
 

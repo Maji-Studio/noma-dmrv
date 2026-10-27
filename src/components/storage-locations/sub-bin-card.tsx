@@ -14,6 +14,7 @@ import { DRY_BIOCHAR_LABEL, ingredientSolidsLabel } from "@/components/biochar-p
 import { ESTIMATED_WATER_LABEL, ESTIMATED_WET_LABEL, INGREDIENT_SOLIDS_LABEL } from "@/lib/output-stock/labels";
 import { stockParts, subBinFigures, type StockPart } from "@/lib/output-stock/stock-parts";
 import type { OutputSubBin, SubBinMovement } from "@/types/output-stock";
+import { estimateKg } from "./output-stock-history-days";
 import { formatWetEstimate, outputStockFigure } from "./stock-preview-shared";
 
 const MOVEMENT_LABELS: Record<SubBinMovement["kind"], string> = {
@@ -56,6 +57,11 @@ export function partLabel(part: StockPart): string {
   return part.kind === "water" ? ESTIMATED_WATER_LABEL : DRY_BIOCHAR_LABEL;
 }
 
+/** A part's kg: water is an estimate and reads like the wet mass it is part of, other parts keep their decimal. */
+export function partFigure(part: StockPart): string {
+  return part.kind === "water" ? estimateKg(part.kg) : formatMassKg(part.kg);
+}
+
 /**
  * What a sub-bin or batch is made of, as the product composition names the
  * parts, top down in the order the bay draws them (`stockParts`): water, each
@@ -63,7 +69,7 @@ export function partLabel(part: StockPart): string {
  * water row: there is nothing to subtract.
  */
 export function partRows(parts: readonly StockPart[]): DetailRow[] {
-  return parts.map((part) => ({ label: partLabel(part), value: formatMassKg(part.kg) }));
+  return parts.map((part) => ({ label: partLabel(part), value: partFigure(part) }));
 }
 
 /** A sub-bin's contents rows as its tooltip lists them. */
