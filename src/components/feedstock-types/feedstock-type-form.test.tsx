@@ -72,7 +72,8 @@ describe("FeedstockTypeForm certification marker", () => {
     expect(html).toContain("Registry wood chips");
     expect(html).not.toContain("fst_1");
     expect(html).not.toContain("Linked to Isometric");
-    expect(html).toContain("Link this type to its Isometric registry entry.");
+    expect(html).toContain("Change the Isometric registry entry this type links to.");
+    expect(html).not.toContain("Link this type to its Isometric registry entry.");
   });
 
   it("shows a locked link read-only with the Removal as a link and no source cards", () => {
@@ -80,6 +81,7 @@ describe("FeedstockTypeForm certification marker", () => {
     const html = renderToStaticMarkup(<FeedstockTypeForm onSubmit={vi.fn()} feedstockType={{ ...savedType, isometricFeedstockTypeId: "fst_1" }} />);
     expect(html).toContain("sent to Isometric with");
     expect(html).toContain("REM-001");
+    expect(html).toContain("refresh its status to edit again");
     expect(html).toContain("removal=rem-1");
     expect(html).toContain("facility=facility-2");
     expect(html).not.toContain("Link this type to its Isometric registry entry.");
@@ -96,5 +98,13 @@ describe("FeedstockTypeForm certification marker", () => {
     const failed = renderToStaticMarkup(<FeedstockTypeForm onSubmit={vi.fn()} feedstockType={linked} />);
     expect(failed).toContain("Try again");
     expect(failed).not.toContain("Link this type to its Isometric registry entry.");
+  });
+
+  it("fails closed when the lock read errored, even with an unlocked answer cached", () => {
+    linkLock.data = { locked: false, removals: [] };
+    linkLock.isError = true;
+    const html = renderToStaticMarkup(<FeedstockTypeForm onSubmit={vi.fn()} feedstockType={{ ...savedType, isometricFeedstockTypeId: "fst_1" }} />);
+    expect(html).toContain("Try again");
+    expect(html).not.toContain("Change the Isometric registry entry this type links to.");
   });
 });

@@ -62,7 +62,7 @@ function useInvalidateFeedstockTypes() {
   const queryClient = useQueryClient();
   return () => {
     void queryClient.invalidateQueries({ queryKey: feedstockTypeKeys.all });
-    void queryClient.invalidateQueries({ queryKey: [...recordLockKeys.all, "feedstockType"] });
+    void queryClient.invalidateQueries({ queryKey: recordLockKeys.feedstockTypeLinks() });
     void queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     invalidateEntityTypeQueries(queryClient, "feedstockType");
   };
@@ -92,7 +92,7 @@ export function useUpdateFeedstockType() {
     onError: (error) => {
       if (error instanceof StaleVersionError) invalidate();
       if (isActionError(error) && error.code === "certification_locked") {
-        void queryClient.invalidateQueries({ queryKey: [...recordLockKeys.all, "feedstockType"] });
+        void queryClient.invalidateQueries({ queryKey: recordLockKeys.feedstockTypeLinks() });
       }
     },
     onSuccess: (data) => {

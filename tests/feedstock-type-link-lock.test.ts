@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
+import { isometricLinkLockedMessage } from "@/lib/feedstock-type-link-lock-copy";
 import { certifierRemovals, feedstockTypes, type FeedstockType } from "@/db/schema";
 import { getFeedstockTypeLinkLock, getLockedFeedstockTypeLinkLock } from "@/data-access/feedstock-type-link-lock";
 import { getFeedstockTypeById, updateFeedstockType } from "@/data-access/feedstock-types";
@@ -78,7 +79,7 @@ describe("feedstock type Isometric link lock", () => {
     ["clearing with whitespace", "   "],
   ] as const)("refuses %s a linked type in a sent Removal", async (_label, link) => {
     await withFeedstockTypeFixture("removal", true, async (fixture, type) => {
-      const message = `The Isometric link cannot change because production runs of this feedstock type are in a sent Removal (${await removalCode(fixture.removalId)}).`;
+      const message = isometricLinkLockedMessage([await removalCode(fixture.removalId)]);
       await expect(updateFeedstockType(ctx, {
         feedstockTypeId: fixture.feedstockTypeId,
         expectedVersion: type.version,

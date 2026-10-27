@@ -44,8 +44,7 @@ export function recordLockLinkText(link: RecordLockLink): string {
   if (link.kind === "binReference") return `${capitalize(link.label ?? "")} (${link.count ?? 0})`;
   const noun = KIND_NOUNS[link.kind] ?? "record";
   if (link.kind === "removal") {
-    if (link.period) return `${noun} ${formatDateRange(link.period.startedOn, link.period.completedOn)}`;
-    return link.label ? `${noun} ${link.label}` : noun;
+    return link.period ? `${noun} ${formatDateRange(link.period.startedOn, link.period.completedOn)}` : noun;
   }
   if (link.kind === "ghgStatement") {
     if (link.period) return `${noun} ${formatDateRange(link.period.startedOn, link.period.completedOn)}`;

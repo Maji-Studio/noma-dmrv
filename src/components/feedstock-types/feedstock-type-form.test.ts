@@ -3,6 +3,7 @@ import {
   feedstockTypeUsageOptionsFor,
   initialFeedstockTypeUsage,
   isometricLinkAction,
+  linkedRegistryName,
   shouldOverwriteNameOnIsometricSelection,
   shouldClearCategoryForIsometricSelection,
   shouldSetUsageToPyrolysisForIsometricSelection,
@@ -182,5 +183,21 @@ describe("isometricLinkAction", () => {
     expect(isometricLinkAction({ ...base, isEditMode: false })).toBeNull();
     expect(isometricLinkAction({ ...base, usage: "blend" })).toBeNull();
     expect(isometricLinkAction({ ...base, hasIsometricCertifier: false })).toBeNull();
+  });
+});
+
+describe("linkedRegistryName", () => {
+  const catalogue = [{ id: "fst_1", name: "Saved entry" }, { id: "fst_2", name: "Replacement" }];
+
+  it("uses the picked entry only while it is the link in the form", () => {
+    expect(linkedRegistryName({ id: "fst_2", name: "Replacement" }, "fst_2", catalogue)).toBe("Replacement");
+  });
+
+  it("falls back to the stored entry once a refusal resets the field", () => {
+    expect(linkedRegistryName({ id: "fst_2", name: "Replacement" }, "fst_1", catalogue)).toBe("Saved entry");
+  });
+
+  it("has no name when the catalogue cannot resolve the id", () => {
+    expect(linkedRegistryName(null, "fst_9", undefined)).toBeUndefined();
   });
 });

@@ -109,6 +109,16 @@ export function isometricLinkAction(input: {
   return input.isLinked ? "change" : "link";
 }
 
-/** The one line shown with a locked link; the holding Removals follow it as links. */
-export const ISOMETRIC_LINK_LOCKED_REASON =
-  "The Isometric link can't be changed, because this feedstock type was sent to Isometric with";
+/**
+ * The registry name shown for the stored link. A picked entry only counts while
+ * it is the link in the form; after a refusal resets the field, the catalogue
+ * entry for the stored id answers instead.
+ */
+export function linkedRegistryName(
+  picked: { id: string; name: string } | null,
+  linkId: string,
+  catalogue: readonly { id: string; name: string }[] | undefined,
+): string | undefined {
+  if (picked && picked.id === linkId) return picked.name;
+  return catalogue?.find((entry) => entry.id === linkId)?.name;
+}

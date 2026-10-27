@@ -4,7 +4,6 @@ import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
-import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import {
   RECORD_LOCK_ERROR_MESSAGE,
   RECORD_LOCK_PENDING_MESSAGE,
@@ -21,18 +20,14 @@ const NAMED_HOLDERS = 2;
 
 const STORAGE_BIN_LOCKED = "Storage type and feedstock type can't be changed, because stock has already been recorded in this bin.";
 
-export function HolderLink({ link }: { link: RecordLockLink }) {
+function HolderLink({ link }: { link: RecordLockLink }) {
   const href = recordLockLinkHref(link);
   const text = recordLockLinkText(link);
-  // A Removal named by its code reads "Removal RM-26-001", the code as the link.
-  if (link.kind === "removal" && !link.period && link.label) {
-    return href ? <>{text.slice(0, -link.label.length)}<Link href={href} className={RECORD_CODE_LINK}>{link.label}</Link></> : <>{text}</>;
-  }
   return href ? <Link href={href} className="underline underline-offset-4 text-[var(--color-text-primary)]">{text}</Link> : <>{text}</>;
 }
 
 /** "production run PR-1, delivery DL-2 and 3 more", each named holder a link. */
-export function HolderList({ holders }: { holders: readonly RecordLockLink[] }) {
+function HolderList({ holders }: { holders: readonly RecordLockLink[] }) {
   const named = holders.slice(0, NAMED_HOLDERS);
   const more = holders.length - named.length;
   const parts: ReactNode[] = named.map(link => <HolderLink key={`${link.kind}:${link.id}`} link={link} />);
