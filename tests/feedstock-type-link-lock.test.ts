@@ -155,7 +155,7 @@ describe("feedstock type Isometric link lock", () => {
   it("reports the lock and Removal reference to an ordinary org member", async () => {
     await withFeedstockTypeFixture("removal", true, async (fixture) => {
       vi.mocked(requireOrgContext).mockResolvedValue({ ...ctx, orgRole: "member" });
-      const expected = { locked: true, removals: [{ id: fixture.removalId, label: REMOVAL_LABEL }] };
+      const expected = { locked: true, removals: [{ id: fixture.removalId, label: REMOVAL_LABEL, facilityId: fixture.facilityId }] };
       expect(await getFeedstockTypeLinkLock(ctx, db, fixture.feedstockTypeId)).toEqual(expected);
       expect(await getFeedstockTypeLinkLockFn({ feedstockTypeId: fixture.feedstockTypeId }))
         .toEqual({ success: true, data: expected });
@@ -169,7 +169,7 @@ describe("feedstock type Isometric link lock", () => {
         eq(certifierRemovals.organizationId, ctx.organizationId),
       ));
       expect(await getFeedstockTypeLinkLock(ctx, db, fixture.feedstockTypeId))
-        .toEqual({ locked: true, removals: [{ id: fixture.removalId }] });
+        .toEqual({ locked: true, removals: [{ id: fixture.removalId, facilityId: fixture.facilityId }] });
       await expect(updateFeedstockType(ctx, {
         feedstockTypeId: fixture.feedstockTypeId,
         expectedVersion: type.version,

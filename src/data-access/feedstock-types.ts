@@ -33,7 +33,7 @@ import {
 } from "@/schemas/feedstock-types";
 import { requireOrgScope } from "./utils";
 import { hasCertifierCredentials } from "./certifier-credentials";
-import { getFeedstockTypeLinkLock } from "./feedstock-type-link-lock";
+import { getLockedFeedstockTypeLinkLock } from "./feedstock-type-link-lock";
 
 export const FEEDSTOCK_TYPE_MANAGE_ROLE = "admin";
 
@@ -107,7 +107,7 @@ export async function updateFeedstockType(
     if (changes.isometricFeedstockTypeId !== undefined) {
       changes.isometricFeedstockTypeId = changes.isometricFeedstockTypeId?.trim() || null;
       if (locked.isometricFeedstockTypeId !== null && changes.isometricFeedstockTypeId !== locked.isometricFeedstockTypeId) {
-        const linkLock = await getFeedstockTypeLinkLock(ctx, tx, feedstockTypeId);
+        const linkLock = await getLockedFeedstockTypeLinkLock(ctx, tx, feedstockTypeId);
         if (linkLock.locked) {
           const removalNames = linkLock.removals.map(removal => removal.label || removal.id).join(", ");
           const removalDescription = linkLock.removals.length === 1 ? "a sent Removal" : "sent Removals";

@@ -136,9 +136,12 @@ export function FeedstockTypeForm({
   );
   // A saved link a sent Removal holds can no longer be picked again.
   const linkIsLocked = !!savedIsometricId && !!linkLock.data?.locked;
+  // A saved link is not offered for change until the lock read has answered, so
+  // a replacement picked meanwhile can never meet a lock that arrives late.
+  const linkLockPending = isEditMode && !!savedIsometricId && hasIsometricCertifier && linkLock.isPending;
   const showIsometricSection =
     shouldShowIsometricFeedstockSection(hasIsometricCertifier, lockUsage, defaultUsage) &&
-    !linkIsLocked;
+    !linkIsLocked && !linkLockPending;
   const sections = showIsometricSection
     ? SECTIONS
     : SECTIONS.filter((section) => section.key === "general");
@@ -211,7 +214,7 @@ export function FeedstockTypeForm({
   const registryMappingRequired = hasIsometricCertifier && isCertifyFormField(
     "feedstockType", "isometricFeedstockTypeId", { usage: selectedUsage },
   );
-  const linkAction = isometricLinkAction({
+  const linkAction = linkLockPending ? null : isometricLinkAction({
     isEditMode,
     hasIsometricCertifier,
     usage: selectedUsage,
@@ -388,16 +391,12 @@ export function FeedstockTypeForm({
                       {linkLock.data?.removals.map((removal, index) => (
                         <span key={removal.id}>
                           {index > 0 && ", "}
-                          {facilityId ? (
-                            <Link
-                              href={removalSheetHref(removal.id, facilityId)}
-                              className="underline"
-                            >
-                              Removal {removal.label ?? removal.id}
-                            </Link>
-                          ) : (
-                            `Removal ${removal.label ?? removal.id}`
-                          )}
+                          <Link
+                            href={removalSheetHref(removal.id, removal.facilityId)}
+                            className="underline"
+                          >
+                            Removal {removal.label ?? removal.id}
+                          </Link>
                         </span>
                       ))}
                       .
