@@ -51,7 +51,7 @@ async function shoot(page: Page, name: string, width: keyof typeof WIDTHS, targe
 test.describe("Returned Removal screens", () => {
   test.skip(!returnedRemovalSeedsEnabled(), "Needs CREDENTIALS_ENCRYPTION_KEY and the preload that answers the returned statement read.");
 
-  test("a returned Removal shows its status, notice and open item", async ({ adminPage: page, seededData }) => {
+  test("a returned Removal shows its status, notice and open item", async ({ adminPage: page, seededData, testUsers }) => {
     test.setTimeout(300_000);
     const facilityId = seededData.facility.id;
     const facilityName = seededData.facility.name;
@@ -60,9 +60,11 @@ test.describe("Returned Removal screens", () => {
     const cleanups: Array<() => Promise<void>> = [];
     try {
       const changed = await seedReturnedRemoval(seededData, `${tag}C`, {
+        adminUserId: testUsers.admin.id,
         changed: true, statementStatus: "FAILED_VERIFICATION", periodStartOn: "2026-07-01", periodEndOn: "2026-09-30" });
       cleanups.push(changed.cleanup);
       const open = await seedReturnedRemoval(seededData, `${tag}O`, {
+        adminUserId: testUsers.admin.id,
         changed: false, statementStatus: "DRAFT", periodStartOn: "2026-04-01", periodEndOn: "2026-06-30" });
       cleanups.push(open.cleanup);
 

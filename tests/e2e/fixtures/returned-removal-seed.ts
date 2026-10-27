@@ -55,6 +55,7 @@ export function returnedRemovalSeedsEnabled(): boolean {
 }
 
 export interface ReturnedRemovalOptions {
+  adminUserId: string;
   /** True: the sent components changed since the Removal was sent. */
   changed: boolean;
   statementStatus: "FAILED_VERIFICATION" | "DRAFT";
@@ -196,7 +197,7 @@ export async function seedReturnedRemoval(
       });
       await db.insert(schema.documents).values(entryDocument(sentEntryIds[0]));
     }
-    const sentSnapshot = await compileReturnedRemovalSnapshot(grouped.removalId, observation);
+    const sentSnapshot = await compileReturnedRemovalSnapshot(grouped.removalId, options.adminUserId, observation);
     await db.insert(schema.certificationSubmissions).values({
       organizationId: DEC_ORG_ID, provider: "isometric", submissionType: "removal", localEntityType: "removal",
       localEntityId: grouped.removalId, version: 1, status: "submitted", externalId: removalExternalId,
@@ -224,7 +225,7 @@ export async function seedReturnedRemoval(
       payloadHash: `e2e-returned-statement-${tag}`, submittedAt: REMOVAL_SUBMITTED_AT,
       metadata: { remoteStatus: options.statementStatus, removalIds: [removalExternalId], submittedToVerifierAt: STATEMENT_RETURNED_AT },
     });
-    await assertReturnedRemovalComparison(grouped.removalId,
+    await assertReturnedRemovalComparison(grouped.removalId, options.adminUserId,
       options.sentSemantic ? undefined : options.changed ? COMPONENTS.map(component => component.id) : []);
     const [removal] = await db.select({ code: schema.certifierRemovals.code }).from(schema.certifierRemovals)
       .where(and(eq(schema.certifierRemovals.organizationId, DEC_ORG_ID), eq(schema.certifierRemovals.id, grouped.removalId)));
