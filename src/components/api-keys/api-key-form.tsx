@@ -1,10 +1,11 @@
 "use client";
 
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { FormActions, FormField, FormInput, FormSelect } from "@/components/forms";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS, API_KEY_EXPIRY_PRESET_DAYS, API_KEY_NAME_MAX_LENGTH, SECONDS_PER_DAY } from "@/config/api-keys";
 import { scopesFromPermissions } from "@/lib/auth/api-scopes";
 import { toSaveErrorMessage } from "@/lib/stale-version";
@@ -36,21 +37,23 @@ export function CreateApiKeyForm({ onSubmit, onCancel, isPending }: {
   isPending: boolean;
 }) {
   const latched = useLatchedSubmit();
-  const [error, setError] = useState("");
-  const { register, control, handleSubmit, formState: { errors, isSubmitting } } = useForm<CreateApiKeyFormInput, unknown, CreateApiKeyInput>({
+  const formId = useId();
+  const [error, setFooter] = useState("");
+  const { register, control, handleSubmit, setError, resetField, formState: { errors, isSubmitting } } = useForm<CreateApiKeyFormInput, unknown, CreateApiKeyInput>({
     resolver: zodResolver(createApiKeySchema),
     defaultValues: { name: "", scopes: [...API_KEY_DEFAULT_SCOPES], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS },
   });
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const busy = isPending || isSubmitting;
 
   async function submit(values: CreateApiKeyInput) {
-    setError("");
+    setFooter("");
     try { await onSubmit(values); }
-    catch (error) { setError(toSaveErrorMessage(error, "The API key was not created. Try again.")); }
+    catch (error) { setFooter(refuseSave(error, toSaveErrorMessage(error, "The API key was not created. Try again.")) ?? ""); }
   }
 
   return (
-    <form onSubmit={latched(handleSubmit(submit))} className="flex flex-col gap-20">
+    <form id={formId} onSubmit={latched(handleSubmit(submit))} className="flex flex-col gap-20">
       <NameField registration={register("name")} error={errors.name?.message} disabled={busy} />
       <Controller name="expiresIn" control={control} render={({ field }) => (
         <FormField id="api-key-expiry" label="Expires after" required error={errors.expiresIn?.message}>
@@ -72,21 +75,23 @@ export function EditApiKeyForm({ apiKey, onSubmit, onCancel, isPending }: {
   isPending: boolean;
 }) {
   const latched = useLatchedSubmit();
-  const [error, setError] = useState("");
-  const { register, control, handleSubmit, formState: { errors, isSubmitting } } = useForm<UpdateApiKeyInput>({
+  const formId = useId();
+  const [error, setFooter] = useState("");
+  const { register, control, handleSubmit, setError, resetField, formState: { errors, isSubmitting } } = useForm<UpdateApiKeyInput>({
     resolver: zodResolver(updateApiKeySchema),
     defaultValues: { id: apiKey.id, expectedVersion: apiKey.version, name: apiKey.name ?? "", scopes: scopesFromPermissions(apiKey.permissions) },
   });
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const busy = isPending || isSubmitting;
 
   async function submit(values: UpdateApiKeyInput) {
-    setError("");
+    setFooter("");
     try { await onSubmit(values); }
-    catch (error) { setError(toSaveErrorMessage(error, "The API key was not saved. Try again.")); }
+    catch (error) { setFooter(refuseSave(error, toSaveErrorMessage(error, "The API key was not saved. Try again.")) ?? ""); }
   }
 
   return (
-    <form onSubmit={latched(handleSubmit(submit))} className="flex flex-col gap-20">
+    <form id={formId} onSubmit={latched(handleSubmit(submit))} className="flex flex-col gap-20">
       <NameField registration={register("name")} error={errors.name?.message} disabled={busy} />
       <Controller name="scopes" control={control} render={({ field }) => (
         <ApiKeyPermissionGrid value={field.value} onChange={field.onChange} disabled={busy} error={errors.scopes?.message} />

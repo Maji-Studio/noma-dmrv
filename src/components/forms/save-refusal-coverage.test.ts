@@ -8,16 +8,7 @@ const COMPONENTS_DIR = resolve(process.cwd(), "src/components");
 const PENDING_SEAMS: { file: string; reason: string; pending: RegExp }[] = [];
 
 /** #1327: remove each entry when its form moves to the shared refusal handler. */
-const PENDING: Record<string, string> = {
-  "settings/organization-defaults-form.tsx": "PR K1: operating defaults refusal",
-  "settings/durability-tier-settings.tsx": "PR K1: durability settings refusal",
-  "settings/organization-name-form.tsx": "PR K1: organization name refusal",
-  "certification/registry-source-visibility-settings.tsx": "PR K1: replace root.serverError routing",
-  "organizations/organization-certifier-credentials.tsx": "PR K1: credential refusal",
-  "organizations/invitation-bootstrap-form.tsx": "PR K1: preserve ActionError from result",
-  "api-keys/api-key-form.tsx": "PR K1: API key refusal",
-  "admin/emission-estimates-form.tsx": "PR K1: emission estimate refusal",
-};
+const PENDING: Record<string, string> = {};
 
 /** Deliberate exclusions, including non-RHF forms named in the issue inventory. */
 const EXCLUDED: Record<string, string> = {
