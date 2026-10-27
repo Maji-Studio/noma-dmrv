@@ -606,6 +606,11 @@ export async function updateCreditBatch(
     const attemptUpdateData = { ...updateData };
     const prepared = await prepareCreditBatchMembershipWrite(ctx, tx, id, updateFields, shouldRefreshMembership);
     const { snapshot: declarationSnapshot, currentProductionRunIds } = prepared;
+    // The batch lock below revalidates this snapshot and current membership.
+    const onlyAddsRuns = creditBatchOnlyAddsRuns(data, {
+      ...declarationSnapshot, productionRunIds: currentProductionRunIds,
+    });
+    const heldAddOnly = onlyAddsRuns && prepared.lockedRemovals.length > 0;
 
     let resolvedProductionRunIds = productionRunIds;
     let lockedMembershipRuns = [] as Awaited<
@@ -626,6 +631,7 @@ export async function updateCreditBatch(
           productionRunIds ?? currentProductionRunIds,
         currentProductionRunIds,
         matchingProductionRunIds: prepared.matchingProductionRunIds,
+        expand: !heldAddOnly,
       });
       resolvedProductionRunIds = declaration.runIds;
       lockedMembershipRuns = declaration.lockedRuns;
@@ -638,9 +644,6 @@ export async function updateCreditBatch(
     }, prepared);
 
     await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "update", existingBatch.lockedRemovals);
-    const onlyAddsRuns = creditBatchOnlyAddsRuns(data, {
-      ...existingBatch, productionRunIds: currentProductionRunIds,
-    });
     if (shouldRefreshMembership && !onlyAddsRuns) {
       await assertCreditBatchSlicesAreUnassigned(ctx, tx, id);
     }
@@ -704,8 +707,8 @@ export async function updateCreditBatch(
     const feedstockRunIds = resolvedProductionRunIds;
     if (feedstockRunIds !== undefined) {
       await assertDeclaredFeedstockType(ctx, tx, feedstockRunIds, effectiveFeedstockTypeId);
-      if (onlyAddsRuns && existingBatch.lockedRemovals.length > 0) {
-        await assertAddedCreditBatchRunsFit(ctx, tx, {
+      if (heldAddOnly) {
+        await assertAddedCreditBatchRunsFit(ctx, tx, id, {
           facilityId: targetFacilityId, feedstockTypeId: effectiveFeedstockTypeId,
           certifier: targetCertifier.provider, startDate: effectiveStartDate, endDate: effectiveEndDate,
         }, currentProductionRunIds, feedstockRunIds, lockedMembershipRuns);

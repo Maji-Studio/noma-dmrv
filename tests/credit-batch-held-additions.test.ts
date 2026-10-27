@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import {
-  activityEvents, certificationSubmissions, certifierRemovals, creditBatchApplications, creditBatchProductionRuns,
+  activityEvents, applicationOutputAllocations, certificationSubmissions, certifierRemovals, creditBatchApplications, creditBatchProductionRuns,
   creditBatches, productionRunFeedstocks, productionRuns,
 } from "@/db/schema";
 import { getCreditBatchProductionRunOptions, updateCreditBatch } from "@/data-access/credit-batches";
@@ -15,6 +15,8 @@ const remote = vi.hoisted(() => ({
 vi.mock("@/lib/isometric/ghg-statements", () => ({ getGhgStatement: async () => remote }));
 vi.mock("@/data-access/certifier-credentials", () => ({ resolveIsometricClient: async () => ({}) }));
 const MISSED_RUN_WET_MASS_KG = 100;
+const SHARED_APPLICATION_WET_MASS_KG = "100";
+const SHARED_APPLICATION_DRY_MASS_KG = "95";
 const ctx = makeTestOrgContext();
 beforeAll(() => ensureTestOrg());
 
@@ -25,24 +27,36 @@ async function withMissedRun(
   await withLineageFixture(async f => {
     await db.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") })
       .where(eq(productionRuns.id, f.productionRunId));
-    const [original] = await db.select().from(productionRuns).where(eq(productionRuns.id, f.productionRunId));
-    // Direct fixture insertion models a legacy run that missed automatic attachment.
-    const [run] = await db.insert(productionRuns).values({
-      ...original, id: crypto.randomUUID(), stockPostingSequence: undefined, code: `PR-MISSED-${crypto.randomUUID()}`,
-      startTime: new Date("2026-06-14T08:00:00Z"), endTime: new Date("2026-06-14T12:00:00Z"),
-    }).returning();
-    await db.insert(productionRunFeedstocks).values({
-      organizationId: TEST_ORG_ID, productionRunId: run.id, feedstockId: f.feedstockId, wetMassUsedKg: MISSED_RUN_WET_MASS_KG,
+    await withUnassignedRun(f, async runId => {
+      const [batch] = await db.select().from(creditBatches).where(eq(creditBatches.id, f.batchId));
+      await test(f, runId, batch);
     });
-    const [batch] = await db.select().from(creditBatches).where(eq(creditBatches.id, f.batchId));
-    try { await test(f, run.id, batch); }
-    finally {
-      await db.delete(activityEvents).where(eq(activityEvents.creditBatchId, f.batchId));
-      await db.delete(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.productionRunId, run.id));
-      await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, run.id));
-      await db.delete(productionRuns).where(eq(productionRuns.id, run.id));
-    }
   }, mode);
+}
+
+const MISSED_RUN_START = "2026-06-14T08:00:00Z";
+const SECOND_MISSED_RUN_START = "2026-06-14T13:00:00Z";
+const MISSED_RUN_HOURS = 4;
+const HOUR_MS = 3_600_000;
+
+async function withUnassignedRun(f: LineageFixture, test: (runId: string) => Promise<void>, start = MISSED_RUN_START) {
+  const startTime = new Date(start);
+  const [original] = await db.select().from(productionRuns).where(eq(productionRuns.id, f.productionRunId));
+  // Direct fixture insertion models a legacy run that missed automatic attachment.
+  const [run] = await db.insert(productionRuns).values({
+    ...original, id: crypto.randomUUID(), stockPostingSequence: undefined, code: `PR-MISSED-${crypto.randomUUID()}`,
+    startTime, endTime: new Date(startTime.getTime() + MISSED_RUN_HOURS * HOUR_MS),
+  }).returning();
+  await db.insert(productionRunFeedstocks).values({
+    organizationId: TEST_ORG_ID, productionRunId: run.id, feedstockId: f.feedstockId, wetMassUsedKg: MISSED_RUN_WET_MASS_KG,
+  });
+  try { await test(run.id); }
+  finally {
+    await db.delete(activityEvents).where(eq(activityEvents.creditBatchId, f.batchId));
+    await db.delete(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.productionRunId, run.id));
+    await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, run.id));
+    await db.delete(productionRuns).where(eq(productionRuns.id, run.id));
+  }
 }
 
 async function expectAccepted(f: LineageFixture, runId: string, batch: typeof creditBatches.$inferSelect) {
@@ -70,6 +84,63 @@ async function expectAccepted(f: LineageFixture, runId: string, batch: typeof cr
 }
 
 describe("manual additions to held credit batches", () => {
+  it("refuses an added run allocated to an application slice held by a draft Removal without changing saved state", async () => {
+    await withMissedRun(async (f, runId, batch) => {
+      const [originalShare] = await db.select().from(applicationOutputAllocations)
+        .where(eq(applicationOutputAllocations.applicationId, f.applicationId));
+      // Split the existing 200 kg wet / 190 kg dry application across A and B.
+      // Its assigned slice still describes A only, before B joins the batch.
+      await db.update(applicationOutputAllocations).set({
+        wetMassKg: SHARED_APPLICATION_WET_MASS_KG, dryMassKg: SHARED_APPLICATION_DRY_MASS_KG,
+      }).where(eq(applicationOutputAllocations.id, originalShare.id));
+      await db.update(creditBatchApplications).set({
+        allocatedWetMassKg: Number(SHARED_APPLICATION_WET_MASS_KG), allocatedDryMassKg: Number(SHARED_APPLICATION_DRY_MASS_KG),
+      }).where(eq(creditBatchApplications.creditBatchId, batch.id));
+      const [addedShare] = await db.insert(applicationOutputAllocations).values({
+        ...originalShare, id: crypto.randomUUID(), productionRunId: runId,
+        wetMassKg: SHARED_APPLICATION_WET_MASS_KG, dryMassKg: SHARED_APPLICATION_DRY_MASS_KG,
+      }).returning();
+      const readState = () => Promise.all([
+        db.select().from(creditBatches).where(eq(creditBatches.id, batch.id)),
+        db.select().from(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.creditBatchId, batch.id))
+          .orderBy(creditBatchProductionRuns.productionRunId),
+        db.select().from(creditBatchApplications).where(eq(creditBatchApplications.creditBatchId, batch.id))
+          .orderBy(creditBatchApplications.id),
+        db.select().from(applicationOutputAllocations).where(eq(applicationOutputAllocations.applicationId, f.applicationId))
+          .orderBy(applicationOutputAllocations.id),
+        db.select().from(activityEvents).where(eq(activityEvents.creditBatchId, batch.id)).orderBy(activityEvents.id),
+      ]);
+      try {
+        const before = await readState();
+        await expect(updateCreditBatch(ctx, batch.id, {
+          expectedVersion: batch.version, productionRunIds: [f.productionRunId, runId],
+        })).rejects.toMatchObject({ code: "certification_locked" });
+        expect(await readState()).toEqual(before);
+      } finally {
+        await db.delete(applicationOutputAllocations).where(eq(applicationOutputAllocations.id, addedShare.id));
+      }
+    });
+  });
+
+  it("adds only the requested missed run and leaves another matching run unassigned", async () => {
+    await withMissedRun(async (f, runId, batch) => {
+      await withUnassignedRun(f, async unrequestedRunId => {
+        await updateCreditBatch(ctx, batch.id, {
+          expectedVersion: batch.version, productionRunIds: [f.productionRunId, runId],
+        });
+        const members = await db.select().from(creditBatchProductionRuns)
+          .where(eq(creditBatchProductionRuns.creditBatchId, batch.id));
+        expect(members.map(member => member.productionRunId).sort()).toEqual([f.productionRunId, runId].sort());
+        expect(await db.select().from(creditBatchProductionRuns)
+          .where(eq(creditBatchProductionRuns.productionRunId, unrequestedRunId))).toEqual([]);
+        const options = await getCreditBatchProductionRunOptions(ctx, {
+          facilityId: f.facilityId, startDate: batch.startDate, endDate: batch.endDate, includeCreditBatchId: batch.id,
+        });
+        expect(options).toContainEqual(expect.objectContaining({ id: unrequestedRunId, assignedCreditBatchId: null }));
+      }, SECOND_MISSED_RUN_START);
+    });
+  });
+
   it("adds a fitting missed run to a draft Removal, bumps version and records manual activity", async () => {
     await withMissedRun(expectAccepted);
   });

@@ -15,7 +15,7 @@ type MembershipDraft = Partial<Omit<CreditBatchMembershipDefinition, "startDate"
   endDate?: Date | string;
 };
 
-function unchangedDay(next: Date | string | undefined, saved: string): boolean {
+export function unchangedDay(next: Date | string | undefined, saved: string): boolean {
   return next === undefined || (next instanceof Date ? formatUtcDate(next) : next.slice(0, CALENDAR_DATE_LENGTH)) === saved;
 }
 
@@ -27,6 +27,6 @@ export function creditBatchOnlyAddsRuns(next: MembershipDraft, saved: CreditBatc
   return requested.size === next.productionRunIds.length && requested.size > current.size &&
     [...current].every(id => requested.has(id)) &&
     (next.facilityId === undefined || next.facilityId === saved.facilityId) &&
-    (next.feedstockTypeId === undefined || next.feedstockTypeId === saved.feedstockTypeId) &&
+    (next.feedstockTypeId === undefined || (next.feedstockTypeId ?? "") === (saved.feedstockTypeId ?? "")) &&
     unchangedDay(next.startDate, saved.startDate) && unchangedDay(next.endDate, saved.endDate);
 }

@@ -1,22 +1,12 @@
 import { isActionError } from "@/lib/action-error";
-import { formatUtcDate } from "@/lib/date-utils";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import type { CreditBatchFormData, UpdateCreditBatchData } from "@/schemas/credit-batches";
 
-import { creditBatchOnlyAddsRuns } from "@/lib/credit-batch-membership-change";
+import { creditBatchOnlyAddsRuns, unchangedDay, type CreditBatchMembershipDefinition } from "@/lib/credit-batch-membership-change";
 
 export { creditBatchOnlyAddsRuns } from "@/lib/credit-batch-membership-change";
 
 const MEMBERSHIP_FIELDS = ["facilityId", "feedstockTypeId", "startDate", "endDate", "productionRunIds"] as const;
-
-/** Saved fields the membership guard compares against. */
-export interface SavedCreditBatchDefinition {
-  facilityId: string;
-  feedstockTypeId: string | null;
-  startDate: string;
-  endDate: string;
-  productionRunIds?: readonly string[];
-}
 
 export const CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE =
   "A Removal now holds this credit batch, so its feedstock type, dates and current production runs cannot change. Restore them or cancel the edit.";
@@ -26,14 +16,13 @@ export function isCreditBatchMembershipLocked(lock: RecordLockView | undefined):
   return !!lock && (lock.level === "sent" || lock.usedBy.some((link) => link.kind === "removal"));
 }
 
-/** Free, draft and returned batches accept additions; Sent batches do not. */
+/**
+ * Free, draft and returned batches accept additions; Sent batches do not.
+ * Undefined also returns true; the form separately requires a loaded lock
+ * (`!!lock`) before offering held additions.
+ */
 export function canAddCreditBatchRuns(lock: RecordLockView | undefined): boolean {
   return lock?.level !== "sent";
-}
-
-function sameDay(value: Date | string | undefined, saved: string): boolean {
-  if (value == null) return true;
-  return (value instanceof Date ? formatUtcDate(value) : value.slice(0, 10)) === saved;
 }
 
 function sameRuns(next: readonly string[] | undefined, saved: readonly string[] | undefined): boolean {
@@ -43,24 +32,22 @@ function sameRuns(next: readonly string[] | undefined, saved: readonly string[] 
 }
 
 /** Whether the draft moves any membership field away from the saved batch. */
-export function creditBatchMembershipChanged(data: Omit<CreditBatchFormData, "sampling">, saved: SavedCreditBatchDefinition): boolean {
+export function creditBatchMembershipChanged(data: Omit<CreditBatchFormData, "sampling">, saved: CreditBatchMembershipDefinition): boolean {
   return data.facilityId !== saved.facilityId ||
-    data.feedstockTypeId !== (saved.feedstockTypeId ?? "") ||
-    !sameDay(data.startDate, saved.startDate) ||
-    !sameDay(data.endDate, saved.endDate) ||
+    (data.feedstockTypeId ?? "") !== (saved.feedstockTypeId ?? "") ||
+    !unchangedDay(data.startDate, saved.startDate) ||
+    !unchangedDay(data.endDate, saved.endDate) ||
     !sameRuns(data.productionRunIds, saved.productionRunIds);
 }
 
-/** Pass the lock view to enable held additions. Legacy boolean true stays fully locked. */
+/** A held batch sends only added runs and non-membership fields. */
 export function creditBatchUpdatePatch(
   data: Omit<CreditBatchFormData, "sampling">,
-  saved: SavedCreditBatchDefinition,
-  membershipLocked: boolean | RecordLockView | undefined,
+  saved: CreditBatchMembershipDefinition,
+  lock: RecordLockView | undefined,
 ): Partial<Omit<CreditBatchFormData, "sampling">> | null {
-  const locked = typeof membershipLocked === "boolean" ? membershipLocked : isCreditBatchMembershipLocked(membershipLocked);
-  if (!locked) return data;
-  const onlyAdds = typeof membershipLocked !== "boolean" &&
-    canAddCreditBatchRuns(membershipLocked) && creditBatchOnlyAddsRuns(data, saved);
+  if (!isCreditBatchMembershipLocked(lock)) return data;
+  const onlyAdds = canAddCreditBatchRuns(lock) && creditBatchOnlyAddsRuns(data, saved);
   if (creditBatchMembershipChanged(data, saved) && !onlyAdds) return null;
   const patch: Partial<Omit<CreditBatchFormData, "sampling">> = { ...data };
   for (const field of MEMBERSHIP_FIELDS) delete patch[field];
@@ -105,18 +92,18 @@ interface SaveResult {
 export async function saveCreditBatchEdit({
   data,
   saved,
-  membershipLocked,
+  lock,
   update,
 }: {
   data: CreditBatchFormData;
-  saved: SavedCreditBatchDefinition & { id: string; version: number };
-  membershipLocked: boolean | RecordLockView | undefined;
+  saved: CreditBatchMembershipDefinition & { id: string; version: number };
+  lock: RecordLockView | undefined;
   update: (input: Omit<UpdateCreditBatchData, "sampling">) => Promise<SaveResult>;
 }): Promise<CreditBatchSaveOutcome> {
   try {
     const { sampling, ...mutableData } = data;
     void sampling;
-    const patch = creditBatchUpdatePatch(mutableData, saved, membershipLocked);
+    const patch = creditBatchUpdatePatch(mutableData, saved, lock);
     if (!patch) return { status: "error", message: CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE };
     const result = await update({ creditBatchId: saved.id, expectedVersion: saved.version, ...patch });
     if (!result.success) return { status: "error", message: result.error || NOT_SAVED_MESSAGE };
