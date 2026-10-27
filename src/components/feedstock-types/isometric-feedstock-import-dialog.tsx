@@ -116,7 +116,7 @@ export function IsometricFeedstockImportDialog({
           >
             Import feedstock type
           </Button>
-          <Button variant="default" onClick={close} disabled={importFeedstockType.isPending}>
+          <Button variant="weak" onClick={close} disabled={importFeedstockType.isPending}>
             Cancel
           </Button>
         </div>

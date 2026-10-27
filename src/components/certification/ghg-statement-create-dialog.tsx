@@ -367,7 +367,7 @@ function DialogBody({
             )}
             {stepIndex > 0 && (
               <Button className={PHONE_TOUCH_TARGET}
-                variant="default"
+                variant="weak"
                 onClick={() => setStepIndex((s) => s - 1)}
                 disabled={mutation.isPending}
               >
@@ -375,7 +375,7 @@ function DialogBody({
               </Button>
             )}
             <Button className={PHONE_TOUCH_TARGET}
-              variant="default"
+              variant="weak"
               onClick={onClose}
               disabled={mutation.isPending}
             >

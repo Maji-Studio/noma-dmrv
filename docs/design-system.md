@@ -537,7 +537,8 @@ missing — don't rebuild it.
 Always use `Button`; never a raw `<button>` with manual styling.
 
 - **Variants:** `default` · `weak` · `primary` · `accent` · `noOutline` ·
-  `destructive` (`--st-bad` outline, for delete actions).
+  `destructive` (`--st-bad` outline, for inline and row delete actions) · `danger`
+  (`--color-signal-red` filled, 4.8:1 against white text, the confirm button of a destructive dialog).
 - **Sizes:** `default` (40px) · `small` (32px) · `large` (48px, 60px at xl) ·
   `icon` (32×32, `p-0`).
 - **`busy` is the one sanctioned in-flight convention.** It disables the button
@@ -595,7 +596,10 @@ restore for free.
   draft in the same registry dialog. Cancel, Escape, backdrop and the close
   button all warn before discarding and hold while a save is pending.
 - **Dialog actions sit bottom left, primary first, then secondary** (Delete,
-  then Cancel). Where it is easy, records a dialog names link to the record
+  then Cancel). One style in every dialog: the main action is filled (`primary`,
+  or `danger` for Delete, Revoke, Disconnect and Discard) and the secondary
+  (Cancel, Back, Keep editing, Close beside an action) is `weak`. Never two
+  outlined buttons, and never a custom red class. Where it is easy, records a dialog names link to the record
   through its deep-link helper; reuse `SheetLinkRow` (`@/components/ui/sheet-link-row`).
 - A dialog that lists records uses `md` width. Its text has hierarchy (a short
   heading, then grouped lines), never one paragraph. Archived children sit
