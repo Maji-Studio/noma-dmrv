@@ -34,6 +34,17 @@ export function InUseReference({ href, code, kind }: { href: string; code: strin
   );
 }
 
+/** Several records that still use the row, one link each, in the order given. */
+export function InUseReferences({ references }: { references: ReadonlyArray<{ href: string; code: string; kind: string }> }) {
+  return (
+    <SheetLinkRows>
+      {references.map(({ href, code, kind }) => (
+        <SheetLinkRow key={`${kind}:${code}`} href={href} primary={code} ariaLabel={`Open ${kind} ${code}`} />
+      ))}
+    </SheetLinkRows>
+  );
+}
+
 export function InUseDeleteDialog({
   label,
   onClose,
