@@ -31,6 +31,12 @@ const WOOD = /^landcover$/i;
 const URBAN = /residential/i;
 const NO_FILL = /building|pier|bridge|aeroway|stadium|cemetery/i;
 const HILL_EXAGGERATION = 0.35;
+// SAT: the same Esri imagery as the app's map controls (src/config/geo.ts), dimmed so the light legs and labels still read
+const SAT_TILES = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const SAT_ATTRIBUTION = "Esri, Maxar, Earthstar Geographics, and the GIS User Community";
+const SAT_TILE_SIZE = 256;
+const SAT_SATURATION = -0.4;
+const SAT_BRIGHTNESS_MAX = 0.72;
 const STATE = { rel: 1, trail: 2, cur: 3 };
 
 /** Canvas paint cannot read CSS variables, so resolve the tokens once at mount. */
@@ -83,6 +89,16 @@ function addRelief(map, p) {
   } catch { /* no relief; the basemap still works */ }
 }
 
+/** Satellite imagery over the basemap, under the legs; hidden until the SAT button turns it on. Needs no key. */
+function addSatellite(map) {
+  try {
+    map.addSource("noma-sat", { type: "raster", tiles: [SAT_TILES], tileSize: SAT_TILE_SIZE, attribution: SAT_ATTRIBUTION });
+    map.addLayer({ id: "noma-sat", type: "raster", source: "noma-sat", layout: { visibility: "none" },
+      paint: { "raster-saturation": SAT_SATURATION, "raster-brightness-max": SAT_BRIGHTNESS_MAX } });
+    return true;
+  } catch { return false; }
+}
+
 /** Bowed arc between two [lng, lat] points, for a leg without a routed line. */
 function arc([x1, y1], [x2, y2], flip) {
   const dx = x2 - x1; const dy = y2 - y1; const len = Math.hypot(dx, dy) || 1;
@@ -130,6 +146,7 @@ export async function createJourneyMap(host, hooks) {
     map.once("load", () => { clearTimeout(t); resolve(); });
   });
   if (map.getStyle()?.layers?.length) { recolor(map, p); addRelief(map, p); }
+  const hasSat = addSatellite(map);
 
   /* ----- legs: routed lines, state through feature-state, the lit one on its own source ----- */
   const features = LEGS.map((l, i) => {
@@ -275,6 +292,12 @@ export async function createJourneyMap(host, hooks) {
     },
     /** 0..1: how much of the plant schematic shows; the plain plant marker takes the rest */
     setPlantWeight(w) { host.classList.toggle("jr-plant-on", w > 0.5); plant.setWeight(w); plantNode.style.opacity = (1 - w).toFixed(3); plantNode.classList.toggle("is-dim", w > 0.5); },
+    hasSat,
+    setSat(on) {
+      if (!hasSat) return;
+      map.setLayoutProperty("noma-sat", "visibility", on ? "visible" : "none");
+      host.classList.toggle("jr-sat", on);
+    },
     resize() { map.resize(); },
     ready() { host.classList.add("jr-map--ready"); },
     destroy() { clearInterval(ants); cancelAnimationFrame(raf); ro.disconnect(); map.remove(); },

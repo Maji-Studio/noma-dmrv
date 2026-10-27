@@ -81,6 +81,9 @@ body { color: var(--stage-ink); overscroll-behavior: none; }
 .ctrls button+button{border-top:1px solid var(--line-2)}
 .ctrls svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4}
 .ctrls button[aria-pressed="true"]{color:var(--lit)}
+.ctrls .sat{font:500 10px var(--f-mono);letter-spacing:.08em}
+.ctrls .sat[hidden]{display:none}
+.ctrls .sat[aria-pressed="true"]{background:var(--lit);color:var(--stage)}
 .vnote{position:absolute;z-index:14;left:var(--gl);bottom:var(--cb,360px);font-size:8.5px;color:var(--ink-3);background:rgba(15,2,26,.82);padding:4px 6px;margin-left:-6px;pointer-events:none;transition:opacity .25s,bottom .42s var(--spring);max-width:60%}
 .vnote.drag{transition:opacity .25s}
 .vnote.off{opacity:0}

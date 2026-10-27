@@ -45,6 +45,7 @@ function setMode(m, quiet) {
   $("seg").dataset.mode = m;
   $("tMap").setAttribute("aria-selected", m === "map"); $("tGraph").setAttribute("aria-selected", m === "graph");
   $("mapV").hidden = m !== "map"; $("graphV").hidden = m !== "graph";
+  $("zSat").hidden = m !== "map" || !ctx.map?.hasSat;
   $("vnote").textContent = `${LATER_RUNS} later runs grouped`;
   $("vnote").style.visibility = m === "graph" ? "" : "hidden";
   st.free[m] = false;
@@ -101,6 +102,11 @@ function controls() {
     ctx.graph.zoomAt(k, I.l + (st.VW - I.l - I.r) / 2, I.t + (st.VH - I.t - I.b) / 2);
   };
   $("zIn").addEventListener("click", () => zoom(2 ** ZOOM_STEP)); $("zOut").addEventListener("click", () => zoom(2 ** -ZOOM_STEP));
+  $("zSat").addEventListener("click", () => {
+    const on = $("zSat").getAttribute("aria-pressed") !== "true";
+    $("zSat").setAttribute("aria-pressed", String(on));
+    ctx.map?.setSat(on);
+  });
   $("zRe").addEventListener("click", () => { startBlend(st.mode, RECENTER_MS); ctx.dirty(); });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
@@ -142,6 +148,7 @@ async function startMap() {
     return;
   }
   ctx.map = handle;
+  $("zSat").hidden = st.mode !== "map" || !handle.hasSat;
   handle.setCamera(toMap(st.cam.map || linked("map", st.f)));
   if (lastLit) handle.setLit(lastLit);
   handle.map.once("idle", () => handle.ready());

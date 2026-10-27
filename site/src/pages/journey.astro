@@ -45,7 +45,8 @@ import Logo from "../components/site/Logo.astro";
       <div class="fadeT" aria-hidden="true"></div>
       <p class="chipline mono" id="chipline"><i aria-hidden="true"></i>Latest record</p>
 
-      <div class="ctrls" id="ctrls" role="group" aria-label="Zoom">
+      <div class="ctrls" id="ctrls" role="group" aria-label="Map controls">
+        <button class="sat" id="zSat" aria-label="Satellite imagery" aria-pressed="false" hidden>SAT</button>
         <button id="zIn" aria-label="Zoom in"><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></button>
         <button id="zOut" aria-label="Zoom out"><svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button>
         <button id="zRe" aria-label="Recenter on the selected record"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.2"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3"/></svg></button>
