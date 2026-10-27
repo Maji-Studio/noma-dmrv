@@ -63,7 +63,7 @@ export function PlatformOrganizationApiAccess({ organizationId, organizationName
             The API keys are not revoked.
           </p>
           <div className="flex flex-wrap justify-start gap-8">
-            <Button type="button" busy={mutation.isPending} onClick={() => setApiAccess(false)}>
+            <Button type="button" variant="primary" busy={mutation.isPending} onClick={() => setApiAccess(false)}>
               Turn API access off
             </Button>
             <Button type="button" variant="weak" disabled={mutation.isPending} onClick={() => setConfirmOff(false)}>
