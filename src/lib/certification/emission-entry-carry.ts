@@ -1,6 +1,9 @@
 import { emissionEntryCounts, entryLine, type EntryObservation } from "./emission-entry-rules";
 import { removalEntryOwner, type EntryContender, type RemovalEntryFact } from "./removal-emission-contributions";
 
+/** The own-batch Removal whose revision will report a late entry. */
+export interface EntryRevisionDestination { removalId: string; removalCode: string }
+
 export interface CarryContender extends EntryContender {
   organizationId: string;
   facilityId: string;

@@ -1,3 +1,4 @@
+import { transportLedgerInput } from "./input-selection";
 /**
  * Pure builder: removal transport legs → Evidence Ledger view model.
  *
@@ -74,18 +75,14 @@ function basisOf(leg: TransportLeg): LedgerDistanceBasis {
   }
 }
 
-function capitalize(s: string): string {
-  return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
-}
-
 function buildLeg(leg: TransportLeg, ref: string): LedgerLeg {
-  const loadMassKg =
-    leg.loadMassKg != null && leg.loadMassKg > 0 ? leg.loadMassKg : 0;
+  const input = transportLedgerInput(leg);
+  const { loadMassKg } = input;
   const massMissing = loadMassKg === 0;
   // Every leg counts its round trip (issue #852), so the row carries the
   // doubled distance into the t·km and reconciles to the category subtotal,
   // which `aggregateTransportMassDistance` also doubles.
-  const effectiveDistanceKm = countedRoundTripKm(leg.distanceKm);
+  const effectiveDistanceKm = countedRoundTripKm(input.distanceKm);
   const tkm = round2(effectiveDistanceKm * kgToTonnes(loadMassKg));
   const vehicle =
     leg.vehicleType && leg.modelYear
@@ -97,10 +94,10 @@ function buildLeg(leg: TransportLeg, ref: string): LedgerLeg {
     destinationName: leg.destinationName,
     originGeo: geoOf(leg.originGpsLatitude, leg.originGpsLongitude),
     destinationGeo: geoOf(leg.destinationGpsLatitude, leg.destinationGpsLongitude),
-    oneWayDistanceKm: leg.distanceKm,
+    oneWayDistanceKm: input.distanceKm,
     distanceKm: effectiveDistanceKm,
     loadMassKg,
-    mode: capitalize(leg.transportMethodType),
+    mode: input.transportMethodType,
     vehicle,
     basis: basisOf(leg),
     tkm,

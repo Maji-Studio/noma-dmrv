@@ -1,4 +1,5 @@
-import { formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
+import { samplingDay, selectThousandYearLedgerSamples } from "./input-selection";
+export { samplingDay } from "./input-selection";
 import {
   CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION,
   computeBlueprint1000YearDurability,
@@ -36,47 +37,16 @@ export const CURRENT_1000_YEAR_SEMANTICS_LABEL =
 export const LEGACY_1000_YEAR_SEMANTICS_LABEL =
   "Legacy total-carbon basis with uncapped durability";
 
-export function samplingDay(
-  value: unknown,
-  facilityTimezone: string | null | undefined,
-): string | null {
-  const parsed =
-    value instanceof Date
-      ? value
-      : typeof value === "string"
-        ? new Date(value)
-        : null;
-  if (!parsed || Number.isNaN(parsed.getTime())) return null;
-  return facilityTimezone
-    ? formatFacilityDate(parsed, facilityTimezone)
-    : formatUtcDate(parsed);
-}
-
 function buildReplicate(
-  sample: CreditBatchDurabilityInput["samples"][number],
-  index: number,
-  facilityTimezone: string | null | undefined,
-): ThousandYearLedgerReplicate | null {
-  if (
-    sample.totalCarbonPercent == null ||
-    !Number.isFinite(sample.totalCarbonPercent) ||
-    sample.inorganicCarbonPercent == null ||
-    !Number.isFinite(sample.inorganicCarbonPercent) ||
-    sample.sReflectanceFraction == null ||
-    !Number.isFinite(sample.sReflectanceFraction)
-  ) {
-    return null;
-  }
+  { sample, index, input }: ReturnType<typeof selectThousandYearLedgerSamples>[number],
+): ThousandYearLedgerReplicate {
   return {
-    ref: `R${index + 1}`,
-    sampleCode: sample.sampleCode,
-    samplingDay: samplingDay(sample.samplingTime, facilityTimezone),
-    labName: sample.labName ?? null,
-    totalCarbonFraction: sample.totalCarbonPercent / 100,
-    inorganicCarbonFraction: sample.inorganicCarbonPercent / 100,
-    calculatedOrganicCarbonFraction:
-      (sample.totalCarbonPercent - sample.inorganicCarbonPercent) / 100,
-    sFraction: sample.sReflectanceFraction,
+    ref: `R${index + 1}`, sampleCode: sample.sampleCode,
+    samplingDay: input.samplingDay, labName: sample.labName ?? null,
+    totalCarbonFraction: input.totalCarbonPercent / 100,
+    inorganicCarbonFraction: input.inorganicCarbonPercent / 100,
+    calculatedOrganicCarbonFraction: (input.totalCarbonPercent - input.inorganicCarbonPercent) / 100,
+    sFraction: input.sReflectanceFraction,
   };
 }
 
@@ -140,16 +110,10 @@ export function buildThousandYearDurabilityLedgerModel(
       const orderedSamples = [...batch.samples].sort((left, right) =>
         String(left.id).localeCompare(String(right.id)),
       );
-      const replicates = orderedSamples
-        .map((sample, index) =>
-          isLegacy
-            ? buildLegacyReplicate(sample, index, batch.facilityTimezone)
-            : buildReplicate(sample, index, batch.facilityTimezone),
-        )
-        .filter(
-          (replicate): replicate is ThousandYearLedgerReplicate =>
-            replicate !== null,
-        );
+      const replicates = isLegacy
+        ? orderedSamples.map((sample, index) => buildLegacyReplicate(sample, index, batch.facilityTimezone))
+          .filter((replicate): replicate is ThousandYearLedgerReplicate => replicate !== null)
+        : selectThousandYearLedgerSamples(batch.samples, batch.facilityTimezone).map(buildReplicate);
       if (replicates.length === 0) return null;
       const currentDurability = isLegacy
         ? null

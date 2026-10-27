@@ -1,3 +1,4 @@
+import { carriedEntrySnapshotSchema } from "@/lib/certification/carried-entry-snapshot";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -22,11 +23,7 @@ export interface RemovalCarriedEntries { carriedEntries: RemovalCarriedEntry[]; 
 const snapshotSchema = z.object({
   templateObservationId: z.string().optional(),
   semantic: z.object({
-    carriedEntries: z.array(z.object({
-      entryId: z.string(), creditBatchId: z.string(), componentId: z.string(),
-      occurredOn: z.string(), value: z.object({ magnitude: z.string(), unit: z.string() }),
-      evidenceDocumentIds: z.array(z.string()), earlierRemovalId: z.string().optional(),
-    })).default([]),
+    carriedEntries: z.array(carriedEntrySnapshotSchema).default([]),
   }),
 });
 

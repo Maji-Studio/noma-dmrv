@@ -10,9 +10,9 @@
  * gate). Inorganic carbon per replicate mirrors `replicateInorganicCarbon`
  * (measured, else Eq.2-derived) so the displayed rows feed the submitted mean.
  */
-import type { Sample } from "@/db/schema";
-import { evaluateRunEligibility, isUsableRatio } from "@/lib/calculations/biochar-eligibility";
-import { formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
+import { evaluateRunEligibility } from "@/lib/calculations/biochar-eligibility";
+import { selectTwoHundredYearLedgerSamples } from "./input-selection";
+export { samplingDayOf } from "./input-selection";
 import {
   buildPerBatchDurabilityData,
   type CreditBatchDurabilityInput,
@@ -43,98 +43,21 @@ export interface BuildDurabilityLedgerModelArgs {
   generatedAtIso: string;
 }
 
-function isUsableNumber(value: number | null | undefined): value is number {
-  return value != null && Number.isFinite(value);
-}
-
 function statOf(value: ValueWithStdDev | null): LedgerStat | null {
   return value == null ? null : { mean: value.mean, stdDev: value.stdDev };
 }
 
-// ISO calendar day (YYYY-MM-DD) of a sampling timestamp, for the §8.3.1
-// distribution evidence, resolved in the facility's local timezone so the
-// ledger classifies a sampling instant on the SAME calendar day as the write
-// guard and submission gate. Falls back to UTC only when the timezone is absent
-// (light fixtures). Reads an existing Date/string — no clock access. Typed
-// `unknown` because the column maps to `Date` but raw rows / test fixtures can
-// carry a string.
-export function samplingDayOf(
-  samplingTime: unknown,
-  facilityTimezone: string | null | undefined,
-): string | null {
-  if (samplingTime instanceof Date) {
-    return formatDayInZone(samplingTime, facilityTimezone);
-  }
-  if (typeof samplingTime === "string" && samplingTime.length >= 10) {
-    // A timestamp string (carries a time/offset component) must resolve through
-    // the SAME facility/UTC branch as a Date — otherwise an offset-bearing value
-    // like `2026-01-15T03:30:00.000Z` slices to the UTC day and diverges from the
-    // Date-backed local day. A bare date-only string is already a calendar day.
-    if (samplingTime.includes("T")) {
-      const parsed = new Date(samplingTime);
-      if (!Number.isNaN(parsed.getTime())) {
-        return formatDayInZone(parsed, facilityTimezone);
-      }
-    }
-    return samplingTime.slice(0, 10);
-  }
-  return null;
-}
+type SelectedSample = ReturnType<typeof selectTwoHundredYearLedgerSamples>["samples"][number];
 
-/** Format a Date as its YYYY-MM-DD calendar day in the facility zone (UTC fallback). */
-function formatDayInZone(
-  date: Date,
-  facilityTimezone: string | null | undefined,
-): string | null {
-  const day = facilityTimezone
-    ? formatFacilityDate(date, facilityTimezone)
-    : formatUtcDate(date);
-  return day || null;
-}
-
-// Inorganic carbon for one replicate: prefer the measured value, else derive
-// max(0, Total − Organic) per Eq.2 — mirrors `replicateInorganicCarbon` so the
-// displayed rows reconcile to the submitted inorganic mean.
-function replicateInorganic(s: Sample): {
-  value: number | null;
-  derived: boolean;
-} {
-  if (isUsableNumber(s.inorganicCarbonPercent)) {
-    return { value: s.inorganicCarbonPercent, derived: false };
-  }
-  if (
-    isUsableNumber(s.totalCarbonPercent) &&
-    isUsableNumber(s.organicCarbonPercent)
-  ) {
-    return {
-      value: Math.max(0, s.totalCarbonPercent - s.organicCarbonPercent),
-      derived: true,
-    };
-  }
-  return { value: null, derived: false };
-}
-
-function buildReplicate(
-  s: Sample,
-  index: number,
-  facilityTimezone: string | null | undefined,
-): LedgerReplicate {
-  const inorganic = replicateInorganic(s);
+function buildReplicate({ sample, input }: SelectedSample, index: number): LedgerReplicate {
+  const derived = input.inorganicCarbonPercent === null && input.totalCarbonPercent !== null && input.organicCarbonPercent !== null;
+  const inorganic = derived ? Math.max(0, input.totalCarbonPercent! - input.organicCarbonPercent!) : input.inorganicCarbonPercent;
   return {
-    ref: `R${index + 1}`,
-    sampleCode: s.sampleCode,
-    samplingDay: samplingDayOf(s.samplingTime, facilityTimezone),
-    labName: s.labName ?? null,
-    hToCorg: isUsableRatio(s.hToCOrgRatio) ? s.hToCOrgRatio : null,
-    oToCorg: isUsableRatio(s.oToCOrgRatio) ? s.oToCOrgRatio : null,
-    totalCarbonPercent: isUsableNumber(s.totalCarbonPercent)
-      ? s.totalCarbonPercent
-      : null,
-    organicCarbonPercent: isUsableNumber(s.organicCarbonPercent)
-      ? s.organicCarbonPercent
-      : null,
-    inorganicCarbonPercent: inorganic.value,
-    inorganicDerived: inorganic.derived,
+    ref: `R${index + 1}`, sampleCode: sample.sampleCode,
+    samplingDay: input.samplingDay ?? null, labName: sample.labName ?? null,
+    hToCorg: input.hToCOrgRatio, oToCorg: input.oToCOrgRatio,
+    totalCarbonPercent: input.totalCarbonPercent, organicCarbonPercent: input.organicCarbonPercent,
+    inorganicCarbonPercent: inorganic, inorganicDerived: derived,
   };
 }
 
@@ -154,34 +77,19 @@ export function buildDurabilityLedgerModel(
 
   const batches: LedgerBatch[] = [];
   for (const dp of perBatch) {
-    // Unsampled batches (Method B only) carry no chemistry to reconcile — they
-    // submit via the unsampled blueprint, so they have no ledger row.
-    if (!dp.sampled || dp.hToCorgRatio == null) continue;
-
     const samples = samplesByBatchId.get(dp.creditBatchId) ?? [];
     const facilityTimezone = timezoneByBatchId.get(dp.creditBatchId) ?? null;
-    // Render only the replicates that back the submitted figures so the ledger
-    // can't show more rows than its own `replicateCount` claim: rows +
-    // replicateCount → the H/C_org-usable set (dp.replicateCount is
-    // hValues.length in buildPerBatchDurabilityData).
-    const usableHReplicates = samples.filter((s) =>
-      isUsableRatio(s.hToCOrgRatio),
-    );
-    const eligibility = evaluateRunEligibility(
-      samples.map((s) => ({
-        hToCOrgRatio: s.hToCOrgRatio,
-        oToCOrgRatio: s.oToCOrgRatio,
-      })),
-    );
-    const oValues = samples
-      .map((s) => s.oToCOrgRatio)
-      .filter(isUsableRatio);
+    const selected = selectTwoHundredYearLedgerSamples(samples, facilityTimezone);
+    // Unsampled batches submit through Method B and have no ledger row.
+    if (!selected.replicates.length || dp.hToCorgRatio == null) continue;
+    const eligibility = evaluateRunEligibility(selected.samples.map(({ input }) => input));
+    const oValues = selected.samples.flatMap(({ input }) => input.oToCOrgRatio === null ? [] : [input.oToCOrgRatio]);
 
     batches.push({
       creditBatchId: dp.creditBatchId,
       creditBatchCode: dp.creditBatchCode,
-      replicates: usableHReplicates.map((s, index) =>
-        buildReplicate(s, index, facilityTimezone),
+      replicates: selected.replicates.map((s, index) =>
+        buildReplicate(s, index),
       ),
       replicateCount: dp.replicateCount,
       hToCorg: { mean: dp.hToCorgRatio.mean, stdDev: dp.hToCorgRatio.stdDev },

@@ -1,3 +1,4 @@
+import type { EntryRevisionDestination } from "@/lib/certification/emission-entry-carry";
 /**
  * What a late emissions entry shows (#1059): another credit batch's Removal
  * reports or will report it, or it goes into the revision of its own returned
@@ -23,7 +24,7 @@ const MEMBER_TEMPLATE_TEXT = "An Admin changes it in Settings, Removal templates
 export interface LateEntryFacts {
   carry?: EntryCarryDisposition;
   reportedIn?: EntryCarryDestination | null;
-  revisionOf?: { removalId: string; removalCode: string } | null;
+  revisionOf?: EntryRevisionDestination | null;
   recordedAfter?: { removalId: string; removalCode: string } | null;
 }
 

@@ -1,6 +1,9 @@
 import { deriveEntryCorrection, type EntryCorrectionState } from "./removal-entry-correction";
 import type { EntryInputManifest } from "./removal-emission-contributions";
 
+/** Only content comparison uses this key; it never enters a submission hash. */
+export const CHANGED_GENERATED_EVIDENCE_KEY = "changedGeneratedEvidence";
+
 // These are descriptive fields in compiler snapshots, not submitted quantities
 // or evidence identities. Normalize old snapshots as well as current builds.
 const DISPLAY_FIELDS = new Set(["entityLabel", "applicationCode", "label", "displayName", "display_name", "name", "description", "notes", "code"]);
@@ -55,7 +58,7 @@ export function deriveRemovalSemanticCorrection(args: {
   const lineageChanged = new Set<string>();
   const previous = args.previous;
   const current = args.current;
-  const sharedKeys = ["changedGeneratedEvidence", "startedOn", "completedOn", "sourceProductionRunIds", "biocharApplicationIntents", "templateId", "externalProjectId"];
+  const sharedKeys = [CHANGED_GENERATED_EVIDENCE_KEY, "startedOn", "completedOn", "sourceProductionRunIds", "biocharApplicationIntents", "templateId", "externalProjectId"];
   const sharedChanged = !current || (sharedKeys.some(key => canonical(previous[key]) !== canonical(current[key])) || canonical(sharedEvidence(previous)) !== canonical(sharedEvidence(current)));
   for (const id of current ? ids : []) {
     const inputs = (semantic: Record<string, unknown>) => rows(semantic.inputs).filter(input => input.rtcId === id);

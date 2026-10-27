@@ -1,8 +1,6 @@
-import { selectRemovalEntries } from "@/lib/certification/removal-entry-selection";
+import { selectDraftRemovalEntries } from "@/lib/certification/removal-draft-entry-selection";
 import { ISOMETRIC_PROVIDER, REMOVAL_SUBMISSION_TYPE } from "@/lib/isometric/utils/constants";
 import type { OrgContext } from "@/lib/auth/server";
-import { frozenEntriesForAttempt } from "@/lib/certification/frozen-removal-entries";
-import { mergeEntryCarryFacts } from "@/lib/certification/merge-entry-carry-facts";
 import { requireOrgScope } from "./utils";
 import { getCreditBatchesByRemovalId } from "./certifier-removals";
 import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
@@ -32,15 +30,10 @@ export async function loadDraftRemovalCarriedEntries(ctx: OrgContext, removalId:
     getLatestSubmission(ctx, { provider: ISOMETRIC_PROVIDER, submissionType: REMOVAL_SUBMISSION_TYPE, localEntityType: "removal", localEntityId: removalId }),
     listEmissionEntryAvailableApplications(ctx, ids),
   ]);
-  const own = mergeEntryCarryFacts(facts.flatMap(fact => fact?.entries ?? []), carry.entries);
-  const frozen = frozenEntriesForAttempt(latest, { carryContext: carry, batchFacts: Object.fromEntries(readableBatches.map(batch => [batch.id, {
-    entries: own.filter(entry => entry.creditBatchId === batch.id),
-    productionReservationSubmissionId: rollups[batch.id]?.batch.productionEmissionsClaimReservedBySubmissionId,
-  }])) });
-  const selection = selectRemovalEntries({ removalId, memberBatches: batches, observation, ownEntries: own,
-    carryEntries: carry.entries, frozenEntrySet: frozen, contenders, availableApplications,
-    applicationDates: Object.values(rollups).flatMap(rollup => rollup.lineageFacts.applications.map(application => application.applicationDate)),
+  const selection = selectDraftRemovalEntries({ removalId, memberBatches: batches, observation,
+    readableBatchIds: readableBatches.map(batch => batch.id), facts, carryEntries: carry.entries,
+    rollups, latest, contenders, availableApplications,
   });
   const reservations = await loadEmissionEntryReservations(ctx, selection.reservationIds);
-  return selection.derive(reservations, Date.now()).carriedEntries ?? [];
+  return selection.deriveCarriedEntries(reservations, Date.now());
 }
