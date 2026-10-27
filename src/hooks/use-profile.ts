@@ -5,11 +5,11 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { changePasswordFn, updateProfileNameFn } from "@/fn/profile";
+import { changeEmailFn, changePasswordFn, updateProfileNameFn } from "@/fn/profile";
 import { unwrap } from "@/hooks/types";
 import { invalidateOrgMembers } from "@/hooks/use-organizations";
 import { refreshSession } from "@/lib/auth/client";
-import type { ChangePasswordFormData, ProfileNameFormData } from "@/schemas/profile";
+import type { ChangeEmailFormData, ChangePasswordFormData, ProfileNameFormData } from "@/schemas/profile";
 
 export function useUpdateProfileName() {
   const queryClient = useQueryClient();
@@ -27,5 +27,16 @@ export function useUpdateProfileName() {
 export function useChangePassword() {
   return useMutation({
     mutationFn: async (input: ChangePasswordFormData) => unwrap(await changePasswordFn(input)),
+  });
+}
+
+/**
+ * Asks for a confirmation link at the new address. The address changes only
+ * when that link is opened, so success is "link sent", never "changed". The
+ * server answers the same for an address another account already holds.
+ */
+export function useChangeEmail() {
+  return useMutation({
+    mutationFn: async (input: ChangeEmailFormData) => unwrap(await changeEmailFn(input)),
   });
 }

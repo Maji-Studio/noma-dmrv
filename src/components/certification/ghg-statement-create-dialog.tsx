@@ -244,7 +244,7 @@ function DialogBody({
 
   return (
     <div id={formId} className="flex flex-col gap-24">
-      <header className="flex flex-col gap-4 pr-40">
+      <header className="flex flex-col gap-4">
         <h2 id={DIALOG_TITLE_ID} className="title-heading-3">
           {result
             ? result.outcome === "existing"

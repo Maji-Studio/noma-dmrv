@@ -3,13 +3,15 @@
  * Sets up authentication with email/password and admin invite
  */
 import { capturePasswordResetNotice, deliverPasswordNotice } from "./account-notice-hooks";
-import { sendRoleChangedNotice, sendRemovedFromOrganizationNotice } from "@/lib/email/account-notices";
+import { sendRoleChangedNotice, sendRemovedFromOrganizationNotice, sendEmailChangeNotice } from "@/lib/email/account-notices";
+import { randomUUID } from "node:crypto";
+import { guardEmailChangeVerification, readEmailVerificationToken } from "./email-change-guard";
 import { createOAuthProvider } from "./oauth-provider";
 import { createOAuthCimdPlugins } from "./oauth-cimd";
 import { oauthBefore } from "./oauth-hooks";
 import { OAUTH_ENDPOINT_LIMITS } from "@/config/oauth";
 import { apiKey } from "@better-auth/api-key";
-import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
+import { APIError, createAuthMiddleware, getAuthoritativeSessionFromCtx, getSessionFromCtx } from "better-auth/api";
 import { createAccessControl } from "better-auth/plugins/access";
 import { defaultStatements, ownerAc, memberAc } from "better-auth/plugins/organization/access";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS, API_KEY_LIVE_PREFIX, API_KEY_MAX_EXPIRY_DAYS, API_KEY_TEST_PREFIX } from "@/config/api-keys";
@@ -19,16 +21,18 @@ import { disableOwnerApiKeys } from "@/data-access/api-credential-auth";
 import { oauthRolePolicy } from "./oauth-role-policy";
 import { canOwnApiKey } from "./api-scopes";
 import { assertOrganizationRole, translateLastAdminError, validateOrganizationRoleInput } from "./organization-role-policy";
-import { betterAuth } from "better-auth";
+import { BASE_ERROR_CODES, betterAuth } from "better-auth";
 import { withLastAdminGuard } from "./last-admin-adapter";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
 import { asc, eq } from "drizzle-orm";
-import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH, EMAIL_VERIFICATION_EXPIRES_IN_SECONDS, INVITATION_EXPIRES_IN_SECONDS, ORGANIZATION_INVITATION_LIMIT, PASSWORD_RESET_EXPIRES_IN_SECONDS, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
+import { CHANGE_EMAIL_MAX_ATTEMPTS, CHANGE_EMAIL_WINDOW_SECONDS, AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH, EMAIL_VERIFICATION_EXPIRES_IN_SECONDS, INVITATION_EXPIRES_IN_SECONDS, ORGANIZATION_INVITATION_LIMIT, PASSWORD_RESET_EXPIRES_IN_SECONDS, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
 import { env } from "@/config/env";
 import { resetPasswordEmail } from "@/lib/email/templates/reset-password-email";
 import { verifyEmailEmail } from "@/lib/email/templates/verify-email-email";
+import { emailChangeConfirmEmail } from "@/lib/email/templates/email-change-confirm-email";
+import { getEmailAppUrl } from "@/lib/email/app-url";
 import { sendAuthEmail } from "@/lib/email/auth-email";
 import { sendOrganizationInvitation } from "@/lib/email/organization-invitation";
 import { db } from "@/db";
@@ -73,6 +77,7 @@ function buildTrustedOrigins(): string[] {
 }
 
 const removedMemberResult = z.object({ id: z.string(), organizationId: z.string(), userId: z.string() });
+const MILLISECONDS_PER_SECOND = 1000;
 
 const apiKeyActions = ["create", "read", "update", "delete"] as const;
 const organizationAccess = createAccessControl({ ...defaultStatements, apiKey: apiKeyActions });
@@ -81,6 +86,18 @@ export const auth = betterAuth({
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
       validateOrganizationRoleInput(ctx.path, ctx.body);
+      if (ctx.path === "/change-email") {
+        // 1.7.10's sensitiveSessionMiddleware re-reads the session but does not
+        // check freshness. Enforce it here before any email can be sent.
+        const session = await getAuthoritativeSessionFromCtx(ctx);
+        if (!session) throw new APIError("UNAUTHORIZED", { code: "UNAUTHORIZED", message: "Unauthorized" });
+        const freshAge = ctx.context.sessionConfig.freshAge;
+        const createdAt = new Date(session.session.createdAt).getTime();
+        if (freshAge !== 0 && Date.now() - createdAt >= freshAge * MILLISECONDS_PER_SECOND) {
+          throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.SESSION_EXPIRED);
+        }
+      }
+      if (ctx.path === "/verify-email") await guardEmailChangeVerification(ctx);
       await capturePasswordResetNotice(ctx);
       // HTTP callers cannot bypass the guarded application actions. Block reads
       // too, so plugin responses cannot expose credential hashes or metadata.
@@ -137,6 +154,9 @@ export const auth = betterAuth({
     },
   })),
   user: {
+    changeEmail: {
+      enabled: true,
+    },
     additionalFields: {
       // Surfaces the `role` column (admin | user) on the session user so
       // requireAdmin() can gate admin routes. input:false keeps it out
@@ -153,6 +173,7 @@ export const auth = betterAuth({
     enabled: true,
     disableSignUp: true,
     requireEmailVerification: true,
+    revokeSessionsOnPasswordReset: true,
     resetPasswordTokenExpiresIn: PASSWORD_RESET_EXPIRES_IN_SECONDS,
     minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
     maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
@@ -170,7 +191,26 @@ export const auth = betterAuth({
     sendOnSignUp: true,
     expiresIn: EMAIL_VERIFICATION_EXPIRES_IN_SECONDS,
     autoSignInAfterVerification: true,
-    sendVerificationEmail: async ({ user, url }) => {
+    sendVerificationEmail: async ({ user, url, token }) => {
+      // Only the server-signed token identifies an email-change request.
+      // Never infer the old address from client input or an unverified decode.
+      const verification = await readEmailVerificationToken(token, env.BETTER_AUTH_SECRET);
+      if (!verification) throw new Error("Invalid email verification token.");
+      if (verification.requestType === "change-email-verification") {
+        const { email: currentEmail, updateTo } = verification;
+        if (updateTo !== user.email) throw new Error("Invalid email verification token.");
+        const appUrl = getEmailAppUrl();
+        await sendAuthEmail({
+          type: "email-change-confirm",
+          userId: user.id,
+          to: user.email,
+          url,
+          idempotencyKey: `email-change-confirm/${user.id}/${randomUUID()}`,
+          ...emailChangeConfirmEmail({ to: user.email, currentEmail, url, appUrl }),
+        });
+        await sendEmailChangeNotice({ userId: user.id, email: currentEmail, newEmail: user.email });
+        return;
+      }
       await sendAuthEmail({
         type: "verify-email",
         userId: user.id,
@@ -197,6 +237,7 @@ export const auth = betterAuth({
       "/sign-in/email": { window: 15 * 60, max: 10 },
       "/sign-up/email": { window: 60 * 60, max: 3 },
       "/request-password-reset": { window: 15 * 60, max: 5 },
+      "/change-email": { window: CHANGE_EMAIL_WINDOW_SECONDS, max: CHANGE_EMAIL_MAX_ATTEMPTS },
       "/reset-password": { window: 15 * 60, max: 10 },
     },
   },

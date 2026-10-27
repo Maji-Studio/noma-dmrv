@@ -1,7 +1,8 @@
 import { logLocalFallbackLink, sendEmail } from "./send";
 
 export async function sendAuthEmail(input: {
-  type: "reset-password" | "verify-email";
+  type: "reset-password" | "verify-email" | "email-change-confirm";
+  idempotencyKey?: string;
   userId: string;
   to: string;
   subject: string;
@@ -14,7 +15,7 @@ export async function sendAuthEmail(input: {
   // Reset must return the same response for existing and nonexistent accounts,
   // including when Resend is down. Verification retains failure propagation,
   // but never exposes the provider's potentially identifying error text.
-  if (!result.sent && result.reason === "provider-error" && input.type === "verify-email") {
+  if (!result.sent && result.reason === "provider-error" && input.type !== "reset-password") {
     throw new Error("Email delivery failed.");
   }
 }

@@ -21,5 +21,18 @@ export const changePasswordSchema = z.object({
   message: "Choose a password different from your current password.",
 });
 
+export const changeEmailServerSchema = z.object({
+  newEmail: z.string().trim().pipe(z.email({ error: "Enter a valid email address." })),
+});
+
+/** The form also rejects the address already in use. */
+export function changeEmailSchema(currentEmail: string) {
+  return changeEmailServerSchema.refine(
+    ({ newEmail }) => newEmail.toLowerCase() !== currentEmail.trim().toLowerCase(),
+    { path: ["newEmail"], message: "Enter an address different from your current email." },
+  );
+}
+
+export type ChangeEmailFormData = z.infer<ReturnType<typeof changeEmailSchema>>;
 export type ProfileNameFormData = z.infer<typeof profileNameSchema>;
 export type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
