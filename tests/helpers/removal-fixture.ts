@@ -1,13 +1,11 @@
-import { sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { certifierRemovals } from "@/db/schema/certification";
-import { withAutoCodes } from "@/data-access/code-generator";
-import { REMOVAL_CODE_PREFIX } from "@/data-access/certifier-removals";
-import { makeTestOrgContext } from "./test-org";
+
+const FIXTURE_TAG_LENGTH = 8;
 
 type RemovalFixture = Omit<typeof certifierRemovals.$inferInsert, "code">;
 
-/** Fixture-only insert: the same org-scoped generator and savepoint retries as real creates. */
+/** Fixture-only codes stay outside the production RM-YY-NNN sequence. */
 export async function insertRemovalFixture(
   executor: typeof db | DbTransaction,
   input: RemovalFixture | RemovalFixture[],
@@ -18,15 +16,8 @@ export async function insertRemovalFixture(
   if (rows.some(row => row.organizationId !== organizationId)) {
     throw new Error("Removal fixtures must belong to one organization.");
   }
-  const ctx = { ...makeTestOrgContext(), organizationId };
-  return executor.transaction(async tx => {
-    // Parallel test files share one org; serialize code allocation until the enclosing transaction ends.
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${"removal-fixture-code:" + organizationId}, 0))`);
-    return withAutoCodes(
-      ctx, tx, REMOVAL_CODE_PREFIX, certifierRemovals, certifierRemovals.code, rows.length,
-      (codes, savepoint) => savepoint.insert(certifierRemovals)
-        .values(rows.map((row, index) => ({ ...row, code: codes[index] })))
-        .returning(),
-    );
-  });
+  const tag = crypto.randomUUID().slice(0, FIXTURE_TAG_LENGTH);
+  return executor.insert(certifierRemovals)
+    .values(rows.map((row, index) => ({ ...row, code: `RM-FX-${tag}-${index}` })))
+    .returning();
 }

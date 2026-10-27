@@ -27,6 +27,8 @@ import { submitRemoval } from "@/fn/certification/submit-removal";
 import type { RemovalScope } from "@/fn/certification/removal-scope";
 
 const { ORIGINAL_EXTERNAL_ID } = vi.hoisted(() => ({ ORIGINAL_EXTERNAL_ID: `original-${crypto.randomUUID()}` }));
+// Registry ids are globally unique in certification_submissions; keep them distinct per file.
+const FILE_TAG = crypto.randomUUID().slice(0, 8);
 
 vi.mock("@/lib/isometric/ghg-statements", () => ({ getGhgStatement: async () => ({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: [ORIGINAL_EXTERNAL_ID] }) }));
 const userId = crypto.randomUUID();
@@ -131,7 +133,7 @@ it.each([false, true])("submits a returned Removal through claim and freshness, 
   // Build uses the contributions supplied by its context, including the claim-scoped freshness read.
   vi.mocked(sources.resolveSourceBindingCandidates).mockImplementation(async (_ctx, args) => args.candidates.map(candidate => ({ ...candidate, sourceId: `src-${candidate.documentId}` })));
   vi.mocked(isometric.createDatapoint).mockImplementation(vi.fn(fakeExternalIds("dp")) as never);
-  vi.mocked(isometric.createGhgEntry).mockImplementation(vi.fn(fakeExternalIds("rmv")) as never);
+  vi.mocked(isometric.createGhgEntry).mockImplementation(vi.fn(fakeExternalIds(`rmv-${FILE_TAG}`)) as never);
   if (interrupt) {
     // Model process loss: the committed draft survives without failure cleanup.
     vi.mocked(reservations.rejectSubmissionAndReleaseProductionClaims).mockResolvedValueOnce(undefined);
