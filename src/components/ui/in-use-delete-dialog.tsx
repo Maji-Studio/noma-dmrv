@@ -25,17 +25,15 @@ interface InUseDeleteDialogProps {
   children?: ReactNode;
 }
 
+interface InUseRecordLink { href: string; code: string; kind: string }
+
 /** A record that still uses the row, as a link the operator can open. */
-export function InUseReference({ href, code, kind }: { href: string; code: string; kind: string }) {
-  return (
-    <SheetLinkRows>
-      <SheetLinkRow href={href} primary={code} ariaLabel={`Open ${kind} ${code}`} />
-    </SheetLinkRows>
-  );
+export function InUseReference(reference: InUseRecordLink) {
+  return <InUseReferences references={[reference]} />;
 }
 
 /** Several records that still use the row, one link each, in the order given. */
-export function InUseReferences({ references }: { references: ReadonlyArray<{ href: string; code: string; kind: string }> }) {
+export function InUseReferences({ references }: { references: ReadonlyArray<InUseRecordLink> }) {
   return (
     <SheetLinkRows>
       {references.map(({ href, code, kind }) => (

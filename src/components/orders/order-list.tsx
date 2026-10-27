@@ -170,16 +170,13 @@ function createColumns(
 // Component
 // ============================================
 
-/** Every delivery the refusal names; falls back to the single legacy deliveryId/deliveryCode pair. */
+/** Every delivery the refusal names. */
 function inUseDeliveryReferences(meta: Record<string, unknown> | undefined, facilityId?: string) {
   const named = Array.isArray(meta?.deliveries) ? meta.deliveries : [];
   const items = named.flatMap((item: unknown) => {
     const { id, code } = (item ?? {}) as { id?: unknown; code?: unknown };
     return typeof id === "string" && typeof code === "string" ? [{ id, code }] : [];
   });
-  if (items.length === 0 && typeof meta?.deliveryId === "string" && typeof meta.deliveryCode === "string") {
-    items.push({ id: meta.deliveryId, code: meta.deliveryCode });
-  }
   return items.map(({ id, code }) => ({ href: deliveryDeepLinkHref(id, facilityId), code, kind: "delivery" }));
 }
 

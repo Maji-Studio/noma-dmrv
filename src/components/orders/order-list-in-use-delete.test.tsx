@@ -71,7 +71,7 @@ describe("Order in-use delete refusal", () => {
   it("opens the in-use dialog with the server's reason and no Delete button", async () => {
     harness.remove.mockRejectedValue(new ActionError({
       error: IN_USE_MESSAGE, code: "certification_locked",
-      issues: [{ path: ["orderId"], code: "certification_locked", message: IN_USE_MESSAGE, meta: { reason: "in_use", deliveryCode: "DL-001", deliveryId: "delivery-1" } }],
+      issues: [{ path: ["orderId"], code: "certification_locked", message: IN_USE_MESSAGE, meta: { reason: "in_use", deliveryCode: "DL-001", deliveryId: "delivery-1", deliveries: [{ id: "delivery-1", code: "DL-001" }] } }],
     }));
     render(<OrderList />);
     await confirmDelete();
