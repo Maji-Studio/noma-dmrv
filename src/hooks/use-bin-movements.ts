@@ -9,7 +9,7 @@ import { outputStockKeys } from "./use-output-stock";
 
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { feedstockBinStockKeys } from "./feedstock-bin-stock-keys";
-import type { DomainIssue } from "@/lib/domain-errors";
+import { ActionError, type ActionFailure } from "@/lib/action-error";
 import type { ConflictRef } from "@/lib/conflict-ref";
 import {
   getFeedstockBinStockFn,
@@ -62,14 +62,7 @@ export class RecordLossConflictError extends Error {
 }
 
 /** Turn a failed loss action into a thrown error, keeping its structure. */
-export function throwRecordLossError(result: {
-  error: string;
-  field?: "lossMassKg";
-  issues?: DomainIssue[];
-  code?: string;
-  conflict?: RecordLossConflict;
-  blockers?: ConflictRef[];
-}): never {
+export function throwRecordLossError(result: ActionFailure & { field?: "lossMassKg" }): never {
   const timeIssue = result.issues?.find(issue => issue.path[0] === "occurredAt");
   if (timeIssue) throw new RecordLossFieldError(timeIssue.message, "occurredAt");
   if (result.field) {
@@ -79,7 +72,9 @@ export function throwRecordLossError(result: {
   if (result.conflict && (result.code === undefined || result.code === "conflict")) {
     throw new RecordLossConflictError(result.error, result.conflict, result.blockers);
   }
-  throw new Error(result.error);
+  // Not throwActionError: it would turn the locked entry's `conflict` (its bin) into a ConflictError, reading as a reused key.
+  // Any other refusal keeps its issues, so the form can show them at its fields.
+  throw new ActionError(result);
 }
 
 /** Client-side carrier for a structured stock-take action field error. */

@@ -5,25 +5,10 @@ import { describe, expect, it } from "vitest";
 const COMPONENTS_DIR = resolve(process.cwd(), "src/components");
 
 /** Parent submit seams the component-form scan cannot see; remove when migrated. */
-const PENDING_SEAMS = [
-  {
-    file: "src/components/feedstocks/feedstock-list.tsx",
-    reason: "PR H: feedstock create getCreateErrorMessage ignores onRefusal",
-    pending: /getCreateErrorMessage:\s*\(error\)\s*=>/,
-  },
-  {
-    file: "src/hooks/use-quick-add-submit.ts",
-    reason: "PR H: useQuickAddSubmit reduces action failures to their message",
-    pending: /setError\(result\.error\)/,
-  },
-];
+const PENDING_SEAMS: { file: string; reason: string; pending: RegExp }[] = [];
 
 /** #1327: remove each entry when its form moves to the shared refusal handler. */
 const PENDING: Record<string, string> = {
-  "storage-locations/storage-location-form.tsx": "PR H: storage bin sheet and quick-add",
-  "storage-locations/output-stock-form.tsx": "PR H: output stock refusal",
-  "storage-locations/feedstock-loss-form.tsx": "PR H: feedstock loss refusal",
-  "transport-legs/transport-leg-form.tsx": "PR H: transport child editor",
   "reactors/reactor-form.tsx": "PR J: reactor sheet and picker edit",
   "facilities/facility-form.tsx": "PR J: facility sheet and onboarding",
   "feedstock-types/feedstock-type-form.tsx": "PR J: feedstock type sheet and picker edit",
