@@ -392,7 +392,7 @@ export async function deleteReactor(
       );
     if (Number(productionRunCount) > 0) {
       throw inUseDeleteRefusal(
-        `Reactor ${versioned.code} ${IN_USE_DELETE_MARKER} production runs still use it. Keep this reactor.`,
+        `Reactor ${versioned.code} ${IN_USE_DELETE_MARKER} production runs still use it. Choose another reactor on those runs first, or keep this reactor.`,
         ["reactorId"],
       );
     }

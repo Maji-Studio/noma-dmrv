@@ -255,6 +255,24 @@ describe("customer and order MCP tools", { timeout: TIMEOUT_MS }, () => {
     expect(await orderAudits(a)).toHaveLength(1);
   });
 
+  it("names both blocking deliveries in a delete refusal, including an archived delivery", async () => {
+    const row = await saved();
+    const deliveries = [
+      await insertReadDelivery(a, row.id, DELIVERED_KG),
+      await insertReadDelivery(a, row.id, DELIVERED_KG, true),
+    ].sort((left, right) => left.code.localeCompare(right.code));
+    const [first, second] = deliveries;
+    const refusal = await write("delete_order", { orderId: row.id, expectedVersion: row.version }, a.deleteKey);
+    expect(refusal).toMatchObject({ isError: true, structuredContent: {
+      code: "certification_locked",
+      detail: `Order ${row.code} was not deleted because 2 deliveries still use it: ${first.code} and ${second.code}. Delete those deliveries first, or keep this order.`,
+      issues: [{ pointer: "/orderId", code: "certification_locked" }],
+    } });
+    expect(refusal.structuredContent.issues[0].meta).toEqual({ reason: "in_use", deliveryCode: first.code, deliveryId: first.id });
+    expect((await readRestOrder(a, row.id)).row).toEqual(row);
+    expect(await orderAudits(a)).toHaveLength(1);
+  });
+
   it("reads the changing balance at a stable order version and preserves allocation meta", async () => {
     const row = await saved();
     const before = await call("get_order_balance", { idOrCode: row.id }, a.key);

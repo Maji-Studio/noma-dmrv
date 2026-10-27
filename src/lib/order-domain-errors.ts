@@ -7,6 +7,8 @@ import { formatStockMinimumKg } from "@/lib/stock-overdraw";
 export type OrderRelationshipField = "facilityId" | "customerId" | "customerLocationId" | "formulationId";
 export type OrderReferenceField = OrderRelationshipField | "orderId";
 
+export const ORDER_DELIVERY_NAME_CAP = 3;
+
 const REFERENCE_LABELS: Record<OrderReferenceField, string> = {
   facilityId: "Facility", customerId: "Customer", customerLocationId: "Customer location",
   formulationId: "Formulation", orderId: "Order",
@@ -35,10 +37,20 @@ export function orderQuantityBelowAllocated(allocatedWetKg: number): DomainError
     ["quantityKg"], { allocatedWetKg, unit: "kg" });
 }
 
-export function orderHasDeliveries(delivery: { id: string; code: string }, orderCode?: string): DomainError {
+/** Deliveries are non-empty and sorted by code ascending; totalCount includes unnamed deliveries. */
+export function orderHasDeliveries(deliveries: readonly { id: string; code: string }[], orderCode: string, totalCount = deliveries.length): DomainError {
+  const first = deliveries[0];
+  const total = Math.max(totalCount, deliveries.length);
+  const names = deliveries.slice(0, ORDER_DELIVERY_NAME_CAP).map(delivery => delivery.code);
+  const remaining = total - names.length;
+  if (remaining > 0) names.push(`${remaining} more`);
+  const deliveryList = `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+  const reason = total === 1
+    ? `delivery ${first.code} still uses it. Delete that delivery first, or keep this order.`
+    : `${total} deliveries still use it: ${deliveryList}. Delete those deliveries first, or keep this order.`;
   return inUseDeleteRefusal(
-    `Order${orderCode ? ` ${orderCode}` : ""} ${IN_USE_DELETE_MARKER} delivery ${delivery.code} still uses it. Delete that delivery first, or keep this order.`,
-    ["orderId"], { code: "certification_locked", meta: { deliveryCode: delivery.code, deliveryId: delivery.id } },
+    `Order ${orderCode} ${IN_USE_DELETE_MARKER} ${reason}`,
+    ["orderId"], { code: "certification_locked", meta: { deliveryCode: first.code, deliveryId: first.id } },
   );
 }
 
