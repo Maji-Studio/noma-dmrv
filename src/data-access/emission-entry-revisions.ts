@@ -7,14 +7,15 @@ import { readRecordLockLineage } from "./record-lock-lineage";
 import { requireOrgScope, type Executor } from "./utils";
 
 /** The correction union's persisted facts, solely for revision announcements.
- * A partial or failed read is unknown, never an empty (apparently open) lineage.
+ * A partial read is unknown (null), never an empty (apparently open) lineage.
+ * A failed query throws: callers pass write transactions, and a caught error
+ * would leave the transaction aborted.
  */
 export async function loadPersistedEmissionCorrectionLineages(ctx: OrgContext, executor: Executor, batchIds: readonly string[]) {
   requireOrgScope(ctx);
   const reads = new Map<string, Promise<RecordLockRemoval[] | null>>();
   return new Map(await Promise.all([...new Set(batchIds)].map(async batchId => {
-    try {
-      const union = await emissionCorrectionBatchIds(ctx, executor, batchId);
+    const union = await emissionCorrectionBatchIds(ctx, executor, batchId);
       const key = JSON.stringify([...union].sort());
       if (!reads.has(key)) reads.set(key, (async () => {
         const members = await executor.select({ removalId: creditBatchApplications.removalId,
@@ -31,9 +32,6 @@ export async function loadPersistedEmissionCorrectionLineages(ctx: OrgContext, e
         })) return null;
         return lineage;
       })());
-      return [batchId, await reads.get(key)!] as const;
-    } catch {
-      return [batchId, null] as const;
-    }
+    return [batchId, await reads.get(key)!] as const;
   })));
 }

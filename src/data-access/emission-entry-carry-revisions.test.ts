@@ -73,15 +73,15 @@ it("does not announce a revision when another holder's statement status is unkno
     { id: "unknown", status: null, fresh: false, submittedToVerifier: true },
   ] }])).toBeNull();
 });
-it("does not announce a revision when the shared union read fails", async () => {
+it("propagates a failed shared union read instead of swallowing it", async () => {
   mocks.union.mockRejectedValueOnce(new Error("read failed"));
   mocks.lineage.mockResolvedValueOnce([owner]);
-  expect((await loadFacilityEmissionEntryCarry(ctx, "facility")).entries[0].revisionOf).toBeNull();
+  await expect(loadFacilityEmissionEntryCarry(ctx, "facility")).rejects.toThrow("read failed");
 });
-it("does not announce a revision when shared lineage hydration fails", async () => {
+it("propagates a failed shared lineage read instead of swallowing it", async () => {
   mocks.where.mockResolvedValueOnce([{ removalId: owner.id, id: owner.id, ghgStatementId: "returned" }]);
   mocks.lineage.mockRejectedValueOnce(new Error("read failed"));
-  expect((await loadFacilityEmissionEntryCarry(ctx, "facility")).entries[0].revisionOf).toBeNull();
+  await expect(loadFacilityEmissionEntryCarry(ctx, "facility")).rejects.toThrow("read failed");
 });
 it("does not announce a revision when a shared holder's covering statement is missing", async () => {
   mocks.where.mockResolvedValueOnce([{ removalId: owner.id, id: owner.id, ghgStatementId: "returned" },
