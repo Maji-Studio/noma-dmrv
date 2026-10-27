@@ -33,7 +33,11 @@ import {
 } from "@/schemas/feedstock-types";
 import { requireOrgScope } from "./utils";
 import { hasCertifierCredentials } from "./certifier-credentials";
-import { getLockedFeedstockTypeLinkLock } from "./feedstock-type-link-lock";
+import {
+  getFeedstockTypeLinkLock,
+  getLockedFeedstockTypeLinkLock,
+  type FeedstockTypeLinkLock,
+} from "./feedstock-type-link-lock";
 
 export const FEEDSTOCK_TYPE_MANAGE_ROLE = "admin";
 
@@ -75,6 +79,14 @@ export async function createFeedstockTypeInTransaction(
     })
     .returning();
   return created;
+}
+
+/** The advisory read the edit sheet asks for, outside any transaction. */
+export async function readFeedstockTypeLinkLock(
+  ctx: OrgContext,
+  feedstockTypeId: string,
+): Promise<FeedstockTypeLinkLock> {
+  return getFeedstockTypeLinkLock(ctx, db, feedstockTypeId);
 }
 
 export async function updateFeedstockType(

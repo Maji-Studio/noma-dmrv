@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { readFeedstockTypeLinkLock, type FeedstockTypeLinkLock } from "@/data-access/feedstock-type-link-lock";
+import type { FeedstockTypeLinkLock } from "@/data-access/feedstock-type-link-lock";
 import { withAutoCode } from "@/data-access/code-generator";
 import { hasCertifierCredentials, resolveIsometricClient } from "@/data-access/certifier-credentials";
 import {
@@ -10,6 +10,7 @@ import {
   deleteFeedstockType,
   importIsometricFeedstockType,
   listFeedstockTypes,
+  readFeedstockTypeLinkLock,
   unarchiveFeedstockType,
   updateFeedstockType,
 } from "@/data-access/feedstock-types";

@@ -1,4 +1,4 @@
-import { db, type DbTransaction } from "@/db";
+import type { DbTransaction } from "@/db";
 import { certifierRemovals, creditBatchProductionRuns, feedstocks, feedstockTypes, productionRunFeedstocks } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
@@ -79,14 +79,6 @@ export async function getFeedstockTypeLinkLock(
     locked: locks.some(lock => lock.level === "sent"),
     removals: await withRemovalFacilities(ctx, tx, removals),
   };
-}
-
-/** The advisory read as the edit sheet asks for it, outside any transaction. */
-export async function readFeedstockTypeLinkLock(
-  ctx: OrgContext,
-  feedstockTypeId: string,
-): Promise<FeedstockTypeLinkLock> {
-  return getFeedstockTypeLinkLock(ctx, db, feedstockTypeId);
 }
 
 /**
