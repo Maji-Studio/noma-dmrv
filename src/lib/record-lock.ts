@@ -75,7 +75,7 @@ function isIdleAttempt(submission: RecordLockSubmission): boolean {
   return !submission.inFlight && isTerminalAttemptStatus(submission.status);
 }
 
-/** Persisted return status is a display fact, not authorization to edit. */
+/** The status half of a return; freshness and attempt coverage are checked by the callers below. */
 export function hasReturnedStatementStatus(statement: Pick<RecordLockStatement, "status" | "submittedToVerifier">): boolean {
   return statement.status === "FAILED_VERIFICATION" || (statement.status === "DRAFT" && statement.submittedToVerifier);
 }
@@ -186,6 +186,15 @@ export function isSentRemoval(removal: RecordLockRemoval): boolean {
 export function isReturnedRemoval(removal: RecordLockRemoval): boolean {
   return !isSentRemoval(removal) && removal.submissions.some(isRemoteSubmission) &&
     removal.statements.length > 0 && removal.statements.every(isReturnedStatement);
+}
+
+/**
+ * Display only, from persisted lineage: the same Returned rule as a fresh read,
+ * so a mixed, unknown or superseded lineage never reads as returned. Never
+ * authorizes an edit; that still needs `isReturnedRemoval` on a fresh read.
+ */
+export function readsAsReturnedFromPersisted(removal: RecordLockRemoval): boolean {
+  return isReturnedRemoval({ ...removal, statements: removal.statements.map(statement => ({ ...statement, fresh: true })) });
 }
 
 /** Entry corrections use the existing returned state and every shared lineage holder. */

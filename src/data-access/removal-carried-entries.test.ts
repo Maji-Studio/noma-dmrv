@@ -27,8 +27,9 @@ beforeEach(() => {
   vi.mocked(getSentRemovalForComparison).mockResolvedValue(null);
   vi.mocked(readRecordLockLineage).mockResolvedValue([returnedLineage("FAILED_VERIFICATION")]);
 });
-function returnedLineage(status: string | null, submittedToVerifier = false) {
-  return { id: "removal", statements: [{ status, submittedToVerifier }] } as never;
+function returnedLineage(status: string | null, submittedToVerifier = status === "FAILED_VERIFICATION") {
+  return { id: "removal", submissions: [{ id: "sent", externalId: "ext", status: "submitted", submittedAt: "2026-10-01T00:00:00.000Z", inFlight: false }],
+    statements: [{ id: "statement", status, submittedToVerifier, fresh: false, removalExternalIds: ["ext"], returnedAt: "2026-10-02T00:00:00.000Z" }] } as never;
 }
 it("refuses a Removal outside the authenticated organization's visible records", async () => {
   vi.mocked(getCertifierRemovalById).mockResolvedValue(null);

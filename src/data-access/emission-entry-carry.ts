@@ -9,7 +9,7 @@ import { removalEntryCarryOwner, type CarryContender, type EntryCarryDestination
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 import { deriveRemovalEntryWindow, isLiveEntryReservation, removalEntryOwner } from "@/lib/certification/removal-emission-contributions";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
-import { hasReturnedStatementStatus } from "@/lib/record-lock";
+import { readsAsReturnedFromPersisted } from "@/lib/record-lock";
 import { readRecordLockLineage } from "./record-lock-lineage";
 import type { EntryContender } from "@/lib/certification/removal-emission-contributions";
 import { requireOrgScope } from "./utils";
@@ -112,9 +112,11 @@ export async function loadFacilityEmissionEntryCarry(
     // Display only: an uncertain conservative owner must not announce a returned revision.
     const ownerId = removalEntryOwner(resolved, ownContenders);
     const owner = ownContenders.find(contender => contender.removalId === ownerId && contender.contenderKind === "correction");
+    const ownerLineage = owner && lineage.find(fact => fact.id === owner.removalId);
+    // Late against the elected owner's own sent attempt, not the batch's latest one.
+    const ownerSentBefore = owner && attempts.some(attempt => attempt.localEntityId === owner.removalId && attempt.submittedAt && attempt.submittedAt <= entry.createdAt);
     const revisionRemoval = !entry.deletedAt && entry.kind === "value" && !entry.sentByRemovalId && !entry.heldForRemovalId &&
-      !retained && resolved.reservationKnownInactive && owner && earlier?.localEntityId === owner.removalId &&
-      lineage.find(fact => fact.id === owner.removalId)?.statements.some(hasReturnedStatementStatus)
+      !retained && resolved.reservationKnownInactive && ownerSentBefore && ownerLineage && readsAsReturnedFromPersisted(ownerLineage)
       ? removals.find(removal => removal.id === owner.removalId) : null;
     const revisionOf = revisionRemoval ? { removalId: revisionRemoval.id, removalCode: revisionRemoval.code } : null;
     return [{ ...resolved, revisionOf, carry, reportedIn: entry.sentByRemovalId ? destination : null,

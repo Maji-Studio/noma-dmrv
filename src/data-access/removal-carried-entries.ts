@@ -15,7 +15,7 @@ import { getTemplateObservationById } from "./removal-template-observations";
 import { getRemovalCodes } from "./removal-codes";
 import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
 import { readRecordLockLineage } from "./record-lock-lineage";
-import { hasReturnedStatementStatus } from "@/lib/record-lock";
+import { readsAsReturnedFromPersisted } from "@/lib/record-lock";
 
 export type RemovalCarriedEntry = NonNullable<RemovalEntryContributions["carriedEntries"]>[number];
 export interface RemovalCarriedEntries { carriedEntries: RemovalCarriedEntry[]; lateEntries: RemovalCarriedEntry[] }
@@ -70,7 +70,7 @@ async function loadRevisionLateEntries(ctx: OrgContext, removal: { id: string; f
   const { id: removalId, facilityId } = removal;
   // Facility discovery only for a returned Removal; every other sent sheet stays a snapshot read.
   const [lineage] = await readRecordLockLineage(ctx, db, [{ removalId, ghgStatementId: removal.ghgStatementId }]);
-  if (!lineage?.statements.some(hasReturnedStatementStatus)) return [];
+  if (!lineage || !readsAsReturnedFromPersisted(lineage)) return [];
   const members = await getCreditBatchesByRemovalId(ctx, removalId);
   const memberIds = members.map(batch => batch.id);
   if (!memberIds.length) return [];

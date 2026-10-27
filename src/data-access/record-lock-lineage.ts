@@ -86,6 +86,8 @@ async function readStatement(ctx: OrgContext, tx: Pick<DbTransaction, "select">,
     status: typeof savedStatus === "string" ? savedStatus : null,
     fresh: false, submittedToVerifier: typeof savedSubmitted === "string" && Number.isFinite(Date.parse(savedSubmitted)),
     removalExternalIds: Array.isArray(getMetadataValue(row.metadata, "removalIds")) ? getMetadataValue(row.metadata, "removalIds") as string[] : [],
+    // The saved verifier submission is the same conservative lower bound a fresh read falls back to.
+    returnedAt: typeof savedSubmitted === "string" ? savedSubmitted : null,
     inFlight: isLockedInFlight(row) || !isTerminalAttemptStatus(row.status),
   };
   if (!fresh || !row.externalId || fact.inFlight || !["DRAFT", "FAILED_VERIFICATION"].includes(fact.status ?? "")) return fact;
