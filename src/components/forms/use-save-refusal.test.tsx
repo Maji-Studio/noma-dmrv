@@ -21,12 +21,12 @@ const issue = (path: string[], message: string, code = "validation_failed") => (
 
 const FALLBACK = "Sample was not saved.";
 
-function Harness({ refusal }: { refusal: unknown }) {
+function Harness({ refusal, dependents, resetSpy }: { refusal: unknown; dependents?: { massKg: ("labName" | "notes")[] }; resetSpy?: (field: string) => void }) {
   const [footer, setFooter] = useState<string | null>(null);
-  const { control, register, handleSubmit, setError, resetField, formState: { errors } } = useForm<Values>({
+  const { control, register, handleSubmit, setError, resetField, setValue, watch, formState: { errors } } = useForm<Values>({
     defaultValues: { labName: "", massKg: "5", notes: "" },
   });
-  const refuse = useSaveRefusal({ control, setError, resetField, formId: FORM_ID, aliases: { weight: "massKg" } });
+  const refuse = useSaveRefusal({ control, setError, resetField: (field) => { resetSpy?.(field); resetField(field); }, formId: FORM_ID, dependents, aliases: { weight: "massKg" } });
   const save = handleSubmit(async () => {
     try {
       throw refusal;
@@ -37,6 +37,9 @@ function Harness({ refusal }: { refusal: unknown }) {
   return (
     <>
       <form id={FORM_ID} aria-label="Sample" onSubmit={save} data-lock-refusal={errors.root?.lockRefusal ? "yes" : "no"}>
+        <input type="hidden" {...register("notes")} />
+        <button type="button" onClick={() => setValue("notes", "edited", { shouldDirty: true })}>Edit hidden notes</button>
+        <output data-testid="notes">{watch("notes")}</output>
         <FormField id="labName" label="Lab name" error={errors.labName?.message}>
           <FormInput id="labName" {...register("labName")} />
         </FormField>
@@ -132,4 +135,30 @@ describe("useSaveRefusal", () => {
     expect(await screen.findByText(FALLBACK)).toBeTruthy();
     expect(screen.queryByText("Not saved. Fix 1 field.")).toBeNull();
   });
+});
+
+it.each([false, true])("restores a dependent and marks it only when changed: %s", async changed => {
+  render(<Harness dependents={{ massKg: ["labName", "labName"] }} refusal={new ActionError({
+    error: LOCK_REASON, issues: [issue(["weight"], LOCK_REASON, "certification_locked")],
+  })} />);
+  fireEvent.change(screen.getByLabelText("Wet mass"), { target: { value: "9" } });
+  if (changed) fireEvent.change(screen.getByLabelText("Lab name"), { target: { value: "Edited" } });
+  await save();
+  expect((screen.getByLabelText("Lab name") as HTMLInputElement).value).toBe("");
+  expect(document.getElementById("labName-error")?.textContent ?? "").toBe(changed ? "Locked. Your change was not saved." : "");
+  expect(await screen.findAllByText(changed ? "Not saved. 2 fields are locked." : "Not saved. 1 field is locked.")).toHaveLength(1);
+});
+
+it("resets a changed off-screen dependent once without a marker", async () => {
+  const resetSpy = vi.fn();
+  render(<Harness resetSpy={resetSpy} dependents={{ massKg: ["notes", "notes"] }} refusal={new ActionError({
+    error: LOCK_REASON, issues: [issue(["weight"], LOCK_REASON, "certification_locked")],
+  })} />);
+  fireEvent.click(screen.getByRole("button", { name: "Edit hidden notes" }));
+  expect(screen.getByTestId("notes").textContent).toBe("edited");
+  fireEvent.change(screen.getByLabelText("Wet mass"), { target: { value: "9" } });
+  await save();
+  expect(screen.getByTestId("notes").textContent).toBe("");
+  expect(resetSpy.mock.calls).toEqual([["massKg"], ["notes"]]);
+  expect(await screen.findAllByText("Not saved. 1 field is locked.")).toHaveLength(1);
 });

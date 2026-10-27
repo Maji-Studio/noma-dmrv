@@ -2,7 +2,7 @@ import { reallocateRunsForBins } from "../feedstock-run-allocations";
 import { readRecordDependents } from "../record-lock-dependents";
 import { assertRecordLockFields } from "@/lib/record-lock-fields";
 import { recordLocks } from "@/lib/record-lock";
-import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
+import { assertProductionRunLineage } from "./lineage-refusal";
 /**
  * Production-run create / update / delete operations, including bin-based
  * feedstock allocation and storage-location validation.
@@ -34,7 +34,6 @@ import {
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
 import { and, eq, isNull } from "drizzle-orm";
-import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
 import { assertRowVersion, nextVersion, staleRowVersion } from "../row-version";
 import {
   CODE_CONFLICT_MESSAGES,
@@ -688,12 +687,7 @@ export async function updateProductionRunInTransaction(
       }
     }
 
-    await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
-      ctx,
-      tx,
-      { entityType: "productionRun", entityId: productionRunId },
-      "update",
-    ), "certification_locked");
+    await assertProductionRunLineage(ctx, tx, productionRunId, locked, data);
 
     // A cancelled run frees its slot, so only an occupying run needs this guard.
     if (statusOccupiesReactor(lockedTargetStatus)) {

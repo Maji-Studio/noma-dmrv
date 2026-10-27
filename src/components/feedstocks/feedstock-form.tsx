@@ -56,7 +56,6 @@ import { DistanceDriftAction, SAVE_BEFORE_REFRESH_REASON } from "@/components/tr
 import { distanceOverridePatch, emptyToNullSource, hasSavedOverride, isOverrideLockRefusal, overrideDistanceError } from "@/components/transport-legs/distance-override";
 import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { feedstockRefusalAliases } from "./feedstock-update-payload";
-import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { supplierLocationDistanceLink } from "@/lib/location-distance-links";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
@@ -280,10 +279,10 @@ export function FeedstockForm({
     setValue("transportDistanceSource", null, { shouldDirty: true });
     setValue("distanceNote", "", { shouldDirty: true });
   };
-  // A new supplier or facility is a new route: its override no longer applies.
-  useClearOnDependencyChange([watchedSupplierId, watchedFacilityId], () => {
-    if (overriding) clearOverride();
-  });
+  // Operator route changes clear the distance override (lock reverts do not).
+  const changeRoute = (next: string | undefined, current: string) => {
+    if (next !== current && overriding) clearOverride();
+  };
 
   // Auto-set facility from context
   useEffect(() => {
@@ -334,8 +333,13 @@ export function FeedstockForm({
     for (const name of OVERRIDE_FIELDS) resetField(name);
   };
   const refuseWithFields = useSaveRefusal({ control, setError, formId, aliases: feedstockRefusalAliases(hasEditedAllocationMass),
+    // Operator changes clear the route override; programmatic restores do not.
+    dependents: { supplierId: OVERRIDE_FIELDS },
     resetField: (field) => {
-      if ((OVERRIDE_FIELDS as readonly string[]).includes(field)) restoreSavedOverride();
+      if ((OVERRIDE_FIELDS as readonly string[]).includes(field)) {
+        setOverriding(hasSavedOverride(savedOverride));
+        resetField(field);
+      }
       // Both controls describe the same saved row in edit mode.
       else if (isEditMode && (field === "totalWetMassKg" || String(field) === "allocations.0.allocatedWetMassKg")) {
         resetField("totalWetMassKg");
@@ -389,6 +393,7 @@ export function FeedstockForm({
               <FormEntitySelect
                 control={formControl}
                 name="facilityId"
+                onChange={(value) => changeRoute(value, watchedFacilityId)}
                 label="Facility"
                 entityType="facility"
                 placeholder="Select facility..."
@@ -417,6 +422,7 @@ export function FeedstockForm({
             <FormEntitySelect
               control={formControl}
               name="supplierId"
+              onChange={(value) => changeRoute(value, watchedSupplierId)}
               label="Supplier"
               entityType="supplier"
               allowEdit
@@ -705,6 +711,7 @@ export function FeedstockForm({
         isOpen={supplierDialog.isOpen}
         onClose={supplierDialog.close}
         onSuccess={(supplier) => {
+          changeRoute(supplier.id, getValues("supplierId"));
           setValue("supplierId", supplier.id, SET_VALUE_OPTS);
           supplierDialog.close();
         }}

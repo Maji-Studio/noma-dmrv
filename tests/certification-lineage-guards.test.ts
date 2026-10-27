@@ -101,7 +101,9 @@ describe("certification lineage guards", () => {
         updateProductionRun(makeTestOrgContext(TEST_USER_ID), fixture.productionRunId, { expectedVersion: await productionVersion(makeTestOrgContext(TEST_USER_ID), "productionRuns", fixture.productionRunId),
           feedstockMoisturePercent: 11,
         }),
-      ).rejects.toMatchObject({ code: "certification_locked", message: expect.stringContaining(LOCKED_COPY) });
+      ).rejects.toMatchObject({ code: "certification_locked", message: expect.stringContaining(LOCKED_COPY),
+        issues: [{ path: ["feedstockMoisturePercent"], code: "certification_locked", message: expect.stringContaining(LOCKED_COPY) }],
+      });
     });
   });
 

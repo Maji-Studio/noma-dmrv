@@ -60,6 +60,10 @@ const SET_VALUE_OPTS = {
 
 /** The override fields: reset together on a refusal, cleared together with the override. */
 const OVERRIDE_FIELDS = ["distanceKmOverride", "distanceSource", "distanceNote"] as const;
+// Lock reverts of these fields restore the saved sub-bin draw.
+const DRAW_RESTORE_FIELDS = [
+  "deliveredWetMassKg", "sources", "storageLocationId", "deliveryDate", "moistureContentPercent",
+];
 const ROUTE_EMPTY = "Select an order and enter the delivered wet mass to see the route.";
 
 const isDeliveryCertifyField = (field: string) =>
@@ -263,12 +267,20 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     setOverriding(hasSavedOverride(savedOverride));
     for (const name of OVERRIDE_FIELDS) resetField(name);
   };
+  register("sources");
   const refuseWithFields = useSaveRefusal({
     control, setError, formId, aliases: DELIVERY_REFUSAL_ALIASES,
     resetField: (field) => {
       if ((OVERRIDE_FIELDS as readonly string[]).includes(field)) restoreSavedOverride();
-      else resetField(field);
+      else {
+        resetField(field);
+        if (DRAW_RESTORE_FIELDS.includes(field)) {
+          draw.restoreSaved();
+          resetField("sources");
+        }
+      }
     },
+    isChanged: (field) => field === "deliveredWetMassKg" && draw.changed,
     // The single moisture field is only on screen for a load with one reading.
     isEnabled: (field) => field !== "moistureContentPercent" || stockLocked || draw.usesSingleMoisture,
   });

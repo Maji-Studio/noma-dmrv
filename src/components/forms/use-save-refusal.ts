@@ -11,7 +11,7 @@
  * caller's fallback when there is no plan.
  */
 import { get, useFormState, type Control, type FieldValues, type Path, type UseFormResetField, type UseFormSetError } from "react-hook-form";
-import { isLockRefusal, planSaveRefusal } from "@/lib/save-refusal";
+import { isLockRefusal, LOCKED_FIELD_MESSAGE, planSaveRefusal, shouldMarkLockedField } from "@/lib/save-refusal";
 import { LOCKED_ERROR_TYPE } from "./form-error-summary";
 import { locateInDirectory, readFieldDirectory } from "./form-error-summary-dom";
 
@@ -41,6 +41,10 @@ interface UseSaveRefusalOptions<TFieldValues extends FieldValues, TContext, TTra
    * field, and a refusal files its error on, and a lock reverts, every control.
    */
   splitFields?: Readonly<Record<string, readonly string[]>>;
+  /** Restore these registered fields when their parent is reverted by a lock. */
+  dependents?: Partial<Record<Path<TFieldValues>, readonly Path<TFieldValues>[]>>;
+  /** Changes held outside RHF, such as a draw editor mapped to its mass field. */
+  isChanged?: (field: string) => boolean;
   /** Extra state the DOM cannot show, such as a section the form leaves out. */
   isEnabled?: (field: string) => boolean;
 }
@@ -63,22 +67,44 @@ export function useSaveRefusal<TFieldValues extends FieldValues, TContext, TTran
   formId,
   aliases,
   splitFields,
+  dependents,
+  isChanged,
   isEnabled,
 }: UseSaveRefusalOptions<TFieldValues, TContext, TTransformed>): SaveRefusalHandler {
   const { dirtyFields } = useFormState({ control });
   return (error, fallback) => {
     const form = document.getElementById(formId);
-    const plan = planSaveRefusal(error, {
+    const options = {
       aliases,
-      isShown: (field) => isRendered(form, field) && (isEnabled?.(field) ?? true),
-      isChanged: (field) => (splitFields?.[field] ?? [field]).some((part) => Boolean(get(dirtyFields, part))),
-    });
+      isShown: (field: string) => isRendered(form, field) && (isEnabled?.(field) ?? true),
+      isChanged: (field: string) => (splitFields?.[field] ?? [field]).some((part) => Boolean(get(dirtyFields, part))) || (isChanged?.(field) ?? false),
+    };
+    const plan = planSaveRefusal(error, options);
     if (!plan) return fallback;
+    const resets = new Set<Path<TFieldValues>>();
+    const dependentFields = new Set<Path<TFieldValues>>();
+    for (const { field, locked } of plan.fieldErrors) {
+      if (!locked) continue;
+      for (const part of splitFields?.[field] ?? [field]) {
+        resets.add(part as Path<TFieldValues>);
+      }
+    }
+    for (const parent of resets) {
+      for (const dependent of dependents?.[parent] ?? []) {
+        if (!resets.has(dependent)) dependentFields.add(dependent);
+      }
+    }
+    // Decide markers before resetField clears dirtyFields. Reset everything
+    // before filing errors, because a related reset can clear another error.
+    const markedDependents = [...dependentFields].filter(field => shouldMarkLockedField(field, options));
+    for (const field of new Set([...resets, ...dependentFields])) resetField(field);
     for (const { field, message, locked } of plan.fieldErrors) {
       for (const part of splitFields?.[field] ?? [field]) {
-        if (locked) resetField(part as Path<TFieldValues>);
         setError(part as Path<TFieldValues>, { type: locked ? LOCKED_ERROR_TYPE : SERVER_ERROR_TYPE, message });
       }
+    }
+    for (const field of markedDependents) {
+      setError(field, { type: LOCKED_ERROR_TYPE, message: LOCKED_FIELD_MESSAGE });
     }
     if (isLockRefusal(error)) setError(LOCK_REFUSAL_ROOT as Path<TFieldValues>, { type: LOCKED_ERROR_TYPE });
     return plan.footer;
