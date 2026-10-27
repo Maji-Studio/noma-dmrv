@@ -20,10 +20,10 @@ vi.mock("@/hooks/use-quick-add-submit", () => ({ useQuickAddSubmit: () => ({ sta
 vi.mock("@/fn/quick-add", () => ({ createStorageLocationFn: vi.fn() }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: mocks.success }) }));
 vi.mock("@/components/storage-locations/storage-location-form", () => ({
-  StorageLocationForm: ({ onSubmit, onCancel, errorMessage, submitLabel }: { onCancel: () => void; onSubmit: (data: StorageLocationFormData) => void; errorMessage?: string; submitLabel: string }) => {
+  StorageLocationForm: ({ onSubmit, onCancel, errorMessage, submitLabel }: { onCancel: () => void; onSubmit: (data: StorageLocationFormData, onRefusal: (error: unknown, fallback: string) => string | null) => void; errorMessage?: string; submitLabel: string }) => {
     mocks.actions = useSideSheetActions();
     const { control, register } = useForm({ defaultValues: { name: "North bin" } });
-    return <form aria-label="Bin form" onSubmit={(event) => { event.preventDefault(); onSubmit({ name: "Renamed bin", facilityId: "facility", type: "feedstock_bin" } as StorageLocationFormData); }}>
+    return <form aria-label="Bin form" onSubmit={(event) => { event.preventDefault(); onSubmit({ name: "Renamed bin", facilityId: "facility", type: "feedstock_bin" } as StorageLocationFormData, (_error, fallback) => fallback); }}>
       <input aria-label="Bin name" {...register("name")} />
       <FormActions control={control} onCancel={onCancel} errorMessage={errorMessage} submitLabel={submitLabel} sticky={false} guardDialogCancel />
     </form>;

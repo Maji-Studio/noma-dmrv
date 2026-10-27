@@ -411,7 +411,7 @@ which delegates failures to `throwActionError`. Hooks throw `ActionError`
 conflict errors retain their subclasses.
 The only exception is a hook that reads `field`, `conflict` or `warning`, or
 returns something other than `result.data`; typed errors go through
-`throwActionError`. `pnpm check:action-boundaries` enforces this rule.
+`throwActionError`. `throwRecordLossError` (`src/hooks/use-bin-movements.ts`) is one: a locked loss entry carries its bin as `conflict` with a non-conflict code, so it throws a plain `ActionError` instead of a `ConflictError`. `pnpm check:action-boundaries` enforces this rule.
 
 A form shows what the hook kept: `useSaveRefusal` files each issue on the field
 it names and returns the footer text for the rest (see

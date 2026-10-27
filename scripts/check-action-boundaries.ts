@@ -96,12 +96,6 @@ export const ACTION_BOUNDARY_ALLOWLIST: readonly ActionBoundaryException[] = [
   },
   {
     file: "src/hooks/use-bin-movements.ts",
-    function: "throwRecordLossError",
-    sites: { "hook-unwrap": 1 },
-    reason: "Loss failures preserve typed field and conflict errors before the generic fallback.",
-  },
-  {
-    file: "src/hooks/use-bin-movements.ts",
     function: "useRecordStockTake",
     sites: { "hook-unwrap": 1 },
     reason: "Stock-take failures preserve a typed counted-field error before the generic fallback.",

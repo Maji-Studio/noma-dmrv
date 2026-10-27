@@ -2,7 +2,9 @@
 
 
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
+import { useId } from "react";
 import { useController, useForm, useWatch } from "react-hook-form";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -38,7 +40,8 @@ const numberBounds = numberInputConstraintsFor(transportLegFormSchema);
 interface TransportLegFormProps {
   /** When provided, the form edits this leg; otherwise it creates a new one. */
   leg?: TransportLeg | TransportLegFormData | null;
-  onSubmit: (data: TransportLegFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1327). */
+  onSubmit: (data: TransportLegFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
@@ -89,6 +92,7 @@ export function TransportLegForm({
   errorMessage,
 }: TransportLegFormProps) {
   const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!leg;
   const isPersisted = !!leg && isSavedTransportLeg(leg);
   const defaultValues = legToFormDefaults(leg);
@@ -98,11 +102,14 @@ export function TransportLegForm({
     handleSubmit,
     control,
     setValue,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(transportLegFormSchema),
     defaultValues,
   });
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const certStatus = makeCertFieldStatus(isPersisted ? defaultValues : undefined);
 
   // Provenance: hand-editing the distance reverts a CALC'd map estimate to
@@ -136,11 +143,12 @@ export function TransportLegForm({
     selectableTransportMethods[0];
 
   const submit = latched(handleSubmit(async (data) => {
-    await onSubmit(data as TransportLegFormData);
+    await onSubmit(data as TransportLegFormData, refuseSave);
   }));
 
   return (
     <form
+      id={formId}
       onSubmit={(event) => {
         // The dialog portal avoids invalid nested form markup, but React portal
         // events still bubble through the component tree to an owning form.

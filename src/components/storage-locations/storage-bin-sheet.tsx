@@ -23,6 +23,7 @@ import { toSaveErrorMessage } from "@/lib/stale-version";
 import type { StorageLocationFormData } from "@/schemas/storage-locations";
 import { useEffect, useEffectEvent, useState } from "react";
 import { StorageLocationForm } from "./storage-location-form";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { storageLocationSheetSections } from "./storage-location-read-sections";
 import { recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock } from "@/hooks/use-record-locks";
@@ -63,18 +64,18 @@ export function StorageBinSheet({
     setFormError(null);
   };
 
-  const handleCreate = async (data: StorageLocationFormData) => {
+  const handleCreate = async (data: StorageLocationFormData, onRefusal: SaveRefusalHandler) => {
     setFormError(null);
     try {
       await createStorageLocation.mutateAsync(data);
       onStateChange(null);
       toast.success("Storage bin created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Storage bin was not created. Check the form.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Storage bin was not created. Check the form."));
     }
   };
 
-  const handleUpdate = async (data: StorageLocationFormData) => {
+  const handleUpdate = async (data: StorageLocationFormData, onRefusal: SaveRefusalHandler) => {
     if (state?.mode !== "edit") return;
     setFormError(null);
     try {
@@ -90,7 +91,7 @@ export function StorageBinSheet({
     } catch (error) {
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      setFormError(toSaveErrorMessage(error, "Storage bin was not saved. Try again."));
+      setFormError(onRefusal(error, toSaveErrorMessage(error, "Storage bin was not saved. Try again.")));
     }
   };
 

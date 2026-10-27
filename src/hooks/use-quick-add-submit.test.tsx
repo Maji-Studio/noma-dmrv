@@ -3,6 +3,7 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
+import { ActionError } from "@/lib/action-error";
 import { useQuickAddSubmit } from "./use-quick-add-submit";
 
 afterEach(cleanup);
@@ -44,4 +45,34 @@ it("keeps failures on one key and rotates before success callbacks and for a new
   await submit();
   expect(keys()[5]).not.toBe(keys()[4]);
   client.clear();
+});
+
+const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>;
+const refusal = {
+  success: false as const,
+  error: "Name is taken",
+  code: "validation_failed" as const,
+  issues: [{ path: ["name"], code: "validation_failed" as const, message: "Name is taken" }],
+};
+
+it("keeps the footer message of a form that passes no refusal handler", async () => {
+  const serverFn = vi.fn().mockResolvedValue(refusal);
+  const { result } = renderHook(() => useQuickAddSubmit({ entityType: "vehicle", serverFn, onSuccess: vi.fn(), onClose: vi.fn() }), { wrapper });
+  await act(async () => { await result.current.handleSubmit({ name: "Vehicle" }); });
+  expect(result.current.error).toBe("Name is taken");
+});
+
+it("hands a refusal to the form's handler as an ActionError and shows what it returns", async () => {
+  const serverFn = vi.fn().mockResolvedValue(refusal);
+  const onRefusal = vi.fn().mockReturnValue(null);
+  const { result } = renderHook(() => useQuickAddSubmit({ entityType: "vehicle", serverFn, onSuccess: vi.fn(), onClose: vi.fn() }), { wrapper });
+  await act(async () => { await result.current.handleSubmit({ name: "Vehicle" }, onRefusal); });
+  const [error, fallback] = onRefusal.mock.calls[0];
+  expect(error).toBeInstanceOf(ActionError);
+  expect(error.issues).toEqual(refusal.issues);
+  expect(fallback).toBe("Name is taken");
+  expect(result.current.error).toBeNull();
+  onRefusal.mockReturnValue("Locked footer");
+  await act(async () => { await result.current.handleSubmit({ name: "Vehicle" }, onRefusal); });
+  expect(result.current.error).toBe("Locked footer");
 });
