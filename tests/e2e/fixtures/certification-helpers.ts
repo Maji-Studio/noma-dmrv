@@ -31,7 +31,7 @@ import {
   READY_SAMPLE_REPLICATE_COUNT, READY_REFERENCE_SOIL_TEMPERATURE_C,
   READY_REFERENCE_SOIL_TEMPERATURE_SOURCE, TRANSPORT_LEG_DISTANCE_KM,
   TRANSPORT_LEG_LOAD_MASS_KG, TRANSPORT_LEG_EMISSION_FACTOR,
-  READY_TRANSPORT_EVIDENCE_URL, READY_PRODUCTION_READINGS_URL,
+  READY_TRANSPORT_EVIDENCE_URL, READY_PRODUCTION_READINGS_URL, READY_DELIVERY_RECEIPT_URL,
   READY_APPLICATION_EVIDENCE_URL, READY_APPLICATION_EVIDENCE_ROLES, E2E_ISOMETRIC_FEEDSTOCK_TYPE_ID_PREFIX,
 } from "./certification-ready-batch-constants";
 export * from "./certification-mapping-helpers";
@@ -402,6 +402,8 @@ export async function seedGroupedRemovalWithChain(
 
 
 export interface ReadyBatchOptions {
+  /** Templates without transport inputs cannot bind a transport bill of lading. */
+  transportEvidence?: boolean;
   /**
    * Omit the lab samples and the batch → production-run link. The batch still
    * has an unassigned application slice (so the wizard lists it) but is
@@ -444,6 +446,7 @@ export async function seedUngroupedReadyBatchWithChain(
   const id = {
     productionRun: crypto.randomUUID(),
     productionReadingsDocument: crypto.randomUUID(),
+    deliveryReceiptDocument: crypto.randomUUID(),
     productionRunFeedstock: crypto.randomUUID(),
     samples: Array.from({ length: READY_SAMPLE_REPLICATE_COUNT }, () =>
       crypto.randomUUID(),
@@ -684,6 +687,17 @@ export async function seedUngroupedReadyBatchWithChain(
         soilTemperatureSource: "baseline",
         soilTemperatureC: 25,
       }, row => row);
+      await tx.insert(schema.documents).values({
+        organizationId: DEC_ORG_ID,
+        id: id.deliveryReceiptDocument,
+        entityType: "delivery",
+        entityId: id.delivery,
+        documentType: "delivery_receipt",
+        fileUrl: READY_DELIVERY_RECEIPT_URL,
+        fileName: `e2e-delivery-receipt-${testRunId}.pdf`,
+        mimeType: "application/pdf",
+        uploadStatus: "uploaded",
+      });
       const applicationEvidenceDocuments: (typeof schema.documents.$inferInsert)[] =
         READY_APPLICATION_EVIDENCE_ROLES.map((role, index) => ({
           organizationId: DEC_ORG_ID,
@@ -792,7 +806,7 @@ export async function seedUngroupedReadyBatchWithChain(
           ? [leg(id.sampleTransportLeg, "sample", id.samples[0])]
           : []),
       ]);
-      await tx.insert(schema.documents).values([
+      if (options.transportEvidence !== false) await tx.insert(schema.documents).values([
         {
           organizationId: DEC_ORG_ID,
           id: id.feedstockTransportDocument,
@@ -853,6 +867,7 @@ export async function seedUngroupedReadyBatchWithChain(
               inArray(schema.documents.id, [
                 id.feedstockTransportDocument,
                 id.biocharTransportDocument,
+                id.deliveryReceiptDocument,
               ]),
             );
           await tx

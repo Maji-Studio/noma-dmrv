@@ -82,6 +82,7 @@ test.describe("Comparison unavailable screens", () => {
         console.log(`SHEET[${PHASE}/${size}]: ${(await page.getByRole("dialog").innerText()).replace(/\n+/g, " | ").slice(0, 600)}`);
         const notice = page.locator('[data-removal-correction="resubmit"]').first();
         await expect(notice).toBeVisible();
+        await expect(notice).toContainText("noma could not compare this Removal with what it sent.");
         await shoot(page, "removal-notice", size, notice);
         await shoot(page, "removal-sheet", size);
 

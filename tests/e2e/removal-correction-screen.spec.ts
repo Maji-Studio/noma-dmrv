@@ -18,7 +18,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { returnedRemovalSeedsEnabled, seedReturnedConnection, seedReturnedRemoval } from "./fixtures/returned-removal-seed";
+import { emptyReturnedRemovalComponentsForWizard, returnedRemovalSeedsEnabled, seedReturnedConnection, seedReturnedRemoval } from "./fixtures/returned-removal-seed";
 import { waitForFacilityHydration, waitForSideSheet } from "./fixtures/page-helpers";
 
 const PHASE = process.env.CORRECTION_SHOTS;
@@ -138,12 +138,14 @@ test.describe("Returned Removal screens", () => {
         await dieselLine.click({ timeout: 10_000 });
         if (CHECK_COPY) {
           await expect(page.getByText("Waiting for resubmit", { exact: true }).locator("visible=true").first()).toBeVisible();
-        } else {
-          await expect(page.getByText("12 kWh").locator("visible=true").first()).toBeVisible();
         }
+        await expect(page.getByText("12 kWh").locator("visible=true").first()).toBeVisible();
         await shoot(page, "batch-emissions-entry", size);
       }
 
+      // All correction assertions above use compile-ready records. Now deliberately
+      // empty both operating lines to retain the wizard's Empty components / Back coverage.
+      await emptyReturnedRemovalComponentsForWizard(changed.creditBatch.id);
       // Resubmit Removal reopens the New Removal wizard on the Removal (its href is asserted on the sheet above).
       for (const [size, viewport] of Object.entries(WIDTHS) as [keyof typeof WIDTHS, (typeof WIDTHS)[keyof typeof WIDTHS]][]) {
         await page.setViewportSize(viewport);
