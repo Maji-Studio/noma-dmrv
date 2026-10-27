@@ -25,6 +25,7 @@ import {
   SegmentedControl,
   ServerError,
 } from "@/components/forms";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { DetailField, DetailSection } from "@/components/ui/detail-panel";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -49,7 +50,7 @@ import {
   type OrganizationSettingsInput,
   type OrganizationSettingsValues,
 } from "@/schemas/organization-settings";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { EVIDENCE_METHOD_ART } from "@/components/applications";
 
 // A default evidence method decides which evidence every new application asks
@@ -102,6 +103,7 @@ export function OrganizationDefaultsForm() {
 function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
   const toast = useToast();
   const saveMutation = useSaveOrganizationDefaults();
+  const formId = useId();
   const [serverError, setServerError] = useState("");
 
   const {
@@ -109,6 +111,8 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
     register,
     handleSubmit,
     setValue,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm<OrganizationSettingsInput, unknown, OrganizationSettingsValues>({
     resolver: zodResolver(organizationSettingsFormSchema),
@@ -129,6 +133,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
     },
   });
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const defaultTimezone =
     (useWatch({ control, name: "defaultTimezone" }) as string | null | undefined) ??
     undefined;
@@ -143,16 +148,18 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
       await saveMutation.mutateAsync(values);
       toast.success("Operating defaults saved.");
     } catch (error) {
-      setServerError(
+      setServerError(refuseSave(
+        error,
         error instanceof Error
           ? error.message
           : "The operating defaults were not saved. Try again.",
-      );
+      ) ?? "");
     }
   }
 
   return (
     <form
+      id={formId}
       onSubmit={handleSubmit(onSubmit)}
       className="content-measure-preview flex flex-col gap-24"
     >
