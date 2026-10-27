@@ -5,7 +5,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { ActionError } from "@/lib/action-error";
-import { FormActions, FormField, FormInput } from "@/components/forms";
+import { FormField, FormInput } from "@/components/forms";
+import { FormErrorSummary } from "@/components/forms/form-error-summary";
+import { readFieldDirectory, type FieldDirectory } from "@/components/forms/form-error-summary-dom";
+import { Button } from "@/components/ui/button";
 import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import { bootstrapInvitationAccountAction } from "@/fn/invitation-bootstrap";
 import { stashPendingWarning } from "@/lib/pending-warning";
@@ -23,6 +26,8 @@ export function InvitationBootstrapForm({
   email: string;
 }) {
   const formId = useId();
+  // Read on every submit, so the error summary can name and order the fields.
+  const [directory, setDirectory] = useState<FieldDirectory | null>(null);
   const [serverError, setServerError] = useState("");
   // The page reloads into the dashboard after the action returns; stay busy through that.
   const leaving = useBusyUntilUnload();
@@ -59,7 +64,7 @@ export function InvitationBootstrapForm({
   const busy = isSubmitting || !!leaving.held;
 
   return (
-    <form id={formId} onSubmit={handleSubmit(submit)} className="space-y-24">
+    <form id={formId} onSubmit={handleSubmit(submit)} onSubmitCapture={(event) => setDirectory(readFieldDirectory(event.currentTarget))} className="space-y-24">
       <input type="hidden" {...register("invitationId")} />
       <div>
         <p className="body-small text-[var(--color-text-secondary)] mb-6">
@@ -90,14 +95,15 @@ export function InvitationBootstrapForm({
           {...register("password")}
         />
       </FormField>
-      <FormActions
+      <FormErrorSummary
         control={control}
-        isSubmitting={busy}
-        errorMessage={serverError}
-        submitLabel="Create account and join"
-        submitClassName="w-full"
-        sticky={false}
+        directory={directory}
+        getForm={() => document.getElementById(formId)}
+        message={serverError}
       />
+      <Button type="submit" variant="primary" width="full" busy={busy}>
+        Create account and join
+      </Button>
     </form>
   );
 }
