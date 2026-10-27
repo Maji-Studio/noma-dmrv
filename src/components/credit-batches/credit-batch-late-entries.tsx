@@ -1,6 +1,7 @@
 /**
  * The entries of this credit batch that another credit batch's Removal reports
- * or will report, each with its date, figure and where it goes (#1059). When
+ * or will report, or that go into the revision of a returned Removal, each with
+ * its date, figure and where it goes (#1059). When
  * every entry was recorded after a sent Removal the heading names it ("Recorded
  * after RM-26-009 was sent"); otherwise each entry says so itself when it can.
  * The Check to-do carries the action, so the list says where each one stands.
@@ -19,9 +20,11 @@ import { formatDayString } from "@/lib/format-utils";
 import { MUTED_TEXT } from "./credit-batch-page-parts";
 import { cn } from "@/lib/utils";
 
-const WHY = "An entry that another Removal reports stays part of this credit batch. The next Removal of this facility includes it, and Isometric gets a note that it belongs to this credit batch.";
+const WHY_OTHER = "An entry that another Removal reports stays part of this credit batch. The next Removal of this facility includes it, and Isometric gets a note that it belongs to this credit batch.";
+const WHY_REVISION = "Isometric returned the Removal it was recorded after, so the entry goes into that Removal's revision and is sent when it is resubmitted.";
 
 const PLAIN_HEADING = "Emissions for other Removals";
+const MIXED_HEADING = "Emissions entries recorded late";
 
 function RemovalLinks({ removals }: { removals: { removalCode: string; removalHref: string }[] }) {
   return (
@@ -43,6 +46,8 @@ export function CreditBatchLateEntries({ facilityId, creditBatchId, canManage }:
   const known = rows.flatMap((row) => row.view.recordedAfter ?? []);
   const removals = [...new Map(known.map((removal) => [removal.removalHref, removal])).values()];
   const headingNamesRemovals = known.length === rows.length;
+  const revisions = rows.filter((row) => row.view.destination.kind === "revision").length;
+  const why = revisions === 0 ? WHY_OTHER : revisions === rows.length ? WHY_REVISION : `${WHY_OTHER} ${WHY_REVISION}`;
   return (
     <section aria-labelledby="late-entries-title" className="flex flex-col gap-8 border-t border-[var(--color-border-secondary)] pt-16" data-late-entries>
       <h3 id="late-entries-title" className="inline-flex items-center gap-4 body-small font-medium">
@@ -51,9 +56,9 @@ export function CreditBatchLateEntries({ facilityId, creditBatchId, canManage }:
             <>
               Recorded after <RemovalLinks removals={removals} /> {removals.length === 1 ? "was" : "were"} sent
             </>
-          ) : PLAIN_HEADING}
+          ) : revisions ? MIXED_HEADING : PLAIN_HEADING}
         </span>
-        <InfoHint label="What happens to entries another Removal reports">{WHY}</InfoHint>
+        <InfoHint label="What happens to these entries">{why}</InfoHint>
       </h3>
       <ul className="flex flex-col">
         {rows.map((row) => (

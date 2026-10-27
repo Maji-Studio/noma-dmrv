@@ -349,7 +349,17 @@ it("the narrow sent read preserves the full-context carried list and its frozen 
     full!.contributions.carriedEntries!.map(item => ({ ...item, value: { magnitude: item.value.magnitude, unit: item.value.unit } })));
 });
 
-it.each(["FAILED_VERIFICATION", "DRAFT", null])("discovers the own-batch revision from persisted returned lineage (%s)", async status => {
+it.each(["FAILED_VERIFICATION", "DRAFT", null].flatMap(status => ["additive", "single"].map(lineRule => ({ status, lineRule }))))(
+  "discovers the own-batch revision from persisted returned lineage ($status, $lineRule)", async ({ status, lineRule }) => {
+  const occurredOn = lineRule === "single" ? "2026-06-01" : "2026-06-10";
+  if (lineRule === "single") {
+    await db.update(removalTemplateObservations).set({
+      lineSources: { line: { scope: "operating", entryPolicy: "single", origin: "reviewed" } },
+    }).where(and(eq(removalTemplateObservations.organizationId, ctx.organizationId), eq(removalTemplateObservations.id, observation.id)));
+    await db.update(emissionEntries).set({ lineRule: "single", occurredOn }).where(and(
+      eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id),
+    ));
+  }
   // A sent snapshot is frozen, so the origin attempt is recreated as sent before the entry was recorded.
   await db.delete(certificationSubmissions).where(and(
     eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityId, origin.removalId),
@@ -377,7 +387,7 @@ it.each(["FAILED_VERIFICATION", "DRAFT", null])("discovers the own-batch revisio
   expect(own.carriedEntries).toEqual([]);
   expect(own.lateEntries.map(item => item.entryId)).toEqual(status ? [entry.id] : []);
   if (status) expect(own.lateEntries[0]).toMatchObject({ creditBatchId: origin.batchId, componentName: "Electricity",
-    occurredOn: "2026-06-10", value: { magnitude: "120", unit: "kWh" }, earlierRemovalId: origin.removalId });
+    occurredOn, value: { magnitude: "120", unit: "kWh" }, earlierRemovalId: origin.removalId });
   expect((await loadRemovalCarriedEntries(ctx, receiving.removalId)).carriedEntries).toEqual([]);
   expect(registry.getGhgStatement).not.toHaveBeenCalled();
   expect(registry.resolveClient).not.toHaveBeenCalled();

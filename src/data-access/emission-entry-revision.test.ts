@@ -1,12 +1,15 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
+import { mergeEntryCarryFacts } from "@/lib/certification/merge-entry-carry-facts";
+import { selectRemovalEntries } from "@/lib/certification/removal-entry-selection";
+import { entriesWithoutRemoval } from "@/lib/certification/removal-emission-contributions";
 
-const mocks = vi.hoisted(() => ({ select: vi.fn(), candidates: vi.fn(), owned: vi.fn(), members: vi.fn(),
+const mocks = vi.hoisted(() => ({ select: vi.fn(), candidates: vi.fn(), owned: vi.fn(), unsent: vi.fn(), members: vi.fn(),
   hydrate: vi.fn(), reservations: vi.fn(), observations: vi.fn(), rollups: vi.fn(), lineage: vi.fn(), registry: vi.fn() }));
 vi.mock("@/db", () => ({ db: { select: mocks.select } }));
 vi.mock("./emission-entry-carry-queries", () => ({ listCarryCandidates: mocks.candidates,
-  listOwnedCarryEntries: mocks.owned, listCarryRemovalMembers: mocks.members }));
+  listOwnedCarryEntries: mocks.owned, listUnsentBatchEntries: mocks.unsent, listCarryRemovalMembers: mocks.members }));
 vi.mock("./emission-entries", () => ({ hydrateEmissionEntries: mocks.hydrate }));
 vi.mock("./emission-entry-contenders", () => ({ loadEmissionEntryReservations: mocks.reservations }));
 vi.mock("./removal-template-observations", () => ({ getTemplateObservationsByIds: mocks.observations,
@@ -36,6 +39,7 @@ const query = (rows: object[]) => ({ from: () => ({ where: async () => rows }) }
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.candidates.mockResolvedValue([{ entry, batch, timezone: "UTC" }]); mocks.owned.mockResolvedValue([]);
+  mocks.unsent.mockResolvedValue([]);
   mocks.members.mockImplementation((_ctx, _facility, _executor, origins) => Promise.resolve(origins
     ? [{ removal, batch, applicationDate: "2026-09-30" }] : []));
   mocks.hydrate.mockResolvedValue([entry]); mocks.reservations.mockResolvedValue([]);
@@ -45,6 +49,130 @@ beforeEach(() => {
   mocks.select.mockReturnValueOnce(query([{ creditBatchId: batch.id, removalId: removal.id, allocatedDryMassKg: 190 }]))
     .mockReturnValueOnce(query([removal])).mockReturnValueOnce({ from: () => ({ innerJoin: () => ({ where: async () => [] }) }) })
     .mockReturnValueOnce(query([{ id: "sent", localEntityId: removal.id, submittedAt: new Date("2026-10-01") }]));
+});
+
+it("discovers a single-rule revision independently of carry candidates", async () => {
+  const single = { ...entry, lineRule: "single", occurredOn: batch.startDate };
+  mocks.candidates.mockResolvedValue([]);
+  mocks.unsent.mockResolvedValue([{ entry: single, batch, timezone: "UTC" }]);
+  mocks.hydrate.mockResolvedValue([single]);
+  mocks.observations.mockResolvedValue([{ ...observation,
+    lineSources: { line: { scope: "operating", entryPolicy: "single", origin: "reviewed" } } }]);
+  const scope = { ownedBatchIds: [batch.id] };
+  const result = await loadFacilityEmissionEntryCarry(ctx, "facility", undefined, undefined, scope);
+  expect(result.entries).toHaveLength(1);
+  expect(result.entries[0]).toMatchObject({ revisionOf: { removalId: "own", removalCode: "RM-009" },
+    carry: { receiver: null, waitingReason: null } });
+  expect(mocks.unsent).toHaveBeenCalledExactlyOnceWith(ctx, "facility", expect.anything(), scope);
+  expect(mocks.members).toHaveBeenCalledExactlyOnceWith(ctx, "facility", expect.anything(), [batch.id]);
+  expect(mocks.rollups).toHaveBeenCalledExactlyOnceWith(ctx, [], undefined, expect.anything());
+});
+
+it("discovers a paired-input revision without making it a carry candidate", async () => {
+  const pairedObservation = { ...structuredClone(observation),
+    enrichment: { line: { initial_readout: { unit: "kWh" }, final_readout: { unit: "kWh" } } } };
+  pairedObservation.definition.groups[0].components[0].inputs = ["initial_readout", "final_readout"].map(key =>
+    ({ key, type: "monitored", quantityKind: "energy" }));
+  pairedObservation.lineSources.line.entryPolicy = "single";
+  const paired = { ...entry, lineRule: "single", occurredOn: batch.startDate,
+    values: ["initial_readout", "final_readout"].map(inputKey => ({ ...entry.values[0], inputKey })) };
+  mocks.candidates.mockResolvedValue([]);
+  mocks.unsent.mockResolvedValue([{ entry: paired, batch, timezone: "UTC" }]);
+  mocks.hydrate.mockResolvedValue([paired]);
+  mocks.observations.mockResolvedValue([pairedObservation]);
+  const result = await loadFacilityEmissionEntryCarry(ctx, "facility", undefined, undefined, { ownedBatchIds: [batch.id] });
+  expect(result.entries).toHaveLength(1);
+  expect(result.entries[0]).toMatchObject({ revisionOf: { removalId: "own", removalCode: "RM-009" },
+    carry: { receiver: null, waitingReason: null } });
+});
+
+it("discovers a revision when a later draft application excludes the batch from carry candidates", async () => {
+  const later = { id: "later", code: "RM-010", createdAt: new Date("2026-10-01"), ghgStatementId: null };
+  mocks.candidates.mockResolvedValue([]);
+  mocks.unsent.mockResolvedValue([{ entry, batch, timezone: "UTC" }]);
+  mocks.members.mockImplementation((_ctx, _facility, _executor, origins) => Promise.resolve(origins
+    ? [{ removal, batch, applicationDate: "2026-09-30" }, { removal: later, batch, applicationDate: "2026-10-20" }] : []));
+  mocks.lineage.mockResolvedValue([...ownLineage([statement]), { id: later.id, statements: [], submissions: [] }]);
+  mocks.select.mockReset()
+    .mockReturnValueOnce(query([{ creditBatchId: batch.id, removalId: removal.id, allocatedDryMassKg: 100 },
+      { creditBatchId: batch.id, removalId: later.id, allocatedDryMassKg: 90 }]))
+    .mockReturnValueOnce(query([removal, later])).mockReturnValueOnce({ from: () => ({ innerJoin: () => ({ where: async () => [] }) }) })
+    .mockReturnValueOnce(query([{ id: "sent", localEntityId: removal.id, submittedAt: new Date("2026-10-01") }]));
+  const result = await loadFacilityEmissionEntryCarry(ctx, "facility", undefined, undefined, { ownedBatchIds: [batch.id] });
+  expect(result.entries).toHaveLength(1);
+  expect(result.entries[0]).toMatchObject({ revisionOf: { removalId: "own", removalCode: "RM-009" },
+    carry: { receiver: null, waitingReason: null } });
+  expect(result.ownContenders).toContainEqual(expect.objectContaining({ contenderKind: "correction", removalId: removal.id }));
+  expect(mocks.members).toHaveBeenCalledExactlyOnceWith(ctx, "facility", expect.anything(), [batch.id]);
+  expect(mocks.rollups).toHaveBeenCalledExactlyOnceWith(ctx, [], undefined, expect.anything());
+});
+
+it.each([batch.endDate, null])("keeps a non-candidate's carry empty without a correction owner (batch end %s)", async endDate => {
+  mocks.candidates.mockResolvedValue([]);
+  mocks.unsent.mockResolvedValue([{ entry, batch: { ...batch, endDate }, timezone: "UTC" }]);
+  mocks.lineage.mockResolvedValue(ownLineage([{ ...statement, status: "VERIFIED" }]));
+  const result = await loadFacilityEmissionEntryCarry(ctx, "facility", undefined, undefined, { ownedBatchIds: [batch.id] });
+  expect(result.entries).toHaveLength(1);
+  expect(result.entries[0]).toMatchObject({ revisionOf: null, carry: { receiver: null, waitingReason: null } });
+});
+
+it("deduplicates an entry found by both candidate and batch discovery", async () => {
+  mocks.unsent.mockResolvedValue([{ entry, batch, timezone: "UTC" }]);
+  const result = await loadFacilityEmissionEntryCarry(ctx, "facility", undefined, undefined, { ownedBatchIds: [batch.id] });
+  expect(result.entries).toHaveLength(1);
+  expect(mocks.hydrate).toHaveBeenCalledExactlyOnceWith(ctx, [entry], expect.anything());
+});
+
+it.each([{}, { ownedBatchIds: [] }, { entryIds: [entry.id] }, { ownedRemovalId: removal.id }])(
+  "keeps discovery unchanged without explicit batch IDs: %j", async scope => {
+    const result = await loadFacilityEmissionEntryCarry(ctx, "facility", undefined, undefined, scope);
+    expect(mocks.unsent).not.toHaveBeenCalled();
+    expect(mocks.candidates).toHaveBeenCalledExactlyOnceWith(ctx, "facility", expect.anything(), scope);
+    expect(mocks.owned).toHaveBeenCalledExactlyOnceWith(ctx, "facility", expect.anything(), scope);
+    expect(mocks.members.mock.calls.map(call => call[3])).toEqual([undefined, [batch.id]]);
+    expect(result.entries[0].revisionOf).toEqual({ removalId: "own", removalCode: "RM-009" });
+  },
+);
+
+it.each([false, true])("keeps retained-only discovery unchanged without batch IDs (ownedOnly=%s)", async ownedOnly => {
+  const sent = { ...entry, sentByRemovalId: removal.id };
+  mocks.candidates.mockResolvedValue([]);
+  mocks.owned.mockResolvedValue([{ entry: sent, batch, timezone: "UTC" }]);
+  mocks.hydrate.mockResolvedValue([sent]);
+  const scope = { ownedRemovalId: removal.id };
+  const result = await loadFacilityEmissionEntryCarry(ctx, "facility", undefined, undefined, scope, ownedOnly);
+  expect(mocks.unsent).not.toHaveBeenCalled();
+  expect(mocks.candidates).toHaveBeenCalledTimes(ownedOnly ? 0 : 1);
+  expect(mocks.owned).toHaveBeenCalledExactlyOnceWith(ctx, "facility", expect.anything(), scope);
+  expect(mocks.members).not.toHaveBeenCalled();
+  expect(mocks.lineage).toHaveBeenCalledExactlyOnceWith(ctx, expect.anything(), []);
+  expect(result.entries[0]).toMatchObject({ revisionOf: null, carry: { receiver: null, waitingReason: null } });
+});
+
+it("keeps selection and orphan blockers unchanged when merging a non-candidate's display facts", async () => {
+  const single = { ...entry, lineRule: "single", occurredOn: batch.startDate };
+  mocks.candidates.mockResolvedValue([]);
+  mocks.unsent.mockResolvedValue([{ entry: single, batch, timezone: "UTC" }]);
+  mocks.hydrate.mockResolvedValue([single]);
+  mocks.observations.mockResolvedValue([{ ...observation,
+    lineSources: { line: { scope: "operating", entryPolicy: "single", origin: "reviewed" } } }]);
+  const result = await loadFacilityEmissionEntryCarry(ctx, "facility", undefined, undefined, { ownedBatchIds: [batch.id] });
+  const [discovered] = result.entries;
+  const baseline = { ...discovered, carry: undefined, reportedIn: undefined, revisionOf: undefined };
+  const merged = mergeEntryCarryFacts([baseline], result.entries);
+  expect(merged).toHaveLength(1);
+  expect(entriesWithoutRemoval(merged, result.ownContenders, new Set(), [])).toEqual(
+    entriesWithoutRemoval([baseline], result.ownContenders, new Set(), []));
+  const args = { removalId: removal.id, memberBatches: [batch], applicationDates: ["2026-09-30"],
+    observation: discovered.entryObservation, contenders: result.ownContenders };
+  const before = selectRemovalEntries({ ...args, ownEntries: [baseline], carryEntries: [] }).derive([], 0);
+  const after = selectRemovalEntries({ ...args, ownEntries: merged, carryEntries: result.entries }).derive([], 0);
+  // The returned Removal owns it, so merging its display facts must leave selection and blockers as they were.
+  expect(before.ownedEntryIds).toEqual([entry.id]);
+  expect(after).toEqual(before);
+  const other = { ...args, removalId: "receiver", memberBatches: [{ ...batch, id: "receiver-batch" }] };
+  expect(selectRemovalEntries({ ...other, ownEntries: [], carryEntries: result.entries }).derive([], 0)).toEqual(
+    selectRemovalEntries({ ...other, ownEntries: [], carryEntries: [] }).derive([], 0));
 });
 
 it.each([statement, { ...statement, status: "DRAFT" }])("exposes the confirmed revision using persisted facts only: $status", async returned => {

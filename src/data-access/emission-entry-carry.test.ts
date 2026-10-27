@@ -26,11 +26,11 @@ it("stops facility discovery after one narrow query when no candidates exist", a
   expect(mocks.registry).not.toHaveBeenCalled();
 });
 
-it("a batch display read with no candidates or retained owners does not load contenders or registry facts", async () => {
+it("a batch display read with no candidates, retained owners or unsent values does not load contenders or registry facts", async () => {
   mocks.where.mockResolvedValueOnce([{ facilityId: "facility" }]).mockReturnValueOnce({ orderBy: async () => [] }).mockReturnValueOnce({ orderBy: async () => [] });
   expect(await loadBatchEmissionEntryCarry(makeTestOrgContext(), ["batch"])).toEqual([]);
-  // Facility identity, candidate entries, and scoped retained ownership only.
-  expect(mocks.select).toHaveBeenCalledTimes(3);
+  // Facility identity, candidate entries, scoped retained owners, and unsent batch values.
+  expect(mocks.select).toHaveBeenCalledTimes(4);
   expect(mocks.contenders).not.toHaveBeenCalled();
   expect(mocks.rollups).not.toHaveBeenCalled();
   expect(mocks.registry).not.toHaveBeenCalled();

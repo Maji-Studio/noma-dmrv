@@ -68,6 +68,15 @@ describe("CreditBatchLateEntries", () => {
     expect(container.textContent).toContain("Recorded after RM-26-009 was sent.");
   });
 
+  it("names a mix of revision and other-Removal entries plainly", () => {
+    const revisionOf = { removalId: "rm-9", removalCode: "RM-26-009" };
+    lines.mockReturnValue(line(entry("late", { recordedAfter: revisionOf, revisionOf }), entry("b", { carry: receiver })));
+    const { container } = render(<CreditBatchLateEntries facilityId="f1" creditBatchId="cb" canManage />);
+    expect(container.querySelector("h3")?.textContent).toBe("Emissions entries recorded late");
+    expect(container.textContent).toContain("Goes into the revision of RM-26-009.");
+    expect(container.textContent).toContain("Goes into RM-26-010 of credit batch CB-26-010.");
+  });
+
   it("leaves out an entry its own batch's Removal sent", () => {
     lines.mockReturnValue(line(entry("a", { recordedAfter: { removalId: "rm-9", removalCode: "RM-26-009" }, reportedIn: { ...DEST, anotherCreditBatch: false } })));
     expect(render(<CreditBatchLateEntries facilityId="f1" creditBatchId="cb" canManage />).container.innerHTML).toBe("");

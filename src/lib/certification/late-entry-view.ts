@@ -1,7 +1,8 @@
 /**
- * What an emissions entry that another credit batch's Removal reports (or will
- * report) shows (#1059): where it goes, the Removal it was recorded after when
- * one was sent, and the one action that clears a wait. Pure, so the entry row,
+ * What a late emissions entry shows (#1059): another credit batch's Removal
+ * reports or will report it, or it goes into the revision of its own returned
+ * Removal. It names where it goes, the Removal it was recorded after when one
+ * was sent, and the one action that clears a wait. Pure, so the entry row,
  * the credit batch Overview and the to-do builder say the same words.
  */
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";

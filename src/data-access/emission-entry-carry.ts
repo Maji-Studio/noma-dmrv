@@ -17,7 +17,7 @@ import { loadEmissionEntryReservations } from "./emission-entry-contenders";
 import { hydrateEmissionEntries } from "./emission-entries";
 import { loadCreditBatchRollups } from "./credit-batch-accounting";
 import { getLatestTemplateObservations, getTemplateObservationsByIds } from "./removal-template-observations";
-import { listCarryCandidates, listCarryRemovalMembers, listOwnedCarryEntries, type CarryExecutor, type CarryReadScope } from "./emission-entry-carry-queries";
+import { listCarryCandidates, listCarryRemovalMembers, listOwnedCarryEntries, listUnsentBatchEntries, type CarryExecutor, type CarryReadScope } from "./emission-entry-carry-queries";
 
 /** Discovery is persisted-only, with roll-ups restricted to potential new carries. */
 export async function loadFacilityEmissionEntryCarry(
@@ -29,18 +29,21 @@ export async function loadFacilityEmissionEntryCarry(
   requireOrgScope(ctx);
   const candidates = ownedOnly ? [] : await listCarryCandidates(ctx, facilityId, executor, scope);
   const owned = await listOwnedCarryEntries(ctx, facilityId, executor, scope);
-  const selected = [...new Map([...candidates, ...owned].map(row => [row.entry.id, row])).values()];
+  const unsent = scope.ownedBatchIds?.length ? await listUnsentBatchEntries(ctx, facilityId, executor, scope) : [];
+  const selected = [...new Map([...candidates, ...owned, ...unsent].map(row => [row.entry.id, row])).values()];
   const empty = { entries: [] as CarryEntry[], contenders: [] as CarryContender[], ownContenders: [] as EntryContender[], batches: [] as (typeof creditBatches.$inferSelect)[] };
   if (!selected.length) return empty;
   const originIds = [...new Set(candidates.map(row => row.batch.id))];
   const allOriginIds = [...new Set(selected.map(row => row.batch.id))];
+  // Only explicit batch display/revision reads broaden correction discovery.
+  const correctionOriginIds = scope.ownedBatchIds?.length ? allOriginIds : originIds;
   const [stored, draftMembers, rollups, slices, previous, originMembers] = await Promise.all([
     hydrateEmissionEntries(ctx, selected.map(row => row.entry), executor),
     candidates.length ? listCarryRemovalMembers(ctx, facilityId, executor) : [],
     loadCreditBatchRollups(ctx, originIds, undefined, executor),
     executor.select().from(creditBatchApplications).where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.creditBatchId, allOriginIds))),
     getTemplateObservationsByIds(ctx, selected.map(row => row.entry.observationId), executor),
-    originIds.length ? listCarryRemovalMembers(ctx, facilityId, executor, originIds) : [],
+    correctionOriginIds.length ? listCarryRemovalMembers(ctx, facilityId, executor, correctionOriginIds) : [],
   ]);
   const reservations = await loadEmissionEntryReservations(ctx, stored.flatMap(entry => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []), executor);
   const removalIds = [...new Set([...draftMembers.map(row => row.removal.id), ...slices.flatMap(row => row.removalId ? [row.removalId] : []),
