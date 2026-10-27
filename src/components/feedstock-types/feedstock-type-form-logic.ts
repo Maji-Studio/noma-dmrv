@@ -109,6 +109,6 @@ export function isometricLinkAction(input: {
   return input.isLinked ? "change" : "link";
 }
 
-/** The one line shown with a locked link. Names the Removal(s) it points at separately. */
+/** The one line shown with a locked link; the holding Removals follow it as links. */
 export const ISOMETRIC_LINK_LOCKED_REASON =
-  "This link is fixed because production runs of this feedstock type were sent in";
+  "The Isometric link can't be changed, because this feedstock type was sent to Isometric with";

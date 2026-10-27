@@ -6,6 +6,7 @@ import type { RecordLockViewKind } from "@/lib/record-lock-view";
 /** Record locks follow almost every write, so one prefix covers every kind. */
 export const recordLockKeys = {
   all: ["record-locks"] as const,
+  feedstockTypeLink: (id: string) => [...recordLockKeys.all, "feedstockType", id] as const,
   kind: (entityType: RecordLockViewKind) => [...recordLockKeys.all, entityType] as const,
   /** Ids are sorted so one page re-read in another order shares the cache. */
   batch: (entityType: RecordLockViewKind, ids: readonly string[]) =>

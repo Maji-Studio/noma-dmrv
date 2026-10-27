@@ -2,7 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { certifierRemovals, feedstockTypes, type FeedstockType } from "@/db/schema";
-import { getFeedstockTypeLinkLock } from "@/data-access/feedstock-type-link-lock";
+import { getFeedstockTypeLinkLock, getLockedFeedstockTypeLinkLock } from "@/data-access/feedstock-type-link-lock";
 import { getFeedstockTypeById, updateFeedstockType } from "@/data-access/feedstock-types";
 import { getFeedstockTypeLinkLockFn } from "@/fn/feedstock-types";
 import { requireOrgContext } from "@/lib/auth/server";
@@ -54,6 +54,21 @@ describe("feedstock type Isometric link lock", () => {
   beforeAll(() => ensureTestOrg());
   beforeEach(() => {
     vi.mocked(requireOrgContext).mockResolvedValue(ctx);
+  });
+
+  it.each(["removal", "none"] as const)("agrees between advisory and locked reads for %s", async (blockingVia) => {
+    await withFeedstockTypeFixture(blockingVia, true, async (fixture) => {
+      const expected = {
+        locked: blockingVia === "removal",
+        removals: blockingVia === "removal"
+          ? [{ id: fixture.removalId, code: await removalCode(fixture.removalId), facilityId: fixture.facilityId }]
+          : [],
+      };
+      const advisory = await getFeedstockTypeLinkLock(ctx, db, fixture.feedstockTypeId);
+      const locked = await db.transaction(tx => getLockedFeedstockTypeLinkLock(ctx, tx, fixture.feedstockTypeId));
+      expect(advisory).toEqual(expected);
+      expect(locked).toEqual(advisory);
+    });
   });
 
   it.each([

@@ -33,7 +33,7 @@ async function withRemovalFacilities(
   return rows.sort((a, b) => a.code.localeCompare(b.code));
 }
 
-/** Advisory read, also used inside the feedstock-type update transaction. */
+/** Advisory read for the edit sheet only; writes use getLockedFeedstockTypeLinkLock. */
 export async function getFeedstockTypeLinkLock(
   ctx: OrgContext,
   tx: Pick<DbTransaction, "select" | "selectDistinct">,

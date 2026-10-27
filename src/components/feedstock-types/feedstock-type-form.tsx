@@ -29,9 +29,8 @@ import type { FeedstockType } from "@/db/schema/feedstock";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFacilityCertifierSummary, useIsometricFeedstockTypes } from "@/hooks/use-certification";
 import { useFeedstockTypeLinkLock } from "@/hooks/use-feedstock-types";
-import { removalSheetHref } from "@/lib/removal-correction-copy";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { RecordLockNotice } from "@/components/record-locks/record-lock-notice";
+import { HolderList } from "@/components/record-locks/record-lock-notice";
 import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { IsometricFeedstockBrowser } from "./isometric-feedstock-browser";
@@ -63,12 +62,14 @@ const SECTIONS = [
     key: "general",
     label: "General",
     description: "Create the local type used by bins, deliveries, and production runs.",
+    editDescription: "The local type used by bins, deliveries and production runs.",
     icon: DatabaseIcon,
   },
   {
     key: "isometric",
     label: "Isometric",
     description: "Choose a certified registry feedstock to prefill the local type.",
+    editDescription: "Link this type to its Isometric registry entry.",
     icon: SealCheckIcon,
   },
 ] as const;
@@ -139,10 +140,11 @@ export function FeedstockTypeForm({
   const linkIsLocked = !!savedIsometricId && !!linkLock.data?.locked;
   // A saved link is not offered for change until the lock read has answered, so
   // a replacement picked meanwhile can never meet a lock that arrives late.
-  const linkLockPending = isEditMode && !!savedIsometricId && hasIsometricCertifier && linkLock.isPending;
+  const linkLockUnresolved =
+    isEditMode && !!savedIsometricId && hasIsometricCertifier && !linkLock.data;
   const showIsometricSection =
     shouldShowIsometricFeedstockSection(hasIsometricCertifier, lockUsage, defaultUsage) &&
-    !linkIsLocked && !linkLockPending;
+    !linkIsLocked && !linkLockUnresolved;
   const sections = showIsometricSection
     ? SECTIONS
     : SECTIONS.filter((section) => section.key === "general");
@@ -215,7 +217,7 @@ export function FeedstockTypeForm({
   const registryMappingRequired = hasIsometricCertifier && isCertifyFormField(
     "feedstockType", "isometricFeedstockTypeId", { usage: selectedUsage },
   );
-  const linkAction = linkLockPending ? null : isometricLinkAction({
+  const linkAction = linkLockUnresolved ? null : isometricLinkAction({
     isEditMode,
     hasIsometricCertifier,
     usage: selectedUsage,
@@ -283,8 +285,8 @@ export function FeedstockTypeForm({
         isometricFeedstockTypeId: selectedIsometricFeedstock.id,
       })
     : null;
-  const selectedIsometricSummary = selectedIsometricFeedstock && (
-    <Notice tone="success" title={`${isEditMode ? "Linked to" : "Selected from"} Isometric: ${selectedIsometricFeedstock.name}`}>
+  const selectedIsometricSummary = !isEditMode && selectedIsometricFeedstock && (
+    <Notice tone="success" title={`Selected from Isometric: ${selectedIsometricFeedstock.name}`}>
       <div className="flex flex-col gap-2">
         <p className="body-caption flex items-center gap-4 font-mono text-[var(--color-text-tertiary)]">
           {!isEditMode && (
@@ -314,7 +316,7 @@ export function FeedstockTypeForm({
         role="radiogroup"
         aria-label="Feedstock type source"
       >
-        {sections.map(({ key, label, description, icon: Icon }, index) => {
+        {sections.map(({ key, label, description, editDescription, icon: Icon }, index) => {
           const isActive = key === visibleActiveSection;
           return (
             <button
@@ -350,7 +352,7 @@ export function FeedstockTypeForm({
                   {label}
                 </span>
                 <span className="body-small text-[var(--color-text-secondary)]">
-                  {description}
+                  {isEditMode ? editDescription : description}
                 </span>
               </span>
             </button>
@@ -393,34 +395,27 @@ export function FeedstockTypeForm({
                     )}
                   </output>
                   {selectedIsometricSummary}
+                  {linkLockUnresolved && (
+                    <RecordLockNotice
+                      lock={undefined}
+                      status={linkLock.isError ? "error" : "pending"}
+                      onRetry={() => void linkLock.refetch()}
+                      retrying={linkLock.isFetching}
+                    />
+                  )}
                   {linkAction === "locked" && (
-                    <Notice tone="info">
+                    <Notice tone="info" boxed data-record-lock-notice="sent">
                       {ISOMETRIC_LINK_LOCKED_REASON}{" "}
-                      {linkLock.data?.removals.map((removal, index, all) => (
-                        <span key={removal.id}>
-                          {index > 0 && (index === all.length - 1 ? " and " : ", ")}
-                          <Link
-                            href={removalSheetHref(removal.id, removal.facilityId)}
-                            className="underline"
-                          >
-                            Removal {removal.code}
-                          </Link>
-                        </span>
-                      ))}
+                      <HolderList
+                        holders={(linkLock.data?.removals ?? []).map((removal) => ({
+                          kind: "removal",
+                          id: removal.id,
+                          label: removal.code,
+                          facilityId: removal.facilityId,
+                        }))}
+                      />
                       .
                     </Notice>
-                  )}
-                  {(linkAction === "link" || linkAction === "change") && (
-                    <div>
-                      <Button
-                        variant={linkAction === "link" ? "default" : "weak"}
-                        size="small"
-                        onClick={() => selectSection("isometric")}
-                      >
-                        <SealCheckIcon aria-hidden className="size-16" weight="bold" />
-                        {linkAction === "link" ? "Link to Isometric" : "Change Isometric link"}
-                      </Button>
-                    </div>
                   )}
                   {showCertifiedFeedstockWarning && (
                     <Notice tone="warning">{CERTIFIED_FEEDSTOCK_WARNING}</Notice>
