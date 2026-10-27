@@ -106,6 +106,9 @@ vi.mock("react-hook-form", () => ({
     };
   },
   useWatch: ({ name }: { name: string }) => harness.formValues[name],
+  // The refusal handler the form builds reads the dirty fields; no save is refused here.
+  useFormState: () => ({ dirtyFields: {} }),
+  get: (source: Record<string, unknown> | undefined, path: string) => source?.[path],
 }));
 
 vi.mock("@/components/forms", () => ({
@@ -277,6 +280,7 @@ describe("FeedstockTypeForm Isometric gate transitions", () => {
     expect(harness.formValues.isometricFeedstockTypeId).toBe("");
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ isometricFeedstockTypeId: "" }),
+      expect.any(Function),
     );
   });
 
@@ -289,6 +293,7 @@ describe("FeedstockTypeForm Isometric gate transitions", () => {
 
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ isometricFeedstockTypeId: ISOMETRIC_ID }),
+      expect.any(Function),
     );
   });
 });

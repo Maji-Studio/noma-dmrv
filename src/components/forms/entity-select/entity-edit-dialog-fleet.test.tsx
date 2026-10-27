@@ -32,6 +32,10 @@ vi.mock("@/fn/quick-add", () => ({
   createOperatorFn: vi.fn(),
 }));
 
+// These tests run in Node, where the refusal handler cannot read the form from the document;
+// they cover the dialog's own save flow, so the handler returns the dialog's fallback.
+vi.mock("@/components/forms/use-save-refusal", () => ({ useSaveRefusal: () => (_error: unknown, fallback: string) => fallback }));
+
 vi.mock("@/hooks/use-quick-add-submit", () => ({
   useQuickAddSubmit: () => ({ startDraft: vi.fn(), error: null, isSubmitting: false, handleSubmit: vi.fn() }),
 }));

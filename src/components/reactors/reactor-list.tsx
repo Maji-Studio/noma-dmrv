@@ -40,6 +40,7 @@ import {
   type CreateReactorData,
 } from "@/schemas/reactors";
 import type { ReactorWithRelations } from "@/data-access/reactors";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import type { Reactor } from "@/db/schema";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { formatThroughputTph } from "./reactor-throughput";
@@ -182,18 +183,18 @@ export function ReactorList() {
   useOpenCreateIntent(openCreate);
 
   // Handlers
-  const handleCreate = async (data: CreateReactorData) => {
+  const handleCreate = async (data: CreateReactorData, onRefusal: SaveRefusalHandler) => {
     setCreateError(null);
     try {
       await createReactor.mutateAsync(data);
       setSideSheet(null);
       toast.success("Reactor created.");
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Reactor was not created. Check the form.");
+      setCreateError(onRefusal(error, error instanceof Error ? error.message : "Reactor was not created. Check the form."));
     }
   };
 
-  const handleUpdate = async (data: CreateReactorData) => {
+  const handleUpdate = async (data: CreateReactorData, onRefusal: SaveRefusalHandler) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
@@ -201,7 +202,7 @@ export function ReactorList() {
       setSideSheet(null);
       toast.success("Reactor updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Reactor was not saved. Try again.");
+      setUpdateError(onRefusal(error, error instanceof Error ? error.message : "Reactor was not saved. Try again."));
     }
   };
 

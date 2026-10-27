@@ -3,7 +3,7 @@
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { makeCertFieldStatus } from "@/components/forms/cert-field-status";
-import { useState, type KeyboardEvent } from "react";
+import { useId, useState, type KeyboardEvent } from "react";
 import { DatabaseIcon, SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,6 +17,7 @@ import {
 import { FormSelect } from "@/components/forms/form-select";
 import { SegmentedControl } from "@/components/forms/segmented-control";
 import { FormActions } from "@/components/forms/form-actions";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import {
   feedstockTypeFormSchema,
   BLEND_FEEDSTOCK_CATEGORY_OPTIONS,
@@ -74,7 +75,8 @@ const CERTIFIED_FEEDSTOCK_WARNING =
 
 interface FeedstockTypeFormProps {
   feedstockType?: FeedstockType;
-  onSubmit: (data: FeedstockTypeFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1327). */
+  onSubmit: (data: FeedstockTypeFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
@@ -104,6 +106,7 @@ export function FeedstockTypeForm({
   guardDialogCancel,
 }: FeedstockTypeFormProps) {
   const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!feedstockType;
   const certStatus = makeCertFieldStatus(feedstockType);
   const { facilityId } = useFacilityContext();
@@ -158,6 +161,8 @@ export function FeedstockTypeForm({
     control,
     trigger,
     setValue,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm<FeedstockTypeFormData>({
     resolver: zodResolver(feedstockTypeFormSchema),
@@ -172,6 +177,8 @@ export function FeedstockTypeForm({
       isometricFeedstockTypeId: feedstockType?.isometricFeedstockTypeId ?? "",
     },
   });
+
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
 
   useClearOnDependencyChange(
     isEditMode ? undefined : showIsometricSection ? "available" : "unavailable",
@@ -320,7 +327,8 @@ export function FeedstockTypeForm({
       )}
 
       <form
-        onSubmit={latched(handleSubmit((data) => onSubmit(data)))}
+        id={formId}
+        onSubmit={latched(handleSubmit((data) => onSubmit(data, refuseSave)))}
       >
         <ResolvedErrorRevalidator control={control} trigger={trigger} />
         <div

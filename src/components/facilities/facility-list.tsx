@@ -53,6 +53,7 @@ import { FacilityCard } from "./facility-card";
 import { ArchiveFacilityDialog } from "./archive-facility-dialog";
 import { FacilityRegistryLinkNotice } from "./facility-registry-link-notice";
 import type { FacilityFormData, FacilityFilterData } from "@/schemas/facilities";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import type { FacilityWithRelations } from "@/data-access/facilities";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { CardSkeleton } from "@/components/ui/loading-skeleton";
@@ -129,7 +130,7 @@ export function FacilityList() {
     setCurrentPage,
   });
 
-  const handleCreate = async (data: FacilityFormData) => {
+  const handleCreate = async (data: FacilityFormData, onRefusal: SaveRefusalHandler) => {
     setCreateError(null);
     try {
       const facility = await createFacility.mutateAsync(data);
@@ -138,11 +139,11 @@ export function FacilityList() {
       toast.success("Facility created.");
       setCreatedFacility({ id: facility.id, code: facility.code });
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Facility was not created. Check the form.");
+      setCreateError(onRefusal(error, error instanceof Error ? error.message : "Facility was not created. Check the form."));
     }
   };
 
-  const handleUpdate = async (data: FacilityFormData) => {
+  const handleUpdate = async (data: FacilityFormData, onRefusal: SaveRefusalHandler) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
@@ -158,7 +159,7 @@ export function FacilityList() {
     } catch (error) {
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      setUpdateError(toSaveErrorMessage(error, "Facility was not saved. Try again."));
+      setUpdateError(onRefusal(error, toSaveErrorMessage(error, "Facility was not saved. Try again.")));
     }
   };
 

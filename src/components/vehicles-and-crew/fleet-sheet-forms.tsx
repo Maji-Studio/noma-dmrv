@@ -22,6 +22,7 @@ import {
   type FleetRecords,
 } from "@/hooks/use-fleet";
 import { useQuickAddSubmit } from "@/hooks/use-quick-add-submit";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import type { FleetKind } from "@/lib/fleet/messages";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import type { DriverFormData } from "@/schemas/drivers";
@@ -53,14 +54,14 @@ function VehicleSheetForm({ record, onSaved, onCancel }: SheetFormProps<Vehicle>
   const update = useUpdateVehicle();
   const [editError, setEditError] = useState<string | null>(null);
 
-  const handleEdit = async (data: VehicleFormData) => {
+  const handleEdit = async (data: VehicleFormData, onRefusal: SaveRefusalHandler) => {
     if (!record) return;
     setEditError(null);
     try {
       await update.mutateAsync({ ...toVehiclePayload(data), vehicleId: record.id, expectedVersion: record.version });
       onSaved("Vehicle updated.");
     } catch (error) {
-      setEditError(toSaveErrorMessage(error, "The vehicle was not saved. Try again."));
+      setEditError(onRefusal(error, toSaveErrorMessage(error, "The vehicle was not saved. Try again.")));
     }
   };
 
@@ -90,14 +91,14 @@ function DriverSheetForm({ record, onSaved, onCancel }: SheetFormProps<Driver>) 
   const update = useUpdateDriver();
   const [editError, setEditError] = useState<string | null>(null);
 
-  const handleEdit = async (data: DriverFormData) => {
+  const handleEdit = async (data: DriverFormData, onRefusal: SaveRefusalHandler) => {
     if (!record) return;
     setEditError(null);
     try {
       await update.mutateAsync({ ...toDriverPayload(data), driverId: record.id, expectedVersion: record.version });
       onSaved("Driver updated.");
     } catch (error) {
-      setEditError(toSaveErrorMessage(error, "The driver was not saved. Try again."));
+      setEditError(onRefusal(error, toSaveErrorMessage(error, "The driver was not saved. Try again.")));
     }
   };
 
@@ -127,14 +128,14 @@ function OperatorSheetForm({ record, onSaved, onCancel }: SheetFormProps<Operato
   const update = useUpdateOperator();
   const [editError, setEditError] = useState<string | null>(null);
 
-  const handleEdit = async (data: OperatorFormData) => {
+  const handleEdit = async (data: OperatorFormData, onRefusal: SaveRefusalHandler) => {
     if (!record) return;
     setEditError(null);
     try {
       await update.mutateAsync({ ...toOperatorPayload(data), operatorId: record.id, expectedVersion: record.version });
       onSaved("Operator updated.");
     } catch (error) {
-      setEditError(toSaveErrorMessage(error, "The operator was not saved. Try again."));
+      setEditError(onRefusal(error, toSaveErrorMessage(error, "The operator was not saved. Try again.")));
     }
   };
 

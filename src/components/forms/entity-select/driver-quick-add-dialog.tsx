@@ -14,6 +14,7 @@ import { useQuickAddSubmit } from "@/hooks/use-quick-add-submit";
 import { useUpdateDriver } from "@/hooks/use-fleet";
 import { useOpenSnapshot } from "@/hooks/use-open-snapshot";
 import { toSaveErrorMessage } from "@/lib/stale-version";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { QuickAddDialogShell, stopSubmitBubbling } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
 
@@ -55,7 +56,7 @@ export function DriverQuickAddDialog({
   const update = useUpdateDriver();
   const [editError, setEditError] = useState<string | null>(null);
 
-  const handleEdit = async (data: DriverFormData) => {
+  const handleEdit = async (data: DriverFormData, onRefusal: SaveRefusalHandler) => {
     if (!driver) return;
     setEditError(null);
     try {
@@ -66,7 +67,7 @@ export function DriverQuickAddDialog({
       });
       onClose();
     } catch (error) {
-      setEditError(toSaveErrorMessage(error, DRIVER_NOT_SAVED));
+      setEditError(onRefusal(error, toSaveErrorMessage(error, DRIVER_NOT_SAVED)));
     }
   };
 

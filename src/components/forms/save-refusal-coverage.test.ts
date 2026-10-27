@@ -9,13 +9,6 @@ const PENDING_SEAMS: { file: string; reason: string; pending: RegExp }[] = [];
 
 /** #1327: remove each entry when its form moves to the shared refusal handler. */
 const PENDING: Record<string, string> = {
-  "reactors/reactor-form.tsx": "PR J: reactor sheet and picker edit",
-  "facilities/facility-form.tsx": "PR J: facility sheet and onboarding",
-  "feedstock-types/feedstock-type-form.tsx": "PR J: feedstock type sheet and picker edit",
-  "formulations/formulation-form.tsx": "PR J: ingredient ratio and row aliases",
-  "drivers/driver-form.tsx": "PR J: driver quick-add and picker edit",
-  "operators/operator-form.tsx": "PR J: operator quick-add and picker edit",
-  "vehicles/vehicle-form.tsx": "PR J: vehicle quick-add and picker edit",
   "settings/organization-defaults-form.tsx": "PR K1: operating defaults refusal",
   "settings/durability-tier-settings.tsx": "PR K1: durability settings refusal",
   "settings/organization-name-form.tsx": "PR K1: organization name refusal",

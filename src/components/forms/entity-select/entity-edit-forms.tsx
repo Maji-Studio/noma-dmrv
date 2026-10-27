@@ -45,14 +45,7 @@ interface PickerEditFormDialogProps<R extends { id: string }, D> {
   width?: ModalWidth;
   renderForm: (record: R, props: {
     key: string;
-    /**
-     * For forms that still show a message line. It drops the form's refusal
-     * handler, though a form typed `(data, onRefusal)` still accepts it. A form
-     * migrated to the shared save refusal must take `onSubmitWithRefusal`, or it
-     * silently loses field routing.
-     */
-    onSubmit: (data: D) => Promise<void>;
-    /** For forms on the shared save refusal: hands the form's handler to the save. */
+    /** Hands the form's refusal handler to the save; every form takes it as its `onSubmit`. */
     onSubmitWithRefusal: (data: D, onRefusal: SaveRefusalHandler) => Promise<void>;
     onCancel: () => void;
     isSubmitting: boolean;
@@ -73,7 +66,7 @@ function PickerEditFormDialog<R extends { id: string }, D>({
     <QuickAddDialogShell isOpen={isOpen} onClose={onClose} onOpen={resetError}
       title={title} testId={testId} dismissible={!isPending} width={width}>
       {renderForm(record, {
-        key: sessionKey, onSubmit: (data) => handleSubmit(data), onSubmitWithRefusal: handleSubmit, onCancel: onClose,
+        key: sessionKey, onSubmitWithRefusal: handleSubmit, onCancel: onClose,
         isSubmitting: isPending, errorMessage: error, submitLabel: "Save changes",
       })}
     </QuickAddDialogShell>
@@ -93,7 +86,7 @@ export function ReactorEditFormDialog(props: EditProps<"reactor">) {
   return <PickerEditFormDialog {...props} title="Edit reactor" testId="reactor-edit-dialog"
     isPending={update.isPending}
     save={(data: CreateReactorData, record) => update.mutateAsync({ ...data, reactorId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <ReactorForm key={key} {...formProps} reactor={record} />} />;
+    renderForm={(record, { key, ...formProps }) => <ReactorForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} reactor={record} />} />;
 }
 
 export function OrderEditFormDialog(props: EditProps<"order">) {
@@ -123,7 +116,7 @@ export function FormulationEditFormDialog(props: EditProps<"formulation">) {
   return <PickerEditFormDialog {...props} title="Edit formulation" testId="formulation-edit-dialog" width="lg"
     isPending={update.isPending}
     save={(data: FormulationFormData, record) => update.mutateAsync({ ...data, formulationId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <FormulationForm key={key} {...formProps} formulation={record} />} />;
+    renderForm={(record, { key, ...formProps }) => <FormulationForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} formulation={record} />} />;
 }
 
 export function FeedstockTypeEditFormDialog(props: EditProps<"feedstockType">) {
@@ -131,5 +124,5 @@ export function FeedstockTypeEditFormDialog(props: EditProps<"feedstockType">) {
   return <PickerEditFormDialog {...props} title="Edit feedstock type" testId="feedstock-type-edit-dialog"
     isPending={update.isPending}
     save={(data: FeedstockTypeFormData, record) => update.mutateAsync({ ...data, feedstockTypeId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <FeedstockTypeForm key={key} {...formProps} feedstockType={record} stickyActions={false} guardDialogCancel />} />;
+    renderForm={(record, { key, ...formProps }) => <FeedstockTypeForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} feedstockType={record} stickyActions={false} guardDialogCancel />} />;
 }

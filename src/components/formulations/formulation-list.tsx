@@ -36,6 +36,7 @@ import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { ArchivedFormulationNotice } from "./formulation-notices";
 import { formatRatio, formulationSheetSections } from "./formulation-read-sections";
 import type { FormulationFormData } from "@/schemas/formulations";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -185,18 +186,18 @@ export function FormulationList() {
   });
 
   // Handlers
-  const handleCreate = async (data: FormulationFormData) => {
+  const handleCreate = async (data: FormulationFormData, onRefusal: SaveRefusalHandler) => {
     setFormError(null);
     try {
       await createFormulation.mutateAsync(data);
       setSideSheet(null);
       toast.success("Formulation created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Formulation was not created. Check the form.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Formulation was not created. Check the form."));
     }
   };
 
-  const handleUpdate = async (data: FormulationFormData) => {
+  const handleUpdate = async (data: FormulationFormData, onRefusal: SaveRefusalHandler) => {
     if (sideSheet?.mode !== "edit") return;
     setFormError(null);
     try {
@@ -208,7 +209,7 @@ export function FormulationList() {
       setSideSheet(null);
       toast.success("Formulation updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Formulation was not saved. Try again.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Formulation was not saved. Try again."));
     }
   };
 
