@@ -36,6 +36,10 @@ export interface SaveRefusalOptions {
   isChanged: (field: string) => boolean;
 }
 
+export function shouldMarkLockedField(field: string, options: SaveRefusalOptions): boolean {
+  return options.isShown(field) && options.isChanged(field);
+}
+
 function formField(path: readonly (string | number)[], aliases: Readonly<Record<string, string>>): string {
   const whole = path.join(".");
   if (aliases[whole] !== undefined) return aliases[whole];
@@ -79,7 +83,7 @@ export function planSaveRefusal(error: unknown, options: SaveRefusalOptions): Sa
     const field = formField(issue.path, aliases);
     const locked = issue.code === LOCK_CODE;
     if (locked) footer.add(issue.message);
-    const atField = options.isShown(field) && (!locked || options.isChanged(field));
+    const atField = locked ? shouldMarkLockedField(field, options) : options.isShown(field);
     // A field shows one error; a second reason for it goes to the footer.
     const taken = fieldErrors.find((existing) => existing.field === field);
     if (!atField || (taken && !locked && taken.message !== issue.message)) {

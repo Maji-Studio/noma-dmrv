@@ -22,20 +22,21 @@ export interface DerivedPosition {
 }
 
 type PositionFieldName = "gpsLatitude" | "gpsLongitude";
-type ResetPositionField = (
+type SetPositionField = (
   name: PositionFieldName,
-  options: { defaultValue: number | null },
+  value: number | null,
+  options: { shouldValidate: boolean; shouldDirty: boolean },
 ) => void;
 
-export function resetFieldPosition(
-  resetField: ResetPositionField,
+export function setFieldPosition(
+  setValue: SetPositionField,
   derived: DerivedPosition | null,
 ): void {
-  resetField("gpsLatitude", {
-    defaultValue: derived?.gpsLatitude ?? null,
+  setValue("gpsLatitude", derived?.gpsLatitude ?? null, {
+    shouldValidate: true, shouldDirty: true,
   });
-  resetField("gpsLongitude", {
-    defaultValue: derived?.gpsLongitude ?? null,
+  setValue("gpsLongitude", derived?.gpsLongitude ?? null, {
+    shouldValidate: true, shouldDirty: true,
   });
 }
 

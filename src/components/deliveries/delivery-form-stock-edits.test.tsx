@@ -304,3 +304,16 @@ it("restores the saved delivery mass after a lineage refusal", async () => {
   await waitFor(() => expect(mass.value).toBe("100"));
   expect(screen.getByText("Locked. Your change was not saved.")).toBeTruthy();
 });
+
+it("restores a changed sub-bin reading when only sources are refused", async () => {
+  const { save, reading, form, button } = await open();
+  save.mockImplementation((_data, onRefusal) => onRefusal(new ActionError({
+    error: "Sent to a Removal.", code: "certification_locked",
+    issues: [{ path: ["sources"], code: "certification_locked", message: "Sent to a Removal." }],
+  }), "Delivery was not saved."));
+  fireEvent.change(reading, { target: { value: "30" } });
+  await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
+  await act(async () => { fireEvent.submit(form); });
+  await waitFor(() => expect((reading as HTMLInputElement).value).toBe("20"));
+  expect(screen.getByText("Locked. Your change was not saved.")).toBeTruthy();
+});

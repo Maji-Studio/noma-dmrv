@@ -586,6 +586,7 @@ describe("OrderForm save refusal (#1327)", () => {
     expect(customer().textContent).toBe("Customer A");
     expect(location().textContent).toBe("North field");
     expect(document.getElementById("customerLocationId-error")?.textContent).toBe("Locked. Your change was not saved.");
+    expect(screen.getByText("Not saved. 2 fields are locked.")).toBeTruthy();
     client.clear();
   });
 

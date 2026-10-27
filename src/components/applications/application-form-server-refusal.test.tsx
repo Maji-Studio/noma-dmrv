@@ -17,14 +17,26 @@ vi.mock("@/hooks/use-organization-settings", async () => {
   const { DEFAULT_ORGANIZATION_SETTINGS } = await import("@/config/organization-settings");
   return { useOrganizationDefaultValues: () => ({ defaults: DEFAULT_ORGANIZATION_SETTINGS }) };
 });
-vi.mock("./application-evidence-panel", () => ({ ApplicationEvidencePanel: () => null }));
+vi.mock("./application-evidence-panel", () => ({ ApplicationEvidencePanel: ({ boundary, onBoundaryChange }: { boundary: unknown; onBoundaryChange: (value: unknown) => void }) => (
+    <button type="button" data-testid="boundary" data-field-name="gisBoundary" onClick={() => onBoundaryChange(EDITED_BOUNDARY)}>{JSON.stringify(boundary)}</button>
+  ) }));
 vi.mock("./application-supporting-evidence-panel", () => ({ ApplicationSupportingEvidencePanel: () => null }));
 vi.mock("./field-position-field", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./field-position-field")>()),
-  FieldPositionField: () => null,
+  FieldPositionField: ({ latitude, longitude, onPositionChange }: { latitude: number; longitude: number; onPositionChange: (value: { lat: number; lng: number }) => void }) => (
+    <button type="button" name="gpsLatitude" onClick={() => onPositionChange({ lat: -9, lng: 36 })}>{latitude},{longitude}</button>
+  ),
 }));
 
 import { ApplicationForm } from "./application-form";
+
+const EDITED_BOUNDARY = {
+      version: 1, source: "paste", fileName: null, capturedAt: "2026-01-01T00:00:00Z",
+      collection: { type: "FeatureCollection", bbox: [0, 0, 1, 1], features: [
+        { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] } },
+      ] },
+      stats: { features: 1, vertices: 4, areaHectares: 1, bbox: [0, 0, 1, 1], center: [0.5, 0.5] }, notes: [],
+    } as const;
 
 const DELIVERY: ApplicationDeliveryOption = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -70,13 +82,13 @@ const LOCK_REASON = "This application is in a Removal sent to Isometric. Correct
 const lockRefusal = (path: string) =>
   new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [{ path: [path], code: "certification_locked", message: LOCK_REASON }] });
 
-function renderRefused(error: ActionError, { footer = null as string | null, edit = () => {} } = {}) {
+function renderRefused(error: ActionError, { footer = null as string | null, edit = () => {}, record = APPLICATION } = {}) {
   const onSubmit = vi.fn((_data, onRefusal) => {
     expect(onRefusal(error, "Application was not saved. Try again.")).toBe(footer);
   });
   const view = render(
     <QueryClientProvider client={new QueryClient()}>
-      <ApplicationForm application={APPLICATION} lock={OPEN_LOCK} deliveries={[DELIVERY]} onSubmit={onSubmit} />
+      <ApplicationForm application={record} lock={OPEN_LOCK} deliveries={[DELIVERY]} onSubmit={onSubmit} />
     </QueryClientProvider>,
   );
   edit();
@@ -192,4 +204,24 @@ it("scrolls to the partial-save message again after a second committed update", 
     await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
     expect(screen.getByText(message)).toBeTruthy();
   }
+});
+
+it("restores registered manual coordinates after a lock", async () => {
+  const onSubmit = renderRefused(lockRefusal("gpsLatitude"), {
+    footer: LOCK_REASON,
+    edit: () => fireEvent.click(screen.getByRole("button", { name: "-8.5,35.2" })),
+  });
+  await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+  expect(screen.getByRole("button", { name: "-8.5,35.2" })).toBeTruthy();
+});
+
+it("restores a registered GIS boundary after a lock", async () => {
+  const savedBoundary = { ...EDITED_BOUNDARY, capturedAt: "2025-01-01T00:00:00Z" };
+  const onSubmit = renderRefused(lockRefusal("gisBoundary"), {
+    footer: LOCK_REASON,
+    record: { ...APPLICATION, gisBoundary: savedBoundary } as unknown as Application,
+    edit: () => fireEvent.click(screen.getByTestId("boundary")),
+  });
+  await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+  expect(screen.getByTestId("boundary").textContent).toBe(JSON.stringify(savedBoundary));
 });

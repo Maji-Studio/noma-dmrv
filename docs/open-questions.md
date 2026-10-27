@@ -635,15 +635,9 @@ before allowing confirmation to convert stored entry values to the new unit.
 
 ## Save refusals on the remaining forms (#1327) - **deferred**
 
-- Only delivery, application and feedstock edit use `useSaveRefusal`; the other forms
-  keep the bottom line.
-- Revert gaps to finish in the per-form PRs:
-  - Delivery sub-bin readings and selections (P1/P2 moisture) are not reset, and `draw.changed` stays true.
-  - Application manual position and GIS boundary are not RHF-registered, so `resetField` cannot restore them.
-  - Feedstock: a supplier change plus a lock refusal restores the supplier, then clears the restored override.
-  - Forms not yet migrated keep typed values after a Sent refusal.
-  - A Sent production run keeps typed values too: its lineage guard in
-    `src/data-access/production-runs/mutations.ts` is not wrapped in `withLockedFieldIssues`.
+- Most forms use `useSaveRefusal`. Remaining migrations are tracked by `PENDING`
+  in `src/components/forms/save-refusal-coverage.test.ts`.
+- Forms not yet migrated keep typed values after a Sent refusal.
 - Registered customer locations have no lock-read kind; their refusal-specific
   disabling belongs to the customer forms migration.
 
