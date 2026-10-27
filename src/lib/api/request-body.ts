@@ -5,7 +5,7 @@ import { ApiHttpError } from "./http-error";
 export const IDEMPOTENCY_KEY_PATTERN = /^[\x21-\x7e]+$/;
 
 const NUL_CHARACTER = "\u0000";
-const NUL_CHARACTER_MESSAGE = "Remove the NUL character (U+0000); it cannot be stored.";
+const NUL_CHARACTER_MESSAGE = "This value contains a NUL character (U+0000), which noma cannot store. Remove it and retry.";
 
 type JsonPath = { part: string | number; parent?: JsonPath };
 

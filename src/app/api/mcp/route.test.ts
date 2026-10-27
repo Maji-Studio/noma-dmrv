@@ -382,7 +382,7 @@ it("refuses NUL in tool arguments with the shared field validation problem", asy
     isError: true,
     structuredContent: {
       code: "validation_failed", retryable: false,
-      issues: [{ pointer: "/locations/0/name", code: "custom", detail: "Remove the NUL character (U+0000); it cannot be stored." }],
+      issues: [{ pointer: "/locations/0/name", code: "custom", detail: "This value contains a NUL character (U+0000), which noma cannot store. Remove it and retry." }],
     },
   } });
 });

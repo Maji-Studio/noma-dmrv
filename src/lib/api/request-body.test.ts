@@ -24,7 +24,7 @@ it.each([
     expect(response.status).toBe(422);
     expect(await response.json()).toMatchObject({
       code: "validation_failed", retryable: false,
-      errors: [{ pointer, code: "custom", detail: "Remove the NUL character (U+0000); it cannot be stored." }],
+      errors: [{ pointer, code: "custom", detail: "This value contains a NUL character (U+0000), which noma cannot store. Remove it and retry." }],
     });
   }
 });
