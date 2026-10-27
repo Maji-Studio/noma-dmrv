@@ -35,6 +35,15 @@ describe("SegmentBar", () => {
     expect(text(html)).toBe("Biochar 60%Compost 30%Rock dust 10%");
   });
 
+  it("hands each segment to the formatter, so one part can read differently", () => {
+    const parts = [
+      { label: "Ingredient solids", mass: 298.1, category: "ingredient-solids" as const },
+      { label: "Water, estimated", mass: 663.1, category: "existing-water" as const },
+    ];
+    const whole = (mass: number, segment: { category: string }) => segment.category === "existing-water" ? `${Math.round(mass)} kg` : `${mass} kg`;
+    expect(text(renderToStaticMarkup(<SegmentKey segments={parts} formatSegment={whole} />))).toBe("Ingredient solids 298.1 kgWater, estimated 663 kg");
+  });
+
   it("scales the parts to the bar", () => {
     expect(segmentWidths(shares)).toEqual([60, 30, 10]);
   });

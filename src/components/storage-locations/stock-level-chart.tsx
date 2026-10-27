@@ -10,7 +10,7 @@ import { useId } from "react";
 import { Button } from "@/components/ui/button";
 import { formatFacilityTime } from "@/lib/date-utils";
 import { formatMassKg } from "@/lib/format-utils";
-import { DetailsTooltip } from "./sub-bin-card";
+import { DetailsTooltip, type DetailRow } from "./sub-bin-card";
 import type { StockLevelPoint, StockModeChange } from "./stock-level-series";
 import { ESTIMATED_WATER_LABEL, ESTIMATED_WET_LABEL, INGREDIENT_SOLIDS_LABEL } from "@/lib/output-stock/labels";
 export type { StockLevelPoint } from "./stock-level-series";
@@ -45,7 +45,21 @@ function polyline(vertices: readonly Vertex[]): string {
   return vertices.map((v, i) => `${i === 0 ? "M" : "L"}${v.x} ${v.y}`).join(" ");
 }
 
-export function StockLevelChart({ points, modeChanges = [], timeZone, now, solidLabel = "Dry biochar", compact = false }: {
+/** How an estimated mass (water, wet) reads: one decimal by default, or whole kg for an output bin. */
+export type EstimateFormat = (kg: number) => string;
+
+/** A step's tooltip rows. Water and wet mass read through `formatEstimate`; the solids keep their decimal. */
+export function stockPointRows(point: StockLevelPoint, solidLabel: string, formatEstimate: EstimateFormat = formatMassKg): DetailRow[] {
+  return [
+    { label: solidLabel, value: formatMassKg(point.dryKg) },
+    ...((point.ingredientsKg ?? 0) > 0 ? [{ label: INGREDIENT_SOLIDS_LABEL, value: formatMassKg(point.ingredientsKg) }] : []),
+    // Water without an honest figure is left out, as in the history.
+    ...(point.waterKg === null ? [] : [{ label: ESTIMATED_WATER_LABEL, value: formatEstimate(point.waterKg) }]),
+    { label: ESTIMATED_WET_LABEL, value: point.wetKg === null ? formatMassKg(null) : formatEstimate(point.wetKg) },
+  ];
+}
+
+export function StockLevelChart({ points, modeChanges = [], timeZone, now, solidLabel = "Dry biochar", compact = false, formatEstimate = formatMassKg }: {
   points: StockLevelPoint[];
   modeChanges?: StockModeChange[];
   timeZone: string;
@@ -54,6 +68,8 @@ export function StockLevelChart({ points, modeChanges = [], timeZone, now, solid
   solidLabel?: string;
   /** The stock card's shorter version. */
   compact?: boolean;
+  /** Reads the estimated water and wet mass; an output bin passes whole kg, a feedstock bin keeps its decimal. */
+  formatEstimate?: EstimateFormat;
 }) {
   // Several bin cards can share a page, so each chart needs its own pattern id.
   const hatchId = `stock-water-hatch-${useId().replace(/:/g, "")}`;
@@ -121,13 +137,7 @@ export function StockLevelChart({ points, modeChanges = [], timeZone, now, solid
           const left = x(point.t);
           const right = index < points.length - 1 ? x(points[index + 1].t) : endX;
           const title = `${point.label ?? "Stock"}, ${formatFacilityTime(new Date(point.t), timeZone, TOOLTIP_DATE_FORMAT)}`;
-          return <DetailsTooltip key={index} title={title} rows={[
-            { label: solidLabel, value: formatMassKg(point.dryKg) },
-            ...((point.ingredientsKg ?? 0) > 0 ? [{ label: INGREDIENT_SOLIDS_LABEL, value: formatMassKg(point.ingredientsKg) }] : []),
-            // Water without an honest figure is left out, as in the history.
-            ...(point.waterKg === null ? [] : [{ label: ESTIMATED_WATER_LABEL, value: formatMassKg(point.waterKg) }]),
-            { label: ESTIMATED_WET_LABEL, value: formatMassKg(point.wetKg) },
-          ]} trigger={<Button type="button" variant="noOutline" aria-label={`${title} details`}
+          return <DetailsTooltip key={index} title={title} rows={stockPointRows(point, solidLabel, formatEstimate)} trigger={<Button type="button" variant="noOutline" aria-label={`${title} details`}
             className="absolute min-h-44 min-w-44 rounded-none p-0 hover:bg-transparent focus-visible:ring-2 focus-visible:ring-inset"
             style={{ left: `min(${left / VIEW_W * PERCENT}%, calc(100% - ${TOUCH_TARGET_PX}px))`, width: `${Math.max(right - left, HIT_MIN_W) / VIEW_W * PERCENT}%`, top: `${PAD.top / viewH * PERCENT}%`, height: `${(baseY - PAD.top) / viewH * PERCENT}%` }} />} />;
         })}
@@ -135,7 +145,7 @@ export function StockLevelChart({ points, modeChanges = [], timeZone, now, solid
       <figcaption className="flex flex-wrap gap-x-16 gap-y-4 body-caption text-[var(--color-text-secondary)]">
         <span className="inline-flex items-center gap-6"><span aria-hidden="true" className="inline-block h-12 w-12 bg-[var(--clr-dark-purple-80)]" />{solidLabel} {formatMassKg(last.dryKg)}</span>
         {hasIngredients && <span className="inline-flex items-center gap-6"><span aria-hidden="true" className="inline-block h-12 w-12 bg-[var(--acc-infra)]" />{INGREDIENT_SOLIDS_LABEL} {formatMassKg(last.ingredientsKg)}</span>}
-        {hasWater && <span className="inline-flex items-center gap-6"><span aria-hidden="true" className="inline-block h-12 w-12 border border-[var(--color-border-secondary)] moisture-water-hatch" />{ESTIMATED_WATER_LABEL}{last.waterKg === null ? "" : ` ${formatMassKg(last.waterKg)}`}</span>}
+        {hasWater && <span className="inline-flex items-center gap-6"><span aria-hidden="true" className="inline-block h-12 w-12 border border-[var(--color-border-secondary)] moisture-water-hatch" />{ESTIMATED_WATER_LABEL}{last.waterKg === null ? "" : ` ${formatEstimate(last.waterKg)}`}</span>}
       </figcaption>
     </figure>
   );
