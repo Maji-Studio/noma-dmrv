@@ -211,7 +211,7 @@ it("says unchanged everywhere for a returned receiving Removal that sent an entr
 
     expect(await compareRemovalCurrentContent(org, f.removalId)).toMatchObject({ kind: "unchanged", state: { comparison: "unchanged", correctionNeeded: false } });
     expect(await loadRemovalEntryCorrection(org, f.removalId)).toMatchObject({ windowOpen: true, correctionNeeded: false, comparison: "unchanged" });
-    const carried = await loadRemovalCarriedEntries(org, f.removalId);
+    const { carriedEntries: carried } = await loadRemovalCarriedEntries(org, f.removalId);
     // The sheet read shows each frozen entry's magnitude and unit only.
     expect(normalizeCarriedEntriesForHash(carried)).toEqual(normalizeCarriedEntriesForHash(baseline!.carriedEntries as never)!
       .map(item => ({ ...item, value: { magnitude: item.value.magnitude, unit: item.value.unit } })));

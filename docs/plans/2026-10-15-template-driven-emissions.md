@@ -423,6 +423,8 @@ The CLI uses the existing Platform Admin bootstrap seam (`ALLOW_DEV_BOOTSTRAP`),
 
 **Amendment, 2026-10-22 (Kenji on the answer page):** A late additive value entry moves only once its own credit batch is fully applied, its period has ended, and no own-batch Removal (draft or returned) can take it. The receiver is the facility's next draft, never a submitted, in-flight or returned Removal, whose window ends on or after the entry date and whose template takes the component. Rank drafts by earliest window end, then earliest creation, then lowest id. Skip a draft with a known incompatible template; an unread template makes the entry wait at that draft. An existing reservation or claim keeps its owner. The entry keeps its own credit batch and date, and Isometric receives a datapoint and Source note.
 
+**Amendment, 2026-10-27 (Kenji on the answer page):** When the statement covering the entry's own-batch Removal is returned, a late entry not yet in flight or sent goes into that Removal's revision, and the entry row, the batch Overview and the Removal sheet say so. This replaces the "ask each time" dialog in #1059 section 4. A waiting late entry is a Check to-do.
+
 ## 8. Risks and checks
 
 - **Hash churn.** Entry edits supersede sent Removals. The derived "correction needed" state and the edit window keep this explicit.

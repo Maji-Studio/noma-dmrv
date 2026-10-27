@@ -122,14 +122,15 @@ it("avoids all reads for an empty set", async () => {
   expect(loadBatchesEmissionAutomaticFacts).not.toHaveBeenCalled();
 });
 
-it("exposes carry destinations, waiting reasons and actual senders on the existing batch lines", async () => {
+it("exposes carry destinations, revisions, waiting reasons and actual senders on the existing batch lines", async () => {
   const destination = { removalId: "receiver", removalCode: "RM-010", creditBatchCodes: ["CB-010"], creditBatchIds: ["cb-010"], anotherCreditBatch: true };
   const carry = { receiver: destination, waitingReason: null };
   const entry = { id: "carry-entry", creditBatchId: "ready", observationId: observation.id, componentId: "electricity", kind: "value",
     values: [{ inputKey: "electricity_use", magnitude: "120", unit: "kWh" }], documentCount: 1 };
   vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([entry] as never);
   for (const state of [{ carry, reportedIn: null }, { carry: { receiver: null, waitingReason: "noDraft" }, reportedIn: null },
-    { carry: { receiver: null, waitingReason: null }, reportedIn: destination }]) {
+    { carry: { receiver: null, waitingReason: null }, reportedIn: destination },
+    { carry: { receiver: null, waitingReason: null }, reportedIn: null, revisionOf: { removalId: "own", removalCode: "RM-009" } }]) {
     vi.mocked(loadBatchEmissionEntryCarry).mockResolvedValue([{ ...entry, ...state }] as never);
     const result = (await loadBatchesEmissionLines(ctx, [batches[0]])).get("ready")!;
     assert(result.status === "ready");

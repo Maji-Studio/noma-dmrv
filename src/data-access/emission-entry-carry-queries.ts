@@ -75,6 +75,21 @@ export async function listOwnedCarryEntries(ctx: OrgContext, facilityId: string,
     .orderBy(emissionEntries.id);
 }
 
+/** Batch display/revision reads include free values independently of carry eligibility. */
+export async function listUnsentBatchEntries(ctx: OrgContext, facilityId: string, executor: CarryExecutor, scope: CarryReadScope) {
+  requireOrgScope(ctx);
+  if (!scope.ownedBatchIds?.length) return [];
+  return executor.select({ entry: emissionEntries, batch: creditBatches, timezone: facilities.timezone }).from(emissionEntries)
+    .innerJoin(creditBatches, and(eq(creditBatches.id, emissionEntries.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId)))
+    .innerJoin(facilities, and(eq(facilities.id, creditBatches.facilityId), eq(facilities.organizationId, ctx.organizationId)))
+    .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId),
+      inArray(emissionEntries.creditBatchId, scope.ownedBatchIds),
+      scope.entryIds ? inArray(emissionEntries.id, scope.entryIds) : undefined,
+      eq(emissionEntries.kind, "value"), isNull(emissionEntries.deletedAt),
+      isNull(emissionEntries.sentByRemovalId), isNull(emissionEntries.sendReservedBySubmissionId)))
+    .orderBy(emissionEntries.id);
+}
+
 /** Draft receivers, or all members of origin Removals for their correction windows. No registry reads. */
 export async function listCarryRemovalMembers(ctx: OrgContext, facilityId: string, executor: CarryExecutor, originBatchIds?: string[]) {
   requireOrgScope(ctx);

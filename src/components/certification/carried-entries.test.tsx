@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { CarriedEntriesPanel, CarriedEntriesSection, type CarriedEntry } from "./carried-entries";
+import { CarriedEntriesPanel, CarriedEntriesSection, RevisionLateEntriesSection, type CarriedEntry } from "./carried-entries";
 
 vi.mock("@/hooks/use-documents", () => ({
   useDocumentsForEntity: () => ({ data: [{ id: "d1", fileName: "diesel-receipt.pdf", uploadStatus: "uploaded" }] }),
@@ -54,5 +54,24 @@ describe("CarriedEntriesSection", () => {
     expect(container.textContent).toContain("diesel-receipt.pdf");
     expect(screen.getByRole("link", { name: "CB-26-009" }).getAttribute("href")).toBe("/credit-batches/cb-9?facility=f1");
     expect(screen.getByRole("link", { name: "RM-26-009" }).getAttribute("href")).toBe("/certification/removals?facility=f1&removal=rm-9");
+  });
+});
+
+describe("RevisionLateEntriesSection", () => {
+  it("renders nothing without late entries", () => {
+    expect(render(<RevisionLateEntriesSection entries={[]} facilityId="f1" removalCode="RM-26-009" />).container.innerHTML).toBe("");
+    expect(render(<RevisionLateEntriesSection entries={undefined} facilityId="f1" removalCode="RM-26-009" />).container.innerHTML).toBe("");
+  });
+
+  it("names the Removal in the title and says when the entry goes out", () => {
+    const { container } = render(<RevisionLateEntriesSection entries={[ENTRY]} facilityId="f1" removalCode="RM-26-009" />);
+    expect(container.textContent).toContain("Recorded after RM-26-009 was sent");
+    expect(container.textContent).toContain("Goes out when this Removal is resubmitted.");
+    expect(container.textContent).toContain("Diesel use");
+    expect(container.textContent).toContain("120");
+    expect(container.textContent).toContain("Sep 14, 2026");
+    expect(container.textContent).toContain("diesel-receipt.pdf");
+    expect(container.textContent).not.toContain("was sent.");
+    expect(screen.getByRole("link", { name: "CB-26-009" }).getAttribute("href")).toBe("/credit-batches/cb-9?facility=f1");
   });
 });

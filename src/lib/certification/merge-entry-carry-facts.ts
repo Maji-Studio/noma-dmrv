@@ -7,6 +7,6 @@ export function mergeEntryCarryFacts<T extends { id: string }>(entries: readonly
   const byId = new Map(carriedEntries.map(entry => [entry.id, entry]));
   return entries.map(entry => {
     const carried = byId.get(entry.id);
-    return { ...entry, carry: carried?.carry, reportedIn: carried?.reportedIn, recordedAfter: recordedAfter(carried) };
+    return { ...entry, carry: carried?.carry, reportedIn: carried?.reportedIn, revisionOf: carried?.revisionOf, recordedAfter: recordedAfter(carried) };
   });
 }

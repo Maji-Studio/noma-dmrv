@@ -15,7 +15,7 @@ it("validates the Removal ID before accessing data", async () => {
 });
 it("uses the authenticated context and returns the narrow result", async () => {
   const removalId = crypto.randomUUID();
-  vi.mocked(loadRemovalCarriedEntries).mockResolvedValue([]);
-  expect(await getRemovalCarriedEntriesFn({ removalId })).toEqual({ success: true, data: [] });
+  vi.mocked(loadRemovalCarriedEntries).mockResolvedValue({ carriedEntries: [], lateEntries: [] });
+  expect(await getRemovalCarriedEntriesFn({ removalId })).toEqual({ success: true, data: { carriedEntries: [], lateEntries: [] } });
   expect(loadRemovalCarriedEntries).toHaveBeenCalledExactlyOnceWith(makeTestOrgContext(), removalId);
 });

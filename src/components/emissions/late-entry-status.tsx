@@ -65,7 +65,9 @@ export function LateEntryDestinationLine({ destination, className, withAction = 
   return (
     <span className={cn(LINE, "text-[var(--color-text-primary)]", className)}>
       <Icon size={ICON} weight="bold" aria-hidden className={cn("mt-2 shrink-0", tone)} />
-      <span>{placedText(destination)}</span>
+      <span>{destination.kind === "revision"
+        ? <>Goes into the revision of <CodeLink href={destination.removalHref}>{destination.removalCode}</CodeLink>.</>
+        : placedText(destination)}</span>
     </span>
   );
 }

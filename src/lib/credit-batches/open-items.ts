@@ -166,6 +166,21 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     }
   }
 
+  // An entry that no Removal will report yet.
+  for (const line of input.emissionLines ?? []) {
+    for (const entry of line.entries) {
+      const view = lateEntryView(entry, input.facilityId, { canManage });
+      if (view?.destination.kind !== "waiting" || !entry.occurredOn) continue;
+      const reason = waitingDetail(view.destination.reason, canManage);
+      check.push({
+        id: `late-entry:${entry.id ?? `${line.componentId}:${entry.occurredOn}`}`,
+        title: waitingEntryTitle(line.displayName, entry.occurredOn),
+        detail: view.recordedAfter ? `Recorded after ${view.recordedAfter.removalCode} was sent. ${reason}` : reason,
+        target: view.destination.action ? { href: view.destination.action.href } : null,
+      });
+    }
+  }
+
   for (const healthCheck of input.health?.checks ?? []) {
     if (healthCheck.status !== "unmet") continue;
     const fix = resolveBatchHealthFixTarget(healthCheck);
@@ -197,21 +212,6 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       ...(healthCheck.whyDetail ? { why: healthCheck.whyDetail } : {}),
       target,
     });
-  }
-
-  // An entry that no Removal will report yet.
-  for (const line of input.emissionLines ?? []) {
-    for (const entry of line.entries) {
-      const view = lateEntryView(entry, input.facilityId, { canManage });
-      if (view?.destination.kind !== "waiting" || !entry.occurredOn) continue;
-      const reason = waitingDetail(view.destination.reason, canManage);
-      blocking.push({
-        id: `late-entry:${entry.id ?? `${line.componentId}:${entry.occurredOn}`}`,
-        title: waitingEntryTitle(line.displayName, entry.occurredOn),
-        detail: view.recordedAfter ? `Recorded after ${view.recordedAfter.removalCode} was sent. ${reason}` : reason,
-        target: view.destination.action ? { href: view.destination.action.href } : null,
-      });
-    }
   }
 
   for (const key of new Set(input.health?.documentWarnings ?? [])) {
