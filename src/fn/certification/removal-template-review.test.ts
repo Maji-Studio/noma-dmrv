@@ -8,10 +8,9 @@ import { listComponentBlueprints, listGhgEntryTemplates, type IsometricGhgEntryT
 import { loadRemovalTemplateFacts } from "./removal-template-facts";
 import { observeRemovalTemplate, TEMPLATE_ENRICHMENT_TTL_MS } from "./observe-removal-template";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
-import { enrichmentProblems, fullFingerprint, lineNeedsReview, lineSourcesForObservation, normalizeTemplateDefinition, resolveLineSources, semanticFingerprint, validateLineSources, type TemplateEnrichment } from "@/lib/isometric/template-observations";
+import { enrichmentProblems, fullFingerprint, isAcceptableProposal, lineNeedsReview, lineSourcesForObservation, normalizeTemplateDefinition, resolveLineSources, semanticFingerprint, validateLineSources, type TemplateEnrichment } from "@/lib/isometric/template-observations";
 import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/load-enrichment";
 import { loadRemovalTemplateReview, loadRemovalTemplateReviewEntry } from "./removal-template-review";
-import { canAcceptProposal, problemMessages } from "@/components/certification/removal-template-review-model";
 
 const ctx = vi.hoisted((): OrgContext => ({ userId: "review-user", organizationId: "review-org", orgRole: "admin", isPlatformAdmin: false }));
 vi.mock("../with-action", async () => {
@@ -221,7 +220,7 @@ it("sends retired-source contracts and candidates for client proposal validation
     expect(line.contract).toMatchObject({ scope: "operating", entryPolicy: "additive", origin: "proposed" });
     expect(line.contract.automaticSource).toBe(undefined);
     expect(line.catalogCandidates.includes("sample-transport")).toBe(false);
-    expect(canAcceptProposal(entry, line, {})).toBe(true);
+    expect(isAcceptableProposal(entry.observation!.definition, entry.observation!.lineSources, componentId)).toBe(true);
   }
 });
 
@@ -239,9 +238,7 @@ it("preserves the server's retired-source review problem and operator guidance a
   const entry = result.data[0];
   const line = entry.lines.find((candidate) => candidate.component.id === componentId)!;
   expect(line.contract.automaticSource).toBeUndefined();
-  expect(problemMessages(line, entry.lineSourceProblems)).toEqual([
-    "These automatic datapoints are no longer available. Choose others or allow entries for this component.",
-  ]);
+  expect(entry.lineSourceProblems).toContainEqual({ code: "retired-automatic-source", componentId });
 });
 
 it("recomputes entry contracts when live enrichment differs from the stored read", async () => {

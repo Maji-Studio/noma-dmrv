@@ -50,11 +50,6 @@ export const UNREADABLE_TIME = "Unreadable time";
 /** What a value says when the read that should supply it failed. */
 export const LOAD_FAILED = "Could not load";
 
-/** An input or component whose unit Isometric leaves empty. */
-export const ISOMETRIC_GIVES_NO_UNIT = "Isometric gives no unit";
-
-/** An input whose unit was not read from Isometric: no stored observation, or the read of its unit failed. */
-export const UNIT_NOT_READ = "Unit not read";
 
 /** What a registry record says when the ID noma saved no longer resolves on Isometric. */
 export const NOT_FOUND_ON_ISOMETRIC = "Not found on Isometric";

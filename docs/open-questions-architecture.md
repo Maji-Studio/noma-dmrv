@@ -664,3 +664,7 @@ Consider a partial index `documents(updated_at) WHERE upload_status = 'failed'`
 to keep the retention sweep from scanning unrelated documents as the table grows.
 This requires a migration and is deferred from this PR. Measure the retention
 query plan and scan cost before adding it.
+
+### Unused Removal template review action (`certification/template-review-action`, opened 2026-10-27)
+
+`loadRemovalTemplateReview` and `loadRemovalTemplateReviewEntry` (`src/fn/certification/removal-template-review.ts`) have had no caller since the guided setup (#1322) replaced the review card; #1447 removed their hook. Their tests in `removal-template-review.test.ts` and `tests/removal-template-review-read-only.integration.test.ts` also cover template observation, so removing the action means moving that coverage first.
