@@ -17,6 +17,7 @@ import { STOCK_PART_MIN_KG } from "@/config/output-stock";
 import { formatFacilityTime } from "@/lib/date-utils";
 import { ESTIMATED_WATER_LABEL, INGREDIENT_SOLIDS_LABEL } from "@/lib/output-stock/labels";
 import type { OutputSubBin } from "@/types/output-stock";
+import { estimateKg } from "./output-stock-history-days";
 import { formatWetEstimate, outputStockFigure } from "./stock-preview-shared";
 import { stockParts, subBinFigures, type StockPart } from "@/lib/output-stock/stock-parts";
 import { DetailsTooltip, SubBinTooltip, partLabel, subBinMoistureText } from "./sub-bin-card";
@@ -40,8 +41,8 @@ function bayParts(subBin: OutputSubBin) {
 }
 
 /** The swatch a listed part takes: water and ingredients their category fill, dry biochar the bay's tint. */
-function partSwatch(part: StockPart): Pick<PartRow, "swatchClassName" | "swatchStyle"> {
-  if (part.kind === "water") return { swatchClassName: MASS_CATEGORY_FILLS["existing-water"] };
+function partSwatch(part: StockPart): Pick<PartRow, "swatchClassName" | "swatchStyle" | "estimated"> {
+  if (part.kind === "water") return { swatchClassName: MASS_CATEGORY_FILLS["existing-water"], estimated: true };
   if (part.kind === "ingredient") return { swatchClassName: MASS_CATEGORY_FILLS["ingredient-solids"] };
   return { swatchStyle: { background: bayTint(0) } };
 }
@@ -71,6 +72,13 @@ interface PartRow {
   details?: PileBand["details"];
   swatchClassName?: string;
   swatchStyle?: CSSProperties;
+  /** Water by the records: an estimate, read in whole kg like the wet mass it is part of. */
+  estimated?: boolean;
+}
+
+/** A part's mass as the legends read it: estimated water in whole kg, the rest as the composition does. */
+export function legendMass(mass: number, estimated: boolean): string {
+  return estimated ? estimateKg(mass) : formatCompositionMass(mass);
 }
 
 /** The parts beside a lone bin, top to bottom in the order they sit in it, each with its mass and share. */
@@ -89,7 +97,7 @@ function BinParts({ rows, label }: { rows: PartRow[]; label: string }) {
               </Button>
             } /> : <span className="truncate">{row.label}</span>}
           </dt>
-          <dd className="text-right font-medium">{formatCompositionMass(row.kg)}</dd>
+          <dd className="text-right font-medium">{legendMass(row.kg, row.estimated === true)}</dd>
           <dd className="w-40 text-right text-[var(--color-text-tertiary)]">{totalKg > 0 ? `${Math.round((Math.max(row.kg, 0) / totalKg) * PERCENT)}%` : ""}</dd>
         </div>
       ))}
@@ -160,7 +168,7 @@ export function SubBinBays({ subBins, timeZone, label, capacityKg }: { subBins: 
           </li>
         ))}
       </ul>
-      {sharedParts.length > 0 && <SegmentKey segments={sharedParts} />}
+      {sharedParts.length > 0 && <SegmentKey segments={sharedParts} formatSegment={(mass, segment) => legendMass(mass, segment.category === "existing-water")} />}
     </div>
   );
 }
@@ -172,6 +180,8 @@ export interface PileBand {
   details: { label: string; value: string }[];
   /** A part that is not a batch (ingredient solids, water) takes its category's fill; batches take a batch accent. */
   category?: Exclude<MassCategory, "dry-batch">;
+  /** An estimate (an output bin's water), read in whole kg in the pile list. Feedstock bins weigh theirs and leave this off. */
+  estimated?: boolean;
 }
 
 function bandSwatch(band: PileBand, index: number): Pick<PartRow, "swatchClassName" | "swatchStyle"> {
@@ -194,7 +204,7 @@ export function MixPileBay({ bands, label = SHARES_LABEL, capacityKg = null }: {
   const listed = batches.slice(0, PILE_LIST_LIMIT);
   const folded = batches.slice(PILE_LIST_LIMIT);
   const rows: PartRow[] = [
-    ...[...parts, ...listed].toSorted((a, b) => b.index - a.index).map(({ band, index }) => ({ label: band.label, kg: band.kg, details: band.details, ...bandSwatch(band, index) })),
+    ...[...parts, ...listed].toSorted((a, b) => b.index - a.index).map(({ band, index }) => ({ label: band.label, kg: band.kg, details: band.details, estimated: band.estimated, ...bandSwatch(band, index) })),
     ...(folded.length > 0 ? [{ label: `${folded.length} older batches`, kg: folded.reduce((sum, { band }) => sum + band.kg, 0), swatchClassName: "bg-[var(--clr-dark-purple-10)]", details: folded.map(({ band }) => ({ label: band.label, value: formatCompositionMass(band.kg) })) }] : []),
   ];
   return (

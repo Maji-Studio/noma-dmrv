@@ -10,11 +10,12 @@ import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composi
 import { mixPileName, WET_STOCK_DEFINITION } from "@/lib/output-stock/labels";
 import { OutputStockHistory } from "./output-stock-history";
 import { StockLevelChart } from "./stock-level-chart";
+import { estimateKg } from "./output-stock-history-days";
 import { buildStockLevelSeries } from "./stock-level-series";
 import { CardTextButton, StockCard, StockChartCard } from "./stock-card";
 import { outputStockFigure } from "./stock-preview-shared";
 import { MixPileBay, SubBinBays, type PileBand } from "./sub-bin-bays";
-import { partLabel, partRows } from "./sub-bin-card";
+import { partFigure, partLabel, partRows } from "./sub-bin-card";
 import { pileFigures, stockParts } from "@/lib/output-stock/stock-parts";
 import type { OutputSubBin } from "@/types/output-stock";
 import type { MoistureBasis } from "@/lib/output-stock/moisture-estimate";
@@ -44,8 +45,8 @@ export function mixPileBands(layers: OutputSubBin[], dryKg: number | null, wetKg
     ...parts.rows.filter((part) => part.kind === "ingredient").map((part) => ({ label: partLabel(part), kg: part.kg, category: "ingredient-solids" as const, details: [
       { label: partLabel(part), value: formatMassKg(part.kg) },
     ] })),
-    ...parts.rows.filter((part) => part.kind === "water").map((part) => ({ label: partLabel(part), kg: part.kg, category: "existing-water" as const, details: [
-      { label: partLabel(part), value: formatMassKg(part.kg) },
+    ...parts.rows.filter((part) => part.kind === "water").map((part) => ({ label: partLabel(part), kg: part.kg, category: "existing-water" as const, estimated: true, details: [
+      { label: partLabel(part), value: partFigure(part) },
       // The pile's moisture is an estimate, so without one the row is left out.
       ...(moisturePercent === null ? [] : [{ label: "Moisture", value: formatMoisturePercent(moisturePercent) }]),
     ] })),
@@ -114,7 +115,7 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
     </StockCard>
     <StockChartCard history={<OutputStockHistory storageLocationId={storageLocationId} facilityId={facilityId}
       renderTrigger={(open, icon) => <CardTextButton icon={icon} onClick={open}>History</CardTextButton>} />}>
-      {history.error ? <Notice tone="error">{history.error.message}</Notice> : history.isLoading ? <p role="status" className="body-caption">Loading stock history</p> : series && series.points.length > 1 ? <StockLevelChart compact points={series.points} modeChanges={series.modeChanges} timeZone={clock.timeZone} now={history.dataUpdatedAt} /> : undefined}
+      {history.error ? <Notice tone="error">{history.error.message}</Notice> : history.isLoading ? <p role="status" className="body-caption">Loading stock history</p> : series && series.points.length > 1 ? <StockLevelChart compact points={series.points} modeChanges={series.modeChanges} timeZone={clock.timeZone} now={history.dataUpdatedAt} formatEstimate={estimateKg} /> : undefined}
     </StockChartCard>
   </div>;
 }
