@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { certifierRemovals } from "@/db/schema/certification";
 import { withAutoCodes } from "@/data-access/code-generator";
@@ -18,10 +19,14 @@ export async function insertRemovalFixture(
     throw new Error("Removal fixtures must belong to one organization.");
   }
   const ctx = { ...makeTestOrgContext(), organizationId };
-  return executor.transaction(tx => withAutoCodes(
-    ctx, tx, REMOVAL_CODE_PREFIX, certifierRemovals, certifierRemovals.code, rows.length,
-    (codes, savepoint) => savepoint.insert(certifierRemovals)
-      .values(rows.map((row, index) => ({ ...row, code: codes[index] })))
-      .returning(),
-  ));
+  return executor.transaction(async tx => {
+    // Parallel test files share one org; serialize code allocation until the enclosing transaction ends.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${"removal-fixture-code:" + organizationId}, 0))`);
+    return withAutoCodes(
+      ctx, tx, REMOVAL_CODE_PREFIX, certifierRemovals, certifierRemovals.code, rows.length,
+      (codes, savepoint) => savepoint.insert(certifierRemovals)
+        .values(rows.map((row, index) => ({ ...row, code: codes[index] })))
+        .returning(),
+    );
+  });
 }
