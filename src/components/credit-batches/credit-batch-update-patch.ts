@@ -19,7 +19,7 @@ export interface SavedCreditBatchDefinition {
 }
 
 export const CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE =
-  "A Removal holds this credit batch. Keep its facility, feedstock type, dates and existing production runs. Matching runs can be added unless the Removal is Sent.";
+  "A Removal now holds this credit batch, so its feedstock type, dates and current production runs cannot change. Restore them or cancel the edit.";
 
 /** A held batch cannot change its cohort definition or remove runs. */
 export function isCreditBatchMembershipLocked(lock: RecordLockView | undefined): boolean {
