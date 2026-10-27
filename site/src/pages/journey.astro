@@ -1,0 +1,93 @@
+---
+/**
+ * Journey: one credit batch traced from supplier to field, as a full-screen app (reached by QR code).
+ * Its own document: no SiteNav or SiteFooter, not in the nav, not indexed until Dark Earth Carbon
+ * approves a public page. Data is the committed snapshot site/src/data/journey/journey.json.
+ * Code: src/components/site/journey/ (journey.js boots it).
+ */
+import "../styles/tokens.css";
+import "../components/site/journey/journey.css";
+import "../components/site/journey/journey-map.css";
+import Logo from "../components/site/Logo.astro";
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Credit batch CB-26-001 | noma</title>
+    <meta name="description" content="Follow credit batch CB-26-001 from supplier to field, with the record behind each step." />
+    <meta name="robots" content="noindex" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0f021a" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <div class="jr" id="app">
+      <div class="view jr-map" id="mapV" role="group" aria-label="Map of the selected chain around Mafinga, Tanzania. The record inspector lists the same records."></div>
+      <p class="jr-nomap">The map needs WebGL, which this browser does not offer. The graph and the cards show the same records.</p>
+      <div class="view" id="graphV" hidden role="img" aria-label="Lineage graph of credit batch CB-26-001. The record inspector lists the same records.">
+        <svg id="gs" aria-hidden="true"><g id="gw"><g id="gH"></g><g id="gE"></g><g id="gN"></g></g></svg>
+      </div>
+
+      <header class="top">
+        <a class="jr-home" href="/" aria-label="noma, home"><Logo /></a>
+        <button class="batch" id="batchBtn" aria-expanded="false" aria-controls="sum" aria-label="Credit batch CB-26-001, pending. Open batch summary">
+          <span class="bk mono">Credit batch <em>Pending</em></span>
+          <span class="bc">CB-26-001<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 3.5 5 7l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></span>
+        </button>
+        <div class="seg" id="seg" role="tablist" aria-label="View" data-mode="map">
+          <span class="knob" aria-hidden="true"></span>
+          <button role="tab" id="tMap" aria-selected="true" aria-controls="mapV">Map</button>
+          <button role="tab" id="tGraph" aria-selected="false" aria-controls="graphV">Graph</button>
+        </div>
+      </header>
+      <div class="fadeT" aria-hidden="true"></div>
+      <p class="chipline mono" id="chipline"><i aria-hidden="true"></i>Latest record</p>
+
+      <div class="ctrls" id="ctrls" role="group" aria-label="Zoom">
+        <button id="zIn" aria-label="Zoom in"><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></button>
+        <button id="zOut" aria-label="Zoom out"><svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button>
+        <button id="zRe" aria-label="Recenter on the selected record"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.2"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3"/></svg></button>
+      </div>
+      <p class="vnote mono" id="vnote" style="visibility:hidden"></p>
+
+      <div class="scrim" id="scrim" hidden></div>
+      <aside class="sum" id="sum" hidden aria-label="Batch summary">
+        <div class="s-h">
+          <div><p class="k mono" id="sumPeriod">Credit batch</p><h2>CB-26-001</h2><p><span class="pend">Pending</span> · not yet verified or issued</p></div>
+          <button class="s-x" id="sumX" aria-label="Close batch summary"><svg viewBox="0 0 14 14"><path d="M2 2l10 10M12 2 2 12"/></svg></button>
+        </div>
+        <dl class="kpi" id="kpi"></dl>
+        <div class="s-sec hc"><h3>H/Corg by lab sample · limit 0.5</h3><svg id="hc" viewBox="0 0 360 60" role="img"></svg></div>
+        <div class="s-sec"><h3>Latest records</h3><ul class="lst" id="late"></ul></div>
+        <div class="s-sec"><h3>All credit batches at this facility</h3><ul class="lst" id="cbs"></ul></div>
+        <div class="s-sec"><h3>Not recorded yet</h3><p class="s-note">CO2e removed, registry id. No documents are attached to any record in this chain.</p></div>
+        <div class="s-sec"><h3>Legend</h3><div class="legend">
+          <span><svg viewBox="0 0 24 10"><circle cx="12" cy="5" r="3.6" fill="#fff9f7" opacity=".7"/></svg>Record</span>
+          <span><svg viewBox="0 0 24 10"><line x1="1" y1="5" x2="23" y2="5" stroke="#fff9f7" stroke-opacity=".7" stroke-width="1.6"/></svg>Time in a bin</span>
+          <span><svg viewBox="0 0 24 10"><line x1="1" y1="5" x2="23" y2="5" stroke="#fff9f7" stroke-opacity=".7" stroke-width="1.6" stroke-dasharray="3 3"/></svg>Transport</span>
+          <span><svg viewBox="0 0 24 10"><circle cx="12" cy="5" r="4" fill="#ffb2d2"/></svg>Selected record</span>
+        </div></div>
+        <div class="ctas"><a class="p" href="/get-started">Book a walkthrough</a><a class="s" id="sumCode" href="#">See the code</a></div>
+        <p class="s-src" id="sumSrc"></p>
+      </aside>
+
+      <section class="sheet" id="sheet" aria-label="Record inspector">
+        <div class="head" id="head">
+          <button class="grab" id="grab" aria-label="Show all record values"><i></i></button>
+          <nav class="crumb" id="crumb" hidden aria-label="Branch"></nav>
+          <div class="row">
+            <p class="pos" id="pos" aria-live="polite"></p>
+            <div class="nav"><button id="prev" aria-label="Previous record, upstream"><svg viewBox="0 0 12 12"><path d="M7.5 2 3.5 6l4 4"/></svg>Back</button><button id="next" aria-label="Next record, downstream">Next<svg viewBox="0 0 12 12"><path d="M4.5 2l4 4-4 4"/></svg></button></div>
+          </div>
+          <div class="rail" id="rail" role="slider" tabindex="0" aria-label="Position in the chain"><svg id="railS"></svg></div>
+        </div>
+        <div class="deck" id="deck"></div>
+      </section>
+    </div>
+    <script>
+      import "../components/site/journey/journey.js";
+    </script>
+  </body>
+</html>

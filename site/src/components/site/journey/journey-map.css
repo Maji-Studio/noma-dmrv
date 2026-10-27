@@ -1,0 +1,93 @@
+/* Journey page map: the MapLibre canvas on the dark stage, markers, legs' chips, the plant schematic. */
+.jr .jr-map { position: absolute; inset: 0; background: var(--stage); opacity: 0; transition: opacity 0.5s var(--ease-out); }
+.jr .jr-map.jr-map--ready, .jr .jr-map--blank { opacity: 1; }
+.jr .view[hidden].jr-map { opacity: 0; }
+.jr .jr-map--blank { background-image: radial-gradient(circle, rgba(255, 249, 247, 0.11) 1.5px, transparent 1.5px); background-size: 28px 28px; }
+.jr .jr-map .maplibregl-canvas { outline: none; }
+
+/* attribution: MapTiler and OSM terms need it visible, so it rides above the sheet */
+.jr .jr-map .maplibregl-ctrl-bottom-left { bottom: var(--cb, 360px); left: 0; transition: bottom 0.42s var(--spring), opacity 0.25s; z-index: 14; }
+.jr .jr-map .maplibregl-ctrl-bottom-right { display: none; }
+.jr .jr-map .maplibregl-ctrl-attrib { max-width: calc(100vw - 2 * var(--gl) - 44px - 24px); margin: 0 0 0 var(--gl); font: 300 9px/1.35 var(--f-sans); letter-spacing: 0; background: rgba(15, 2, 26, 0.6); color: var(--ink-4); }
+.jr .jr-map .maplibregl-ctrl-attrib a { color: var(--ink-2); }
+.jr .jr-map .maplibregl-ctrl-attrib-button { background-color: transparent; filter: invert(1) opacity(0.6); }
+.jr.sheet-high .maplibregl-ctrl-bottom-left { opacity: 0; pointer-events: none; }
+
+/* markers. Each is a 0x0 anchor on its coordinate; the pieces centre on it. */
+.jr-fd, .jr-sp, .jr-plantmark, .jr-town, .jr-chip { position: relative; width: 0; height: 0; }
+.jr-fd, .jr-sp, .jr-plantmark { cursor: pointer; }
+.jr-lab { position: absolute; display: grid; gap: 1px; white-space: nowrap; pointer-events: none; text-shadow: 0 0 3px var(--stage), 0 0 6px var(--stage), 0 0 10px var(--stage); font-family: var(--f-mono); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
+.jr-lab b { font-weight: 500; font-size: 9.5px; color: var(--ink-3); }
+.jr-lab small { font-size: 9px; color: var(--ink-4); }
+
+/* fields */
+.jr-fd::after, .jr-sp::after, .jr-plantmark::after { content: ""; position: absolute; left: -20px; top: -20px; width: 40px; height: 40px; }
+.jr-fd .jr-dot { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 249, 247, 0.34); box-shadow: 0 0 0 1.5px var(--stage); transition: background 0.35s; }
+.jr-fd.rel .jr-dot { background: rgba(255, 249, 247, 0.72); }
+.jr-fd.trail .jr-dot { background: var(--lit-mid); }
+.jr-fd.cur .jr-dot { background: var(--lit); }
+.jr-fd { z-index: 1; }
+.jr-fd.cur { z-index: 4; }
+.jr-fd .jr-halo { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; border: 1.2px solid var(--lit); border-radius: 50%; display: none; animation: jr-halo 2.4s var(--ease-out) infinite; }
+.jr-halo-on .jr-fd.cur .jr-halo { display: block; }
+@keyframes jr-halo { 0% { transform: scale(0.5); opacity: 0.9; } 70%, 100% { transform: scale(2.2); opacity: 0; } }
+.jr-fd .jr-lab { display: none; left: 10px; top: -6px; font-size: 10.5px; color: var(--lit); letter-spacing: 0.06em; }
+.jr-few .jr-fd.cur .jr-lab { display: block; }
+
+/* suppliers: hollow ring, name and place beside it */
+.jr-sp .jr-dot { position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%; background: var(--stage); border: 1.5px solid rgba(255, 249, 247, 0.5); transition: border-color 0.35s, background 0.35s; }
+.jr-sp.rel .jr-dot { border-color: var(--ink-2); }
+.jr-sp.trail .jr-dot { border-color: var(--lit-mid); }
+.jr-sp.cur .jr-dot { border-color: var(--lit); background: var(--lit); }
+.jr-sp .jr-lab { left: 12px; top: -4px; display: none; }
+.jr-sp.cur .jr-lab, .jr-sp.rel .jr-lab { display: grid; }
+.jr-sp.up .jr-lab { top: -28px; }
+.jr-sp.left .jr-lab { left: auto; right: 12px; text-align: right; }
+.jr-sp.cur .jr-lab b { color: var(--lit); }
+.jr-sp.trail .jr-lab b { color: var(--ink-2); }
+
+/* the plant marker (approximate) */
+.jr-plantmark { z-index: 3; transition: opacity 0.3s; }
+.jr-plantmark.is-dim { pointer-events: none; visibility: hidden; }
+.jr-plantmark .jr-sq { position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; background: var(--stage); border: 1.5px solid rgba(255, 249, 247, 0.6); transition: border-color 0.35s, background 0.35s; }
+.jr-plantmark.trail .jr-sq { border-color: var(--lit-mid); }
+.jr-plantmark.cur .jr-sq { border-color: var(--lit); background: var(--lit); }
+.jr-plantmark .jr-lab { right: 13px; top: -10px; text-align: right; }
+.jr-plantmark .jr-lab b { font-size: 10.5px; color: var(--ink-2); }
+
+/* places the page names itself: towns from delivery destinations, distance chips on the lit leg */
+.jr-town { margin-top: -20px; pointer-events: none; }
+.jr-town { font: 500 9px var(--f-mono); letter-spacing: 0.06em; color: rgba(255, 249, 247, 0.42); text-shadow: 0 0 3px var(--stage), 0 0 6px var(--stage), 0 0 10px var(--stage); white-space: nowrap; display: flex; justify-content: center; }
+.jr-chip { display: none; pointer-events: none; z-index: 5; }
+.jr-chip.on { display: flex; justify-content: center; font: 500 10px var(--f-mono); letter-spacing: 0.06em; color: var(--lit); white-space: nowrap; text-shadow: 0 0 3px var(--stage), 0 0 6px var(--stage), 0 0 10px var(--stage), 0 0 14px var(--stage); margin-top: -13px; }
+.jr-truck { display: block; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: var(--lit); box-shadow: 0 0 0 2px var(--lit-glow), 0 0 8px var(--lit-mid); pointer-events: none; z-index: 5; }
+
+/* plant schematic: an overlay in screen pixels, never in map units */
+.jr .jr-plant { position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none; background: rgba(15, 2, 26, 0.95); transition: opacity 0.3s; will-change: transform; }
+.jr-plant-cap { position: absolute; left: 0; top: -17px; font-size: 9px; color: var(--ink-3); white-space: nowrap; text-shadow: 0 0 4px var(--stage), 0 0 8px var(--stage); }
+.jr-plant-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.jr-plant-frame { fill: none; stroke: rgba(255, 249, 247, 0.22); stroke-width: 1; stroke-dasharray: 2 3; }
+.jr-conv { stroke: rgba(255, 249, 247, 0.24); stroke-width: 1.5; }
+.jr-conv.trail { stroke: var(--lit-mid); }
+.jr-tile { position: absolute; width: 30px; height: 30px; display: block; pointer-events: none; }
+.is-live .jr-tile { pointer-events: auto; cursor: pointer; }
+.jr-tile::before { content: ""; position: absolute; inset: 0; background: var(--k, var(--prod)); opacity: 0.5; border: 1px solid rgba(255, 249, 247, 0.3); transition: opacity 0.35s, background 0.35s; }
+.jr-tile.d-prod { --k: var(--prod); } .jr-tile.d-dist { --k: var(--dist); } .jr-tile.d-ver { --k: var(--ver); } .jr-tile.d-infra { --k: var(--infra); }
+.jr-tile svg { position: absolute; inset: 3px; width: 24px; height: 24px; fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; opacity: 0.7; }
+.jr-tile::after { content: ""; position: absolute; inset: -5px; border: 1.6px solid var(--lit); opacity: 0; transition: opacity 0.35s; }
+.jr-tile.trail::before { opacity: 0.85; }
+.jr-tile.trail::after { opacity: 0.4; }
+.jr-tile.cur::before { opacity: 1; background: var(--lit); border-color: var(--lit); }
+.jr-tile.cur::after { opacity: 1; }
+.jr-tile.cur svg { stroke: var(--stage); opacity: 1; }
+.jr-tile-lab { position: absolute; left: 50%; top: 40px; width: var(--lab-w, 80px); margin-left: calc(var(--lab-w, 80px) / -2); text-align: center; font-size: 9.5px; letter-spacing: 0.05em; color: var(--ink-3); white-space: nowrap; }
+.jr-tile.trail .jr-tile-lab { color: var(--ink-2); }
+.jr-tile.cur .jr-tile-lab { color: var(--lit); }
+.jr-tile:focus-visible { outline: 2px solid var(--lit); outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) { .jr-fd .jr-halo { animation: none; } }
+@media (min-width: 960px) {
+  .jr .jr-map .maplibregl-ctrl-bottom-left { bottom: 0; }
+  .jr .jr-map .maplibregl-ctrl-attrib { margin-left: 28px; max-width: 420px; }
+}
+.jr-plantmark.flip .jr-lab { right: auto; left: 13px; text-align: left; }
+.jr-plant-on .jr-fd .jr-lab { display: none !important; }
