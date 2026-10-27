@@ -332,7 +332,7 @@ it("shares discovery across different Removals but reads each Removal's retained
   const cache = new Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>();
   const waiting = { ...deriveEmissionEntryFacts([storedEntry("origin")], observation as never, new Map())[0],
     reservedByRemovalId: null, reservationKnownInactive: true,
-    carry: { receiver: null, waitingReason: "noDraft" as const }, reportedIn: null,
+    carry: { receiver: null, waitingReason: "noDraft" as const }, reportedIn: null, revisionOf: null,
     earlierRemovalCode: undefined, creditBatchCode: "CB-origin", entryObservation: observation as never };
   vi.mocked(loadFacilityEmissionEntryCarry).mockImplementation(async (_ctx, _facility, _executor, _claim, _scope, ownedOnly) =>
     ({ entries: ownedOnly ? [] : [waiting], contenders: [], ownContenders: [], batches: [] }));

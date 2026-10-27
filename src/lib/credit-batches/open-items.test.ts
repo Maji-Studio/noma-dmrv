@@ -16,6 +16,8 @@ import {
   CREDIT_BATCH_DETAILS_ROW,
 } from "./open-items";
 
+import { overviewBadgeCount, tabBadge } from "./batch-page";
+
 const batchContext = { facilityId: "facility", creditBatchId: "batch", canManage: true };
 
 function fixture() {
@@ -375,14 +377,31 @@ describe("entries recorded after the Removal was sent", () => {
     ["noDraft", "No later draft is available at this facility.", "/certification/removals?facility=facility&create=true"],
     ["incompatibleTemplate", "The next draft's template cannot take this component.", "/settings/removal-templates?facility=facility"],
     ["templateUnknown", "noma has not read the next draft's template yet. Open the Removal to load it.", "/certification/removals?facility=facility&removal=rm-11"],
-  ])("blocks on a waiting entry: %s", (reason, text, href) => {
-    const { blocking } = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line(waiting(reason))] });
-    expect(blocking).toEqual([{
+  ])("adds a Check for a waiting entry: %s", (reason, text, href) => {
+    const { blocking, check } = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line(waiting(reason))] });
+    expect(blocking).toEqual([]);
+    expect(check).toEqual([{
       id: "late-entry:e1",
       title: "Diesel use of Sep 14, 2026 is waiting for a Removal",
       detail: `Recorded after RM-26-009 was sent. ${text}`,
       target: { href },
     }]);
+  });
+
+  it("places a waiting entry immediately after late production runs and keeps the list non-blocking", () => {
+    const items = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line(waiting("noDraft"))],
+      lateProductionRuns: { sentRemovalCodes: ["RM-009"], batchStartDate: "2026-09-01", manualEntries: [],
+        runs: [{ id: "run", code: "PR-112", startDate: "2026-09-09", createdAt: new Date("2026-10-01") }] } });
+    expect(items.blocking).toEqual([]);
+    expect(items.check.map(item => item.id)).toEqual(["late-production-run:run", "late-entry:e1"]);
+    expect(overviewBadgeCount({ ...items, waiting: [] })).toBe(2);
+    expect(tabBadge("overview", { ...items, waiting: [] })).toEqual({ count: 2, blocking: false });
+  });
+
+  it("has no to-do when an entry goes into its own Removal revision", () => {
+    expect(buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line(waiting("noDraft"), {
+      revisionOf: { removalId: "rm-9", removalCode: "RM-26-009" },
+    })] })).toEqual({ blocking: [], check: [] });
   });
 
   it("is not open once a Removal has it or reported it", () => {
@@ -391,9 +410,10 @@ describe("entries recorded after the Removal was sent", () => {
     expect(buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line({ receiver: null, waitingReason: null }, { reportedIn: receiver })] }).blocking).toEqual([]);
   });
 
-  it("blocks on a waiting entry that has no earlier sent Removal, without the lead line", () => {
-    const { blocking } = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line(waiting("noDraft"), { recordedAfter: null })] });
-    expect(blocking).toEqual([{
+  it("adds a Check for a waiting entry that has no earlier sent Removal, without the lead line", () => {
+    const { blocking, check } = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line(waiting("noDraft"), { recordedAfter: null })] });
+    expect(blocking).toEqual([]);
+    expect(check).toEqual([{
       id: "late-entry:e1",
       title: "Diesel use of Sep 14, 2026 is waiting for a Removal",
       detail: "No later draft is available at this facility.",
@@ -402,9 +422,10 @@ describe("entries recorded after the Removal was sent", () => {
   });
 
   it("gives a member the template text and no link", () => {
-    const { blocking } = buildCreditBatchOpenItems({ ...batchContext, canManage: false, emissionLines: [line(waiting("incompatibleTemplate"))] });
-    expect(blocking[0].detail).toBe("Recorded after RM-26-009 was sent. The next draft's template cannot take this component. An Admin changes it in Settings, Removal templates.");
-    expect(blocking[0].target).toBeNull();
+    const { blocking, check } = buildCreditBatchOpenItems({ ...batchContext, canManage: false, emissionLines: [line(waiting("incompatibleTemplate"))] });
+    expect(blocking).toEqual([]);
+    expect(check[0].detail).toBe("Recorded after RM-26-009 was sent. The next draft's template cannot take this component. An Admin changes it in Settings, Removal templates.");
+    expect(check[0].target).toBeNull();
   });
 });
 

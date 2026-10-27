@@ -8,6 +8,7 @@
  */
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { PaperclipIcon } from "@phosphor-icons/react/dist/ssr";
@@ -29,6 +30,7 @@ const ICON_SIZE = 14;
 const PANEL_TITLE = "Emissions from other credit batches";
 const PANEL_CAPTION = "Included automatically. Each stays part of its own credit batch, and Isometric gets a note saying so.";
 const SHEET_STATE = { draft: "Included automatically. Sent when this Removal is submitted.", sent: "Sent with this Removal." } as const;
+const REVISION_STATE = "Goes out when this Removal is resubmitted.";
 const FALLBACK_NAME = "Emissions entry";
 // Phone: component and figure, then batch and date, then source. Desktop: five columns.
 const ROW_GRID =
@@ -121,21 +123,49 @@ export function CarriedEntriesPanel({ entries, facilityId }: { entries: readonly
 export function CarriedEntriesSection({ entries, facilityId, sent }: { entries: readonly CarriedEntry[] | undefined; facilityId: string; sent: boolean }) {
   if (!entries?.length) return null;
   return (
-    <DetailSection title={PANEL_TITLE}>
-      <ul className="flex flex-col" data-carried-entries>
-        {entries.map((entry) => (
-          <li key={entry.entryId} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-12 gap-y-4 border-t border-[var(--color-border-tertiary)] py-10 first:border-t-0" data-carried-entry>
-            <span className="body-small font-medium">{entry.componentName ?? FALLBACK_NAME}</span>
-            <span className="text-right font-mono body-small tabular-nums">{formatFigure(entry.value)}</span>
-            <span className="col-span-2 body-small text-[var(--color-text-secondary)]">
-              From <BatchLink entry={entry} facilityId={facilityId} newTab={false} />, {formatDayString(entry.occurredOn)}.
-            </span>
-            <span className="col-span-2"><RecordedAfter entry={entry} facilityId={facilityId} newTab={false} /></span>
-            <span className="col-span-2 flex flex-col gap-2 body-caption text-[var(--color-text-secondary)] empty:hidden"><EntryFileNames entryId={entry.entryId} /></span>
-          </li>
-        ))}
-      </ul>
-      <p className="body-small">{sent ? SHEET_STATE.sent : SHEET_STATE.draft}</p>
+    <EntriesSection title={PANEL_TITLE} state={sent ? SHEET_STATE.sent : SHEET_STATE.draft}>
+      {entries.map((entry) => (
+        <EntryItem key={entry.entryId} entry={entry} facilityId={facilityId} lead="From" recordedAfter />
+      ))}
+    </EntriesSection>
+  );
+}
+
+/**
+ * A returned Removal's revision: late entries of its own credit batches that it
+ * takes when it is resubmitted. The title names the Removal, so rows skip the
+ * "Recorded after" line.
+ */
+export function RevisionLateEntriesSection({ entries, facilityId, removalCode }: { entries: readonly CarriedEntry[] | undefined; facilityId: string; removalCode: string }) {
+  if (!entries?.length) return null;
+  return (
+    <EntriesSection title={`Recorded after ${removalCode} was sent`} state={REVISION_STATE} dataAttr="data-revision-late-entries">
+      {entries.map((entry) => (
+        <EntryItem key={entry.entryId} entry={entry} facilityId={facilityId} lead="In" recordedAfter={false} />
+      ))}
+    </EntriesSection>
+  );
+}
+
+function EntriesSection({ title, state, dataAttr = "data-carried-entries", children }: { title: string; state: string; dataAttr?: string; children: ReactNode }) {
+  return (
+    <DetailSection title={title}>
+      <ul className="flex flex-col" {...{ [dataAttr]: true }}>{children}</ul>
+      <p className="body-small">{state}</p>
     </DetailSection>
+  );
+}
+
+function EntryItem({ entry, facilityId, lead, recordedAfter }: { entry: CarriedEntry; facilityId: string; lead: string; recordedAfter: boolean }) {
+  return (
+    <li className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-12 gap-y-4 border-t border-[var(--color-border-tertiary)] py-10 first:border-t-0" data-carried-entry>
+      <span className="body-small font-medium">{entry.componentName ?? FALLBACK_NAME}</span>
+      <span className="text-right font-mono body-small tabular-nums">{formatFigure(entry.value)}</span>
+      <span className="col-span-2 body-small text-[var(--color-text-secondary)]">
+        {lead} <BatchLink entry={entry} facilityId={facilityId} newTab={false} />, {formatDayString(entry.occurredOn)}.
+      </span>
+      {recordedAfter && <span className="col-span-2"><RecordedAfter entry={entry} facilityId={facilityId} newTab={false} /></span>}
+      <span className="col-span-2 flex flex-col gap-2 body-caption text-[var(--color-text-secondary)] empty:hidden"><EntryFileNames entryId={entry.entryId} /></span>
+    </li>
   );
 }
