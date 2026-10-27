@@ -178,7 +178,10 @@ export async function seedReturnedRemoval(
     await db.update(schema.certifierRemovals).set({
       ghgStatementId: statementId, startedOn: options.periodStartOn, completedOn: options.periodEndOn,
     }).where(and(eq(schema.certifierRemovals.organizationId, DEC_ORG_ID), eq(schema.certifierRemovals.id, grouped.removalId)));
-    const occurredOn = new Date().toISOString().slice(0, 10);
+    // The ready batch's own end date (set with its application), so the entries never straddle a midnight.
+    const [seededBatch] = await db.select({ endDate: schema.creditBatches.endDate }).from(schema.creditBatches)
+      .where(and(eq(schema.creditBatches.organizationId, DEC_ORG_ID), eq(schema.creditBatches.id, grouped.creditBatch.id)));
+    const occurredOn = seededBatch.endDate;
     const sentEntryIds = COMPONENTS.map(() => crypto.randomUUID());
     const entryBase = {
       organizationId: DEC_ORG_ID, creditBatchId: grouped.creditBatch.id, removalTemplateId: templateId,
