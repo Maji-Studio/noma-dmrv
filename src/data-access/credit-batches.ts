@@ -1,3 +1,5 @@
+import { creditBatchOnlyAddsRuns } from "@/lib/credit-batch-membership-change";
+import { assertAddedCreditBatchRunsFit } from "./credit-batch-held-additions";
 import { recordEmissionEntryActivity } from "./emission-entry-activity";
 import type { ActivityEventInput } from "./activity-events";
 import { readRecordDependents } from './record-lock-dependents';
@@ -636,12 +638,17 @@ export async function updateCreditBatch(
     }, prepared);
 
     await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "update", existingBatch.lockedRemovals);
-    if (shouldRefreshMembership) {
+    const onlyAddsRuns = creditBatchOnlyAddsRuns(data, {
+      ...existingBatch, productionRunIds: currentProductionRunIds,
+    });
+    if (shouldRefreshMembership && !onlyAddsRuns) {
       await assertCreditBatchSlicesAreUnassigned(ctx, tx, id);
     }
     assertRecordLockFields(recordLocks.creditBatch({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: 'creditBatch', entityId: id }) }),
       { ...existingBatch, productionRunIds: currentProductionRunIds },
-      { ...updateFields, startDate: updateData.startDate, endDate: updateData.endDate, productionRunIds });
+      { ...updateFields, startDate: updateData.startDate, endDate: updateData.endDate,
+        // The strict add-only exception above authorizes this field alone.
+        productionRunIds: onlyAddsRuns ? undefined : productionRunIds });
 
     const targetFacilityId = updateFields.facilityId ?? existingBatch.facilityId;
     // Resolve the effective date window after update
@@ -697,6 +704,12 @@ export async function updateCreditBatch(
     const feedstockRunIds = resolvedProductionRunIds;
     if (feedstockRunIds !== undefined) {
       await assertDeclaredFeedstockType(ctx, tx, feedstockRunIds, effectiveFeedstockTypeId);
+      if (onlyAddsRuns && existingBatch.lockedRemovals.length > 0) {
+        await assertAddedCreditBatchRunsFit(ctx, tx, {
+          facilityId: targetFacilityId, feedstockTypeId: effectiveFeedstockTypeId,
+          certifier: targetCertifier.provider, startDate: effectiveStartDate, endDate: effectiveEndDate,
+        }, currentProductionRunIds, feedstockRunIds, lockedMembershipRuns);
+      }
       const process = await findOrCreateProductionProcess(
         ctx,
         {

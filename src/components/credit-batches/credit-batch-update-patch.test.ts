@@ -4,6 +4,8 @@ import type { RecordLockView } from "@/lib/record-lock-view";
 import {
   CREDIT_BATCH_MEMBERSHIP_HELD_MESSAGE,
   creditBatchUpdatePatch,
+  canAddCreditBatchRuns,
+  creditBatchOnlyAddsRuns,
   isCreditBatchMembershipLocked,
   logUnexpectedSaveError,
   saveCreditBatchEdit,
@@ -20,6 +22,32 @@ const lock = (level: RecordLockView["level"], kinds: string[]): RecordLockView =
 });
 
 describe("credit batch update patch", () => {
+  it("sends only added membership for a held draft or returned batch", () => {
+    const draft = { ...FORM, productionRunIds: ["run-2", "run-1", "missed"] };
+    expect(creditBatchOnlyAddsRuns(draft, SAVED)).toBe(true);
+    expect(canAddCreditBatchRuns(lock("inUse", ["removal"]))).toBe(true);
+    expect(canAddCreditBatchRuns(undefined)).toBe(true);
+    expect(canAddCreditBatchRuns(lock("sent", ["removal"]))).toBe(false);
+    expect(creditBatchUpdatePatch(draft, SAVED, lock("inUse", ["removal"])))
+      .toEqual({ productionRunIds: draft.productionRunIds, siteManagementNotes: "Wet season" });
+    expect(creditBatchUpdatePatch(draft, SAVED, lock("sent", ["removal"]))).toBeNull();
+  });
+
+  it("requires a strict superset and unchanged cohort fields for held additions", () => {
+    for (const change of [
+      { productionRunIds: ["run-1", "missed"] },
+      { productionRunIds: ["run-1", "run-2", "run-2"] },
+      { productionRunIds: ["run-1", "run-2", "missed"], facilityId: "elsewhere" },
+      { productionRunIds: ["run-1", "run-2", "missed"], feedstockTypeId: "other" },
+      { productionRunIds: ["run-1", "run-2", "missed"], startDate: new Date("2026-08-01") },
+      { productionRunIds: ["run-1", "run-2", "missed"], endDate: new Date("2026-10-01") },
+    ]) {
+      expect(creditBatchOnlyAddsRuns({ ...FORM, ...change }, SAVED)).toBe(false);
+      expect(creditBatchUpdatePatch({ ...FORM, ...change }, SAVED, lock("inUse", ["removal"]))).toBeNull();
+    }
+    expect(creditBatchOnlyAddsRuns(FORM, SAVED)).toBe(false);
+    expect(creditBatchOnlyAddsRuns({ ...FORM, productionRunIds: undefined }, SAVED)).toBe(false);
+  });
   it("sends the whole definition of a free batch, so saving re-resolves membership", () => {
     expect(creditBatchUpdatePatch(FORM, SAVED, false)).toEqual(FORM);
   });
@@ -49,6 +77,16 @@ describe("saveCreditBatchEdit", () => {
     const update = vi.fn(async () => ({ success: true }));
     await expect(saveCreditBatchEdit({ data, saved: snapshot, membershipLocked: false, update })).resolves.toEqual({ status: "saved" });
     expect(update).toHaveBeenCalledWith({ creditBatchId: "batch-1", expectedVersion: 3, ...FORM });
+  });
+
+  it("passes held additions through the save boundary when given the lock view", async () => {
+    const update = vi.fn(async () => ({ success: true }));
+    await expect(saveCreditBatchEdit({
+      data: { ...data, productionRunIds: ["run-1", "run-2", "missed"] },
+      saved: snapshot, membershipLocked: lock("inUse", ["removal"]), update,
+    })).resolves.toEqual({ status: "saved" });
+    expect(update).toHaveBeenCalledWith({ creditBatchId: "batch-1", expectedVersion: 3,
+      productionRunIds: ["run-1", "run-2", "missed"], siteManagementNotes: "Wet season" });
   });
 
   it("keeps the warning of a save whose follow-up failed", async () => {
