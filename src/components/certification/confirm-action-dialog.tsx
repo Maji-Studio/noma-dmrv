@@ -27,7 +27,7 @@ interface ConfirmActionDialogProps {
   /** Primary button label. */
   confirmLabel: string;
   /** Irreversible actions (delete) get a filled red button; every other confirm is filled primary. */
-  variant?: "default" | "neutral" | "destructive";
+  variant?: "default" | "destructive";
   /** Disables both buttons and shows the spinner on the primary; the label stays. */
   isPending?: boolean;
   /** Renders the inline production EnvBanner above the title. */

@@ -448,7 +448,7 @@ export function SubmitStep({
         )}
         {canDeleteRemoval ? (
           <Button
-            variant="default"
+            variant="weak"
             className={PHONE_TOUCH_TARGET}
             onClick={() => setDeleteConfirmOpen(true)}
             disabled={submitMutation.isPending}

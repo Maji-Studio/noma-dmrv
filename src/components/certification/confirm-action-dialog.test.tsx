@@ -28,7 +28,7 @@ describe("ConfirmActionDialog", () => {
     expect(modalOf(true)).toBe(false);
   });
 
-  it("renders reversible confirmations with the filled primary treatment and a weak Cancel", () => {
+  it("renders non-destructive confirmations with the filled primary treatment and a weak Cancel", () => {
     const view = ConfirmActionDialog({
       isOpen: true,
       onClose: vi.fn(),
@@ -36,7 +36,6 @@ describe("ConfirmActionDialog", () => {
       title: "Unlink Isometric project",
       body: "Past submissions stay on Isometric.",
       confirmLabel: "Unlink",
-      variant: "neutral",
     });
 
     const confirmButton = findButtons(view)[0];
