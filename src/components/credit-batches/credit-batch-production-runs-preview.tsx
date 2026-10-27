@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import {
   ArrowsClockwiseIcon,
   FactoryIcon,
@@ -12,6 +13,12 @@ import { formatDate } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { Notice } from "@/components/ui/notice";
+import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
+
+/** The Production Runs list opened on one run. */
+export function productionRunHref(facilityId: string, runId: string): string {
+  return `/production-runs?facility=${facilityId}&run=${runId}`;
+}
 
 export interface RetainedProductionRunPreview {
   id: string;
@@ -29,14 +36,53 @@ interface CreditBatchProductionRunsPreviewProps {
   onRetry: () => void;
   /** Derived totals for the selected cohort, shown above the run rows so the cohort reads as one block. */
   summary?: ReactNode;
+  /** Replaces the default hint, for a batch that does not attach runs by itself. */
+  hint?: string;
+  /** Facility of the batch: with it, run codes link to the run in a new tab. */
+  facilityId?: string;
+  /** Runs added in this edit and not yet saved; only these can be taken back. */
+  removableRunIds?: ReadonlySet<string>;
+  onRemoveRun?: (runId: string) => void;
+  /** Add-run control shown under the rows. */
+  footer?: ReactNode;
+}
+
+export function ProductionRunCaption({
+  run,
+  facilityId,
+}: {
+  run: CreditBatchProductionRunOption;
+  facilityId?: string;
+}) {
+  const bin = run.biocharStorageName;
+  if (!facilityId) {
+    return bin ? <span className="body-caption text-[var(--color-text-tertiary)]">{bin}</span> : null;
+  }
+  return (
+    <span className="body-caption text-[var(--color-text-tertiary)]">
+      <Link
+        href={productionRunHref(facilityId, run.id)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={RECORD_CODE_LINK}
+      >
+        {run.code}
+      </Link>
+      {bin ? ` · ${bin}` : ""}
+    </span>
+  );
 }
 
 function ProductionRunPreviewRow({
   run,
   currentCreditBatchId,
+  facilityId,
+  onRemove,
 }: {
   run: CreditBatchProductionRunOption;
   currentCreditBatchId?: string;
+  facilityId?: string;
+  onRemove?: () => void;
 }) {
   const assignedElsewhere =
     !!run.assignedCreditBatchId &&
@@ -63,11 +109,7 @@ function ProductionRunPreviewRow({
         >
           {formatDate(run.date)}
         </span>
-        {run.biocharStorageName && (
-          <span className="body-caption text-[var(--color-text-tertiary)]">
-            {run.biocharStorageName}
-          </span>
-        )}
+        <ProductionRunCaption run={run} facilityId={facilityId} />
         {assignedElsewhere && (
           <span className="body-caption text-[var(--color-text-tertiary)]">
             Assigned to another credit batch
@@ -84,6 +126,11 @@ function ProductionRunPreviewRow({
             })}
           </span>
         </span>
+        {onRemove && (
+          <Button type="button" variant="noOutline" size="small" onClick={onRemove}>
+            Undo
+          </Button>
+        )}
       </span>
     </div>
   );
@@ -121,6 +168,11 @@ export function CreditBatchProductionRunsPreview({
   isRetrying,
   onRetry,
   summary,
+  hint = "Completed runs matching this feedstock and production window are attached automatically. Non-complete runs are shown as previews.",
+  facilityId,
+  removableRunIds,
+  onRemoveRun,
+  footer,
 }: CreditBatchProductionRunsPreviewProps) {
   const retainedKnownRuns = retainedRuns.flatMap(({ run }) => (run ? [run] : []));
   const unavailableRunIds = retainedRuns.flatMap(({ id, run }) =>
@@ -138,7 +190,7 @@ export function CreditBatchProductionRunsPreview({
       data-testid="credit-batch-production-run-cohort"
       className="space-y-12"
     >
-      <SectionLabel hint="Completed runs matching this feedstock and production window are attached automatically. Non-complete runs are shown as previews.">
+      <SectionLabel hint={hint}>
         Production runs
       </SectionLabel>
 
@@ -202,6 +254,12 @@ export function CreditBatchProductionRunsPreview({
                 key={run.id}
                 run={run}
                 currentCreditBatchId={currentCreditBatchId}
+                facilityId={facilityId}
+                onRemove={
+                  onRemoveRun && removableRunIds?.has(run.id)
+                    ? () => onRemoveRun(run.id)
+                    : undefined
+                }
               />
             ))}
             {unavailableRunIds.map((id) => (
@@ -210,6 +268,7 @@ export function CreditBatchProductionRunsPreview({
           </div>
         </div>
       )}
+      {isReady && !isError && !isLoading && footer}
     </section>
   );
 }
