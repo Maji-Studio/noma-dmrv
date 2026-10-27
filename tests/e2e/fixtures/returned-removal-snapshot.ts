@@ -1,6 +1,6 @@
 import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 import type { OrgContext } from "@/lib/auth/server";
-import { DEC_ORG_ID } from "@/db/org-defaults";
+import { fixtureOrgId } from "./fixture-org";
 import { compileRemovalCorrectionContent } from "@/fn/certification/removal-correction-compile-core";
 import { buildRemovalContext } from "@/fn/certification/removal-context-build";
 import { resolveScopeForRemoval } from "@/fn/certification/removal-scope";
@@ -11,7 +11,7 @@ import { getFacilityById } from "@/data-access/facilities";
 import { getCertifierProjectByFacility } from "@/data-access/certification";
 
 function returnedOrgContext(adminUserId: string): OrgContext {
-  return { organizationId: DEC_ORG_ID, userId: adminUserId, orgRole: "admin" as const, isPlatformAdmin: true };
+  return { organizationId: fixtureOrgId(), userId: adminUserId, orgRole: "admin" as const, isPlatformAdmin: true };
 }
 
 /** Compile the sent state with the real server cores (Playwright's loader only transforms static imports).

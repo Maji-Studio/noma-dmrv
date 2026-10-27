@@ -7,7 +7,7 @@
  */
 import * as crypto from "crypto";
 import { and, eq, inArray } from "drizzle-orm";
-import { DEC_ORG_ID } from "@/db/org-defaults";
+import { fixtureOrgId } from "./fixture-org";
 import { encryptSecret } from "@/lib/crypto/secrets";
 import * as schema from "../../../src/db/schema";
 import {
@@ -60,14 +60,14 @@ type Db = ReturnType<typeof createDbConnection>["db"];
 async function deleteEmissionEntries(db: Db, entryIds: string[]): Promise<void> {
   if (!entryIds.length) return;
   await db.delete(schema.documents).where(and(
-    eq(schema.documents.organizationId, DEC_ORG_ID), eq(schema.documents.entityType, "emission_entry"),
+    eq(schema.documents.organizationId, fixtureOrgId()), eq(schema.documents.entityType, "emission_entry"),
     inArray(schema.documents.entityId, entryIds)));
   await db.update(schema.emissionEntries).set({ replacesEntryId: null }).where(and(
-    eq(schema.emissionEntries.organizationId, DEC_ORG_ID), inArray(schema.emissionEntries.id, entryIds)));
+    eq(schema.emissionEntries.organizationId, fixtureOrgId()), inArray(schema.emissionEntries.id, entryIds)));
   await db.delete(schema.emissionEntryValues).where(and(
-    eq(schema.emissionEntryValues.organizationId, DEC_ORG_ID), inArray(schema.emissionEntryValues.entryId, entryIds)));
+    eq(schema.emissionEntryValues.organizationId, fixtureOrgId()), inArray(schema.emissionEntryValues.entryId, entryIds)));
   await db.delete(schema.emissionEntries).where(and(
-    eq(schema.emissionEntries.organizationId, DEC_ORG_ID), inArray(schema.emissionEntries.id, entryIds)));
+    eq(schema.emissionEntries.organizationId, fixtureOrgId()), inArray(schema.emissionEntries.id, entryIds)));
 }
 
 export interface ReturnedRemovalOptions {
@@ -102,7 +102,7 @@ export async function seedReturnedRemoval(
       const conn = createDbConnection();
       try {
         await conn.db.delete(schema.certifierRemovals).where(and(
-          eq(schema.certifierRemovals.organizationId, DEC_ORG_ID), eq(schema.certifierRemovals.id, grouped.removalId)));
+          eq(schema.certifierRemovals.organizationId, fixtureOrgId()), eq(schema.certifierRemovals.id, grouped.removalId)));
       } finally {
         await conn.pool.end();
       }
@@ -119,17 +119,17 @@ export async function seedReturnedRemoval(
       const ids = [grouped.removalId, statementId];
       for (const id of ids) {
         await conn.db.delete(schema.certificationSubmissions).where(and(
-          eq(schema.certificationSubmissions.organizationId, DEC_ORG_ID), eq(schema.certificationSubmissions.localEntityId, id)));
+          eq(schema.certificationSubmissions.organizationId, fixtureOrgId()), eq(schema.certificationSubmissions.localEntityId, id)));
       }
       const entryIds = (await conn.db.select({ id: schema.emissionEntries.id }).from(schema.emissionEntries).where(and(
-        eq(schema.emissionEntries.organizationId, DEC_ORG_ID), eq(schema.emissionEntries.creditBatchId, grouped.creditBatch.id)))).map((row) => row.id);
+        eq(schema.emissionEntries.organizationId, fixtureOrgId()), eq(schema.emissionEntries.creditBatchId, grouped.creditBatch.id)))).map((row) => row.id);
       await deleteEmissionEntries(conn.db, entryIds);
       await conn.db.update(schema.certifierRemovals).set({ ghgStatementId: null })
-        .where(and(eq(schema.certifierRemovals.organizationId, DEC_ORG_ID), eq(schema.certifierRemovals.id, grouped.removalId)));
+        .where(and(eq(schema.certifierRemovals.organizationId, fixtureOrgId()), eq(schema.certifierRemovals.id, grouped.removalId)));
       await conn.db.delete(schema.certifierGhgStatements).where(and(
-        eq(schema.certifierGhgStatements.organizationId, DEC_ORG_ID), eq(schema.certifierGhgStatements.id, statementId)));
+        eq(schema.certifierGhgStatements.organizationId, fixtureOrgId()), eq(schema.certifierGhgStatements.id, statementId)));
       await conn.db.update(schema.creditBatches).set({ removalTemplateId: null })
-        .where(and(eq(schema.creditBatches.organizationId, DEC_ORG_ID), eq(schema.creditBatches.id, grouped.creditBatch.id)));
+        .where(and(eq(schema.creditBatches.organizationId, fixtureOrgId()), eq(schema.creditBatches.id, grouped.creditBatch.id)));
     } finally {
       await conn.pool.end();
     }
@@ -138,12 +138,12 @@ export async function seedReturnedRemoval(
   const { db, pool } = createDbConnection();
   try {
     await insertRemovalFixture(db, {
-      organizationId: DEC_ORG_ID, id: grouped.removalId, facilityId, provider: "isometric",
+      organizationId: fixtureOrgId(), id: grouped.removalId, facilityId, provider: "isometric",
     });
     await db.update(schema.creditBatchApplications).set({ removalId: grouped.removalId }).where(and(
-      eq(schema.creditBatchApplications.organizationId, DEC_ORG_ID), eq(schema.creditBatchApplications.creditBatchId, ready.creditBatchId)));
+      eq(schema.creditBatchApplications.organizationId, fixtureOrgId()), eq(schema.creditBatchApplications.creditBatchId, ready.creditBatchId)));
     const [observation] = await db.insert(schema.removalTemplateObservations).values({
-      organizationId: DEC_ORG_ID,
+      organizationId: fixtureOrgId(),
       provider: "isometric",
       externalProjectId: "prj_e2e_returned",
       externalTemplateId: templateId,
@@ -170,21 +170,21 @@ export async function seedReturnedRemoval(
     }).returning();
     // Include the historical usage day used by the comparison-unavailable spec.
     await db.update(schema.creditBatches).set({ removalTemplateId: templateId, startDate: options.periodStartOn })
-      .where(and(eq(schema.creditBatches.organizationId, DEC_ORG_ID), eq(schema.creditBatches.id, grouped.creditBatch.id)));
+      .where(and(eq(schema.creditBatches.organizationId, fixtureOrgId()), eq(schema.creditBatches.id, grouped.creditBatch.id)));
     await db.insert(schema.certifierGhgStatements).values({
-      organizationId: DEC_ORG_ID, id: statementId, facilityId,
+      organizationId: fixtureOrgId(), id: statementId, facilityId,
       reportingPeriodStartOn: options.periodStartOn, reportingPeriodEndOn: options.periodEndOn,
     });
     await db.update(schema.certifierRemovals).set({
       ghgStatementId: statementId, startedOn: options.periodStartOn, completedOn: options.periodEndOn,
-    }).where(and(eq(schema.certifierRemovals.organizationId, DEC_ORG_ID), eq(schema.certifierRemovals.id, grouped.removalId)));
+    }).where(and(eq(schema.certifierRemovals.organizationId, fixtureOrgId()), eq(schema.certifierRemovals.id, grouped.removalId)));
     // The ready batch's own end date (set with its application), so the entries never straddle a midnight.
     const [seededBatch] = await db.select({ endDate: schema.creditBatches.endDate }).from(schema.creditBatches)
-      .where(and(eq(schema.creditBatches.organizationId, DEC_ORG_ID), eq(schema.creditBatches.id, grouped.creditBatch.id)));
+      .where(and(eq(schema.creditBatches.organizationId, fixtureOrgId()), eq(schema.creditBatches.id, grouped.creditBatch.id)));
     const occurredOn = seededBatch.endDate;
     const sentEntryIds = COMPONENTS.map(() => crypto.randomUUID());
     const entryBase = {
-      organizationId: DEC_ORG_ID, creditBatchId: grouped.creditBatch.id, removalTemplateId: templateId,
+      organizationId: fixtureOrgId(), creditBatchId: grouped.creditBatch.id, removalTemplateId: templateId,
       inputShape: [{ key: INPUT, type: "monitored" as const, quantityKind: "energy" as const }],
       lineRule: "additive" as const, observationId: observation.id, occurredOn,
     };
@@ -196,19 +196,19 @@ export async function seedReturnedRemoval(
       sentByRemovalId: grouped.removalId,
     })));
     const entryDocument = (entryId: string): typeof schema.documents.$inferInsert => ({
-      organizationId: DEC_ORG_ID, entityType: "emission_entry", entityId: entryId,
+      organizationId: fixtureOrgId(), entityType: "emission_entry", entityId: entryId,
       documentType: "pdf", fileName: `e2e-entry-${entryId}.pdf`, fileUrl: ENTRY_EVIDENCE_URL,
       mimeType: "application/pdf", uploadStatus: "uploaded",
     });
     if (options.changed) {
       await db.insert(schema.emissionEntryValues).values({
-        organizationId: DEC_ORG_ID, entryId: sentEntryIds[0], inputKey: INPUT, magnitude: SENT_MAGNITUDE, unit: UNIT,
+        organizationId: fixtureOrgId(), entryId: sentEntryIds[0], inputKey: INPUT, magnitude: SENT_MAGNITUDE, unit: UNIT,
       });
       await db.insert(schema.documents).values(entryDocument(sentEntryIds[0]));
     }
     const sentSnapshot = await compileReturnedRemovalSnapshot(grouped.removalId, options.adminUserId, observation);
     await db.insert(schema.certificationSubmissions).values({
-      organizationId: DEC_ORG_ID, provider: "isometric", submissionType: "removal", localEntityType: "removal",
+      organizationId: fixtureOrgId(), provider: "isometric", submissionType: "removal", localEntityType: "removal",
       localEntityId: grouped.removalId, version: 1, status: "submitted", externalId: removalExternalId,
       payloadHash: `e2e-returned-${tag}`, submittedAt: REMOVAL_SUBMITTED_AT,
       payloadSnapshot: { ...sentSnapshot, semantic: { ...sentSnapshot.semantic, ...options.sentSemantic } },
@@ -216,7 +216,7 @@ export async function seedReturnedRemoval(
     if (options.changed) {
       // Keep the sent owner on retired entries; the replacement is held for resubmit.
       await db.update(schema.emissionEntries).set({ deletedAt: CORRECTED_AT }).where(and(
-        eq(schema.emissionEntries.organizationId, DEC_ORG_ID), inArray(schema.emissionEntries.id, sentEntryIds)));
+        eq(schema.emissionEntries.organizationId, fixtureOrgId()), inArray(schema.emissionEntries.id, sentEntryIds)));
       const replacementId = crypto.randomUUID();
       await db.insert(schema.emissionEntries).values([
         { ...entryBase, id: replacementId, componentId: COMPONENTS[0].id, kind: "value", replacesEntryId: sentEntryIds[0] },
@@ -224,12 +224,12 @@ export async function seedReturnedRemoval(
         { ...entryBase, componentId: COMPONENTS[1].id, kind: "zero", confirmedForRemovalId: grouped.removalId },
       ]);
       await db.insert(schema.emissionEntryValues).values({
-        organizationId: DEC_ORG_ID, entryId: replacementId, inputKey: INPUT, magnitude: REPLACEMENT_MAGNITUDE, unit: UNIT,
+        organizationId: fixtureOrgId(), entryId: replacementId, inputKey: INPUT, magnitude: REPLACEMENT_MAGNITUDE, unit: UNIT,
       });
       await db.insert(schema.documents).values(entryDocument(replacementId));
     }
     await db.insert(schema.certificationSubmissions).values({
-      organizationId: DEC_ORG_ID, provider: "isometric", submissionType: "ghg_statement", localEntityType: "ghgStatement",
+      organizationId: fixtureOrgId(), provider: "isometric", submissionType: "ghg_statement", localEntityType: "ghgStatement",
       localEntityId: statementId, version: 1, status: "submitted", externalId: statementExternalId,
       payloadHash: `e2e-returned-statement-${tag}`, submittedAt: REMOVAL_SUBMITTED_AT,
       metadata: { remoteStatus: options.statementStatus, removalIds: [removalExternalId], submittedToVerifierAt: STATEMENT_RETURNED_AT },
@@ -237,7 +237,7 @@ export async function seedReturnedRemoval(
     await assertReturnedRemovalComparison(grouped.removalId, options.adminUserId,
       options.sentSemantic ? undefined : options.changed ? COMPONENTS.map(component => component.id) : []);
     const [removal] = await db.select({ code: schema.certifierRemovals.code }).from(schema.certifierRemovals)
-      .where(and(eq(schema.certifierRemovals.organizationId, DEC_ORG_ID), eq(schema.certifierRemovals.id, grouped.removalId)));
+      .where(and(eq(schema.certifierRemovals.organizationId, fixtureOrgId()), eq(schema.certifierRemovals.id, grouped.removalId)));
     return {
       ...grouped,
       statementId, statementExternalId, removalCode: removal.code,
@@ -256,7 +256,7 @@ export async function emptyReturnedRemovalComponentsForWizard(creditBatchId: str
   const { db, pool } = createDbConnection();
   try {
     await db.update(schema.emissionEntries).set({ deletedAt: new Date() }).where(and(
-      eq(schema.emissionEntries.organizationId, DEC_ORG_ID), eq(schema.emissionEntries.creditBatchId, creditBatchId)));
+      eq(schema.emissionEntries.organizationId, fixtureOrgId()), eq(schema.emissionEntries.creditBatchId, creditBatchId)));
   } finally {
     await pool.end();
   }
@@ -269,10 +269,10 @@ export async function seedReturnedConnection(facilityId: string): Promise<() => 
   let createdCredentials = false;
   try {
     const existing = await db.select({ id: schema.certifierCredentials.id }).from(schema.certifierCredentials)
-      .where(and(eq(schema.certifierCredentials.organizationId, DEC_ORG_ID), eq(schema.certifierCredentials.provider, "isometric")));
+      .where(and(eq(schema.certifierCredentials.organizationId, fixtureOrgId()), eq(schema.certifierCredentials.provider, "isometric")));
     if (existing.length === 0) {
       await db.insert(schema.certifierCredentials).values({
-        organizationId: DEC_ORG_ID, provider: "isometric",
+        organizationId: fixtureOrgId(), provider: "isometric",
         accessTokenEncrypted: encryptSecret("e2e-returned-access"), clientSecretEncrypted: encryptSecret("e2e-returned-secret"),
       });
       createdCredentials = true;
@@ -286,15 +286,15 @@ export async function seedReturnedConnection(facilityId: string): Promise<() => 
     try {
       // The wizard and the app can write entries of their own against the served template; they go first.
       const observationIds = (await observations.db.select({ id: schema.removalTemplateObservations.id }).from(schema.removalTemplateObservations).where(and(
-        eq(schema.removalTemplateObservations.organizationId, DEC_ORG_ID),
+        eq(schema.removalTemplateObservations.organizationId, fixtureOrgId()),
         eq(schema.removalTemplateObservations.externalTemplateId, RETURNED_TEMPLATE_ID)))).map((row) => row.id);
       if (observationIds.length) {
         const strayIds = (await observations.db.select({ id: schema.emissionEntries.id }).from(schema.emissionEntries).where(and(
-          eq(schema.emissionEntries.organizationId, DEC_ORG_ID), inArray(schema.emissionEntries.observationId, observationIds)))).map((row) => row.id);
+          eq(schema.emissionEntries.organizationId, fixtureOrgId()), inArray(schema.emissionEntries.observationId, observationIds)))).map((row) => row.id);
         await deleteEmissionEntries(observations.db, strayIds);
       }
       await observations.db.delete(schema.removalTemplateObservations).where(and(
-        eq(schema.removalTemplateObservations.organizationId, DEC_ORG_ID),
+        eq(schema.removalTemplateObservations.organizationId, fixtureOrgId()),
         eq(schema.removalTemplateObservations.externalTemplateId, RETURNED_TEMPLATE_ID)));
     } finally {
       await observations.pool.end();
@@ -303,7 +303,7 @@ export async function seedReturnedConnection(facilityId: string): Promise<() => 
       const conn = createDbConnection();
       try {
         await conn.db.delete(schema.certifierCredentials).where(and(
-          eq(schema.certifierCredentials.organizationId, DEC_ORG_ID), eq(schema.certifierCredentials.provider, "isometric")));
+          eq(schema.certifierCredentials.organizationId, fixtureOrgId()), eq(schema.certifierCredentials.provider, "isometric")));
       } finally {
         await conn.pool.end();
       }
