@@ -47,7 +47,8 @@ import { submitRemoval } from "@/fn/certification/submit-removal";
 import type { RemovalScope } from "@/fn/certification/removal-scope";
 
 // Registry ids are globally unique in certification_submissions; keep them distinct per file.
-const FILE_TAG = crypto.randomUUID().slice(0, 8);
+const FILE_TAG_LENGTH = 8;
+const FILE_TAG = crypto.randomUUID().slice(0, FILE_TAG_LENGTH);
 
 vi.mock("@/lib/isometric/ghg-statements", async original => ({
   ...await original<typeof import("@/lib/isometric/ghg-statements")>(),

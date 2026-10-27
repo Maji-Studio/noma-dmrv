@@ -28,7 +28,8 @@ import type { RemovalScope } from "@/fn/certification/removal-scope";
 
 const { ORIGINAL_EXTERNAL_ID } = vi.hoisted(() => ({ ORIGINAL_EXTERNAL_ID: `original-${crypto.randomUUID()}` }));
 // Registry ids are globally unique in certification_submissions; keep them distinct per file.
-const FILE_TAG = crypto.randomUUID().slice(0, 8);
+const FILE_TAG_LENGTH = 8;
+const FILE_TAG = crypto.randomUUID().slice(0, FILE_TAG_LENGTH);
 
 vi.mock("@/lib/isometric/ghg-statements", () => ({ getGhgStatement: async () => ({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: [ORIGINAL_EXTERNAL_ID] }) }));
 const userId = crypto.randomUUID();
