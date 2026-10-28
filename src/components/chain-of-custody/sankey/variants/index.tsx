@@ -10,11 +10,13 @@ import { ChartBarIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState } from "@/components/ui";
 import { NO_APPLICATION_SANKEY_MESSAGE } from "@/lib/chain-of-custody/copy";
 import { VariantAMassWaterfall, type SankeyVariantProps } from "./variant-a-mass-waterfall";
+import { VariantBWaterfallRecords } from "./variant-b-waterfall-records";
 import type { SankeyVariant } from "./variant-switcher";
 
 export { parseSankeyVariant, SankeyVariantSwitcher } from "./variant-switcher";
 
 export function SankeyVariantView({ variant, ...props }: SankeyVariantProps & { variant: SankeyVariant }) {
+  if (variant === "b") return <VariantBWaterfallRecords {...props} />;
   return <VariantAMassWaterfall {...props} />;
 }
 
