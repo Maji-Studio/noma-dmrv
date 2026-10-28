@@ -46,6 +46,10 @@ import { reviewedTemplateSources } from "./helpers/template-line-sources";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import type { RemovalScope } from "@/fn/certification/removal-scope";
 
+// Registry ids are globally unique in certification_submissions; keep them distinct per file.
+const FILE_TAG_LENGTH = 8;
+const FILE_TAG = crypto.randomUUID().slice(0, FILE_TAG_LENGTH);
+
 vi.mock("@/lib/isometric/ghg-statements", async original => ({
   ...await original<typeof import("@/lib/isometric/ghg-statements")>(),
   getGhgStatement: vi.fn(async () => makeRemoteStatement({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: [originalId] })),
@@ -221,7 +225,7 @@ it.each(["run", "distance"] as const)("detects a %s-only correction, fences the 
   // Build uses the contributions supplied by its context, including the claim-scoped freshness read.
   vi.mocked(sources.resolveSourceBindingCandidates).mockImplementation(async (_ctx, args) => args.candidates.map(candidate => ({ ...candidate, sourceId: `src-${candidate.documentId}` })));
   vi.mocked(isometric.createDatapoint).mockImplementation(vi.fn(fakeExternalIds("dp")) as never);
-  vi.mocked(isometric.createGhgEntry).mockImplementation(vi.fn(fakeExternalIds("rmv")) as never);
+  vi.mocked(isometric.createGhgEntry).mockImplementation(vi.fn(fakeExternalIds(`rmv-${FILE_TAG}`)) as never);
   const baselineContext = await loadContext();
   if (correctionKind === "distance") await evidenceLedgers.ensureEvidenceLedgersFromContext(org, f.removalId, baselineContext, logger);
   const baseline = await buildRemovalSubmissionBuild({ orgCtx: org, removalId: f.removalId,
