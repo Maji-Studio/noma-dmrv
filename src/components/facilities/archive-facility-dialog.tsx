@@ -193,7 +193,7 @@ export function ArchiveFacilityDialog({
         <div className="flex flex-wrap gap-16 justify-start">
           <Button
             size="large"
-            variant="default"
+            variant="primary"
             onClick={() => {
               setTypedCode("");
               onConfirm();
@@ -205,7 +205,7 @@ export function ArchiveFacilityDialog({
           </Button>
           <Button
             size="large"
-            variant="default"
+            variant="weak"
             onClick={handleCancel}
             disabled={isPending}
           >

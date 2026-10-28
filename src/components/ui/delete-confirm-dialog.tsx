@@ -73,8 +73,7 @@ export function DeleteConfirmDialog({
         <div className="flex gap-16 justify-start">
           <Button
             size="large"
-            variant="default"
-            className="bg-[var(--color-signal-red)] text-white border-[var(--color-signal-red)] hover:opacity-90"
+            variant="danger"
             onClick={onConfirm}
             disabled={confirmDisabled}
             busy={isPending}
@@ -83,7 +82,7 @@ export function DeleteConfirmDialog({
           </Button>
           <Button
             size="large"
-            variant="default"
+            variant="weak"
             onClick={onCancel}
             disabled={isPending}
           >

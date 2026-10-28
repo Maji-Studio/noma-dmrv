@@ -320,7 +320,6 @@ export function UnlinkConfirmDialog({
       onConfirm={onConfirm}
       isPending={isPending}
       errorMessage={errorMessage}
-      variant="neutral"
       title="Unlink Isometric project"
       confirmLabel="Unlink"
       body="The facility will no longer be associated with the Isometric project. Past submissions stay on Isometric."

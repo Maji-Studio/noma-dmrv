@@ -461,6 +461,7 @@ function GhgStatementSubmitDialogContent({
                       </Button>
                       <Button className={PHONE_TOUCH_TARGET}
                         type="button"
+                        variant="weak"
                         onClick={() => {
                           mutation.reset();
                           setProgressUpdates([]);
@@ -547,7 +548,7 @@ function GhgStatementSubmitDialogContent({
                   {stepIndex === REVIEW_STEP_INDEX && (
                     <Button className={PHONE_TOUCH_TARGET}
                       type="button"
-                      variant="default"
+                      variant="weak"
                       onClick={returnToReportStep}
                       disabled={submissionPending}
                     >
@@ -556,7 +557,7 @@ function GhgStatementSubmitDialogContent({
                   )}
                   <Button className={PHONE_TOUCH_TARGET}
                     type="button"
-                    variant="default"
+                    variant="weak"
                     onClick={onClose}
                     disabled={submissionPending}
                   >

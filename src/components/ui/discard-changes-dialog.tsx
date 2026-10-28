@@ -23,8 +23,8 @@ export function DiscardChangesDialog({
         <h2 id={titleId} className="title-heading-4">Discard unsaved changes?</h2>
         <p className="body-small text-[var(--color-text-secondary)]">{description}</p>
         <div className="flex items-center justify-start gap-16">
-          <Button variant="destructive" onClick={onDiscard}>Discard changes</Button>
-          <Button variant="default" onClick={onClose}>Keep editing</Button>
+          <Button variant="danger" onClick={onDiscard}>Discard changes</Button>
+          <Button variant="weak" onClick={onClose}>Keep editing</Button>
         </div>
       </div>
     </Modal>

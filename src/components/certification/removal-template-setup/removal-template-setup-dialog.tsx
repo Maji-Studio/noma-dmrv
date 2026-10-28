@@ -70,7 +70,7 @@ function DialogBody({ facilityId, templateId = null, step = null, onClose, apply
             message="The Removal templates could not be read from Isometric."
             action={<Button size="small" busy={query.isFetching} onClick={() => void query.refetch()}>Try again</Button>}
           />
-          <div><Button variant="default" onClick={onClose}>Cancel</Button></div>
+          <div><Button variant="weak" onClick={onClose}>Cancel</Button></div>
         </div>
       ) : !query.data ? (
         <div className={`${SETUP_GUTTER_CLASS} flex flex-col gap-16 pb-20`} aria-busy="true" aria-label="Loading Removal templates">

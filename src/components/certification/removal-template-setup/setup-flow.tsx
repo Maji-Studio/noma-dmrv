@@ -163,8 +163,8 @@ export function RemovalTemplateSetupFlow({ data: loadedData, facilityId, templat
               {SET_LABEL}
             </Button>
           )}
-          {step > 0 && <Button className={PHONE_TOUCH_TARGET} variant="default" disabled={apply.isPending} onClick={back}>Back</Button>}
-          <Button className={PHONE_TOUCH_TARGET} variant="default" disabled={apply.isPending} onClick={onClose}>Cancel</Button>
+          {step > 0 && <Button className={PHONE_TOUCH_TARGET} variant="weak" disabled={apply.isPending} onClick={back}>Back</Button>}
+          <Button className={PHONE_TOUCH_TARGET} variant="weak" disabled={apply.isPending} onClick={onClose}>Cancel</Button>
         </div>
       </div>
     </>

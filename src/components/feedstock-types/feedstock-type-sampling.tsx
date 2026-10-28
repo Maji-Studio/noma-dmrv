@@ -144,7 +144,6 @@ export function FeedstockTypeSampling({
         title="Start a new production process?"
         body="This resets the eligible Sample count for this facility and feedstock type to zero. Existing credit batches keep their recorded sampling choice."
         confirmLabel="Start new process"
-        variant="neutral"
         isPending={startNewProcess.isPending}
         errorMessage={actionError ?? undefined}
       />
