@@ -41,6 +41,25 @@ const mockUser = {
 const TEST_CTX = makeTestOrgContext(mockUser.id);
 
 describe("withAction", () => {
+  it("returns a validation failure for a wrapped PostgreSQL NUL refusal without logging", async () => {
+    vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
+    vi.mocked(logger.error).mockClear();
+    const cause = Object.assign(new Error('invalid byte sequence for encoding "UTF8": 0x00'), {
+      code: "22021",
+    });
+
+    const result = await withAction(async () => {
+      throw new Error("Failed query", { cause });
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "This value contains a NUL character (U+0000), which noma cannot store. Remove it and retry.",
+      code: "validation_failed",
+    });
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
   it("returns the org-context guard error when no organization is active", async () => {
     vi.mocked(requireOrgContext).mockRejectedValue(
       new SafeError("Select an organization to continue."),
