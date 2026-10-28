@@ -38,14 +38,14 @@ A plan target uses `--spec <plan path>` instead of `--issue`. Round 1 runs with 
 
 For each round:
 
-1. The conductor verifies every P0-P2 finding against the code. A finding is **valid** when the code at the reviewed head shows the defect. Check fixes that add compatibility for old rows against the issue and the pre-production policy in `.claude/CLAUDE.md` first.
+1. The conductor verifies every finding against the code. A finding is **valid** when the code at the reviewed head shows the defect. Check fixes that add compatibility for old rows against the issue and the pre-production policy in `.claude/CLAUDE.md` first.
 2. An implementer fixes the valid ones and commits once the gates are green (playbook: Fixer); the conductor reviews the fix diff.
 3. Declined findings get a one-line reason in `report.json`. P3s are fixed only when trivial; otherwise decline them with a reason.
 4. Rerun the gates from step 3.
 
-**Stop rule.** Stop after the first round with no valid P0-P2. Cap at 3 rounds. Rounds 4 and 5 run only while a valid P0, or a valid P1 on security, auth/tenancy, money or data integrity, stays open; a fix no later round has reviewed still counts as open. Still open at the cap: stop, open no PR, and ask Kenji on an answer page with the open findings.
+**Stop rule.** Stop after the first round with no valid P0-P2. Cap at 3 rounds. Rounds 4 and 5 run only while a valid P0, or a valid P1 on security, auth/tenancy, money or data integrity, stays open; such a fix counts as open until a later round has reviewed it. Still open at the cap: stop, open no PR, and ask Kenji on an answer page with the open findings. Other valid findings from the last round are fixed after it and listed under the table as commits after the last reviewed head (step 5).
 
-Done when: the stop rule ends the loop with no valid P0-P2 open, the gates are green on the last reviewed head, and every finding in every round carries a disposition.
+Done when: the stop rule ends the loop with every valid P0-P2 fixed, the gates are green on the last reviewed head, and every finding in every round carries a disposition.
 
 ## 5. Open the PR ready
 
@@ -73,13 +73,15 @@ Done when: the PR is open and ready (not draft), the section's last reviewed hea
 node .agents/skills/pr-review-suite/scripts/run-pr-review-suite.mjs --pr <n> --profile light --publish
 ```
 
-Verify each finding against the code. Fix valid P0 and P1 only, through the Fixer (playbook: Fixer), committing once the step 3 gates are green. Decline valid P2s with a reason in a PR comment, or file them as follow-up issues; decline invalid findings with a one-line reason. A fix commit that touches auth, tenancy or data code (schema, migrations, data-access) gets a **codex-review** of that delta before landing, with that skill's escalation for auth and data diffs and never the model that wrote the fix; no second suite pass.
+A plan target adds the same `--spec <plan path>` as its local rounds.
+
+Verify each finding against the code. Fix valid P0 and P1 only, through the Fixer (playbook: Fixer), committing once the step 3 gates are green. Decline valid P2s with a reason in a PR comment, or file them as follow-up issues; decline invalid findings with a one-line reason. A fix commit that touches auth, tenancy or data code (schema, migrations, data-access) gets a **codex-review** of that delta before landing, with that skill's escalation for auth and data diffs and never the model that wrote the fix; no second suite pass. Push the fixes from the main checkout and confirm the PR head is the fixed SHA.
 
 Done when: the light-pass comment is on the PR, every P0/P1 is fixed or declined with a reason, every P2 is declined or filed, and CI is green on the head.
 
 ## 7. Merge
 
-Publish the merge card per the **pr** skill's Done state. Once Kenji's saved doc says `choice: merge` and its `sha` equals the PR head, land with `scripts/pr-land.sh <pr> --teardown <worktree-name>`. The script merges staging into a DIRTY branch by itself; Kenji's OK holds through that merge when the PR diff is unchanged.
+Publish the merge card per the **pr** skill's Done state. Once Kenji's saved doc says `choice: merge` and its `sha` equals the PR head, land with `scripts/pr-land.sh <pr> --teardown <worktree-name>`.
 
 Done when: the PR state is MERGED, the worktree is torn down, and the issue is closed.
 

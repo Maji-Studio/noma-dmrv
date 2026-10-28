@@ -56,7 +56,7 @@ A backend-only change shows a test that fails on `origin/staging` and passes on 
 
 ## Local review rounds
 
-- One suite at a time across all sessions: two in parallel hit Codex rate limits (429), and a run with a failed reviewer writes no complete report. When only some reviewers failed, rerun those with `--models <m> --practices <list>` into a new artifact dir and merge the two `report.json` files by hand before setting dispositions.
+- One suite at a time across all sessions: two in parallel hit Codex rate limits (429), and a run with a failed reviewer writes no complete report. When only some reviewers failed, rerun the same round command (every `--prior` included) with `--models <m> --practices <list>` added, into a new artifact dir and merge the two `report.json` files by hand before setting dispositions.
 - Run it from the worktree root. The suite refuses a dirty worktree, so commit first.
 - `report.json` sits in the `--artifact-dir`. Set each finding's `disposition` to `fixed` or `declined`, and `reason` (required for `declined`), then pass the file as `--prior` to the next round. The P0-P3 counts for the PR table come from its `counts`.
 - A finding that re-raises a declined item without new evidence is declined again with the same reason.
