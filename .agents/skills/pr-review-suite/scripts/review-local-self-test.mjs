@@ -100,6 +100,9 @@ function testReportsAndPriors(root) {
   ok(markdown.includes(`Base: \`staging\` at \`${aggregate.baseSha}\``));
   match(markdown, /Round: 1/);
   match(markdown, /Models: Codex \(gpt-6.1-sol, high\) \+ Claude Opus \(medium\) \(profile light\)/);
+  const codexOnly = { ...aggregate, models: ["codex"] };
+  deepStrictEqual(buildReportJson(codexOnly).models, { codex: "gpt-6.1-sol" });
+  match(aggregateReport(codexOnly), /^Models: Codex \(gpt-6.1-sol, high\) \(profile light\)$/m);
 
   const path = join(root, "prior.json");
   const load = () => loadPriors([path]);
@@ -202,8 +205,9 @@ async function testLocalGit(root) {
   const options = { gitCommand, warn: (message) => warnings.push(message) };
   // There is no origin remote: fetch fails locally and cannot contact a server.
   const target = await resolveLocalTarget("staging", root, options);
-  equal(target.base.sha, baseSha);
-  ok(target.base.sha !== remoteSha);
+  deepStrictEqual(target.base, { name: remoteSha, sha: remoteSha });
+  equal(target.mergeBase, baseSha);
+  ok(target.base.sha !== target.mergeBase);
   equal(target.headSha, headSha);
   equal(target.pr.title, "oldest subject");
   equal(target.pr.headRefName, "feat/local");

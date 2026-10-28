@@ -584,7 +584,7 @@ async function main() {
     }
   }
 
-  const { pr, base, headSha, baseFetchFailed } = localTarget || await resolveTarget(options, cwd);
+  const { pr, base, headSha, baseFetchFailed, mergeBase } = localTarget || await resolveTarget(options, cwd);
   const diff = await getDiffMetadata(base.name, cwd, headSha);
   const spec = await discoverSpec(options, pr, diff, cwd, artifactDir);
   // The review criteria must come from the base branch. Reading the working tree
@@ -654,11 +654,11 @@ async function main() {
     designGlobalSkill: globalDesign.designGlobalSkill,
     practiceReferenceSource,
     profile: options.profile,
-    models: profileModels(options.profile),
+    models: profileModels(options.profile, options.models),
     selectedModels: options.models,
     round,
     priors: options.prior,
-    ...(options.local ? { baseFetchFailed } : {}),
+    ...(options.local ? { baseFetchFailed, mergeBase } : {}),
     practices,
     skippedPractices: [...skippedPractices],
   };
@@ -764,6 +764,7 @@ async function main() {
     round,
     priors,
     profile: options.profile,
+    models: options.models,
   };
   writeFileSync(reportPath, aggregateReport(aggregate));
   writeFileSync(

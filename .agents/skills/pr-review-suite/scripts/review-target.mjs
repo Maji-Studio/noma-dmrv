@@ -80,13 +80,15 @@ export async function resolveLocalTarget(baseName, cwd, { gitCommand = git, warn
     baseFetchFailed = true;
     warn(`Warning: failed to fetch origin ${baseName}; continuing with existing origin/${baseName}.\n`);
   }
-  const baseSha = (await gitCommand(["merge-base", `origin/${baseName}`, "HEAD"], { cwd })).stdout.trim();
+  const tipSha = (await gitCommand(["rev-parse", "--verify", `origin/${baseName}`], { cwd })).stdout.trim();
+  const mergeBase = (await gitCommand(["merge-base", tipSha, "HEAD"], { cwd })).stdout.trim();
   const headSha = (await gitCommand(["rev-parse", "HEAD"], { cwd })).stdout.trim();
   const branch = (await gitCommand(["branch", "--show-current"], { cwd })).stdout.trim() || "HEAD";
   const title = (await gitCommand(["log", "--reverse", "--format=%s", `origin/${baseName}..HEAD`], { cwd })).stdout.split("\n")[0];
   return {
     pr: { mode: "local", title, body: "", headRefName: branch, baseRefName: baseName, headRefOid: headSha },
-    base: { name: baseSha, sha: baseSha },
+    base: { name: tipSha, sha: tipSha },
+    mergeBase,
     headSha,
     baseFetchFailed,
   };

@@ -1,6 +1,6 @@
 import { displayModel, profileModels } from "./review-models.mjs";
 import { earlierRounds, REPORT_VERSION } from "./review-prior.mjs";
-import { DEFAULT_PRACTICES } from "./review-runtime.mjs";
+import { DEFAULT_MODELS, DEFAULT_PRACTICES } from "./review-runtime.mjs";
 
 export const COMMENT_MARKER = "<!-- noma-pr-review-suite:v1 -->";
 const SEVERITY_ORDER = new Map([
@@ -32,14 +32,14 @@ export function worstSeverity(reports) {
     )[0];
 }
 
-export function aggregateReport({ pr, baseSha, headSha, reports, skippedPractices, omittedFiles = [], round = 1, priors = [], profile = "full" }) {
+export function aggregateReport({ pr, baseSha, headSha, reports, skippedPractices, omittedFiles = [], round = 1, priors = [], profile = "full", models = DEFAULT_MODELS }) {
   const sections = [
     COMMENT_MARKER,
     pr.mode === "local" ? "# Codex + Opus local review suite" : "# Codex + Opus PR review suite",
     "",
     pr.mode === "local" ? `Branch: ${pr.headRefName}` : `PR: [#${pr.number}](${pr.url})`,
     `Round: ${round}`,
-    `Models: ${displayModel("codex", profile)} + ${displayModel("opus", profile)} (profile ${profile})`,
+    `Models: ${models.map((model) => displayModel(model, profile)).join(" + ")} (profile ${profile})`,
     ...(priors.length ? [`Earlier rounds: ${earlierRounds(priors)}`] : []),
     `Reviewed head: \`${headSha}\``,
     `Base: \`${pr.baseRefName}\` at \`${baseSha}\``,
@@ -120,7 +120,7 @@ export function displayPractice(practice) {
 
 export { displayModel } from "./review-models.mjs";
 
-export function buildReportJson({ pr, baseSha, headSha, reports, skippedPractices, round = 1, profile = "full", generatedAt = new Date().toISOString() }) {
+export function buildReportJson({ pr, baseSha, headSha, reports, skippedPractices, round = 1, profile = "full", models = DEFAULT_MODELS, generatedAt = new Date().toISOString() }) {
   const counts = { P0: 0, P1: 0, P2: 0, P3: 0 };
   // v1: {version, mode, round, profile, models, base: {name, sha}, headSha, pr,
   // branch, generatedAt, counts: {P0,P1,P2,P3}, reports: [{practice, model,
@@ -153,7 +153,7 @@ export function buildReportJson({ pr, baseSha, headSha, reports, skippedPractice
     mode: pr.mode === "local" ? "local" : "pr",
     round,
     profile,
-    models: profileModels(profile),
+    models: profileModels(profile, models),
     base: { name: pr.baseRefName, sha: baseSha },
     headSha,
     pr: pr.number ?? null,

@@ -13,9 +13,9 @@ export function modelSettings(model, profile = "full") {
   return MODEL_PROFILES[profile][model];
 }
 
-export function profileModels(profile = "full") {
+export function profileModels(profile = "full", models = Object.keys(MODEL_PROFILES[profile])) {
   return Object.fromEntries(
-    Object.entries(MODEL_PROFILES[profile]).map(([key, value]) => [key, value.model]),
+    models.map((model) => [model, MODEL_PROFILES[profile][model].model]),
   );
 }
 
