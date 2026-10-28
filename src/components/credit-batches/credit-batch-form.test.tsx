@@ -13,6 +13,7 @@ import { CreditBatchForm } from "./credit-batch-form";
 const mocks = vi.hoisted(() => ({
   certifierSummary: vi.fn(), methodBEligibility: vi.fn(), recordPrerequisites: vi.fn(),
   claimedRun: null as null | { endsOn: string; run: Record<string, unknown> },
+  extraRuns: [] as Record<string, unknown>[],
   showFacilitySelect: false, showFeedstockSelect: false, realPicker: false, autoPick: false, timeZone: "UTC",
 }));
 
@@ -66,7 +67,7 @@ vi.mock("@/hooks/use-credit-batches", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-credit-batches")>(),
   useCreditBatchProductionRunOptions: (params: { endDate?: string }) => ({
     // A claimed run is in the window once the batch ends on or after the run's own end.
-    data: mocks.claimedRun && params.endDate && params.endDate >= mocks.claimedRun.endsOn ? [mocks.claimedRun.run] : [],
+    data: mocks.claimedRun && params.endDate && params.endDate >= mocks.claimedRun.endsOn ? [mocks.claimedRun.run, ...mocks.extraRuns] : [],
     isSuccess: true,
   }),
 }));
@@ -423,5 +424,72 @@ describe("CreditBatchForm save refusal (#1327)", () => {
     } finally {
       batch.productionRunIds = [];
     }
+  });
+});
+
+describe("CreditBatchForm held batch: add a missed run", () => {
+  const SAVED_ID = "00000000-0000-4000-8000-0000000000a1";
+  const MISSED_ID = "00000000-0000-4000-8000-0000000000a2";
+  const creditBatch = {
+    id: "00000000-0000-4000-8000-000000000001",
+    facilityId: ISOMETRIC_FACILITY_ID,
+    feedstockTypeId: FEEDSTOCK_TYPE_ID,
+    startDate: "2026-01-01",
+    endDate: "2026-01-31",
+    sampling: "sampled",
+    certifier: null,
+    productionRunIds: [SAVED_ID],
+  } as unknown as CreditBatch;
+  const lockOf = (level: "open" | "in_use" | "sent") => ({
+    ...OPEN_LOCK,
+    level,
+    usedBy: level === "open" ? [] : [{ kind: "removal", id: "removal-1", label: "RM-26-001", facilityId: null }],
+  }) as typeof OPEN_LOCK;
+  const run = (id: string, code: string, assignedCreditBatchId: string | null) => ({
+    id, code, date: "2026-01-10", status: "complete", feedstockTypeIds: [FEEDSTOCK_TYPE_ID],
+    assignedCreditBatchId, biocharOutputKg: 100, biocharDryMassKg: 90, biocharStorageName: "Pad",
+  });
+  const setRuns = () => {
+    mocks.claimedRun = { endsOn: "2026-01-10", run: run(SAVED_ID, "PR-0412", creditBatch.id) };
+    mocks.extraRuns = [run(MISSED_ID, "PR-0415", null)];
+  };
+
+  afterEach(() => { mocks.extraRuns = []; });
+
+  async function renderHeld(level: "open" | "in_use" | "sent", onSubmit = vi.fn()) {
+    setRuns();
+    const view = render(<CreditBatchForm creditBatch={creditBatch} lock={lockOf(level)} onSubmit={onSubmit} />);
+    await act(async () => {});
+    return { ...view, onSubmit };
+  }
+
+  it("offers Add run on a held batch and keeps existing runs without a remove button", async () => {
+    const { container } = await renderHeld("in_use");
+    expect(screen.getByRole("button", { name: "Add run PR-0415" })).toBeTruthy();
+    expect(container.querySelectorAll('[data-testid="credit-batch-production-run-preview"]').length).toBe(1);
+    expect(screen.queryByRole("button", { name: /^Undo adding/ })).toBeNull();
+    expect(container.querySelector('a[href*="run=' + SAVED_ID + '"]')?.textContent).toBe("PR-0412");
+  });
+
+  it("moves the added run into the batch, lets it be undone, and submits it", async () => {
+    const { container, onSubmit } = await renderHeld("in_use");
+    fireEvent.click(screen.getByRole("button", { name: "Add run PR-0415" }));
+    await act(async () => {});
+    expect(container.querySelectorAll('[data-testid="credit-batch-production-run-preview"]').length).toBe(2);
+    expect(screen.queryByRole("button", { name: "Add run PR-0415" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: /^Undo adding/ }).length).toBe(1);
+    await act(async () => { fireEvent.submit(container.querySelector("form")!); });
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(new Set(onSubmit.mock.calls[0][0].productionRunIds)).toEqual(new Set([SAVED_ID, MISSED_ID]));
+  });
+
+  it("offers no Add run on a Sent batch", async () => {
+    await renderHeld("sent");
+    expect(screen.queryByRole("button", { name: /Add run/ })).toBeNull();
+  });
+
+  it("leaves a free batch as it was", async () => {
+    await renderHeld("open");
+    expect(screen.queryByRole("button", { name: /Add run/ })).toBeNull();
   });
 });

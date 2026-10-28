@@ -46,7 +46,8 @@ import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle
 import { CreditBatchProductionRunsPreview } from "./credit-batch-production-runs-preview";
 import { Notice } from "@/components/ui/notice";
 import type { RecordLockView } from "@/lib/record-lock-view";
-import { isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
+import { canAddCreditBatchRuns, isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
+import { CreditBatchAddRuns } from "./credit-batch-add-runs";
 
 type CreditBatchFormInput = z.input<ReturnType<typeof creditBatchFormSchemaForCertifier>>;
 type CreditBatchFormResolver = Resolver<CreditBatchFormInput, unknown, CreditBatchFormData>;
@@ -273,6 +274,35 @@ export function CreditBatchForm({
     selectedProductionRunIds.includes(run.id),
   );
 
+  // A batch held by a draft or returned Removal keeps its runs but can take a
+  // missed one. The runs it holds are fixed; only an addition made in this
+  // edit can be taken back.
+  const canAddRuns =
+    isEditMode && membershipLocked && canAddCreditBatchRuns(lock);
+  const savedRunIdSet = new Set(creditBatch?.productionRunIds ?? []);
+  const pendingAddedRunIds = new Set(
+    selectedProductionRunIds.filter((id) => !savedRunIdSet.has(id)),
+  );
+  const addableRuns = canAddRuns
+    ? typedRunOptions.filter(
+        (run) =>
+          run.status === COMPLETED_PRODUCTION_RUN_STATUS &&
+          !run.assignedCreditBatchId &&
+          !selectedProductionRunIds.includes(run.id),
+      )
+    : [];
+  const addRun = (runId: string) =>
+    setValue("productionRunIds", [...selectedProductionRunIds, runId], {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+  const undoAddedRun = (runId: string) =>
+    setValue(
+      "productionRunIds",
+      selectedProductionRunIds.filter((id) => id !== runId),
+      { shouldValidate: true, shouldDirty: true },
+    );
+
   // The pruning effect below silently removes saved members that fall outside
   // the edited window; without a visible warning an out-of-range date change
   // drops a claimed run and the save still succeeds (design review DR-003).
@@ -459,7 +489,24 @@ export function CreditBatchForm({
 
       {/* ── Production cohort ── */}
       <CreditBatchProductionRunsPreview
-        matchingRuns={typedRunOptions}
+        matchingRuns={canAddRuns ? selectedRuns : typedRunOptions}
+        facilityId={effectiveFacilityId || undefined}
+        {...(canAddRuns
+          ? {
+              hint: "A Removal holds this batch, so its runs stay. Use Add run to include a missed completed run of this feedstock type within the production window.",
+              removableRunIds: pendingAddedRunIds,
+              onRemoveRun: undoAddedRun,
+              disabled: isSubmitting,
+              footer: (
+                <CreditBatchAddRuns
+                  runs={addableRuns}
+                  facilityId={effectiveFacilityId || undefined}
+                  onAdd={addRun}
+                  disabled={isSubmitting}
+                />
+              ),
+            }
+          : {})}
         retainedRuns={retainedProductionRunOptions}
         currentCreditBatchId={creditBatch?.id}
         isReady={isCohortReady}

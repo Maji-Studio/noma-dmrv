@@ -329,7 +329,7 @@ export function CreditBatchList({
     const outcome = await saveCreditBatchEdit({
       data,
       saved: sideSheet.entity,
-      membershipLocked,
+      lock: sheetLock,
       update: (input) => updateCreditBatch.mutateAsync(input),
     });
     if (outcome.status === "error") {
