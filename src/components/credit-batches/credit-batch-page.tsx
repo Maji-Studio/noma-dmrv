@@ -255,7 +255,7 @@ export function CreditBatchPage({
     const outcome = await saveCreditBatchEdit({
       data,
       saved: editSnapshot,
-      membershipLocked,
+      lock: lock,
       update: (input) => updateCreditBatch.mutateAsync(input),
     });
     if (outcome.status === "error") {

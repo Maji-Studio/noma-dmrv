@@ -3,6 +3,7 @@ import { CODE_CONFLICT_MESSAGES, withAutoCodes } from "./code-generator";
 import { recordActivityChange } from "./activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
+import { removalSplitsApplicationsByBatch } from "@/lib/certification/removal-application-policy";
 import { REMOVAL_DELETE_ALREADY_DELETING_ERROR } from "./certifier-removal-deletion";
 import { assertNoRemovalBatchDeletion } from "./removal-production-batch-deletion";
 import { and, asc, desc, eq, exists, gte, inArray, isNull, or, sql } from "drizzle-orm";
@@ -400,15 +401,13 @@ export async function createRemovalWithCreditBatches(
     if (!facility) {
       throw new SafeError("Facility not found.");
     }
+    const splitsApplicationsByBatch = removalSplitsApplicationsByBatch(facility.durabilityOption);
     if (
-      facility.durabilityOption === "1000_year" &&
+      splitsApplicationsByBatch &&
       uniqueIds.length > THOUSAND_YEAR_REMOVAL_BATCH_LIMIT
     ) {
       throw new SafeError(THOUSAND_YEAR_REMOVAL_ERROR);
     }
-    const splitsApplicationsByBatch =
-      facility.durabilityOption === "1000_year";
-
     const batches = await tx
       .select({
         id: creditBatches.id,
