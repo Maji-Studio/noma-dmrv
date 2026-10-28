@@ -1,3 +1,4 @@
+import type { CarriedEntrySnapshot } from "@/lib/certification/carried-entry-snapshot";
 import type { EntryInputManifest, RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
 import type { RemovalSourceLineage } from "@/lib/certification/removal-source-bindings";
 
@@ -28,8 +29,8 @@ export function normalizeEntrySourceBindingForHash<T extends {
 }
 
 /** Carry labels remain available to operators and registry descriptions, outside the hash. */
-export function normalizeCarriedEntriesForHash(entries: RemovalEntryContributions["carriedEntries"]) {
-  return entries?.map(entry => ({
+export function normalizeCarriedEntriesForHash(entries: RemovalEntryContributions["carriedEntries"]): CarriedEntrySnapshot[] | undefined {
+  return entries?.map((entry): CarriedEntrySnapshot => ({
     entryId: entry.entryId, creditBatchId: entry.creditBatchId, componentId: entry.componentId,
     occurredOn: entry.occurredOn, value: entry.value,
     evidenceDocumentIds: [...entry.evidenceDocumentIds].sort(),

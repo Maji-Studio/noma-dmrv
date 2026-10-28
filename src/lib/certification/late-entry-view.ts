@@ -16,6 +16,7 @@ import {
   type CarryWaitingReason,
   type EntryCarryDestination,
   type EntryCarryDisposition,
+  type EntryRevisionDestination,
 } from "./emission-entry-carry";
 
 const MEMBER_TEMPLATE_TEXT = "An Admin changes it in Settings, Removal templates.";
@@ -23,7 +24,7 @@ const MEMBER_TEMPLATE_TEXT = "An Admin changes it in Settings, Removal templates
 export interface LateEntryFacts {
   carry?: EntryCarryDisposition;
   reportedIn?: EntryCarryDestination | null;
-  revisionOf?: { removalId: string; removalCode: string } | null;
+  revisionOf?: EntryRevisionDestination | null;
   recordedAfter?: { removalId: string; removalCode: string } | null;
 }
 

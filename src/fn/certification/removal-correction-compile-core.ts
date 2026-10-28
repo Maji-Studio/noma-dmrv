@@ -1,3 +1,4 @@
+import { CHANGED_GENERATED_EVIDENCE_KEY } from "@/lib/certification/removal-semantic-correction";
 import type { CoveredContenders } from "@/lib/certification/covered-contenders";
 import { changedGeneratedEvidence } from "./generated-evidence-comparison";
 import { RemovalComparisonBlockedError } from "./removal-comparison-blocked-error";
@@ -42,5 +43,5 @@ export async function compileRemovalCorrectionContent(orgCtx: OrgContext, remova
   const semantic = (await buildRemovalSubmissionBuild({ orgCtx, removalId, ctx: context, prepared })).semanticPayload;
   const changedLedgers = await changedGeneratedEvidence(orgCtx, removalId, context);
   // Comparison-only facts: never enter the submission payload or its hash.
-  return changedLedgers.length ? { ...semantic, changedGeneratedEvidence: changedLedgers } : semantic;
+  return changedLedgers.length ? { ...semantic, [CHANGED_GENERATED_EVIDENCE_KEY]: changedLedgers } : semantic;
 }
