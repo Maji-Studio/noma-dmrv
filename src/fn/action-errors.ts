@@ -1,4 +1,4 @@
-import { isPgNulCharacterError } from "@/db/errors";
+import { isPgNulCharacterError, NUL_CHARACTER_MESSAGE } from "@/db/errors";
 import { DomainError } from "@/lib/domain-errors";
 import { validationFailed } from "@/lib/operations/errors";
 import { formatValidationIssues } from "@/lib/validation-message";
@@ -7,8 +7,6 @@ import { ActionConflictError, SafeError, toActionError } from "@/lib/errors";
 import { logger, sanitizeErrorMessage } from "@/lib/log";
 import type { ActionResult } from "@/types/actions";
 import { ZodError } from "zod";
-
-const NUL_CHARACTER_MESSAGE = "This value contains a NUL character (U+0000), which noma cannot store. Remove it and retry.";
 
 interface LogActionErrorOptions {
   context?: Record<string, unknown>;

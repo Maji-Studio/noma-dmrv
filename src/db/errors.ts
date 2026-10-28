@@ -29,6 +29,9 @@ const PG_SCHEMA_MISMATCH_CODES = new Set([
 // Guard against a pathological/cyclic `.cause` chain.
 const MAX_CAUSE_DEPTH = 5;
 
+/** What every transport answers for a value holding U+0000, which PostgreSQL text cannot store. */
+export const NUL_CHARACTER_MESSAGE = "This value contains a NUL character (U+0000), which noma cannot store. Remove it and retry.";
+
 /** Match NUL-specific text/JSONB refusals, including Drizzle-wrapped errors. */
 export function isPgNulCharacterError(err: unknown): boolean {
   const visited = new Set<unknown>();
