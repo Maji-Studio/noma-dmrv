@@ -1,6 +1,6 @@
 /**
  * RemovalsList — the Certification → Removals workspace tab (route:
- * /certification/removals). The app-native DataTable idiom (cf. production-runs):
+ * /removals). The app-native DataTable idiom (cf. production-runs):
  * one dense, scannable list of every Removal for the selected facility. A row
  * opens a read-only quick view in a side-sheet (`?removal=<id>`, nuqs); the
  * sheet one-click-submits a ready 1:1 removal or routes complex ones to the

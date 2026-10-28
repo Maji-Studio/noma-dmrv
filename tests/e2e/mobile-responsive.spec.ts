@@ -30,8 +30,8 @@ const ROUTES = [
   "/facilities",
   "/reactors",
   "/production-runs",
-  "/feedstocks",
-  "/samples",
+  "/feedstock-intake",
+  "/lab-samples",
   "/biochar-products",
   "/orders",
   "/deliveries",
@@ -39,12 +39,11 @@ const ROUTES = [
   "/credit-batches",
   "/customers",
   "/suppliers",
-  "/storage-locations",
+  "/storage-bins",
   "/formulations",
   "/emissions",
-  "/certification",
-  "/certification/removals",
-  "/certification/ghg-statements",
+  "/removals",
+  "/ghg-statements",
   "/traceability",
   // Settings is a rail (a grouped select below `lg`) plus one pane; panes of
   // each group are checked because their content stacks differently.
@@ -52,8 +51,9 @@ const ROUTES = [
   "/settings/members",
   "/settings/registry",
   "/settings/facilities",
-  "/vehicles-and-crew",
-  "/admin/organizations",
+  "/vehicles",
+  "/crew",
+  "/platform/organizations",
 ] as const;
 
 test.use({ viewport: MOBILE_VIEWPORT });

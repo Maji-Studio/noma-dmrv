@@ -264,7 +264,7 @@ export function FacilityList() {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="infrastructure"
+        area="setup"
         title="Facilities"
         actions={
           <Button variant="primary" onClick={openCreate}>

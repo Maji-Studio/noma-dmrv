@@ -11,7 +11,7 @@ describe("dashboard activity dates", () => {
     expect(markup).toContain("Oct 22, 2026");
   });
   it("keeps a business date on its persisted calendar", () => {
-    const activity = [{ id: "feedstock-1", title: "Feedstock", code: "FS-1", href: "/feedstocks", dateIso: "2026-10-21T00:00:00Z", calendarDay: true }];
+    const activity = [{ id: "feedstock-1", title: "Feedstock", code: "FS-1", href: "/feedstock-intake", dateIso: "2026-10-21T00:00:00Z", calendarDay: true }];
     expect(renderToStaticMarkup(<ActivityFeed activity={activity} timeZone="America/Los_Angeles" />)).toContain("Oct 21, 2026");
   });
 });

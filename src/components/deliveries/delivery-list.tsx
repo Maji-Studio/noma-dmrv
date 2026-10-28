@@ -516,7 +516,7 @@ export function DeliveryList() {
     return (
       <div className="container-max page-shell">
         <PageHeader
-          area="distribution"
+          area="records"
           title="Deliveries"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its deliveries." />
@@ -551,7 +551,7 @@ export function DeliveryList() {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="distribution"
+        area="records"
         title="Deliveries"
         actions={
           <Button variant="primary" onClick={openCreate}>

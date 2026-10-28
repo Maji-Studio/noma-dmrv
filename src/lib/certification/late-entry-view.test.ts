@@ -35,8 +35,8 @@ describe("lateEntryView", () => {
 
   it("links the origin Removal and a draft receiver", () => {
     const view = lateEntryView({ recordedAfter: AFTER, carry: { receiver: DEST, waitingReason: null } }, "f1");
-    expect(view?.recordedAfter).toEqual({ removalCode: "RM-26-009", removalHref: "/certification/removals?facility=f1&removal=rm-9" });
-    expect(view?.destination).toEqual({ kind: "draft", removalCode: "RM-26-010", removalHref: "/certification/removals?facility=f1&removal=rm-10", creditBatches: [{ code: "CB-26-010", href: "/credit-batches/cb-10?facility=f1" }], anotherCreditBatch: true });
+    expect(view?.recordedAfter).toEqual({ removalCode: "RM-26-009", removalHref: "/removals?facility=f1&removal=rm-9" });
+    expect(view?.destination).toEqual({ kind: "draft", removalCode: "RM-26-010", removalHref: "/removals?facility=f1&removal=rm-10", creditBatches: [{ code: "CB-26-010", href: "/credit-batches/cb-10?facility=f1" }], anotherCreditBatch: true });
   });
 
   it("reports a sent destination before any receiver", () => {
@@ -47,8 +47,8 @@ describe("lateEntryView", () => {
   it("links a revision before a waiting reason and keeps the recorded-after fact", () => {
     const facts = { revisionOf: AFTER, recordedAfter: AFTER, carry: { receiver: null, waitingReason: "noDraft" as const } };
     expect(lateEntryView(facts, "f1")).toEqual({
-      recordedAfter: { removalCode: AFTER.removalCode, removalHref: "/certification/removals?facility=f1&removal=rm-9" },
-      destination: { kind: "revision", removalCode: AFTER.removalCode, removalHref: "/certification/removals?facility=f1&removal=rm-9" },
+      recordedAfter: { removalCode: AFTER.removalCode, removalHref: "/removals?facility=f1&removal=rm-9" },
+      destination: { kind: "revision", removalCode: AFTER.removalCode, removalHref: "/removals?facility=f1&removal=rm-9" },
     });
     expect(lateEntryView({ ...facts, carry: { receiver: DEST, waitingReason: null } }, "f1")?.destination.kind).toBe("draft");
     expect(lateEntryView({ ...facts, reportedIn: DEST }, "f1")?.destination.kind).toBe("reported");
@@ -56,9 +56,9 @@ describe("lateEntryView", () => {
   });
 
   it.each([
-    ["noDraft", "New Removal", "/certification/removals?facility=f1&create=true"],
+    ["noDraft", "New Removal", "/removals?facility=f1&create=true"],
     ["incompatibleTemplate", "Open Removal templates", "/settings/removal-templates?facility=f1"],
-    ["templateUnknown", "Open Removals", "/certification/removals?facility=f1"],
+    ["templateUnknown", "Open Removals", "/removals?facility=f1"],
   ] as const)("waits for %s with the server text and one action", (reason, label, href) => {
     const view = lateEntryView({ recordedAfter: AFTER, carry: { receiver: null, waitingReason: reason } }, "f1", { canManage: true });
     expect(view?.destination).toEqual({ kind: "waiting", reason, text: CARRY_WAITING_REASONS[reason], action: { label, href } });
@@ -67,7 +67,7 @@ describe("lateEntryView", () => {
 
   it("opens the draft whose template is not read yet", () => {
     const carry = { receiver: null, waitingReason: "templateUnknown" as const, waitingFor: { removalId: "rm-11", removalCode: "RM-26-011" } };
-    expect(lateEntryView({ carry }, "f1")?.destination).toMatchObject({ action: { label: "Open Removal", href: "/certification/removals?facility=f1&removal=rm-11" } });
+    expect(lateEntryView({ carry }, "f1")?.destination).toMatchObject({ action: { label: "Open Removal", href: "/removals?facility=f1&removal=rm-11" } });
   });
 
   it("gives a member the template text without the templates action", () => {

@@ -88,7 +88,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 **UI**
 - The Removal flow had two steps, select and submit (`src/components/certification/new-removal-dialog/index.tsx`); PR 4 adds the Empty components step between them (Removal flow, §4.5). The per-input value table exists only inside the technical-details drawer (`compiled-submission-review.tsx`).
 - The credit batch side sheet's sections are in `creditBatchSheetSections` (`src/components/credit-batches/credit-batch-view.tsx`). Self-fetching panels mount in `viewModeChildren` (`credit-batch-list.tsx`).
-- The Energy page is `src/app/(app)/energy/page.tsx` with `src/components/energy/*` and `src/lib/energy/*`. Its batch filter is client state, not in the URL.
+- The Energy page (since retired; `/energy` was removed in the 2026-10-28 navigation overhaul) used `src/components/energy/*` and `src/lib/energy/*`. Its batch filter is client state, not in the URL.
 - The nearest reference for a small versioned, org-scoped child table with documents is production incidents (`src/db/schema/production.ts` `incidentReports`, `src/data-access/production-incidents.ts`).
 - The activity log exists: `recordActivity(ctx, tx, event)` in `src/data-access/activity-events.ts` (migration 0142).
 - Files near the 1000-line limit that this plan extends: `src/fn/certification/certify-context-core.ts` (974) and `src/data-access/certification.ts` (952). Split them before adding to them.

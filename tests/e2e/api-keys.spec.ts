@@ -73,8 +73,8 @@ test("Members have no Developers rail entry or controls", async ({ operatorPage:
   const rail = page.getByRole("navigation", { name: "Settings categories" });
   await expect(rail).toBeVisible({ timeout: UI_TIMEOUT_MS });
   await expect(rail.getByRole("link", { name: "Developers", exact: true })).toHaveCount(0);
-  // The retired route still lands on the pane.
-  await page.goto("/settings/api-keys");
+  // Opened directly, the pane explains why there are no controls.
+  await page.goto("/settings/developers");
   await expect(page).toHaveURL(/\/settings\/developers/);
   await expect(page.getByText(/Only organization Admins with a membership/)).toBeVisible();
   await expect(page.getByRole("button", { name: "New API key" })).toHaveCount(0);

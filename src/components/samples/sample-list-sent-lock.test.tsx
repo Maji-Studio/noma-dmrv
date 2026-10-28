@@ -210,7 +210,7 @@ describe("Sample sheet behind a Sent Removal", () => {
     expect(text).toContain("Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026.");
     expect(text).toContain("If Isometric sends the GHG Statement back, refresh its status to edit again.");
     const link = renderer!.root.findByType("a");
-    expect(link.props.href).toBe(`/certification/removals?facility=${FACILITY_ID}&removal=${REMOVAL_ID}`);
+    expect(link.props.href).toBe(`/removals?facility=${FACILITY_ID}&removal=${REMOVAL_ID}`);
     renderer?.unmount();
   });
 

@@ -1,8 +1,7 @@
 "use client";
 
 // Segment-level error boundary for the certification surface
-// (/certification, /certification/removals, /certification/removals/[id],
-// /certification/ghg-statements). Next.js mounts the nearest error.tsx
+// (/removals and /ghg-statements). Next.js mounts the nearest error.tsx
 // when a child throws; without this, a crash in a submission flow or a
 // failed Isometric/data-access read escapes to the app-level boundary in
 // `(app)/error.tsx`, which discards the certification context and the

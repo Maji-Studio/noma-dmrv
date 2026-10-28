@@ -29,9 +29,9 @@ test.describe("Security: Authorization Bypass Prevention", () => {
 });
 
 test.describe("Security: Admin Panel Protection", () => {
-  test("Unauthenticated user cannot access /admin", async ({ page }) => {
+  test("Unauthenticated user cannot access /platform/organizations", async ({ page }) => {
     // Navigate to admin panel without authentication
-    await page.goto("/admin");
+    await page.goto("/platform/organizations");
 
     // Should redirect to login
     await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
@@ -44,7 +44,7 @@ test.describe("Security: Admin Panel Protection", () => {
     page,
   }) => {
     // Try to access admin panel
-    await page.goto("/admin/users");
+    await page.goto("/platform/diagnostics");
 
     // Should redirect to login page
     await expect(page).toHaveURL(/\/login/, { timeout: 5000 });

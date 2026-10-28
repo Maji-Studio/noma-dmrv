@@ -63,7 +63,7 @@ test.describe("Double-click on Create", () => {
     const scope = and(eq(schema.feedstocks.organizationId, DEC_ORG_ID), eq(schema.feedstocks.facilityId, seededData.facility.id));
     try {
       const before = new Set((await db.select({ id: schema.feedstocks.id }).from(schema.feedstocks).where(scope)).map((row) => row.id));
-      await openCreateSheet(page, `/feedstocks?facility=${seededData.facility.id}`, seededData.facility.name, "New feedstock");
+      await openCreateSheet(page, `/feedstock-intake?facility=${seededData.facility.id}`, seededData.facility.name, "New feedstock");
       await page.locator('input[name="deliveryDate"]').fill("2026-01-15");
       await selectEntity(page, "Supplier", seededData.supplier.id, seededData.supplier.name);
       await selectEntity(page, "Feedstock Type", seededData.feedstockType.id, seededData.feedstockType.name);
@@ -118,7 +118,7 @@ test.describe("Double-click on Create", () => {
     const sampleIds: string[] = [];
     try {
       const batch = await seedCreditBatch(seededData.facility.id, crypto.randomUUID().slice(0, 8).toUpperCase(), seededData.feedstockType.id);
-      await openCreateSheet(page, `/samples?facility=${seededData.facility.id}`, seededData.facility.name, "New Sample");
+      await openCreateSheet(page, `/lab-samples?facility=${seededData.facility.id}`, seededData.facility.name, "New Sample");
       const dialog = page.getByRole("dialog", { name: "Create Sample" });
       await selectFirstEntity(page, "Credit Batch");
       const samplingTime = dialog.locator('input[name="samplingTime"]');

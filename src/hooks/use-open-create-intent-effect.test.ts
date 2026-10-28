@@ -23,7 +23,7 @@ vi.mock("react", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/samples",
+  usePathname: () => "/lab-samples",
   useSearchParams: () => mocks.searchParams,
 }));
 
@@ -60,7 +60,7 @@ describe("useOpenCreateIntent client effect", () => {
     expect(mocks.replaceState).toHaveBeenCalledWith(
       null,
       "",
-      "/samples?creditBatch=filter-batch",
+      "/lab-samples?creditBatch=filter-batch",
     );
   });
 });

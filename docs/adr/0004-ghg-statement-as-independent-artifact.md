@@ -55,8 +55,8 @@ server-derived. There is no way to pass an explicit removal list.
   different statement is left unchanged and a warning is surfaced. The
   decision is a pure function (`decideRemovalMembership`); the data-access
   layer applies it under a `SELECT … FOR UPDATE` + `IS NULL` guard.
-- The surface is a provider-neutral `src/app/(app)/certification/` route
-  group (tile hub + `removals/` + `ghg-statements/`). The section name is
+- The surface is a provider-neutral `src/app/(app)/(certification)/` route
+  group (`removals/` + `ghg-statements/`). The section name is
   provider-neutral; the artifacts stay Isometric-specific this iteration.
 - Full lifecycle: create draft → submit to verifier (report URL →
   `AWAITING_VERIFICATION`) → status refresh.

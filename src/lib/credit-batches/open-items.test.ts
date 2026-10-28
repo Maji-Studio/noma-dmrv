@@ -68,7 +68,7 @@ describe("buildCreditBatchOpenItems", () => {
       id: "correction:removal-1",
       title: "RM-26-003: Resubmit needed",
       detail: "Diesel use and Transport to field changed here since RM-26-003 was sent. Resubmit the Removal to send them.",
-      target: { href: "/certification/removals?facility=facility&removal=removal-1" },
+      target: { href: "/removals?facility=facility&removal=removal-1" },
     }]);
   });
 
@@ -374,9 +374,9 @@ describe("entries recorded after the Removal was sent", () => {
   const waiting = (waitingReason: string) => ({ receiver: null, waitingReason, waitingFor: { removalId: "rm-11", removalCode: "RM-26-011" } });
 
   it.each([
-    ["noDraft", "No later draft is available at this facility.", "/certification/removals?facility=facility&create=true"],
+    ["noDraft", "No later draft is available at this facility.", "/removals?facility=facility&create=true"],
     ["incompatibleTemplate", "The next draft's template cannot take this component.", "/settings/removal-templates?facility=facility"],
-    ["templateUnknown", "noma has not read the next draft's template yet. Open the Removal to load it.", "/certification/removals?facility=facility&removal=rm-11"],
+    ["templateUnknown", "noma has not read the next draft's template yet. Open the Removal to load it.", "/removals?facility=facility&removal=rm-11"],
   ])("adds a Check for a waiting entry: %s", (reason, text, href) => {
     const { blocking, check } = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line(waiting(reason))] });
     expect(blocking).toEqual([]);
@@ -417,7 +417,7 @@ describe("entries recorded after the Removal was sent", () => {
       id: "late-entry:e1",
       title: "Diesel use of Sep 14, 2026 is waiting for a Removal",
       detail: "No later draft is available at this facility.",
-      target: { href: "/certification/removals?facility=facility&create=true" },
+      target: { href: "/removals?facility=facility&create=true" },
     }]);
   });
 
