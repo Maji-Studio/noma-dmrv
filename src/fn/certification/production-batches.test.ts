@@ -47,6 +47,7 @@ vi.mock("@/data-access/certifier-production-batches", () => ({
   migrateProductionBatchPayloadHash: mocks.migrateProductionBatchPayloadHash,
   upsertProductionBatchRegistration: mocks.upsertProductionBatchRegistration,
   replaceMissingProductionBatchRegistration: mocks.replaceMissingProductionBatchRegistration,
+  resolveRegistryDisplayNames: async () => ({ facilities: new Map(), feedstockTypes: new Map() }),
 }));
 
 vi.mock("./shared", async (importOriginal) => {
