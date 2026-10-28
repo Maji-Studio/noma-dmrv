@@ -1,3 +1,5 @@
+import { displayModel, profileModels } from "./review-models.mjs";
+import { earlierRounds } from "./review-prior.mjs";
 import { DEFAULT_PRACTICES } from "./review-runtime.mjs";
 
 export const COMMENT_MARKER = "<!-- noma-pr-review-suite:v1 -->";
@@ -30,12 +32,15 @@ export function worstSeverity(reports) {
     )[0];
 }
 
-export function aggregateReport({ pr, baseSha, headSha, reports, skippedPractices, omittedFiles = [] }) {
+export function aggregateReport({ pr, baseSha, headSha, reports, skippedPractices, omittedFiles = [], round = 1, priors = [], profile = "full" }) {
   const sections = [
     COMMENT_MARKER,
-    "# Codex + Opus PR review suite",
+    pr.mode === "local" ? "# Codex + Opus local review suite" : "# Codex + Opus PR review suite",
     "",
-    `PR: [#${pr.number}](${pr.url})`,
+    pr.mode === "local" ? `Branch: ${pr.headRefName}` : `PR: [#${pr.number}](${pr.url})`,
+    `Round: ${round}`,
+    `Models: ${displayModel("codex", profile)} + ${displayModel("opus", profile)} (profile ${profile})`,
+    ...(priors.length ? [`Earlier rounds: ${earlierRounds(priors)}`] : []),
     `Reviewed head: \`${headSha}\``,
     `Base: \`${pr.baseRefName}\` at \`${baseSha}\``,
     "",
@@ -59,7 +64,7 @@ export function aggregateReport({ pr, baseSha, headSha, reports, skippedPractice
     if (practiceReports.length === 0) continue;
     sections.push("", `## ${displayPractice(practice)}`);
     for (const report of practiceReports) {
-      sections.push("", `### ${displayModel(report.model)}`, "");
+      sections.push("", `### ${displayModel(report.model, profile)}`, "");
       if (report.error) {
         sections.push(`_Reviewer failed: ${report.error}_`);
         continue;
@@ -113,6 +118,49 @@ export function displayPractice(practice) {
   return practice[0].toUpperCase() + practice.slice(1);
 }
 
-export function displayModel(model) {
-  return model === "codex" ? "Codex (gpt-6-astra, medium)" : "Claude Opus (high)";
+export { displayModel } from "./review-models.mjs";
+
+export function buildReportJson({ pr, baseSha, headSha, reports, skippedPractices, round = 1, profile = "full", generatedAt = new Date().toISOString() }) {
+  const counts = { P0: 0, P1: 0, P2: 0, P3: 0 };
+  // v1: {version, mode, round, profile, models, base: {name, sha}, headSha, pr,
+  // branch, generatedAt, counts: {P0,P1,P2,P3}, reports: [{practice, model,
+  // status, error?, findings}], skippedPractices: [[practice, reason]]}.
+  // Findings have stable IDs and editable disposition/reason for the next round.
+  const normalized = reports.map((report) => ({
+    practice: report.practice,
+    model: report.model,
+    status: report.error ? "failed" : "ok",
+    ...(report.error ? { error: report.error } : {}),
+    findings: (report.output?.findings || []).map((finding, index) => {
+      counts[finding.severity] += 1;
+      return {
+        id: `r${round}-${report.practice}-${report.model}-${index + 1}`,
+        severity: finding.severity,
+        kind: finding.kind,
+        title: finding.title,
+        path: finding.path,
+        start_line: finding.start_line,
+        end_line: finding.end_line,
+        problem: finding.problem,
+        smallest_safe_fix: finding.smallest_safe_fix,
+        disposition: null,
+        reason: null,
+      };
+    }),
+  }));
+  return {
+    version: 1,
+    mode: pr.mode === "local" ? "local" : "pr",
+    round,
+    profile,
+    models: profileModels(profile),
+    base: { name: pr.baseRefName, sha: baseSha },
+    headSha,
+    pr: pr.number ?? null,
+    branch: pr.headRefName,
+    generatedAt,
+    counts,
+    reports: normalized,
+    skippedPractices: [...skippedPractices],
+  };
 }

@@ -1,6 +1,6 @@
 ---
 name: pr-review-suite
-description: Submit or review a GitHub pull request through four independent practices (Standards, Spec, Deep Correctness, and Design) using subscription-authenticated Codex gpt-6-astra and Claude Opus CLI sessions, then publish one updateable practice-first PR comment. Design runs only for UI changes. Use when asked to publish changes with follow-up reviews, after opening or updating a PR, before marking a draft ready, or for a multi-model PR review without API-key billing.
+description: Review a branch before its PR opens, or a GitHub pull request, through four independent practices (Standards, Spec, Deep Correctness, and Design) using subscription-authenticated Codex and Claude Opus CLI sessions; a PR review publishes one updateable practice-first comment. Design runs only for UI changes. Use for local review rounds before a PR, after opening or updating a PR, or for a multi-model review without API-key billing.
 ---
 
 # PR Review Suite
@@ -50,6 +50,30 @@ context without running either model. Use `--self-test` for offline validation.
 
 The command relies on the existing authenticated `codex`, `claude`, and `gh`
 CLI sessions. It must not request or materialize OpenAI or Anthropic API keys.
+
+### Review before the PR
+
+Review committed branch changes without a PR:
+
+```bash
+node .agents/skills/pr-review-suite/scripts/run-pr-review-suite.mjs --local --issue 123 --dry-run
+```
+
+Local mode requires a clean tracked worktree and `--dry-run` or `--plan`.
+Use `--base <branch>` to change the default `staging` base. `--issue <number>`
+is an explicit spec source in either mode; use it instead of `--spec <path>`.
+
+For round 2, edit each finding's `disposition` in the earlier `report.json` to
+`fixed` or `declined`, adding a non-empty `reason` for each declined finding:
+
+```bash
+node .agents/skills/pr-review-suite/scripts/run-pr-review-suite.mjs \
+  --local --issue 123 --dry-run --prior /path/to/round-1/report.json
+```
+
+Repeat `--prior` in round order to include more earlier reports.
+Use `--profile light` for Codex gpt-6.1-sol (high) and Opus (medium); the default
+`full` profile keeps Codex gpt-6-astra (medium) and Opus (high).
 
 ## Practices
 
