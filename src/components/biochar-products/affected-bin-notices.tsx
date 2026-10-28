@@ -9,6 +9,7 @@
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import { formatMassKg } from "@/lib/format-utils";
 import { backdatedNotice } from "@/lib/output-stock/messages";
 import type { AffectedStockPreview } from "@/types/output-stock";
@@ -22,11 +23,11 @@ function blockerHref(blocker: Blocker): string | null {
     case "binMovement":
       return null;
     case "application":
-      return `/applications?ids=${blocker.id}`;
+      return recordHref("application", blocker.id);
     case "ghgStatement":
-      return `/ghg-statements?statement=${blocker.id}`;
+      return recordHref("ghgStatement", blocker.id);
     default:
-      return `/removals?removal=${blocker.id}`;
+      return recordHref("removal", blocker.id);
   }
 }
 

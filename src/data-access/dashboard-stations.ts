@@ -10,6 +10,7 @@
  * aggregates for every count, one `union all` for the newest rows per entity;
  * the merge sort and labelling happen in JS.
  */
+import { recordHref } from "@/lib/record-links";
 import { db } from "@/db";
 import { countRows } from "@/db/aggregate";
 import {
@@ -22,7 +23,6 @@ import {
   samples,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import type { StatusStateClass } from "@/lib/status-state";
 import {
   and,
@@ -460,15 +460,15 @@ function activityHref(
 ): string {
   switch (kind) {
     case "feedstock":
-      return facilityHref("/feedstock-intake", facilityId);
+      return recordHref("feedstock", id, { facilityId });
     case "run":
-      return facilityHref("/production-runs", facilityId);
+      return recordHref("productionRun", id, { facilityId });
     case "delivery":
-      return facilityHref("/deliveries", facilityId);
+      return recordHref("delivery", id, { facilityId });
     case "application":
-      return facilityHref("/applications", facilityId);
+      return recordHref("application", id, { facilityId });
     case "batch":
-      return creditBatchDeepLinkHref(id, facilityId);
+      return recordHref("creditBatch", id, { facilityId });
   }
 }
 

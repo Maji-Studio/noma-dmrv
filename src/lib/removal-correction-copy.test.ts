@@ -1,15 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RemovalCorrection } from "@/lib/certification/removal-entry-correction";
-import {
-  changedComponentNames,
-  correctionStatementHref,
-  correctionStatementLabel,
-  correctionStatus,
-  joinWithAnd,
-  removalResubmitHref,
-  removalSheetHref,
-  returnedStatementPhrase,
-} from "./removal-correction-copy";
+import { changedComponentNames, correctionStatementHref, correctionStatementLabel, correctionStatus, joinWithAnd, removalResubmitHref, returnedStatementPhrase } from "./removal-correction-copy";
 
 const correction = (overrides: Partial<RemovalCorrection> = {}): RemovalCorrection => ({
   removalId: "removal-1", removalCode: "RM-26-001", windowOpen: true, resubmitNeeded: false,
@@ -46,7 +37,6 @@ describe("removal correction copy", () => {
 
   it("links through the shared deep link helpers", () => {
     expect(correctionStatementHref(correction(), "facility-1")).toBe("/ghg-statements?facility=facility-1&statement=statement-1");
-    expect(removalSheetHref("removal-1", "facility-1")).toBe("/removals?facility=facility-1&removal=removal-1");
     expect(removalResubmitHref("removal-1", "facility-1")).toBe("/removals?facility=facility-1&resume=removal-1");
   });
 });

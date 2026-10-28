@@ -3,7 +3,7 @@
  * /ghg-statements). Replaces the card-grid GhgStatementsHub with
  * the app-native DataTable idiom (cf. removals-list / production-runs): one
  * dense, scannable list of every GHG Statement for the selected facility. A row
- * opens a read-only centered Modal (`?statement=<id>`, nuqs); the
+ * opens a read-only side sheet (`?statement=<id>`, nuqs); the
  * "New GHG Statement" button opens the period-first create dialog.
  *
  * A GHG Statement is an independent, period-anchored artifact that rolls up
@@ -13,17 +13,17 @@
  * The status column derives from the persisted `metadata.remoteStatus` overlay
  * (`deriveSubmissionStatus(..., "ghgStatement")`) — NOT a per-row live verifier
  * fetch (P2-a, N+1). The selected statement's heavier detail (remote status,
- * sync events) loads once in the detail Modal.
+ * sync events) loads once in the detail side sheet.
  */
 "use client";
 
-import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
+import { recordHref, GHG_STATEMENT_DEEP_LINK_PARAM } from "@/lib/record-links";
 import type { ColumnDef, SortingState } from "@tanstack/react-table";
 import { isSortedDescending } from "./undated-last-sort";
 import Link from "next/link";
 import { parseAsString, useQueryState } from "nuqs";
-import { GHG_STATEMENT_DEEP_LINK_PARAM } from "@/lib/ghg-statement-links";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowsClockwiseIcon,
   ClipboardTextIcon,
@@ -35,6 +35,7 @@ import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-conte
 import {
   useFacilityCertifierSummary,
   useGhgStatementsForFacility,
+  useGhgStatementState,
   useSyncGhgStatementsFromRegistry,
 } from "@/hooks/use-certification";
 import { useToast } from "@/components/ui/toast";
@@ -353,6 +354,20 @@ function ListBody({ facilityId }: { facilityId: string }) {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 
+  // A statement already on this facility's list opens at once (its sheet loads the registry detail);
+  // only a link from elsewhere waits for the detail read to learn its facility.
+  const linkedInList = !!statementId && !!query.data?.some((s) => s.statement.id === statementId);
+  const lookupEnabled = !!statementId && !linkedInList && !query.isLoading;
+  const linkedStatement = useGhgStatementState(statementId ?? "", lookupEnabled);
+  const linkedFacilityReady = useLinkedRecordFacility(lookupEnabled ? linkedStatement.data?.statement : undefined, linkedStatement.isLoading);
+  useEffect(() => {
+    // A failed refresh of a statement already shown keeps its sheet; only one that never loaded closes.
+    if (lookupEnabled && !linkedStatement.data && (linkedStatement.isError || linkedStatement.isSuccess)) {
+      toast.error("Linked GHG Statement could not be opened");
+      void setStatementId(null);
+    }
+  }, [lookupEnabled, linkedStatement.isError, linkedStatement.isSuccess, linkedStatement.data, setStatementId, toast]);
+
   const isProduction = summaryQuery.data?.isProduction ?? false;
   const externalProjectId =
     summaryQuery.data?.mapping?.externalProjectId ?? null;
@@ -416,7 +431,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
   }
 
   const statements = query.data ?? [];
-  const selected = statementId
+  const selected = statementId && (linkedInList || linkedFacilityReady)
     ? statements.find((s) => s.statement.id === statementId)
     : undefined;
 
@@ -488,7 +503,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
           isLoading={query.isLoading}
           hoverable
           onRowClick={(row) => setStatementId(row.statement.id)}
-          getRowHref={(row) => ghgStatementDeepLinkHref(row.statement.id, facilityId)}
+          getRowHref={(row) => recordHref("ghgStatement", row.statement.id, { facilityId })}
           aria-label="GHG Statements"
           emptyMessage={
             <EmptyState

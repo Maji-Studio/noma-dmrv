@@ -7,6 +7,7 @@
  * Hover (or focus, or a first tap) on a bar shows its facts; pressing a bar
  * (the second tap on touch) opens the batch page, so each bar is a real link.
  */
+import { recordHref } from "@/lib/record-links";
 import { useState } from "react";
 import { CaretLeftIcon, CaretRightIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,6 @@ import {
   type BarPlacement,
   type DateWindow,
 } from "@/lib/credit-batches/timeline";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { formatDateRange } from "@/lib/format-utils";
 import { LOAD_FAILED } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
@@ -279,7 +279,7 @@ export function CreditBatchTimeline({
                             }}
                             label={`${batch.code}, ${row.feedstockName}, ${formatDateRange(batch.start, batch.end)}, ${stateLabel}${view.openTodoCount > 0 ? `, ${todosLabel(view.openTodoCount)}` : ""}`}
                             className="group absolute inset-0 block outline-offset-2"
-                            href={creditBatchDeepLinkHref(batch.id, batch.source.facilityId)}
+                            href={recordHref("creditBatch", batch.id, { facilityId: batch.source.facilityId })}
                           >
                             <Bar batch={batch} spot={spot} view={view} />
                           </BatchHoverCard>

@@ -1,6 +1,7 @@
 "use client";
 
 /** The Production, Samples and Activities tabs of the credit batch page. */
+import { recordHref } from "@/lib/record-links";
 import Link from "next/link";
 import { FactoryIcon } from "@phosphor-icons/react/dist/ssr";
 import { CreditBatchActivityView } from "@/components/activity";
@@ -10,7 +11,6 @@ import { Skeleton } from "@/components/ui/loading-skeleton";
 import { Notice } from "@/components/ui/notice";
 import { useCreditBatchProductionRunOptions } from "@/hooks/use-credit-batches";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import { productionRunDeepLinkHref } from "@/lib/certification/links";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
@@ -80,7 +80,7 @@ export function CreditBatchProductionTab() {
             <tr key={run.id} className="border-t border-[var(--color-border-tertiary)] first:border-t-0">
               <td className="py-10">
                 <Link
-                  href={productionRunDeepLinkHref(run.id, batch.facilityId)}
+                  href={recordHref("productionRun", run.id, { facilityId: batch.facilityId })}
                   className={cn("group flex min-h-44 min-w-0 flex-col justify-center", FOCUS_RING)}
                 >
                   <span className="body-medium font-medium underline-offset-2 group-hover:underline">{run.code}</span>

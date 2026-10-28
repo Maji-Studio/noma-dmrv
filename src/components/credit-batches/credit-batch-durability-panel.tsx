@@ -14,6 +14,7 @@
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import Link from "next/link";
 import {
   CaretDownIcon,
@@ -35,7 +36,7 @@ import {
   DurabilityReadinessSignals,
   formatDurabilityStat,
 } from "@/components/certification/durability-readiness";
-import { sampleCreateHref, sampleDetailHref } from "@/lib/sample-create-intent";
+import { sampleCreateHref } from "@/lib/sample-create-intent";
 import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { focusRowProps } from "./credit-batch-page-parts";
@@ -219,7 +220,7 @@ function SampleSummaryRows({
         return (
           <div key={replicate.id} {...focusRowProps(`sample-row-${replicate.id}`, replicate.id === focusedSampleId)}>
             <SheetLinkRow
-              href={sampleDetailHref(facilityId, replicate.id)}
+              href={recordHref("sample", replicate.id, { facilityId })}
               ariaLabel={`Open lab Sample ${replicate.sampleCode}`}
               primary={
                 <span className="inline-flex min-w-0 items-center gap-6">

@@ -12,6 +12,7 @@
  * millions, and this keeps the module free of fragile SQL bucketing. Round
  * trips are budgeted by `tests/dashboard-query-budget.test.ts`.
  */
+import { recordHref } from "@/lib/record-links";
 import { db } from "@/db";
 import {
   applications,
@@ -26,7 +27,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { addDaysIso, formatFacilityDate, formatUtcDate, UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import {
   and,
@@ -81,14 +82,6 @@ const ATTENTION_PER_CHECK = 4;
 const ATTENTION_TOTAL = 8;
 const WEEK_DAYS = 7;
 const MONTH_DAYS = 30;
-
-function productionRunHref(facilityId: string, productionRunId: string): string {
-  const params = new URLSearchParams({
-    facility: facilityId,
-    run: productionRunId,
-  });
-  return `/production-runs?${params.toString()}`;
-}
 
 export type DashboardKpiKey =
   | "feedstockProcessed"
@@ -553,16 +546,15 @@ function attentionHref(
   id: string,
   facilityId: string,
 ): string {
-  const facilityQuery = `?facility=${facilityId}`;
   switch (kind) {
     case "run-mass":
-      return productionRunHref(facilityId, id);
+      return recordHref("productionRun", id, { facilityId });
     case "feedstock-missing":
-      return `/feedstock-intake${facilityQuery}`;
+      return recordHref("feedstock", id, { facilityId });
     case "application-evidence":
-      return `/applications${facilityQuery}`;
+      return recordHref("application", id, { facilityId });
     case "batch-pending":
-      return creditBatchDeepLinkHref(id, facilityId);
+      return recordHref("creditBatch", id, { facilityId });
   }
 }
 

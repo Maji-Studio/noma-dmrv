@@ -1,3 +1,4 @@
+import { recordHref } from "@/lib/record-links";
 import Link from "next/link";
 import { Fragment } from "react";
 import { Notice } from "@/components/ui/notice";
@@ -6,7 +7,6 @@ import {
   ISOMETRIC_LINK_LOCKED_HOW_TO_FREE,
   ISOMETRIC_LINK_LOCKED_REASON,
 } from "@/lib/feedstock-type-link-lock-copy";
-import { removalSheetHref } from "@/lib/removal-correction-copy";
 
 /** Removals named inline; the rest are counted, as in the record lock lines. */
 const NAMED_REMOVALS = 2;
@@ -28,7 +28,7 @@ export function FeedstockTypeLinkLockedNote({ removals }: { removals: readonly L
     ...named.map((removal) => (
       <>
         Removal{" "}
-        <Link href={removalSheetHref(removal.id, removal.facilityId)} className={RECORD_CODE_LINK}>
+        <Link href={recordHref("removal", removal.id, { facilityId: removal.facilityId })} className={RECORD_CODE_LINK}>
           {removal.code}
         </Link>
       </>

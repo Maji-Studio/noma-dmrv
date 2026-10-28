@@ -328,7 +328,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   // Append the Platform section only for Platform Admins. `useIsAdmin()` is
   // hydration-safe (server snapshot is `false`, so the admin subtree only
   // mounts after hydration). Server-side `requireAdmin()` in
-  // src/app/admin/layout.tsx remains the actual access boundary.
+  // src/app/(app)/platform/layout.tsx remains the actual access boundary.
   const isAdmin = useIsAdmin();
 
   // Gate the Certification routes on the current facility having a registry

@@ -80,6 +80,8 @@ export interface SampleWithRelations {
   version: number;
 
   // Relations
+  /** Owning batch's facility, used to reconcile record links with the working facility. */
+  facilityId: string;
   creditBatchCode: string | null;
   facilityCode: string | null;
   facilityName: string | null;
@@ -130,6 +132,7 @@ export const sampleWithRelationsColumns = {
   createdAt: samples.createdAt,
   updatedAt: samples.updatedAt,
   version: samples.version,
+  facilityId: creditBatches.facilityId,
   creditBatchCode: creditBatches.code,
   sampling: creditBatches.sampling,
   batchDurabilityOption: sampleBatchFacilities.durabilityOption,

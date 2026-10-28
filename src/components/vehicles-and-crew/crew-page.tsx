@@ -12,18 +12,13 @@
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, PageHeader } from "@/components/ui";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
-import {
-  DRIVER_QUERY_PARAM,
-  ENTITY_DEEP_LINK_MODE_PARAM,
-  OPERATOR_QUERY_PARAM,
-  entityViewHref,
-} from "@/lib/entity-deep-link";
+import { DRIVER_QUERY_PARAM, ENTITY_DEEP_LINK_MODE_PARAM, OPERATOR_QUERY_PARAM } from "@/lib/entity-deep-link";
 import type { FleetKind } from "@/lib/fleet/messages";
-import { CREW_HREF } from "@/lib/settings/links";
 import { CREW_KINDS, FLEET_KIND_COPY, type CrewKind } from "./fleet-kinds";
 import { FleetKindTable } from "./fleet-kind-table";
 import { FLEET_SUBTITLE } from "./fleet-copy";
@@ -31,10 +26,6 @@ import { FLEET_TAB_PANEL_ID, FleetTabs, fleetTabId } from "./fleet-tabs";
 import { useFleetKindManager, type FleetKindManager } from "./use-fleet-kind-manager";
 
 const LINK_PARSER = parseAsString.withOptions({ shallow: true, history: "replace" });
-const LINK_PARAMS: Record<CrewKind, string> = {
-  driver: DRIVER_QUERY_PARAM,
-  operator: OPERATOR_QUERY_PARAM,
-};
 
 export function CrewPage() {
   const [tabParam, setTab] = useQueryState(
@@ -85,7 +76,7 @@ export function CrewPage() {
     void setTab(kind);
   };
 
-  const rowHref = (record: { id: string }) => entityViewHref(CREW_HREF, LINK_PARAMS[tab], record.id);
+  const rowHref = (record: { id: string }) => recordHref(tab, record.id);
 
   return (
     <div className="container-max page-shell">

@@ -4,13 +4,13 @@
  */
 "use client";
 
-import { feedstockDeepLinkHref } from "@/lib/feedstock-links";
+import { recordHref, FEEDSTOCK_DEEP_LINK_PARAM } from "@/lib/record-links";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { PackageIcon, PlusIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
-import { FEEDSTOCK_DEEP_LINK_PARAM } from "@/lib/feedstock-links";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
@@ -306,6 +306,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     focusedFeedstockId ?? "",
     !!focusedFeedstockId,
   );
+  const linkedFacilityReady = useLinkedRecordFacility(focusedFeedstock.data, focusedFeedstock.isLoading);
   const createFeedstock = useCreateFeedstock();
   const updateFeedstock = useUpdateFeedstock();
   const fetchFeedstock = useFetchFeedstock();
@@ -496,7 +497,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   }
   const frozenDeepLinkEntity =
     deepLinkEditEntity?.id === focusedFeedstockId ? deepLinkEditEntity.entity : null;
-  const deepLinkedSideSheet = !focusedFeedstockId
+  const deepLinkedSideSheet = !linkedFacilityReady || !focusedFeedstockId
     ? null
     : wantsDeepLinkEdit
       ? frozenDeepLinkEntity
@@ -511,9 +512,11 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     sideSheet?.mode === "view" && sideSheet.entity && focusedFeedstock.data?.id === sideSheet.entity.id
       ? focusedFeedstock.data
       : null;
-  const displaySideSheet = liveViewEntity
+  const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== contextFacilityId ? null : sideSheet;
+  // A row the operator opened shows at once; only a link waits for its facility.
+  const displaySideSheet = focusedFeedstockId && !linkedFacilityReady && !localSideSheet ? null : liveViewEntity
     ? ({ entity: liveViewEntity, mode: "view" } as const)
-    : sideSheet ?? deepLinkedSideSheet;
+    : localSideSheet ?? deepLinkedSideSheet;
   const viewedFeedstockId =
     displaySideSheet?.mode === "view" ? displaySideSheet.entity?.id ?? "" : "";
   const recordedDistance = useTransportDistanceDrift(
@@ -605,7 +608,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
-        getRowHref={(row) => feedstockDeepLinkHref(row.id, row.facilityId)}
+        getRowHref={(row) => recordHref("feedstock", row.id, { facilityId: row.facilityId })}
         emptyMessage={
           <EmptyState
             padding="md"

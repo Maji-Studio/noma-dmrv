@@ -49,6 +49,8 @@ export interface ApplicationDeliveryOptionData {
  * location) resolved from the delivery's order customer location.
  */
 export interface ApplicationListItem extends Application {
+  /** Owning delivery's facility, used by linked-record facility reconciliation. */
+  facilityId: string;
   allocationShares: ApplicationAllocationShare[];
   /** Drawn from a mix bin: recorded as usual, but held out of credit batches (ADR 0030). */
   heldOutOfCredits: boolean;
@@ -166,6 +168,7 @@ export async function getApplications(
       status: applications.status,
       applicationDate: applications.applicationDate,
       deliveryId: applications.deliveryId,
+      facilityId: deliveries.facilityId,
       deliveryCode: deliveries.code,
       biocharAppliedTons: applications.biocharAppliedTons,
       biocharAppliedDryTons: applications.biocharAppliedDryTons,

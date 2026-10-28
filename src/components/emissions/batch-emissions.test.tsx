@@ -11,23 +11,15 @@ const mocks = vi.hoisted(() => ({
   lines: [] as unknown[],
   linesError: null as Error | null,
   filter: null as string | null,
+  fromList: false,
   deleteEntry: vi.fn(),
   restoreEntry: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }));
 
-vi.mock("@/components/navigation", () => ({ SelectFacilityEmptyState: () => null }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => mocks.toast }));
 vi.mock("@/hooks/use-facility-context", () => ({
-  useFacilityContext: () => ({ facilityId: "fac" }),
   useFacilityClock: () => ({ timeZone: "UTC", hint: "" }),
-}));
-vi.mock("@/hooks/use-emissions-overview", () => ({
-  useEmissionsOverview: () => ({
-    data: { batches: [{ creditBatchId: "cb", code: "CB-1", startDate: "2026-09-01", endDate: null, templateName: null }] },
-    isSuccess: true,
-    error: null,
-  }),
 }));
 vi.mock("@/hooks/use-emission-entries", () => ({
   useBatchEmissionLines: () => ({ data: mocks.linesError ? undefined : mocks.lines, isLoading: false, error: mocks.linesError, refetch: vi.fn() }),
@@ -36,12 +28,9 @@ vi.mock("@/hooks/use-emission-entries", () => ({
 }));
 vi.mock("./batch-emissions-query", () => ({
   useBatchLineQuery: () => ({ filter: mocks.filter, sort: "template", setFilter: vi.fn(), setSort: vi.fn() }),
+  useOpenedFromEmissionsList: () => mocks.fromList,
 }));
-vi.mock("./emissions-overview-query", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./emissions-overview-query")>()),
-  useEmissionsOverviewQuery: () => ({ query: {} }),
-}));
-vi.mock("./batch-emissions-pager", () => ({ BatchEmissionsTopBar: () => null }));
+vi.mock("./batch-emissions-pager", () => ({ BatchEmissionsPager: () => <nav aria-label="Credit batches" /> }));
 vi.mock("./batch-emissions-toolbar", () => ({ BatchKpiStrip: () => null, LineToolbar: () => null, lineChipLabel: () => null }));
 vi.mock("./emission-entry-form-panel", () => ({ EmissionEntryFormPanel: () => null }));
 // The list itself is covered by emission-line-list.test.tsx; here each row offers a Delete and shows its Undo bar.
@@ -58,7 +47,10 @@ vi.mock("./emission-line-list", () => ({
   ),
 }));
 
-import { BatchEmissionsPage } from "./batch-emissions-page";
+import { BatchEmissions } from "./batch-emissions";
+
+const BATCH = { creditBatchId: "cb", code: "CB-1", startDate: "2026-09-01", endDate: null };
+const renderBatch = () => render(<BatchEmissions facilityId="fac" batch={BATCH} />);
 
 const COUNTING = makeLine({ state: "filled", entries: [makeEntry({ version: 4 })] });
 
@@ -66,6 +58,7 @@ beforeEach(() => {
   mocks.lines = [COUNTING];
   mocks.linesError = null;
   mocks.filter = null;
+  mocks.fromList = false;
   mocks.deleteEntry.mockResolvedValue({ id: "entry-1", version: 5 });
   mocks.restoreEntry.mockResolvedValue({});
 });
@@ -75,10 +68,10 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("BatchEmissionsPage undo", () => {
+describe("BatchEmissions undo", () => {
   it("shows Undo under the row and restores with the version the delete returned", async () => {
     mocks.deleteEntry.mockResolvedValue({ id: "entry-1", version: 9 });
-    render(<BatchEmissionsPage creditBatchId="cb" />);
+    renderBatch();
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(mocks.deleteEntry).toHaveBeenCalledWith({ id: "entry-1", expectedVersion: 4 }));
     const row = screen.getByRole("listitem", { name: COUNTING.displayName });
@@ -91,7 +84,7 @@ describe("BatchEmissionsPage undo", () => {
       mocks.lines = [{ ...COUNTING, state: "empty", entries: [] }];
       return { id: "entry-1", version: 5 };
     });
-    render(<BatchEmissionsPage creditBatchId="cb" />);
+    renderBatch();
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
     expect(screen.queryByRole("listitem", { name: COUNTING.displayName })).toBeNull();
@@ -99,7 +92,7 @@ describe("BatchEmissionsPage undo", () => {
   });
   it("confirms before deleting a stopped entry and offers no Undo", async () => {
     mocks.lines = [makeLine({ state: "needsReview", entries: [makeEntry({ counts: false, canConfirm: false, version: 2 })] })];
-    render(<BatchEmissionsPage creditBatchId="cb" />);
+    renderBatch();
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(mocks.deleteEntry).not.toHaveBeenCalled();
     const dialog = await screen.findByRole("dialog");
@@ -111,11 +104,11 @@ describe("BatchEmissionsPage undo", () => {
   });
 });
 
-describe("BatchEmissionsPage template blocker", () => {
+describe("BatchEmissions template blocker", () => {
   it("explains a missing template with a link and no Try again", () => {
     mocks.lines = [];
     mocks.linesError = new EmissionLinesBlockedError(removalTemplateBlocker("unpinnedTemplate"));
-    render(<BatchEmissionsPage creditBatchId="cb" />);
+    renderBatch();
     expect(screen.getByText("Set a Removal template in Settings, Removal templates.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Set template" }).getAttribute("href")).toBe("/settings/removal-templates?facility=fac&setup=template");
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
@@ -123,7 +116,18 @@ describe("BatchEmissionsPage template blocker", () => {
   it("keeps Try again for a real load failure", () => {
     mocks.lines = [];
     mocks.linesError = new Error("Network down");
-    render(<BatchEmissionsPage creditBatchId="cb" />);
+    renderBatch();
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+});
+
+describe("BatchEmissions pager", () => {
+  it("offers previous and next only when the tab was opened from the Emissions list", () => {
+    renderBatch();
+    expect(screen.queryByRole("navigation", { name: "Credit batches" })).toBeNull();
+    cleanup();
+    mocks.fromList = true;
+    renderBatch();
+    expect(screen.getByRole("navigation", { name: "Credit batches" })).toBeTruthy();
   });
 });

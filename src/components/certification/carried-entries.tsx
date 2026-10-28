@@ -8,6 +8,7 @@
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
@@ -15,10 +16,8 @@ import { PaperclipIcon } from "@phosphor-icons/react/dist/ssr";
 import { DetailSection } from "@/components/ui/detail-panel";
 import { InfoHint } from "@/components/ui/tooltip";
 import { formatFigure } from "@/components/emissions/emission-line-display";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { pluralize } from "@/lib/copy-utils";
 import { formatDayString } from "@/lib/format-utils";
-import { removalSheetHref } from "@/lib/removal-correction-copy";
 import type { CarriedEntryRow } from "@/lib/certification/late-entry-figures";
 import { cn } from "@/lib/utils";
 import { EntryFileNames } from "./new-removal-dialog/component-table";
@@ -38,7 +37,7 @@ const ROW_GRID =
 
 function RecordedAfter({ entry, facilityId, newTab }: { entry: CarriedEntry; facilityId: string; newTab: boolean }) {
   if (!entry.earlierRemovalCode || !entry.earlierRemovalId) return null;
-  const href = removalSheetHref(entry.earlierRemovalId, facilityId);
+  const href = recordHref("removal", entry.earlierRemovalId, { facilityId });
   return (
     <span className="body-caption text-[var(--color-text-secondary)]">
       Recorded after{" "}
@@ -53,7 +52,7 @@ function RecordedAfter({ entry, facilityId, newTab }: { entry: CarriedEntry; fac
 }
 
 function BatchLink({ entry, facilityId, newTab }: { entry: CarriedEntry; facilityId: string; newTab: boolean }) {
-  const href = creditBatchDeepLinkHref(entry.creditBatchId, facilityId);
+  const href = recordHref("creditBatch", entry.creditBatchId, { facilityId });
   return newTab ? (
     <NewTabLink href={href} mono tall>{entry.creditBatchCode}</NewTabLink>
   ) : (

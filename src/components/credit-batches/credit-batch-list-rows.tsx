@@ -11,6 +11,7 @@
  * State and colors are the timeline's (STATE_TONE): Open, Ready, Submitted,
  * Issued. Applied biochar is the dry mass held by the batch's slices.
  */
+import { recordHref } from "@/lib/record-links";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { EyeIcon, PencilSimpleIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
@@ -21,7 +22,6 @@ import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import type { CreditBatchStateView } from "@/lib/credit-batches/batch-state";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
 import { cn } from "@/lib/utils";
@@ -164,7 +164,7 @@ export function CreditBatchListRow({
         <div className="flex min-w-0 items-center justify-between gap-12 xl:contents">
           <div className="flex min-w-0 items-baseline gap-8 xl:contents">
             <Link
-              href={creditBatchDeepLinkHref(creditBatch.id, creditBatch.facilityId)}
+              href={recordHref("creditBatch", creditBatch.id, { facilityId: creditBatch.facilityId })}
               // The link navigates itself; the row's own click must not push a second time.
               onClick={(event) => event.stopPropagation()}
               aria-label={`Open credit batch ${creditBatch.code}`}

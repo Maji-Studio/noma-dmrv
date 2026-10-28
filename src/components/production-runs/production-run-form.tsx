@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { nullableNumericValue } from "@/lib/form-utils";
@@ -503,7 +504,7 @@ export function ProductionRunForm({
         {overlapConflict && watchedFacilityId && (
           <p className="body-caption text-[var(--color-text-secondary)]">
             <Link
-              href={`/production-runs?facility=${watchedFacilityId}&run=${overlapConflict.id}`}
+              href={recordHref("productionRun", overlapConflict.id, { facilityId: watchedFacilityId })}
               className="text-[var(--clr-dark-purple)] underline"
             >
               Open {overlapConflict.code}
@@ -625,7 +626,6 @@ export function ProductionRunForm({
             )}
           />
         ))}
-
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <MoistureField

@@ -1,6 +1,7 @@
 "use client";
 
-import { orderDeepLinkHref } from "@/lib/order-links";
+import { recordHref, ORDER_DEEP_LINK_PARAM } from "@/lib/record-links";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * OrderList component
@@ -13,6 +14,7 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { InUseDeleteDialog, InUseReferences } from "@/components/ui/in-use-delete-dialog";
+import { ActionError } from "@/lib/action-error";
 import { orderInUseReferences } from "@/lib/in-use-references";
 import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -41,7 +43,6 @@ import { PackageIcon, PlusIcon, TruckIcon, XIcon } from "@phosphor-icons/react/d
 import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useRef, useState } from "react";
-import { ORDER_DEEP_LINK_PARAM } from "@/lib/order-links";
 import { OrderForm } from "./order-form";
 import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
@@ -224,13 +225,16 @@ export function OrderList() {
   // The list row shape (customer, fulfillment) for the deep-linked order, read
   // by id so an order on another page, behind a filter or archived still opens.
   const focusedOrder = useOrderWithRelations(focusedOrderId ?? "", !!focusedOrderId);
+  const linkedFacilityReady = useLinkedRecordFacility(focusedOrder.data, focusedOrder.isLoading);
   const deepLinkedSideSheet =
     focusedOrderId &&
     focusedOrder.data?.id === focusedOrderId &&
-    (!facilityId || focusedOrder.data.facilityId === facilityId)
+    linkedFacilityReady
       ? ({ entity: focusedOrder.data, mode: "view" } as const)
       : null;
-  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== facilityId ? null : sideSheet;
+  // A row the operator opened shows at once; only a link waits for its facility.
+  const displaySideSheet = focusedOrderId && !linkedFacilityReady && !localSideSheet ? null : localSideSheet ?? deepLinkedSideSheet;
 
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
@@ -274,8 +278,7 @@ export function OrderList() {
     setFormError(null);
   };
 
-  // Clear a deep-linked `?order=` that cannot be opened (wrong facility,
-  // deleted, or cross-org), with the same guard as the credit-batch list.
+  // Clear a deep-linked `?order=` that cannot be opened (deleted or cross-org), with the same guard as the credit-batch list.
   useEffect(() => {
     if (!focusedOrderId) {
       handledInvalidOrderIdRef.current = null;
@@ -283,12 +286,6 @@ export function OrderList() {
     }
     if (focusedOrder.isLoading || focusedOrder.isFetching || focusedOrder.isPending) return;
     if (handledInvalidOrderIdRef.current === focusedOrderId) return;
-    if (focusedOrder.data && facilityId && focusedOrder.data.facilityId !== facilityId) {
-      handledInvalidOrderIdRef.current = focusedOrderId;
-      toast.error("Linked order is not in the selected facility");
-      void setFocusedOrderId(null);
-      return;
-    }
     if (focusedOrder.isError || (focusedOrder.isSuccess && !focusedOrder.data)) {
       handledInvalidOrderIdRef.current = focusedOrderId;
       toast.error("Linked order could not be opened");
@@ -438,7 +435,7 @@ export function OrderList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
-        getRowHref={(row) => orderDeepLinkHref(row.id, row.facilityId)}
+        getRowHref={(row) => recordHref("order", row.id, { facilityId: row.facilityId })}
         emptyMessage={
           <EmptyState
             padding="md"

@@ -19,7 +19,7 @@ import { readRecordLockLineage } from "./record-lock-lineage";
 import { readsAsReturnedFromPersisted } from "@/lib/record-lock";
 
 export type RemovalCarriedEntry = CarriedEntryRow;
-export interface RemovalCarriedEntries { carriedEntries: RemovalCarriedEntry[]; lateEntries: RemovalCarriedEntry[] }
+export interface RemovalCarriedEntries { facilityId: string; carriedEntries: RemovalCarriedEntry[]; lateEntries: RemovalCarriedEntry[] }
 const snapshotSchema = z.object({
   templateObservationId: z.string().optional(),
   semantic: z.object({
@@ -33,13 +33,13 @@ export async function loadRemovalCarriedEntries(ctx: OrgContext, removalId: stri
   const removal = await getCertifierRemovalById(ctx, removalId);
   if (!removal) throw new SafeError("Removal was not found.");
   const sent = await getSentRemovalForComparison(ctx, removalId);
-  if (!sent) return { carriedEntries: await loadDraftRemovalCarriedEntries(ctx, removalId, removal.facilityId), lateEntries: [] };
+  if (!sent) return { facilityId: removal.facilityId, carriedEntries: await loadDraftRemovalCarriedEntries(ctx, removalId, removal.facilityId), lateEntries: [] };
   const parsed = snapshotSchema.safeParse(sent.payloadSnapshot);
   if (!parsed.success) throw new DomainError("validation_failed", "The sent Removal’s saved emissions entry set could not be read. Reload the Removal and try again.");
   const snapshot = parsed.data;
   const entries = snapshot.semantic.carriedEntries;
   const lateEntries = await loadRevisionLateEntries(ctx, removal);
-  if (!entries.length) return { carriedEntries: [], lateEntries };
+  if (!entries.length) return { facilityId: removal.facilityId, carriedEntries: [], lateEntries };
   const earlier = new Map(entries.map(entry => [entry.entryId, entry.earlierRemovalId]));
   const [batches, observation, codes] = await Promise.all([
     db.select({ id: creditBatches.id, code: creditBatches.code }).from(creditBatches).where(and(
@@ -58,7 +58,7 @@ export async function loadRemovalCarriedEntries(ctx: OrgContext, removalId: stri
       earlierRemovalId, earlierRemovalCode: earlierRemovalId ? codes.get(earlierRemovalId) : undefined,
     };
   }).sort((a, b) => a.entryId.localeCompare(b.entryId));
-  return { carriedEntries, lateEntries };
+  return { facilityId: removal.facilityId, carriedEntries, lateEntries };
 }
 
 /** Live late entries keep their own observation's labels, beside the frozen sent list. */

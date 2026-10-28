@@ -89,6 +89,7 @@ export async function getFacilities(
   requireOrgScope(ctx);
 
   const {
+    id,
     search,
     country,
     archived = false,
@@ -99,10 +100,13 @@ export async function getFacilities(
   } = filters ?? {};
 
   // Build where conditions — active facilities by default, archived-only view on demand
-  const conditions: SQL[] = [
-    eq(facilities.organizationId, ctx.organizationId),
-    archived ? isNotNull(facilities.archivedAt) : isNull(facilities.archivedAt),
-  ];
+  const conditions: SQL[] = [eq(facilities.organizationId, ctx.organizationId)];
+  if (id) {
+    // A linked record opens whether it is active or archived.
+    conditions.push(eq(facilities.id, id));
+  } else {
+    conditions.push(archived ? isNotNull(facilities.archivedAt) : isNull(facilities.archivedAt));
+  }
 
   if (search) {
     const searchPattern = `%${search}%`;

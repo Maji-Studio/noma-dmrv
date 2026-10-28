@@ -5,11 +5,11 @@
  * was sent, and the one action that clears a wait. Pure, so the entry row,
  * the credit batch Overview and the to-do builder say the same words.
  */
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+
+import { recordHref } from "@/lib/record-links";
 import { createIntentHref } from "@/lib/create-intent";
 import { certificationRemovalsHref, OPEN_REMOVAL_TEMPLATES_LINK_LABEL, removalTemplatesSettingsHref } from "@/lib/certification/links";
 import { formatDayString } from "@/lib/format-utils";
-import { removalSheetHref } from "@/lib/removal-correction-copy";
 import {
   CARRY_WAITING_REASONS,
   CARRY_WAITING_DETAILS,
@@ -51,7 +51,7 @@ export interface LateEntryOptions {
 function destinationBatches(destination: EntryCarryDestination, facilityId: string): LateEntryBatch[] {
   return destination.creditBatchCodes.map((code, index) => ({
     code,
-    href: creditBatchDeepLinkHref(destination.creditBatchIds[index] ?? "", facilityId),
+    href: recordHref("creditBatch", destination.creditBatchIds[index] ?? "", { facilityId }),
   })).filter((_, index) => destination.creditBatchIds[index]);
 }
 
@@ -62,7 +62,7 @@ export function waitingAction(
 ): LateEntryAction {
   if (reason === "noDraft") return { label: "New Removal", href: createIntentHref(certificationRemovalsHref(), facilityId) };
   if (reason === "incompatibleTemplate") return { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: removalTemplatesSettingsHref(facilityId) };
-  if (draft) return { label: "Open Removal", href: removalSheetHref(draft.removalId, facilityId) };
+  if (draft) return { label: "Open Removal", href: recordHref("removal", draft.removalId, { facilityId }) };
   return { label: "Open Removals", href: certificationRemovalsHref({ facility: facilityId }) };
 }
 
@@ -82,17 +82,17 @@ export function lateEntryView(entry: LateEntryFacts, facilityId: string, options
   const sent = entry.reportedIn;
   const receiver = entry.carry?.receiver;
   const reason = entry.carry?.waitingReason;
-  const recordedAfter = after ? { removalCode: after.removalCode, removalHref: removalSheetHref(after.removalId, facilityId) } : null;
+  const recordedAfter = after ? { removalCode: after.removalCode, removalHref: recordHref("removal", after.removalId, { facilityId }) } : null;
   if (sent) {
     if (!sent.anotherCreditBatch) return null;
-    return { recordedAfter, destination: { kind: "reported", removalCode: sent.removalCode, removalHref: removalSheetHref(sent.removalId, facilityId), creditBatches: destinationBatches(sent, facilityId), anotherCreditBatch: true } };
+    return { recordedAfter, destination: { kind: "reported", removalCode: sent.removalCode, removalHref: recordHref("removal", sent.removalId, { facilityId }), creditBatches: destinationBatches(sent, facilityId), anotherCreditBatch: true } };
   }
   if (receiver) {
-    return { recordedAfter, destination: { kind: "draft", removalCode: receiver.removalCode, removalHref: removalSheetHref(receiver.removalId, facilityId), creditBatches: destinationBatches(receiver, facilityId), anotherCreditBatch: receiver.anotherCreditBatch } };
+    return { recordedAfter, destination: { kind: "draft", removalCode: receiver.removalCode, removalHref: recordHref("removal", receiver.removalId, { facilityId }), creditBatches: destinationBatches(receiver, facilityId), anotherCreditBatch: receiver.anotherCreditBatch } };
   }
   if (entry.revisionOf) {
     return { recordedAfter, destination: { kind: "revision", removalCode: entry.revisionOf.removalCode,
-      removalHref: removalSheetHref(entry.revisionOf.removalId, facilityId) } };
+      removalHref: recordHref("removal", entry.revisionOf.removalId, { facilityId }) } };
   }
   if (reason) {
     const memberOnly = reason === "incompatibleTemplate" && !canManage;

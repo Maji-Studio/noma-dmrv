@@ -5,21 +5,13 @@
  * alike. The values an update recorded (`changes`, with current link names in
  * `changeLabels`) become one line per field in `activity-change-lines.ts`.
  */
+import { recordHref } from "@/lib/record-links";
 import type { CreditBatchActivityPage } from "@/data-access/credit-batch-activity";
 import {
   isActivityEntityType,
   type ActivityEntityType,
 } from "@/db/schema/common";
 import { CERTIFY_FIELD_REGISTRY, type CertifyEntityKind } from "@/lib/certification/certify-field-registry";
-import { applicationDeepLinkHref } from "@/lib/application-links";
-import { certificationRemovalsHref, productionRunDeepLinkHref } from "@/lib/certification/links";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
-import { deliveryDeepLinkHref } from "@/lib/delivery-links";
-import { orderDeepLinkHref } from "@/lib/order-links";
-import { feedstockDeepLinkHref } from "@/lib/feedstock-links";
-import { biocharProductDeepLinkHref } from "@/lib/biochar-product-links";
-import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
-import { sampleDetailHref } from "@/lib/sample-create-intent";
 import { documentOwnerActivityType, parseDocumentActivityReasonCode } from "@/lib/activity-entity-type";
 import { humanizeEnum, UNKNOWN_USER } from "@/lib/copy-utils";
 import { DRY_MASS_FIELD_LABEL, MOISTURE_FIELD_LABEL, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
@@ -276,16 +268,16 @@ export function activityRecordHref(
   }
   switch (entityType) {
     case "credit_batch":
-      return entityId === context.creditBatchId ? null : creditBatchDeepLinkHref(entityId, facility);
-    case "production_run": return productionRunDeepLinkHref(entityId, facility);
-    case "feedstock": return feedstockDeepLinkHref(entityId, facility);
-    case "biochar_product": return biocharProductDeepLinkHref(entityId, facility);
-    case "lab_sample": return sampleDetailHref(facility, entityId);
-    case "order": return orderDeepLinkHref(entityId, facility);
-    case "delivery": return deliveryDeepLinkHref(entityId, facility);
-    case "application": return applicationDeepLinkHref(entityId, facility);
-    case "removal": return certificationRemovalsHref({ facility, removal: entityId });
-    case "ghg_statement": return ghgStatementDeepLinkHref(entityId, facility);
+      return entityId === context.creditBatchId ? null : recordHref("creditBatch", entityId, { facilityId: facility });
+    case "production_run": return recordHref("productionRun", entityId, { facilityId: facility });
+    case "feedstock": return recordHref("feedstock", entityId, { facilityId: facility });
+    case "biochar_product": return recordHref("biocharProduct", entityId, { facilityId: facility });
+    case "lab_sample": return recordHref("sample", entityId, { facilityId: facility });
+    case "order": return recordHref("order", entityId, { facilityId: facility });
+    case "delivery": return recordHref("delivery", entityId, { facilityId: facility });
+    case "application": return recordHref("application", entityId, { facilityId: facility });
+    case "removal": return recordHref("removal", entityId, { facilityId: facility });
+    case "ghg_statement": return recordHref("ghgStatement", entityId, { facilityId: facility });
     default: return null;
   }
 }

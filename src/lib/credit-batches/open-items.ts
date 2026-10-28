@@ -1,3 +1,4 @@
+import { recordHref } from "@/lib/record-links";
 import { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "./application-mass";
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
 import type { CreditBatchLateProductionRuns } from "@/data-access/credit-batch-late-production-runs";
@@ -27,15 +28,7 @@ import type { RemovalCorrection } from "@/lib/certification/removal-entry-correc
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { formatCalendarDate, formatTonnes } from "@/lib/format-utils";
 import { lateRunEntryDate } from "./late-run-entry-date";
-import {
-  RESUBMIT_NEEDED_LABEL,
-  changedComponentNames,
-  correctionStatementLabel,
-  joinWithAnd,
-  removalSheetHref,
-  returnedStatementPhrase,
-  comparisonUnavailableClause,
-} from "@/lib/removal-correction-copy";
+import { RESUBMIT_NEEDED_LABEL, changedComponentNames, correctionStatementLabel, joinWithAnd, returnedStatementPhrase, comparisonUnavailableClause } from "@/lib/removal-correction-copy";
 import { lateEntryView, waitingDetail, waitingEntryTitle } from "@/lib/certification/late-entry-view";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
 
@@ -135,7 +128,7 @@ function removalCorrectionItem(
         : correction.comparison === "unavailable"
           ? `${comparisonUnavailableClause(code)}. Open the Removal to see why.`
           : `Records or files changed since ${code} was sent. Resubmit the Removal to send the changes.`,
-      target: { href: removalSheetHref(correction.removalId, facilityId) },
+      target: { href: recordHref("removal", correction.removalId, { facilityId }) },
     };
   }
   return {

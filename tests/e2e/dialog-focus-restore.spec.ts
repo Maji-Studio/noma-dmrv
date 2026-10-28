@@ -22,7 +22,8 @@ test.describe("Dialog focus restore", () => {
     void cleanupTestData;
     const page = adminPage;
 
-    await page.goto(`/facilities?facility=${seededData.facility.id}`);
+    // The plain list, as the sidebar opens it: ?facility= on /facilities opens that facility's sheet.
+    await page.goto("/facilities");
     await expect(page.getByText("Active facilities", { exact: true })).toBeVisible({
       timeout: 15000,
     });

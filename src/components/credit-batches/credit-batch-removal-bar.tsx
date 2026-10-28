@@ -7,12 +7,12 @@
  * Removals tab draws it in detail, each Removal split into its applications,
  * and clicks through instead of hovering.
  */
+import { recordHref } from "@/lib/record-links";
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import { PreviewCard } from "@base-ui/react/preview-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import { certificationRemovalsHref } from "@/lib/certification/links";
 import {
   notAppliedCaptionKg,
   type RemovalBarGroup,
@@ -47,10 +47,6 @@ export const NOT_IN_REMOVAL_LABEL = "Applied, not in a Removal";
 
 export function tonnesFromKg(kg: number): string {
   return formatTonnes(kgToTonnes(kg));
-}
-
-export function removalHref(facilityId: string, removalId: string): string {
-  return certificationRemovalsHref({ facility: facilityId, removal: removalId });
 }
 
 /** "DL-26-031 to Kanyama field", or the delivery code alone. */
@@ -167,7 +163,7 @@ export function CompactRemovalBar({ groups, facilityId }: { groups: RemovalBarGr
         {groups.map((group) => (
           <li key={group.id}>
             {group.removal ? (
-              <RemovalHoverLink facilityId={facilityId} group={group} href={removalHref(facilityId, group.removal.id)} className="group inline-flex min-h-44 items-center gap-6">
+              <RemovalHoverLink facilityId={facilityId} group={group} href={recordHref("removal", group.removal.id, { facilityId })} className="group inline-flex min-h-44 items-center gap-6">
                 <SegmentSwatch segment={group.segment} />
                 <span className="underline-offset-2 group-hover:underline">{compactLabel(group)}</span>
               </RemovalHoverLink>
@@ -193,7 +189,7 @@ export function DetailedRemovalBar({ groups, facilityId }: { groups: RemovalBarG
     <div className="flex flex-col gap-12">
       <div className="flex gap-4">
         {groups.map((group) => {
-          const href = group.removal ? removalHref(facilityId, group.removal.id) : null;
+          const href = group.removal ? recordHref("removal", group.removal.id, { facilityId }) : null;
           return (
             <div key={group.id} className="flex min-w-0 flex-col gap-4" style={{ flexGrow: group.dryKg, flexBasis: 0, minWidth: MIN_GROUP_PX }}>
               {named && (href ? (
@@ -238,7 +234,7 @@ export function DetailedRemovalBar({ groups, facilityId }: { groups: RemovalBarG
           return (
             <li key={group.id} className={cn(index === firstOpen && index > 0 && "mt-4 border-t border-[var(--color-border-secondary)] pt-4")}>
               {group.removal ? (
-                <Link href={removalHref(facilityId, group.removal.id)} className={cn(rowClass, "group hover:bg-[var(--color-surface-medium)]", FOCUS_RING)}>
+                <Link href={recordHref("removal", group.removal.id, { facilityId })} className={cn(rowClass, "group hover:bg-[var(--color-surface-medium)]", FOCUS_RING)}>
                   {row}
                 </Link>
               ) : (

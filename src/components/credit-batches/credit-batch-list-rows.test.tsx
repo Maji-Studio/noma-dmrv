@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
+import { recordHref } from "@/lib/record-links";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import {
   appliedDryLabel,
@@ -76,7 +76,7 @@ describe("CreditBatchListRow", () => {
     expect(props.onOpen).toHaveBeenCalledTimes(1);
     expect(props.onOpen).toHaveBeenCalledWith(creditBatch);
     const link = within(row).getByRole("link", { name: "Open credit batch CB-26-009" });
-    expect(link.getAttribute("href")).toBe(creditBatchDeepLinkHref(creditBatch.id, creditBatch.facilityId));
+    expect(link.getAttribute("href")).toBe(recordHref("creditBatch", creditBatch.id, { facilityId: creditBatch.facilityId }));
     // The link navigates itself; the row does not push a second time.
     fireEvent.click(link);
     expect(props.onOpen).toHaveBeenCalledTimes(1);

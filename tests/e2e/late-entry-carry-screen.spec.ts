@@ -52,7 +52,7 @@ test.describe("Late emissions entry on screen", () => {
     const facilityId = seededData.facility.id;
     const tag = crypto.randomUUID().slice(0, 6).toUpperCase();
     const seeded = await seedLateEntry(seededData, tag);
-    const emissionsUrl = `/emissions/${seeded.origin.creditBatchId}?facility=${facilityId}`;
+    const emissionsUrl = `/credit-batches/${seeded.origin.creditBatchId}?facility=${facilityId}&tab=emissions`;
     const batchUrl = `/credit-batches/${seeded.origin.creditBatchId}?facility=${facilityId}`;
     try {
       for (const size of Object.keys(WIDTHS) as Size[]) {

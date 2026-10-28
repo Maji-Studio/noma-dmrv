@@ -8,10 +8,10 @@
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import Link from "next/link";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import type { DashboardCertification } from "@/data-access/dashboard-overview";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { DashboardPanel } from "./dashboard-panel";
 
 interface CertificationBlockProps {
@@ -51,7 +51,7 @@ export function CertificationBlock({
               }
             >
               <Link
-                href={creditBatchDeepLinkHref(batch.id, facilityId)}
+                href={recordHref("creditBatch", batch.id, { facilityId })}
                 className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-12 py-12"
               >
                 <span className="font-mono text-[12px] tabular-nums text-[var(--color-text-primary)]">

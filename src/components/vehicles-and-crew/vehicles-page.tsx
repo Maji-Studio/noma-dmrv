@@ -10,12 +10,12 @@
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import { parseAsString, useQueryState } from "nuqs";
 import { PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, PageHeader } from "@/components/ui";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
-import { ENTITY_DEEP_LINK_MODE_PARAM, VEHICLE_QUERY_PARAM, entityViewHref } from "@/lib/entity-deep-link";
-import { VEHICLES_HREF } from "@/lib/settings/links";
+import { ENTITY_DEEP_LINK_MODE_PARAM, VEHICLE_QUERY_PARAM } from "@/lib/entity-deep-link";
 import { FLEET_KIND_COPY } from "./fleet-kinds";
 import { FleetKindTable } from "./fleet-kind-table";
 import { FLEET_SUBTITLE } from "./fleet-copy";
@@ -39,7 +39,7 @@ export function VehiclesPage() {
 
   useOpenCreateIntent(manager.openCreate);
 
-  const rowHref = (record: { id: string }) => entityViewHref(VEHICLES_HREF, VEHICLE_QUERY_PARAM, record.id);
+  const rowHref = (record: { id: string }) => recordHref("vehicle", record.id);
 
   return (
     <div className="container-max page-shell">

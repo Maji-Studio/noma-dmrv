@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({ facilityId: null as string | null }));
 
+vi.mock("nuqs", async () => (await import("../../../tests/helpers/linked-sheet-mocks")).nuqsModule);
+vi.mock("@/hooks/use-entity-edit-record", async () => (await import("../../../tests/helpers/linked-sheet-mocks")).entityEditRecordModule);
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({ facilityId: state.facilityId }),
 }));

@@ -10,6 +10,7 @@
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import { Fragment } from "react";
 import {
   PaperclipIcon,
@@ -19,8 +20,6 @@ import { InfoHint } from "@/components/ui/tooltip";
 import { NewTabLink } from "./link-label";
 import { ENTRY_ENTITY_TYPE } from "@/components/emissions/emission-entry-files";
 import { useDocumentsForEntity } from "@/hooks/use-documents";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
-import { certificationRemovalsHref } from "@/lib/certification/links";
 import { pluralize } from "@/lib/copy-utils";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { Skeleton } from "@/components/ui/loading-skeleton";
@@ -184,7 +183,7 @@ export function ComponentTable({ table, facilityId }: ComponentTableProps) {
           {batches.map((batch) => (
             <div key={batch.id} className="flex flex-wrap items-baseline gap-x-12 gap-y-2 body-small">
               <NewTabLink
-                href={creditBatchDeepLinkHref(batch.id, facilityId)}
+                href={recordHref("creditBatch", batch.id, { facilityId })}
                 mono
                 tall
                 className="font-medium"
@@ -209,7 +208,7 @@ export function ComponentTable({ table, facilityId }: ComponentTableProps) {
                   Production emissions sent with{" "}
                   {batch.claim.removalId ? (
                     <NewTabLink
-                      href={certificationRemovalsHref({ facility: facilityId, removal: batch.claim.removalId })}
+                      href={recordHref("removal", batch.claim.removalId, { facilityId })}
                       mono
                       tall
                       className="text-[var(--color-text-tertiary)]"

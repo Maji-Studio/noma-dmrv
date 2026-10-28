@@ -422,6 +422,7 @@ describe("GHG Statement parent list refreshes", () => {
     latestSubmission: null, linkedRemovalCount: 1,
   };
   const detail = {
+    statement: listItem.statement,
     statementSubmission: { id: "submission-1", externalId: "registry-1", status: "submitted" },
     statementSubmissionForStatus: null,
     linkedRemovals: [], recentSyncEvents: [],

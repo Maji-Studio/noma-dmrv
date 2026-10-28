@@ -10,8 +10,7 @@ import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { Notice } from "@/components/ui/notice";
 import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
-import { removalSheetHref } from "@/lib/removal-correction-copy";
+import { recordHref } from "@/lib/record-links";
 import { cn } from "@/lib/utils";
 import type { AttemptOutcome } from "@/lib/certification/submission-attempts";
 import { FigurePairs } from "./submission-outcome-figures";
@@ -22,7 +21,7 @@ const LINK_CLASS = cn(RECORD_CODE_LINK, INLINE_HIT_AREA);
 
 export function CreditBatchLink({ id, code, facilityId }: { id: string; code: string; facilityId: string }) {
   return (
-    <Link href={creditBatchDeepLinkHref(id, facilityId)} className={LINK_CLASS}>
+    <Link href={recordHref("creditBatch", id, { facilityId })} className={LINK_CLASS}>
       {code}
     </Link>
   );
@@ -30,7 +29,7 @@ export function CreditBatchLink({ id, code, facilityId }: { id: string; code: st
 
 export function RemovalLink({ id, code, facilityId }: { id: string; code: string; facilityId: string }) {
   return (
-    <Link href={removalSheetHref(id, facilityId)} className={LINK_CLASS}>
+    <Link href={recordHref("removal", id, { facilityId })} className={LINK_CLASS}>
       {code}
     </Link>
   );
