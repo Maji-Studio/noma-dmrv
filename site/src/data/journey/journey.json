@@ -45,7 +45,7 @@
     {"code":"SUP-26-001","name":"Supplier, Kinyanambo","kind":"company","region":"Mufindi, Iringa","location":{"city":"Kinyanambo","stateRegion":"Iringa","country":"Tanzania","lat":-8.427,"lng":35.251},"distanceToPlantKm":28,"distanceSource":"manual","feedstockType":"Pine off-cuts (forestry/sawmill residue)","deliveriesToPineOffcutBin":91,"wetKgToPineOffcutBin":787255},
     {"code":"SUP-26-002","name":"Supplier, Sao Hill","kind":"company","region":"Mufindi, Iringa","location":{"city":"Sao Hill","stateRegion":"Iringa","country":"Tanzania","lat":-8.406,"lng":35.215},"distanceToPlantKm":23,"distanceSource":"manual","feedstockType":"Pine off-cuts (forestry/sawmill residue)","deliveriesToPineOffcutBin":16,"wetKgToPineOffcutBin":119220},
     {"code":"SUP-26-003","name":"Supplier, Ihemi","kind":"company","region":"Iringa","location":{"city":"Ihemi","stateRegion":"Iringa","country":"Tanzania","lat":-7.97,"lng":35.507},"distanceToPlantKm":20,"distanceSource":"manual","feedstockType":null,"deliveriesToPineOffcutBin":0,"wetKgToPineOffcutBin":0},
-    {"code":"SUP-26-004","name":"Supplier, location not recorded","kind":"individual","region":"Dodoma","location":{"city":null,"stateRegion":"Dodoma","country":"Tanzania","lat":-6.849,"lng":36.05},"distanceToPlantKm":115,"distanceSource":"manual","feedstockType":null,"deliveriesToPineOffcutBin":0,"wetKgToPineOffcutBin":0}
+    {"code":"SUP-26-004","name":"Supplier, location not recorded","kind":"individual","region":"Dodoma","location":{"city":null,"stateRegion":"Dodoma","country":"Tanzania","lat":-6.85,"lng":36.05},"distanceToPlantKm":115,"distanceSource":"manual","feedstockType":null,"deliveriesToPineOffcutBin":0,"wetKgToPineOffcutBin":0}
   ],
   "feedstockFanIn": {
     "binCode": "SL-26-001",

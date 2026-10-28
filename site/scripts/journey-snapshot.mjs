@@ -1,8 +1,9 @@
 // Local-only publication boundary: the source stays outside this public repository.
 // Usage, from the repository root (Node 22):
-// OPENROUTESERVICE_API_KEY=... node site/scripts/journey-snapshot.mjs <source journey.json> [--no-routes] [--anonymise-suppliers]
+// OPENROUTESERVICE_API_KEY=... node site/scripts/journey-snapshot.mjs <source journey.json> [--no-routes]
 // --no-routes preserves only the existing output's routes; a first run omits routes.
-// Supplier anonymisation uses "location not recorded" when no city was recorded.
+// Suppliers are always anonymised; use "location not recorded" when no city was recorded.
+// Individual supplier points use destination precision; other supplier points use 3 decimals.
 // All other source fields retain their shape, except the privacy transforms below.
 // Routes use published endpoints. Recorded km remain authoritative; lines are for drawing.
 // routes?: { provider, routedOn, legs: [...] }
@@ -144,16 +145,15 @@ function scrub(value, rewrite) {
     .map(([key, child]) => [key, scrub(child, rewrite)]));
 }
 
-function publish(source, customers, labs, anonymiseSuppliers) {
+function publish(source, customers, labs) {
   const replacements = new Map([...labs.replacements, ...customers.replacements]);
-  if (anonymiseSuppliers) {
-    for (const supplier of source.suppliers) {
-      if (!supplier.name?.trim()) {
-        throw new Error('Cannot derive a supplier role from supplier records.');
-      }
-      const city = supplier.location?.city?.trim() || UNRECORDED_SUPPLIER_CITY;
-      replacements.set(supplier.name, `Supplier, ${city}`);
+  const individuals = new Set(source.suppliers.filter((supplier) => supplier.kind === 'individual').map((supplier) => supplier.code));
+  for (const supplier of source.suppliers) {
+    if (!supplier.name?.trim()) {
+      throw new Error('Cannot derive a supplier role from supplier records.');
     }
+    const city = supplier.location?.city?.trim() || UNRECORDED_SUPPLIER_CITY;
+    replacements.set(supplier.name, `Supplier, ${city}`);
   }
   const output = structuredClone(source);
   // Source route geometry has not passed the publication boundary.
@@ -167,7 +167,7 @@ function publish(source, customers, labs, anonymiseSuppliers) {
   });
   for (const supplier of output.suppliers) {
     delete supplier.location.name;
-    roundPoint(supplier.location, SUPPLIER_DECIMALS);
+    roundPoint(supplier.location, supplier.kind === 'individual' ? DESTINATION_DECIMALS : SUPPLIER_DECIMALS);
   }
   for (const delivery of [...output.deliveries, output.heroDelivery].filter(Boolean)) {
     roundPoint(delivery.destination, DESTINATION_DECIMALS);
@@ -184,7 +184,7 @@ function publish(source, customers, labs, anonymiseSuppliers) {
   });
   for (const node of output.graph.nodes) {
     if (PRIVATE_GRAPH_TYPES.has(node.type)) roundPoint(node, DESTINATION_DECIMALS);
-    if (node.type === 'supplier') roundPoint(node, SUPPLIER_DECIMALS);
+    if (node.type === 'supplier') roundPoint(node, individuals.has(node.code) ? DESTINATION_DECIMALS : SUPPLIER_DECIMALS);
     if (node.type === 'facility' || node.code === output.facility.code) {
       Object.assign(node, { lat: PLANT_LAT, lng: PLANT_LNG });
     }
@@ -331,10 +331,10 @@ async function buildRoutes(output, key) {
   };
 }
 
-function guard(output, customers, labs, source, anonymiseSuppliers) {
+function guard(output, customers, labs, source) {
   const violations = new Set();
-  const forbidden = [...customers.replacements.keys(), ...labs.companyNames];
-  if (anonymiseSuppliers) forbidden.push(...source.suppliers.map((supplier) => supplier.name));
+  const forbidden = [...customers.replacements.keys(), ...labs.companyNames, ...source.suppliers.map((supplier) => supplier.name)];
+  const individuals = new Set(source.suppliers.filter((supplier) => supplier.kind === 'individual').map((supplier) => supplier.code));
   visit(output, (value, path, key) => {
     if (FORBIDDEN_KEYS.has(key)) violations.add(path);
     if (typeof value === 'string' && forbidden.some((label) => includesLabel(value, label))) violations.add(path);
@@ -354,8 +354,13 @@ function guard(output, customers, labs, source, anonymiseSuppliers) {
   if (output.heroDelivery) checkPoint(output.heroDelivery.destination, '$.heroDelivery.destination');
   output.applications.forEach((application, index) => checkPoint(application, `$.applications[${index}]`));
   if (output.heroApplication) checkPoint(output.heroApplication, '$.heroApplication');
+  output.suppliers.forEach((supplier, index) => {
+    if (individuals.has(supplier.code)) checkPoint(supplier.location, `$.suppliers[${index}].location`);
+  });
   output.graph.nodes.forEach((node, index) => {
-    if (PRIVATE_GRAPH_TYPES.has(node.type)) checkPoint(node, `$.graph.nodes[${index}]`);
+    if (PRIVATE_GRAPH_TYPES.has(node.type) || (node.type === 'supplier' && individuals.has(node.code))) {
+      checkPoint(node, `$.graph.nodes[${index}]`);
+    }
   });
   if (violations.size) throw new Error(`Publication guard failed:\n${[...violations].sort().join('\n')}`);
 }
@@ -381,14 +386,13 @@ async function main() {
   try {
     args = parseArgs({
       allowPositionals: true,
-      options: { 'no-routes': { type: 'boolean' }, 'anonymise-suppliers': { type: 'boolean' } },
+      options: { 'no-routes': { type: 'boolean' } },
     });
   } catch {
-    throw new Error(`Usage: node ${SCRIPT} <source journey.json> [--no-routes] [--anonymise-suppliers]`);
+    throw new Error(`Usage: node ${SCRIPT} <source journey.json> [--no-routes]`);
   }
   if (args.positionals.length !== 1) throw new Error(`Expected one source JSON file. See ${SCRIPT} for usage.`);
   const noRoutes = args.values['no-routes'];
-  const anonymiseSuppliers = args.values['anonymise-suppliers'];
   const key = process.env.OPENROUTESERVICE_API_KEY;
   if (!noRoutes && !key?.trim()) throw new Error('OPENROUTESERVICE_API_KEY is required unless --no-routes is passed.');
   if (resolve(args.positionals[0]) === OUTPUT) throw new Error('Source must be a private file distinct from the published output.');
@@ -400,7 +404,7 @@ async function main() {
   }
   const customers = customerPolicy(source);
   const labs = labPolicy(source);
-  const { output, rewrite } = publish(source, customers, labs, anonymiseSuppliers);
+  const { output, rewrite } = publish(source, customers, labs);
   if (noRoutes) {
     try {
       const previous = JSON.parse(await readFile(OUTPUT, 'utf8'));
@@ -419,7 +423,7 @@ async function main() {
       value.label = customers.byCode.get(value.code);
     }
   });
-  guard(final, customers, labs, source, anonymiseSuppliers);
+  guard(final, customers, labs, source);
   await mkdir(dirname(OUTPUT), { recursive: true });
   await writeFile(OUTPUT, `${snapshotJson(final)}\n`);
 }

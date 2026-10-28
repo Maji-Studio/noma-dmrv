@@ -141,7 +141,7 @@ async function startMap() {
   const handle = await Promise.race([
     createJourneyMap(host, { onPick: (id) => ctx.goRecord(id), onUser: onMapUser, onMove: onMapMove }),
     new Promise((resolve) => setTimeout(() => resolve(null), MAP_WAIT_MS)),
-  ]);
+  ]).catch(() => null);
   if (!handle) {
     app.classList.add("no-map");
     if (st.mode === "map" && !location.hash.includes("map")) setMode("graph");

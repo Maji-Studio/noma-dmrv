@@ -200,11 +200,17 @@ export const sibLabel = (k, n) => plural(n, PLURAL[k].replace(/s$/, ""), PLURAL[
 
 /* ---------- transport legs (routed lines from the snapshot) ---------- */
 /** Each leg: key "l:<supplier or delivery code>", recorded km, the road line (or null) and its two ends. */
-export const LEGS = J.routes.legs.map((l) => {
+const routes = J.routes?.legs ?? [];
+const legs = [
+  ...SUPS.map((code) => ({ id: `in:${code}`, kind: "inbound", recordedKmOneWay: supBy[code].distanceToPlantKm })),
+  ...dels.map((d) => ({ id: `out:${d.code}`, kind: "outbound", recordedKmOneWay: d.distanceKmOneWay })),
+];
+export const LEGS = legs.map((leg) => {
+  const l = routes.find((r) => r.id === leg.id) ?? leg;
   const code = l.id.split(":")[1];
   const inbound = l.kind === "inbound";
   const ap = inbound ? null : appByDel[code];
-  return { key: `l:${code}`, code, inbound, km: l.recordedKmOneWay, coords: l.coordinates, from: inbound ? [supBy[code].location.lng, supBy[code].location.lat] : PLANT_LL, to: inbound ? PLANT_LL : [ap.lng, ap.lat], app: ap && ap.code };
+  return { key: `l:${code}`, code, inbound, km: l.recordedKmOneWay, coords: l.coordinates ?? null, from: inbound ? [supBy[code].location.lng, supBy[code].location.lat] : PLANT_LL, to: inbound ? PLANT_LL : [ap.lng, ap.lat], app: ap && ap.code };
 });
 
 /* ---------- graph model ---------- */

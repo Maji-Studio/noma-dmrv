@@ -142,8 +142,14 @@ export async function createJourneyMap(host, hooks) {
   map.getCanvas().tabIndex = -1;
   if (!KEY) host.classList.add("jr-map--blank");
   await new Promise((resolve) => {
-    const t = setTimeout(() => { if (KEY) map.setStyle(BLANK); host.classList.add("jr-map--blank"); resolve(); }, STYLE_TIMEOUT_MS);
-    map.once("load", () => { clearTimeout(t); resolve(); });
+    const loaded = () => { clearTimeout(t); resolve(); };
+    const t = setTimeout(() => {
+      map.off("load", loaded);
+      host.classList.add("jr-map--blank");
+      map.once("style.load", resolve);
+      map.setStyle(BLANK);
+    }, STYLE_TIMEOUT_MS);
+    map.once("load", loaded);
   });
   if (map.getStyle()?.layers?.length) { recolor(map, p); addRelief(map, p); }
   const hasSat = addSatellite(map);

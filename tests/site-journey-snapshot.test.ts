@@ -1,10 +1,13 @@
 // The public snapshot is a publication boundary; failures report paths, never values.
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const SNAPSHOT_PATH = resolve(__dirname, "../site/src/data/journey/journey.json");
+const SCRIPT_PATH = resolve(__dirname, "../site/scripts/journey-snapshot.mjs");
 const CUSTOMER_LABEL = /^Customer, \S/u;
+const SUPPLIER_LABEL = /^Supplier, \S/u;
 const FORBIDDEN_KEYS = new Set(["note", "notes", "accreditation"]);
 const DESTINATION_DECIMALS = 2;
 const MIN_ROUTE_POINTS = 2;
@@ -55,6 +58,94 @@ function validRoutePoint(value: Json): boolean {
 }
 
 describe("site journey snapshot publication boundary", () => {
+  it("labels every supplier by role and town", () => {
+    const violations: string[] = [];
+    const suppliers = snapshot.suppliers;
+    expect(Array.isArray(suppliers)).toBe(true);
+    if (Array.isArray(suppliers)) {
+      expect(suppliers.length).toBeGreaterThan(0);
+      suppliers.forEach((supplier, index) => {
+        if (!isRecord(supplier) || typeof supplier.name !== "string" || !SUPPLIER_LABEL.test(supplier.name)) {
+          violations.push(`$.suppliers[${index}].name`);
+        }
+      });
+    }
+    const graph = snapshot.graph;
+    expect(isRecord(graph) && Array.isArray(graph.nodes)).toBe(true);
+    let nodes = 0;
+    if (isRecord(graph) && Array.isArray(graph.nodes)) {
+      graph.nodes.forEach((node, index) => {
+        if (!isRecord(node) || node.type !== "supplier") return;
+        nodes++;
+        if (typeof node.label !== "string" || !SUPPLIER_LABEL.test(node.label)) violations.push(`$.graph.nodes[${index}].label`);
+      });
+    }
+    expect(nodes).toBeGreaterThan(0);
+    expect(violations).toEqual([]);
+  });
+
+  it("limits individual supplier and graph coordinates to two decimals", () => {
+    const violations: string[] = [];
+    const individuals = new Set<Json>();
+    const suppliers = snapshot.suppliers;
+    expect(Array.isArray(suppliers)).toBe(true);
+    if (Array.isArray(suppliers)) {
+      suppliers.forEach((supplier, index) => {
+        if (!isRecord(supplier) || supplier.kind !== "individual") return;
+        individuals.add(supplier.code);
+        violations.push(...coordinateViolations(supplier.location, `$.suppliers[${index}].location`));
+      });
+    }
+    expect(individuals.size).toBeGreaterThan(0);
+    const graph = snapshot.graph;
+    expect(isRecord(graph) && Array.isArray(graph.nodes)).toBe(true);
+    // Suppliers outside the displayed chain need not have graph nodes.
+    if (isRecord(graph) && Array.isArray(graph.nodes)) {
+      graph.nodes.forEach((node, index) => {
+        if (!isRecord(node) || node.type !== "supplier" || !individuals.has(node.code)) return;
+        violations.push(...coordinateViolations(node, `$.graph.nodes[${index}]`));
+      });
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("publishes a synthetic source without a supplier anonymisation flag", () => {
+    // Isolate the CLI's fixed output path; never overwrite the committed snapshot.
+    const directory = mkdtempSync(resolve(__dirname, ".journey-snapshot-"));
+    try {
+      const suppliers = [
+        { code: "SUP-TEST-001", name: "Synthetic supplier alpha", kind: "individual", location: { city: "Test town", lat: -8.12345, lng: 35.12345 } },
+        { code: "SUP-TEST-002", name: "Synthetic supplier beta", kind: "company", location: { lat: -8.23456, lng: 35.23456 } },
+      ];
+      const source = {
+        meta: { description: suppliers.map((supplier) => supplier.name).join("; ") }, facility: {}, suppliers,
+        deliveries: [], applications: [], labSamples: [],
+        graph: { nodes: suppliers.map((supplier) => ({ type: "supplier", code: supplier.code, label: supplier.name, ...supplier.location })), edges: [] },
+      };
+      const script = resolve(directory, "scripts/journey-snapshot.mjs");
+      const sourcePath = resolve(directory, "source.json");
+      mkdirSync(resolve(directory, "scripts"));
+      copyFileSync(SCRIPT_PATH, script);
+      writeFileSync(sourcePath, JSON.stringify(source));
+      const result = spawnSync(process.execPath, [script, sourcePath, "--no-routes"], { encoding: "utf8" });
+      expect(result.status).toBe(0);
+      const output = JSON.parse(readFileSync(resolve(directory, "src/data/journey/journey.json"), "utf8")) as JsonRecord;
+      const violations: string[] = [];
+      visit(output, (value, path) => {
+        if (typeof value === "string" && suppliers.some((supplier) => value.toLowerCase().includes(supplier.name.toLowerCase()))) {
+          violations.push(path);
+        }
+        if (isRecord(value) && value.code === suppliers[0].code) {
+          violations.push(...coordinateViolations(value.type === "supplier" ? value : value.location, path));
+        }
+      });
+      expect(violations).toEqual([]);
+      expect(Object.hasOwn(output, "routes")).toBe(false);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("labels every customer by role and town", () => {
     const violations: string[] = [];
     let customers = 0;
