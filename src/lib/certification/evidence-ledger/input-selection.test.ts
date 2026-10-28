@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { Sample, TransportLeg } from "@/db/schema";
-import { selectThousandYearLedgerSamples, selectTwoHundredYearLedgerSamples, transportLedgerInput } from "./input-selection";
+import { samplingDay, samplingDayOf, selectThousandYearLedgerSamples, selectTwoHundredYearLedgerSamples, transportLedgerInput } from "./input-selection";
 
 const sample = (overrides: Partial<Sample>) => ({ id: "sample", samplingTime: new Date("2026-01-01T23:30:00Z"),
   hToCOrgRatio: null, oToCOrgRatio: null, totalCarbonPercent: null, inorganicCarbonPercent: null,
@@ -31,4 +31,16 @@ it("keeps complete 1000-year measured replicates in identity order, with origina
 it("normalizes only the transport operands read by the evidence row", () => {
   expect(transportLedgerInput({ distanceKm: 12, loadMassKg: -1, transportMethodType: "road" } as TransportLeg))
     .toEqual({ distanceKm: 12, loadMassKg: 0, transportMethodType: "Road" });
+});
+
+it("preserves date-only days only in samplingDayOf, while both localize timestamps", () => {
+  const zone = "America/Los_Angeles";
+  expect(samplingDayOf("2026-01-15", zone)).toBe("2026-01-15");
+  expect(samplingDay("2026-01-15", zone)).toBe("2026-01-14");
+  for (const value of ["2026-01-15T03:30:00.000Z", new Date("2026-01-15T03:30:00.000Z")]) {
+    expect(samplingDayOf(value, zone)).toBe("2026-01-14");
+    expect(samplingDay(value, zone)).toBe("2026-01-14");
+    expect(samplingDayOf(value, null)).toBe("2026-01-15");
+    expect(samplingDay(value, null)).toBe("2026-01-15");
+  }
 });

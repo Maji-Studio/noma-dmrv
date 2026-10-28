@@ -5,7 +5,7 @@ import type { RecordLockRemoval } from "@/lib/record-lock";
 const mocks = vi.hoisted(() => ({ select: vi.fn(), where: vi.fn(), lineage: vi.fn(), union: vi.fn() }));
 vi.mock("@/db", () => ({ db: { select: mocks.select } }));
 vi.mock("./record-lock-lineage", () => ({ readRecordLockLineage: mocks.lineage }));
-vi.mock("./emission-entry-corrections", () => ({ emissionCorrectionBatchIds: mocks.union }));
+vi.mock("./emission-entry-corrections", () => ({ readPerCorrectionUnion: mocks.union }));
 vi.mock("./emission-entry-contenders", () => ({ loadEmissionEntryReservations: async () => [] }));
 vi.mock("./credit-batch-accounting", () => ({ loadCreditBatchRollups: async () => ({}) }));
 vi.mock("./emission-entries", () => ({ hydrateEmissionEntries: async () => [entry] }));
@@ -44,7 +44,8 @@ beforeEach(() => {
     .mockResolvedValueOnce([removal])
     .mockResolvedValueOnce([{ removalId: removal.id, batch }])
     .mockResolvedValueOnce([{ id: "attempt", localEntityId: removal.id, status: "submitted", submittedAt: new Date("2026-04-01") }]);
-  mocks.union.mockResolvedValue([batch.id, "shared"]);
+  mocks.union.mockImplementation(async (_ctx, _executor, batchIds: string[], read: (union: string[]) => Promise<unknown>) =>
+    new Map([[batchIds[0], await read([batch.id, "shared"])]]));
   mocks.lineage.mockResolvedValueOnce([owner]);
 });
 
@@ -53,7 +54,7 @@ async function announcement(holders: RecordLockRemoval[]) {
     ghgStatementId: holder.id === owner.id ? "returned" : holder.statements[0]?.id ?? null })));
   mocks.lineage.mockResolvedValueOnce(holders);
   const result = await loadFacilityEmissionEntryCarry(ctx, "facility");
-  expect(mocks.union).toHaveBeenCalledExactlyOnceWith(ctx, expect.anything(), batch.id);
+  expect(mocks.union).toHaveBeenCalledExactlyOnceWith(ctx, expect.anything(), [batch.id], expect.any(Function));
   return result.entries[0].revisionOf;
 }
 

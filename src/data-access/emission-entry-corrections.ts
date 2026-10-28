@@ -102,3 +102,15 @@ export async function emissionCorrectionBatchIds(ctx: OrgContext, executor: Exec
   )) : [];
   return [...new Set([batchId, ...shared.map((row) => row.id)])];
 }
+
+/** Read once per correction union, retaining a result for each distinct batch. */
+export async function readPerCorrectionUnion<T>(ctx: OrgContext, executor: Executor, batchIds: readonly string[], read: (union: string[]) => Promise<T>): Promise<Map<string, T>> {
+  requireOrgScope(ctx);
+  const reads = new Map<string, Promise<T>>();
+  return new Map(await Promise.all([...new Set(batchIds)].map(async batchId => {
+    const union = await emissionCorrectionBatchIds(ctx, executor, batchId);
+    const key = JSON.stringify([...union].sort());
+    if (!reads.has(key)) reads.set(key, read(union));
+    return [batchId, await reads.get(key)!] as const;
+  })));
+}

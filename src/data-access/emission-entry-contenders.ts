@@ -2,7 +2,7 @@ import { decideSubmissionClaim } from "@/lib/isometric/utils/submission-claim";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { isSubmittedAttempt, isRemovalCorrectionWindowOpen, isReturnedStatement } from "@/lib/record-lock";
 import { getCertifiedLineageForBatches } from "./certification-lineage-guards";
-import { emissionCorrectionBatchIds } from "./emission-entry-corrections";
+import { readPerCorrectionUnion } from "./emission-entry-corrections";
 import type { StatementReads } from "./record-lock-lineage";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -46,14 +46,8 @@ export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBa
       (latest.id === claimedAttempt.submissionId || resumable)) excludeSubmissionId = latest.id;
   }
   const statementReads: StatementReads = new Map();
-  const lineageReads = new Map<string, ReturnType<typeof getCertifiedLineageForBatches>>();
-  const lineageByBatch = new Map(await Promise.all([...new Set(rows.map((row) => row.creditBatchId))].map(async (batchId) => {
-    const union = await emissionCorrectionBatchIds(ctx, executor, batchId);
-    const key = JSON.stringify([...union].sort());
-    if (!lineageReads.has(key)) lineageReads.set(key, getCertifiedLineageForBatches(ctx, executor, union, statementReads, excludeSubmissionId));
-    const lineage = await lineageReads.get(key)!;
-    return [batchId, lineage.map((row) => row.recordLockRemoval)] as const;
-  })));
+  const lineageByBatch = await readPerCorrectionUnion(ctx, executor, rows.map((row) => row.creditBatchId), async union =>
+    (await getCertifiedLineageForBatches(ctx, executor, union, statementReads, excludeSubmissionId)).map(row => row.recordLockRemoval));
   const facts = [...lineageByBatch.values()].flat();
   return ids.flatMap((removalId) => {
     const group = rows.filter((row) => row.removalId === removalId && !hasFreshRemovalDeletionLease(row.metadata));

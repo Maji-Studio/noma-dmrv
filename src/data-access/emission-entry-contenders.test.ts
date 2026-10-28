@@ -3,11 +3,14 @@ import type { RecordLockRemoval } from "@/lib/record-lock";
 import type { LockedCertifiedLineageRow } from "./certification-lineage-guards";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 import { listEmissionEntryDraftContenders } from "./emission-entry-contenders";
-import { emissionCorrectionBatchIds } from "./emission-entry-corrections";
+import { readPerCorrectionUnion } from "./emission-entry-corrections";
 import { getCertifiedLineageForBatches } from "./certification-lineage-guards";
 
 vi.mock("@/db", () => ({ db: {} }));
-vi.mock("./emission-entry-corrections", () => ({ emissionCorrectionBatchIds: vi.fn(async () => ["a", "b"]) }));
+vi.mock("./emission-entry-corrections", () => ({
+  readPerCorrectionUnion: vi.fn(async (_ctx, _executor, batchIds: string[], read: (union: string[]) => Promise<unknown>) =>
+    new Map([[batchIds[0], await read(["a", "b"])]])),
+}));
 vi.mock("./certification-lineage-guards", () => ({ getCertifiedLineageForBatches: vi.fn() }));
 const returned: RecordLockRemoval = { id: "returned", submissions: [{ id: "attempt", status: "submitted", externalId: "remote", submittedAt: "2026-01-01" }],
   statements: [{ id: "statement", status: "FAILED_VERIFICATION", submittedToVerifier: true, fresh: true, returnedAt: "2026-02-01", removalExternalIds: ["remote"] }] };
@@ -28,7 +31,7 @@ it("uses the write scope's full batch union, including a blocking holder beyond 
   const ctx = makeTestOrgContext();
   const executor = reader();
   expect(await listEmissionEntryDraftContenders(ctx, ["a"], executor)).toEqual([]);
-  expect(emissionCorrectionBatchIds).toHaveBeenCalledWith(ctx, executor, "a");
+  expect(readPerCorrectionUnion).toHaveBeenCalledWith(ctx, executor, ["a"], expect.any(Function));
   expect(getCertifiedLineageForBatches).toHaveBeenCalledWith(ctx, executor, ["a", "b"], expect.any(Map), undefined);
 });
 it("offers the correction when the same union has no blocking holder", async () => {
