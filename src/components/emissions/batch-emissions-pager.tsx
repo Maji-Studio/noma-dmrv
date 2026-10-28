@@ -78,8 +78,10 @@ export function BatchEmissionsPager({ creditBatchId, facilityId, lineFilter, lin
     <div className="flex flex-wrap items-center justify-between gap-x-16 gap-y-4">
       <Link
         href={emissionsOverviewHref({ ...query, facility: facilityId })}
-        className="inline-flex min-h-44 items-center body-small underline underline-offset-4 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+        className="inline-flex min-h-44 items-center gap-6 self-start body-small text-[var(--color-text-secondary)] underline-offset-2 hover:underline"
       >
+        {/* Same back link as the batch page header's "All credit batches". */}
+        <ArrowLeftIcon size={16} aria-hidden />
         Back to Emissions
       </Link>
       {index >= 0 && (

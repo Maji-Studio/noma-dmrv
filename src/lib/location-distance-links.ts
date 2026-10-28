@@ -10,10 +10,10 @@ interface LocationDistanceLinkInput {
 
 /** Opens the supplier location whose facility distance feeds a feedstock leg. */
 export function supplierLocationDistanceLink(input: LocationDistanceLinkInput): string {
-  return recordHref("supplier", input.partyId, { facilityId: input.facilityId, preview: true, mode: "edit", locationId: input.locationId });
+  return recordHref("supplier", input.partyId, { facilityId: input.facilityId, mode: "edit", locationId: input.locationId });
 }
 
 /** Opens the customer location whose facility distance feeds a delivery. */
 export function customerLocationDistanceLink(input: LocationDistanceLinkInput): string {
-  return recordHref("customer", input.partyId, { facilityId: input.facilityId, preview: true, mode: "edit", locationId: input.locationId });
+  return recordHref("customer", input.partyId, { facilityId: input.facilityId, mode: "edit", locationId: input.locationId });
 }

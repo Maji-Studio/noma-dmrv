@@ -131,7 +131,7 @@ export function buildDashboardStructuralGaps(
   const facilityParams = new URLSearchParams({ facility: facilityId });
   const facilityQuery = `?${facilityParams.toString()}`;
   const supplierHref = counts.missingFeedstockGpsSupplierId
-    ? recordHref("supplier", counts.missingFeedstockGpsSupplierId, { facilityId, preview: true, mode: "edit" })
+    ? recordHref("supplier", counts.missingFeedstockGpsSupplierId, { facilityId, mode: "edit" })
     : `/suppliers${facilityQuery}`;
   return [
     {

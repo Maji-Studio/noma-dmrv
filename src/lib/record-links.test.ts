@@ -14,8 +14,8 @@ const CASES = [
   ["sample", "/lab-samples", "sample"],
   ["removal", "/removals", "removal"],
   ["ghgStatement", "/ghg-statements", "statement"],
-  ["supplier", "/suppliers/record%2F1", null],
-  ["customer", "/customers/record%2F1", null],
+  ["supplier", "/suppliers", "supplier"],
+  ["customer", "/customers", "customer"],
   ["feedstockType", "/feedstock-types", "feedstockType"],
   ["storageBin", "/storage-bins", "bin"],
   ["reactor", "/reactors", "reactor"],
@@ -73,7 +73,7 @@ describe("recordHref", () => {
   });
 
   it.each(["supplier", "customer"] as const)("preserves the %s list's location edit intent", (kind) => {
-    expect(recordHref(kind, "party/1", { facilityId: "f 1", preview: true, mode: "edit", locationId: "loc/1" }))
+    expect(recordHref(kind, "party/1", { facilityId: "f 1", mode: "edit", locationId: "loc/1" }))
       .toBe(`${RECORD_LINKS[kind].path}?facility=f+1&${kind}=party%2F1&mode=edit&location=loc%2F1`);
   });
 });

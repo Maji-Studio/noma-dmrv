@@ -42,11 +42,14 @@ vi.mock("@/hooks/use-open-create-intent", () => ({
 vi.mock("@/hooks/use-certification", () => ({
   useRemovalsForFacility: () =>
     useQuery({
-      queryKey: ["removals", FACILITY_ID],
+      // Facility-scoped like the app: another facility's or a missing Removal is not listed.
+      queryKey: ["removals", FACILITY_ID, mocks.facilityId],
       queryFn: async () => ({
         isProduction: false,
         fetchedAt: ++mocks.fetchCount,
-        removals: mocks.removalIds.map((id) => ({ removal: { id } })),
+        removals: mocks.removalIds
+          .filter((id) => id !== REMOVAL_ID || (!mocks.missing && mocks.facilityId === mocks.linkedFacilityId))
+          .map((id) => ({ removal: { id } })),
       }),
     }),
   useRemovalPreflightSummaries: () => ({}),
@@ -182,13 +185,29 @@ describe("Removal record links", () => {
     expect(screen.getByRole("dialog").textContent).toBe(param === "resume" ? "Resume Removal" : "Linked Removal");
   });
 
-  it.each(["removal", "resume"])("clears a missing ?%s= and reports it", async (param) => {
-    mocks.query[param] = REMOVAL_ID;
+  it("clears a missing ?removal= and reports it", async () => {
+    mocks.query.removal = REMOVAL_ID;
     mocks.missing = true;
     render(<QueryClientProvider client={client}><RemovalsList /></QueryClientProvider>);
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith("Linked Removal could not be opened"));
-    expect(mocks.query[param]).toBeNull();
+    expect(mocks.query.removal).toBeNull();
     expect(mocks.setFacilityId).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("still opens the wizard for ?resume= when its facility lookup fails", async () => {
+    mocks.query.resume = REMOVAL_ID;
+    mocks.missing = true;
+    render(<QueryClientProvider client={client}><RemovalsList /></QueryClientProvider>);
+    await screen.findByRole("dialog");
+    expect(mocks.setFacilityId).not.toHaveBeenCalled();
+    expect(mocks.toastError).not.toHaveBeenCalled();
+  });
+
+  it("opens a Removal already on the facility's list without looking up its facility", async () => {
+    mocks.query.removal = REMOVAL_ID;
+    render(<QueryClientProvider client={client}><RemovalsList /></QueryClientProvider>);
+    await screen.findByRole("dialog");
+    expect(mocks.setFacilityId).not.toHaveBeenCalled();
   });
 });

@@ -11,8 +11,8 @@ export function useLinkedRecordFacility(
   const { facilityId, facilities, setFacilityId, isLoading: facilitiesLoading } = useFacilityContext();
   const recordFacilityId = record?.facilityId;
   const requestedSwitch = useRef<string | null>(null);
-  const canSwitch = !isLoading && !facilitiesLoading && !!recordFacilityId &&
-    facilities?.some((facility) => facility.id === recordFacilityId);
+  const selectable = !!recordFacilityId && !!facilities?.some((facility) => facility.id === recordFacilityId);
+  const canSwitch = !isLoading && !facilitiesLoading && selectable;
 
   // URL, localStorage and sidebar selection are owned by the context setter.
   useEffect(() => {
@@ -27,6 +27,7 @@ export function useLinkedRecordFacility(
     }
   }, [canSwitch, facilityId, recordFacilityId, setFacilityId]);
 
+  // A facility that cannot be selected (archived, or beyond the loaded list) shows the record where it is.
   return !!record && !isLoading && !facilitiesLoading &&
-    (!recordFacilityId || recordFacilityId === facilityId);
+    (!recordFacilityId || recordFacilityId === facilityId || !selectable);
 }

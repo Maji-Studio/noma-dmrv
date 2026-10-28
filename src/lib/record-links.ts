@@ -13,8 +13,8 @@ export const RECORD_LINKS = {
   sample: { path: "/lab-samples", param: "sample" },
   removal: { path: "/removals", param: "removal" },
   ghgStatement: { path: "/ghg-statements", param: "statement" },
-  supplier: { path: "/suppliers", param: "supplier", routed: true },
-  customer: { path: "/customers", param: "customer", routed: true },
+  supplier: { path: "/suppliers", param: "supplier" },
+  customer: { path: "/customers", param: "customer" },
   feedstockType: { path: "/feedstock-types", param: "feedstockType" },
   storageBin: { path: "/storage-bins", param: "bin" },
   reactor: { path: "/reactors", param: "reactor" },
@@ -41,9 +41,7 @@ export type RecordLinkOptions<K extends RecordKind> = {
 } & (K extends "creditBatch"
   ? { preview?: boolean; tab?: CreditBatchPageTab; focus?: string }
   : { focus?: EntityFocusTarget }) &
-  (K extends "supplier" | "customer"
-    ? { preview?: boolean; locationId?: string | null }
-    : object);
+  (K extends "supplier" | "customer" ? { locationId?: string | null } : object);
 
 /** Facility always comes first. Routed records opt into their list sheet with preview. */
 export function recordHref<K extends RecordKind>(

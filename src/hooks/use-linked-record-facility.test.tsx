@@ -63,9 +63,9 @@ describe("useLinkedRecordFacility", () => {
     expect(context.setFacilityId).toHaveBeenCalledExactlyOnceWith("facility-b");
   });
 
-  it("never selects a facility outside the user's list or exposes its sheet", () => {
-    const { result } = renderHook(() => useLinkedRecordFacility({ facilityId: "other-org-facility" }));
-    expect(result.current).toBe(false);
+  it("never selects a facility outside the user's list, and shows the record where it is", () => {
+    const { result } = renderHook(() => useLinkedRecordFacility({ facilityId: "archived-facility" }));
+    expect(result.current).toBe(true);
     expect(context.setFacilityId).not.toHaveBeenCalled();
   });
 

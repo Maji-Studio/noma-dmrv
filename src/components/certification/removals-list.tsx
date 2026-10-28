@@ -80,13 +80,14 @@ export function RemovalsList({ initialCreate = false }: { initialCreate?: boolea
       return;
     }
     if (invalidResumeId.current === resume) return;
-    if (!resumedRemoval.data && (resumedRemoval.isError || resumedRemoval.isSuccess)) {
+    if (resumedRemoval.isSuccess && !resumedRemoval.data) {
       invalidResumeId.current = resume;
       toast.error("Linked Removal could not be opened");
       void setResume(null);
     }
   }, [resume, resumedRemoval.data, resumedRemoval.isError, resumedRemoval.isSuccess, setResume, toast]);
-  const wizardOpen = resume ? resumeFacilityReady : dialogOpen || createIntent.isOpen;
+  // A failed facility lookup still opens the wizard, which reports a Removal it cannot load.
+  const wizardOpen = resume ? resumeFacilityReady || resumedRemoval.isError : dialogOpen || createIntent.isOpen;
   const closeWizard = () => {
     setDialogOpen(false);
     createIntent.clear();
@@ -384,12 +385,15 @@ function ListBody({
   );
 
   const identityRows = identities.data?.removals ?? [];
-  const linkedRemoval = useRemovalCarriedEntries(removalId, { enabled: linkedSheetEnabled });
-  const linkedFacilityReady = useLinkedRecordFacility(linkedSheetEnabled ? linkedRemoval.data : undefined, linkedRemoval.isLoading);
+  // A Removal already on this facility's list opens at once; only a link from elsewhere looks up its facility.
+  const linkedInList = !!removalId && identityRows.some((entry) => entry.removal.id === removalId);
+  const lookupEnabled = linkedSheetEnabled && !linkedInList && !identities.isLoading;
+  const linkedRemoval = useRemovalCarriedEntries(removalId, { enabled: lookupEnabled });
+  const linkedFacilityReady = useLinkedRecordFacility(lookupEnabled ? linkedRemoval.data : undefined, linkedRemoval.isLoading);
   const toast = useToast();
   const invalidRemovalId = useRef<string | null>(null);
   useEffect(() => {
-    if (!removalId || !linkedSheetEnabled) {
+    if (!removalId || !lookupEnabled) {
       invalidRemovalId.current = null;
       return;
     }
@@ -399,7 +403,7 @@ function ListBody({
       toast.error("Linked Removal could not be opened");
       void setRemovalId(null);
     }
-  }, [removalId, linkedSheetEnabled, linkedRemoval.data, linkedRemoval.isError, linkedRemoval.isSuccess, setRemovalId, toast]);
+  }, [removalId, lookupEnabled, linkedRemoval.data, linkedRemoval.isError, linkedRemoval.isSuccess, setRemovalId, toast]);
 
   const enrichmentByRemovalId = useRemovalPreflightSummaries(
     facilityId,
@@ -434,7 +438,7 @@ function ListBody({
     }),
     timeZone,
   );
-  const selected = removalId && linkedFacilityReady
+  const selected = removalId && (linkedInList || linkedFacilityReady)
     ? rows.find((r) => r.removalId === removalId)
     : undefined;
 
