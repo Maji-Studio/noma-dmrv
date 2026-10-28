@@ -41,3 +41,4 @@ export const READY_APPLICATION_EVIDENCE_ROLES = [
   "incorporation",
 ] as const;
 export const E2E_ISOMETRIC_FEEDSTOCK_TYPE_ID_PREFIX = "e2e-fst-";
+export const READY_DELIVERY_RECEIPT_URL = "https://example.invalid/e2e-delivery-receipt.pdf";

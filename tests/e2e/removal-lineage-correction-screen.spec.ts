@@ -33,7 +33,7 @@ async function shoot(page: Page, name: string, width: keyof typeof WIDTHS, targe
 test.describe("Lineage-only correction screens", () => {
   test.skip(!returnedRemovalSeedsEnabled(), "Needs CREDENTIALS_ENCRYPTION_KEY and the registry stub preload.");
 
-  test("a returned Removal with changed lineage and the batch it holds", async ({ adminPage: page, seededData }) => {
+  test("a returned Removal with changed lineage and the batch it holds", async ({ adminPage: page, seededData, testUsers }) => {
     test.setTimeout(300_000);
     const facilityId = seededData.facility.id;
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
@@ -41,6 +41,7 @@ test.describe("Lineage-only correction screens", () => {
     const cleanups: Array<() => Promise<void>> = [];
     try {
       const removal = await seedReturnedRemoval(seededData, `${tag}L`, {
+        adminUserId: testUsers.admin.id,
         changed: false, statementStatus: "FAILED_VERIFICATION", periodStartOn: "2026-07-01", periodEndOn: "2026-09-30",
         // Sent from a production run that is not the batch's run now: only a lineage record differs.
         sentSemantic: { startedOn: "2026-07-01", completedOn: "2026-09-30", sourceProductionRunIds: [crypto.randomUUID()] } });

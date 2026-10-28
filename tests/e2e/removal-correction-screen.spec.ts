@@ -18,7 +18,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { returnedRemovalSeedsEnabled, seedReturnedConnection, seedReturnedRemoval } from "./fixtures/returned-removal-seed";
+import { emptyReturnedRemovalComponentsForWizard, returnedRemovalSeedsEnabled, seedReturnedConnection, seedReturnedRemoval } from "./fixtures/returned-removal-seed";
 import { waitForFacilityHydration, waitForSideSheet } from "./fixtures/page-helpers";
 
 const PHASE = process.env.CORRECTION_SHOTS;
@@ -51,7 +51,7 @@ async function shoot(page: Page, name: string, width: keyof typeof WIDTHS, targe
 test.describe("Returned Removal screens", () => {
   test.skip(!returnedRemovalSeedsEnabled(), "Needs CREDENTIALS_ENCRYPTION_KEY and the preload that answers the returned statement read.");
 
-  test("a returned Removal shows its status, notice and open item", async ({ adminPage: page, seededData }) => {
+  test("a returned Removal shows its status, notice and open item", async ({ adminPage: page, seededData, testUsers }) => {
     test.setTimeout(300_000);
     const facilityId = seededData.facility.id;
     const facilityName = seededData.facility.name;
@@ -60,9 +60,11 @@ test.describe("Returned Removal screens", () => {
     const cleanups: Array<() => Promise<void>> = [];
     try {
       const changed = await seedReturnedRemoval(seededData, `${tag}C`, {
+        adminUserId: testUsers.admin.id,
         changed: true, statementStatus: "FAILED_VERIFICATION", periodStartOn: "2026-07-01", periodEndOn: "2026-09-30" });
       cleanups.push(changed.cleanup);
       const open = await seedReturnedRemoval(seededData, `${tag}O`, {
+        adminUserId: testUsers.admin.id,
         changed: false, statementStatus: "DRAFT", periodStartOn: "2026-04-01", periodEndOn: "2026-06-30" });
       cleanups.push(open.cleanup);
 
@@ -138,12 +140,14 @@ test.describe("Returned Removal screens", () => {
         await dieselLine.click({ timeout: 10_000 });
         if (CHECK_COPY) {
           await expect(page.getByText("Waiting for resubmit", { exact: true }).locator("visible=true").first()).toBeVisible();
-        } else {
-          await expect(page.getByText("12 kWh").locator("visible=true").first()).toBeVisible();
         }
+        await expect(page.getByText("12 kWh").locator("visible=true").first()).toBeVisible();
         await shoot(page, "batch-emissions-entry", size);
       }
 
+      // All correction assertions above use compile-ready records. Now deliberately
+      // empty both operating lines to retain the wizard's Empty components / Back coverage.
+      await emptyReturnedRemovalComponentsForWizard(changed.creditBatch.id);
       // Resubmit Removal reopens the New Removal wizard on the Removal (its href is asserted on the sheet above).
       for (const [size, viewport] of Object.entries(WIDTHS) as [keyof typeof WIDTHS, (typeof WIDTHS)[keyof typeof WIDTHS]][]) {
         await page.setViewportSize(viewport);
