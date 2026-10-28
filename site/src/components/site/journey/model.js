@@ -120,10 +120,10 @@ J.feedstockBins.filter((b) => b.type === "biochar_bin").forEach((b) => {
   const rs = runs.filter((r) => r.outputBin === b.code);
   const made = rs.reduce((a, r) => a + r.biocharOutputKg, 0);
   const f = fieldsOfBin(b.code);
-  const ss = sams.filter((s) => s.creditBatch === b.creditBatch).map((s) => s.code);
+  const bs = sams.filter((s) => s.creditBatch === b.creditBatch); const ss = bs.map((s) => s.code); const hs = bs.map((s) => s.hToCorg);
   add({ id: b.code, k: "bbin", code: b.code, date: null, dlabel: `${binName(b)} ${J.meta.generated.slice(0, 4)}`, sub: `${binName(b)} · ${plural(rs.length, "run", "runs")} · ${b.creditBatch}`,
     stats: [["Made", nf(made / 1000, 1), "t wet"], ["Still here", nf((b.currentEstWetKg || made) / 1000, 1), "t wet"], ["Fields", f.length, ""]],
-    rows: [["Runs", `${rs.length}, ${rs[0].code} to ${rs.at(-1).code}`], ["Biochar made", `${kg(made)} wet`], ["Still in bin", b.currentEstWetKg ? `${kg(b.currentEstWetKg)} wet est., ${kg(b.currentDryKg)} dry` : `${kg(made)} wet, ${nowhere}`], ["Left as products", f.length ? `${prods.length} products, ${dels.length} deliveries` : "None yet"], ["Credit batch", `${b.creditBatch}, pending`], ["Lab samples", String(ss.length)]],
+    rows: [["Runs", `${rs.length}, ${rs[0].code} to ${rs.at(-1).code}`], ["Biochar made", `${kg(made)} wet`], ["Still in bin", b.currentEstWetKg ? `${kg(b.currentEstWetKg)} wet est., ${kg(b.currentDryKg)} dry` : `${kg(made)} wet, ${nowhere}`], ["Left as products", f.length ? `${prods.length} products, ${dels.length} deliveries` : "None yet"], ["Credit batch", `${b.creditBatch}, pending`], ["Lab samples", ss.length ? `${ss.length}, H/Corg ${nf(Math.min(...hs), 2)} to ${nf(Math.max(...hs), 2)}, limit ${H_CORG_LIMIT}` : "None yet"]],
     br: [{ dir: "up", label: `Came from ${rs.length} runs`, ids: rs.map((r) => r.code) }, ...(f.length ? [{ dir: "down", label: `Went to ${f.length} fields`, ids: f }] : []), { dir: "peer", label: `${ss.length} lab samples`, ids: ss }],
     mc: ["t:bbin"], mr: ["t:run", ...f.map((x) => `f:${x}`)] });
 });
@@ -191,9 +191,10 @@ cbs.forEach((c) => {
 });
 
 /* ---------- the selected chain ---------- */
-export const CHAIN = [HERO.sup, HERO.intakes[0], FEED_BIN, HERO.run, HERO.bin, HERO.sample, HERO.prod, HERO.del, HERO.app, ANCHOR];
-export const VIA = ["dash", "solid", "solid", "solid", "solid", "solid", "solid", "dash", "solid"]; // connector after each step
-export const HASH = ["supplier", "intake", "feedbin", "run", "biocharbin", "lab", "product", "delivery", "field", "batch"];
+// the material's path, supplier to field; the credit batch and its lab samples sit above it (batch summary)
+export const CHAIN = [HERO.sup, HERO.intakes[0], FEED_BIN, HERO.run, HERO.bin, HERO.prod, HERO.del, HERO.app];
+export const VIA = ["dash", "solid", "solid", "solid", "solid", "solid", "dash"]; // connector after each step
+export const HASH = ["supplier", "intake", "feedbin", "run", "biocharbin", "product", "delivery", "field"];
 export const HOME = CHAIN.indexOf(HERO.app);
 export const CHAIN_G = new Set([HERO.sup, ...HERO.intakes, FEED_BIN, HERO.run, HERO.bin, ANCHOR, HERO.sample, HERO.prod, HERO.del, HERO.app]);
 export const SIBLINGS = { sup: SUPS, fs: HERO.intakes, run: ALL_RUNS, bbin: J.feedstockBins.filter((b) => b.type === "biochar_bin").map((b) => b.code), smp: sams.map((x) => x.code), prod: prods.map((x) => x.code), del: dels.map((x) => x.code), app: ALL_APPS, cb: cbs.map((x) => x.code) };

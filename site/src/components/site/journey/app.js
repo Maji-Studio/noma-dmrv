@@ -85,7 +85,7 @@ function route(h) {
     if (br) { ctx.openBranch(CHAIN[si], br); if (xi) ctx.scrollToIdx(+xi, false); }
   }
   st.snap = snap; ctx.applySnap(false); setMode(mode, true);
-  if (t.includes("summary")) ctx.openSum(true);
+  if (t.includes("summary") || t.includes("batch")) ctx.openSum(true); // "batch" was a chain step before
 }
 
 /* ---------- controls ---------- */
