@@ -156,11 +156,21 @@ function EntriesSection({ title, state, dataAttr = "data-carried-entries", child
   );
 }
 
+/** A paired entry has no single total, so each value sits on its own line, as in the emissions entry rows. */
+function EntryFigures({ entry }: { entry: CarriedEntry }) {
+  const figures = entry.values && entry.values.length > 1 ? entry.values : [entry.value];
+  return (
+    <span className="flex flex-col text-right font-mono body-small tabular-nums">
+      {figures.map((figure) => <span key={`${figure.unit}:${figure.magnitude}`}>{formatFigure(figure)}</span>)}
+    </span>
+  );
+}
+
 function EntryItem({ entry, facilityId, lead, recordedAfter }: { entry: CarriedEntry; facilityId: string; lead: string; recordedAfter: boolean }) {
   return (
     <li className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-12 gap-y-4 border-t border-[var(--color-border-tertiary)] py-10 first:border-t-0" data-carried-entry>
       <span className="body-small font-medium">{entry.componentName ?? FALLBACK_NAME}</span>
-      <span className="text-right font-mono body-small tabular-nums">{formatFigure(entry.value)}</span>
+      <EntryFigures entry={entry} />
       <span className="col-span-2 body-small text-[var(--color-text-secondary)]">
         {lead} <BatchLink entry={entry} facilityId={facilityId} newTab={false} />, {formatDayString(entry.occurredOn)}.
       </span>

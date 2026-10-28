@@ -64,6 +64,8 @@ export interface RemovalEntryContributions {
   carriedEntries?: (CarriedEntryNote & {
     componentId: string; componentName?: string; creditBatchId: string; earlierRemovalId?: string;
     evidenceDocumentIds: readonly string[];
+    /** Every input figure of a paired entry; absent for a single-value entry. */
+    values?: readonly EmissionFigure[];
   })[];
   manifest: EntryInputManifest[];
   inputs: { componentId: string; inputKey: string; value: EmissionFigure }[];
