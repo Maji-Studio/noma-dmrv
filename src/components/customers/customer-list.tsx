@@ -383,10 +383,12 @@ export function CustomerList() {
         return;
       }
       const message = toDeleteErrorMessage(error, `Customer ${deletingCustomer.code}`, "Customer was not deleted. Try again.");
-      if (isInUseDeleteRefusal(error)) {
+      const references = customerInUseReferences(error);
+      // An archived customer opens the in-use dialog only to link its blockers; otherwise the server's own reason shows inline.
+      if (isInUseDeleteRefusal(error) && (!deletingCustomer.archivedAt || references.length > 0)) {
         // In use: the dialog gives way to the in-use dialog (Archive instead for an active customer, Close only for an archived one).
         setDeleteConflict(deletingCustomer);
-        setConflictReferences(customerInUseReferences(error));
+        setConflictReferences(references);
         setDeletingCustomer(null);
         return;
       }
@@ -437,7 +439,8 @@ export function CustomerList() {
   // A customer whose orders have deliveries is refused when the dialog opens,
   // so the lock shows before the operator confirms anything.
   const previewRefusedInUse =
-    !!deletingCustomer && !!deletePreview.error && isInUseDeleteRefusal(deletePreview.error);
+    !!deletingCustomer && !!deletePreview.error && isInUseDeleteRefusal(deletePreview.error) &&
+    (!deletingCustomer.archivedAt || customerInUseReferences(deletePreview.error).length > 0);
   const conflictCustomer = deleteConflict ?? (previewRefusedInUse ? deletingCustomer : null);
   const conflictLinks = deleteConflict ? conflictReferences : customerInUseReferences(deletePreview.error);
 

@@ -200,7 +200,7 @@ describe("SupplierList archive view", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
     const plain = inDialog(await screen.findByRole("dialog", { name: "SUP-0001 is in use" }));
     expect(plain.queryAllByRole("link")).toHaveLength(0);
-    expect(plain.getByText("SUP-0001 cannot be deleted because other records still use it.")).toBeTruthy();
+    expect(plain.getByText("SUP-0001 cannot be deleted because feedstock intakes still use it.")).toBeTruthy();
   });
 
   it("retries Archive instead with the refreshed version after a stale refusal", async () => {

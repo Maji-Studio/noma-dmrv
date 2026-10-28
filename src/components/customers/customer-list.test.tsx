@@ -319,6 +319,16 @@ describe("CustomerList archive view", () => {
     expect(dialog.queryByRole("button", { name: "Confirm delete" })).toBeNull();
   });
 
+  it("keeps the server's reason inline when an archived customer's refusal names no records", () => {
+    const message = "Customer was not deleted because its locations are registered storage sites. Keep this customer.";
+    state.preview = { data: undefined, isPending: false, isError: true, error: inUseError(message, { locationIds: ["l1"] }) };
+    render(<CustomerList />);
+    fireEvent.click(screen.getByRole("button", { name: "Archived" }));
+    fireEvent.click(within("Actions for CUST-0002", "Delete"));
+    expect(screen.queryByRole("dialog", { name: "CUST-0002 is in use" })).toBeNull();
+    expect(screen.getByText(/registered storage sites/)).toBeTruthy();
+  });
+
   it("does not offer Archive instead when an already archived customer is refused as in use", async () => {
     state.remove.mockRejectedValue(inUseError("Customer was not deleted because orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer."));
     render(<CustomerList />);

@@ -527,7 +527,7 @@ export function SupplierList() {
         <InUseDeleteDialog
           label={deleteConflict.code}
           onArchive={deleteConflict.archivedAt ? undefined : () => handleArchive(deleteConflict)}
-          reason={conflictReferences.length > 0 ? "feedstock intakes still use it" : undefined}
+          reason="feedstock intakes still use it"
           references={conflictReferences}
           onClose={() => {
             setDeleteConflict(null);

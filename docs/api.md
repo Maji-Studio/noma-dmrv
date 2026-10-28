@@ -872,7 +872,7 @@ as name clashes, do not carry it. HTTP status is 409 for all of them.
 | Order | Deliveries, including archived ones | `certification_locked` | `/orderId` | `deliveryCode`, `deliveryId` (the delivery with the lowest code); `deliveries` (`{ id, code }` for each delivery the message names, up to the name cap, in code order) |
 | Reactor | Production runs | `conflict` | `/reactorId` | None; Server Actions only, no REST or MCP delete |
 
-The party blocker limit is 5. Delivery and order references carry their own
+The party blocker limit is 5. Feedstock, delivery and order references carry their own
 `facilityId` so clients can link across facilities. FK-violation fallbacks keep
 empty code arrays and return empty reference arrays. Existing metadata fields
 and refusal messages are unchanged.
