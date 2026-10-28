@@ -43,7 +43,7 @@ For each round:
 3. Declined findings get a one-line reason in `report.json`. P3s are fixed only when trivial; otherwise decline them with a reason.
 4. Rerun the gates from step 3.
 
-**Stop rule.** Stop after the first round with no valid P0-P2. Cap at 3 rounds. Rounds 4 and 5 run only while a valid P0, or a valid P1 on security, auth/tenancy, money or data integrity, stays open. Still open at the cap: stop, open no PR, and ask Kenji on an answer page with the open findings.
+**Stop rule.** Stop after the first round with no valid P0-P2. Cap at 3 rounds. Rounds 4 and 5 run only while a valid P0, or a valid P1 on security, auth/tenancy, money or data integrity, stays open; a fix no later round has reviewed still counts as open. Still open at the cap: stop, open no PR, and ask Kenji on an answer page with the open findings.
 
 Done when: the stop rule ends the loop with no valid P0-P2 open, the gates are green on the last reviewed head, and every finding in every round carries a disposition.
 
@@ -73,13 +73,13 @@ Done when: the PR is open and ready (not draft), the section's last reviewed hea
 node .agents/skills/pr-review-suite/scripts/run-pr-review-suite.mjs --pr <n> --profile light --publish
 ```
 
-Verify each finding against the code. Fix valid P0 and P1 only. Decline valid P2s with a reason in a PR comment, or file them as follow-up issues; decline invalid findings with a one-line reason. A fix commit that touches auth, tenancy or data code (schema, migrations, data-access) gets a **codex-review** (gpt-6.1-sol) of that delta before landing; no second suite pass.
+Verify each finding against the code. Fix valid P0 and P1 only, through the Fixer (playbook: Fixer), committing once the step 3 gates are green. Decline valid P2s with a reason in a PR comment, or file them as follow-up issues; decline invalid findings with a one-line reason. A fix commit that touches auth, tenancy or data code (schema, migrations, data-access) gets a **codex-review** of that delta before landing, with that skill's escalation for auth and data diffs and never the model that wrote the fix; no second suite pass.
 
 Done when: the light-pass comment is on the PR, every P0/P1 is fixed or declined with a reason, every P2 is declined or filed, and CI is green on the head.
 
 ## 7. Merge
 
-Publish the merge card per the **pr** skill's Done state. Once Kenji's saved doc says `choice: merge` and its `sha` equals the PR head, land with `scripts/pr-land.sh <pr> --teardown <worktree-name>`.
+Publish the merge card per the **pr** skill's Done state. Once Kenji's saved doc says `choice: merge` and its `sha` equals the PR head, land with `scripts/pr-land.sh <pr> --teardown <worktree-name>`. The script merges staging into a DIRTY branch by itself; Kenji's OK holds through that merge when the PR diff is unchanged.
 
 Done when: the PR state is MERGED, the worktree is torn down, and the issue is closed.
 
