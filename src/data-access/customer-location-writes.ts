@@ -175,7 +175,7 @@ export async function deleteCustomerLocationInTransaction(ctx: OrgContext, tx: D
   const before = (await withLocationFacilityDistances(ctx, "customer", [versioned], tx))[0];
   const blockers = await findCustomerLocationBlockers(ctx, tx, locationId);
   const archived = versioned.archivedAt !== null;
-  if (blockers.orderCodes.length) throw customerLocationHasOrders(blockers.orderCodes, archived);
+  if (blockers.orderCodes.length) throw customerLocationHasOrders(blockers.orders, archived);
   if (blockers.registeredLocationIds.length) throw customerLocationHasStorageSite(archived);
   const deleted = await tx
     .delete(customerLocations)

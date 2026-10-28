@@ -1,3 +1,4 @@
+import { BLOCKER_LIMIT } from "@/config/party-input";
 import { DOCUMENT_DOWNLOAD_TTL_MINUTES } from "@/config/documents";
 import { DOCUMENT_GUIDANCE, DOCUMENT_TYPE_GUIDANCE } from "@/lib/operations/document-guidance";
 import { readDescriptions } from "@/lib/operations/read-descriptions";
@@ -112,5 +113,6 @@ MCP: find_documents and get_document_download_url require the chosen owner's rea
 - Run start and end times take RFC 3339 with an explicit offset, or facility-local { date, time }; offset-less strings are refused. Responses return UTC instants.
 - Errors use application/problem+json with code, retryable, errors containing JSON pointers and safe metadata, and optional conflict, blockers or current. Follow retryable and Retry-After seconds. 429 is rate limited; 409 idempotency_in_progress means wait and retry the same key. Retryable 500 deadline_exceeded or outcome_unknown requires the same key; outcome_unknown may already have committed. 503 temporarily disables writes.
 - Feedstock (production-run usage) and order (deliveries) dependency delete refusals keep 409 certification_locked and production-run dependency refusals keep 409 conflict; each adds issue metadata reason in_use (errors in REST, issues in MCP). Certified-lineage refusals are 409 certification_locked without that reason. Order issues also include deliveryCode and deliveryId (the first delivery by code in ascending order) and deliveries (id and code of each delivery the message names, in the same order).
+- Supplier intake, customer delivery and customer-location order delete refusals keep 409 conflict and issue metadata reason in_use. Alongside feedstockCodes, deliveryCodes or orderCodes, issues include feedstocks (id, code and facilityId), deliveries (id, code and facilityId) or orders (id, code and facilityId), respectively. Each list contains the same references as its code array, up to ${BLOCKER_LIMIT} in code order. facilityId supports links across facilities. FK-violation fallbacks have empty code and reference arrays.
 - RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset describe the tightest request bucket; Reset is seconds. Failed writes and dry runs consume the write budget. X-Request-Id identifies requests.
 `;

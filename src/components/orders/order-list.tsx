@@ -15,6 +15,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { InUseDeleteDialog, InUseReferences } from "@/components/ui/in-use-delete-dialog";
 import { ActionError } from "@/lib/action-error";
+import { orderInUseReferences } from "@/lib/in-use-references";
 import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
@@ -168,16 +169,6 @@ function createColumns(
 // ============================================
 // Component
 // ============================================
-
-/** Every delivery the refusal names. */
-function inUseDeliveryReferences(meta: Record<string, unknown> | undefined, facilityId?: string) {
-  const named = Array.isArray(meta?.deliveries) ? meta.deliveries : [];
-  const items = named.flatMap((item: unknown) => {
-    const { id, code } = (item ?? {}) as { id?: unknown; code?: unknown };
-    return typeof id === "string" && typeof code === "string" ? [{ id, code }] : [];
-  });
-  return items.map(({ id, code }) => ({ href: recordHref("delivery", id, { facilityId }), code, kind: "delivery" }));
-}
 
 export function OrderList() {
   // Global facility context
@@ -355,11 +346,10 @@ export function OrderList() {
       const message = toDeleteErrorMessage(error, "Order", "Order was not deleted. Try again.");
       if (isInUseDeleteRefusal(error)) {
         const row = orders.find((item) => item.id === deletingOrderId);
-        const meta = error instanceof ActionError ? error.issues.find((issue) => issue.meta?.reason === "in_use")?.meta : undefined;
         setInUseRefusal({
           code: row?.code ?? "Order",
           message,
-          references: inUseDeliveryReferences(meta, row?.facilityId),
+          references: orderInUseReferences(error, row?.facilityId),
         });
         setDeletingOrderId(null);
         return;
