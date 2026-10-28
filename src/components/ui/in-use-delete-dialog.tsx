@@ -73,12 +73,12 @@ export function InUseDeleteDialog({
         <ServerError message={errorMessage ?? undefined} />
         <div className="flex gap-16 justify-start">
           {onArchive && (
-            <Button size="large" variant="default" onClick={onArchive} busy={isPending}>
+            <Button size="large" variant="primary" onClick={onArchive} busy={isPending}>
               <ArchiveIcon size={16} weight="bold" />
               Archive instead
             </Button>
           )}
-          <Button size="large" variant="default" onClick={onClose} disabled={isPending}>
+          <Button size="large" variant={onArchive ? "weak" : "primary"} onClick={onClose} disabled={isPending}>
             {onArchive ? "Cancel" : "Close"}
           </Button>
         </div>

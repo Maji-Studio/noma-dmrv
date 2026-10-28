@@ -131,7 +131,7 @@ export function QuickAddDialog({
               Create {entityLabel}
             </Button>
             <Button
-              variant="default"
+              variant="weak"
               onClick={onClose}
               disabled={isSubmitting}
             >

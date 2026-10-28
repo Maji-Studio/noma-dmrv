@@ -26,8 +26,8 @@ interface ConfirmActionDialogProps {
   body: ReactNode;
   /** Primary button label. */
   confirmLabel: string;
-  /** Irreversible actions (delete) get red; reversible actions can stay neutral. */
-  variant?: "default" | "neutral" | "destructive";
+  /** Irreversible actions (delete) get a filled red button; every other confirm is filled primary. */
+  variant?: "default" | "destructive";
   /** Disables both buttons and shows the spinner on the primary; the label stays. */
   isPending?: boolean;
   /** Renders the inline production EnvBanner above the title. */
@@ -57,7 +57,6 @@ export function ConfirmActionDialog({
   dismissible = true,
 }: ConfirmActionDialogProps) {
   const isDestructive = variant === "destructive";
-  const isNeutral = variant === "neutral";
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} dismissible={dismissible && !isPending} ariaLabelledBy={TITLE_ID} width="sm">
@@ -78,12 +77,7 @@ export function ConfirmActionDialog({
         <div className="flex flex-wrap justify-start gap-12">
           <Button
             size="large"
-            variant={isDestructive || isNeutral ? "default" : "primary"}
-            className={
-              isDestructive
-                ? "bg-[var(--color-signal-red)] text-white border-[var(--color-signal-red)] hover:opacity-90"
-                : undefined
-            }
+            variant={isDestructive ? "danger" : "primary"}
             onClick={onConfirm}
             disabled={confirmDisabled}
             busy={isPending}
@@ -92,7 +86,7 @@ export function ConfirmActionDialog({
           </Button>
           <Button
             size="large"
-            variant="default"
+            variant="weak"
             onClick={onClose}
             disabled={isPending}
           >

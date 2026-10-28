@@ -7,8 +7,9 @@ import { facilityToday } from "@/lib/date-utils";
 import { creditBatchApplicationMass, isCreditBatchFullyApplied } from "@/lib/credit-batches/application-mass";
 import { removalEntryCarryOwner, type CarryContender, type EntryCarryDestination } from "@/lib/certification/emission-entry-carry";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
-import { deriveRemovalEntryWindow, isLiveEntryReservation } from "@/lib/certification/removal-emission-contributions";
+import { deriveRemovalEntryWindow, isLiveEntryReservation, removalEntryOwner } from "@/lib/certification/removal-emission-contributions";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
+import { readsAsReturnedFromPersisted } from "@/lib/record-lock";
 import { readRecordLockLineage } from "./record-lock-lineage";
 import type { EntryContender } from "@/lib/certification/removal-emission-contributions";
 import { requireOrgScope } from "./utils";
@@ -16,7 +17,7 @@ import { loadEmissionEntryReservations } from "./emission-entry-contenders";
 import { hydrateEmissionEntries } from "./emission-entries";
 import { loadCreditBatchRollups } from "./credit-batch-accounting";
 import { getLatestTemplateObservations, getTemplateObservationsByIds } from "./removal-template-observations";
-import { listCarryCandidates, listCarryRemovalMembers, listOwnedCarryEntries, type CarryExecutor, type CarryReadScope } from "./emission-entry-carry-queries";
+import { listCarryCandidates, listCarryRemovalMembers, listOwnedCarryEntries, listUnsentBatchEntries, type CarryExecutor, type CarryReadScope } from "./emission-entry-carry-queries";
 
 /** Discovery is persisted-only, with roll-ups restricted to potential new carries. */
 export async function loadFacilityEmissionEntryCarry(
@@ -28,18 +29,21 @@ export async function loadFacilityEmissionEntryCarry(
   requireOrgScope(ctx);
   const candidates = ownedOnly ? [] : await listCarryCandidates(ctx, facilityId, executor, scope);
   const owned = await listOwnedCarryEntries(ctx, facilityId, executor, scope);
-  const selected = [...new Map([...candidates, ...owned].map(row => [row.entry.id, row])).values()];
+  const unsent = scope.ownedBatchIds?.length ? await listUnsentBatchEntries(ctx, facilityId, executor, scope) : [];
+  const selected = [...new Map([...candidates, ...owned, ...unsent].map(row => [row.entry.id, row])).values()];
   const empty = { entries: [] as CarryEntry[], contenders: [] as CarryContender[], ownContenders: [] as EntryContender[], batches: [] as (typeof creditBatches.$inferSelect)[] };
   if (!selected.length) return empty;
   const originIds = [...new Set(candidates.map(row => row.batch.id))];
   const allOriginIds = [...new Set(selected.map(row => row.batch.id))];
+  // Only explicit batch display/revision reads broaden correction discovery.
+  const correctionOriginIds = scope.ownedBatchIds?.length ? allOriginIds : originIds;
   const [stored, draftMembers, rollups, slices, previous, originMembers] = await Promise.all([
     hydrateEmissionEntries(ctx, selected.map(row => row.entry), executor),
     candidates.length ? listCarryRemovalMembers(ctx, facilityId, executor) : [],
     loadCreditBatchRollups(ctx, originIds, undefined, executor),
     executor.select().from(creditBatchApplications).where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.creditBatchId, allOriginIds))),
     getTemplateObservationsByIds(ctx, selected.map(row => row.entry.observationId), executor),
-    originIds.length ? listCarryRemovalMembers(ctx, facilityId, executor, originIds) : [],
+    correctionOriginIds.length ? listCarryRemovalMembers(ctx, facilityId, executor, correctionOriginIds) : [],
   ]);
   const reservations = await loadEmissionEntryReservations(ctx, stored.flatMap(entry => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []), executor);
   const removalIds = [...new Set([...draftMembers.map(row => row.removal.id), ...slices.flatMap(row => row.removalId ? [row.removalId] : []),
@@ -108,7 +112,17 @@ export async function loadFacilityEmissionEntryCarry(
     if (retained && destination?.anotherCreditBatch) carry.receiver = destination;
     const earlier = attempts.filter(attempt => attempt.submittedAt && attempt.submittedAt <= entry.createdAt && slices.some(slice => slice.creditBatchId === entry.creditBatchId && slice.removalId === attempt.localEntityId))
       .sort((a, b) => b.submittedAt!.getTime() - a.submittedAt!.getTime() || a.id.localeCompare(b.id))[0];
-    return [{ ...resolved, carry, reportedIn: entry.sentByRemovalId ? destination : null,
+    // Display only: an uncertain conservative owner must not announce a returned revision.
+    const ownerId = removalEntryOwner(resolved, ownContenders);
+    const owner = ownContenders.find(contender => contender.removalId === ownerId && contender.contenderKind === "correction");
+    const ownerLineage = owner && lineage.find(fact => fact.id === owner.removalId);
+    // Late against the elected owner's own sent attempt, not the batch's latest one.
+    const ownerSentBefore = owner && attempts.some(attempt => attempt.localEntityId === owner.removalId && attempt.submittedAt && attempt.submittedAt <= entry.createdAt);
+    const revisionRemoval = !entry.deletedAt && entry.kind === "value" && !entry.sentByRemovalId && !entry.heldForRemovalId &&
+      !retained && resolved.reservationKnownInactive && ownerSentBefore && ownerLineage && readsAsReturnedFromPersisted(ownerLineage)
+      ? removals.find(removal => removal.id === owner.removalId) : null;
+    const revisionOf = revisionRemoval ? { removalId: revisionRemoval.id, removalCode: revisionRemoval.code } : null;
+    return [{ ...resolved, revisionOf, carry, reportedIn: entry.sentByRemovalId ? destination : null,
       earlierRemovalCode: removals.find(removal => removal.id === earlier?.localEntityId)?.code,
       earlierRemovalId: removals.find(removal => removal.id === earlier?.localEntityId)?.id,
       creditBatchCode: batch.code, entryObservation: observation }];
@@ -119,6 +133,7 @@ export async function loadFacilityEmissionEntryCarry(
 type CarryEntry = ReturnType<typeof deriveEmissionEntryFacts>[number] & {
   reservedByRemovalId: string | null; reservationKnownInactive: boolean;
   carry: ReturnType<typeof removalEntryCarryOwner>; reportedIn: EntryCarryDestination | null;
+  revisionOf: { removalId: string; removalCode: string } | null;
   earlierRemovalCode: string | undefined; earlierRemovalId?: string; creditBatchCode: string;
   entryObservation: Awaited<ReturnType<typeof getTemplateObservationsByIds>>[number];
 };

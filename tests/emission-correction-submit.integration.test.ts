@@ -26,7 +26,12 @@ import { reviewedTemplateSources } from "./helpers/template-line-sources";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import type { RemovalScope } from "@/fn/certification/removal-scope";
 
-vi.mock("@/lib/isometric/ghg-statements", () => ({ getGhgStatement: async () => ({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: ["original"] }) }));
+const { ORIGINAL_EXTERNAL_ID } = vi.hoisted(() => ({ ORIGINAL_EXTERNAL_ID: `original-${crypto.randomUUID()}` }));
+// Registry ids are globally unique in certification_submissions; keep them distinct per file.
+const FILE_TAG_LENGTH = 8;
+const FILE_TAG = crypto.randomUUID().slice(0, FILE_TAG_LENGTH);
+
+vi.mock("@/lib/isometric/ghg-statements", () => ({ getGhgStatement: async () => ({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: [ORIGINAL_EXTERNAL_ID] }) }));
 const userId = crypto.randomUUID();
 const org = { ...makeTestOrgContext(userId), orgRole: "admin" as const };
 let fixture: LineageFixture | undefined;
@@ -78,12 +83,12 @@ it.each([false, true])("submits a returned Removal through claim and freshness, 
   await db.update(creditBatches).set({ removalTemplateId: template.id }).where(and(eq(creditBatches.organizationId, org.organizationId), eq(creditBatches.id, f.batchId)));
   await db.insert(certifierProjects).values({ organizationId: org.organizationId, provider: "isometric", facilityId: f.facilityId, externalProjectId: "prj_test_1", externalFacilityId: "fcl_test_1" });
   const [prior] = await db.insert(certificationSubmissions).values({ organizationId: org.organizationId, provider: "isometric", localEntityType: "removal",
-    localEntityId: f.removalId, submissionType: "removal", status: "submitted", version: 1, submittedAt: new Date("2026-01-01"), externalId: "original", payloadHash: "original" }).returning();
+    localEntityId: f.removalId, submissionType: "removal", status: "submitted", version: 1, submittedAt: new Date("2026-01-01"), externalId: ORIGINAL_EXTERNAL_ID, payloadHash: "original" }).returning();
   const [statement] = await db.insert(certifierGhgStatements).values({ organizationId: org.organizationId, facilityId: f.facilityId, reportingPeriodEndOn: "2026-06-30" }).returning();
   f.ghgStatementId = statement.id;
   await db.update(certifierRemovals).set({ ghgStatementId: statement.id }).where(and(eq(certifierRemovals.organizationId, org.organizationId), eq(certifierRemovals.id, f.removalId)));
   await db.insert(certificationSubmissions).values({ organizationId: org.organizationId, provider: "isometric", localEntityType: "ghgStatement", localEntityId: statement.id,
-    submissionType: "ghg_statement", status: "submitted", version: 1, externalId: "returned-statement", submittedAt: new Date("2026-01-02"), metadata: { remoteStatus: "FAILED_VERIFICATION", removalIds: ["original"] } });
+    submissionType: "ghg_statement", status: "submitted", version: 1, externalId: "returned-statement", submittedAt: new Date("2026-01-02"), metadata: { remoteStatus: "FAILED_VERIFICATION", removalIds: [ORIGINAL_EXTERNAL_ID] } });
   const added = await createEmissionEntry(org, { creditBatchId: f.batchId, componentId: "line", occurredOn: "2026-06-10", values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "2", unit: "kWh" }] });
   const evidence = await insertDocument(org, { entityType: "emission_entry", entityId: added.id, documentType: "pdf", fileName: "Evidence.pdf", fileUrl: "https://example.test/evidence.pdf" });
   documentIds.push(evidence.id);
@@ -129,7 +134,7 @@ it.each([false, true])("submits a returned Removal through claim and freshness, 
   // Build uses the contributions supplied by its context, including the claim-scoped freshness read.
   vi.mocked(sources.resolveSourceBindingCandidates).mockImplementation(async (_ctx, args) => args.candidates.map(candidate => ({ ...candidate, sourceId: `src-${candidate.documentId}` })));
   vi.mocked(isometric.createDatapoint).mockImplementation(vi.fn(fakeExternalIds("dp")) as never);
-  vi.mocked(isometric.createGhgEntry).mockImplementation(vi.fn(fakeExternalIds("rmv")) as never);
+  vi.mocked(isometric.createGhgEntry).mockImplementation(vi.fn(fakeExternalIds(`rmv-${FILE_TAG}`)) as never);
   if (interrupt) {
     // Model process loss: the committed draft survives without failure cleanup.
     vi.mocked(reservations.rejectSubmissionAndReleaseProductionClaims).mockResolvedValueOnce(undefined);

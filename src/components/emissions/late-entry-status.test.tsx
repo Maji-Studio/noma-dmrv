@@ -23,6 +23,13 @@ describe("LateEntryStatus", () => {
     expect(screen.queryByText(/Waiting/)).toBeNull();
   });
 
+  it("says the entry goes into the earlier Removal revision with the existing code link", () => {
+    const { container } = render(<LateEntryStatus entry={{ recordedAfter: AFTER, revisionOf: AFTER }} facilityId="f1" />);
+    expect(container.textContent).toBe("Recorded after RM-26-009 was sent.Goes into the revision of RM-26-009.");
+    expect(screen.getAllByRole("link", { name: "RM-26-009" }).map(link => link.getAttribute("href")))
+      .toEqual(["/certification/removals?facility=f1&removal=rm-9", "/certification/removals?facility=f1&removal=rm-9"]);
+  });
+
   it("names several credit batches", () => {
     const { container } = render(<LateEntryStatus entry={{ reportedIn: { ...DEST, creditBatchCodes: ["CB-1", "CB-2"], creditBatchIds: ["a", "b"] }, carry: { receiver: null, waitingReason: null } }} facilityId="f1" />);
     expect(container.textContent).toContain("Reported in RM-26-010 of credit batches CB-1, CB-2.");

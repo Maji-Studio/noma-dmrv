@@ -4,6 +4,7 @@ import { getRemovalCarriedEntriesFn } from "@/fn/certification/removal-carried-e
 import { throwActionError } from "@/lib/stale-version";
 import { certificationKeys } from "./use-certification";
 
+/** Frozen carries and live late entries for the Removal revision. */
 export function useRemovalCarriedEntries(removalId: string | null, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: certificationKeys.removalCarriedEntries(removalId ?? ""),

@@ -28,7 +28,7 @@ describe("ConfirmActionDialog", () => {
     expect(modalOf(true)).toBe(false);
   });
 
-  it("renders reversible confirmations with the neutral outline treatment", () => {
+  it("renders non-destructive confirmations with the filled primary treatment and a weak Cancel", () => {
     const view = ConfirmActionDialog({
       isOpen: true,
       onClose: vi.fn(),
@@ -36,12 +36,19 @@ describe("ConfirmActionDialog", () => {
       title: "Unlink Isometric project",
       body: "Past submissions stay on Isometric.",
       confirmLabel: "Unlink",
-      variant: "neutral",
     });
 
     const confirmButton = findButtons(view)[0];
 
-    expect(confirmButton?.props.variant).toBe("default");
+    expect(confirmButton?.props.variant).toBe("primary");
+    expect(confirmButton?.props.className).toBeUndefined();
+    expect(findButtons(view)[1]?.props.variant).toBe("weak");
+  });
+
+  it("renders destructive confirmations with the filled danger variant and no custom class", () => {
+    const view = ConfirmActionDialog({ isOpen: true, onClose: vi.fn(), onConfirm: vi.fn(), title: "T", body: "B", confirmLabel: "Go", variant: "destructive" });
+    const confirmButton = findButtons(view)[0];
+    expect(confirmButton?.props.variant).toBe("danger");
     expect(confirmButton?.props.className).toBeUndefined();
   });
 });

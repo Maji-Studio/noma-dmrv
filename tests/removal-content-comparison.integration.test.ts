@@ -37,6 +37,8 @@ import { compareRemovalCurrentContent } from "@/fn/certification/removal-content
 import { compileRemovalCorrectionContent } from "@/fn/certification/removal-correction-compile-core";
 import { assertStatementRemovalsCurrent } from "@/fn/certification/statement-removal-correction-core";
 
+const { ORIGINAL_EXTERNAL_ID } = vi.hoisted(() => ({ ORIGINAL_EXTERNAL_ID: `original-${crypto.randomUUID()}` }));
+
 // Same registry/Source edge the other DB-backed submission tests stub. Everything else is real.
 vi.mock("@/fn/certification/source-candidates", async original => ({
   ...await original<typeof import("@/fn/certification/source-candidates")>(),
@@ -47,7 +49,7 @@ vi.mock("@/fn/certification/source-candidates", async original => ({
 // The registry says the statement came back after the Removal was sent.
 vi.mock("@/lib/isometric/ghg-statements", async original => ({
   ...await original<typeof import("@/lib/isometric/ghg-statements")>(),
-  getGhgStatement: vi.fn(async () => makeRemoteStatement({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: ["original"] })),
+  getGhgStatement: vi.fn(async () => makeRemoteStatement({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: [ORIGINAL_EXTERNAL_ID] })),
 }));
 
 const NOTICE_UNAVAILABLE = "Resubmit needed: noma could not compare this Removal with what it sent.";
@@ -101,7 +103,7 @@ beforeEach(async () => {
     externalProjectId: "prj_test_1", externalFacilityId: `fcl_test_${userId}`,
     defaultSoilTemperatureC: 20, defaultSoilTemperatureSource: "Test dataset" });
   // The fixture's statement submission becomes the returned statement.
-  await db.update(certificationSubmissions).set({ metadata: { remoteStatus: "FAILED_VERIFICATION", submittedToVerifierAt: "2099-01-01T00:00:00Z", removalIds: ["original"] } })
+  await db.update(certificationSubmissions).set({ metadata: { remoteStatus: "FAILED_VERIFICATION", submittedToVerifierAt: "2099-01-01T00:00:00Z", removalIds: [ORIGINAL_EXTERNAL_ID] } })
     .where(and(eq(certificationSubmissions.organizationId, org.organizationId), eq(certificationSubmissions.localEntityId, f.ghgStatementId!)));
 
   // Source documents are the registry edge: one inventory Source plus the entries' own files.
@@ -142,7 +144,7 @@ beforeEach(async () => {
   expect(baseline).toMatchObject({ entryContributions: [expect.objectContaining({ componentId: "line" })] });
   await db.insert(certificationSubmissions).values({ organizationId: org.organizationId, provider: "isometric", localEntityType: "removal",
     localEntityId: f.removalId, submissionType: "removal", status: "submitted", version: 1, submittedAt: new Date("2026-06-17"),
-    externalId: "original", payloadHash: "original", payloadSnapshot: { generatedEvidenceFacts: generatedEvidenceFacts(baselineContext), semantic: baseline, templateObservationId: observation.id, frozenEntrySet: [] } });
+    externalId: ORIGINAL_EXTERNAL_ID, payloadHash: "original", payloadSnapshot: { generatedEvidenceFacts: generatedEvidenceFacts(baselineContext), semantic: baseline, templateObservationId: observation.id, frozenEntrySet: [] } });
 });
 
 const guard = () => withGhgVerifierSubmissionLock(org, fixture!.ghgStatementId!, () => assertStatementRemovalsCurrent(org, fixture!.ghgStatementId!));
@@ -207,11 +209,11 @@ it("says unchanged everywhere for a returned receiving Removal that sent an entr
       eq(certificationSubmissions.localEntityId, f.removalId), eq(certificationSubmissions.submissionType, "removal")));
     await db.insert(certificationSubmissions).values({ organizationId: org.organizationId, provider: "isometric", localEntityType: "removal",
       localEntityId: f.removalId, submissionType: "removal", status: "submitted", version: 1, submittedAt: new Date("2026-06-17"),
-      externalId: "original", payloadHash: "original", payloadSnapshot: { semantic: baseline, templateObservationId: observation!.id, frozenEntrySet: [] } });
+      externalId: ORIGINAL_EXTERNAL_ID, payloadHash: "original", payloadSnapshot: { semantic: baseline, templateObservationId: observation!.id, frozenEntrySet: [] } });
 
     expect(await compareRemovalCurrentContent(org, f.removalId)).toMatchObject({ kind: "unchanged", state: { comparison: "unchanged", correctionNeeded: false } });
     expect(await loadRemovalEntryCorrection(org, f.removalId)).toMatchObject({ windowOpen: true, correctionNeeded: false, comparison: "unchanged" });
-    const carried = await loadRemovalCarriedEntries(org, f.removalId);
+    const { carriedEntries: carried } = await loadRemovalCarriedEntries(org, f.removalId);
     // The sheet read shows each frozen entry's magnitude and unit only.
     expect(normalizeCarriedEntriesForHash(carried)).toEqual(normalizeCarriedEntriesForHash(baseline!.carriedEntries as never)!
       .map(item => ({ ...item, value: { magnitude: item.value.magnitude, unit: item.value.unit } })));

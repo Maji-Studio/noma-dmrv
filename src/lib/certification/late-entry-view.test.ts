@@ -44,6 +44,17 @@ describe("lateEntryView", () => {
     expect(lateEntryView(facts, "f1")?.destination.kind).toBe("reported");
   });
 
+  it("links a revision before a waiting reason and keeps the recorded-after fact", () => {
+    const facts = { revisionOf: AFTER, recordedAfter: AFTER, carry: { receiver: null, waitingReason: "noDraft" as const } };
+    expect(lateEntryView(facts, "f1")).toEqual({
+      recordedAfter: { removalCode: AFTER.removalCode, removalHref: "/certification/removals?facility=f1&removal=rm-9" },
+      destination: { kind: "revision", removalCode: AFTER.removalCode, removalHref: "/certification/removals?facility=f1&removal=rm-9" },
+    });
+    expect(lateEntryView({ ...facts, carry: { receiver: DEST, waitingReason: null } }, "f1")?.destination.kind).toBe("draft");
+    expect(lateEntryView({ ...facts, reportedIn: DEST }, "f1")?.destination.kind).toBe("reported");
+    expect(lateEntryView({ ...facts, reportedIn: { ...DEST, anotherCreditBatch: false } }, "f1")).toBeNull();
+  });
+
   it.each([
     ["noDraft", "New Removal", "/certification/removals?facility=f1&create=true"],
     ["incompatibleTemplate", "Open Removal templates", "/settings/removal-templates?facility=f1"],
@@ -75,6 +86,12 @@ describe("lateEntryView", () => {
 });
 
 describe("lateEntryRows", () => {
+  it("includes an entry returning to its own Removal revision", () => {
+    const rows = lateEntryRows([{ displayName: "Diesel use", entries: [{ id: "revision", componentId: "d",
+      occurredOn: "2026-09-14", kind: "value", hasEvidence: true, total: { magnitude: "120", unit: "L" },
+      counts: true, revisionOf: AFTER, recordedAfter: AFTER }] }], "f1");
+    expect(rows.map(row => [row.id, row.view.destination.kind])).toEqual([["revision", "revision"]]);
+  });
   it("lists only late entries, oldest day first", () => {
     const rows = lateEntryRows([
       { displayName: "Diesel use", entries: [

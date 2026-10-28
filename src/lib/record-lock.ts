@@ -34,6 +34,9 @@ export const IN_USE_HOW_TO_FREE_ONE = "To change them, first correct or remove t
 export const IN_USE_REFUSAL_HOW_TO_FREE = "To change this, first correct or remove the records that use it.";
 export const IN_USE_REFUSAL_HOW_TO_FREE_ONE = "To change this, first correct or remove the record that uses it.";
 
+/** The Sent sentence: what to do once Isometric returns the GHG Statement. */
+export const SENT_HOW_TO_FREE = "If Isometric sends the GHG Statement back, refresh its status to edit again.";
+
 /** The Sent sentence when sending was started and not finished: what to do, for one or several Removals. */
 export const INTERRUPTED_HOW_TO_FREE_ONE = "To edit again, delete or resume that Removal, or review its records in Isometric.";
 export const INTERRUPTED_HOW_TO_FREE = "To edit again, delete or resume those Removals, or review their records in Isometric.";
@@ -75,9 +78,13 @@ function isIdleAttempt(submission: RecordLockSubmission): boolean {
   return !submission.inFlight && isTerminalAttemptStatus(submission.status);
 }
 
+/** The status half of a return; freshness and attempt coverage are checked by the callers below. */
+export function hasReturnedStatementStatus(statement: Pick<RecordLockStatement, "status" | "submittedToVerifier">): boolean {
+  return statement.status === "FAILED_VERIFICATION" || (statement.status === "DRAFT" && statement.submittedToVerifier);
+}
+
 export function isReturnedStatement(statement: RecordLockStatement): boolean {
-  return statement.fresh && !statement.inFlight &&
-    (statement.status === "FAILED_VERIFICATION" || (statement.status === "DRAFT" && statement.submittedToVerifier));
+  return statement.fresh && !statement.inFlight && hasReturnedStatementStatus(statement);
 }
 
 /** Client-safe facts. Callers resolve dependencies and every ledger version. */
@@ -184,6 +191,15 @@ export function isReturnedRemoval(removal: RecordLockRemoval): boolean {
     removal.statements.length > 0 && removal.statements.every(isReturnedStatement);
 }
 
+/**
+ * Display only, from persisted lineage: the same Returned rule as a fresh read,
+ * so a mixed, unknown or superseded lineage never reads as returned. Never
+ * authorizes an edit; that still needs `isReturnedRemoval` on a fresh read.
+ */
+export function readsAsReturnedFromPersisted(removal: RecordLockRemoval): boolean {
+  return isReturnedRemoval({ ...removal, statements: removal.statements.map(statement => ({ ...statement, fresh: true })) });
+}
+
 /** Entry corrections use the existing returned state and every shared lineage holder. */
 export function isRemovalCorrectionWindowOpen(removal: RecordLockRemoval, lineage: readonly RecordLockRemoval[] = [removal]): boolean {
   return isReturnedRemoval(removal) && lineage.every((holder) =>
@@ -210,7 +226,7 @@ function recordLock<Kind extends keyof RecordUpdateInputs>(facts: RecordLockFact
       howToFree: heldBy.length > 1 ? INTERRUPTED_HOW_TO_FREE : INTERRUPTED_HOW_TO_FREE_ONE };
     if (interruptedHolders.length) return { level: "sent", heldBy, freeFields: [], interruptedHolders,
       howToFree: interruptedHolders.length > 1 ? INTERRUPTED_MIXED_HOW_TO_FREE : INTERRUPTED_MIXED_HOW_TO_FREE_ONE };
-    return { level: "sent", heldBy, freeFields: [], howToFree: "If Isometric sends the GHG Statement back, refresh its status to edit again." };
+    return { level: "sent", heldBy, freeFields: [], howToFree: SENT_HOW_TO_FREE };
   }
   if (facts.dependents.length) return { level: "inUse", heldBy: facts.dependents, freeFields,
     howToFree: IN_USE_HOW_TO_FREE, ...returnedBy(facts) };
