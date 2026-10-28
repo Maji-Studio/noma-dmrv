@@ -8,13 +8,17 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { Notice } from "@/components/ui/notice";
+import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
+import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+import { removalSheetHref } from "@/lib/removal-correction-copy";
+import { cn } from "@/lib/utils";
 import type { AttemptOutcome } from "@/lib/certification/submission-attempts";
 import { FigurePairs } from "./submission-outcome-figures";
 
 export type NoticeOutcome = AttemptOutcome | { kind: "interrupted" };
 
-const LINK_CLASS = "font-medium text-[var(--color-text-primary)] underline underline-offset-2";
+const LINK_CLASS = cn(RECORD_CODE_LINK, INLINE_HIT_AREA);
 
 export function CreditBatchLink({ id, code, facilityId }: { id: string; code: string; facilityId: string }) {
   return (
@@ -26,7 +30,7 @@ export function CreditBatchLink({ id, code, facilityId }: { id: string; code: st
 
 export function RemovalLink({ id, code, facilityId }: { id: string; code: string; facilityId: string }) {
   return (
-    <Link href={`/certification/removals?removal=${encodeURIComponent(id)}&facility=${encodeURIComponent(facilityId)}`} className={LINK_CLASS}>
+    <Link href={removalSheetHref(id, facilityId)} className={LINK_CLASS}>
       {code}
     </Link>
   );

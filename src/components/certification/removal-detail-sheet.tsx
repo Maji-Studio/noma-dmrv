@@ -353,13 +353,6 @@ export function RemovalDetailSheet({
               </div>
             </DetailSection>
 
-            <SubmissionHistory
-              attempts={summary.submissionAttempts}
-              events={summary.recentSyncEvents}
-              facilityId={facilityId}
-              timeZone={timeZone}
-            />
-
             <CarriedEntriesSection
               entries={carriedEntries}
               facilityId={facilityId}
@@ -388,6 +381,12 @@ export function RemovalDetailSheet({
               isEditable={isActionable}
             />
 
+            <SubmissionHistory
+              attempts={summary.submissionAttempts}
+              events={summary.recentSyncEvents}
+              facilityId={facilityId}
+              timeZone={timeZone}
+            />
           </SlideOverPanel.Body>
 
           <SlideOverPanel.Footer>
