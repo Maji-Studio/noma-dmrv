@@ -58,7 +58,7 @@ export interface CreditBatchChainLineage {
 export interface CreditBatchChainData {
   batch: CreditBatchChainBatch;
   facility: ChainFacility;
-  /** One resolved rollback per member application (DAG merge happens client-side). */
+  /** One resolved rollback per member application (Flow merge happens client-side). */
   lineages: CreditBatchChainLineage[];
   /** One roll-forward per member run (merged with the rollbacks client-side). */
   rollForwards: ChainRunRollForward[];
@@ -183,7 +183,7 @@ export async function getCreditBatchChainData(
  * biochar is not applied yet still plot their feedstock legs and records.
  *
  * `productionRunId` narrows the roll-up to lineages flowing through that run,
- * the same subset the page's Run filter shows in the DAG and Sankey.
+ * the same subset the page's Run filter shows in the Flow chart and Sankey.
  */
 export async function getCreditBatchChainGeoData(
   ctx: OrgContext,

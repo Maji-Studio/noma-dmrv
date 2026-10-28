@@ -9,31 +9,45 @@ import {
   TruckIcon,
 } from "@phosphor-icons/react/dist/ssr";
 
-export const NODE_WIDTH = 260;
-// Layout estimate for dagre — sized for the tallest card (feedstock: date +
-// code + five label/value rows with a wrapping supplier name), so real cards
-// never overlap.
-export const NODE_HEIGHT = 232;
-
-export const DAGRE_CONFIG = {
-  rankdir: "LR" as const,
-  // Vertical breathing room between sibling cards so fan-in/out trunks get
-  // their own corridor instead of piling on each other's labels.
-  nodesep: 76,
-  // Wide enough that edge mass labels sit clear of both ranks' cards.
-  ranksep: 208,
-};
-
-/** Edge mass labels declutter below this zoom (read the flow, not the kg). */
-export const EDGE_LABEL_MIN_ZOOM = 0.62;
-
-/** Fallback edge color when an edge ships without an explicit color. */
-export const EDGE_COLOR_FALLBACK = "var(--clr-dark-purple)";
+/**
+ * Flow chart geometry (graph coordinates, px at zoom 1). Records sit in fixed
+ * columns by kind, in chain order; each record is a small square with its code
+ * underneath, like the buyer journey graph.
+ */
+export const FLOW_NODE_SIZE = 28;
+/** The node box is wider than the square so the code label fits under it. */
+export const FLOW_NODE_BOX_WIDTH = 112;
+/** Square plus the label line under it. */
+export const FLOW_NODE_BOX_HEIGHT = 48;
+export const FLOW_COLUMN_PITCH = 208;
+export const FLOW_ROW_PITCH = 64;
+/** Column headers sit this far above the topmost record. */
+export const FLOW_HEADER_GAP = 72;
+export const FLOW_HEADER_WIDTH = 168;
+export const FLOW_HEADER_HEIGHT = 40;
+/**
+ * A column with more records than this collapses into one stacked group
+ * node. Clicking the group lists every record again.
+ */
+export const FLOW_GROUP_THRESHOLD = 12;
+export const FLOW_ICON_SIZE = 16;
+/** Zoom bounds; the low end lets a wide batch fit a phone screen. */
+export const FLOW_MIN_ZOOM = 0.2;
+export const FLOW_MAX_ZOOM = 2.5;
+export const FLOW_FIT_PADDING = 0.12;
+/**
+ * Below this canvas width (a phone) fitting every column would shrink the
+ * codes past reading, so the chart opens at a readable zoom from its first
+ * column instead, and the operator pans or pinches for the rest.
+ */
+export const FLOW_NARROW_CANVAS_PX = 640;
+export const FLOW_NARROW_ZOOM = 0.75;
+export const FLOW_NARROW_INSET_PX = 16;
 
 /**
  * Shared graph-canvas chrome (figure/ground per the concept screens): the
  * canvas sits on the --sea plum wash with a quiet dotted grid; the white
- * cards lift off it. Controls/minimap are paper boxes with ink hairlines
+ * records lift off it. Controls are paper boxes with ink hairlines
  * that invert on hover.
  */
 export const GRAPH_CANVAS_CLASS = "!bg-[var(--sea)]";
@@ -47,9 +61,6 @@ export const GRAPH_CONTROLS_CLASS =
   "[&>button]:!rounded-none [&>button]:!border-b [&>button]:!border-[var(--clr-dark-purple-10)] " +
   "[&>button]:!bg-transparent [&>button:last-child]:!border-b-0 " +
   "[&>button:hover]:!bg-[var(--ink)] [&>button:hover>svg]:!fill-[var(--paper)]";
-export const GRAPH_MINIMAP_CLASS =
-  "pointer-events-none !rounded-none !border-[1.5px] !border-[var(--ink)] !bg-[var(--paper)] !shadow-none";
-export const GRAPH_MINIMAP_MASK = "rgba(15, 2, 26, 0.05)";
 
 export type LineageNodeKind =
   | "application"
@@ -62,6 +73,8 @@ export type LineageNodeKind =
 
 export interface LineageNodeStyle {
   label: string;
+  /** Plural for a collapsed group ("34 feedstocks"). */
+  plural: string;
   icon: Icon;
   /** Fill accent — left edge, minimap, marker shapes. */
   accent: string;
@@ -75,45 +88,67 @@ export interface LineageNodeStyle {
  */
 export const LINEAGE_NODE_STYLES: Record<LineageNodeKind, LineageNodeStyle> = {
   application: {
+    plural: "applications",
     label: "Application",
     icon: MapPinIcon,
     accent: "var(--acc-dist)",
     accentInk: "var(--acc-dist-ink)",
   },
   delivery: {
+    plural: "deliveries",
     label: "Delivery",
     icon: TruckIcon,
     accent: "var(--acc-dist)",
     accentInk: "var(--acc-dist-ink)",
   },
   order: {
+    plural: "orders",
     label: "Order",
     icon: ShoppingCartIcon,
     accent: "var(--acc-dist)",
     accentInk: "var(--acc-dist-ink)",
   },
   biocharProduct: {
+    plural: "products",
     label: "Biochar product",
     icon: CubeIcon,
     accent: "var(--acc-prod)",
     accentInk: "var(--acc-prod-ink)",
   },
   productionRun: {
+    plural: "runs",
     label: "Production run",
     icon: FactoryIcon,
     accent: "var(--acc-prod)",
     accentInk: "var(--acc-prod-ink)",
   },
   reactor: {
+    plural: "reactors",
     label: "Reactor",
     icon: FlaskIcon,
     accent: "var(--acc-infra)",
     accentInk: "var(--acc-infra-ink)",
   },
   feedstock: {
+    plural: "feedstocks",
     label: "Feedstock",
     icon: LeafIcon,
     accent: "var(--acc-prod)",
     accentInk: "var(--acc-prod-ink)",
   },
 };
+
+/**
+ * Flow chart columns, in chain order. The reactor is equipment, not a mass
+ * step, so it sits above the runs it served instead of in the flow's path.
+ */
+export const FLOW_COLUMNS: readonly LineageNodeKind[] = [
+  "feedstock",
+  "reactor",
+  "productionRun",
+  "biocharProduct",
+  "order",
+  "delivery",
+  "application",
+];
+export const FLOW_EQUIPMENT_KINDS: ReadonlySet<LineageNodeKind> = new Set(["reactor"]);

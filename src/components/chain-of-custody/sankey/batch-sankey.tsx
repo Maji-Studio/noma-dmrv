@@ -8,7 +8,7 @@
  * renders as the taper of the ribbon into the production-runs column; net
  * tCO₂e is a header label, not a ribbon.
  *
- * The diagram sits on a React Flow canvas (same zoom/pan chrome as the DAG
+ * The diagram sits on a React Flow canvas (same zoom/pan chrome as the Flow chart
  * view). Clicking a column or exit opens an info tooltip; columns (and the
  * record-backed exits) link through to their entity routes.
  */

@@ -807,7 +807,7 @@ forwards — do not add a page there. Deep links: `?batch=<id>` opens the batch
 roll-up, `?application=<id>` an application drill-down.
 
 Batch roll-up merges every member application's rollback, dedupes production
-runs, and exposes **DAG | Map | Sankey**. Drill-down exposes **Lineage | Map |
+runs, and exposes **Flow | Map | Sankey**. Drill-down exposes **Flow | Map |
 Split | Trail**. The Sankey is a dry-mass balance with explicit exits for
 conversion loss and in-storage mass; no net-CO2e figure
 (registry-owned, ADR [0018](./adr/0018-isometric-owns-project-emissions.md)).

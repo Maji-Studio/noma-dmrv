@@ -466,21 +466,18 @@ test.describe("Traceability Visualization", () => {
       timeout: 15000,
     });
 
+    // Each Flow record shows its own code under its node.
     const expectedNodes = [
       ["feedstock", seededData.feedstock.id, seededData.feedstock.code],
       ["reactor", seededData.reactor.id, seededData.reactor.code],
-      [
-        "production-run",
-        lineage.productionRun.id,
-        seededData.biocharStorageLocation.name,
-      ],
+      ["production-run", lineage.productionRun.id, lineage.productionRun.code],
       [
         "biochar-product",
         seededData.biocharProduct.id,
-        seededData.formulation.name,
+        seededData.biocharProduct.code,
       ],
-      ["order", lineage.order.id, "Order"],
-      ["delivery", lineage.delivery.id, "Delivery"],
+      ["order", lineage.order.id, lineage.order.code],
+      ["delivery", lineage.delivery.id, lineage.delivery.code],
       [
         "application",
         lineage.application.id,
@@ -646,13 +643,11 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
       `rf__node-production-run:${batch.ids.productionRun}`,
     );
     await expect(sharedRun).toHaveCount(1);
-    await expect(sharedRun).toContainText(
-      seededData.biocharStorageLocation.name,
-    );
+    await expect(sharedRun).toContainText(batch.codes.productionRun);
 
     // Batch anchor exposes the batch view modes.
     const segment = adminPage.getByTestId("chain-view-segment");
-    await expect(segment.getByRole("button", { name: "DAG" })).toBeVisible();
+    await expect(segment.getByRole("button", { name: "Flow" })).toBeVisible();
     await expect(segment.getByRole("button", { name: "Map" })).toBeVisible();
     await expect(segment.getByRole("button", { name: "Sankey" })).toBeVisible();
   });
