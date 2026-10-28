@@ -1,13 +1,12 @@
 "use client";
 
+import { recordHref, APPLICATION_DEEP_LINK_PARAM } from "@/lib/record-links";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 /**
  * ApplicationList component
  * Displays application records in a DataTable with create/edit/delete
  * Includes stat cards, search, and pagination
  */
-
-
-import { applicationDeepLinkHref } from "@/lib/application-links";
 import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
@@ -44,7 +43,6 @@ import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
-import { APPLICATION_DEEP_LINK_PARAM } from "@/lib/application-links";
 import { APPLICATION_EVIDENCE_RULE_SPEC } from "@/lib/certification/application-evidence";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -281,22 +279,24 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     APPLICATION_DEEP_LINK_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
-  const focusedQueryEnabled = !!contextFacilityId && !!focusedApplicationId;
+  const focusedQueryEnabled = !!focusedApplicationId;
   const focusedApplication = useApplications(
-    contextFacilityId && focusedApplicationId
-      ? { facilityId: contextFacilityId, ids: [focusedApplicationId] }
+    focusedApplicationId
+      ? { ids: [focusedApplicationId] }
       : undefined,
     { enabled: focusedQueryEnabled },
   );
   const focusedApplicationItem =
     focusedApplication.data?.items.find((item) => item.id === focusedApplicationId) ?? null;
+  const linkedFacilityReady = useLinkedRecordFacility(focusedApplicationItem, focusedApplication.isLoading);
   const focusedApplicationMissing =
     focusedQueryEnabled &&
     !focusedApplication.isLoading &&
     (focusedApplication.error != null || focusedApplicationItem == null);
-  const displaySideSheet =
-    sideSheet ??
-    (focusedApplicationItem ? { entity: focusedApplicationItem, mode: "view" as const } : null);
+  const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== contextFacilityId ? null : sideSheet;
+  const displaySideSheet = focusedApplicationId && !linkedFacilityReady ? null :
+    localSideSheet ??
+    (linkedFacilityReady && focusedApplicationItem ? { entity: focusedApplicationItem, mode: "view" as const } : null);
 
   const applicationLock = useRecordCertificationLock("application", displaySideSheet?.entity?.id);
   const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("application", displaySideSheet?.entity?.id);
@@ -368,6 +368,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       }
       const createdApplication: ApplicationListItem = {
         ...result.data,
+        facilityId: contextFacilityId ?? "",
         deliveryCode: "",
         allocationShares: [],
         heldOutOfCredits: false,
@@ -653,7 +654,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
-        getRowHref={(row) => applicationDeepLinkHref(row.id, contextFacilityId)}
+        getRowHref={(row) => recordHref("application", row.id, { facilityId: contextFacilityId })}
         emptyMessage={
           <EmptyState
             padding="md"

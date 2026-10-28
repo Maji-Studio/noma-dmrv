@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { entityViewHref } from "@/lib/entity-deep-link";
+import { recordHref, CUSTOMER_DEEP_LINK_PARAM } from "@/lib/record-links";
 import { useEffect, useRef, useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -48,7 +48,6 @@ import { CascadeChangedError } from "@/lib/cascade-changed";
 import type { CascadePreview } from "@/lib/domain-errors";
 import { toSaveErrorMessage, StaleVersionError, toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
 import { ENTITY_DEEP_LINK_EDIT_MODE, ENTITY_DEEP_LINK_MODE_PARAM, LOCATION_DEEP_LINK_PARAM } from "@/lib/entity-deep-link";
-import { CUSTOMER_DEEP_LINK_PARAM } from "@/lib/customer-links";
 import { customerSheetSections } from "./customer-read-sections";
 import { Notice } from "@/components/ui/notice";
 import { ILLUSTRATION_SIZE, CustomerArt } from "@/components/ui/illustrations";
@@ -515,7 +514,7 @@ export function CustomerList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
-        getRowHref={(row) => entityViewHref("/customers", CUSTOMER_DEEP_LINK_PARAM, row.id)}
+        getRowHref={(row) => recordHref("customer", row.id)}
         emptyMessage={
           <EmptyState
             padding="md"

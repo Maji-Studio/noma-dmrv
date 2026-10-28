@@ -5,6 +5,7 @@
  * cross-cutting certification input, so it blocks the dashboard's all-clear
  * state without changing any station badge.
  */
+import { recordHref } from "@/lib/record-links";
 import {
   and,
   count,
@@ -13,7 +14,6 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { ENTITY_DEEP_LINK_EDIT_MODE, ENTITY_DEEP_LINK_MODE_PARAM, SUPPLIER_QUERY_PARAM } from "@/lib/entity-deep-link";
 import { db } from "@/db";
 import { countRows } from "@/db/aggregate";
 import {
@@ -26,7 +26,6 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 import {
-  buildEntityDeepLink,
   type EntityFocusTarget,
   ENTITY_FOCUS_TARGETS,
 } from "@/lib/entity-deep-link";
@@ -106,18 +105,7 @@ function parentEditorHref(
   const params = new URLSearchParams({ facility: facilityId });
   if (!target) return `/feedstock-intake?${params.toString()}`;
 
-  const targetRoutes = {
-    feedstock: { path: "/feedstock-intake", queryKey: "feedstock" },
-    biochar: { path: "/biochar-products", queryKey: "biocharProduct" },
-  } as const;
-  const route = targetRoutes[target.entityType];
-  return buildEntityDeepLink({
-    path: route.path,
-    facilityId,
-    entityQueryKey: route.queryKey,
-    entityId: target.entityId,
-    focus,
-  });
+  return recordHref(target.entityType === "feedstock" ? "feedstock" : "biocharProduct", target.entityId, { facilityId, mode: "edit", focus });
 }
 
 function transportTargetForm(target: TransportGapTarget | null): string {
@@ -143,11 +131,7 @@ export function buildDashboardStructuralGaps(
   const facilityParams = new URLSearchParams({ facility: facilityId });
   const facilityQuery = `?${facilityParams.toString()}`;
   const supplierHref = counts.missingFeedstockGpsSupplierId
-    ? `/suppliers?${new URLSearchParams({
-        facility: facilityId,
-        [SUPPLIER_QUERY_PARAM]: counts.missingFeedstockGpsSupplierId,
-        [ENTITY_DEEP_LINK_MODE_PARAM]: ENTITY_DEEP_LINK_EDIT_MODE,
-      }).toString()}`
+    ? recordHref("supplier", counts.missingFeedstockGpsSupplierId, { facilityId, preview: true, mode: "edit" })
     : `/suppliers${facilityQuery}`;
   return [
     {

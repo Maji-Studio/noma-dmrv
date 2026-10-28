@@ -10,15 +10,30 @@ const REMOVAL_ID = "11111111-1111-4111-8111-111111111111";
 const NEWER_REMOVAL_ID = "22222222-2222-4222-8222-222222222222";
 const BADGE_NAME = "Blocked, status history";
 
-const mocks = vi.hoisted(() => ({ fetchCount: 0, lockReads: 0, removalIds: [] as string[] }));
+const mocks = vi.hoisted(() => ({
+  fetchCount: 0, lockReads: 0, removalIds: [] as string[],
+  query: {} as Record<string, string | null>,
+  facilityId: "facility-1", linkedFacilityId: "facility-1", missing: false,
+  setFacilityId: vi.fn(), toastError: vi.fn(),
+}));
 
 vi.mock("nuqs", () => ({
   parseAsString: { withOptions: () => ({}) },
-  useQueryState: () => [null, vi.fn()],
+  useQueryState: (param: string) => [mocks.query[param] ?? null, (value: string | null) => { mocks.query[param] = value; }],
 }));
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }),
-  useFacilityContext: () => ({ facilityId: FACILITY_ID, selectedFacility: { name: "Facility", code: "FAC" } }),
+  useFacilityContext: () => ({
+    facilityId: mocks.facilityId, selectedFacility: { name: "Facility", code: "FAC" },
+    facilities: [{ id: FACILITY_ID }, { id: "facility-2" }], setFacilityId: mocks.setFacilityId,
+  }),
+}));
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: mocks.toastError }) }));
+vi.mock("@/hooks/use-removal-carried-entries", () => ({
+  useRemovalCarriedEntries: (id: string | null) => ({
+    data: id && !mocks.missing ? { facilityId: mocks.linkedFacilityId, carriedEntries: [], lateEntries: [] } : undefined,
+    isLoading: false, isError: !!id && mocks.missing, isSuccess: !!id && !mocks.missing,
+  }),
 }));
 vi.mock("@/hooks/use-open-create-intent", () => ({
   useOpenCreateIntent: () => ({ isOpen: false, clear: vi.fn() }),
@@ -62,8 +77,8 @@ vi.mock("@/lib/certification/status", async (importOriginal) => ({
   deriveRemovalWorkflowStatus: () => ({ value: "blocked", label: "Blocked", reasons: [], canRetry: false }),
 }));
 vi.mock("./submission-status-history", () => ({ SubmissionStatusHistory: () => <p>History body</p> }));
-vi.mock("./new-removal-dialog", () => ({ NewRemovalDialog: () => null }));
-vi.mock("./removal-detail-sheet", () => ({ RemovalDetailSheet: () => null }));
+vi.mock("./new-removal-dialog", () => ({ NewRemovalDialog: ({ isOpen }: { isOpen: boolean }) => isOpen ? <div role="dialog">Resume Removal</div> : null }));
+vi.mock("./removal-detail-sheet", () => ({ RemovalDetailSheet: () => <div role="dialog">Linked Removal</div> }));
 
 let client: QueryClient;
 
@@ -76,6 +91,12 @@ function tableBadge(code = "RM-0001") {
 }
 
 beforeEach(() => {
+  mocks.query = {};
+  mocks.facilityId = FACILITY_ID;
+  mocks.linkedFacilityId = FACILITY_ID;
+  mocks.missing = false;
+  mocks.setFacilityId.mockClear();
+  mocks.toastError.mockClear();
   mocks.fetchCount = 0;
   mocks.lockReads = 0;
   mocks.removalIds = [REMOVAL_ID];
@@ -142,5 +163,32 @@ describe("Removals status history focus", () => {
     expect(tableBadge("RM-0002").getAttribute("aria-expanded")).toBe("false");
     await pressEscape();
     await waitFor(() => expect(document.activeElement).toBe(tableBadge("RM-0001")));
+  });
+});
+
+
+describe("Removal record links", () => {
+  it.each(["removal", "resume"])("follows the facility for ?%s= and keeps its record param", async (param) => {
+    mocks.query[param] = REMOVAL_ID;
+    mocks.linkedFacilityId = "facility-2";
+    const view = render(<QueryClientProvider client={client}><RemovalsList /></QueryClientProvider>);
+    await waitFor(() => expect(mocks.setFacilityId).toHaveBeenCalledWith("facility-2"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(mocks.query[param]).toBe(REMOVAL_ID);
+    expect(mocks.toastError).not.toHaveBeenCalled();
+    mocks.facilityId = "facility-2";
+    view.rerender(<QueryClientProvider client={client}><RemovalsList /></QueryClientProvider>);
+    await screen.findByRole("dialog");
+    expect(screen.getByRole("dialog").textContent).toBe(param === "resume" ? "Resume Removal" : "Linked Removal");
+  });
+
+  it.each(["removal", "resume"])("clears a missing ?%s= and reports it", async (param) => {
+    mocks.query[param] = REMOVAL_ID;
+    mocks.missing = true;
+    render(<QueryClientProvider client={client}><RemovalsList /></QueryClientProvider>);
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith("Linked Removal could not be opened"));
+    expect(mocks.query[param]).toBeNull();
+    expect(mocks.setFacilityId).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

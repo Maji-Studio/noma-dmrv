@@ -3,7 +3,9 @@
  * Main biochar product listing with CRUD operations, stat cards, and DataTable
  */
 "use client";
-import { biocharProductDeepLinkHref } from "@/lib/biochar-product-links";
+
+import { recordHref, BIOCHAR_PRODUCT_DEEP_LINK_PARAM } from "@/lib/record-links";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { ServerError } from "@/components/forms";
@@ -65,7 +67,6 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
-import { BIOCHAR_PRODUCT_DEEP_LINK_PARAM } from "@/lib/biochar-product-links";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useEffect, useState } from "react";
 import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
@@ -299,6 +300,7 @@ export function BiocharProductList() {
     focusedProductId ?? "",
     !!focusedProductId,
   );
+  const linkedFacilityReady = useLinkedRecordFacility(focusedProduct.data, focusedProduct.isLoading);
   const { data: creditBatches } = useCreditBatches(
     contextFacilityId || undefined,
   );
@@ -319,13 +321,14 @@ export function BiocharProductList() {
     setDeepLinkSnapshot(focusedProduct.data);
   }
   const deepLinkedSideSheet =
-    focusedProductId && focusedProduct.data
+    linkedFacilityReady && focusedProductId && focusedProduct.data
       ? ({
           mode: deepLinkMode === "edit" ? "edit" : "view",
           entity: deepLinkMode === "edit" ? deepLinkSnapshot ?? focusedProduct.data : focusedProduct.data,
         } as const)
       : null;
-  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== contextFacilityId ? null : sideSheet;
+  const displaySideSheet = focusedProductId && !linkedFacilityReady ? null : localSideSheet ?? deepLinkedSideSheet;
   const productLocks = useRecordLocks("biocharProduct", products.map((product) => product.id));
   // A lock that arrives as Sent keeps an open draft, read-only, with the way
   // back (`submitBlock`).
@@ -530,7 +533,7 @@ export function BiocharProductList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
-        getRowHref={(row) => biocharProductDeepLinkHref(row.id, row.facilityId)}
+        getRowHref={(row) => recordHref("biocharProduct", row.id, { facilityId: row.facilityId })}
         emptyMessage={
           <EmptyState
             padding="md"

@@ -9,6 +9,7 @@
  * Edit opens the batch form in a side sheet over the page; delete sits under
  * ⋯. The route has already org-scoped the batch and matched its facility.
  */
+import { recordHref, CREDIT_BATCH_TAB_PARAM } from "@/lib/record-links";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -34,7 +35,6 @@ import { useRecordLock } from "@/hooks/use-record-locks";
 import { creditBatchListHref } from "@/lib/certification/batch-health-links";
 import { ConflictError } from "@/lib/conflict-ref";
 import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
-import { CREDIT_BATCH_TAB_PARAM } from "@/lib/credit-batch-links";
 import { certificationRemovalsHref, traceabilityBatchHref } from "@/lib/certification/links";
 import { CREATE_INTENT_PARAM } from "@/lib/create-intent";
 import { Button } from "@/components/ui/button";
@@ -56,7 +56,6 @@ import {
 import { ENTITY_DEEP_LINK_FOCUS_PARAM } from "@/lib/entity-deep-link";
 import { formatDateRange } from "@/lib/format-utils";
 import { isRecordEditable } from "@/lib/record-lock-view";
-import { sampleDetailHref } from "@/lib/sample-create-intent";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 import { cn } from "@/lib/utils";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
@@ -245,7 +244,7 @@ export function CreditBatchPage({
 
   // Removals are made in the certification workspace, behind its registry guard.
   const onPrimary = (action: CreditBatchPrimaryAction) => {
-    if (action.kind === "draft") router.push(certificationRemovalsHref({ facility: batch.facilityId, removal: action.removalId }));
+    if (action.kind === "draft") router.push(recordHref("removal", action.removalId, { facilityId: batch.facilityId }));
     else router.push(certificationRemovalsHref({ facility: batch.facilityId, [CREATE_INTENT_PARAM]: "true" }));
   };
 
@@ -303,7 +302,7 @@ export function CreditBatchPage({
   };
 
   const conflictHref = deleteConflict?.conflict.entity === "sample"
-    ? sampleDetailHref(batch.facilityId, deleteConflict.conflict.id)
+    ? recordHref("sample", deleteConflict.conflict.id, { facilityId: batch.facilityId })
     : null;
 
   return (

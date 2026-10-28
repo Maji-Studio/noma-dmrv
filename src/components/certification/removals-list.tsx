@@ -16,11 +16,14 @@
  */
 "use client";
 
-import { certificationRemovalsHref } from "@/lib/certification/links";
+import { useRemovalCarriedEntries } from "@/hooks/use-removal-carried-entries";
+import { useToast } from "@/components/ui/toast";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
+import { RECORD_LINKS, recordHref } from "@/lib/record-links";
 import type { CellContext, ColumnDef, SortingState } from "@tanstack/react-table";
 import { isSortedDescending } from "./undated-last-sort";
 import { parseAsString, useQueryState } from "nuqs";
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import {
   PlusIcon,
   SealCheckIcon,
@@ -54,7 +57,6 @@ import {
   type RemovalListRow,
 } from "./removal-list-state";
 
-
 export function RemovalsList({ initialCreate = false }: { initialCreate?: boolean } = {}) {
   const { facilityId, selectedFacility } = useFacilityContext();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -68,7 +70,23 @@ export function RemovalsList({ initialCreate = false }: { initialCreate?: boolea
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 
-  const wizardOpen = dialogOpen || !!resume || createIntent.isOpen;
+  const resumedRemoval = useRemovalCarriedEntries(resume);
+  const resumeFacilityReady = useLinkedRecordFacility(resumedRemoval.data, resumedRemoval.isLoading);
+  const toast = useToast();
+  const invalidResumeId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!resume) {
+      invalidResumeId.current = null;
+      return;
+    }
+    if (invalidResumeId.current === resume) return;
+    if (!resumedRemoval.data && (resumedRemoval.isError || resumedRemoval.isSuccess)) {
+      invalidResumeId.current = resume;
+      toast.error("Linked Removal could not be opened");
+      void setResume(null);
+    }
+  }, [resume, resumedRemoval.data, resumedRemoval.isError, resumedRemoval.isSuccess, setResume, toast]);
+  const wizardOpen = resume ? resumeFacilityReady : dialogOpen || createIntent.isOpen;
   const closeWizard = () => {
     setDialogOpen(false);
     createIntent.clear();
@@ -94,7 +112,7 @@ export function RemovalsList({ initialCreate = false }: { initialCreate?: boolea
       {!facilityId ? (
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its Removals." />
       ) : (
-        <ListBody facilityId={facilityId} onNewRemoval={() => setDialogOpen(true)} />
+        <ListBody facilityId={facilityId} linkedSheetEnabled={!resume} onNewRemoval={() => setDialogOpen(true)} />
       )}
 
       {facilityId && (
@@ -349,9 +367,11 @@ const createColumns = (
 
 function ListBody({
   facilityId,
+  linkedSheetEnabled,
   onNewRemoval,
 }: {
   facilityId: string;
+  linkedSheetEnabled: boolean;
   onNewRemoval: () => void;
 }) {
   const { timeZone } = useFacilityClock(facilityId);
@@ -359,11 +379,28 @@ function ListBody({
   const [searchQuery, setSearchQuery] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [removalId, setRemovalId] = useQueryState(
-    "removal",
+    RECORD_LINKS.removal.param,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 
   const identityRows = identities.data?.removals ?? [];
+  const linkedRemoval = useRemovalCarriedEntries(removalId, { enabled: linkedSheetEnabled });
+  const linkedFacilityReady = useLinkedRecordFacility(linkedSheetEnabled ? linkedRemoval.data : undefined, linkedRemoval.isLoading);
+  const toast = useToast();
+  const invalidRemovalId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!removalId || !linkedSheetEnabled) {
+      invalidRemovalId.current = null;
+      return;
+    }
+    if (invalidRemovalId.current === removalId) return;
+    if (!linkedRemoval.data && (linkedRemoval.isError || linkedRemoval.isSuccess)) {
+      invalidRemovalId.current = removalId;
+      toast.error("Linked Removal could not be opened");
+      void setRemovalId(null);
+    }
+  }, [removalId, linkedSheetEnabled, linkedRemoval.data, linkedRemoval.isError, linkedRemoval.isSuccess, setRemovalId, toast]);
+
   const enrichmentByRemovalId = useRemovalPreflightSummaries(
     facilityId,
     identityRows.map((entry) => entry.removal.id),
@@ -397,7 +434,7 @@ function ListBody({
     }),
     timeZone,
   );
-  const selected = removalId
+  const selected = removalId && linkedFacilityReady
     ? rows.find((r) => r.removalId === removalId)
     : undefined;
 
@@ -426,7 +463,7 @@ function ListBody({
             isLoading={identities.isLoading}
             hoverable
             onRowClick={(row) => setRemovalId(row.removalId)}
-            getRowHref={(row) => certificationRemovalsHref({ facility: facilityId, removal: row.removalId })}
+            getRowHref={(row) => recordHref("removal", row.removalId, { facilityId })}
             aria-label="Removals"
             emptyMessage={
               <EmptyState

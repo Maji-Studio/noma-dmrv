@@ -17,13 +17,13 @@
  */
 "use client";
 
-import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
+import { recordHref, GHG_STATEMENT_DEEP_LINK_PARAM } from "@/lib/record-links";
 import type { ColumnDef, SortingState } from "@tanstack/react-table";
 import { isSortedDescending } from "./undated-last-sort";
 import Link from "next/link";
 import { parseAsString, useQueryState } from "nuqs";
-import { GHG_STATEMENT_DEEP_LINK_PARAM } from "@/lib/ghg-statement-links";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowsClockwiseIcon,
   ClipboardTextIcon,
@@ -35,6 +35,7 @@ import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-conte
 import {
   useFacilityCertifierSummary,
   useGhgStatementsForFacility,
+  useGhgStatementState,
   useSyncGhgStatementsFromRegistry,
 } from "@/hooks/use-certification";
 import { useToast } from "@/components/ui/toast";
@@ -353,6 +354,16 @@ function ListBody({ facilityId }: { facilityId: string }) {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 
+  const linkedStatement = useGhgStatementState(statementId ?? "", !!statementId);
+  const linkedFacilityReady = useLinkedRecordFacility(linkedStatement.data?.statement, linkedStatement.isLoading);
+  useEffect(() => {
+    // A failed refresh of a statement already shown keeps its sheet; only one that never loaded closes.
+    if (statementId && !linkedStatement.data && (linkedStatement.isError || linkedStatement.isSuccess)) {
+      toast.error("Linked GHG Statement could not be opened");
+      void setStatementId(null);
+    }
+  }, [statementId, linkedStatement.isError, linkedStatement.isSuccess, linkedStatement.data, setStatementId, toast]);
+
   const isProduction = summaryQuery.data?.isProduction ?? false;
   const externalProjectId =
     summaryQuery.data?.mapping?.externalProjectId ?? null;
@@ -416,7 +427,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
   }
 
   const statements = query.data ?? [];
-  const selected = statementId
+  const selected = statementId && linkedFacilityReady
     ? statements.find((s) => s.statement.id === statementId)
     : undefined;
 
@@ -488,7 +499,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
           isLoading={query.isLoading}
           hoverable
           onRowClick={(row) => setStatementId(row.statement.id)}
-          getRowHref={(row) => ghgStatementDeepLinkHref(row.statement.id, facilityId)}
+          getRowHref={(row) => recordHref("ghgStatement", row.statement.id, { facilityId })}
           aria-label="GHG Statements"
           emptyMessage={
             <EmptyState

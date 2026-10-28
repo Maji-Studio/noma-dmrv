@@ -10,6 +10,7 @@
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import Link from "next/link";
 import { parseAsString, useQueryStates } from "nuqs";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/ssr";
@@ -20,7 +21,6 @@ import { Skeleton } from "@/components/ui/loading-skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import {
   REMOVAL_TEMPLATES_SETUP_PARAM,
   REMOVAL_TEMPLATES_TEMPLATE_PARAM,
@@ -162,7 +162,7 @@ function SummaryBody({ facilityId, onOpenSetup }: { facilityId: string; onOpenSe
                 {`${formatCount(pinned.length, "credit batch", "credit batches")}: `}
                 {pinned.map((batch, index) => (
                   <span key={batch.id}>
-                    <Link href={creditBatchDeepLinkHref(batch.id, facilityId)} className="underline underline-offset-2">{batch.code}</Link>
+                    <Link href={recordHref("creditBatch", batch.id, { facilityId })} className="underline underline-offset-2">{batch.code}</Link>
                     {index < pinned.length - 1 ? ", " : ""}
                   </span>
                 ))}

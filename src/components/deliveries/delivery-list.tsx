@@ -1,12 +1,12 @@
 "use client";
 
+import { recordHref, DELIVERY_DEEP_LINK_PARAM } from "@/lib/record-links";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 /**
  * DeliveryList component
  * Main delivery listing with CRUD operations using DataTable
  * Includes stat cards, status badges, and EntitySideSheet
  */
-
-import { deliveryDeepLinkHref } from "@/lib/delivery-links";
 import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
@@ -49,7 +49,6 @@ import {
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { DELIVERY_DEEP_LINK_PARAM } from "@/lib/delivery-links";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
@@ -282,7 +281,6 @@ export function DeliveryList() {
     mode: SideSheetMode;
   } | null>(null);
 
-
   // Error state
   const [formError, setFormError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<DeliverySheetRecord | null>(null);
@@ -324,9 +322,10 @@ export function DeliveryList() {
     focusedDeliveryId ?? "",
     !!focusedDeliveryId,
   );
+  const linkedFacilityReady = useLinkedRecordFacility(focusedDelivery.data, focusedDelivery.isLoading);
 
   // Freeze the opening draft and version; detail refetches must not advance it.
-  if (!sideSheet && deepLinkMode === "edit" && focusedDelivery.data && focusedDeliveryId === focusedDelivery.data.id) {
+  if (linkedFacilityReady && !sideSheet && deepLinkMode === "edit" && focusedDelivery.data && focusedDeliveryId === focusedDelivery.data.id) {
     setSideSheet({ mode: "edit", entity: deliveryDetailToRelations(focusedDelivery.data) });
   }
 
@@ -381,7 +380,7 @@ export function DeliveryList() {
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
   const deepLinkedSideSheet =
-    focusedDeliveryId && focusedDelivery.data
+    linkedFacilityReady && focusedDeliveryId && focusedDelivery.data
       ? {
           entity: deliveryDetailToRelations(focusedDelivery.data),
           mode: deepLinkMode === "edit" ? "edit" as const : "view" as const,
@@ -393,9 +392,10 @@ export function DeliveryList() {
     sideSheet?.mode === "view" && sideSheet.entity && focusedDelivery.data?.id === sideSheet.entity.id
       ? deliveryDetailToRelations(focusedDelivery.data)
       : null;
-  const displaySideSheet = liveViewEntity
+  const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== contextFacilityId ? null : sideSheet;
+  const displaySideSheet = focusedDeliveryId && !linkedFacilityReady ? null : liveViewEntity
     ? ({ entity: liveViewEntity, mode: "view" } as const)
-    : sideSheet ?? deepLinkedSideSheet;
+    : localSideSheet ?? deepLinkedSideSheet;
   const proofStatus = useDocumentsCertStatus("delivery", displaySideSheet?.entity?.id, isProofOfDeliveryDocument);
 
   // Side sheet helpers
@@ -612,7 +612,7 @@ export function DeliveryList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
-        getRowHref={(row) => deliveryDeepLinkHref(row.id, row.facilityId)}
+        getRowHref={(row) => recordHref("delivery", row.id, { facilityId: row.facilityId })}
         emptyMessage={
           <EmptyState
             padding="md"

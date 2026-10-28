@@ -1,5 +1,7 @@
 "use client";
 
+import { recordHref, CREDIT_BATCH_DEEP_LINK_PARAM } from "@/lib/record-links";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * CreditBatchList component
@@ -77,7 +79,6 @@ import {
   monthWindow,
 } from "@/lib/credit-batches/timeline";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
-import { CREDIT_BATCH_DEEP_LINK_PARAM, creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { buttonVariants } from "@/components/ui/button";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
@@ -187,6 +188,7 @@ export function CreditBatchList({
     contextFacilityId ?? undefined
   );
   const focusedBatch = useCreditBatch(focusedBatchId ?? "");
+  const linkedFacilityReady = useLinkedRecordFacility(focusedBatch.data, focusedBatch.isLoading);
   const createCreditBatch = useCreateCreditBatch();
   const updateCreditBatch = useUpdateCreditBatch();
   const deleteCreditBatch = useDeleteCreditBatch();
@@ -393,7 +395,7 @@ export function CreditBatchList({
   // Bars and rows open the batch page. The preview sheet stays for old
   // `?batch=<id>` links and for Edit.
   const openPage = (batch: CreditBatchWithRelations) => {
-    router.push(creditBatchDeepLinkHref(batch.id, batch.facilityId));
+    router.push(recordHref("creditBatch", batch.id, { facilityId: batch.facilityId }));
   };
   const openEdit = (batch: CreditBatchWithRelations) => {
     setCreateError(null);
@@ -412,8 +414,7 @@ export function CreditBatchList({
     setUpdateError(null);
   };
 
-  // Clear a deep-linked `?batch=` that cannot be opened (wrong facility,
-  // deleted, or cross-org) — same guard as the production-run list.
+  // Clear a deep-linked `?batch=` that cannot be opened (deleted or cross-org) — same guard as the production-run list.
   useEffect(() => {
     if (!focusedBatchId) {
       handledInvalidBatchIdRef.current = null;
@@ -427,17 +428,6 @@ export function CreditBatchList({
       return;
     }
     if (handledInvalidBatchIdRef.current === focusedBatchId) return;
-
-    if (
-      focusedBatch.data &&
-      contextFacilityId &&
-      focusedBatch.data.facilityId !== contextFacilityId
-    ) {
-      handledInvalidBatchIdRef.current = focusedBatchId;
-      toast.error("Linked credit batch is not in the selected facility");
-      void setFocusedBatchId(null);
-      return;
-    }
 
     if (
       focusedBatch.isError ||
@@ -463,10 +453,11 @@ export function CreditBatchList({
   const deepLinkedSideSheet =
     focusedBatchId &&
     focusedBatch.data &&
-    (!contextFacilityId || focusedBatch.data.facilityId === contextFacilityId)
+    linkedFacilityReady
       ? ({ entity: focusedBatch.data, mode: "view" } as const)
       : null;
-  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== contextFacilityId ? null : sideSheet;
+  const displaySideSheet = focusedBatchId && !linkedFacilityReady ? null : localSideSheet ?? deepLinkedSideSheet;
 
   // Member production runs for the view sheet's "Production runs" section.
   // The sheet's entity is a snapshot (click-captured, or fetched by deep link),
@@ -780,7 +771,7 @@ export function CreditBatchList({
           message={deleteConflict.message}
           action={deleteConflict.conflict.entity === "sample" && (
             <Link
-              href={`/lab-samples?${new URLSearchParams({ facility: contextFacilityId ?? "", sample: deleteConflict.conflict.id })}`}
+              href={recordHref("sample", deleteConflict.conflict.id, { facilityId: contextFacilityId })}
               className="body-small underline"
             >
               Open {deleteConflict.conflict.code}
@@ -843,7 +834,7 @@ export function CreditBatchList({
         viewPrimaryAction={
           sideSheetEntity ? (
             <Link
-              href={creditBatchDeepLinkHref(sideSheetEntity.id, sideSheetEntity.facilityId)}
+              href={recordHref("creditBatch", sideSheetEntity.id, { facilityId: sideSheetEntity.facilityId })}
               className={buttonVariants({ variant: "primary" })}
             >
               Open credit batch

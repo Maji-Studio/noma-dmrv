@@ -7,6 +7,7 @@
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { useRef, useState } from "react";
 import Link from "next/link";
@@ -22,7 +23,6 @@ import { FormTextarea } from "@/components/forms/form-textarea";
 import { InfoHint } from "@/components/ui/tooltip";
 import { emissionsBatchHref } from "@/components/emissions/emissions-overview-query";
 import { MAX_NOTE_LENGTH } from "@/schemas/emission-entry-form";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { formatDateRange, formatFacilityDateTime } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import type { EmptyComponentsActions } from "@/hooks/use-removal-empty-components";
@@ -201,7 +201,7 @@ function BatchCard({
       <div className="flex flex-wrap items-center justify-between gap-x-12 gap-y-4 bg-[var(--sea)] px-16 py-10">
         <span className="inline-flex flex-wrap items-baseline gap-x-8 body-small font-medium">
           <Link
-            href={creditBatchDeepLinkHref(batch.creditBatchId, facilityId)}
+            href={recordHref("creditBatch", batch.creditBatchId, { facilityId })}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex min-h-44 items-center gap-4 font-mono text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline md:min-h-0"

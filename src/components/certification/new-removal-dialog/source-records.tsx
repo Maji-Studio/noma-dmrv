@@ -5,12 +5,10 @@
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import { Accordion } from "@/components/ui/accordion";
 import type { RemovalLedgerPreview } from "@/fn/certification/removal-ledger-preview";
-import {
-  productionRunDeepLinkHref,
-  traceabilityApplicationHref,
-} from "@/lib/certification/links";
+import { traceabilityApplicationHref } from "@/lib/certification/links";
 import { countLabel } from "./submission-facts";
 import { NewTabLink } from "./link-label";
 
@@ -59,7 +57,7 @@ export function SourceRecords({ ledger, facilityId, storageSitesHref }: SourceRe
             {productionRuns.map((run) => (
               <li key={run.id} className="flex items-baseline justify-between gap-12">
                 <span>Production run</span>
-                <NewTabLink tall mono href={productionRunDeepLinkHref(run.id, facilityId)}>
+                <NewTabLink tall mono href={recordHref("productionRun", run.id, { facilityId })}>
                   {run.code ?? "Open run"}
                 </NewTabLink>
               </li>

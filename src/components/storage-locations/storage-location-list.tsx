@@ -7,8 +7,11 @@
  * already facility-scoped, so the facility is not repeated per bin.
  */
 "use client";
+import { parseAsString, useQueryState } from "nuqs";
+import { RECORD_LINKS } from "@/lib/record-links";
+import { useEntityEditRecord } from "@/hooks/use-entity-edit-record";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { StaleVersionError, toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
-
 
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -31,7 +34,7 @@ import {
 } from "@/hooks/use-storage-locations";
 import type { StorageLocationFilterData } from "@/schemas/storage-locations";
 import { PlusIcon } from "@phosphor-icons/react/dist/ssr";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   DEFAULT_BIN_SORT,
   parseBinSortValue,
@@ -56,6 +59,20 @@ export function StorageLocationList() {
   );
 
   const [sideSheet, setSideSheet] = useState<StorageBinSheetState | null>(null);
+  const [linkedBinId, setLinkedBinId] = useQueryState(
+    RECORD_LINKS.storageBin.param,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const linkedBin = useEntityEditRecord("storageLocation", linkedBinId ?? "");
+  const linkedFacilityReady = useLinkedRecordFacility(linkedBin.data, linkedBin.isLoading);
+  const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== facilityId ? null : sideSheet;
+  const displaySideSheet = linkedBinId && !linkedFacilityReady ? null : localSideSheet ?? (linkedBinId && linkedBin.data && linkedFacilityReady
+    ? { mode: "view" as const, entity: linkedBin.data } : null);
+  const changeSideSheet = (state: StorageBinSheetState | null) => {
+    setSideSheet(state);
+    if (!state) void setLinkedBinId(null);
+  };
+
   const [reconcilingBin, setReconcilingBin] =
     useState<StorageLocationWithFacility | null>(null);
   const [deletingBin, setDeletingBin] = useState<StorageLocationWithFacility | null>(null);
@@ -84,6 +101,12 @@ export function StorageLocationList() {
   const restoreStorageLocation = useRestoreStorageLocation();
   const deleteStorageLocation = useDeleteStorageLocation();
   const toast = useToast();
+  useEffect(() => {
+    if (linkedBinId && (!linkedBin.data && (linkedBin.isError || linkedBin.isSuccess))) {
+      toast.error("Linked storage bin could not be opened");
+      void setLinkedBinId(null);
+    }
+  }, [linkedBinId, linkedBin.isError, linkedBin.isSuccess, linkedBin.data, setLinkedBinId, toast]);
 
   const storageLocations = storageLocationsData?.items ?? [];
   const totalStorageLocations = storageLocationsData?.total ?? 0;
@@ -141,18 +164,25 @@ export function StorageLocationList() {
     }
   };
 
-  const openCreate = () => setSideSheet({ mode: "create", entity: null });
+  const openCreate = () => {
+    void setLinkedBinId(null);
+    setSideSheet({ mode: "create", entity: null });
+  };
 
-  const openView = (storageLocation: StorageLocationWithFacility) =>
+  const openView = (storageLocation: StorageLocationWithFacility) => {
+    void setLinkedBinId(storageLocation.id);
     setSideSheet({ mode: "view", entity: storageLocation });
+  };
 
-  const openEdit = (storageLocation: StorageLocationWithFacility) =>
+  const openEdit = (storageLocation: StorageLocationWithFacility) => {
+    void setLinkedBinId(storageLocation.id);
     setSideSheet({ mode: "edit", entity: storageLocation });
+  };
 
   // Lost mass lives in its own side sheet — close the detail sheet first so the
   // two panels never stack.
   const openReconcile = (storageLocation: StorageLocationWithFacility) => {
-    setSideSheet(null);
+    changeSideSheet(null);
     setReconcilingBin(storageLocation);
   };
 
@@ -165,7 +195,7 @@ export function StorageLocationList() {
   const toggleShowArchived = () => {
     setShowArchived((current) => !current);
     setCurrentPage(1);
-    setSideSheet(null);
+    changeSideSheet(null);
   };
 
   const hasActiveFilters = Boolean(searchQuery) || typeFilter !== "all";
@@ -257,8 +287,8 @@ export function StorageLocationList() {
       />
 
       <StorageBinSheet
-        state={sideSheet}
-        onStateChange={setSideSheet}
+        state={displaySideSheet}
+        onStateChange={changeSideSheet}
         onReconcile={openReconcile}
       />
 
