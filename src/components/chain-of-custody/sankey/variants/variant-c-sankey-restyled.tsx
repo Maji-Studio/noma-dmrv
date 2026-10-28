@@ -413,11 +413,11 @@ export function VariantCSankeyRestyled({ sankey, lineages, batchCode }: SankeyVa
             <div ref={measureChart}>
               <PhoneRibbon parts={parts} width={chartWidth} activeKey={focus.pinned} pinnedKey={focus.pinned} onHover={focus.hover} onSelect={focus.toggle} />
             </div>
-            {/* A pinned detail sticks above the variant pill, so a tap low on the ribbon still shows it. */}
+            {/* A pinned detail sticks to the bottom (padded clear of the variant pill), so a tap low on the ribbon still shows it. */}
             <div
               className={cn(
                 "border-t border-[var(--clr-dark-purple-10)] bg-[var(--color-background-white)] py-12",
-                pinnedItem && "sticky bottom-72",
+                pinnedItem && "sticky bottom-0 pb-72",
               )}
               aria-live="polite"
             >
