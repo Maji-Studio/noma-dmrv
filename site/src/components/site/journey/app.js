@@ -119,10 +119,13 @@ function controls() {
     if (e.key === "ArrowRight" && !e.metaKey) ctx.go(st.ai + 1);
     else if (e.key === "ArrowLeft" && !e.metaKey) ctx.go(st.ai - 1);
   });
+  // Watch the page box, not window resize: iOS Safari can hand over a page opened from a QR scan
+  // at its final size without a resize event, which left the sheet and cameras fitted to the old size.
   let rz = 0;
-  addEventListener("resize", () => {
+  new ResizeObserver(() => {
     clearTimeout(rz);
     rz = setTimeout(() => {
+      if (app.clientWidth === st.VW && app.clientHeight === st.VH) return;
       const keep = st.ai; const wasDesk = $("deck").dataset.desk === "1";
       $("deck").dataset.desk = desk() ? "1" : "0";
       if (wasDesk !== desk()) ctx.buildDeck(0); else ctx.layoutDeck();
@@ -131,7 +134,7 @@ function controls() {
       for (const m of ["map", "graph"]) st.blend[m] = null;
       ctx.dirty();
     }, RESIZE_MS);
-  });
+  }).observe(app);
   addEventListener("hashchange", () => route(location.hash));
 }
 
