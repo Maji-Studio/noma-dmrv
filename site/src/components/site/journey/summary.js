@@ -20,7 +20,7 @@ function kpis() {
   return [
     ["Runs", String(own.length), `${own[0].code} to ${own.at(-1).code}`],
     ["Biochar made", `${tn(c.biocharKg)} wet`, `Made ${dtRange(firstIso(own.map((r) => r.date)), lastIso(own.map((r) => r.date)))}`],
-    ["Applied", `${tn(c.appliedWetKg)} wet`, `${tn(c.appliedDryKg)} dry, ${apps.length} fields, ${dtRange(firstIso(appDates), lastIso(appDates))}`],
+    ["Applied", `${tn(c.appliedDryKg)} dry`, `In ${tn(c.appliedWetKg)} of product, ${apps.length} fields, ${dtRange(firstIso(appDates), lastIso(appDates))}`],
     ["Still in bin", `${tn(bin.currentEstWetKg)} wet est.`, `${tn(bin.currentDryKg)} dry, ${bin.code}, not applied yet`],
     ["H/Corg", `${nf(Math.min(...hs), 2)} to ${nf(Math.max(...hs), 2)}`, `${ss.length} samples, limit ${H_CORG_LIMIT}`],
     ["Organic carbon", `${nf(Math.min(...oc), 1)} to ${nf(Math.max(...oc), 1)} %`, "Of dry mass"],
@@ -63,7 +63,7 @@ function latest() {
 
 function batches() {
   const t = J.meta.totals;
-  $("cbs").innerHTML = `${cbs.map((x) => `<li${x.code === ANCHOR ? ' class="cur"' : ""}><span>${x.code} · ${MONTH[+x.reportingPeriod.start.slice(5, 7) - 1]}</span><b class="pend">${x.status === "pending" ? "Pending" : esc(x.status)}</b><small>${x.memberRunCount} runs · ${tn(x.biocharKg)} made, wet · ${x.appliedWetKg ? `${tn(x.appliedWetKg)} applied, wet` : "none applied yet"}</small></li>`).join("")}<li><span>Facility total</span><b>${tn(t.biocharKg)}</b><small>${t.runs} runs, ${dtRange(t.firstRun, t.lastRun)}</small></li>`;
+  $("cbs").innerHTML = `${cbs.map((x) => `<li${x.code === ANCHOR ? ' class="cur"' : ""}><span>${x.code} · ${MONTH[+x.reportingPeriod.start.slice(5, 7) - 1]}</span><b class="pend">${x.status === "pending" ? "Pending" : esc(x.status)}</b><small>${x.memberRunCount} runs · ${tn(x.biocharKg)} made, wet · ${x.appliedDryKg ? `${tn(x.appliedDryKg)} dry applied` : "none applied yet"}</small></li>`).join("")}<li><span>Facility total</span><b>${tn(t.biocharKg)}</b><small>${t.runs} runs, ${dtRange(t.firstRun, t.lastRun)}</small></li>`;
 }
 
 function open(isOpen) {
