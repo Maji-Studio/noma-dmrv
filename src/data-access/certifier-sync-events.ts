@@ -105,15 +105,15 @@ export async function listRemovalAttemptEvents(
   args: { removalId: string },
 ): Promise<CertifierSyncEventRow[]> {
   requireOrgScope(ctx);
-  const scope = and(
-    eq(certifierSyncEvents.entityType, "removal"),
-    eq(certifierSyncEvents.entityId, args.removalId),
-    eq(certifierSyncEvents.organizationId, ctx.organizationId),
-  );
   const summaries = await db
     .select()
     .from(certifierSyncEvents)
-    .where(and(scope, eq(certifierSyncEvents.operation, "removal:submit:attempt-summary")))
+    .where(and(
+      eq(certifierSyncEvents.entityType, "removal"),
+      eq(certifierSyncEvents.entityId, args.removalId),
+      eq(certifierSyncEvents.organizationId, ctx.organizationId),
+      eq(certifierSyncEvents.operation, "removal:submit:attempt-summary"),
+    ))
     .orderBy(desc(certifierSyncEvents.attemptedAt))
     .limit(ATTEMPT_SUMMARY_LIMIT);
   const oldest = summaries[summaries.length - 1];
@@ -122,7 +122,9 @@ export async function listRemovalAttemptEvents(
     .select()
     .from(certifierSyncEvents)
     .where(and(
-      scope,
+      eq(certifierSyncEvents.entityType, "removal"),
+      eq(certifierSyncEvents.entityId, args.removalId),
+      eq(certifierSyncEvents.organizationId, ctx.organizationId),
       like(certifierSyncEvents.operation, "production-batch:drift:%"),
       eq(certifierSyncEvents.status, "failed"),
       gte(certifierSyncEvents.attemptedAt, oldest.attemptedAt),
