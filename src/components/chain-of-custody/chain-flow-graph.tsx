@@ -50,6 +50,8 @@ const edgeTypes = {
 const NODE_WRAPPER_CLASS = "focus-visible:outline-none";
 
 const LEGEND_SAMPLE_WIDTH = 24;
+/** The Missing links box's `top-16`; a phone chart starts below the box. */
+const WARNINGS_TOP_PX = 16;
 const LEGEND_SAMPLE_HEIGHT = 6;
 
 /**
@@ -58,7 +60,7 @@ const LEGEND_SAMPLE_HEIGHT = 6;
  * its own width and height, so the bounds are known without waiting for
  * React Flow to measure the DOM.
  */
-function FrameFlow({ nodeCount }: { nodeCount: number }) {
+function FrameFlow({ nodeCount, topInsetPx }: { nodeCount: number; topInsetPx: number }) {
   const { fitBounds, getNodes, setViewport } = useReactFlow();
   const canvasWidth = useStore((state) => state.width);
   const canvasHeight = useStore((state) => state.height);
@@ -74,11 +76,12 @@ function FrameFlow({ nodeCount }: { nodeCount: number }) {
     }
     void setViewport({
       x: FLOW_NARROW_INSET_PX - bounds.x * FLOW_NARROW_ZOOM,
-      // From the top-left corner, so the column headers stay in view.
-      y: FLOW_NARROW_INSET_PX - bounds.y * FLOW_NARROW_ZOOM,
+      // From the top-left corner, so the column headers stay in view (below
+      // the Missing links box when there is one).
+      y: topInsetPx - bounds.y * FLOW_NARROW_ZOOM,
       zoom: FLOW_NARROW_ZOOM,
     });
-  }, [fitBounds, getNodes, setViewport, narrow, canvasWidth, canvasHeight, nodeCount]);
+  }, [fitBounds, getNodes, setViewport, narrow, canvasWidth, canvasHeight, nodeCount, topInsetPx]);
 
   return null;
 }
@@ -121,6 +124,18 @@ export function ChainFlowGraph({
   onPaneClick,
 }: ChainFlowGraphProps) {
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  // The Missing links box's height, kept current as its text reflows, so the
+  // phone framing can start the chart below it.
+  const [warningsHeight, setWarningsHeight] = useState(0);
+  const measureWarnings = (element: HTMLDivElement | null) => {
+    if (!element) return;
+    const observer = new ResizeObserver(() => setWarningsHeight(element.offsetHeight));
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      setWarningsHeight(0);
+    };
+  };
   const [expandedKinds, setExpandedKinds] = useState<ReadonlySet<LineageNodeKind>>(new Set());
   const setExpanded = (kind: LineageNodeKind, expanded: boolean) =>
     setExpandedKinds((current) => {
@@ -173,7 +188,8 @@ export function ChainFlowGraph({
       const text = labelText(graphEdge);
       const source = centreOf.get(graphEdge.source);
       const target = centreOf.get(graphEdge.target);
-      if (!litEdge(graphEdge) || !text || !source || !target) return [];
+      // A lit edge only partly on the lineage draws lit but carries no chip.
+      if (!lit?.chipEdgeIds.has(graphEdge.id) || !text || !source || !target) return [];
       return [{
         id: graphEdge.id,
         source: graphEdge.source,
@@ -215,7 +231,7 @@ export function ChainFlowGraph({
   return (
     <div className="h-full w-full">
       {warnings.length > 0 ? (
-        <div className="absolute top-16 left-16 z-10 max-w-[min(480px,calc(100%-32px))] border-[1.5px] border-dashed border-[var(--st-wait)] bg-[var(--paper)] p-12">
+        <div ref={measureWarnings} className="absolute top-16 left-16 z-10 max-w-[min(480px,calc(100%-32px))] border-[1.5px] border-dashed border-[var(--st-wait)] bg-[var(--paper)] p-12">
           <p className="text-[10px] font-medium text-[var(--st-wait)]">
             Missing links
           </p>
@@ -285,7 +301,14 @@ export function ChainFlowGraph({
         minZoom={FLOW_MIN_ZOOM}
         maxZoom={FLOW_MAX_ZOOM}
       >
-        <FrameFlow nodeCount={displayNodes.length} />
+        <FrameFlow
+          nodeCount={displayNodes.length}
+          topInsetPx={
+            warningsHeight > 0
+              ? WARNINGS_TOP_PX + warningsHeight + FLOW_NARROW_INSET_PX
+              : FLOW_NARROW_INSET_PX
+          }
+        />
         <Background
           variant={BackgroundVariant.Dots}
           gap={GRAPH_DOTS.gap}

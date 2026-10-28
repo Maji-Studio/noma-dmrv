@@ -186,7 +186,9 @@ theme.
   its sheet; a click on the empty canvas clears the focus. Split view keeps the
   map cross-link instead of the sheet.
 - **Mass labels only on lit edges**: the kg / % toggle labels the edges of the
-  current hover or selection, nothing at rest. A wet and dry pair stacks on two
+  current hover or selection, nothing at rest. A merged edge only partly on
+  the lineage draws lit but carries no chip, since its mass would include
+  records off the lineage. A wet and dry pair stacks on two
   lines. Chips always sit in a column gap, never on a column, so an edge that
   skips a column never covers its records: a fan out of one record labels each
   branch in the gap before its target, any other edge in the gap after its
@@ -203,7 +205,8 @@ theme.
 - **Framing**: every Flow node carries its own width and height, so the chart
   frames itself from known bounds (no wait on DOM measurement). Below
   `FLOW_NARROW_CANVAS_PX` (a phone) it opens at zoom 1 from the top-left
-  (first column and its header) instead of fitting every column, so every
+  (first column and its header, below the Missing links box when there is
+  one) instead of fitting every column, so every
   node's 48px hit box and the 44px "Collapse" button stay touch-sized.
 - **Keyboard**: Enter or Space on a focused record opens it like a click; on
   a group it expands the column (`elementsSelectable` is off, so React Flow

@@ -354,3 +354,34 @@ describe("flowLighting", () => {
     ]));
   });
 });
+
+describe("flowLighting chips through a collapsed column", () => {
+  // F1 feeds only R1; F2 feeds every other run; every run makes P1. The runs
+  // collapse, so group → P1 stands for R1 → P1 and twelve edges off F1's lineage.
+  const runs = Array.from({ length: FLOW_GROUP_THRESHOLD + 1 }, (_, index) =>
+    record("productionRun", `production-run:${index}`, `PR-${index}`),
+  );
+  const nodes = [record("feedstock", "feedstock:1"), record("feedstock", "feedstock:2"), ...runs, record("biocharProduct", "biochar-product:1")];
+  const edges = [
+    link("feedstock:1", "production-run:0", { mass: 100, unit: "kg", massFooting: "wet", kgLabel: "100 kg" }),
+    ...runs.slice(1).map((run) => link("feedstock:2", run.id, { mass: 100, unit: "kg", massFooting: "wet", kgLabel: "100 kg" })),
+    ...runs.map((run) => link(run.id, "biochar-product:1", { mass: 40, unit: "kg", massFooting: "dry", wetKg: 50, dryKg: 40 })),
+  ];
+  const layout = layoutFlow(nodes, edges, noneExpanded);
+  const group = flowGroupId("productionRun");
+  const lit = flowLighting(layout, edges, null, reachableNodeIds("feedstock:1", edges), reachableNodeIds)!;
+
+  it("lights the partly covered merged edge but gives it no chip", () => {
+    const merged = `${group}->biochar-product:1`;
+    expect(lit.edgeIds.has(merged)).toBe(true);
+    expect(lit.chipEdgeIds.has(merged)).toBe(false);
+  });
+
+  it("keeps the chip on a merged edge whose every member is on the lineage", () => {
+    const fromF1 = `feedstock:1->${group}`;
+    expect(lit.edgeIds.has(fromF1)).toBe(true);
+    expect(lit.chipEdgeIds.has(fromF1)).toBe(true);
+    expect(lit.edgeIds.has(`feedstock:2->${group}`)).toBe(false);
+  });
+});
+

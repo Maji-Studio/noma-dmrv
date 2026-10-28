@@ -240,6 +240,12 @@ export interface FlowLightingSets {
   nodeIds: Set<string>;
   /** Displayed edge ids carrying at least one record edge on that lineage. */
   edgeIds: Set<string>;
+  /**
+   * Lit edges whose every record edge is on the lineage. Only these may show
+   * a mass chip: a merged edge that is partly on the lineage would otherwise
+   * show the mass of records off it.
+   */
+  chipEdgeIds: Set<string>;
 }
 
 /**
@@ -272,11 +278,15 @@ export function flowLighting(
   if (!recordIds) return null;
   const nodeIds = new Set(Array.from(recordIds, layout.displayIdOf));
   const edgeIds = new Set<string>();
+  const offLineage = new Set<string>();
   for (const graphEdge of recordEdges) {
-    if (!recordIds.has(graphEdge.source) || !recordIds.has(graphEdge.target)) continue;
     const source = layout.displayIdOf(graphEdge.source);
     const target = layout.displayIdOf(graphEdge.target);
-    if (source !== target) edgeIds.add(flowEdgeId(source, target));
+    if (source === target) continue;
+    const id = flowEdgeId(source, target);
+    if (recordIds.has(graphEdge.source) && recordIds.has(graphEdge.target)) edgeIds.add(id);
+    else offLineage.add(id);
   }
-  return { nodeIds, edgeIds };
+  const chipEdgeIds = new Set([...edgeIds].filter((id) => !offLineage.has(id)));
+  return { nodeIds, edgeIds, chipEdgeIds };
 }
