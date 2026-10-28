@@ -84,6 +84,19 @@ describe("credit batch page to-dos", () => {
     expect(screen.getByRole("button", { name: "Add in Edit" })).toBeTruthy();
   });
 
+  it("offers Open Emissions, not Add in Edit, for a Sent batch's late run", async () => {
+    harness.loadTodos.mockResolvedValue({ success: true, data: { ...TODOS, blocking: [], check: [{
+      id: "late-production-run:run-1", productionRun: { id: "run-1", code: "RUN-1" },
+      title: "RUN-1 was recorded after RM-9 was sent",
+      detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Sep 10, 2026.",
+      target: { tab: "emissions" },
+    }] } });
+    renderPage();
+    expect(await screen.findByRole("link", { name: "RUN-1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open Emissions" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Add in Edit" })).toBeNull();
+  });
+
   it("shows the notice and Retry, and no to-do groups or counts, when the read fails", async () => {
     harness.loadTodos.mockResolvedValue({ success: false, error: "boom" });
     renderPage();

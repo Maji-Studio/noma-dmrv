@@ -17,6 +17,7 @@ import { productionRunDeepLinkHref } from "@/lib/certification/links";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   CREDIT_BATCH_DETAILS_ROW,
+  LATE_PRODUCTION_RUN_ITEM_PREFIX,
   type CreditBatchOpenItem,
 } from "@/lib/credit-batches/open-items";
 import { removalBarGroups, showOverviewRemovals } from "@/lib/credit-batches/removal-bar";
@@ -51,7 +52,8 @@ function itemRowClass(besideHint: boolean) {
 
 /**
  * A Check that names a run: the code is a link to the run, so the row cannot be
- * one button. Its action sits beside the text, as "Add in Edit" does on the sheet.
+ * one button. Its action sits beside the text, named as on the sheet: a held
+ * batch's missing run is added in Edit, a Sent batch's late run is recorded on Emissions.
  */
 function RunItemRow({ item, run }: { item: CreditBatchOpenItem; run: { id: string; code: string } }) {
   const { openItem, batch } = useCreditBatchPage();
@@ -79,7 +81,7 @@ function RunItemRow({ item, run }: { item: CreditBatchOpenItem; run: { id: strin
         </span>
         {item.target && (
           <Button type="button" variant="weak" size="small" className={cn("shrink-0", CENTRED_HIT_AREA)} onClick={() => openItem(item)}>
-            Add in Edit
+            {item.id.startsWith(LATE_PRODUCTION_RUN_ITEM_PREFIX) ? "Open Emissions" : "Add in Edit"}
           </Button>
         )}
       </div>
