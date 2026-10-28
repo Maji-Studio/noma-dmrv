@@ -1,85 +1,81 @@
-// Journey page: the record carousel (cards), the rail above it, and branch levels. The cards are the
-// page's main control: swiping moves st.f, and the map and graph cameras follow it (camera.js).
-import { CHAIN, KIND, R, READ_DATE, SIBLINGS, VIA, sibLabel } from "./model.js";
+// Journey page: the record list (a swipe carousel of cards on a phone, a vertical timeline accordion on
+// desktop), the rail above it, and branch levels. Choosing a record moves st.f, and the map and graph
+// cameras follow it (camera.js).
+import { CHAIN, GL, KIND, R, READ_DATE, SIBLINGS, VIA, sibLabel } from "./model.js";
 import { clamp, dt, esc, pad2 } from "./format.js";
 import { $, RM, ctx, desk, lvl, mk, st } from "./state.js";
 
 const CARD_MAX = 460;
-const CARD_GUTTER = 56; // px of the next card that shows at the edge
+const CARD_GUTTER = 44; // px of the next card that shows at the edge
 const CARD_GAP = 10;
 const SNAP_REST_MS = 140;
 const MAX_DEPTH = 4;
 const FAN = 0.05; // how much a card shrinks as it leaves the centre
 const FADE = 0.5;
-const DESK_FADE = 0.42;
 const deck = $("deck"); const rail = $("rail"); const railS = $("railS");
-const ARROW = {
-  up: '<svg viewBox="0 0 12 12"><path d="M6 10V2M2.5 5.5 6 2l3.5 3.5"/></svg>',
-  down: '<svg viewBox="0 0 12 12"><path d="M6 2v8M2.5 6.5 6 10l3.5-3.5"/></svg>',
-  peer: '<svg viewBox="0 0 12 12"><path d="M1.5 6h9M7.5 3l3 3-3 3"/></svg>',
-};
-const DIRL = { up: "Came from", down: "Went to", peer: "Same step" };
-let slides = []; let pitch = 1; let tops = [];
+const OPEN_BLEND_MS = 650;
+let slides = []; let pitch = 1;
 
-function slideHTML(id, i) {
-  const r = R[id]; const kd = KIND[r.k];
+const glyph = (k) => `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="${GL[k]}"/></svg>`;
+const kindLine = (r, kd) => {
   const date = r.date ? dt(r.date) : r.dlabel || "";
-  let h = `<article class="slide" data-i="${i}" aria-roledescription="record" aria-label="${esc(`${kd[0]} ${r.code}`)}"><div class="sumA"><div class="card" style="--k:var(--${kd[1]})">`;
-  h += `<p class="kind mono"><i></i><span>${kd[0]}</span>${date ? `<span class="dt">· ${esc(date)}</span>` : ""}${r.pill ? `<span class="pill">${r.pill}</span>` : ""}</p>`;
-  h += `<h2 class="code">${esc(r.code)}</h2><p class="sub">${esc(r.sub)}</p>`;
-  h += `<dl class="stats">${r.stats.map(([k, v, u]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}${u ? `<small>${esc(u)}</small>` : ""}</dd></div>`).join("")}</dl></div>`;
-  const brs = r.br.filter((b) => !b.ids.every((x) => x === id)).slice(0, 3);
-  h += `<div class="br">${brs.map((b) => `<button class="bchip" data-b="${r.br.indexOf(b)}" aria-label="${esc(`${DIRL[b.dir]}: ${b.label}`)}">${ARROW[b.dir]}<span>${esc(b.label)}</span></button>`).join("")}</div>`;
-  h += '<button class="morebtn" data-more="1"><span class="mo">All record values</span><span class="mc">Collapse</span><svg viewBox="0 0 12 12"><path d="M2.5 7.5 6 4l3.5 3.5"/></svg></button></div>';
-  h += `<div class="more"><h3>Record values</h3><dl class="rows">${r.rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>`;
+  return `<span>${kd[0]}</span>${date ? `<span class="dt">· ${esc(date)}</span>` : ""}${r.pill ? `<span class="pill">${r.pill}</span>` : ""}`;
+};
+const statsHTML = (r) => `<dl class="stats">${r.stats.map(([k, v, u]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}${u ? `<small>${esc(u)}</small>` : ""}</dd></div>`).join("")}</dl>`;
+function moreHTML(r) {
+  let h = `<div class="more"><h3>Record values</h3><dl class="rows">${r.rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>`;
   if (r.note) h += `<p class="flag"><b>${esc(r.note[0])}</b>${esc(r.note[1])}</p>`;
   if (r.miss) h += `<p class="flag miss"><b>Not recorded yet</b>${esc(r.miss)}</p>`;
-  return `${h}<p class="src mono">noma record ${esc(r.id)} · read ${READ_DATE}</p></div></article>`;
+  return `${h}<p class="src mono">noma record ${esc(r.id)} · read ${READ_DATE}</p></div>`;
+}
+/** Phone: one card per record. */
+function slideHTML(id, i) {
+  const r = R[id]; const kd = KIND[r.k];
+  let h = `<article class="slide" data-i="${i}" aria-roledescription="record" aria-label="${esc(`${kd[0]} ${r.code}`)}"><div class="sumA"><div class="card" style="--k:var(--${kd[1]})">`;
+  h += `<p class="kind mono"><i></i>${kindLine(r, kd)}</p>`;
+  h += `<h2 class="code">${esc(r.code)}</h2><p class="sub">${esc(r.sub)}</p>${statsHTML(r)}</div>`;
+  h += '<button class="morebtn" data-more="1"><span class="mo">All record values</span><span class="mc">Collapse</span><svg viewBox="0 0 12 12"><path d="M2.5 7.5 6 4l3.5 3.5"/></svg></button></div>';
+  return `${h}${moreHTML(r)}</article>`;
+}
+/** Desktop: one timeline step per record; the selected one is open. */
+function stepHTML(id, i) {
+  const r = R[id]; const kd = KIND[r.k];
+  const dash = st.levels.length === 1 && VIA[i] === "dash" ? " dash" : "";
+  return `<article class="slide step${dash}" data-i="${i}" style="--k:var(--${kd[1]})" aria-roledescription="record"><button class="sh" id="sh${i}" aria-expanded="false" aria-controls="sb${i}"><span class="ic">${glyph(r.k)}</span><span class="tx"><span class="kind mono">${kindLine(r, kd)}</span><span class="tl"><span class="sc mono">${esc(r.code)}</span><span class="ss">${esc(r.sub)}</span></span></span></button><div class="sb" id="sb${i}" role="region" aria-labelledby="sh${i}"><div class="sbi">${statsHTML(r)}${moreHTML(r)}</div></div></article>`;
 }
 
 function buildDeck(anim) {
-  deck.innerHTML = lvl().items.map(slideHTML).join("") + (desk() ? '<div class="deckpad" id="deckpad"></div>' : "");
+  deck.innerHTML = lvl().items.map(desk() ? stepHTML : slideHTML).join("");
   slides = [...deck.querySelectorAll(".slide")];
   layoutDeck();
   if (anim && !RM()) deck.animate([{ opacity: 0, transform: `translateX(${anim > 0 ? 36 : -36}px)` }, { opacity: 1, transform: "none" }], { duration: 380, easing: "cubic-bezier(.16,1,.3,1)" });
 }
 function layoutDeck() {
   st.VW = $("app").clientWidth; st.VH = $("app").clientHeight;
-  if (desk()) {
-    deck.style.removeProperty("--cw"); deck.style.removeProperty("--pad");
-    tops = slides.map((s) => s.offsetTop - slides[0].offsetTop);
-    const padEl = $("deckpad");
-    if (padEl) padEl.style.height = `${Math.max(0, deck.clientHeight - slides[slides.length - 1].offsetHeight - 30)}px`;
-  } else {
+  if (desk()) { deck.style.removeProperty("--cw"); deck.style.removeProperty("--pad"); } else {
     const cw = Math.min(st.VW - 2 * CARD_GUTTER, CARD_MAX); const padX = (st.VW - cw) / 2;
     deck.style.setProperty("--cw", `${cw}px`); deck.style.setProperty("--pad", `${padX}px`);
     pitch = cw + CARD_GAP;
     // every card as tall as the tallest, so the sheet does not jump between cards
     deck.style.setProperty("--cmin", "0px");
     deck.style.setProperty("--cmin", `${Math.max(...slides.map((s) => s.querySelector(".card").offsetHeight))}px`);
-    deck.style.setProperty("--smin", "0px");
-    deck.style.setProperty("--smin", `${Math.max(...slides.map((s) => s.querySelector(".sumA").offsetHeight))}px`);
   }
   ctx.measureSheet();
 }
-function readF() {
-  const n = slides.length; if (!n) return 0;
-  if (desk()) {
-    const y = deck.scrollTop; let i = 0;
-    while (i < n - 1 && tops[i + 1] <= y) i++;
-    if (i >= n - 1) return n - 1;
-    return clamp(i + (y - tops[i]) / Math.max(1, tops[i + 1] - tops[i]), 0, n - 1);
-  }
-  return clamp(deck.scrollLeft / pitch, 0, n - 1);
-}
+function readF() { return clamp(deck.scrollLeft / pitch, 0, Math.max(0, slides.length - 1)); }
 function scrollToIdx(i, smooth) {
   i = clamp(i, 0, slides.length - 1);
+  if (desk()) {
+    st.f = i; ctx.dirty();
+    if (smooth) { setActive(i); for (const m of ["map", "graph"]) ctx.startBlend(m, OPEN_BLEND_MS); ctx.setHash(); }
+    return;
+  }
   const b = smooth && !RM() ? "smooth" : "auto";
-  if (desk()) deck.scrollTo({ top: tops[i], behavior: b }); else deck.scrollTo({ left: i * pitch, behavior: b });
+  deck.scrollTo({ left: i * pitch, behavior: b });
   if (b === "auto") { st.f = i; ctx.dirty(); }
 }
 function cardFx(f) {
-  if (desk()) { slides.forEach((s, i) => { s.style.opacity = 1 - Math.min(1, Math.abs(i - f)) * DESK_FADE; }); return; }
+  if (desk()) return;
   const lo = Math.max(0, Math.floor(f) - 2); const hi = Math.min(slides.length - 1, Math.ceil(f) + 2);
   for (let i = lo; i <= hi; i++) {
     const d = Math.min(1, Math.abs(i - f));
@@ -90,7 +86,7 @@ function cardFx(f) {
 
 /* ---------- rail: where in the chain, draggable ---------- */
 let railX = []; let railLit = null; let railKnob = null; let railDots = [];
-const RAIL_Y = 15; const RAIL_PAD = 12; const DENSE = 16;
+const RAIL_Y = 17; const RAIL_PAD = 15; const DENSE = 16; const TILE = 22; const TILE_GLYPH = 0.8;
 function buildRail() {
   railS.textContent = "";
   const n = lvl().items.length; const W = rail.clientWidth;
@@ -98,20 +94,22 @@ function buildRail() {
   const main = st.levels.length === 1; const dense = n > DENSE;
   const base = mk("g", {}, railS); const lit = mk("g", {}, railS);
   const clipId = `rc${Math.random().toString(36).slice(2, 7)}`;
-  railLit = mk("rect", { x: 0, y: 0, height: 36, width: 0 }, mk("clipPath", { id: clipId }, railS));
+  railLit = mk("rect", { x: 0, y: 0, height: 2 * RAIL_Y, width: 0 }, mk("clipPath", { id: clipId }, railS));
   lit.setAttribute("clip-path", `url(#${clipId})`);
-  const via = VIA;
   for (let i = 0; i < n - 1; i++) {
-    const dash = main && via[i] === "dash" ? " dash" : "";
+    const dash = main && VIA[i] === "dash" ? " dash" : "";
     mk("line", { class: `r-base${dash}`, x1: railX[i], x2: railX[i + 1], y1: RAIL_Y, y2: RAIL_Y }, base);
     mk("line", { class: `r-lit${dash}`, x1: railX[i], x2: railX[i + 1], y1: RAIL_Y, y2: RAIL_Y }, lit);
   }
-  railDots = railX.map((x) => (dense ? mk("line", { class: "r-tick", x1: x, x2: x, y1: RAIL_Y - 4, y2: RAIL_Y + 4 }, railS) : mk("circle", { class: "r-dot", cx: x, cy: RAIL_Y, r: 4 }, railS)));
-  railKnob = mk("circle", { class: "r-knob", cx: railX[0], cy: RAIL_Y, r: 2.4 }, railS);
-  if (main) {
-    mk("text", { class: "r-end", x: RAIL_PAD - 4, y: 34 }, railS).textContent = "UPSTREAM";
-    mk("text", { class: "r-end", x: W - RAIL_PAD + 4, y: 34, "text-anchor": "end" }, railS).textContent = "DOWNSTREAM";
-  }
+  railDots = railX.map((x, i) => {
+    if (dense) return mk("line", { class: "r-tick", x1: x, x2: x, y1: RAIL_Y - 4, y2: RAIL_Y + 4 }, railS);
+    const r = R[lvl().items[i]]; const g = mk("g", { class: `r-tile d-${KIND[r.k][1]}` }, railS); const h = TILE / 2;
+    mk("rect", { class: "body", x: x - h, y: RAIL_Y - h, width: TILE, height: TILE }, g);
+    mk("path", { class: "glyph", d: GL[r.k], "stroke-width": 1.3 / TILE_GLYPH, transform: `translate(${x - 8 * TILE_GLYPH},${RAIL_Y - 8 * TILE_GLYPH}) scale(${TILE_GLYPH})` }, g);
+    mk("rect", { class: "ring", x: x - h - 3, y: RAIL_Y - h - 3, width: TILE + 6, height: TILE + 6 }, g);
+    return g;
+  });
+  railKnob = mk("circle", { class: "r-knob", cx: railX[0], cy: RAIL_Y, r: 0 }, railS);
   rail.setAttribute("aria-valuemin", 1); rail.setAttribute("aria-valuemax", n);
 }
 function railFx(f) {
@@ -123,7 +121,6 @@ function railFx(f) {
   railDots.forEach((d, k) => {
     d.classList.toggle("past", k < ai || (k <= f + 0.001 && k !== ai));
     d.classList.toggle("now", k === ai);
-    if (d.tagName === "circle") d.setAttribute("r", k === ai ? 5.5 : 3.6);
   });
 }
 function idxFromRail(e) {
@@ -131,9 +128,7 @@ function idxFromRail(e) {
   return n < 2 ? 0 : clamp(((x - railX[0]) / (railX[n - 1] - railX[0])) * (n - 1), 0, n - 1);
 }
 let railDrag = null;
-function scrubTo(f) {
-  if (desk()) { const i = Math.min(tops.length - 2, Math.floor(f)); deck.scrollTop = tops[i] + (tops[i + 1] - tops[i]) * (f - i); } else deck.scrollLeft = f * pitch;
-}
+const scrubTo = (f) => { deck.scrollLeft = f * pitch; };
 function railEvents() {
   rail.addEventListener("pointerdown", (e) => { railDrag = { id: e.pointerId }; rail.setPointerCapture(e.pointerId); deck.classList.add("free"); scrubTo(idxFromRail(e)); });
   rail.addEventListener("pointermove", (e) => { if (railDrag) scrubTo(idxFromRail(e)); });
@@ -157,7 +152,11 @@ function setActive(ai) {
   $("prev").disabled = ai === 0; $("next").disabled = ai === n - 1;
   rail.setAttribute("aria-valuenow", ai + 1);
   rail.setAttribute("aria-valuetext", `${KIND[r.k][0]} ${r.code}, ${ai + 1} of ${n}`);
-  slides.forEach((s, i) => { s.classList.toggle("on", i === ai); s.setAttribute("aria-current", i === ai ? "true" : "false"); });
+  slides.forEach((s, i) => {
+    s.classList.toggle("on", i === ai); s.classList.toggle("past", i < ai); s.setAttribute("aria-current", i === ai ? "true" : "false");
+    s.querySelector(".sh")?.setAttribute("aria-expanded", i === ai);
+  });
+  if (desk()) slides[ai].scrollIntoView({ block: "nearest", behavior: RM() || !had ? "auto" : "smooth" });
   ctx.light();
   // a visitor who moved the view gets the camera back as soon as they pick another card
   if (had) for (const m of ["map", "graph"]) if (st.free[m]) ctx.startBlend(m, 650);
@@ -217,16 +216,15 @@ function goRecord(id) {
 
 function events() {
   deck.addEventListener("click", (e) => {
-    const b = e.target.closest(".bchip");
-    if (b) { const r = R[lvl().items[+b.closest(".slide").dataset.i]]; openBranch(r.id, r.br[+b.dataset.b]); return; }
     if (e.target.closest("[data-more]")) { ctx.setSnap(st.snap === "full" ? "mid" : "full"); return; }
     const s = e.target.closest(".slide");
     if (s && +s.dataset.i !== st.ai) go(+s.dataset.i);
   });
   let settleTimer = 0;
   deck.addEventListener("scroll", () => {
+    if (desk()) return;
     st.f = readF(); ctx.dirty();
-    clearTimeout(settleTimer); settleTimer = setTimeout(() => { ctx.setHash(); if (!desk() && st.snap !== "full") { const s = slides[st.ai]; if (s) s.scrollTop = 0; } }, SNAP_REST_MS);
+    clearTimeout(settleTimer); settleTimer = setTimeout(() => { ctx.setHash(); if (st.snap !== "full") { const s = slides[st.ai]; if (s) s.scrollTop = 0; } }, SNAP_REST_MS);
   }, { passive: true });
   $("prev").addEventListener("click", () => go(st.ai - 1));
   $("next").addEventListener("click", () => go(st.ai + 1));
