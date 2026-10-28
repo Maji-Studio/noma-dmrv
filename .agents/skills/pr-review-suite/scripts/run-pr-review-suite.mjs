@@ -568,7 +568,7 @@ async function main() {
 
   const versions = {
     git: await requireCommand("git"),
-    ...(!options.local || options.issue ? { gh: await requireCommand("gh") } : {}),
+    gh: await requireCommand("gh"),
   };
   if (options.mode !== "plan") {
     if (options.models.includes("codex")) {
