@@ -1,3 +1,4 @@
+import { recordHref } from "@/lib/record-links";
 import {
   BATCH_DETAILS_FIX_LABEL,
   batchHealthFixLinkFor,
@@ -6,7 +7,6 @@ import {
 } from "./batch-health-links";
 import type { BatchHealthFixTarget } from "./batch-health";
 import type { RemovalAdvisory, RemovalBlocker } from "./removal-blockers";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { isTemplateFixTarget, templateLineFixTarget } from "./template-fix-targets";
 
 /** Targets that repair the credit batch itself. Every other target is per record. */
@@ -37,7 +37,7 @@ export function removalFindingFixLink(
   if (target === "batchDetails") {
     return {
       label: BATCH_DETAILS_FIX_LABEL,
-      href: batchId ? creditBatchDeepLinkHref(batchId, facilityId) : creditBatchListHref(facilityId),
+      href: batchId ? recordHref("creditBatch", batchId, { facilityId }) : creditBatchListHref(facilityId),
     };
   }
   return batchHealthFixLinkFor({ key: target === "templateSetup" ? "templateSet" : "templateLines", fixTarget: target }, facilityId, batchId);

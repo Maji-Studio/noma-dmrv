@@ -1,6 +1,6 @@
+import { recordHref } from "@/lib/record-links";
 import { describe, expect, it } from "vitest";
 import { batchHealthFixLinkFor } from "./batch-health-links";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
 import { removalFindingFixLink } from "./removal-finding-links";
 import { templateRemovalBlocker } from "./removal-blockers";
@@ -30,7 +30,7 @@ describe("removalFindingFixLink", () => {
       batchHealthFixLinkFor({ key: "templateSet", fixTarget: "templateSetup" }, "fac-1", "b1"),
     );
     expect(removalFindingFixLink({ fixTarget: "batchDetails" }, "fac-1", ["b1"])?.href).toBe(
-      creditBatchDeepLinkHref("b1", "fac-1"),
+      recordHref("creditBatch", "b1", { facilityId: "fac-1" }),
     );
   });
 

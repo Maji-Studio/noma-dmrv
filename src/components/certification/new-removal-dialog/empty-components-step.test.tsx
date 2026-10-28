@@ -86,7 +86,7 @@ describe("EmptyComponentsStep", () => {
     expect(screen.getByText("Staff travel local")).toBeTruthy();
     expect(screen.getByText("2 components not recorded")).toBeTruthy();
     const link = screen.getByRole("link", { name: "Add entry for Staff travel local" });
-    expect(link.getAttribute("href")).toBe(`/emissions/${BATCH_ID}?facility=facility-1`);
+    expect(link.getAttribute("href")).toBe(`/credit-batches/${BATCH_ID}?facility=facility-1&tab=emissions`);
     expect(link.getAttribute("target")).toBe("_blank");
   });
 

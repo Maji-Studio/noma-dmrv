@@ -1,14 +1,6 @@
+import { recordHref } from "@/lib/record-links";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
-import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
-import { applicationDeepLinkHref } from "@/lib/application-links";
-import { biocharProductDeepLinkHref } from "@/lib/biochar-product-links";
-import { certificationRemovalsHref, productionRunDeepLinkHref } from "@/lib/certification/links";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
-import { deliveryDeepLinkHref } from "@/lib/delivery-links";
-import { feedstockDeepLinkHref } from "@/lib/feedstock-links";
-import { orderDeepLinkHref } from "@/lib/order-links";
 import type { RecordLockLink, RecordLockView } from "@/lib/record-lock-view";
-import { sampleDetailHref } from "@/lib/sample-create-intent";
 
 export const RECORD_LOCK_LEVEL_LABELS: Record<RecordLockView["level"], string> = {
   open: "Open",
@@ -66,16 +58,16 @@ export function recordLockLinkTitle(link: RecordLockLink): string {
 export function recordLockLinkHref(link: RecordLockLink): string | null {
   const facility = link.facilityId ?? undefined;
   switch (link.kind) {
-    case "feedstock": return feedstockDeepLinkHref(link.id, facility);
-    case "productionRun": return facility ? productionRunDeepLinkHref(link.id, facility) : null;
-    case "sample": return facility ? sampleDetailHref(facility, link.id) : null;
-    case "biocharProduct": return biocharProductDeepLinkHref(link.id, facility);
-    case "order": return orderDeepLinkHref(link.id, facility);
-    case "delivery": return deliveryDeepLinkHref(link.id, facility);
-    case "application": return applicationDeepLinkHref(link.id, facility);
-    case "creditBatch": return creditBatchDeepLinkHref(link.id, facility);
-    case "removal": return certificationRemovalsHref({ ...(facility ? { facility } : {}), removal: link.id });
-    case "ghgStatement": return ghgStatementDeepLinkHref(link.id, facility);
+    case "feedstock": return recordHref("feedstock", link.id, { facilityId: facility });
+    case "productionRun": return facility ? recordHref("productionRun", link.id, { facilityId: facility }) : null;
+    case "sample": return facility ? recordHref("sample", link.id, { facilityId: facility }) : null;
+    case "biocharProduct": return recordHref("biocharProduct", link.id, { facilityId: facility });
+    case "order": return recordHref("order", link.id, { facilityId: facility });
+    case "delivery": return recordHref("delivery", link.id, { facilityId: facility });
+    case "application": return recordHref("application", link.id, { facilityId: facility });
+    case "creditBatch": return recordHref("creditBatch", link.id, { facilityId: facility });
+    case "removal": return recordHref("removal", link.id, { facilityId: facility });
+    case "ghgStatement": return recordHref("ghgStatement", link.id, { facilityId: facility });
     default: return null;
   }
 }

@@ -11,7 +11,7 @@ beforeEach(() => vi.resetAllMocks());
 const options = () => mocks.query.mock.calls[0][0] as { queryFn: () => Promise<RemovalCarriedEntries>; enabled: boolean };
 
 it("exposes both carried and late entries from the action without mixing their lists", async () => {
-  const result = { carriedEntries: [], lateEntries: [{ entryId: "late", creditBatchId: "own", creditBatchCode: "CB-009",
+  const result = { facilityId: "facility", carriedEntries: [], lateEntries: [{ entryId: "late", creditBatchId: "own", creditBatchCode: "CB-009",
     componentId: "diesel", occurredOn: "2026-09-14", value: { magnitude: "120", unit: "L" }, evidenceDocumentIds: [] }] };
   vi.mocked(getRemovalCarriedEntriesFn).mockResolvedValue({ success: true, data: result });
   useRemovalCarriedEntries("removal");

@@ -1,14 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  certificationRemovalsHref,
-  facilityCertificationSettingsHref,
-  productionRunDeepLinkHref,
-  registrySettingsHref,
-  removalTemplatesSettingsHref,
-  traceabilityActivityHref,
-  traceabilityApplicationHref,
-  traceabilityBatchHref,
-} from "./links";
+import { certificationRemovalsHref, facilityCertificationSettingsHref, registrySettingsHref, removalTemplatesSettingsHref, traceabilityActivityHref, traceabilityApplicationHref, traceabilityBatchHref } from "./links";
 
 describe("settings link builders", () => {
   it("sends registry fixes to Settings, Registry with the working facility", () => {
@@ -95,10 +86,7 @@ describe("certificationRemovalsHref", () => {
 });
 
 describe("record deep links", () => {
-  it("encodes production-run and traceability identities", () => {
-    expect(productionRunDeepLinkHref("run/1", "facility 1")).toBe(
-      "/production-runs?facility=facility+1&run=run%2F1",
-    );
+  it("encodes traceability identities", () => {
     expect(traceabilityApplicationHref("batch/1", "application 1")).toBe(
       "/traceability?batch=batch%2F1&application=application+1",
     );

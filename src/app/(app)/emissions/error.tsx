@@ -1,6 +1,6 @@
 "use client";
 
-// Segment-level error boundary for /emissions and /emissions/[creditBatchId].
+// Segment-level error boundary for /emissions, the list of credit batches.
 // Catching here keeps the (app) layout and sidebar mounted, so the operator
 // can retry without losing the facility or the overview's URL filter.
 import { useEffect } from "react";

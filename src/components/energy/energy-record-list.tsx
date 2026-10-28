@@ -6,6 +6,7 @@
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import { Fragment, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import {
@@ -15,10 +16,6 @@ import {
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui";
-import { applicationDeepLinkHref } from "@/lib/application-links";
-import { productionRunDeepLinkHref } from "@/lib/certification/links";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
-import { deliveryDeepLinkHref } from "@/lib/delivery-links";
 import {
   rankRecords,
   recordHasMissingReadings,
@@ -54,16 +51,16 @@ export const ENERGY_RECORD_SCOPES: { key: EnergyRecordScope; label: string }[] =
   { key: "application", label: "Applications" },
 ];
 
-function recordHref(record: EnergyRecord, facilityId: string): string {
+function energyRecordHref(record: EnergyRecord, facilityId: string): string {
   switch (record.scope) {
     case "batch":
-      return creditBatchDeepLinkHref(record.id, facilityId);
+      return recordHref("creditBatch", record.id, { facilityId });
     case "run":
-      return productionRunDeepLinkHref(record.id, facilityId);
+      return recordHref("productionRun", record.id, { facilityId });
     case "delivery":
-      return deliveryDeepLinkHref(record.id, facilityId);
+      return recordHref("delivery", record.id, { facilityId });
     case "application":
-      return applicationDeepLinkHref(record.id, facilityId);
+      return recordHref("application", record.id, { facilityId });
   }
 }
 
@@ -190,7 +187,7 @@ export function EnergyRecordList({
                               )}
                             </button>
                             <Link
-                              href={recordHref(record, facilityId)}
+                              href={energyRecordHref(record, facilityId)}
                               onClick={(event) => event.stopPropagation()}
                               className="whitespace-nowrap body-small font-medium text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline"
                             >

@@ -8,6 +8,7 @@
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import Link from "next/link";
 import { CertificateIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,6 @@ import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import { cn } from "@/lib/utils";
 import { formatDateRange } from "@/lib/format-utils";
 import { FormFooterPreview } from "@/components/forms/form-footer-preview";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { CREDIT_BATCH_INFO_LABEL, type CreditBatchLineBatch, type CreditBatchLineCopy } from "./credit-batch-line-copy";
 
 export interface CreditBatchLineProps {
@@ -33,7 +33,7 @@ export interface CreditBatchLineProps {
 function BatchLink({ batch, facilityId }: { batch: CreditBatchLineBatch; facilityId?: string | null }) {
   return (
     <Link
-      href={creditBatchDeepLinkHref(batch.id, facilityId ?? undefined)}
+      href={recordHref("creditBatch", batch.id, { facilityId: facilityId ?? undefined })}
       target="_blank"
       rel="noreferrer"
       className="font-mono text-[var(--clr-dark-purple)] underline underline-offset-2"

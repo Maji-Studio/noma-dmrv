@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
 vi.mock("@/hooks/use-formulations", () => {
   const mutation = () => ({ mutateAsync: vi.fn(), isPending: false });
   return {
+    useFormulation: () => ({ data: undefined, isError: false, isSuccess: false }),
     useFormulationStats: (archived: boolean) => {
       state.statsArchivedArgs.push(archived);
       return state.stats;
@@ -32,6 +33,7 @@ vi.mock("@/hooks/use-list-pagination", () => ({
   useListPagination: () => ({ currentPage: 1, pageSize: 10, setCurrentPage: vi.fn(), onPaginationChange: vi.fn() }),
   useReconcileListPage: () => undefined,
 }));
+vi.mock("nuqs", async () => (await import("../../../tests/helpers/linked-sheet-mocks")).nuqsModule);
 vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => undefined }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 vi.mock("@/components/forms", () => ({ ServerError: ({ message }: { message: string }) => <p role="alert">{message}</p> }));

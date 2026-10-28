@@ -5,13 +5,13 @@
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import Link from "next/link";
 import { ChoiceCardGroup } from "@/components/forms";
 import { Notice } from "@/components/ui/notice";
 import { InfoHint } from "@/components/ui/tooltip";
 import { LedgerBeforeAfter } from "@/components/storage-locations/stock-ledger";
 import type { useRemovalTemplateSetup } from "@/hooks/use-removal-template-setup";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { creditBatchListHref } from "@/lib/certification/batch-health-links";
 import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
 import {
@@ -133,7 +133,7 @@ function JoinedCodes({ batches, facilityId }: { batches: { id?: string; code: st
       {batches.map((batch, index) => (
         <span key={batch.code}>
           {index > 0 && (index === batches.length - 1 ? " and " : ", ")}
-          <Link href={batch.id ? creditBatchDeepLinkHref(batch.id, facilityId) : creditBatchListHref(facilityId)} className="underline underline-offset-2">
+          <Link href={batch.id ? recordHref("creditBatch", batch.id, { facilityId }) : creditBatchListHref(facilityId)} className="underline underline-offset-2">
             {batch.code}
           </Link>
         </span>
