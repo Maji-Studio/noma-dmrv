@@ -14,6 +14,10 @@ import { act } from "react-test-renderer";
 import type { ComponentProps, ReactElement, ReactNode } from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+// nuqs 2.10 reads location.pathname when the adapter gives no pathname, and
+// NuqsTestingAdapter gives none. This file renders in the node environment.
+vi.stubGlobal("location", new URL("http://localhost/"));
+
 vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();
   const settled = { data: undefined, error: null, isLoading: false, isPending: false, isFetching: false, isError: false, isSuccess: true, status: "success", dataUpdatedAt: 0, refetch: async () => ({}) };
