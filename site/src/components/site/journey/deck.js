@@ -4,16 +4,20 @@
 import { CHAIN, GL, KIND, R, READ_DATE, SIBLINGS, VIA, sibLabel } from "./model.js";
 import { clamp, dt, esc, pad2 } from "./format.js";
 import { $, RM, ctx, desk, lvl, mk, st } from "./state.js";
+import { contourNode, loadContour } from "../contours/index.js";
 
 const CARD_MAX = 460;
-const CARD_GUTTER = 44; // px of the next card that shows at the edge
-const CARD_GAP = 10;
+const CARD_GUTTER = 16; // card content lines up with the sheet head
+const CARD_GAP = 32; // keeps the neighbouring card off screen
 const SNAP_REST_MS = 140;
 const MAX_DEPTH = 4;
 const FAN = 0.05; // how much a card shrinks as it leaves the centre
 const FADE = 0.5;
 const deck = $("deck"); const rail = $("rail"); const railS = $("railS");
 const OPEN_BLEND_MS = 650;
+// the site's station line drawings (contours/), for the steps that have one
+const STATION = { sup: "source", fs: "feedstock-delivery", run: "production-run", bbin: "mix-bin", prod: "biochar-product", del: "delivery", app: "application" };
+const artHTML = (r) => (STATION[r.k] ? `<div class="art" data-st="${STATION[r.k]}"></div>` : "");
 let slides = []; let pitch = 1;
 
 const glyph = (k) => `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="${GL[k]}"/></svg>`;
@@ -32,29 +36,32 @@ function moreHTML(r) {
 function slideHTML(id, i) {
   const r = R[id]; const kd = KIND[r.k];
   let h = `<article class="slide" data-i="${i}" aria-roledescription="record" aria-label="${esc(`${kd[0]} ${r.code}`)}"><div class="sumA"><div class="card" style="--k:var(--${kd[1]})">`;
-  h += `<p class="kind mono"><i></i>${kindLine(r, kd)}</p>`;
+  h += `${artHTML(r)}<p class="kind mono"><i></i>${kindLine(r, kd)}</p>`;
   h += `<h2 class="code">${esc(r.code)}</h2><p class="sub">${esc(r.sub)}</p>${statsHTML(r)}</div>`;
-  h += '<button class="morebtn" data-more="1"><span class="mo">All record values</span><span class="mc">Collapse</span><svg viewBox="0 0 12 12"><path d="M2.5 7.5 6 4l3.5 3.5"/></svg></button></div>';
-  return `${h}${moreHTML(r)}</article>`;
+  return `${h}</div>${moreHTML(r)}</article>`;
 }
 /** Desktop: one timeline step per record; the selected one is open. */
 function stepHTML(id, i) {
   const r = R[id]; const kd = KIND[r.k];
   const dash = st.levels.length === 1 && VIA[i] === "dash" ? " dash" : "";
-  return `<article class="slide step${dash}" data-i="${i}" style="--k:var(--${kd[1]})" aria-roledescription="record"><button class="sh" id="sh${i}" aria-expanded="false" aria-controls="sb${i}"><span class="ic">${glyph(r.k)}</span><span class="tx"><span class="kind mono">${kindLine(r, kd)}</span><span class="tl"><span class="sc mono">${esc(r.code)}</span><span class="ss">${esc(r.sub)}</span></span></span></button><div class="sb" id="sb${i}" role="region" aria-labelledby="sh${i}"><div class="sbi">${statsHTML(r)}${moreHTML(r)}</div></div></article>`;
+  return `<article class="slide step${dash}" data-i="${i}" style="--k:var(--${kd[1]})" aria-roledescription="record"><button class="sh" id="sh${i}" aria-expanded="false" aria-controls="sb${i}"><span class="ic">${glyph(r.k)}</span><span class="tx"><span class="kind mono">${kindLine(r, kd)}</span><span class="tl"><span class="sc mono">${esc(r.code)}</span><span class="ss">${esc(r.sub)}</span></span></span></button><div class="sb" id="sb${i}" role="region" aria-labelledby="sh${i}"><div class="sbi">${artHTML(r)}${statsHTML(r)}${moreHTML(r)}</div></div></article>`;
 }
 
 function buildDeck(anim) {
   deck.innerHTML = lvl().items.map(desk() ? stepHTML : slideHTML).join("");
   slides = [...deck.querySelectorAll(".slide")];
+  fillArt();
   layoutDeck();
   if (anim && !RM()) deck.animate([{ opacity: 0, transform: `translateX(${anim > 0 ? 36 : -36}px)` }, { opacity: 1, transform: "none" }], { duration: 380, easing: "cubic-bezier(.16,1,.3,1)" });
+}
+function fillArt() {
+  deck.querySelectorAll(".art[data-st]").forEach((el, i) => loadContour(el.dataset.st).then((raw) => { if (raw) el.replaceChildren(contourNode(raw, `jr${i}`)); }));
 }
 function layoutDeck() {
   st.VW = $("app").clientWidth; st.VH = $("app").clientHeight;
   if (desk()) { deck.style.removeProperty("--cw"); deck.style.removeProperty("--pad"); } else {
     const cw = Math.min(st.VW - 2 * CARD_GUTTER, CARD_MAX); const padX = (st.VW - cw) / 2;
-    deck.style.setProperty("--cw", `${cw}px`); deck.style.setProperty("--pad", `${padX}px`);
+    deck.style.setProperty("--cw", `${cw}px`); deck.style.setProperty("--pad", `${padX}px`); deck.style.setProperty("--gap", `${CARD_GAP}px`);
     pitch = cw + CARD_GAP;
     // every card as tall as the tallest, so the sheet does not jump between cards
     deck.style.setProperty("--cmin", "0px");
@@ -153,7 +160,7 @@ function setActive(ai) {
   rail.setAttribute("aria-valuenow", ai + 1);
   rail.setAttribute("aria-valuetext", `${KIND[r.k][0]} ${r.code}, ${ai + 1} of ${n}`);
   slides.forEach((s, i) => {
-    s.classList.toggle("on", i === ai); s.classList.toggle("past", i < ai); s.setAttribute("aria-current", i === ai ? "true" : "false");
+    s.classList.toggle("on", i === ai); s.classList.toggle("past", i < ai); s.classList.toggle("is-active", i === ai); s.classList.toggle("is-plotting", i === ai); s.setAttribute("aria-current", i === ai ? "true" : "false");
     s.querySelector(".sh")?.setAttribute("aria-expanded", i === ai);
   });
   if (desk()) slides[ai].scrollIntoView({ block: "nearest", behavior: RM() || !had ? "auto" : "smooth" });
@@ -216,9 +223,10 @@ function goRecord(id) {
 
 function events() {
   deck.addEventListener("click", (e) => {
-    if (e.target.closest("[data-more]")) { ctx.setSnap(st.snap === "full" ? "mid" : "full"); return; }
     const s = e.target.closest(".slide");
-    if (s && +s.dataset.i !== st.ai) go(+s.dataset.i);
+    if (!s || ctx.justDragged()) return;
+    if (+s.dataset.i !== st.ai) go(+s.dataset.i);
+    else if (!desk() && st.snap !== "full") ctx.setSnap("full"); // tapping the open card shows all its values
   });
   let settleTimer = 0;
   deck.addEventListener("scroll", () => {

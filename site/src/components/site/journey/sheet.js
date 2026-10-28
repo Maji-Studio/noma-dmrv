@@ -16,6 +16,7 @@ const FLING = 0.45; // px per ms
 const FLING_LOOK = 220; // ms of velocity projected ahead
 const FLING_SNAP_SLACK = 10;
 const DRAG_START = 4;
+const CLICK_AFTER_DRAG_MS = 350;
 const AXIS_START = 6;
 const AXIS_BIAS = 1.2;
 const PULL_START = 8;
@@ -92,6 +93,7 @@ function sdEnd(clientY) {
   }
   sd = null; setSnap(best);
 }
+const justDragged = () => performance.now() - dragEndT < CLICK_AFTER_DRAG_MS;
 function headEvents() {
   head.addEventListener("pointerdown", (e) => { if (desk() || e.target.closest(".nav,.crumb,.rail")) return; sdStart(e); });
   head.addEventListener("pointermove", (e) => {
@@ -101,7 +103,7 @@ function headEvents() {
   });
   head.addEventListener("pointerup", (e) => { if (!sd) return; if (sd.active) { sdEnd(e.clientY); dragEndT = performance.now(); } else sd = null; });
   head.addEventListener("pointercancel", () => { if (sd) { sd = null; applySnap(true); } });
-  $("grab").addEventListener("click", () => { if (performance.now() - dragEndT < 350) return; setSnap(st.snap === "full" ? "mid" : st.snap === "low" ? "mid" : "full"); });
+  $("grab").addEventListener("click", () => { if (justDragged()) return; setSnap(st.snap === "full" ? "mid" : st.snap === "low" ? "mid" : "full"); });
 }
 // Touch scrolls the deck sideways natively (touch-action: pan-x), so a vertical drag arrives as pointer
 // events and moves the sheet; a mouse also drags the deck sideways by hand.
@@ -129,7 +131,7 @@ function deckEvents() {
   });
   const end = (e) => {
     if (!dd) return;
-    if (dd.axis === "y" && sd) sdEnd(e.clientY);
+    if (dd.axis === "y" && sd) { sdEnd(e.clientY); dragEndT = performance.now(); }
     if (dd.axis === "x" && dd.mouse) {
       const f = deck.scrollLeft / ctx.pitch(); const target = Math.abs(dd.v) > MOUSE_FLING ? (dd.v < 0 ? Math.ceil(f) : Math.floor(f)) : Math.round(f);
       deck.classList.remove("free"); dd = null; ctx.go(target); return;
@@ -154,11 +156,11 @@ function deckEvents() {
     }
     if (td.on) { e.preventDefault(); sdMove(t.clientY); }
   }, { passive: false });
-  deck.addEventListener("touchend", (e) => { if (td && td.on && sd) sdEnd(e.changedTouches[0].clientY); td = null; });
+  deck.addEventListener("touchend", (e) => { if (td && td.on && sd) { sdEnd(e.changedTouches[0].clientY); dragEndT = performance.now(); } td = null; });
 }
 
 export function mount() {
   headEvents(); deckEvents();
-  Object.assign(ctx, { measureSheet, sheetVisible, applySnap, setSnap, isDragging: () => !!sd });
+  Object.assign(ctx, { measureSheet, sheetVisible, applySnap, setSnap, isDragging: () => !!sd, justDragged });
 
 }
