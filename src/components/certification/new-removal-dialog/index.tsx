@@ -441,7 +441,7 @@ function EmptyStepFooter({
         <Button variant="primary" className={PHONE_TOUCH_TARGET} onClick={onContinue} busy={busy}>
           Continue
         </Button>
-        <Button variant="default" className={PHONE_TOUCH_TARGET} onClick={onCancel}>
+        <Button variant="weak" className={PHONE_TOUCH_TARGET} onClick={onCancel}>
           Cancel
         </Button>
       </div>
@@ -480,7 +480,7 @@ export function Footer({
         >
           Continue
         </Button>
-        <Button variant="default" className={PHONE_TOUCH_TARGET} onClick={onCancel}>
+        <Button variant="weak" className={PHONE_TOUCH_TARGET} onClick={onCancel}>
           Cancel
         </Button>
       </div>

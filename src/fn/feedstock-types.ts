@@ -1,5 +1,7 @@
 "use server";
 
+import { z } from "zod";
+import type { FeedstockTypeLinkLock } from "@/data-access/feedstock-type-link-lock";
 import { withAutoCode } from "@/data-access/code-generator";
 import { hasCertifierCredentials, resolveIsometricClient } from "@/data-access/certifier-credentials";
 import {
@@ -8,6 +10,7 @@ import {
   deleteFeedstockType,
   importIsometricFeedstockType,
   listFeedstockTypes,
+  readFeedstockTypeLinkLock,
   unarchiveFeedstockType,
   updateFeedstockType,
 } from "@/data-access/feedstock-types";
@@ -32,6 +35,16 @@ import { getFeedstockTypeById } from "@/data-access/feedstock-types";
 import { uuidSchema } from "@/schemas/helpers";
 
 const FEEDSTOCK_TYPE_CODE_PREFIX = "FT";
+const feedstockTypeLinkLockSchema = z.object({ feedstockTypeId: uuidSchema() });
+
+export async function getFeedstockTypeLinkLockFn(
+  input: unknown,
+): Promise<ActionResult<FeedstockTypeLinkLock>> {
+  return withAction((ctx) => {
+    const { feedstockTypeId } = feedstockTypeLinkLockSchema.parse(input);
+    return readFeedstockTypeLinkLock(ctx, feedstockTypeId);
+  });
+}
 
 export async function listFeedstockTypesFn(): Promise<
   ActionResult<FeedstockType[]>

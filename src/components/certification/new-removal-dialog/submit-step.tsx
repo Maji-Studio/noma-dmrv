@@ -361,6 +361,14 @@ export function SubmitStep({
               ) : (
                 <>
                   <Button
+                    variant="primary"
+                    className={PHONE_TOUCH_TARGET}
+                    onClick={() => fireSubmit(lastConfirmProduction)}
+                  >
+                    Try again
+                  </Button>
+                  <Button
+                    variant="weak"
                     className={PHONE_TOUCH_TARGET}
                     onClick={() => {
                       setProgressUpdates([]);
@@ -368,13 +376,6 @@ export function SubmitStep({
                     }}
                   >
                     Review submission
-                  </Button>
-                  <Button
-                    variant="primary"
-                    className={PHONE_TOUCH_TARGET}
-                    onClick={() => fireSubmit(lastConfirmProduction)}
-                  >
-                    Try again
                   </Button>
                 </>
               )}
@@ -465,13 +466,13 @@ export function SubmitStep({
           </Tooltip>
         )}
         {onBackToEmpty && (
-          <Button variant="default" className={cn(PHONE_TOUCH_TARGET, "sm:hidden")} onClick={onBackToEmpty} data-phone-back>
+          <Button variant="weak" className={cn(PHONE_TOUCH_TARGET, "sm:hidden")} onClick={onBackToEmpty} data-phone-back>
             Back
           </Button>
         )}
         {canDeleteRemoval ? (
           <Button
-            variant="default"
+            variant="weak"
             className={PHONE_TOUCH_TARGET}
             onClick={() => setDeleteConfirmOpen(true)}
             disabled={submitMutation.isPending}
