@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   appendSyncEventBestEffort: vi.fn(),
   markSubmissionRejected: vi.fn(),
   isShared: vi.fn(),
+  findSharing: vi.fn(),
 }));
 vi.mock("./shared", () => ({
   ...mocks,
@@ -18,6 +19,7 @@ vi.mock("./shared", () => ({
 }));
 vi.mock("@/data-access/removal-production-batch-deletion", () => ({
   isProductionBatchSharedWithOtherRemovals: mocks.isShared,
+  findRemovalSharingCreditBatch: mocks.findSharing,
 }));
 vi.mock("@/data-access/certification", () => ({
   markSubmissionRejected: mocks.markSubmissionRejected,
@@ -57,6 +59,7 @@ beforeEach(() => {
   mocks.appendSyncEventBestEffort.mockResolvedValue(undefined);
   mocks.markSubmissionRejected.mockResolvedValue(undefined);
   mocks.isShared.mockResolvedValue(false);
+  mocks.findSharing.mockResolvedValue(null);
 });
 
 describe("assertRegisteredProductionBatchMatches", () => {
@@ -85,13 +88,40 @@ describe("assertRegisteredProductionBatchMatches", () => {
     expect(mocks.appendSyncEventBestEffort).toHaveBeenCalledWith(orgCtx, {
       provider: "isometric", entityType: "removal", entityId: "removal-1",
       operation: "production-batch:drift:batch-1", status: "failed", errorMessage: message,
-      requestPayload: args.submission.body, responsePayload: { ...args.remote, reused: false },
+      requestPayload: args.submission.body,
+      responsePayload: {
+        ...args.remote, reused: false,
+        drift: {
+          creditBatchId: "batch-1", creditBatchCode: "NM-001", shared: false, sharedWith: null,
+          differences: [
+            { field: "facility", isometric: "fcl_registered", noma: "fcl_current" },
+            { field: "feedstockTypes", isometric: ["ftt_registered"], noma: ["ftt_1", "ftt_2"] },
+            { field: "kind", isometric: "other", noma: "biochar" },
+            { field: "dryMass", isometric: { magnitude: 1_200, unit: "kilogram" }, noma: { magnitude: 1_150, unit: "kg" } },
+            { field: "windowStart", isometric: "2026-03-01T06:15:00.000Z", noma: "2026-03-01T07:15:00.000Z" },
+            { field: "windowEnd", isometric: "2026-03-28T19:45:00.000Z", noma: "2026-03-28T18:45:00.000Z" },
+          ],
+        },
+      },
     }, { submissionId: "submission-1" });
     expect(mocks.markSubmissionRejected).toHaveBeenCalledWith(orgCtx, "submission-1", {
       errorMessage: message, expectedLockedAt: args.expectedLockedAt,
     });
     expect(mocks.appendSyncEventBestEffort.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.markSubmissionRejected.mock.invocationCallOrder[0]);
+  });
+
+  it("saves the shared Removal on the drift details", async () => {
+    const args = fixture();
+    args.remote.mass = { magnitude: 1_200, unit: "kg" };
+    mocks.isShared.mockResolvedValue(true);
+    mocks.findSharing.mockResolvedValue({ id: "removal-2", code: "RM-26-003" });
+    await expect(assertRegisteredProductionBatchMatches(args)).rejects.toBeInstanceOf(SafeError);
+    const event = mocks.appendSyncEventBestEffort.mock.calls[0][1];
+    expect(event.responsePayload.drift).toMatchObject({
+      shared: true, sharedWith: { id: "removal-2", code: "RM-26-003" },
+      differences: [{ field: "dryMass", isometric: { magnitude: 1_200, unit: "kg" }, noma: { magnitude: 1_150, unit: "kg" } }],
+    });
   });
 
   it("awaits the sync event before throwing", async () => {

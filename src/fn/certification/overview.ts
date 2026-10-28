@@ -13,6 +13,7 @@ import { listCreditBatchCertificationLinks } from "@/data-access/credit-batch-ce
 import { requireOrgFacility } from "@/data-access/utils";
 import {
   listRecentSyncEvents,
+  listRemovalAttemptEvents,
   type CertifierSyncEventRow,
 } from "@/data-access/certification";
 import { getLatestSubmissionsForEntities } from "@/data-access/certification";
@@ -64,6 +65,7 @@ import {
 import { loadCreditBatchTodos } from "./credit-batch-todos-core";
 
 import { logger } from "@/lib/log";
+import { deriveSubmissionAttempts, type SubmissionAttempt } from "@/lib/certification/submission-attempts";
 import { refreshRemovalEvidenceLinks, type RemovalEvidenceLinks } from "./biochar-application-source-readback";
 
 const evidenceLinksLog = logger.child({ mod: "application-source-readback" });
@@ -78,6 +80,7 @@ const READINESS_CONCURRENCY = 8;
 // capping the cost of a single fan-out.
 const MAX_HEALTH_SUMMARIES = 50;
 const RECENT_SYNC_EVENTS_LIMIT = 10;
+const ATTEMPT_EVENTS_LIMIT = 60;
 
 /**
  * One credit batch's overview status: lightweight data readiness plus the
@@ -135,6 +138,8 @@ export interface RemovalPreflightSummary {
   submissionWarnings: string[];
   /** Removal-scoped submit/upload attempts, newest first. */
   recentSyncEvents: CertifierSyncEventRow[];
+  /** One entry per submit attempt, newest first. */
+  submissionAttempts: SubmissionAttempt[];
 }
 
 export interface CertificationOverviewData {
@@ -160,13 +165,14 @@ async function buildRemovalPreflightSummary(
 ): Promise<RemovalPreflightSummary> {
   const scope = await resolveScopeForRemoval(orgCtx, removalId);
   if (!scope.removal) throw new SafeError("Removal not found.");
-  const [ctx, recentSyncEvents] = await Promise.all([
+  const [ctx, recentSyncEvents, attemptEvents] = await Promise.all([
     buildRemovalContext(orgCtx, scope, facilityFacts, { carryReads }),
     listRecentSyncEvents(orgCtx, {
       entityType: REMOVAL_ENTITY_TYPE,
       entityId: removalId,
       limit: RECENT_SYNC_EVENTS_LIMIT,
     }),
+    listRemovalAttemptEvents(orgCtx, { removalId, limit: ATTEMPT_EVENTS_LIMIT }),
   ]);
   const facts = toRemovalReadinessFacts(ctx);
   const startedOn = scope.removal.startedOn ?? null;
@@ -203,6 +209,7 @@ async function buildRemovalPreflightSummary(
     evidenceLinks: await refreshRemovalEvidenceLinks(orgCtx, ctx.latestSubmission?.id ?? null, evidenceLinksLog),
     submissionWarnings: ctx.submissionWarnings,
     recentSyncEvents,
+    submissionAttempts: deriveSubmissionAttempts(attemptEvents),
   };
 }
 

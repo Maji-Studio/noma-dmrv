@@ -28,6 +28,8 @@ import {
 } from "@/hooks/use-certification";
 import {
   deriveRemovalWorkflowStatus,
+  REMOVAL_FAILED_REVIEW_REASON,
+  REMOVAL_INTERRUPTED_RECONCILE_REASON,
   type RemovalWorkflowStatus,
 } from "@/lib/certification/status";
 import { pluralize } from "@/lib/copy-utils";
@@ -42,7 +44,8 @@ import { RemovalCarbonBreakdown } from "./removal-carbon-breakdown";
 import { SourcesPanel } from "./sources-panel";
 import { SubmissionNotes } from "./submission-notes";
 import { buildSubmissionWarningNotes } from "./submission-warning-notes";
-import { SyncEventLog } from "./sync-event-log";
+import { SubmissionHistory } from "./submission-history";
+import { SubmissionOutcomeNotice, type NoticeOutcome } from "./submission-outcome-notice";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import {
   canDeleteRemovalRow,
@@ -94,13 +97,30 @@ export function RemovalStorageSitesField({
   );
 }
 
+/** The outcome the notice under the status tells, or null when nothing needs saying. */
+function submissionOutcomeFor(summary: RemovalListRow, status: RemovalWorkflowStatus): NoticeOutcome | null {
+  if (status.kind === "interrupted") return { kind: "interrupted" };
+  if (status.kind === "submitted" || status.kind === "submitting" || status.kind === "superseded") return null;
+  const latest = summary.submissionAttempts[0]?.outcome;
+  return latest && latest.kind !== "submitted" ? latest : null;
+}
+
 function SubmissionStatusSection({
   summary,
   status,
+  facilityId,
+  timeZone,
 }: {
   summary: RemovalListRow;
   status: RemovalWorkflowStatus;
+  facilityId: string;
+  timeZone: string;
 }) {
+  const outcome = submissionOutcomeFor(summary, status);
+  // The outcome notice replaces the two generic "review the history" reasons.
+  const reasons = outcome
+    ? status.reasons.filter((reason) => reason !== REMOVAL_FAILED_REVIEW_REASON && reason !== REMOVAL_INTERRUPTED_RECONCILE_REASON)
+    : status.reasons;
   return (
     <DetailSection title="Submission status" divider={false}>
       <DetailField
@@ -119,10 +139,19 @@ function SubmissionStatusSection({
         valuePresent
       />
 
-      {status.reasons.length > 0 && (
+      {outcome && (
+        <SubmissionOutcomeNotice
+          outcome={outcome}
+          facilityId={facilityId}
+          timeZone={timeZone}
+          finalized={summary.hasFinalizedSubmission}
+        />
+      )}
+
+      {reasons.length > 0 && (
         <Notice tone="warning">
           <ul className="flex flex-col gap-6">
-            {status.reasons.map((reason) => (
+            {reasons.map((reason) => (
               <li key={reason}><MultilineDetail>{reason}</MultilineDetail></li>
             ))}
           </ul>
@@ -248,7 +277,7 @@ export function RemovalDetailSheet({
           <SlideOverPanel.Body className="flex flex-col gap-24">
             <EnvBanner isProduction={isProduction} variant="inline" />
 
-            <SubmissionStatusSection summary={summary} status={shownStatus} />
+            <SubmissionStatusSection summary={summary} status={shownStatus} facilityId={facilityId} timeZone={timeZone} />
             {correction ? (
               <RemovalResubmitNotice correction={correction} facilityId={facilityId} />
             ) : (
@@ -324,6 +353,13 @@ export function RemovalDetailSheet({
               </div>
             </DetailSection>
 
+            <SubmissionHistory
+              attempts={summary.submissionAttempts}
+              events={summary.recentSyncEvents}
+              facilityId={facilityId}
+              timeZone={timeZone}
+            />
+
             <CarriedEntriesSection
               entries={carriedEntries}
               facilityId={facilityId}
@@ -352,13 +388,6 @@ export function RemovalDetailSheet({
               isEditable={isActionable}
             />
 
-            {summary.recentSyncEvents.length > 0 && (
-              <SyncEventLog
-                events={summary.recentSyncEvents}
-                timeZone={timeZone}
-                label={`Submission history (${summary.recentSyncEvents.length})`}
-              />
-            )}
           </SlideOverPanel.Body>
 
           <SlideOverPanel.Footer>

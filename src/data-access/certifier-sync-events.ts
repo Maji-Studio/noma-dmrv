@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, max, notInArray } from "drizzle-orm";
+import { and, desc, eq, inArray, like, max, notInArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import { certifierSyncEvents } from "@/db/schema/certification";
 import type { OrgContext } from "@/lib/auth/server";
@@ -86,6 +86,35 @@ export async function listRecentSyncEvents(
         args.excludeOperations?.length
           ? notInArray(certifierSyncEvents.operation, args.excludeOperations)
           : undefined,
+      ),
+    )
+    .orderBy(desc(certifierSyncEvents.attemptedAt))
+    .limit(args.limit);
+}
+
+/**
+ * What the Removal sheet needs to tell submit attempts apart: every attempt's
+ * summary event, the drift stops, and any failed registry call. A successful
+ * attempt writes dozens of events, so the plain recent list cannot hold it.
+ */
+export async function listRemovalAttemptEvents(
+  ctx: OrgContext,
+  args: { removalId: string; limit: number },
+): Promise<CertifierSyncEventRow[]> {
+  requireOrgScope(ctx);
+  return db
+    .select()
+    .from(certifierSyncEvents)
+    .where(
+      and(
+        eq(certifierSyncEvents.entityType, "removal"),
+        eq(certifierSyncEvents.entityId, args.removalId),
+        eq(certifierSyncEvents.organizationId, ctx.organizationId),
+        or(
+          eq(certifierSyncEvents.operation, "removal:submit:attempt-summary"),
+          like(certifierSyncEvents.operation, "production-batch:drift:%"),
+          eq(certifierSyncEvents.status, "failed"),
+        ),
       ),
     )
     .orderBy(desc(certifierSyncEvents.attemptedAt))

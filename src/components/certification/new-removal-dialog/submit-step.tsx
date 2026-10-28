@@ -29,7 +29,9 @@ import { useToast } from "@/components/ui/toast";
 import {
   useDeleteRemoval,
   useRemovalCompilation,
+  useRemovalSubmissionAttempts,
 } from "@/hooks/use-certification";
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { useRemovalDeleteAccess } from "@/hooks/use-removal-delete-access";
 import {
   canDeleteRemovalRow,
@@ -48,6 +50,7 @@ import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { SubmitConfirmDialog } from "../submit-confirm-dialog";
 import { SubmissionProgress } from "../submission-progress";
+import { SubmissionOutcomeNotice } from "../submission-outcome-notice";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import { DebugDrawer } from "./debug-drawer";
@@ -100,9 +103,26 @@ export function SubmitStep({
     () => Boolean(ctx.latestSubmission),
   );
   const hasStartedSubmission = useRef(false);
+  const { timeZone } = useFacilityClock(facilityId);
   const [progressUpdates, setProgressUpdates] = useState<
     SubmissionProgressUpdate[]
   >([]);
+
+  const terminalError =
+    submitError ??
+    (submitMutation.error instanceof Error
+      ? submitMutation.error.message
+      : submitMutation.isError
+        ? "The Removal was not submitted. Try again."
+        : null);
+  // The attempt that just ended says why in structured form; its error text
+  // ties it to this failure rather than to an older attempt.
+  const attemptsQuery = useRemovalSubmissionAttempts(facilityId, removalId, Boolean(terminalError));
+  const endedAttempt = terminalError
+    ? attemptsQuery.data?.find((attempt) => attempt.errorMessage === terminalError)
+    : undefined;
+  const outcome = endedAttempt && endedAttempt.outcome.kind !== "submitted" ? endedAttempt.outcome : null;
+  const stopped = outcome?.kind === "differs";
 
   const externalId = ctx.latestSubmission?.externalId ?? null;
   const rejectedWithExternal =
@@ -312,13 +332,6 @@ export function SubmitStep({
     const submissionStalled = isSubmissionStreamStalledError(
       submitMutation.error,
     );
-    const terminalError =
-      submitError ??
-      (submitMutation.error instanceof Error
-        ? submitMutation.error.message
-        : submitMutation.isError
-          ? "The Removal was not submitted. Try again."
-          : null);
     return (
       <div className="flex flex-col gap-16">
         <SubmissionProgress
@@ -328,11 +341,20 @@ export function SubmitStep({
           stalled={submissionStalled}
           isResubmission={attemptIsResubmission}
         />
-        {terminalError && <ServerError message={terminalError} />}
+        {terminalError && outcome ? (
+          <SubmissionOutcomeNotice
+            outcome={outcome}
+            facilityId={facilityId}
+            timeZone={timeZone}
+            finalized={ctx.hasFinalizedSubmission}
+          />
+        ) : (
+          terminalError && <ServerError message={terminalError} />
+        )}
         <div className="flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] pt-16">
           {!submitMutation.isPending && (
             <div className="flex items-center gap-12">
-              {submissionStalled ? (
+              {submissionStalled || stopped ? (
                 <Button variant="primary" className={PHONE_TOUCH_TARGET} onClick={onDone}>
                   Close
                 </Button>
@@ -358,13 +380,15 @@ export function SubmitStep({
               )}
             </div>
           )}
-          <span className="body-caption text-[var(--color-text-tertiary)]">
-            {submitMutation.isPending
-              ? "noma is submitting the Removal to Isometric."
-              : submissionStalled
-                ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
-                : "Completed registry operations are preserved for a safe retry."}
-          </span>
+          {!stopped && (
+            <span className="body-caption text-[var(--color-text-tertiary)]">
+              {submitMutation.isPending
+                ? "noma is submitting the Removal to Isometric."
+                : submissionStalled
+                  ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
+                  : "Completed registry operations are preserved for a safe retry."}
+            </span>
+          )}
         </div>
         {confirmDialog}
       </div>

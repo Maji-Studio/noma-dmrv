@@ -92,6 +92,28 @@ export async function isProductionBatchSharedWithOtherRemovals(
   return isRemovalProductionBatchShared(ctx, { removalId, submissionIds: own.map((row) => row.id) }, target);
 }
 
+/** Another Removal that holds this credit batch through a Biochar Application, to name it for the operator. */
+export async function findRemovalSharingCreditBatch(
+  ctx: OrgContext,
+  removalId: string,
+  creditBatchId: string,
+): Promise<{ id: string; code: string } | null> {
+  requireOrgScope(ctx);
+  const [row] = await db.select({ id: certifierRemovals.id, code: certifierRemovals.code })
+    .from(creditBatchApplications)
+    .innerJoin(certifierRemovals, and(
+      eq(certifierRemovals.id, creditBatchApplications.removalId),
+      eq(certifierRemovals.organizationId, ctx.organizationId),
+    ))
+    .where(and(
+      eq(creditBatchApplications.creditBatchId, creditBatchId),
+      ne(creditBatchApplications.removalId, removalId),
+      eq(creditBatchApplications.organizationId, ctx.organizationId),
+    ))
+    .limit(1);
+  return row ?? null;
+}
+
 function containsIdentity(value: unknown, identity: string): boolean {
   if (value === identity) return true;
   if (!value || typeof value !== "object") return false;

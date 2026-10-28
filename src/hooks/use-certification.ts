@@ -256,6 +256,17 @@ export function useCertificationOverview(facilityId: string, enabled = true) {
   });
 }
 
+/** The Removal's submit attempts, fetched fresh so a surface can name the outcome of the attempt that just ended. */
+export function useRemovalSubmissionAttempts(facilityId: string, removalId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: certificationKeys.removalPreflight(facilityId, removalId),
+    queryFn: async () => unwrap(await loadRemovalPreflight(facilityId, removalId)),
+    enabled: enabled && Boolean(facilityId && removalId),
+    staleTime: 0,
+    select: (data) => data.submissionAttempts,
+  });
+}
+
 export function useRemovalPreflightSummaries(
   facilityId: string,
   removalIds: string[],
