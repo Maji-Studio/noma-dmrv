@@ -182,6 +182,27 @@ describe("authenticated read response", () => {
     });
   });
 
+  it("answers 400 without logging when PostgreSQL refuses a NUL in the read input", async () => {
+    const response = await readResponse({
+      fallbackMessage: "Failed to load records",
+      invalidInputContext: "Invalid read parameters",
+      logContext: "read:test",
+      read: async () => {
+        throw new Error("Failed query", {
+          cause: { code: "22021", message: 'invalid byte sequence for encoding "UTF8": 0x00' },
+        });
+      },
+    });
+
+    expect(response.status).toBe(400);
+    expect(mocks.logger.error).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual({
+      success: false,
+      error: "This value contains a NUL character (U+0000), which noma cannot store. Remove it and retry.",
+      code: "validation_failed",
+    });
+  });
+
   it("logs an unexpected failure and answers 500 with the fallback message", async () => {
     const response = await readResponse({
       fallbackMessage: "Failed to load records",

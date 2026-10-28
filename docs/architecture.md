@@ -168,6 +168,9 @@ own; the returned shape is preserved in the action's result type), or `undefined
 through. A mapped result bypasses `toActionError` and is not logged, so map
 only error classes that extend `SafeError`, whose messages are written for
 the operator; anything else must fall through to the logged fallback.
+`toActionFailure` maps a value PostgreSQL refuses for holding U+0000 (SQLSTATE
+22021 or 22P05) to a `validation_failed` result and does not log it; boundaries
+with their own catch call `nulCharacterFailure` before their fallback.
 
 ### `SafeError` vs `Error`
 
