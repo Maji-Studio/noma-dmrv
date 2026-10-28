@@ -74,7 +74,7 @@ export interface PopupCardInput {
   typeLabel: string;
   code: string;
   status: string | null;
-  /** Label/value rows — same grammar as the lineage cards. */
+  /** Label/value rows: same grammar as the Flow record sheet. */
   details: LineageDetailRow[];
 }
 

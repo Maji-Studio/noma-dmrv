@@ -4,9 +4,9 @@ import { outputOrderFixtureValues, insertEstablishedOutputDeliveryFixture as ins
 /**
  * Carbon Viewer E2E (hermetic) — map-integration Phase 2.
  *
- * Covers the traceability view segment (Lineage / Map / Split), the
+ * Covers the traceability view segment (Flow / Map / Split), the
  * geography panel's rails (custody stages, not-geolocated), the split-view
- * cross-linking into the DAG, and the nothing-to-plot empty state.
+ * cross-linking into the Flow chart, and the nothing-to-plot empty state.
  *
  * The renderer regressions additionally inspect painted MapLibre features,
  * camera bounds and projected markers. A local blank basemap and SwiftShader
@@ -358,7 +358,7 @@ test.describe("Carbon Viewer (traceability geography)", () => {
     await expectRenderedGeography(page, lineage.application.id, FIELD_POINT, EDITED_CUSTOMER_POINT);
   });
 
-  test("view segment toggles lineage / map / split and persists in the URL", async ({
+  test("view segment toggles flow / map / split and persists in the URL", async ({
     adminPage: page,
     seededData,
     cleanupTestData,
@@ -369,7 +369,7 @@ test.describe("Carbon Viewer (traceability geography)", () => {
     await page.goto(
       traceabilityUrl(seededData.facility.id, { application: lineage.application.id })
     );
-    // Default view: lineage DAG, no geography panel.
+    // Default view: Flow chart, no geography panel.
     await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId("carbon-viewer-panel")).toHaveCount(0);
 
@@ -384,7 +384,7 @@ test.describe("Carbon Viewer (traceability geography)", () => {
     await expect(page.getByTestId("carbon-viewer-panel")).toBeVisible();
     await expect(page.locator(".react-flow__viewport")).toBeVisible();
 
-    await segment.getByRole("button", { name: "Lineage" }).click();
+    await segment.getByRole("button", { name: "Flow" }).click();
     await expect(page).not.toHaveURL(/view=/);
     await expect(page.getByTestId("carbon-viewer-panel")).toHaveCount(0);
   });
@@ -467,7 +467,7 @@ test.describe("Carbon Viewer (traceability geography)", () => {
     await expect(stageRail).toBeVisible();
   });
 
-  test("split view cross-links chip selection into the DAG highlight", async ({
+  test("split view cross-links chip selection into the Flow chart highlight", async ({
     adminPage: page,
     seededData,
     cleanupTestData,

@@ -10,7 +10,7 @@ Related: [forms.md](./forms.md) (form/schema work) ·
 [code-style.md](./code-style.md) (naming, React Compiler rules, a11y) ·
 [ux-writing.md](./ux-writing.md) (all user-facing copy) ·
 [architecture.md](./architecture.md) (layers, ActionResult, facility context) ·
-[traceability.md](./traceability.md) (DAG / Map / Sankey surfaces) ·
+[traceability.md](./traceability.md) (Flow / Map / Sankey surfaces) ·
 [troubleshooting.md](./troubleshooting.md) ·
 [open-questions.md](./open-questions.md) (deferred work).
 
