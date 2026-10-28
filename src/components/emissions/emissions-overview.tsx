@@ -37,7 +37,7 @@ export function EmissionsOverview() {
   if (!facilityId) {
     return (
       <div className="container-max page-shell">
-        <PageHeader area="verification" title={TITLE} subtitle={SUBTITLE} />
+        <PageHeader area="records" title={TITLE} subtitle={SUBTITLE} />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to see its emissions." />
       </div>
     );
@@ -69,7 +69,7 @@ function EmissionsLedger({ facilityId }: { facilityId: string }) {
   const rows = filterAndSortBatches(batches, query, today);
   return (
     <div className="container-max page-shell">
-      <PageHeader area="verification" title={TITLE} subtitle={SUBTITLE} />
+      <PageHeader area="records" title={TITLE} subtitle={SUBTITLE} />
       <EmissionsOverviewKpis facet={facet} query={query} facilityId={facilityId} isLoading={isLoading} />
 
       <div className={PANEL_CLASS}>

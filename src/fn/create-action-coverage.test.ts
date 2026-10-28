@@ -250,12 +250,9 @@ function clientErrors(source: ts.SourceFile): string[] {
       }
     } else if (imports && ts.isNamespaceImport(imports)) namespaces.set(imports.name.text, actionModule);
   }
+  if (!bindings.size && !namespaces.size) return [];
   const errors: string[] = [];
   for (const node of descendants(source)) {
-    // Import declarations introduce bindings; type queries do not pass runtime values.
-    let ancestor: ts.Node | undefined = node;
-    while (ancestor && !ts.isImportDeclaration(ancestor) && !ts.isTypeQueryNode(ancestor)) ancestor = ancestor.parent;
-    if (ancestor) continue;
     const identity = ts.isIdentifier(node) && bindings.has(node.text)
       ? bindings.get(node.text)
       : (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
@@ -264,6 +261,11 @@ function clientErrors(source: ts.SourceFile): string[] {
           ? node.name.text : ts.isStringLiteral(node.argumentExpression) ? node.argumentExpression.text : ""}`
         : undefined;
     if (!identity || !KEYED.includes(identity)) continue;
+    // Only action references need an ancestor walk. Imports and type queries
+    // introduce bindings or types rather than pass runtime values.
+    let ancestor: ts.Node | undefined = node;
+    while (ancestor && !ts.isImportDeclaration(ancestor) && !ts.isTypeQueryNode(ancestor)) ancestor = ancestor.parent;
+    if (ancestor) continue;
     // A property name is not a reference to a same-named imported binding.
     if (ts.isIdentifier(node) && ts.isPropertyAccessExpression(node.parent) && node.parent.name === node) continue;
     const call = node.parent;
