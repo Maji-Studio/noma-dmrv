@@ -13,9 +13,12 @@ import { NOTICE_ACTION_LINK_CLASS } from "./removal-resubmit-notice";
 export function RemovalMissingRunsNotice({
   batches,
   facilityId,
+  canManage,
 }: {
   batches: RemovalPreflightSummary["missingProductionRuns"];
   facilityId: string;
+  /** Admin: others are told who can add the run. */
+  canManage: boolean;
 }) {
   return (
     <>
@@ -26,7 +29,7 @@ export function RemovalMissingRunsNotice({
             key={batch.creditBatchId}
             tone="warning"
             data-removal-missing-runs={batch.creditBatchId}
-            title={`${batch.creditBatchCode} is missing ${one ? "1 completed run" : `${batch.runs.length} completed runs`}`}
+            title={`${one ? "1 completed run is" : `${batch.runs.length} completed runs are`} not in ${batch.creditBatchCode} yet`}
             action={
               <Link href={creditBatchDeepLinkHref(batch.creditBatchId, facilityId)} className={NOTICE_ACTION_LINK_CLASS}>
                 Open credit batch
@@ -34,7 +37,7 @@ export function RemovalMissingRunsNotice({
             }
           >
             <MissingRunLinks runs={batch.runs} facilityId={facilityId} />
-            {`. ${one ? "Its" : "Their"} emissions are not counted until ${one ? "it is" : "they are"} added in Edit.`}
+            {`. ${one ? "Its" : "Their"} emissions are not counted. ${canManage ? `Open the credit batch and add ${one ? "it" : "them"} in Edit.` : `An admin can add ${one ? "it" : "them"} in Edit.`}`}
           </Notice>
         );
       })}

@@ -305,8 +305,8 @@ it.each([
 });
 
 describe("credit batch sheet missing runs", () => {
-  const productionRuns = (missingRuns?: { id: string; code: string }[], onEditMissingRuns?: () => void) =>
-    creditBatchSheetSections({ ...baseOptions, creditBatch: makeBatch({}), missingRuns, onEditMissingRuns })
+  const productionRuns = (missingRuns?: { id: string; code: string }[], onEditMissingRuns?: () => void, canManage = true) =>
+    creditBatchSheetSections({ ...baseOptions, creditBatch: makeBatch({}), missingRuns, onEditMissingRuns, canManage })
       .find((section) => section.title === "Production runs")?.content;
 
   it("says which fitting runs are not in the batch and opens Edit", () => {
@@ -316,6 +316,12 @@ describe("credit batch sheet missing runs", () => {
     expect(screen.getByRole("link", { name: "RUN-9" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Add in Edit" }));
     expect(onEdit).toHaveBeenCalledOnce();
+  });
+
+  it("tells a member who can add the run", () => {
+    render(<>{productionRuns([{ id: "run-9", code: "RUN-9" }], undefined, false)}</>);
+    expect(screen.getByTestId("credit-batch-missing-runs").textContent).toContain("An admin can add it in Edit.");
+    expect(screen.queryByRole("button", { name: "Add in Edit" })).toBeNull();
   });
 
   it("adds nothing when no run is missing", () => {

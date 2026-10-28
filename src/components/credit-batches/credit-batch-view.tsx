@@ -405,6 +405,7 @@ export function creditBatchSheetSections({
           <CreditBatchMissingRunsNotice
             runs={missingRuns}
             facilityId={creditBatch.facilityId}
+            canManage={canManage}
             onEdit={onEditMissingRuns}
           />
           <CreditBatchCarbonEstimate

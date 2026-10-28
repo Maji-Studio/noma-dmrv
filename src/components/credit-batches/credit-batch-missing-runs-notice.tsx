@@ -3,8 +3,9 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
-import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
+import { CENTRED_HIT_AREA, INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import { productionRunDeepLinkHref } from "@/lib/certification/links";
+import { MISSING_PRODUCTION_RUN_ITEM_PREFIX } from "@/lib/credit-batches/open-items";
 import { cn } from "@/lib/utils";
 
 export interface MissingRunRef {
@@ -17,7 +18,7 @@ export function missingRunsFromTodos(
   check: readonly { productionRun?: MissingRunRef; id: string }[] | undefined,
 ): MissingRunRef[] {
   return (check ?? []).flatMap((item) =>
-    item.id.startsWith("missing-production-run:") && item.productionRun ? [item.productionRun] : [],
+    item.id.startsWith(MISSING_PRODUCTION_RUN_ITEM_PREFIX) && item.productionRun ? [item.productionRun] : [],
   );
 }
 
@@ -45,6 +46,8 @@ export function MissingRunLinks({ runs, facilityId }: { runs: readonly MissingRu
 interface CreditBatchMissingRunsNoticeProps {
   runs: readonly MissingRunRef[];
   facilityId: string;
+  /** Admin: others are told who can add the run. */
+  canManage: boolean;
   /** Opens Edit, where Add run lives; omitted when the viewer cannot edit. */
   onEdit?: () => void;
 }
@@ -54,7 +57,7 @@ interface CreditBatchMissingRunsNoticeProps {
  * their emissions are not counted. Only a batch held by an unsent Removal
  * has them.
  */
-export function CreditBatchMissingRunsNotice({ runs, facilityId, onEdit }: CreditBatchMissingRunsNoticeProps) {
+export function CreditBatchMissingRunsNotice({ runs, facilityId, canManage, onEdit }: CreditBatchMissingRunsNoticeProps) {
   if (runs.length === 0) return null;
   const one = runs.length === 1;
   return (
@@ -63,13 +66,13 @@ export function CreditBatchMissingRunsNotice({ runs, facilityId, onEdit }: Credi
       data-testid="credit-batch-missing-runs"
       title={one ? "1 completed run is not in this credit batch yet" : `${runs.length} completed runs are not in this credit batch yet`}
       action={onEdit ? (
-        <Button type="button" variant="weak" size="small" onClick={onEdit}>
+        <Button type="button" variant="weak" size="small" className={CENTRED_HIT_AREA} onClick={onEdit}>
           Add in Edit
         </Button>
       ) : undefined}
     >
       <MissingRunLinks runs={runs} facilityId={facilityId} />
-      {`. ${one ? "Its" : "Their"} emissions are not counted.`}
+      {`. ${one ? "Its" : "Their"} emissions are not counted.${canManage ? "" : ` An admin can add ${one ? "it" : "them"} in Edit.`}`}
     </Notice>
   );
 }

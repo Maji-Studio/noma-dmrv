@@ -71,6 +71,19 @@ describe("credit batch page to-dos", () => {
     expect(harness.loadTodos).toHaveBeenCalledWith("facility-1", "batch-1");
   });
 
+  it("links the run code of a missing-run Check outside its Add in Edit button", async () => {
+    harness.loadTodos.mockResolvedValue({ success: true, data: { ...TODOS, blocking: [], check: [{
+      id: "missing-production-run:run-1", productionRun: { id: "run-1", code: "RUN-1" },
+      title: "RUN-1 is not in this credit batch yet", detail: "Its emissions are not counted.",
+      target: { tab: "overview", rowId: "batch-details" },
+    }] } });
+    renderPage();
+    const link = await screen.findByRole("link", { name: "RUN-1" });
+    expect(link.getAttribute("href")).toContain("run-1");
+    expect(link.closest("button")).toBeNull();
+    expect(screen.getByRole("button", { name: "Add in Edit" })).toBeTruthy();
+  });
+
   it("shows the notice and Retry, and no to-do groups or counts, when the read fails", async () => {
     harness.loadTodos.mockResolvedValue({ success: false, error: "boom" });
     renderPage();

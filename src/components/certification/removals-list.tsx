@@ -55,7 +55,7 @@ import {
 } from "./removal-list-state";
 
 
-export function RemovalsList({ initialCreate = false }: { initialCreate?: boolean } = {}) {
+export function RemovalsList({ initialCreate = false, canManage = false }: { initialCreate?: boolean; canManage?: boolean } = {}) {
   const { facilityId, selectedFacility } = useFacilityContext();
   const [dialogOpen, setDialogOpen] = useState(false);
   // `?create=true` opens the wizard (the credit batch page's Start Removal).
@@ -94,7 +94,7 @@ export function RemovalsList({ initialCreate = false }: { initialCreate?: boolea
       {!facilityId ? (
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its Removals." />
       ) : (
-        <ListBody facilityId={facilityId} onNewRemoval={() => setDialogOpen(true)} />
+        <ListBody facilityId={facilityId} canManage={canManage} onNewRemoval={() => setDialogOpen(true)} />
       )}
 
       {facilityId && (
@@ -349,9 +349,11 @@ const createColumns = (
 
 function ListBody({
   facilityId,
+  canManage,
   onNewRemoval,
 }: {
   facilityId: string;
+  canManage: boolean;
   onNewRemoval: () => void;
 }) {
   const { timeZone } = useFacilityClock(facilityId);
@@ -469,6 +471,7 @@ function ListBody({
           isProduction={identities.data.isProduction}
           facilityId={facilityId}
           lock={removalLocks.locks[selected.removalId]}
+          canManage={canManage}
           open
           onClose={() => setRemovalId(null)}
         />
