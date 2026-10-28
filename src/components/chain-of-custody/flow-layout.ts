@@ -230,3 +230,49 @@ export function layoutFlow(nodes: Node[], edges: Edge[], options: FlowLayoutOpti
 
   return { nodes: [...headers, ...positioned], edges: displayEdges, displayIdOf };
 }
+
+export interface FlowLightingSets {
+  /** Displayed node ids (records or groups) on the focused lineage. */
+  nodeIds: Set<string>;
+  /** Displayed edge ids carrying at least one record edge on that lineage. */
+  edgeIds: Set<string>;
+}
+
+/**
+ * What a hover or a selection lights, worked out on the record edges and
+ * then mapped onto the displayed nodes, so a collapsed group never joins two
+ * lineages that only meet inside it. Hovering a group lights the union of its
+ * members' lineages. Hover wins over the shared selection; both use
+ * `lineageOf` (reachableNodeIds), so they agree.
+ */
+export function flowLighting(
+  layout: Pick<FlowLayout, "nodes" | "displayIdOf">,
+  recordEdges: Edge[],
+  hoveredDisplayId: string | null,
+  focusRecordIds: ReadonlySet<string> | null | undefined,
+  lineageOf: (recordId: string, edges: Edge[]) => Set<string> | null,
+): FlowLightingSets | null {
+  let recordIds: ReadonlySet<string> | null = null;
+  if (hoveredDisplayId) {
+    const hovered = layout.nodes.find((node) => node.id === hoveredDisplayId);
+    const members =
+      hovered?.type === "flowGroup"
+        ? (hovered.data as unknown as FlowGroupNodeData).memberIds
+        : [hoveredDisplayId];
+    const union = new Set<string>();
+    for (const member of members) for (const id of lineageOf(member, recordEdges) ?? []) union.add(id);
+    recordIds = union;
+  } else if (focusRecordIds) {
+    recordIds = focusRecordIds;
+  }
+  if (!recordIds) return null;
+  const nodeIds = new Set(Array.from(recordIds, layout.displayIdOf));
+  const edgeIds = new Set<string>();
+  for (const graphEdge of recordEdges) {
+    if (!recordIds.has(graphEdge.source) || !recordIds.has(graphEdge.target)) continue;
+    const source = layout.displayIdOf(graphEdge.source);
+    const target = layout.displayIdOf(graphEdge.target);
+    if (source !== target) edgeIds.add(flowEdgeId(source, target));
+  }
+  return { nodeIds, edgeIds };
+}

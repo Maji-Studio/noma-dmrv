@@ -21,6 +21,8 @@ import {
   FLOW_NARROW_CANVAS_PX,
   FLOW_NARROW_INSET_PX,
   FLOW_NARROW_ZOOM,
+  FLOW_NODE_BOX_WIDTH,
+  FLOW_NODE_SIZE,
   GRAPH_CANVAS_CLASS,
   GRAPH_CONTROLS_CLASS,
   GRAPH_DOTS,
@@ -28,7 +30,8 @@ import {
 } from "./chain-constants";
 import { ChainEdge, type ChainEdgeData } from "./chain-edge";
 import { ChainNode, FlowColumnNode, FlowGroupNode, type FlowGroupNodeData } from "./chain-node";
-import { layoutFlow } from "./flow-layout";
+import { placeEdgeLabels } from "./flow-edge-geometry";
+import { flowLighting, layoutFlow } from "./flow-layout";
 import { reachableNodeIds } from "./use-chain-graph";
 
 const nodeTypes: NodeTypes = {
@@ -131,11 +134,7 @@ export function ChainFlowGraph({
       .filter((node) => (node.data as { highlighted?: boolean }).highlighted)
       .map((node) => layout.displayIdOf(node.id)),
   );
-  const lit = hoveredNodeId
-    ? reachableNodeIds(hoveredNodeId, layout.edges)
-    : focusNodeIds
-      ? new Set(Array.from(focusNodeIds, layout.displayIdOf))
-      : null;
+  const lit = flowLighting(layout, edges, hoveredNodeId, focusNodeIds, reachableNodeIds);
 
   const displayNodes = layout.nodes.map((node) => {
     if (node.type === "flowColumn") return node;
@@ -145,13 +144,43 @@ export function ChainFlowGraph({
       className: NODE_WRAPPER_CLASS,
       data: {
         ...node.data,
-        dimmed: lit ? !lit.has(node.id) : false,
-        lit: lit?.has(node.id) ?? false,
+        dimmed: lit ? !lit.nodeIds.has(node.id) : false,
+        lit: lit?.nodeIds.has(node.id) ?? false,
         current: node.id === hoveredNodeId || (isGroup && selectedDisplayIds.has(node.id)),
       },
     };
   });
-  const litEdge = (graphEdge: Edge) => Boolean(lit?.has(graphEdge.source) && lit.has(graphEdge.target));
+  const litEdge = (graphEdge: Edge) => lit?.edgeIds.has(graphEdge.id) ?? false;
+  const labelText = (graphEdge: Edge) => {
+    const data = graphEdge.data as ChainEdgeData | undefined;
+    if (!data || data.variant === "equipment") return null;
+    return (labelMode === "pct" ? data.pctLabel : data.kgLabel) ?? null;
+  };
+  // Chips are placed together so fans and converging edges never overlap.
+  const centreOf = new Map(
+    layout.nodes.map((node) => [
+      node.id,
+      { x: node.position.x + FLOW_NODE_BOX_WIDTH / 2, y: node.position.y + FLOW_NODE_SIZE / 2 },
+    ]),
+  );
+  const labels = placeEdgeLabels(
+    layout.edges.flatMap((graphEdge) => {
+      const text = labelText(graphEdge);
+      const source = centreOf.get(graphEdge.source);
+      const target = centreOf.get(graphEdge.target);
+      if (!litEdge(graphEdge) || !text || !source || !target) return [];
+      return [{
+        id: graphEdge.id,
+        source: graphEdge.source,
+        target: graphEdge.target,
+        sourceX: source.x + FLOW_NODE_SIZE / 2,
+        sourceY: source.y,
+        targetX: target.x - FLOW_NODE_SIZE / 2,
+        targetY: target.y,
+        text,
+      }];
+    }),
+  );
   // Lit edges draw on top: React Flow paints edges in array order.
   const displayEdges = [...layout.edges]
     .sort((left, right) => Number(litEdge(left)) - Number(litEdge(right)))
@@ -162,6 +191,8 @@ export function ChainFlowGraph({
         labelMode,
         lit: litEdge(graphEdge),
         dimmed: lit ? !litEdge(graphEdge) : false,
+        labelX: labels.get(graphEdge.id)?.x,
+        labelY: labels.get(graphEdge.id)?.y,
       } satisfies ChainEdgeData,
     }));
   const showsInferred = layout.edges.some((graphEdge) => (graphEdge.data as ChainEdgeData | undefined)?.inferred);

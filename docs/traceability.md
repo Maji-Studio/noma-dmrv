@@ -165,24 +165,33 @@ theme.
   codes; an application's field identifier). The sheet keeps the longer
   heading (`code`).
 - **Groups**: a column with more than `FLOW_GROUP_THRESHOLD` records collapses
-  into one stacked node ("34 feedstocks"); parallel edges into it merge and
-  their masses sum only when every member has one in the same unit and basis.
-  Clicking the group expands the column; its header then offers "Collapse".
-  Every record stays reachable.
+  into one stacked node ("34 feedstocks"); parallel edges into it merge. Wet
+  and dry kg sum independently, each only when every member has it; the share
+  mass sums only when every member is in the same unit, basis and footing
+  (allocation edges carry dry kg, or wet kg when dry is unknown). A merge
+  that cannot sum is `mixedMass`, and no fan holding it shows a %. Clicking
+  the group expands the column; its header then offers "Collapse". Every
+  record stays reachable.
 - **Edges** are cubic beziers between column edges. Feedstock → run links are
   dashed: a run records what it drew from a bin, and which intakes that came
   from follows from the bin's draw order (legend bottom right). The reactor's
   equipment link is a quieter solid line.
 - **Focus** is cross-surface (bar ⇄ map ⇄ Flow selection *and* Flow hover).
   `reachableNodeIds` walks the focused record's ancestors and descendants
-  along the edge direction (not its siblings); that lineage stays lit, lit
-  edges draw on top, everything else dims. A click lights the record and opens
+  along the edge direction (not its siblings), always on the record edges;
+  `flowLighting` then maps the result onto groups, so a group never joins two
+  lineages that only meet inside it, and hovering a group lights the union of
+  its members' lineages. That lineage stays lit, lit edges draw on top,
+  everything else dims. A click lights the record and opens
   its sheet; a click on the empty canvas clears the focus. Split view keeps the
   map cross-link instead of the sheet.
 - **Mass labels only on lit edges**: the kg / % toggle labels the edges of the
   current hover or selection, nothing at rest. A wet and dry pair stacks on two
-  lines. The label sits in the gap after the source column, so an edge that
-  skips a column never covers that column's records. Per-step CO₂e is never
+  lines. Chips always sit in a column gap, never on a column, so an edge that
+  skips a column never covers its records: a fan out of one record labels each
+  branch in the gap before its target, any other edge in the gap after its
+  source, and chips left sharing a gap are pushed apart
+  (`placeEdgeLabels`, `flow-edge-geometry.ts`). Per-step CO₂e is never
   shown (ADR 0018).
 - Product-to-delivery edges show the selected applications' allocated shares.
   An edge only a roll-forward reaches shows the member runs' net shipped share
@@ -241,7 +250,7 @@ See [docs/testing.md](testing.md) for fixtures and E2E conventions. Suites:
   `tests/credit-batch-context-set.test.ts`
 - `src/lib/chain-of-custody/sankey.test.ts`
 - `src/lib/chain-of-custody/lineage-mass-totals.test.ts` (shares `lineage-mass-totals-test-fixtures.ts` with the graph suite)
-- `src/components/chain-of-custody/use-chain-graph.test.ts`, `flow-layout.test.ts`, `chain-edge.test.ts`
+- `src/components/chain-of-custody/use-chain-graph.test.ts`, `flow-layout.test.ts`, `flow-edge-geometry.test.ts`
 - `src/components/chain-of-custody/use-credit-batch-card-selection.test.ts`
 - `src/components/chain-of-custody/map/viewer-utils.test.ts`
 

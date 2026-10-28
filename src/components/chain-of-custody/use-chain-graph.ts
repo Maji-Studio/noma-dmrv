@@ -31,6 +31,7 @@ import {
   type ChainEdgeBuildData,
   type EdgeMass,
   type EdgeMassBasis,
+  type EdgeMassFooting,
 } from "./chain-edge-mass";
 import type { ChainNodeData } from "./chain-node";
 import { expandProductLineages } from "./expand-product-lineages";
@@ -330,6 +331,7 @@ function edge(
     variant?: "flow" | "equipment";
     inferred?: boolean;
     massBasis?: EdgeMassBasis;
+    massFooting?: EdgeMassFooting | null;
   },
 ): Edge {
   const mass = opts?.mass ?? null;
@@ -343,6 +345,7 @@ function edge(
       inferred: opts?.inferred ?? false,
       mass: mass?.value ?? null,
       unit: mass?.unit ?? null,
+      massFooting: mass?.value == null ? null : (opts?.massFooting ?? null),
       wetKg: opts?.wetKg ?? null,
       dryKg: opts?.dryKg ?? null,
       kgLabel: opts?.massLabel ?? massLabel(mass),
@@ -364,6 +367,7 @@ function buildSourceEdges(source: ChainSourceLineage): Edge[] {
     edges.push(
       edge(`feedstock:${feedstock.id}`, productionRunNodeId(productionRun.id), {
         mass: { value: feedstock.wetMassUsedKg, unit: "kg" },
+        massFooting: "wet",
         inferred: true,
       })
     );
@@ -432,6 +436,8 @@ function massFlowEdge(
     },
     wetKg: mass.wetKg,
     dryKg: mass.dryKg,
+    // finishEdges: the share mass is dry kg, or wet kg when dry is unknown.
+    massFooting: mass.dryKg != null ? "dry" : "wet",
     massLabel: formatWetDryMass(mass),
     massBasis,
   });

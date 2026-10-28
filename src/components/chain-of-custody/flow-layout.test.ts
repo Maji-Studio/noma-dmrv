@@ -11,7 +11,8 @@ import {
 } from "./chain-constants";
 import type { ChainEdgeBuildData } from "./chain-edge-mass";
 import type { ChainNodeData } from "./chain-node";
-import { flowColumnId, flowGroupId, layoutFlow } from "./flow-layout";
+import { flowColumnId, flowGroupId, flowLighting, layoutFlow } from "./flow-layout";
+import { reachableNodeIds } from "./use-chain-graph";
 
 function record(kind: LineageNodeKind, id: string, shortCode = id): Node {
   const style = LINEAGE_NODE_STYLES[kind];
@@ -45,6 +46,7 @@ function link(source: string, target: string, data: Partial<ChainEdgeBuildData> 
       inferred: false,
       mass: null,
       unit: null,
+      massFooting: null,
       wetKg: null,
       dryKg: null,
       kgLabel: null,
@@ -159,6 +161,7 @@ describe("layoutFlow", () => {
         inferred: true,
         mass: 100,
         unit: "kg",
+        massFooting: "wet",
         kgLabel: "100 kg",
       }),
     );
@@ -209,5 +212,114 @@ describe("layoutFlow", () => {
       layoutFlow([...intakes, ...runs], edges, noneExpanded);
       expect(JSON.stringify(edges)).toBe(before);
     });
+  });
+});
+
+describe("merged group edges", () => {
+  const products = Array.from({ length: FLOW_GROUP_THRESHOLD + 1 }, (_, index) =>
+    record("biocharProduct", `biochar-product:${index}`, `BP-${index}`),
+  );
+  const delivery = record("delivery", "delivery:1");
+
+  it("sums wet and dry independently and drops the share mass across dry and wet footing", () => {
+    // Allocation edges carry dry kg, or wet kg when dry is unknown.
+    const edges = products.map((product, index) =>
+      link(product.id, "delivery:1", index === 0
+        ? { mass: 80, unit: "kg", massFooting: "dry", wetKg: 100, dryKg: 80 }
+        : { mass: 100, unit: "kg", massFooting: "wet", wetKg: 100, dryKg: null }),
+    );
+    const layout = layoutFlow([...products, delivery], edges, noneExpanded);
+    const data = layout.edges[0]!.data as ChainEdgeBuildData;
+
+    expect(layout.edges).toHaveLength(1);
+    expect(data.mass).toBeNull();
+    expect(data.wetKg).toBe(products.length * 100);
+    expect(data.dryKg).toBeNull();
+    expect(data.kgLabel).toMatch(/^Wet: 1,300 kg/);
+    expect(data.kgLabel).not.toContain("1,280");
+    expect(data.mixedMass).toBe(true);
+  });
+
+  it("sums dry mass when every member is on a dry footing", () => {
+    const edges = products.map((product) =>
+      link(product.id, "delivery:1", { mass: 50, unit: "kg", massFooting: "dry", wetKg: 100, dryKg: 50 }),
+    );
+    const data = layoutFlow([...products, delivery], edges, noneExpanded).edges[0]!.data as ChainEdgeBuildData;
+
+    expect(data.mass).toBe(products.length * 50);
+    expect(data.mixedMass).toBe(false);
+    expect(data.pctLabel).toBe("100%");
+  });
+
+  it("shows no % on a fan that holds a merge of applied and recorded mass", () => {
+    const order = record("order", "order:1");
+    const edges = [
+      ...products.map((product, index) =>
+        link(product.id, "delivery:1", {
+          mass: 100,
+          unit: "kg",
+          massFooting: "dry",
+          massBasis: index === 0 ? "recorded" : "applied",
+        }),
+      ),
+      link("order:1", "delivery:1", { mass: 100, unit: "kg", massFooting: "dry" }),
+    ];
+    const layout = layoutFlow([...products, order, delivery], edges, noneExpanded);
+    const pct = (source: string) =>
+      (layout.edges.find((graphEdge) => graphEdge.source === source)!.data as ChainEdgeBuildData).pctLabel;
+
+    expect(pct(flowGroupId("biocharProduct"))).toBeNull();
+    // The sibling into the same delivery must not read as the whole inflow.
+    expect(pct("order:1")).toBeNull();
+  });
+});
+
+describe("flowLighting", () => {
+  // Two separate lineages whose products collapse into one group.
+  const filler = Array.from({ length: FLOW_GROUP_THRESHOLD - 1 }, (_, index) =>
+    record("biocharProduct", `biochar-product:f${index}`, `BP-F${index}`),
+  );
+  const nodes = [
+    record("productionRun", "production-run:1"),
+    record("productionRun", "production-run:2"),
+    record("biocharProduct", "biochar-product:1"),
+    record("biocharProduct", "biochar-product:2"),
+    ...filler,
+    record("delivery", "delivery:1"),
+    record("delivery", "delivery:2"),
+  ];
+  const edges = [
+    link("production-run:1", "biochar-product:1"),
+    link("biochar-product:1", "delivery:1"),
+    link("production-run:2", "biochar-product:2"),
+    link("biochar-product:2", "delivery:2"),
+  ];
+  const layout = layoutFlow(nodes, edges, noneExpanded);
+  const group = flowGroupId("biocharProduct");
+
+  it("never joins two lineages through a collapsed group on hover", () => {
+    const lit = flowLighting(layout, edges, "production-run:1", null, reachableNodeIds)!;
+
+    expect(lit.nodeIds).toEqual(new Set(["production-run:1", group, "delivery:1"]));
+    expect(lit.edgeIds).toEqual(new Set([`production-run:1->${group}`, `${group}->delivery:1`]));
+  });
+
+  it("lights the same records for a selection as for a hover", () => {
+    const focus = reachableNodeIds("production-run:1", edges);
+    expect(flowLighting(layout, edges, null, focus, reachableNodeIds)).toEqual(
+      flowLighting(layout, edges, "production-run:1", null, reachableNodeIds),
+    );
+  });
+
+  it("lights the union of its members' lineages when a group is hovered", () => {
+    const lit = flowLighting(layout, edges, group, null, reachableNodeIds)!;
+
+    expect(lit.nodeIds).toEqual(new Set([
+      group,
+      "production-run:1",
+      "production-run:2",
+      "delivery:1",
+      "delivery:2",
+    ]));
   });
 });

@@ -16,6 +16,13 @@ export interface EdgeMass {
 export type EdgeMassBasis = "applied" | "recorded";
 
 /**
+ * Which figure `mass` holds. Allocation edges carry dry kg and fall back to
+ * wet kg when dry is unknown (lineage-mass-totals.ts `finishEdges`), so two
+ * edges in the same unit can still measure different things.
+ */
+export type EdgeMassFooting = "dry" | "wet";
+
+/**
  * Data carried on every flow edge. `mass`/`unit` feed the branch-share %;
  * `kgLabel`/`pctLabel` are the pre-formatted strings the toggle swaps between;
  * `variant` distinguishes mass flow from the reactor's mass-less equipment
@@ -27,6 +34,13 @@ export interface ChainEdgeBuildData {
   inferred: boolean;
   mass: number | null;
   unit: EdgeMassUnit | null;
+  massFooting: EdgeMassFooting | null;
+  /**
+   * A merged edge whose members' masses could not be summed (mixed unit,
+   * basis or footing). It has no mass, and any fan it belongs to shows no %,
+   * since the shares of the rest would not add up to the whole.
+   */
+  mixedMass?: boolean;
   wetKg: number | null;
   dryKg: number | null;
   kgLabel: string | null;
@@ -80,34 +94,50 @@ export function computeEdgeShareLabels(edges: Edge[]): void {
   const inCount = new Map<string, number>();
   const outBases = new Map<string, Set<EdgeMassBasis>>();
   const inBases = new Map<string, Set<EdgeMassBasis>>();
+  // Fans holding a merged edge whose mass could not be summed: no % at all.
+  const mixedOut = new Map<string, number>();
+  const mixedIn = new Map<string, number>();
+  const bump = (counts: Map<string, number>, key: string) => counts.set(key, (counts.get(key) ?? 0) + 1);
   const addBasis = (bases: Map<string, Set<EdgeMassBasis>>, key: string, basis: EdgeMassBasis) =>
     bases.set(key, (bases.get(key) ?? new Set()).add(basis));
   for (const edge of edges) {
     const data = edge.data as ChainEdgeBuildData | undefined;
+    if (data?.mixedMass) {
+      bump(mixedOut, edge.source);
+      bump(mixedIn, edge.target);
+      continue;
+    }
     if (!data || data.mass == null || data.unit == null) continue;
     const outKey = `${edge.source}|${data.unit}`;
     const inKey = `${edge.target}|${data.unit}`;
     outSum.set(outKey, (outSum.get(outKey) ?? 0) + data.mass);
-    outCount.set(outKey, (outCount.get(outKey) ?? 0) + 1);
+    bump(outCount, outKey);
     inSum.set(inKey, (inSum.get(inKey) ?? 0) + data.mass);
-    inCount.set(inKey, (inCount.get(inKey) ?? 0) + 1);
+    bump(inCount, inKey);
     addBasis(outBases, outKey, data.massBasis);
     addBasis(inBases, inKey, data.massBasis);
   }
   for (const edge of edges) {
     const data = edge.data as ChainEdgeBuildData | undefined;
-    if (!data || data.mass == null || data.unit == null) continue;
+    if (!data) continue;
+    if (data.mixedMass) {
+      data.pctLabel = null;
+      continue;
+    }
+    if (data.mass == null || data.unit == null) continue;
     const outKey = `${edge.source}|${data.unit}`;
     const inKey = `${edge.target}|${data.unit}`;
+    const mixedSplit = mixedOut.get(edge.source) ?? 0;
+    const mixedMerge = mixedIn.get(edge.target) ?? 0;
     let fraction: number;
-    if ((outCount.get(outKey) ?? 0) > 1) {
-      if ((outBases.get(outKey)?.size ?? 0) > 1) {
+    if ((outCount.get(outKey) ?? 0) + mixedSplit > 1) {
+      if (mixedSplit > 0 || (outBases.get(outKey)?.size ?? 0) > 1) {
         data.pctLabel = null;
         continue;
       }
       fraction = data.mass / (outSum.get(outKey) || 1);
-    } else if ((inCount.get(inKey) ?? 0) > 1) {
-      if ((inBases.get(inKey)?.size ?? 0) > 1) {
+    } else if ((inCount.get(inKey) ?? 0) + mixedMerge > 1) {
+      if (mixedMerge > 0 || (inBases.get(inKey)?.size ?? 0) > 1) {
         data.pctLabel = null;
         continue;
       }
@@ -126,30 +156,37 @@ function sumOrNull(values: Array<number | null>): number | null {
 
 /**
  * One edge standing for several parallel edges (a collapsed group's links to
- * the same record). Masses sum only when every member carries one in the same
- * unit and basis; otherwise the merged edge shows no mass rather than a
- * partial total.
+ * the same record). Wet and dry kg sum independently, each only when every
+ * member has that figure. The share mass sums only when every member has one
+ * in the same unit, basis and footing; otherwise the merged edge is marked
+ * `mixedMass` so no fan it joins shows a %.
  */
 export function mergeEdgeMass(members: ChainEdgeBuildData[]): ChainEdgeBuildData {
   const [first] = members;
-  const sameUnit = members.every((member) => member.unit === first.unit);
-  const sameBasis = members.every((member) => member.massBasis === first.massBasis);
-  const mass = sameUnit && sameBasis ? sumOrNull(members.map((member) => member.mass)) : null;
+  const summable = members.every(
+    (member) =>
+      member.mass != null &&
+      member.unit === first.unit &&
+      member.massBasis === first.massBasis &&
+      member.massFooting === first.massFooting,
+  );
+  const anyMass = members.some((member) => member.mass != null);
+  const mass = summable ? sumOrNull(members.map((member) => member.mass)) : null;
   const wetKg = sumOrNull(members.map((member) => member.wetKg));
   const dryKg = sumOrNull(members.map((member) => member.dryKg));
   const kgLabel =
-    mass == null
-      ? null
-      : first.unit === "kg" && dryKg == null
-        ? formatKg(mass)
-        : wetKg != null || dryKg != null
-          ? formatWetDryMass({ wetKg, dryKg })
-          : massLabel({ value: mass, unit: first.unit ?? "kg" });
+    wetKg != null || dryKg != null
+      ? formatWetDryMass({ wetKg, dryKg })
+      : mass != null
+        ? massLabel({ value: mass, unit: first.unit ?? "kg" })
+        : null;
   return {
     ...first,
     inferred: members.some((member) => member.inferred),
     mass,
     unit: mass == null ? null : first.unit,
+    massFooting: mass == null ? null : first.massFooting,
+    mixedMass: anyMass && !summable,
     wetKg,
     dryKg,
     kgLabel,
