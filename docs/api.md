@@ -863,7 +863,7 @@ as name clashes, do not carry it. HTTP status is 409 for all of them.
 
 | Record | Used by | Code | Issue pointer | Safe issue metadata besides `reason` |
 |---|---|---|---|---|
-| Supplier | Feedstock intakes, including archived ones | `conflict` | `/supplierId` | `feedstockCodes`; `feedstocks` (`{ id, code }` for each referenced intake, up to the blocker limit, in code order, matching `feedstockCodes`) |
+| Supplier | Feedstock intakes, including archived ones | `conflict` | `/supplierId` | `feedstockCodes`; `feedstocks` (`{ id, code, facilityId }` for each referenced intake, up to the blocker limit, in code order, matching `feedstockCodes`) |
 | Customer | Deliveries, including archived ones, or registered storage sites | `conflict` | `/customerId` | `deliveryCodes`; `deliveries` (`{ id, code, facilityId }` for each referenced delivery, up to the blocker limit, in code order, matching `deliveryCodes`); `locationIds` for registered storage-site blockers instead |
 | Customer location | Orders, including archived ones, or a registered storage site | `conflict` | `/locationId` | `orderCodes`; `orders` (`{ id, code, facilityId }` for each referenced order, up to the blocker limit, in code order, matching `orderCodes`); none for a registered storage site |
 | Formulation, feedstock type | Their dependents | `conflict` | the record's own id field | Dependent codes (for example `orderCodes`) where the refusal lists them |

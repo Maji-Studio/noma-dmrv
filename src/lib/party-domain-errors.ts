@@ -25,8 +25,8 @@ export function partyArchiveConflict(kind: Party, code: string, archived: boolea
 export function partyNameConflict(message: string, meta?: DomainIssue["meta"]): DomainError {
   return partyRefusal("conflict", message, ["name"], meta);
 }
-export function supplierHasIntakes(feedstocks: readonly { id: string; code: string }[] = []): DomainError {
-  return inUseDeleteRefusal(`Supplier ${IN_USE_DELETE_MARKER} feedstock intakes still use it. Review the linked intakes or keep this supplier.`, ["supplierId"], { meta: { feedstockCodes: feedstocks.map(row => row.code), feedstocks: feedstocks.map(({ id, code }) => ({ id, code })) } });
+export function supplierHasIntakes(feedstocks: readonly { id: string; code: string; facilityId: string }[] = []): DomainError {
+  return inUseDeleteRefusal(`Supplier ${IN_USE_DELETE_MARKER} feedstock intakes still use it. Review the linked intakes or keep this supplier.`, ["supplierId"], { meta: { feedstockCodes: feedstocks.map(row => row.code), feedstocks: feedstocks.map(({ id, code, facilityId }) => ({ id, code, facilityId })) } });
 }
 export function customerHasStorageSites(locationIds: string[] = []): DomainError {
   return inUseDeleteRefusal(`Customer ${IN_USE_DELETE_MARKER} its locations are registered storage sites. Keep this customer.`, ["customerId"], { meta: { locationIds } });

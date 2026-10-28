@@ -261,6 +261,34 @@ describe("CustomerSavedLocations", () => {
     await waitFor(() => expect(screen.queryByText("E2E North Block is in use")).toBeNull());
   });
 
+  it("links every order the refusal names under its own facility", async () => {
+    state.locations = [location("l1", "E2E North Block", { isDefault: true })];
+    state.remove.mockRejectedValue(inUseError(IN_USE, {
+      orderCodes: ["OR-001", "OR-002"],
+      orders: [{ id: "o1", code: "OR-001", facilityId: "f1" }, { id: "o2", code: "OR-002", facilityId: "f2" }],
+    }));
+    render(<CustomerSavedLocations customerId="c1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Delete E2E North Block" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "E2E North Block is in use" }));
+    expect(dialog.getAllByRole("link").map((link) => [link.getAttribute("aria-label"), link.getAttribute("href")])).toEqual([
+      ["Open order OR-001", "/orders?facility=f1&order=o1"], ["Open order OR-002", "/orders?facility=f2&order=o2"],
+    ]);
+    expect(dialog.getByText(/it cannot be archived because it is the only active location/)).toBeTruthy();
+  });
+
+  it("links the orders on an archived location's in-use dialog", async () => {
+    state.locations = [...state.locations, location("l3", "E2E Old Field", { archivedAt: ARCHIVED_AT })];
+    state.remove.mockRejectedValue(inUseError(ARCHIVED_IN_USE, { orderCodes: ["OR-001"], orders: [{ id: "o1", code: "OR-001", facilityId: "f1" }] }));
+    render(<CustomerSavedLocations customerId="c1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Archived locations (1)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete E2E Old Field" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "E2E Old Field is in use" }));
+    expect(dialog.getByText("E2E Old Field cannot be deleted because other records still use it.")).toBeTruthy();
+    expect(dialog.getByRole("link", { name: "Open order OR-001" }).getAttribute("href")).toBe("/orders?facility=f1&order=o1");
+  });
+
   it("says only that an archived location is in use when its delete is refused", async () => {
     state.locations = [...state.locations, location("l3", "E2E Old Field", { archivedAt: ARCHIVED_AT })];
     state.remove.mockRejectedValue(inUseError(ARCHIVED_IN_USE));

@@ -113,18 +113,18 @@ describe("party refusals and atomic effects", () => {
     const [intake] = await db.update(feedstocks).set({ archivedAt: new Date() })
       .where(eq(feedstocks.organizationId, f.ctx.organizationId)).returning();
     await expect(runOperation(deleteSupplier, f.ctx, { supplierId: f.supplierId, expectedVersion: 1 }))
-      .rejects.toMatchObject({ code: "conflict", issues: [expect.objectContaining({ meta: { feedstockCodes: [intake.code], feedstocks: [{ id: intake.id, code: intake.code }], reason: "in_use" } })] });
+      .rejects.toMatchObject({ code: "conflict", issues: [expect.objectContaining({ meta: { feedstockCodes: [intake.code], feedstocks: [{ id: intake.id, code: intake.code, facilityId: intake.facilityId }], reason: "in_use" } })] });
     expect(await db.select().from(suppliers).where(eq(suppliers.id, f.supplierId))).toHaveLength(1);
   });
   it("caps supplier references in code order with ids from the matching intakes", async () => {
     const f = await createIntakeFixture("supplier-references"); intakeFixtures.push(f);
-    const references: { id: string; code: string }[] = [];
+    const references: { id: string; code: string; facilityId: string }[] = [];
     for (const index of [6, 3, 1, 5, 2, 4]) {
       const result = await runOperation(logFeedstockDelivery, f.ctx, f.input());
       const [row] = result.data.feedstocks;
       const code = `E2E-FS-${index}`;
       await db.update(feedstocks).set({ code, archivedAt: new Date() }).where(and(eq(feedstocks.organizationId, f.ctx.organizationId), eq(feedstocks.id, row.id)));
-      references.push({ id: row.id, code });
+      references.push({ id: row.id, code, facilityId: row.facilityId });
     }
     const named = references.sort((a, b) => a.code.localeCompare(b.code)).slice(0, BLOCKER_LIMIT);
     await expect(runOperation(deleteSupplier, f.ctx, { supplierId: f.supplierId, expectedVersion: 1 }))

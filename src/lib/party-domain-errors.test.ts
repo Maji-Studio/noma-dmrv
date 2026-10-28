@@ -38,10 +38,9 @@ describe("party in-use reference metadata", () => {
     { id: "record-1", code: "REF-002", facilityId: "facility-1" },
   ];
 
-  it("pairs supplier intake ids with the codes in query order", () => {
+  it("keeps each supplier intake's facility with its id and code", () => {
     expect(supplierHasIntakes(references).issues[0].meta).toEqual({
-      reason: IN_USE_REASON, feedstockCodes: ["REF-001", "REF-002"],
-      feedstocks: references.map(({ id, code }) => ({ id, code })),
+      reason: IN_USE_REASON, feedstockCodes: ["REF-001", "REF-002"], feedstocks: references,
     });
   });
 

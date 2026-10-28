@@ -21,7 +21,8 @@ import { Button } from "@/components/ui/button";
 import { ICON_BUTTON_TOUCH_PROPS } from "@/components/ui/touch-target";
 import { DefaultLocationBadge } from "@/components/ui/default-location-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { InUseDeleteDialog, InUseReferences } from "@/components/ui/in-use-delete-dialog";
+import { locationInUseReferences } from "@/lib/in-use-references";
 import { isActionError } from "@/lib/action-error";
 import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { useToast } from "@/components/ui/toast";
@@ -212,6 +213,8 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
     setIsLocationDialogOpen(true);
   };
 
+  const conflictLinks = deleteConflict ? locationInUseReferences(deleteConflict.refusal) : [];
+
   return (
     <FormSection
       title="Locations"
@@ -318,8 +321,15 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
           }}
           errorMessage={lifecycleError}
         >
-          {deleteConflict.location.archivedAt ? undefined : (
-            <p>{onlyActiveInUseMessage(deleteConflict.location.name, deleteConflict.refusal)}</p>
+          {deleteConflict.location.archivedAt && conflictLinks.length === 0 ? undefined : (
+            <>
+              <p>
+                {deleteConflict.location.archivedAt
+                  ? `${deleteConflict.location.name} cannot be deleted because other records still use it.`
+                  : onlyActiveInUseMessage(deleteConflict.location.name, deleteConflict.refusal)}
+              </p>
+              {conflictLinks.length > 0 && <InUseReferences references={conflictLinks} />}
+            </>
           )}
         </InUseDeleteDialog>
       )}

@@ -55,7 +55,7 @@ export function addSupplierWritePaths(paths: Paths, { publishOutput, writeErrors
   };
   paths["/suppliers/{idOrCode}"].delete = {
     ...privateOperation("delete_supplier", "suppliers:delete",
-      `Delete by UUID, including archived rows; deletes its locations and facility pairs. Intakes, including archived intakes, answer 409 conflict with issue metadata reason in_use, feedstockCodes and feedstocks (id and code of each referenced intake, up to ${BLOCKER_LIMIT} in code order, matching feedstockCodes). Blockers point at /supplierId. ${RETRY_GUIDANCE}`,
+      `Delete by UUID, including archived rows; deletes its locations and facility pairs. Intakes, including archived intakes, answer 409 conflict with issue metadata reason in_use, feedstockCodes and feedstocks (id, code and facilityId of each referenced intake, up to ${BLOCKER_LIMIT} in code order, matching feedstockCodes). Blockers point at /supplierId. ${RETRY_GUIDANCE}`,
       {
         ...existingErrors,
         "204": { description: "Deleted, or replayed; no body or ETag.", headers: { ...privateHeaders, ...writeHeaders } },

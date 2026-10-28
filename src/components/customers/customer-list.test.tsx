@@ -2,15 +2,15 @@
 import { ActionError } from "@/lib/action-error";
 import { inUseDeleteRefusal } from "@/lib/delete-refusal";
 import type { ReactNode } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within as inDialog } from "@testing-library/react";
 import { CascadeChangedError } from "@/lib/cascade-changed";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CustomerWithRelations } from "@/data-access/customers";
 import { CustomerList } from "./customer-list";
 
-function inUseError(message: string): ActionError {
-  return new ActionError({ error: message, ...inUseDeleteRefusal(message, []) });
+function inUseError(message: string, meta?: Record<string, unknown>): ActionError {
+  return new ActionError({ error: message, ...inUseDeleteRefusal(message, [], meta ? { meta } : {}) });
 }
 
 const state = vi.hoisted(() => ({
@@ -179,6 +179,40 @@ describe("CustomerList archive view", () => {
     fireEvent.click(screen.getByRole("button", { name: "Archive instead" }));
     await waitFor(() => expect(state.archive).toHaveBeenCalledWith({ customerId: "id-CUST-0001", expectedVersion: 4 }));
     await waitFor(() => expect(screen.queryByText("CUST-0001 is in use")).toBeNull());
+  });
+
+  it("links every delivery the refusal names under its own facility, and stays text-only without a list", async () => {
+    const message = "Customer was not deleted because deliveries were recorded on its orders. Archive it instead.";
+    state.remove.mockRejectedValueOnce(inUseError(message, {
+      deliveryCodes: ["DL-001", "DL-002"],
+      deliveries: [{ id: "d1", code: "DL-001", facilityId: "f1" }, { id: "d2", code: "DL-002", facilityId: "f2" }],
+    }));
+    const view = render(<CustomerList />);
+    fireEvent.click(within("Actions for CUST-0001", "Delete"));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    const dialog = inDialog(await screen.findByRole("dialog", { name: "CUST-0001 is in use" }));
+    expect(dialog.getAllByRole("link").map((link) => [link.getAttribute("aria-label"), link.getAttribute("href")])).toEqual([
+      ["Open delivery DL-001", "/deliveries?facility=f1&delivery=d1"], ["Open delivery DL-002", "/deliveries?facility=f2&delivery=d2"],
+    ]);
+    expect(dialog.getByRole("button", { name: "Archive instead" })).toBeTruthy();
+    view.unmount();
+
+    state.remove.mockRejectedValueOnce(inUseError(message));
+    render(<CustomerList />);
+    fireEvent.click(within("Actions for CUST-0001", "Delete"));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    const plain = inDialog(await screen.findByRole("dialog", { name: "CUST-0001 is in use" }));
+    expect(plain.queryAllByRole("link")).toHaveLength(0);
+  });
+
+  it("links the deliveries when the dry run refuses the customer", () => {
+    state.preview = { data: undefined, isPending: false, isError: true, error: inUseError(
+      "Customer was not deleted because deliveries were recorded on its orders. Archive it instead.",
+      { deliveries: [{ id: "d1", code: "DL-001", facilityId: "f2" }] },
+    ) };
+    render(<CustomerList />);
+    fireEvent.click(within("Actions for CUST-0001", "Delete"));
+    expect(screen.getByRole("link", { name: "Open delivery DL-001" }).getAttribute("href")).toBe("/deliveries?facility=f2&delivery=d1");
   });
 
   it("retries Archive instead with the refreshed version after a stale refusal", async () => {

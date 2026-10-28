@@ -91,7 +91,7 @@ export async function deleteSupplierInTransaction(ctx: OrgContext, tx: DbTransac
   const [locked] = await tx.select().from(suppliers).where(and(eq(suppliers.organizationId, ctx.organizationId), eq(suppliers.id, supplierId))).for("update");
   if (!locked) throw partyNotFound("supplier");
   assertRowVersion({ entity: "supplier", id: supplierId, expectedVersion, actualVersion: locked.version });
-  const uses = await tx.select({ id: feedstocks.id, code: feedstocks.code }).from(feedstocks)
+  const uses = await tx.select({ id: feedstocks.id, code: feedstocks.code, facilityId: feedstocks.facilityId }).from(feedstocks)
     .where(and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.supplierId, supplierId)))
     .orderBy(asc(feedstocks.code)).limit(BLOCKER_LIMIT);
   if (uses.length) throw supplierHasIntakes(uses);
