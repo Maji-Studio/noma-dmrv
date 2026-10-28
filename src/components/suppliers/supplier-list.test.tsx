@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { ActionError } from "@/lib/action-error";
 import { inUseDeleteRefusal } from "@/lib/delete-refusal";
+import { feedstockDeepLinkHref } from "@/lib/feedstock-links";
 import type { ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within as inDialog } from "@testing-library/react";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
@@ -189,7 +190,7 @@ describe("SupplierList archive view", () => {
     const dialog = inDialog(await screen.findByRole("dialog", { name: "SUP-0001 is in use" }));
     const links = dialog.getAllByRole("link");
     expect(links.map((link) => link.getAttribute("aria-label"))).toEqual(["Open feedstock FS-001", "Open feedstock FS-002"]);
-    expect(links.map((link) => link.getAttribute("href"))).toEqual(["/feedstocks?facility=fac-1&feedstock=fs-1", "/feedstocks?facility=fac-2&feedstock=fs-2"]);
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([feedstockDeepLinkHref("fs-1", "fac-1"), feedstockDeepLinkHref("fs-2", "fac-2")]);
     expect(dialog.getByText("SUP-0001 cannot be deleted because feedstock intakes still use it.")).toBeTruthy();
     expect(dialog.getByRole("button", { name: "Archive instead" })).toBeTruthy();
     view.unmount();
@@ -287,7 +288,7 @@ describe("SupplierList archive view", () => {
     fireEvent.click(within("Actions for SUP-0002", "Delete"));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
     const dialog = inDialog(await screen.findByRole("dialog", { name: "SUP-0002 is in use" }));
-    expect(dialog.getByRole("link", { name: "Open feedstock FS-001" }).getAttribute("href")).toBe("/feedstocks?facility=f2&feedstock=fs-1");
+    expect(dialog.getByRole("link", { name: "Open feedstock FS-001" }).getAttribute("href")).toBe(feedstockDeepLinkHref("fs-1", "f2"));
     expect(dialog.queryByRole("button", { name: "Archive instead" })).toBeNull();
     expect(dialog.queryByText(/Archive it instead/)).toBeNull();
     expect(dialog.getAllByRole("button", { name: "Close" }).length).toBeGreaterThan(0);
