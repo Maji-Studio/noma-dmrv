@@ -108,7 +108,9 @@ describe("order errors", () => {
     expect(capped.message).toBe(message);
     expect(capped.issues).toEqual(error.issues);
     expect(error).toMatchObject({ code: "certification_locked", issues: [{ path: ["orderId"], code: "certification_locked", meta: { reason: "in_use", deliveryCode: "DL-1", deliveryId: "delivery-id" } }] });
-    expect(error.issues[0].meta).toEqual({ reason: "in_use", deliveryCode: "DL-1", deliveryId: "delivery-id" });
+    const named = deliveries.slice(0, ORDER_DELIVERY_NAME_CAP);
+    expect(error.issues[0].meta).toEqual({ reason: "in_use", deliveryCode: "DL-1", deliveryId: "delivery-id", deliveries: named });
+    expect(capped.issues[0].meta).toEqual(error.issues[0].meta);
     const failure = toActionFailure(error, options);
     expect(isInUseDeleteRefusal(new ActionError(failure))).toBe(true);
     const response = actionFailureResponse(failure, "/api/v1/orders/order-id", "request-id");
@@ -119,6 +121,14 @@ describe("order errors", () => {
       code: "certification_locked", detail: error.message,
       issues: [{ pointer: "/orderId", code: "certification_locked", meta: { reason: "in_use", deliveryCode: "DL-1", deliveryId: "delivery-id" } }],
     } });
+  });
+
+  it("lists only the named deliveries in code order, keeping the first as the legacy pair", () => {
+    const all = ["DL-1", "DL-2", "DL-3", "DL-4", "DL-5"].map(code => ({ id: `id-${code}`, code }));
+    const meta = orderHasDeliveries(all, "OR-1").issues[0].meta;
+    expect(meta?.deliveries).toEqual(all.slice(0, ORDER_DELIVERY_NAME_CAP));
+    expect(meta).toMatchObject({ reason: "in_use", deliveryCode: "DL-1", deliveryId: "id-DL-1" });
+    expect(orderHasDeliveries(all.slice(0, 1), "OR-1").issues[0].meta?.deliveries).toEqual([all[0]]);
   });
 
   it("refuses mismatched customer locations", () => {

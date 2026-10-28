@@ -219,9 +219,9 @@ describe("three-way order parity", { timeout: TIMEOUT_MS }, () => {
       expect(failure).toMatchObject({ code, issues: [{ code, pointer }] });
       if (setup === "quantity") expect(failure.issues[0].meta).toEqual({ allocatedWetKg: DELIVERED_KG, unit: "kg" });
       if (setup === "delivery") {
-        expect(failure.issues[0].meta).toEqual({ reason: "in_use", deliveryCode, deliveryId });
+        expect(failure.issues[0].meta).toEqual({ reason: "in_use", deliveryCode, deliveryId, deliveries: [{ id: deliveryId, code: deliveryCode }] });
         // Each transport fixture generates its own delivery code and id; compare after checking the exact values.
-        failure.issues[0].meta = { ...failure.issues[0].meta, deliveryCode: "<delivery>", deliveryId: "<delivery-id>" };
+        failure.issues[0].meta = { ...failure.issues[0].meta, deliveryCode: "<delivery>", deliveryId: "<delivery-id>", deliveries: [{ id: "<delivery-id>", code: "<delivery>" }] };
       }
       failures.set(transport, failure);
       expect(await orderRows(f)).toEqual(beforeRows);

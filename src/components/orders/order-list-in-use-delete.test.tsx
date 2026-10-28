@@ -71,7 +71,7 @@ describe("Order in-use delete refusal", () => {
   it("opens the in-use dialog with the server's reason and no Delete button", async () => {
     harness.remove.mockRejectedValue(new ActionError({
       error: IN_USE_MESSAGE, code: "certification_locked",
-      issues: [{ path: ["orderId"], code: "certification_locked", message: IN_USE_MESSAGE, meta: { reason: "in_use", deliveryCode: "DL-001", deliveryId: "delivery-1" } }],
+      issues: [{ path: ["orderId"], code: "certification_locked", message: IN_USE_MESSAGE, meta: { reason: "in_use", deliveryCode: "DL-001", deliveryId: "delivery-1", deliveries: [{ id: "delivery-1", code: "DL-001" }] } }],
     }));
     render(<OrderList />);
     await confirmDelete();
@@ -86,6 +86,27 @@ describe("Order in-use delete refusal", () => {
 
     fireEvent.click(dialog.getAllByRole("button", { name: "Close" }).at(-1)!);
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("links every named delivery and leaves the remaining count in the message", async () => {
+    const message = "Order OR-001 was not deleted because 5 deliveries still use it: DL-001, DL-002, DL-003 and 2 more. Delete those deliveries first, or keep this order.";
+    harness.remove.mockRejectedValue(new ActionError({
+      error: message, code: "certification_locked",
+      issues: [{ path: ["orderId"], code: "certification_locked", message, meta: {
+        reason: "in_use", deliveryCode: "DL-001", deliveryId: "delivery-1",
+        deliveries: [{ id: "delivery-1", code: "DL-001" }, { id: "delivery-2", code: "DL-002" }, { id: "delivery-3", code: "DL-003" }],
+      } }],
+    }));
+    render(<OrderList />);
+    await confirmDelete();
+
+    const dialog = within(screen.getByRole("dialog"));
+    const links = dialog.getAllByRole("link");
+    expect(links.map((link) => link.getAttribute("aria-label"))).toEqual(["Open delivery DL-001", "Open delivery DL-002", "Open delivery DL-003"]);
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      "/deliveries?facility=f1&delivery=delivery-1", "/deliveries?facility=f1&delivery=delivery-2", "/deliveries?facility=f1&delivery=delivery-3",
+    ]);
+    expect(dialog.getByText(message)).toBeTruthy();
   });
 
   it("keeps any other refusal in the confirm dialog", async () => {

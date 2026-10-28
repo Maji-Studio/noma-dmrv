@@ -268,7 +268,7 @@ describe("customer and order MCP tools", { timeout: TIMEOUT_MS }, () => {
       detail: `Order ${row.code} was not deleted because 2 deliveries still use it: ${first.code} and ${second.code}. Delete those deliveries first, or keep this order.`,
       issues: [{ pointer: "/orderId", code: "certification_locked" }],
     } });
-    expect(refusal.structuredContent.issues[0].meta).toEqual({ reason: "in_use", deliveryCode: first.code, deliveryId: first.id });
+    expect(refusal.structuredContent.issues[0].meta).toEqual({ reason: "in_use", deliveryCode: first.code, deliveryId: first.id, deliveries: [first, second].map(({ id, code }) => ({ id, code })) });
     expect((await readRestOrder(a, row.id)).row).toEqual(row);
     expect(await orderAudits(a)).toHaveLength(1);
   });
