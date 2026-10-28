@@ -9,6 +9,7 @@ export type DriftDifference =
   | { field: "windowStart" | "windowEnd"; isometric: string; noma: string };
 
 export interface DriftDetails {
+  attemptId?: string;
   creditBatchId: string;
   creditBatchCode: string;
   differences: DriftDifference[];
@@ -28,6 +29,7 @@ export function readDriftDetails(responsePayload: unknown): DriftDetails | null 
     return null;
   }
   return {
+    ...(typeof value.attemptId === "string" ? { attemptId: value.attemptId } : {}),
     creditBatchId: value.creditBatchId,
     creditBatchCode: value.creditBatchCode,
     differences: value.differences,

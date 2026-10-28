@@ -25,7 +25,8 @@
  *    confirmed (a concurrent registration won the race).
  *
  * When a changed payload hash reveals different registered figures, record a
- * failed sync event and stop submission. Display-only changes remain logged
+ * failed sync event and stop pre-entry submission by default. Post-entry
+ * reconciliation explicitly selects audit-only reuse. Display-only changes remain logged
  * and audited without changing the registry. Legacy day-bound window hashes
  * still migrate. Payload validation gates new registrations; an existing batch
  * whose local facts cannot be rebuilt retains the existing reuse behavior.
@@ -168,6 +169,9 @@ export function buildProductionBatchSubmissions(
 export interface EnsureProductionBatchesArgs {
   orgCtx: OrgContext;
   removalId: string;
+  attemptId?: string;
+  /** Reject drift by default; audit-only reuse is for post-entry reconciliation. */
+  driftPolicy?: "reject" | "audit";
   /** Claimed ledger row used for registry audit and recovery. */
   submissionRow: { id: string };
   expectedLockedAt?: Date;
@@ -250,6 +254,8 @@ export async function ensureProductionBatchesForCreditBatches(
           await assertRegisteredProductionBatchMatches({
             orgCtx: args.orgCtx,
             removalId: args.removalId,
+            attemptId: args.attemptId,
+            driftPolicy: args.driftPolicy,
             submissionRowId: args.submissionRow.id,
             submission: current,
             remote,
@@ -393,6 +399,8 @@ export async function ensureProductionBatchesForCreditBatches(
 export async function bindProductionBatchesToMeasurementSamples(args: {
   orgCtx: OrgContext;
   removalId: string;
+  attemptId?: string;
+  driftPolicy?: "reject" | "audit";
   submissionRow: { id: string };
   expectedLockedAt?: Date;
   deferRejectionToAttempt?: boolean;
@@ -403,6 +411,8 @@ export async function bindProductionBatchesToMeasurementSamples(args: {
   const registered = await ensureProductionBatchesForCreditBatches({
     orgCtx: args.orgCtx,
     removalId: args.removalId,
+    attemptId: args.attemptId,
+    driftPolicy: args.driftPolicy,
     submissionRow: args.submissionRow,
     expectedLockedAt: args.expectedLockedAt,
     deferRejectionToAttempt: args.deferRejectionToAttempt,

@@ -92,7 +92,7 @@ function remoteBatch() {
 }
 
 function precheck(creditBatchIds = [CREDIT_BATCH_ID]) {
-  return assertRegisteredProductionBatchesMatch({ orgCtx, removalId: "removal-1", creditBatchIds, log });
+  return assertRegisteredProductionBatchesMatch({ orgCtx, attemptId: "attempt-precheck", removalId: "removal-1", creditBatchIds, log });
 }
 
 function expectNoWrites() {
@@ -141,7 +141,7 @@ describe("assertRegisteredProductionBatchesMatch", () => {
         operation: `production-batch:drift:${CREDIT_BATCH_ID}`,
         status: "failed",
         errorMessage: expect.stringContaining("different figures than noma has now"),
-        responsePayload: expect.objectContaining({ reused: false }),
+        responsePayload: expect.objectContaining({ reused: false, drift: expect.objectContaining({ attemptId: "attempt-precheck" }) }),
       }),
       { submissionId: undefined },
     );

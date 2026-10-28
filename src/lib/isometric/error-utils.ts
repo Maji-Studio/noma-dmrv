@@ -1,5 +1,5 @@
 import { sanitizeErrorMessage } from "@/lib/log";
-import { IsometricApiError } from "./client";
+import { ISOMETRIC_REQUEST_TIMEOUT_MESSAGE, IsometricApiError } from "./client";
 
 const MAX_ERROR_TEXT_LENGTH = 500;
 const MAX_SUMMARY_LENGTH = 240;
@@ -115,8 +115,6 @@ export function describeIsometricApiError(
   return fallback;
 }
 
-const REQUEST_TIMEOUT_TEXT = "Isometric request timed out";
-
 /**
  * Whether Isometric never answered: a network failure, a read that timed out,
  * or the client's own request deadline, on the error or anything in its cause
@@ -130,7 +128,7 @@ export function isNoAnswerError(error: unknown): boolean {
     if (current instanceof IsometricApiError && (current.code === "network" || current.readFailureReason === "timeout")) {
       return true;
     }
-    if (current instanceof Error && current.message.includes(REQUEST_TIMEOUT_TEXT)) return true;
+    if (current instanceof Error && current.message.includes(ISOMETRIC_REQUEST_TIMEOUT_MESSAGE)) return true;
     current = (current as { cause?: unknown }).cause;
   }
   return false;

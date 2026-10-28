@@ -2,8 +2,8 @@
  * One entry per submit attempt, derived from the Removal's sync events.
  * `submitRemoval` writes a `removal:submit:attempt-summary` event as each
  * attempt ends, stamped with the attempt's start time. Every other event the
- * attempt wrote (a drift stop) falls between that start and the summary's own
- * write time. An attempt that never ended (the server died) has
+ * attempt wrote (a drift stop) is correlated by attempt ID. Older events
+ * fall back to the window between that start and the summary's write time. An attempt that never ended (the server died) has
  * no summary, so it has no entry; the interrupted status covers that case.
  */
 import type { DriftDetails } from "./production-batch-drift-details";
@@ -63,9 +63,14 @@ export function deriveSubmissionAttempts(events: readonly AttemptEventInput[]): 
     if (summary.status === "succeeded") return { ...base, outcome: { kind: "submitted" } };
 
     for (const event of drifts) {
-      if (time(event.attemptedAt) < start || time(event.attemptedAt) > end) continue;
       const details = readDriftDetails(event.responsePayload);
-      if (details) return { ...base, outcome: { kind: "differs", ...details } };
+      if (!details) continue;
+      if (details.attemptId !== undefined) {
+        if (details.attemptId !== payload.attempt_id) continue;
+      } else if (time(event.attemptedAt) < start || time(event.attemptedAt) > end) {
+        continue;
+      }
+      return { ...base, outcome: { kind: "differs", ...details } };
     }
     if (payload.failure_kind === "no_answer") return { ...base, outcome: { kind: "no-answer" } };
     return { ...base, outcome: { kind: "failed", message: summary.errorMessage } };

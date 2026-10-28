@@ -20,6 +20,7 @@ import {
 export async function assertRegisteredProductionBatchesMatch(args: {
   orgCtx: OrgContext;
   removalId: string;
+  attemptId?: string;
   creditBatchIds: string[];
   log: Logger;
 }): Promise<void> {
@@ -60,6 +61,7 @@ export async function assertRegisteredProductionBatchesMatch(args: {
     await assertRegisteredProductionBatchMatches({
       orgCtx: args.orgCtx,
       removalId: args.removalId,
+      attemptId: args.attemptId,
       submission: current,
       remote,
       legacyWindow: input,

@@ -1,3 +1,4 @@
+import { ATTEMPT_SUMMARY_OPERATION } from "@/lib/certification/submission-attempts";
 import { isNoAnswerError } from "@/lib/isometric/error-utils";
 import { REMOVAL_SUBMISSION_CLAIM_POLICY } from "@/lib/isometric/utils/submission-claim";
 import { readRemovalEntrySnapshot } from "./removal-snapshot-readers";
@@ -173,7 +174,7 @@ export async function submitRemoval(
       provider: ISOMETRIC_PROVIDER,
       entityType: REMOVAL_ENTITY_TYPE,
       entityId: args.removalId,
-      operation: "removal:submit:attempt-summary",
+      operation: ATTEMPT_SUMMARY_OPERATION,
       status: outcome === "succeeded" ? "succeeded" : "failed",
       responsePayload: {
         attempt_id: attempt.id,
@@ -292,12 +293,19 @@ async function submitRemovalCore(
   });
   const client = await resolveIsometricClient(orgCtx);
 
-  await assertRegisteredProductionBatchesMatch({
-    orgCtx,
-    removalId,
-    creditBatchIds: ctx.memberBatches.map((batch) => batch.id),
-    log,
-  });
+  // A resumed draft whose GHG Entry already exists finishes reconciliation despite batch drift.
+  // A new version (first submit or a superseding resubmit) still stops before any Source work.
+  const resumesExistingEntry =
+    ctx.latestSubmission?.status === "draft" && Boolean(ctx.latestSubmission.externalId);
+  if (!resumesExistingEntry) {
+    await assertRegisteredProductionBatchesMatch({
+      orgCtx,
+      removalId,
+      attemptId: attempt.id,
+      creditBatchIds: ctx.memberBatches.map((batch) => batch.id),
+      log,
+    });
+  }
 
   // Everything below may create or update Isometric Sources before the
   // submission ledger draft exists. Persist that the registry boundary is
@@ -684,6 +692,8 @@ async function runRemovalSubmission({
         orgCtx,
         removalId,
         submissionRow: row,
+        attemptId: attempt.id,
+        driftPolicy: row.externalId ? "audit" : "reject",
         expectedLockedAt,
         deferRejectionToAttempt: true,
         onExternalMutation: (state) => recordRemovalExternalMutation(attempt, state),
@@ -699,6 +709,8 @@ async function runRemovalSubmission({
     orgCtx,
     removalId,
     submissionRow: row,
+    attemptId: attempt.id,
+    driftPolicy: row.externalId ? "audit" : "reject",
     expectedLockedAt,
     deferRejectionToAttempt: true,
     onExternalMutation: (state) => recordRemovalExternalMutation(attempt, state),

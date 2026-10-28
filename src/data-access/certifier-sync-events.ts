@@ -2,6 +2,7 @@ import { and, desc, eq, gte, inArray, like, max, notInArray } from "drizzle-orm"
 import { db } from "@/db";
 import { certifierSyncEvents } from "@/db/schema/certification";
 import type { OrgContext } from "@/lib/auth/server";
+import { ATTEMPT_SUMMARY_OPERATION, DRIFT_OPERATION_PREFIX } from "@/lib/certification/submission-attempts";
 import { requireOrgScope } from "./utils";
 
 type CertifierProvider =
@@ -112,7 +113,7 @@ export async function listRemovalAttemptEvents(
       eq(certifierSyncEvents.entityType, "removal"),
       eq(certifierSyncEvents.entityId, args.removalId),
       eq(certifierSyncEvents.organizationId, ctx.organizationId),
-      eq(certifierSyncEvents.operation, "removal:submit:attempt-summary"),
+      eq(certifierSyncEvents.operation, ATTEMPT_SUMMARY_OPERATION),
     ))
     .orderBy(desc(certifierSyncEvents.attemptedAt))
     .limit(ATTEMPT_SUMMARY_LIMIT);
@@ -125,7 +126,7 @@ export async function listRemovalAttemptEvents(
       eq(certifierSyncEvents.entityType, "removal"),
       eq(certifierSyncEvents.entityId, args.removalId),
       eq(certifierSyncEvents.organizationId, ctx.organizationId),
-      like(certifierSyncEvents.operation, "production-batch:drift:%"),
+      like(certifierSyncEvents.operation, `${DRIFT_OPERATION_PREFIX}%`),
       eq(certifierSyncEvents.status, "failed"),
       gte(certifierSyncEvents.attemptedAt, oldest.attemptedAt),
     ))

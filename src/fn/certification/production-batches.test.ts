@@ -552,7 +552,7 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     }]);
     const sendMeasurements = vi.fn();
     const pending = bindProductionBatchesToMeasurementSamples({
-      orgCtx, removalId: "removal-1", submissionRow: { id: "submission-1" }, log,
+      orgCtx, removalId: "removal-1", attemptId: "attempt-binding", submissionRow: { id: "submission-1" }, log,
       submissions: [CREDIT_BATCH_ID, laterId].map((creditBatchId) => ({
         creditBatchId, body: { production_batch_id: null },
       } as DurabilityMeasurementSampleSubmission)),
@@ -570,7 +570,7 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       operation: `production-batch:drift:${CREDIT_BATCH_ID}`, status: "failed",
       errorMessage: expect.stringContaining(difference),
       requestPayload: expect.objectContaining({ mass: { magnitude: registryInput(patch).totalDryMassKg, unit: "kg" } }),
-      responsePayload: { mass: { magnitude: 2_000 }, reused: false },
+      responsePayload: { mass: { magnitude: 2_000 }, reused: false, drift: { attemptId: "attempt-binding" } },
     });
     expect(mocks.markSubmissionRejectedBestEffort).toHaveBeenCalledWith(
       expect.objectContaining({ submissionRowId: "submission-1" }), event.errorMessage,

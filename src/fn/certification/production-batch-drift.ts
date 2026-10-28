@@ -9,6 +9,7 @@ import {
   type IsometricProductionBatch,
 } from "@/lib/isometric/production-batches";
 import type { Logger } from "@/lib/log";
+import { DRIFT_OPERATION_PREFIX } from "@/lib/certification/submission-attempts";
 import type { DriftDetails, DriftDifference } from "@/lib/certification/production-batch-drift-details";
 import {
   compareProductionBatchFigures,
@@ -31,6 +32,8 @@ const DRIFT_TIME_ZONE = "UTC";
 export async function assertRegisteredProductionBatchMatches(args: {
   orgCtx: OrgContext;
   removalId: string;
+  attemptId?: string;
+  driftPolicy?: "reject" | "audit";
   submissionRowId?: string;
   expectedLockedAt?: Date;
   deferRejectionToAttempt?: boolean;
@@ -70,24 +73,29 @@ export async function assertRegisteredProductionBatchMatches(args: {
     matches.window === "mismatch" ||
     (matches.window === "legacy" && !physicalWindowFitsLegacyBounds(current, args.legacyWindow));
   if (windowDiffers) {
-    if (!matches.start) {
+    if (matches.window === "legacy"
+      ? Date.parse(current.started_at) < Date.parse(remote.started_at)
+      : !matches.start) {
       describe({ field: "windowStart", isometric: remote.started_at, noma: current.started_at }, "Production window start", ...formatInstantPair(remote.started_at, current.started_at));
     }
-    if (!matches.end) {
+    if (matches.window === "legacy"
+      ? Date.parse(current.ended_at) > Date.parse(remote.ended_at)
+      : !matches.end) {
       describe({ field: "windowEnd", isometric: remote.ended_at, noma: current.ended_at }, "Production window end", ...formatInstantPair(remote.ended_at, current.ended_at));
     }
   }
 
-  const shared = differences.length > 0 && await isProductionBatchSharedWithOtherRemovals(args.orgCtx, args.removalId, {
+  const stopOnDrift = args.driftPolicy !== "audit";
+  const shared = stopOnDrift && differences.length > 0 && await isProductionBatchSharedWithOtherRemovals(args.orgCtx, args.removalId, {
     creditBatchId: submission.creditBatchId, externalProductionBatchId: remote.id,
   });
   const sharedWith = shared
     ? await findRemovalSharingCreditBatch(args.orgCtx, args.removalId, submission.creditBatchId)
     : null;
   const resolution = shared
-    ? "Another Removal also uses this Production Batch, so deleting this Removal keeps it in Isometric. Ask support to resolve the registry record."
+    ? "Another Removal also uses this credit batch, so deleting this Removal does not fix it. Contact support."
     : "To fix it before finalization, delete this Removal, which also removes the records noma created in Isometric, then submit again.";
-  const message = differences.length > 0
+  const message = stopOnDrift && differences.length > 0
     ? `Credit batch ${submission.creditBatchCode} is registered in Isometric with different figures than noma has now. ${lines.join(" ")} Check the production runs in this credit batch for edits made after the first submission. ${resolution} Nothing is changed in Isometric automatically.`
     : null;
   if (!message && args.recordSucceededEvent === false) return;
@@ -103,7 +111,7 @@ export async function assertRegisteredProductionBatchMatches(args: {
       provider: ISOMETRIC_PROVIDER,
       entityType: REMOVAL_ENTITY_TYPE,
       entityId: args.removalId,
-      operation: `production-batch:drift:${submission.creditBatchId}`,
+      operation: `${DRIFT_OPERATION_PREFIX}${submission.creditBatchId}`,
       status: message ? "failed" : "succeeded",
       requestPayload: current,
       responsePayload: {
@@ -111,7 +119,7 @@ export async function assertRegisteredProductionBatchMatches(args: {
         reused: !message,
         // Saved as data so the Removal sheet and the submit dialog show the
         // figures without parsing the message.
-        ...(message ? { drift: { creditBatchId: submission.creditBatchId, creditBatchCode: submission.creditBatchCode, differences, shared, sharedWith } satisfies DriftDetails } : {}),
+        ...(message ? { drift: { ...(args.attemptId ? { attemptId: args.attemptId } : {}), creditBatchId: submission.creditBatchId, creditBatchCode: submission.creditBatchCode, differences, shared, sharedWith } satisfies DriftDetails } : {}),
       },
       ...(message ? { errorMessage: message } : {}),
     },

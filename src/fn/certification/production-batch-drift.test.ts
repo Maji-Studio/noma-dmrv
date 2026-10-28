@@ -47,7 +47,7 @@ function fixture() {
     ...submission.body, display_name: "NM-001", mass: { ...submission.body.mass }, id: "ptb_1", uploaded_at: "2026-03-29T00:00:00.000Z",
   };
   return {
-    orgCtx, removalId: "removal-1", submissionRowId: "submission-1", log,
+    orgCtx, removalId: "removal-1", attemptId: "attempt-1", submissionRowId: "submission-1", log,
     expectedLockedAt: new Date("2026-03-30T00:00:00.000Z"),
     legacyWindow: { startDate: "2026-03-01", endDate: "2026-03-28" },
     submission, remote,
@@ -92,7 +92,7 @@ describe("assertRegisteredProductionBatchMatches", () => {
       responsePayload: {
         ...args.remote, reused: false,
         drift: {
-          creditBatchId: "batch-1", creditBatchCode: "NM-001", shared: false, sharedWith: null,
+          attemptId: "attempt-1", creditBatchId: "batch-1", creditBatchCode: "NM-001", shared: false, sharedWith: null,
           differences: [
             { field: "facility", isometric: "fcl_registered", noma: "fcl_current" },
             { field: "feedstockTypes", isometric: ["ftt_registered"], noma: ["ftt_1", "ftt_2"] },
@@ -199,7 +199,21 @@ describe("assertRegisteredProductionBatchMatches", () => {
     args.remote.started_at = "2026-03-01T00:00:00.000Z";
     args.remote.ended_at = "2026-03-28T23:59:59.999Z";
     args.submission.body.ended_at = "2026-03-29T01:00:00.000Z";
-    await expect(assertRegisteredProductionBatchMatches(args)).rejects.toThrow(/Production window end:/);
+    const error = await assertRegisteredProductionBatchMatches(args).catch((error: unknown) => error);
+    expect((error as SafeError).message).toContain("Production window end:");
+    expect((error as SafeError).message).not.toContain("Production window start:");
+    expect(mocks.appendSyncEventBestEffort.mock.calls[0][1].responsePayload.drift.differences)
+      .toEqual([{ field: "windowEnd", isometric: args.remote.ended_at, noma: args.submission.body.ended_at }]);
+  });
+
+  it("reports only the start when the physical window precedes the legacy bounds", async () => {
+    const args = fixture();
+    args.remote.started_at = "2026-03-01T00:00:00.000Z";
+    args.remote.ended_at = "2026-03-28T23:59:59.999Z";
+    args.submission.body.started_at = "2026-02-28T23:00:00.000Z";
+    await expect(assertRegisteredProductionBatchMatches(args)).rejects.toThrow(/Production window start:/);
+    expect(mocks.appendSyncEventBestEffort.mock.calls[0][1].responsePayload.drift.differences)
+      .toEqual([{ field: "windowStart", isometric: args.remote.started_at, noma: args.submission.body.started_at }]);
   });
 
   it("sends the operator to support when another Removal shares the batch", async () => {
@@ -207,8 +221,7 @@ describe("assertRegisteredProductionBatchMatches", () => {
     const args = fixture();
     args.remote.mass.magnitude = 1_200;
     const error = await assertRegisteredProductionBatchMatches(args).catch((e: unknown) => e);
-    expect((error as SafeError).message).toContain("Another Removal also uses this Production Batch");
-    expect((error as SafeError).message).toContain("Ask support to resolve the registry record.");
+    expect((error as SafeError).message).toContain("Another Removal also uses this credit batch, so deleting this Removal does not fix it. Contact support.");
     expect((error as SafeError).message).not.toContain("delete this Removal");
   });
 });

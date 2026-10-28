@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import type { CertifierBiocharApplication } from "@/db/schema/certifier-biochar-applications";
 import type { OrgContext } from "@/lib/auth/server";
+import type { IsometricClient } from "@/lib/isometric/client";
 import type { IsometricBiocharApplication } from "@/lib/isometric/biochar-applications";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { Logger } from "@/lib/log";
@@ -18,6 +19,11 @@ const mocks = vi.hoisted(() => ({
   recordReadback: vi.fn(),
   getProductionRegistrations: vi.fn(),
   ensureProduction: vi.fn(),
+  getProductionInputs: vi.fn(),
+  appendSyncEvent: vi.fn(),
+  rejectSubmission: vi.fn(),
+  verifyBindings: vi.fn(),
+  updateDates: vi.fn(),
   ensureStorage: vi.fn(),
   getStorage: vi.fn(),
   withLock: vi.fn(async (_key: string, fn: () => Promise<unknown>) => fn()),
@@ -38,6 +44,7 @@ vi.mock("@/data-access/certifier-biochar-applications", async (importOriginal) =
 }));
 vi.mock("@/data-access/certifier-production-batches", () => ({
   getProductionBatchRegistrations: mocks.getProductionRegistrations,
+  getProductionBatchRegistryInputs: mocks.getProductionInputs,
 }));
 vi.mock("@/db", () => ({ withDedicatedSessionAdvisoryLock: mocks.withLock }));
 vi.mock("@/lib/auth/server", () => ({ requireOrgRole: vi.fn() }));
@@ -61,7 +68,22 @@ vi.mock("@/data-access/certifier-storage-locations", () => ({
 vi.mock("./storage-locations", () => ({
   ensureStorageLocation: mocks.ensureStorage,
 }));
+vi.mock("@/data-access/credit-batch-removal-holders", () => ({
+  getCreditBatchUndeletableRemovalCodes: vi.fn(async () => new Map()),
+}));
+vi.mock("@/data-access/removal-production-batch-deletion", () => ({
+  isProductionBatchSharedWithOtherRemovals: vi.fn(),
+}));
+vi.mock("@/data-access/certifier-removals", () => ({ updateRemovalDates: mocks.updateDates }));
+vi.mock("./removal-source-binding-verification", () => ({
+  verifyAndPersistRemovalSourceBindings: mocks.verifyBindings,
+}));
+vi.mock("./shared", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./shared")>(),
+  appendSyncEventBestEffort: mocks.appendSyncEvent,
+}));
 vi.mock("./registry-create", () => ({
+  markSubmissionRejectedBestEffort: mocks.rejectSubmission,
   supplierRefLookup: (
     result: { found: true; externalId: string } | { found: false },
   ) =>
@@ -84,6 +106,7 @@ vi.mock("./registry-create", () => ({
 }));
 
 import { ensureRemovalBiocharApplications } from "./biochar-applications";
+import { reconcileRemovalRegistryArtifacts } from "./removal-submission-finalization";
 
 const APPLICATION_ID = "11111111-1111-4111-8111-111111111111";
 const CREDIT_BATCH_ID = "22222222-2222-4222-8222-222222222222";
@@ -293,6 +316,52 @@ beforeEach(() => {
 });
 
 describe("ensureRemovalBiocharApplications", () => {
+  it("completes post-entry reconciliation with a drifted registered batch and a succeeded audit", async () => {
+    const production = await vi.importActual<typeof import("./production-batches")>("./production-batches");
+    mocks.ensureProduction.mockImplementation(production.ensureProductionBatchesForCreditBatches);
+    const input = {
+      creditBatchId: CREDIT_BATCH_ID, creditBatchCode: "CB-001",
+      startDate: "2026-03-01", endDate: "2026-03-28",
+      startedAt: "2026-03-01T07:00:00.000Z", endedAt: "2026-03-28T18:00:00.000Z",
+      latestEndingRunCode: null, externalProjectId: "prj-test", externalFacilityId: "fcl-test",
+      isometricFeedstockTypeId: "ftt-test", totalDryMassKg: 1_150,
+      runsMissingDryMass: 0, runsMissingEndTime: 0,
+    };
+    const current = production.buildProductionBatchSubmission(input);
+    mocks.getProductionInputs.mockResolvedValue([input]);
+    mocks.getProductionRegistrations.mockResolvedValue([{
+      id: "production-journal-1", creditBatchId: CREDIT_BATCH_ID,
+      externalProductionBatchId: "ptb-test", supplierReference: current.supplierRefId,
+      externalProjectId: input.externalProjectId, externalFacilityId: input.externalFacilityId,
+      payloadHash: "registered-before-mass-changed",
+    }]);
+    const registered = {
+      ...current.body, id: "ptb-test", mass: { magnitude: 1_200, unit: "kg" },
+      uploaded_at: "2026-03-29T00:00:00.000Z",
+    };
+    mocks.client.get.mockImplementation(async (path: string) =>
+      path === "/production_batches/ptb-test" ? registered : page([canonicalRemote()]),
+    );
+    const row = { id: "submission-1", status: "submitted", externalId: EXTERNAL_REMOVAL_ID } as CertificationSubmissionRow;
+    const args = {
+      client: mocks.client as unknown as IsometricClient, orgCtx, removalId: "removal-1", row,
+      externalRemovalId: EXTERNAL_REMOVAL_ID, biocharApplicationIntents: [intent()], log,
+      reportingWindow: { startedOn: new Date("2026-03-01"), completedOn: new Date("2026-04-05") },
+    };
+    await expect(reconcileRemovalRegistryArtifacts(args)).resolves.toBeUndefined();
+    expect(mocks.confirm).toHaveBeenCalledWith(orgCtx, expect.objectContaining({ externalApplicationId: "bca-test" }));
+    expect(mocks.verifyBindings).toHaveBeenCalledWith(expect.objectContaining({ externalRemovalId: EXTERNAL_REMOVAL_ID }));
+    expect(mocks.updateDates).toHaveBeenCalledWith(orgCtx, "removal-1", { startedOn: "2026-03-01", completedOn: "2026-04-05" });
+    expect(mocks.appendSyncEvent).toHaveBeenCalledExactlyOnceWith(orgCtx, {
+      provider: "isometric", entityType: "removal", entityId: "removal-1",
+      operation: `production-batch:drift:${CREDIT_BATCH_ID}`, status: "succeeded",
+      requestPayload: current.body, responsePayload: { ...registered, reused: true },
+    }, { submissionId: "submission-1" });
+    expect(mocks.rejectSubmission).not.toHaveBeenCalled();
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.markDrift).not.toHaveBeenCalled();
+  });
+
   it("blocks a Storage Location replacement between dependency resolution and the Biochar Application lock", async () => {
     mocks.getStorage.mockResolvedValue({ id: "storage-journal-1", externalStorageLocationId: "slc-newer" });
     await expect(ensure()).rejects.toThrow(/Storage Location changed while/);

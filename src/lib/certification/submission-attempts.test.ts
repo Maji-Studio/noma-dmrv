@@ -50,6 +50,36 @@ describe("deriveSubmissionAttempts", () => {
     expect(attempts[1].outcome).toEqual({ kind: "failed", message: "other" });
   });
 
+  it("correlates overlapping attempts by ID", () => {
+    const attempts = deriveSubmissionAttempts([
+      summary("2026-10-27T11:05:00Z", "2026-10-27T11:05:30Z", "failed", "a1", "other"),
+      summary("2026-10-27T11:05:10Z", "2026-10-27T11:05:20Z", "failed", "a2", "drift"),
+      driftEvent("2026-10-27T11:05:15Z", { ...DRIFT, attemptId: "a2" }),
+    ]);
+    expect(attempts[0]).toMatchObject({ id: "a2", outcome: { kind: "differs", attemptId: "a2" } });
+    expect(attempts[1].outcome).toEqual({ kind: "failed", message: "other" });
+  });
+
+  it("assigns drift within the previous summary's slack to the next attempt by ID", () => {
+    const attempts = deriveSubmissionAttempts([
+      summary("2026-10-27T11:05:00Z", "2026-10-27T11:05:10Z", "failed", "a1", "other"),
+      summary("2026-10-27T11:05:10.100Z", "2026-10-27T11:05:12Z", "failed", "a2", "drift"),
+      driftEvent("2026-10-27T11:05:10.500Z", { ...DRIFT, attemptId: "a2" }),
+    ]);
+    expect(attempts[0]).toMatchObject({ id: "a2", outcome: { kind: "differs" } });
+    expect(attempts[1].outcome).toEqual({ kind: "failed", message: "other" });
+  });
+
+  it("uses an ID even outside the time window and never lends an identified orphan", () => {
+    const events = [
+      summary("2026-10-27T11:05:00Z", "2026-10-27T11:05:10Z", "failed", "a1", "other"),
+      driftEvent("2026-10-27T11:05:05Z", { ...DRIFT, attemptId: "orphan" }),
+    ];
+    expect(deriveSubmissionAttempts(events)[0].outcome.kind).toBe("failed");
+    events.push(driftEvent("2026-10-27T12:00:00Z", { ...DRIFT, attemptId: "a1" }));
+    expect(deriveSubmissionAttempts(events)[0].outcome.kind).toBe("differs");
+  });
+
   it("does not hand a later out-of-attempt drift stop to the newest attempt", () => {
     const [attempt] = deriveSubmissionAttempts([
       summary("2026-10-27T11:05:00Z", "2026-10-27T11:05:30Z", "failed", "a1", "plain failure"),
