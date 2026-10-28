@@ -34,6 +34,9 @@ export const IN_USE_HOW_TO_FREE_ONE = "To change them, first correct or remove t
 export const IN_USE_REFUSAL_HOW_TO_FREE = "To change this, first correct or remove the records that use it.";
 export const IN_USE_REFUSAL_HOW_TO_FREE_ONE = "To change this, first correct or remove the record that uses it.";
 
+/** The Sent sentence: what to do once Isometric returns the GHG Statement. */
+export const SENT_HOW_TO_FREE = "If Isometric sends the GHG Statement back, refresh its status to edit again.";
+
 /** The Sent sentence when sending was started and not finished: what to do, for one or several Removals. */
 export const INTERRUPTED_HOW_TO_FREE_ONE = "To edit again, delete or resume that Removal, or review its records in Isometric.";
 export const INTERRUPTED_HOW_TO_FREE = "To edit again, delete or resume those Removals, or review their records in Isometric.";
@@ -223,7 +226,7 @@ function recordLock<Kind extends keyof RecordUpdateInputs>(facts: RecordLockFact
       howToFree: heldBy.length > 1 ? INTERRUPTED_HOW_TO_FREE : INTERRUPTED_HOW_TO_FREE_ONE };
     if (interruptedHolders.length) return { level: "sent", heldBy, freeFields: [], interruptedHolders,
       howToFree: interruptedHolders.length > 1 ? INTERRUPTED_MIXED_HOW_TO_FREE : INTERRUPTED_MIXED_HOW_TO_FREE_ONE };
-    return { level: "sent", heldBy, freeFields: [], howToFree: "If Isometric sends the GHG Statement back, refresh its status to edit again." };
+    return { level: "sent", heldBy, freeFields: [], howToFree: SENT_HOW_TO_FREE };
   }
   if (facts.dependents.length) return { level: "inUse", heldBy: facts.dependents, freeFields,
     howToFree: IN_USE_HOW_TO_FREE, ...returnedBy(facts) };

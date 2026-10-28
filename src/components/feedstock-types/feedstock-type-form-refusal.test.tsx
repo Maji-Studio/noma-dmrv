@@ -10,6 +10,11 @@ const FALLBACK = "Feedstock type was not saved. Try again.";
 vi.mock("@/hooks/use-certification", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-certification")>(),
   useFacilityCertifierSummary: () => ({ data: undefined }),
+  useIsometricFeedstockTypes: () => ({ data: undefined }),
+}));
+vi.mock("@/hooks/use-feedstock-types", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/hooks/use-feedstock-types")>(),
+  useFeedstockTypeLinkLock: () => ({ data: undefined }),
 }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: "facility-1" }) }));
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null, Tooltip: ({ children }: { children: ReactNode }) => children }));
