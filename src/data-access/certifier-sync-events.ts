@@ -1,7 +1,8 @@
-import { and, desc, eq, inArray, max, notInArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, like, max, notInArray } from "drizzle-orm";
 import { db } from "@/db";
 import { certifierSyncEvents } from "@/db/schema/certification";
 import type { OrgContext } from "@/lib/auth/server";
+import { ATTEMPT_SUMMARY_OPERATION, DRIFT_OPERATION_PREFIX } from "@/lib/certification/submission-attempts";
 import { requireOrgScope } from "./utils";
 
 type CertifierProvider =
@@ -90,6 +91,48 @@ export async function listRecentSyncEvents(
     )
     .orderBy(desc(certifierSyncEvents.attemptedAt))
     .limit(args.limit);
+}
+
+const ATTEMPT_SUMMARY_LIMIT = 20;
+const DRIFT_EVENT_LIMIT = 40;
+
+/**
+ * What the Removal sheet needs to tell submit attempts apart: the newest
+ * attempt summaries, then the drift stops written since the oldest of them.
+ * Fetched separately so a run of failed events cannot push summaries out.
+ */
+export async function listRemovalAttemptEvents(
+  ctx: OrgContext,
+  args: { removalId: string },
+): Promise<CertifierSyncEventRow[]> {
+  requireOrgScope(ctx);
+  const summaries = await db
+    .select()
+    .from(certifierSyncEvents)
+    .where(and(
+      eq(certifierSyncEvents.entityType, "removal"),
+      eq(certifierSyncEvents.entityId, args.removalId),
+      eq(certifierSyncEvents.organizationId, ctx.organizationId),
+      eq(certifierSyncEvents.operation, ATTEMPT_SUMMARY_OPERATION),
+    ))
+    .orderBy(desc(certifierSyncEvents.attemptedAt))
+    .limit(ATTEMPT_SUMMARY_LIMIT);
+  const oldest = summaries[summaries.length - 1];
+  if (!oldest) return [];
+  const drifts = await db
+    .select()
+    .from(certifierSyncEvents)
+    .where(and(
+      eq(certifierSyncEvents.entityType, "removal"),
+      eq(certifierSyncEvents.entityId, args.removalId),
+      eq(certifierSyncEvents.organizationId, ctx.organizationId),
+      like(certifierSyncEvents.operation, `${DRIFT_OPERATION_PREFIX}%`),
+      eq(certifierSyncEvents.status, "failed"),
+      gte(certifierSyncEvents.attemptedAt, oldest.attemptedAt),
+    ))
+    .orderBy(desc(certifierSyncEvents.attemptedAt))
+    .limit(DRIFT_EVENT_LIMIT);
+  return [...summaries, ...drifts];
 }
 
 /** Latest successful sync for all requested entities in one org-scoped query. */
