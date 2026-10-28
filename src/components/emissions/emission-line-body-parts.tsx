@@ -13,6 +13,7 @@ import { ServerError } from "@/components/forms/server-error";
 import { Button, Notice } from "@/components/ui";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
 import { removalTemplateSetupHref, removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
+import { entryFigures } from "@/lib/certification/late-entry-figures";
 import { cn } from "@/lib/utils";
 import { EntryFileUpload, useEntryFiles } from "./emission-entry-files";
 import {
@@ -150,7 +151,7 @@ export function entryAmount(entry: EmissionEntry): { figures: string[]; detail: 
     const md = first?.massDistanceDetail;
     return { figures: [formatFigure(entry.total)], detail: md ? `${formatFigure(md.mass)} × ${formatFigure(md.distance)}` : null };
   }
-  return { figures: entry.values.map((value) => formatFigure({ magnitude: value.magnitude, unit: value.unit })), detail: null };
+  return { figures: entryFigures(entry).map(formatFigure), detail: null };
 }
 
 /** One counting entry's actions: Edit, Add file (opens the upload in place), Delete. */

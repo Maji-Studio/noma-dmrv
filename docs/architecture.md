@@ -168,6 +168,9 @@ own; the returned shape is preserved in the action's result type), or `undefined
 through. A mapped result bypasses `toActionError` and is not logged, so map
 only error classes that extend `SafeError`, whose messages are written for
 the operator; anything else must fall through to the logged fallback.
+`toActionFailure` maps a value PostgreSQL refuses for holding U+0000 (SQLSTATE
+22021 or 22P05) to a `validation_failed` result and does not log it; boundaries
+with their own catch call `nulCharacterFailure` before their fallback.
 
 ### `SafeError` vs `Error`
 
@@ -308,14 +311,14 @@ runtime.
 ## Routing & Auth
 
 - `src/app/(auth)/*` public · `src/app/(app)/*` authenticated workspace ·
-  `src/app/(app)/admin/*` admin-only · `src/app/api/*` API routes.
+  `src/app/(app)/platform/*` admin-only · `src/app/api/*` API routes.
 - `src/app/(app)/layout.tsx` enforces auth and mounts `FacilityProvider`.
 - **One settings console** (`/settings`, #1277). `SettingsConsole` renders a
   rail grouped by whose setting it is, one route per pane, listed in
   `src/lib/settings/panes.ts`: **You** (Profile, Connected apps), **Organization**
   (General, Members, Developers) and **Certification** (Registry, Removal
   templates, Facilities). Platform pages are not settings: Organizations (the
-  Platform home), Diagnostics and Template mapping live under `/admin` in the
+  Platform home), Diagnostics and Template mapping live under `/platform` in the
   sidebar's Platform section (#1373). Each route loads the viewer with
   `loadSettingsViewer()` and calls `assertSettingsPaneVisible()`: a pane
   outside the viewer's audience is a 404, and Removal templates and Facilities
@@ -324,17 +327,17 @@ runtime.
   Admins) change them. Developers (API keys) requires a verified Admin
   membership; a Platform Admin without one sees it without controls.
   Certification panes configure the working facility from
-  `FacilityProvider`; there is no second facility picker. `/certification/settings`,
-  `/settings/organization`, `/settings/defaults`, `/settings/api-keys` and
-  `/settings/vehicles-and-crew` only redirect (`legacyCertificationSettingsRedirect`,
-  `redirectPreservingQuery`). Vehicles and crew is a list page at
-  `/vehicles-and-crew` under Distribution (tabs per kind on the shared
-  `DataTable`; `?tab=`, `?create=`, and `?vehicle=`/`?driver=`/`?operator=<id>`
-  (+ `mode=edit`) open a record's sheet); every member can edit and delete
+  `FacilityProvider`; there is no second facility picker. The settings index
+  opens General, preserving its query. Legacy settings paths are deleted.
+  Vehicles and Crew are list pages under Setup: `/vehicles` is one
+  `DataTable` (`?create=`, `?vehicle=<id>` and `mode=edit` open a record's
+  sheet); `/crew` has Drivers | Operators tabs (`?tab=operator`, `?create=`,
+  `?driver=`/`?operator=<id>` + `mode=edit`). Every member can edit and delete
   vehicles, drivers and operators there, as every member can create them from
-  a picker. `/admin` is cross-tenant platform administration
-  (`users.role === "admin"`) and is only the organization directory; `/admin`
-  itself redirects to `/admin/organizations`.
+  a picker. Platform administration (`users.role === "admin"`) lives at
+  `/platform/organizations`, `/platform/diagnostics` and
+  `/platform/template-mapping`, guarded by the platform layout's `requireAdmin()`.
+  There is no platform index page or legacy redirect.
 - `src/proxy.ts` → `updateSession()` in `src/lib/auth/middleware.ts`. Node
   runtime (not Edge) so Better Auth can use `crypto`. The matcher covers
   everything except static assets — **including `/api`**; `/api/auth/*` is
@@ -717,19 +720,19 @@ Numeric dependencies still apply after reopening. Independent master-data,
 document and Removal lifecycle guards remain outside this policy; see
 [Record locks](./database.md#record-locks).
 
-**Workspace:** `/certification` (ADR
+**Workspace:** Certification (ADR
 [0007](./adr/0007-certification-workspace-consolidation.md)) is a first-class
-sidebar group with three concrete routes — Removals · GHG Statements ·
-Settings. Root `/certification` redirects to Removals preserving `?facility=`.
-Removals has list, side-sheet (`?removal=`), detail
-(`/removals/[removalId]`) and review (`/[removalId]/review`) surfaces; new
-Removals are created through the New-Removal wizard. Settings holds the
-facility↔project link and emission/LCA config.
+sidebar group with two operational routes: `/removals` and `/ghg-statements`.
+Removals has a list and side sheet (`?removal=`); `?resume=` opens a saved
+Removal in the New-Removal wizard. Settings holds the facility↔project link
+and emission/LCA config in its own console.
 
-**`CertificationRegistryGuard`** (`src/components/certification/`) gates the
-operational `/certification/*` routes on the facility having a registry link;
-Settings stays open. It is mounted in the certification layout. **New
-operational certification routes must sit inside that guard.**
+**`CertificationRegistryGuard`** (`src/components/certification/`) gates
+`/removals` and `/ghg-statements` on the facility having a registry link.
+It is mounted alongside the shared error boundary in
+`src/app/(app)/(certification)/`; the route group adds no URL segment.
+Settings stays outside the group. **New operational certification routes must
+sit inside that guard.** Legacy app paths are deleted without redirects.
 
 **Generated GHG Statement report:** an Admin prepares a versioned PDF from
 live Isometric statement and GHG Entry facts, reviews it through the normal
@@ -805,12 +808,11 @@ and tells the operator when older readings are omitted; it is not virtualized.
 ## Traceability Visualization
 
 Credit-batch anchored lineage at `/traceability` (canonical).
-`/chain-of-custody` is a legacy redirect that preserves search params and
-forwards — do not add a page there. Deep links: `?batch=<id>` opens the batch
+Deep links: `?batch=<id>` opens the batch
 roll-up, `?application=<id>` an application drill-down.
 
 Batch roll-up merges every member application's rollback, dedupes production
-runs, and exposes **DAG | Map | Sankey**. Drill-down exposes **Lineage | Map |
+runs, and exposes **Flow | Map | Sankey**. Drill-down exposes **Flow | Map |
 Split | Trail**. The Sankey is a dry-mass balance with explicit exits for
 conversion loss and in-storage mass; no net-CO2e figure
 (registry-owned, ADR [0018](./adr/0018-isometric-owns-project-emissions.md)).
@@ -821,8 +823,9 @@ Anchor model: ADR
   `use-chain-graph.ts` / `chain-node.tsx` / `chain-edge.tsx`, plus `map/`,
   `sankey/`, `trail/`, `chain-constants.ts`.
 - **Data**: `src/data-access/chain-of-custody{,-batch,-trail}.ts`.
-- **Layout**: dagre LR layout on a React Flow canvas with minimap, hover focus,
-  and record-opening side sheets.
+- **Layout**: the Flow chart's column layout (`flow-layout.ts`) on a React
+  Flow canvas, no minimap, with hover and selection focus and record-opening
+  side sheets.
 - **Scope**: selectors and resolved anchors are filtered against the active
   facility so stale or foreign deep links cannot render another facility's
   provenance. Full detail in [traceability.md](./traceability.md).

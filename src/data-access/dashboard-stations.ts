@@ -460,7 +460,7 @@ function activityHref(
 ): string {
   switch (kind) {
     case "feedstock":
-      return facilityHref("/feedstocks", facilityId);
+      return facilityHref("/feedstock-intake", facilityId);
     case "run":
       return facilityHref("/production-runs", facilityId);
     case "delivery":
@@ -565,7 +565,7 @@ export async function getDashboardStations(
         feedstockMissing > 0
           ? [{ state: "warning", text: `${plural(feedstockMissing, "record")} missing data` }]
           : [],
-      href: facilityHref("/feedstocks", facilityId),
+      href: facilityHref("/feedstock-intake", facilityId),
     },
     {
       key: "production",

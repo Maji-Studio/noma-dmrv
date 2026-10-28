@@ -49,7 +49,7 @@ test.describe("Lineage-only correction screens", () => {
 
       for (const [size, viewport] of Object.entries(WIDTHS) as [keyof typeof WIDTHS, (typeof WIDTHS)[keyof typeof WIDTHS]][]) {
         await page.setViewportSize(viewport);
-        await page.goto(`/certification/removals?facility=${facilityId}`);
+        await page.goto(`/removals?facility=${facilityId}`);
         if (size === "desktop") await waitForFacilityHydration(page, seededData.facility.name);
         const row = (size === "desktop" ? page.getByRole("row").filter({ hasText: removal.removalCode }) : page)
           .getByText(removal.removalCode, { exact: true }).locator("visible=true").first();
@@ -57,7 +57,7 @@ test.describe("Lineage-only correction screens", () => {
         await page.waitForTimeout(3000);
         await shoot(page, "removals-list", size);
 
-        await page.goto(`/certification/removals?facility=${facilityId}&removal=${removal.removalId}`);
+        await page.goto(`/removals?facility=${facilityId}&removal=${removal.removalId}`);
         await waitForSideSheet(page);
         await expect(page.getByRole("dialog")).toContainText(removal.removalCode, { timeout: 30_000 });
         await page.waitForTimeout(3000);

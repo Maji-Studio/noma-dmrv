@@ -8,9 +8,9 @@ describe("RemovalDetailSheet sync history contract", () => {
       "utf8",
     );
 
-    expect(source).toContain('import { SyncEventLog } from "./sync-event-log"');
+    expect(source).toContain('import { SubmissionHistory } from "./submission-history"');
     expect(source).toMatch(
-      /<SyncEventLog\s+events=\{summary\.recentSyncEvents\}/,
+      /<SubmissionHistory\s+attempts=\{summary\.submissionAttempts\}\s+events=\{summary\.recentSyncEvents\}/,
     );
   });
 
@@ -56,8 +56,9 @@ describe("RemovalDetailSheet sync history contract", () => {
       "utf8",
     );
 
-    expect(source).toContain("summary.recentSyncEvents.length > 0");
-    expect(source).toContain("Submission history");
+    const history = readFileSync(new URL("./submission-history.tsx", import.meta.url), "utf8");
+    expect(history).toContain("attempts.length === 0 && events.length === 0");
+    expect(history).toContain("Submission history");
   });
 
   it("renders post-submit attachment health separately from files ready", () => {

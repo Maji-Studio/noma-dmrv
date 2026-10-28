@@ -61,7 +61,7 @@ export const orderWriteTools: WriteTool[] = [
   {
     kind: "write", name: "delete_order", scope: "orders:delete", requiredScopes: () => ["orders:delete"], input: deleteInput, output: deleteOutput,
     annotations: { ...annotations, destructiveHint: true },
-    description: `Delete an order by UUID and retire its documents. Requires orders:delete. Any delivery, including an archived delivery, prevents deletion with certification_locked at /orderId and issue metadata reason in_use, deliveryCode and deliveryId (the first by code in ascending order; the message names up to ${ORDER_DELIVERY_NAME_CAP} and counts the rest); an archived order without deliveries can be deleted. Returns deleted id and code, or data on a dry run. ${versionGuidance} ${guidance}`,
+    description: `Delete an order by UUID and retire its documents. Requires orders:delete. Any delivery, including an archived delivery, prevents deletion with certification_locked at /orderId and issue metadata reason in_use, deliveryCode, deliveryId (the first by code in ascending order) and deliveries (id and code of each delivery the message names, up to ${ORDER_DELIVERY_NAME_CAP} in code order; the message counts the rest); an archived order without deliveries can be deleted. Returns deleted id and code, or data on a dry run. ${versionGuidance} ${guidance}`,
     execute: (context, raw) => mutate(context, raw, "delete"),
     summarize(body, dryRun) {
       const code = ((body.deleted ?? body.data) as { code: string }).code;

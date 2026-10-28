@@ -22,53 +22,62 @@ import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
 import { formatCalendarDate, formatDate, formatFacilityDay } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
-import dagre from "@dagrejs/dagre";
-import { MarkerType, type Edge, type Node } from "@xyflow/react";
+import type { Edge, Node } from "@xyflow/react";
+import { LINEAGE_NODE_STYLES, type LineageNodeKind } from "./chain-constants";
 import {
-  DAGRE_CONFIG,
-  LINEAGE_NODE_STYLES,
-  NODE_HEIGHT,
-  NODE_WIDTH,
-  type LineageNodeKind,
-} from "./chain-constants";
+  computeEdgeShareLabels,
+  formatKg,
+  massLabel,
+  type ChainEdgeBuildData,
+  type EdgeMass,
+  type EdgeMassBasis,
+  type EdgeMassFooting,
+} from "./chain-edge-mass";
 import type { ChainNodeData } from "./chain-node";
 import { expandProductLineages } from "./expand-product-lineages";
 
-/** One label/value row on a lineage card (mono micro-label left, value right). */
+export type { ChainEdgeBuildData, EdgeMassBasis } from "./chain-edge-mass";
+
+/** One label/value row in a record's detail sheet and map popup. */
 export interface LineageDetailRow {
   label: string;
   value: string;
 }
 
 /**
- * The node's full connected lineage — every node reachable by walking the flow
- * edges in either direction from it (ancestors + descendants). Used both by the
- * DAG's hover focus and by the cross-surface selection focus (bar ⇄ map ⇄ DAG):
- * focusing a feedstock lights its run → product → reachable deliveries /
- * applications and dims the rest. Returns null when no node is given (nothing
- * focused → everything full strength).
+ * The node's lineage: every node upstream of it (walking edges backwards to
+ * its sources) and every node downstream (walking them forwards), plus the
+ * node itself. Siblings that only share a parent are left out, so focusing
+ * one run in a batch lights that run's intakes, products, deliveries and
+ * applications, not every other run that fed the same product. Used by the
+ * Flow chart's hover and selection and by the cross-surface focus (bar ⇄ map
+ * ⇄ Flow). Returns null when no node is given (nothing focused → everything
+ * full strength).
  */
 export function reachableNodeIds(
   nodeId: string | null,
   edges: Edge[]
 ): Set<string> | null {
   if (!nodeId) return null;
-  const adjacency = new Map<string, string[]>();
+  const downstream = new Map<string, string[]>();
+  const upstream = new Map<string, string[]>();
   for (const graphEdge of edges) {
-    if (!adjacency.has(graphEdge.source)) adjacency.set(graphEdge.source, []);
-    if (!adjacency.has(graphEdge.target)) adjacency.set(graphEdge.target, []);
-    adjacency.get(graphEdge.source)!.push(graphEdge.target);
-    adjacency.get(graphEdge.target)!.push(graphEdge.source);
+    downstream.set(graphEdge.source, [...(downstream.get(graphEdge.source) ?? []), graphEdge.target]);
+    upstream.set(graphEdge.target, [...(upstream.get(graphEdge.target) ?? []), graphEdge.source]);
   }
 
   const reachable = new Set<string>([nodeId]);
-  const queue = [nodeId];
-  while (queue.length > 0) {
-    const current = queue.pop()!;
-    for (const next of adjacency.get(current) ?? []) {
-      if (reachable.has(next)) continue;
-      reachable.add(next);
-      queue.push(next);
+  for (const adjacency of [upstream, downstream]) {
+    const seen = new Set<string>([nodeId]);
+    const queue = [nodeId];
+    while (queue.length > 0) {
+      const current = queue.pop()!;
+      for (const next of adjacency.get(current) ?? []) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        reachable.add(next);
+        queue.push(next);
+      }
     }
   }
   return reachable;
@@ -77,236 +86,20 @@ export function reachableNodeIds(
 export interface LineageGraphNode {
   id: string;
   kind: LineageNodeKind;
+  /** Sheet heading. */
   code: string;
+  /** The record's own code, shown under its Flow chart node. */
+  shortCode: string;
   href: string | null;
   status?: string | null;
-  /** Formatted event date — the card's primary line (code is secondary). */
+  /** Formatted event date, shown in the detail sheet. */
   date: string | null;
   /** Label/value rows below the primary line (masses, parties, identifiers). */
   details: LineageDetailRow[];
 }
 
-// Stroke, casing, and the mass label chip live in ChainEdge (chain-edge.tsx).
-// Mass-flow lines are dark purple for contrast on the tinted canvas; the
-// reactor's equipment link is a quieter dashed tint of the same ink.
+// Stroke and the mass label chip live in ChainEdge (chain-edge.tsx).
 const APPLIED_FROM_SOURCE_LABEL = "Applied from source";
-
-const FLOW_EDGE_COLOR = "var(--clr-dark-purple)";
-const EQUIPMENT_EDGE_COLOR = "var(--clr-dark-purple-40)";
-
-/** Residual smaller than this is rounding noise, not a storage remainder. */
-
-/** Below this share, round-to-percent would read as a misleading "0%". */
-const SUB_ONE_PERCENT = 0.01;
-const NEAR_FULL_PERCENT = 0.995;
-
-/** Preferred separation between parallel fan routes, in graph coordinates. */
-const EDGE_ROUTE_LANE_GAP = 28;
-/**
- * Keeps large fans inside the corridor between adjacent Dagre ranks. 70 is
- * safe only because `DAGRE_CONFIG.ranksep` is 208 (`chain-constants.ts`):
- * xyflow's smooth-step path reserves a 20px gap point at each end, leaving a
- * midpoint band of ±84, so 70 keeps 14px of clearance. Lowering `ranksep`
- * means lowering this too, or the outer lanes cross into the node rows.
- */
-const EDGE_ROUTE_MAX_OFFSET = 70;
-
-/** A unit must never be mixed within one fan when normalizing to a share. */
-type EdgeMassUnit = "kg" | "tDry";
-
-interface EdgeMass {
-  value: number | null;
-  unit: EdgeMassUnit;
-}
-
-/**
- * Data carried on every flow edge. `mass`/`unit` feed the branch-share %;
- * `kgLabel`/`pctLabel` are the pre-formatted strings the toggle swaps between;
- * `variant` distinguishes mass flow from the reactor's mass-less equipment
- * link; `color` is the source-accent stroke.
- */
-export interface ChainEdgeBuildData {
-  variant: "flow" | "equipment";
-  color: string;
-  mass: number | null;
-  unit: EdgeMassUnit | null;
-  kgLabel: string | null;
-  pctLabel: string | null;
-  /**
-   * What the mass measures: `applied` (rollback allocations) or `recorded`
-   * (roll-forward draws and shipments). Branch shares never mix the two.
-   */
-  massBasis: EdgeMassBasis;
-  /** Horizontal offset from the default midpoint for split/merge fan routing. */
-  routeOffsetX: number | null;
-  [key: string]: unknown;
-}
-
-export type EdgeMassBasis = "applied" | "recorded";
-
-function formatKg(value: number | null | undefined): string | null {
-  if (value == null) return null;
-  return `${Math.round(value).toLocaleString()} kg`;
-}
-
-function formatDryTons(value: number | null | undefined): string | null {
-  if (value == null) return null;
-  return `${value.toFixed(2)} t dry`;
-}
-
-function massLabel(mass: EdgeMass | null): string | null {
-  if (!mass || mass.value == null) return null;
-  return mass.unit === "kg" ? formatKg(mass.value) : formatDryTons(mass.value);
-}
-
-/** A share is derived, so one that cannot be worked out is left off the edge. */
-function formatShare(fraction: number): string | null {
-  if (!Number.isFinite(fraction) || fraction <= 0) return null;
-  if (fraction < SUB_ONE_PERCENT) return "<1%";
-  if (fraction >= NEAR_FULL_PERCENT) return "100%";
-  return `${Math.round(fraction * 100)}%`;
-}
-
-/**
- * Branch-share % per edge (plan decision): an edge in a fan reads as its
- * share of that fan. A split (one source → many targets) normalizes against
- * the source's total outflow; a merge (many sources → one target) against the
- * target's total inflow; a straight 1:1 hand-off reads 100%. Sums stay within
- * one unit, since a fan never mixes kg and dry-tons. A fan that mixes applied
- * and recorded mass (rollback next to roll-forward) gets no share at all:
- * summing the two describes neither split.
- */
-function computeEdgeShareLabels(edges: Edge[]): void {
-  const outSum = new Map<string, number>();
-  const outCount = new Map<string, number>();
-  const inSum = new Map<string, number>();
-  const inCount = new Map<string, number>();
-  const outBases = new Map<string, Set<EdgeMassBasis>>();
-  const inBases = new Map<string, Set<EdgeMassBasis>>();
-  const addBasis = (bases: Map<string, Set<EdgeMassBasis>>, key: string, basis: EdgeMassBasis) =>
-    bases.set(key, (bases.get(key) ?? new Set()).add(basis));
-  for (const edge of edges) {
-    const data = edge.data as ChainEdgeBuildData | undefined;
-    if (!data || data.mass == null || data.unit == null) continue;
-    const outKey = `${edge.source}|${data.unit}`;
-    const inKey = `${edge.target}|${data.unit}`;
-    outSum.set(outKey, (outSum.get(outKey) ?? 0) + data.mass);
-    outCount.set(outKey, (outCount.get(outKey) ?? 0) + 1);
-    inSum.set(inKey, (inSum.get(inKey) ?? 0) + data.mass);
-    inCount.set(inKey, (inCount.get(inKey) ?? 0) + 1);
-    addBasis(outBases, outKey, data.massBasis);
-    addBasis(inBases, inKey, data.massBasis);
-  }
-  for (const edge of edges) {
-    const data = edge.data as ChainEdgeBuildData | undefined;
-    if (!data || data.mass == null || data.unit == null) continue;
-    const outKey = `${edge.source}|${data.unit}`;
-    const inKey = `${edge.target}|${data.unit}`;
-    let fraction: number;
-    if ((outCount.get(outKey) ?? 0) > 1) {
-      if ((outBases.get(outKey)?.size ?? 0) > 1) {
-        data.pctLabel = null;
-        continue;
-      }
-      fraction = data.mass / (outSum.get(outKey) || 1);
-    } else if ((inCount.get(inKey) ?? 0) > 1) {
-      if ((inBases.get(inKey)?.size ?? 0) > 1) {
-        data.pctLabel = null;
-        continue;
-      }
-      fraction = data.mass / (inSum.get(inKey) || 1);
-    } else {
-      fraction = 1;
-    }
-    data.pctLabel = formatShare(fraction);
-  }
-}
-
-/**
- * React Flow's smooth-step default sends every edge between two ranks through
- * the same midpoint. In a split/merge fan that makes distinct allocations
- * look like one shared line carrying several labels. Give each connected fan
- * edge its own midpoint lane while leaving ordinary 1:1 hand-offs unchanged.
- *
- * Call this **after** `dagre.layout`: `getNodeY` reports each node's laid-out
- * centre, and lanes are ordered by their endpoints' vertical position so the
- * routes do not cross. Without it, lanes fall back to edge-id order, which is
- * only stable, not geometrically sensible.
- */
-export function assignEdgeRouteOffsets(
-  edges: Edge[],
-  getNodeY?: (nodeId: string) => number,
-): void {
-  const flowEdges = edges.filter((graphEdge) => {
-    const data = graphEdge.data as ChainEdgeBuildData | undefined;
-    return data?.variant === "flow";
-  });
-  const bySource = new Map<string, Edge[]>();
-  const byTarget = new Map<string, Edge[]>();
-
-  for (const graphEdge of flowEdges) {
-    const sourceEdges = bySource.get(graphEdge.source) ?? [];
-    sourceEdges.push(graphEdge);
-    bySource.set(graphEdge.source, sourceEdges);
-
-    const targetEdges = byTarget.get(graphEdge.target) ?? [];
-    targetEdges.push(graphEdge);
-    byTarget.set(graphEdge.target, targetEdges);
-  }
-
-  const fanEdges = new Set(
-    flowEdges.filter(
-      (graphEdge) =>
-        (bySource.get(graphEdge.source)?.length ?? 0) > 1 ||
-        (byTarget.get(graphEdge.target)?.length ?? 0) > 1,
-    ),
-  );
-  const visited = new Set<Edge>();
-
-  for (const firstEdge of fanEdges) {
-    if (visited.has(firstEdge)) continue;
-    const component: Edge[] = [];
-    const queue = [firstEdge];
-    visited.add(firstEdge);
-
-    while (queue.length > 0) {
-      const graphEdge = queue.pop()!;
-      component.push(graphEdge);
-      const neighbors = [
-        ...(bySource.get(graphEdge.source) ?? []),
-        ...(byTarget.get(graphEdge.target) ?? []),
-      ];
-      for (const neighbor of neighbors) {
-        if (!fanEdges.has(neighbor) || visited.has(neighbor)) continue;
-        visited.add(neighbor);
-        queue.push(neighbor);
-      }
-    }
-
-    // Endpoint midpoint: an edge between two high cards takes a high lane.
-    const laneKeys = new Map(
-      component.map((graphEdge) => [
-        graphEdge,
-        getNodeY
-          ? getNodeY(graphEdge.source) + getNodeY(graphEdge.target)
-          : 0,
-      ]),
-    );
-    component.sort((left, right) => {
-      const delta = (laneKeys.get(left) ?? 0) - (laneKeys.get(right) ?? 0);
-      return delta !== 0 ? delta : left.id.localeCompare(right.id);
-    });
-    const preferredSpan = (component.length - 1) * EDGE_ROUTE_LANE_GAP;
-    const span = Math.min(preferredSpan, EDGE_ROUTE_MAX_OFFSET * 2);
-    const laneGap = component.length > 1 ? span / (component.length - 1) : 0;
-    const centerIndex = (component.length - 1) / 2;
-
-    component.forEach((graphEdge, index) => {
-      const data = graphEdge.data as ChainEdgeBuildData;
-      data.routeOffsetX = (index - centerIndex) * laneGap;
-    });
-  }
-}
 
 function formatDateOrNull(value: Date | string | null | undefined, calendarDay = false): string | null {
   if (!value) return null;
@@ -324,7 +117,7 @@ function addRow(
   }
 }
 
-/** Reactor, feedstock and production-run cards for a set of chain sources. */
+/** Reactor, feedstock and production-run records for a set of chain sources. */
 function buildSourceNodes(
   sources: ChainSourceLineage[],
   totals?: LineageMassTotals,
@@ -343,6 +136,7 @@ function buildSourceNodes(
       id: `reactor:${reactor.id}`,
       kind: "reactor",
       code: reactor.code,
+      shortCode: reactor.code,
       href: reactor.href,
       date: null,
       details,
@@ -367,6 +161,7 @@ function buildSourceNodes(
       id: `feedstock:${feedstock.id}`,
       kind: "feedstock",
       code: feedstock.code,
+      shortCode: feedstock.code,
       href: feedstock.href,
       status: feedstock.status,
       date: formatDateOrNull(feedstock.deliveryDate, true),
@@ -406,6 +201,7 @@ function buildSourceNodes(
       id: productionRunNodeId(productionRun.id),
       kind: "productionRun",
       code: productionRun.biocharStorageName ?? productionRun.code,
+      shortCode: productionRun.code,
       href: productionRun.href,
       status: productionRun.status,
       date: formatDateOrNull(productionRun.date),
@@ -434,6 +230,7 @@ function buildDeliveryNode(delivery: Omit<ChainDeliveryLineage, "proofOfDelivery
     id: deliveryNodeId(delivery.id),
     kind: "delivery",
     code: "Delivery",
+    shortCode: delivery.code,
     href: delivery.href,
     status: delivery.status,
     date: formatFacilityDay(delivery.deliveryDate, timeZone),
@@ -466,6 +263,7 @@ export function buildLineageNodes(
       id: productNodeId(data.biocharProduct.id),
       kind: "biocharProduct",
       code: productCardCode(data.biocharProduct),
+      shortCode: data.biocharProduct.code,
       href: data.biocharProduct.href,
       status: data.biocharProduct.status,
       date: formatDateOrNull(data.biocharProduct.productionDate),
@@ -488,6 +286,7 @@ export function buildLineageNodes(
       id: `order:${data.order.id}`,
       kind: "order",
       code: "Order",
+      shortCode: data.order.code,
       href: data.order.href,
       date: formatDateOrNull(data.order.orderDate, true),
       details,
@@ -510,6 +309,7 @@ export function buildLineageNodes(
       kind: "application",
       code:
         data.application.fieldIdentifier ?? "Field application",
+      shortCode: data.application.fieldIdentifier ?? data.application.code,
       href: data.application.href,
       status: data.application.status,
       date: formatDateOrNull(data.application.applicationDate, true),
@@ -527,34 +327,39 @@ function edge(
     mass?: EdgeMass | null;
     massLabel?: string | null;
     wetKg?: number | null;
+    dryKg?: number | null;
     variant?: "flow" | "equipment";
+    inferred?: boolean;
     massBasis?: EdgeMassBasis;
+    massFooting?: EdgeMassFooting | null;
   },
 ): Edge {
-  const variant = opts?.variant ?? "flow";
   const mass = opts?.mass ?? null;
-  const color = variant === "equipment" ? EQUIPMENT_EDGE_COLOR : FLOW_EDGE_COLOR;
   return {
     id: flowEdgeId(source, target),
     source,
     target,
     type: "chainEdge",
-    markerEnd: { type: MarkerType.ArrowClosed, color },
     data: {
-      variant,
-      color,
+      variant: opts?.variant ?? "flow",
+      inferred: opts?.inferred ?? false,
       mass: mass?.value ?? null,
       unit: mass?.unit ?? null,
+      massFooting: mass?.value == null ? null : (opts?.massFooting ?? null),
       wetKg: opts?.wetKg ?? null,
+      dryKg: opts?.dryKg ?? null,
       kgLabel: opts?.massLabel ?? massLabel(mass),
       pctLabel: null,
       massBasis: opts?.massBasis ?? "applied",
-      routeOffsetX: null,
     } satisfies ChainEdgeBuildData,
   };
 }
 
-/** Feedstock → run flows and the reactor's equipment link for one source. */
+/**
+ * Feedstock → run flows and the reactor's equipment link for one source. A run
+ * records what it drew from a feedstock bin; which intakes that wood came from
+ * follows from the bin's draw order, so the intake links are inferred.
+ */
 function buildSourceEdges(source: ChainSourceLineage): Edge[] {
   const edges: Edge[] = [];
   const productionRun = source.productionRun;
@@ -562,6 +367,8 @@ function buildSourceEdges(source: ChainSourceLineage): Edge[] {
     edges.push(
       edge(`feedstock:${feedstock.id}`, productionRunNodeId(productionRun.id), {
         mass: { value: feedstock.wetMassUsedKg, unit: "kg" },
+        massFooting: "wet",
+        inferred: true,
       })
     );
   }
@@ -628,6 +435,9 @@ function massFlowEdge(
       unit: mass.unit,
     },
     wetKg: mass.wetKg,
+    dryKg: mass.dryKg,
+    // finishEdges: the share mass is dry kg, or wet kg when dry is unknown.
+    massFooting: mass.dryKg != null ? "dry" : "wet",
     massLabel: formatWetDryMass(mass),
     massBasis,
   });
@@ -656,6 +466,7 @@ export function buildRollForwardGraph(
       id: productId,
       kind: "biocharProduct",
       code: productCardCode(product),
+      shortCode: product.code,
       href: product.href,
       status: product.status,
       date: formatDateOrNull(product.productionDate),
@@ -671,8 +482,8 @@ export function buildRollForwardGraph(
 }
 
 /**
- * Every roll-forward card, deduped, with each product's "Drawn from runs"
- * total across member runs. Shared by the DAG merge and the map popups.
+ * Every roll-forward record, deduped, with each product's "Drawn from runs"
+ * total across member runs. Shared by the Flow chart merge and the map popups.
  */
 export function buildRollForwardNodes(
   rollForwards: ChainRunRollForward[],
@@ -695,61 +506,40 @@ export interface ChainGraphOptions {
   /** Facility zone for delivery instants; other node dates are calendar days. */
   timeZone: string;
   /**
-   * Split/map cross-linking: card clicks highlight the map marker instead of
-   * navigating, so the cards drop their links.
+   * Split/map cross-linking: record clicks highlight the map marker instead
+   * of navigating, so the records drop their links.
    */
   disableLinks?: boolean;
   /** Node to ring-highlight (selected via map marker / rail / chip). */
   highlightedNodeId?: string | null;
-  /** Batch DAG: application cards drill into the rollback (hover hint). */
+  /** Batch Flow: application records drill into the rollback. */
   drillApplications?: boolean;
 }
 
-function layoutGraph(
+/**
+ * Graph records as React Flow nodes, unpositioned: the Flow chart lays them
+ * out in columns (flow-layout.ts), and the map and sheets read their data.
+ */
+function toGraph(
   lineageNodes: LineageGraphNode[],
   edges: Edge[],
   options: ChainGraphOptions
 ): { nodes: Node[]; edges: Edge[] } {
   // Branch shares depend on the full (merged + deduped) edge set, so annotate
-  // here — covers both the single-rollback and batch roll-up graphs.
+  // here: covers both the single-rollback and batch roll-up graphs.
   computeEdgeShareLabels(edges);
 
-  const g = new dagre.graphlib.Graph();
-  g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph(DAGRE_CONFIG);
-
-  for (const node of lineageNodes) {
-    g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
-  }
-
-  for (const edge of edges) {
-    g.setEdge(edge.source, edge.target);
-  }
-
-  dagre.layout(g);
-
-  // Fan lanes read the laid-out vertical positions, so they are assigned once
-  // the ranks exist.
-  assignEdgeRouteOffsets(edges, (nodeId) => g.node(nodeId)?.y ?? 0);
-
   const nodes: Node[] = lineageNodes.map((node) => {
-    const position = g.node(node.id);
     const style = LINEAGE_NODE_STYLES[node.kind];
-
     return {
       id: node.id,
       type: "chainNode",
-      position: {
-        x: position.x - NODE_WIDTH / 2,
-        y: position.y - NODE_HEIGHT / 2,
-      },
-      // Pre-measure dimensions so the MiniMap can draw nodes (it reads the
-      // user node, which never receives `measured`); real size still wins.
-      initialWidth: NODE_WIDTH,
-      initialHeight: NODE_HEIGHT,
+      position: { x: 0, y: 0 },
       data: {
+        kind: node.kind,
         label: style.label,
         code: node.code,
+        shortCode: node.shortCode,
         icon: style.icon,
         accent: style.accent,
         accentInk: style.accentInk,
@@ -779,7 +569,7 @@ export function useChainGraph(
 }
 
 /**
- * Batch roll-up DAG: the member applications' lineage graphs merged into one
+ * Batch roll-up Flow: the member applications' lineage graphs merged into one
  * fan-out (plan decision 2). Nodes and edges dedupe by id, so a production
  * run / lot / feedstock shared by several applications appears once with all
  * its downstream branches attached.
@@ -821,7 +611,7 @@ function buildMergedChainGraph(
     }
   }
 
-  return layoutGraph(
+  return toGraph(
     Array.from(nodeById.values()),
     Array.from(edgeById.values()),
     { ...options, drillApplications: true }

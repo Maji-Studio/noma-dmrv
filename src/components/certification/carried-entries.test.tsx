@@ -30,7 +30,7 @@ describe("CarriedEntriesPanel", () => {
     expect(container.textContent).toContain("1 file");
     expect(panel.getAllByRole("link", { name: "CB-26-009" })[0].getAttribute("href")).toBe("/credit-batches/cb-9?facility=f1");
     expect(container.textContent).toContain("Recorded after RM-26-009 was sent.");
-    expect(panel.getByRole("link", { name: "RM-26-009" }).getAttribute("href")).toBe("/certification/removals?facility=f1&removal=rm-9");
+    expect(panel.getByRole("link", { name: "RM-26-009" }).getAttribute("href")).toBe("/removals?facility=f1&removal=rm-9");
   });
 
   it("omits the earlier Removal line when the entry was not recorded after one", () => {
@@ -53,7 +53,7 @@ describe("CarriedEntriesSection", () => {
     expect(container.textContent).toContain("Emissions from other credit batches");
     expect(container.textContent).toContain("diesel-receipt.pdf");
     expect(screen.getByRole("link", { name: "CB-26-009" }).getAttribute("href")).toBe("/credit-batches/cb-9?facility=f1");
-    expect(screen.getByRole("link", { name: "RM-26-009" }).getAttribute("href")).toBe("/certification/removals?facility=f1&removal=rm-9");
+    expect(screen.getByRole("link", { name: "RM-26-009" }).getAttribute("href")).toBe("/removals?facility=f1&removal=rm-9");
   });
 });
 
@@ -73,5 +73,17 @@ describe("RevisionLateEntriesSection", () => {
     expect(container.textContent).toContain("diesel-receipt.pdf");
     expect(container.textContent).not.toContain("was sent.");
     expect(screen.getByRole("link", { name: "CB-26-009" }).getAttribute("href")).toBe("/credit-batches/cb-9?facility=f1");
+  });
+});
+
+describe("RevisionLateEntriesSection paired entries", () => {
+  it("shows every value of a paired entry on its own line", () => {
+    const paired = { ...ENTRY, value: { magnitude: "40", unit: "l" }, values: [{ magnitude: "40", unit: "l" }, { magnitude: "0.85", unit: "kg/l" }] };
+    const { container } = render(<RevisionLateEntriesSection entries={[paired]} facilityId="f1" removalCode="RM-26-009" />);
+    const row = container.querySelector("[data-carried-entry]")!;
+    const lines = [...row.querySelectorAll("span.font-mono > span")].map((node) => node.textContent);
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain("40");
+    expect(lines[1]).toContain("0.85");
   });
 });

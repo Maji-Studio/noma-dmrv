@@ -63,13 +63,11 @@ export function selectThousandYearLedgerSamples(samples: Sample[], facilityTimez
     });
 }
 
-// ISO calendar day (YYYY-MM-DD) of a sampling timestamp, for the §8.3.1
-// distribution evidence, resolved in the facility's local timezone so the
-// ledger classifies a sampling instant on the SAME calendar day as the write
-// guard and submission gate. Falls back to UTC only when the timezone is absent
-// (light fixtures). Reads an existing Date/string — no clock access. Typed
-// `unknown` because the column maps to `Date` but raw rows / test fixtures can
-// carry a string.
+/** ISO calendar day of a sampling time, on the same day the write guard and the
+ * submission gate use. Dates and ISO timestamps use the facility zone (UTC fallback);
+ * date-only strings retain their calendar day, unlike samplingDay. Other strings of
+ * 10+ characters fall back to their first 10 characters; unsupported inputs return null.
+ */
 export function samplingDayOf(
   samplingTime: unknown,
   facilityTimezone: string | null | undefined,
@@ -104,6 +102,10 @@ function formatDayInZone(
   return day || null;
 }
 
+/** Accept Dates and parseable strings as instants in the facility zone (UTC fallback).
+ * Callers pass Sample.samplingTime timestamps; unlike samplingDayOf, a date-only
+ * string is parsed as UTC midnight and can shift to the previous local day.
+ */
 export function samplingDay(
   value: unknown,
   facilityTimezone: string | null | undefined,
@@ -119,4 +121,3 @@ export function samplingDay(
     ? formatFacilityDate(parsed, facilityTimezone)
     : formatUtcDate(parsed);
 }
-

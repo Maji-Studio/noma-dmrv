@@ -166,7 +166,7 @@ describe("credit batch accounting", () => {
       expect(chain.sankey.columns.length).toBeGreaterThan(0);
 
       // The map's Run filter narrows the geo roll-up to the same lineages the
-      // DAG and Sankey show, instead of plotting the whole batch.
+      // Flow and Sankey show, instead of plotting the whole batch.
       const geoEntityIds = (
         geo: Awaited<ReturnType<typeof getCreditBatchChainGeoData>>,
         kind: string,

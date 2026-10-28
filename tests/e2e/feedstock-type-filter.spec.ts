@@ -72,7 +72,7 @@ test.describe("Feedstock type filter", () => {
       await db.insert(schema.feedstockTypes).values(altType);
       await db.insert(schema.feedstocks).values(await feedstockFixtureValues(db, altFeedstock));
 
-      await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+      await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
       // Hydration gate: the sidebar facility name is client-resolved.
       await expect(
         page.locator("aside").getByText(seededData.facility.name, { exact: false }),

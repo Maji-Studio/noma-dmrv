@@ -171,7 +171,7 @@ The blast radius is the potential impact or scope of the changes introduced by t
 
 ## Done state: the merge page
 
-A PR is done when the review suite has run on its head, valid findings are fixed, and CI is green. Then update the merge page and send Kenji its link. A merge OK is never asked in chat; the page carries it.
+A PR is done when its local review rounds are recorded under `## Reviewed before opening`, the light pass has run in the PR with valid P0/P1 fixed, and CI is green (the **implement-ticket** flow, steps 4 to 6). Then update the merge page and send Kenji its link. A merge OK is never asked in chat; the page carries it.
 
 1. Start from `merge-page-template.html` (this folder) for the first PR of a batch: copy it, fill the `PRS` array, publish with `capabilities: {db: {}, user: {}}`. For later PRs, read the existing page and republish to the same url with one more entry.
 2. One card per PR: title and link, a Before block, an arrow, an After block (never a sentence; embed screenshots as data URIs because the artifact CSP blocks GitHub images), review status, CI status, and a Merge/Hold control with Merge preselected. The Merge label names the whole action: merge, delete the branch, tear down the worktree.

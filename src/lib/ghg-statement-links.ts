@@ -9,5 +9,5 @@ export function ghgStatementDeepLinkHref(ghgStatementId: string, facilityId?: st
   const params = new URLSearchParams();
   if (facilityId) params.set("facility", facilityId);
   params.set(GHG_STATEMENT_DEEP_LINK_PARAM, ghgStatementId);
-  return `/certification/ghg-statements?${params.toString()}`;
+  return `/ghg-statements?${params.toString()}`;
 }

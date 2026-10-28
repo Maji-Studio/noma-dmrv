@@ -4,7 +4,7 @@ import { isCreateIntentValue } from "@/lib/create-intent";
 import { useOpenCreateIntent } from "./use-open-create-intent";
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/samples",
+  usePathname: () => "/lab-samples",
   useRouter: () => ({ replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));

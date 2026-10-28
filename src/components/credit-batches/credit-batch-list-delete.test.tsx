@@ -88,7 +88,7 @@ it("shows a blocked delete with a link to the Sample and clears it for the next 
     const alert = renderer!.root.findByProps({ role: "alert" });
     expect(alert.children).toContain(reason);
     const link = alert.findByType("a");
-    expect(link.props.href).toBe("/samples?facility=facility-1&sample=sample-1");
+    expect(link.props.href).toBe("/lab-samples?facility=facility-1&sample=sample-1");
     expect(link.children.join("")).toBe("Open SAM-1");
     expect(harness.error).not.toHaveBeenCalled();
     expect(harness.success).not.toHaveBeenCalled();

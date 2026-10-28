@@ -3,9 +3,12 @@ import type { Sample } from "@/db/schema";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import type { FacilityReferenceSoilTemperature } from "@/lib/isometric/utils/durability-aggregation";
 import {
+  applyProductionBatchIds,
   buildDurabilityMeasurementSampleSubmissions,
+  creditBatchIdsForMeasurementSamples,
   DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
   patchMeasurementSampleSourceBindings,
+  type DurabilityMeasurementSampleSubmission,
 } from "./durability-measurement-samples";
 import {
   normalizeMeasurementSamplesForHash,
@@ -843,5 +846,46 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
     expect(
       submissions.map((submission) => submission.creditBatchProductMassKg),
     ).toEqual([500, 500, 500]); // one direct Datapoint is built from this batch fact
+  });
+});
+
+describe("measurement-sample binding", () => {
+  const CREDIT_BATCH_ID = "11111111-1111-4111-8111-111111111111";
+  const PRODUCTION_BATCH_ID = "ptb_1GAFJ4C051S06E0Z";
+  const perSample = [1, 2, 3].map(
+    (index) =>
+      ({
+        creditBatchId: CREDIT_BATCH_ID,
+        sampleId: `sample-${index}`,
+        creditBatchProductMassKg: 1_970,
+        operationKey: `pb:${CREDIT_BATCH_ID}:sample:sample-${index}`,
+        supplierRefId: `nm-mts-x-pb-y-s-${index}-v1`,
+        label: `Sample sample-${index}`,
+        body: { production_batch_id: null },
+      }) as unknown as DurabilityMeasurementSampleSubmission,
+  );
+
+  it("collects one credit batch for all of its local Samples", () => {
+    expect(creditBatchIdsForMeasurementSamples(perSample)).toEqual([
+      CREDIT_BATCH_ID,
+    ]);
+  });
+
+  it("stamps the same registered production batch onto every local Sample", () => {
+    const bound = applyProductionBatchIds(
+      perSample,
+      new Map([[CREDIT_BATCH_ID, PRODUCTION_BATCH_ID]]),
+    );
+    expect(bound.map((submission) => submission.body.production_batch_id)).toEqual([
+      PRODUCTION_BATCH_ID,
+      PRODUCTION_BATCH_ID,
+      PRODUCTION_BATCH_ID,
+    ]);
+  });
+
+  it("fails closed rather than submitting a null production batch", () => {
+    expect(() => applyProductionBatchIds(perSample, new Map())).toThrow(
+      /production batch/,
+    );
   });
 });

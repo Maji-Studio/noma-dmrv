@@ -1,6 +1,6 @@
 ---
 name: pr-review-suite
-description: Submit or review a GitHub pull request through four independent practices (Standards, Spec, Deep Correctness, and Design) using subscription-authenticated Codex gpt-6-astra and Claude Opus CLI sessions, then publish one updateable practice-first PR comment. Design runs only for UI changes. Use when asked to publish changes with follow-up reviews, after opening or updating a PR, before marking a draft ready, or for a multi-model PR review without API-key billing.
+description: Review a branch before its PR opens, or a GitHub pull request, through four independent practices (Standards, Spec, Deep Correctness, and Design) using subscription-authenticated Codex and Claude Opus CLI sessions; a PR review publishes one updateable practice-first comment. Design runs only for UI changes. Use for local review rounds before a PR, after opening or updating a PR, or for a multi-model review without API-key billing.
 ---
 
 # PR Review Suite
@@ -13,19 +13,11 @@ creates or updates one GitHub comment.
 
 ## Submit and review
 
-When the request includes submitting or publishing the current changes:
-
-1. Inspect `git status -sb` and the complete diff. If unrelated changes are
-   present, confirm scope and stage explicit paths only.
-2. Stay on the current feature branch, or create a repository-conformant feature
-   branch when still on `staging` or `main`.
-3. Run the relevant checks, commit the intended scope, push with tracking, and
-   open a **draft** PR to the requested base (`staging` by default).
-4. Capture the created PR number and run the suite with
-   `--pr <number> --publish`.
-5. Return the PR, validation, reviewed head, comment, and artifact paths.
-
-Do not mark the PR ready, fix model findings, or merge it in this workflow.
+Submitting changes for review follows the **implement-ticket** skill, steps 3
+to 6: gates, full suite rounds locally with `--local`, a **ready** PR, then one
+`--profile light --publish` pass on it. Inspect `git status -sb` and the
+complete diff first; when unrelated changes are present, confirm scope and stage
+explicit paths only.
 
 ## Review an existing PR
 
@@ -50,6 +42,31 @@ context without running either model. Use `--self-test` for offline validation.
 
 The command relies on the existing authenticated `codex`, `claude`, and `gh`
 CLI sessions. It must not request or materialize OpenAI or Anthropic API keys.
+
+### Review before the PR
+
+Review committed branch changes without a PR:
+
+```bash
+node .agents/skills/pr-review-suite/scripts/run-pr-review-suite.mjs --local --issue 123 --dry-run
+```
+
+Local mode requires a clean worktree and `--dry-run` or `--plan`.
+Keep `--artifact-dir` outside the repository.
+Use `--base <branch>` to change the default `staging` base. `--issue <number>`
+is an explicit spec source in either mode; use it instead of `--spec <path>`.
+
+For round 2, edit each finding's `disposition` in the earlier `report.json` to
+`fixed` or `declined`, adding a non-empty `reason` for each declined finding:
+
+```bash
+node .agents/skills/pr-review-suite/scripts/run-pr-review-suite.mjs \
+  --local --issue 123 --dry-run --prior /path/to/round-1/report.json
+```
+
+Repeat `--prior` in round order to include more earlier reports.
+Use `--profile light` for Codex gpt-6.1-sol (high) and Opus (medium); the default
+`full` profile keeps Codex gpt-6-astra (medium) and Opus (high).
 
 ## Practices
 
@@ -95,6 +112,7 @@ until a human or a separate remediation pass checks them against the code.
 
 ## PR submission integration
 
-After a draft PR is opened by the repository's publish workflow, invoke this
-skill with that PR number. On later pushes, invoke it again; the same comment is
-updated for the new head.
+After a PR is opened, run the light pass once with that PR number. Fix commits
+after it get a **codex-review** delta review when the implement-ticket flow asks
+for one, not another suite pass. A rerun on the same PR updates the same comment
+for the new head.

@@ -1,5 +1,5 @@
 /**
- * The create and edit forms of the Vehicles and crew side sheet. They reuse
+ * The create and edit forms of the Vehicles and Crew side sheets. They reuse
  * the vehicle, driver and operator forms and the save paths of the picker
  * dialogs (the same create actions, payloads and update mutations).
  */

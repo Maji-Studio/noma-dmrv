@@ -1,12 +1,10 @@
 /**
- * Facility activity on the Emissions page (ADR 0031, epic #1058): the old
- * /energy route redirects to /emissions with its query kept; the activity
+ * Facility activity on the Emissions page (ADR 0031, epic #1058): the activity
  * shows recorded activity per run, a ranked list that expands a row, and a
  * record code that opens its own side sheet. No CO2e is shown and
  * Certification settings has no emission factors section.
  *
- * `activity=true` opens the "Facility activity" disclosure, and the
- * redirect keeps it.
+ * `activity=true` opens the "Facility activity" disclosure.
  *
  * The run is inserted straight into the seeded facility with its energy
  * readings.
@@ -50,7 +48,7 @@ test.describe("Emissions page, facility activity", () => {
         biocharDryMassKg: 270,
       });
 
-      await page.goto(`/energy?facility=${facilityId}&activity=true`);
+      await page.goto(`/emissions?facility=${facilityId}&activity=true`);
       await expect(page).toHaveURL(/\/emissions\?.*facility=/);
       await expect(page).toHaveURL(/activity=true/);
       await expect(page.getByRole("heading", { level: 1, name: "Emissions" })).toBeVisible();

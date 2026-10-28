@@ -417,8 +417,8 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="infrastructure"
-        title="Feedstock Types"
+        area="setup"
+        title="Feedstock types"
         subtitle="Shared by every facility in your organization."
         actions={
           canManage ? (

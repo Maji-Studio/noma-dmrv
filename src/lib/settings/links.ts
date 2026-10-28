@@ -1,6 +1,6 @@
 /**
- * Routes of the settings console (`/settings`) and the redirects that keep the
- * retired settings URLs working. Every settings link in the app is built here.
+ * Routes of the settings console (`/settings`) and its Platform links.
+ * Every settings link in the app is built here.
  */
 
 export const SETTINGS_HREF = "/settings";
@@ -19,13 +19,14 @@ export const SETTINGS_REGISTRY_HREF = "/settings/registry";
 export const SETTINGS_REMOVAL_TEMPLATES_HREF = "/settings/removal-templates";
 export const SETTINGS_FACILITIES_HREF = "/settings/facilities";
 
-// Platform (Platform Admins only): pages under /admin, outside the console (#1373)
+// Platform (Platform Admins only): pages under /platform, outside the console (#1373)
 export { PLATFORM_HOME_HREF as ADMIN_ORGANIZATIONS_HREF } from "@/lib/auth/home-path";
-export const PLATFORM_DIAGNOSTICS_HREF = "/admin/diagnostics";
-export const PLATFORM_TEMPLATE_MAPPING_HREF = "/admin/template-mapping";
+export const PLATFORM_DIAGNOSTICS_HREF = "/platform/diagnostics";
+export const PLATFORM_TEMPLATE_MAPPING_HREF = "/platform/template-mapping";
 
-/** Vehicles and crew is a list page under Distribution, not a setting. */
-export const VEHICLES_AND_CREW_HREF = "/vehicles-and-crew";
+/** Vehicles and Crew are list pages under Setup, not settings. */
+export const VEHICLES_HREF = "/vehicles";
+export const CREW_HREF = "/crew";
 
 /** The working facility rides along in `?facility=`, as on every sidebar link. */
 export const FACILITY_PARAM = "facility";
@@ -40,8 +41,8 @@ export function withFacilityParam(href: string, facilityId: string | null | unde
 export type SettingsSearchParams = Record<string, string | string[] | undefined>;
 
 /**
- * `target` carrying the incoming query unchanged, for redirects from a retired
- * URL: an old bookmark with `?facility=` keeps its facility.
+ * `target` carrying the incoming query unchanged, for the settings index and
+ * visibility redirects: `?facility=` keeps the working facility.
  */
 export function redirectPreservingQuery(target: string, searchParams: SettingsSearchParams = {}): string {
   const params = new URLSearchParams();

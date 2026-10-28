@@ -12,7 +12,7 @@ export const NO_RUN_APPLICATION_YET_WARNING =
 
 /** Sankey: the mass balance runs to applications, so it needs at least one. */
 export const NO_APPLICATION_SANKEY_MESSAGE =
-  "Nothing is applied yet, so there is no mass balance to show. Open DAG or Map to see where the biochar is now.";
+  "Nothing is applied yet, so there is no mass balance to show. Open Flow or Map to see where the biochar is now.";
 
 /** Shown when the Run filter matches no lineage in the batch. */
 export const NO_LINEAGE_FOR_SELECTED_RUN =

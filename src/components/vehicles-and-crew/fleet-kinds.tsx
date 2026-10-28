@@ -1,7 +1,7 @@
 /**
  * Vehicles, drivers and operators as list rows: per kind, the table columns,
  * the columns that start hidden, the read sections of the side sheet and the
- * copy. Used by the Vehicles and crew page.
+ * copy. Used by the Vehicles and Crew pages.
  */
 import type { ReactNode } from "react";
 import type { ColumnDef, VisibilityState } from "@tanstack/react-table";
@@ -15,6 +15,11 @@ import type { FleetKind } from "@/lib/fleet/messages";
 import { formatVehicleType, lPerKmToLPer100Km } from "@/schemas/vehicles";
 
 export const FLEET_KINDS = ["vehicle", "driver", "operator"] as const satisfies readonly FleetKind[];
+
+/** The kinds on the Crew page's tabs; Vehicles has its own page. */
+export const CREW_KINDS = ["driver", "operator"] as const satisfies readonly FleetKind[];
+
+export type CrewKind = (typeof CREW_KINDS)[number];
 
 export const EMPTY_ICON_SIZE = 40;
 

@@ -1,65 +1,90 @@
 ---
 name: implement-ticket
-description: Autonomously carry a GitHub issue or plan from brief to resolved review comments, delegating each phase to a subagent so the main thread stays lean.
+description: The one flow from a GitHub issue or plan to a merged PR in noma-dmrv. Use when implementing an issue or plan, running several issues in parallel, or deciding how many review rounds a change gets before and after its PR opens.
 argument-hint: "<issue number | issue URL | plan file path>"
-disable-model-invocation: true
 ---
 
-Drive a ticket end-to-end. The main thread is a **conductor**: it resolves the target, then hands each phase to a subagent and keeps only their compact returns — it never reads code, diffs, or issue bodies into its own window. That is the point. A full cycle should cost the main context a few thousand tokens, not tens of thousands.
+Carry one ticket from brief to merge. Agents work alone until the PR is ready: every full review round runs locally against the branch, and the PR opens **ready** for one light pass. The main session is the **conductor**: it scopes, routes work by `~/.claude/model-selection.md`, verifies every finding against the code, reviews every diff, commits and lands. It keeps subagents' compact returns, not their diffs. For several independent issues, run this flow once per issue side by side; serialize issues that share files or migrations.
 
-Read [`references/playbook.md`](references/playbook.md) for the concrete board IDs, `gh` commands, verification recipes, and subagent prompt skeletons. Pull from it as you spawn each subagent. gpt-6-astra work (implementation, review, UI verification) goes through the **codex-implementation**, **codex-review**, and **codex-computer-use** skills (`.claude/skills/codex-*/SKILL.md`) — point subagents at those files for invocation mechanics instead of restating commands.
+Concrete IDs, commands and prompt skeletons are in [`references/playbook.md`](references/playbook.md). Pull the section you need when you reach its step.
 
-**Leanness rule.** Every subagent returns a structured summary under ~200 words (files touched, decisions, test result, blockers). If one starts dumping a diff or file contents back to you, that is a failure — tell it to summarize. Spawn phase subagents synchronously (you need each result to proceed); the Phase 4 reviewers are independent and run concurrently.
+## 1. Brief and worktree
 
-**Guardrails.** `pnpm` only. Never commit to `staging`/`main` — feature branch + PR only. Secrets never enter the skill, a commit, or a log; the Chrome login reads `.env.local` at runtime. Codex and CodeRabbit are best-effort — degrade gracefully if absent.
+Resolve the target (`gh issue view <n> --json title,body,labels,url`, or read the plan file). Write a brief to the scratchpad: goal, acceptance criteria, in-scope paths, out-of-scope, how to see it working. Link the issue by URL; leave its body where it is. Cut the worktree with `scripts/worktree.sh new <name> <type>/<kebab-desc>` and move the board item to **In progress** (playbook: Board).
 
-## Phase 1 — Brief
+Done when: the brief file exists, the worktree is on its own branch off `origin/staging`, and the board item is In progress (an issue target only).
 
-Resolve the **target**: an issue (`gh issue view <n> --json title,body,labels,url`) or a plan file (read it). Confirm you are not on `staging`/`main`, then branch `<type>/<kebab-desc>` off `staging`. If the target is an issue on the board, move its item to **In progress** (playbook IDs).
+## 2. Implement
 
-Write a compact **brief** to the scratchpad — goal, acceptance criteria, in-scope paths, out-of-scope, branch name, how to verify in the UI. This is the `/handoff` the implementer works from: keep it tight and link the issue/plan by URL rather than pasting it.
+Route by the model policy: non-UI changes go to Codex through the **codex-implementation** skill; UI, copy and API design stay with Claude and load **noma-design**. Give the implementer the brief path and the worktree path (playbook: Implementer). It commits on the feature branch with conventional commits.
 
-Completion: brief file written, feature branch checked out, board moved (if applicable).
+Done when: every acceptance criterion in the brief maps to a committed change, and the conductor has read the diff.
 
-## Phase 2 — Build & Verify (one implementer subagent)
+## 3. Gates
 
-Spawn ONE subagent with only the brief path, the repo root, and a pointer to `.claude/CLAUDE.md`. Its task:
+Run in the worktree: `pnpm verify:static`, the tests that cover the change, and for a UI change Before | After screenshots at the same viewport and state (playbook: Evidence). Read the real output; a piped exit code hides failures.
 
-- Implement the change through the layered flow (schema → data-access+guards → fn → hooks → components), reusing existing hooks/utilities. Route the work per the shared model policy (`~/.claude/model-selection.md`): non-UI changes go to Codex via the **codex-implementation** skill — the subagent then owns inspecting the diff and verifying, and codex output is evidence, not authority. User-facing work (UI, copy, API design) stays with Claude.
-- Keep `pnpm verify:static` green — never trust exit 0 from a piped command; read the real output.
-- Commit on the feature branch (conventional commits; body says *why*).
-- **Verify the changed behaviour** per the playbook's UI verification section — the path depends on session mode. Interactive session: ensure the dev server is up on :3100 and delegate to the **codex-computer-use** skill (the user approves the full-access prompt); judge the screenshots + report yourself. Auto/unattended session: the permission classifier blocks codex full-access and credential extraction — write or extend a Playwright e2e spec (HTTP-auth fixtures) covering the flow and run it; do not attempt the codex path. Claude-in-chrome fallback per playbook (user signs in themselves in auto mode). For a backend-only change with no UI surface, exercise the relevant `pnpm test:e2e` spec or unit path instead and say which.
+Done when: every gate is green on the committed head and the shots exist locally.
 
-Completion: change committed, verify:static green, the changed behaviour observed working. If verify goes red, send the failure back to the same subagent (SendMessage) to fix — never open a PR on red.
+## 4. Local review rounds
 
-## Phase 3 — Publish (one subagent)
+Run the suite against the branch, one suite at a time across sessions:
 
-Spawn a subagent to push the branch (`-u`), open a PR to `staging` with a title/body built from the commits + brief (`Closes #<n>` when there is an issue), then move the board item to **In review (Maji)** (playbook IDs). It returns the PR number + URL.
+```bash
+node .agents/skills/pr-review-suite/scripts/run-pr-review-suite.mjs --local --issue <n> --dry-run --artifact-dir <scratch>/round-<k>
+```
 
-Completion: PR open against `staging`, issue linked, board moved.
+A plan target uses `--spec <plan path>` instead of `--issue`. Round 1 runs with no `--prior`. Each later round passes every earlier `report.json` as `--prior`, in round order, after the conductor has set each finding's `disposition` (`fixed`, or `declined` with a `reason`).
 
-## Phase 4 — Review (fresh reviewer + Codex + CodeRabbit)
+For each round:
 
-Three reviews converge on the PR. Keep the reviewer **fresh** — never the implementer — so it stays unbiased. Run the first two concurrently:
+1. The conductor verifies every finding against the code. A finding is **valid** when the code at the reviewed head shows the defect. Check fixes that add compatibility for old rows against the issue and the pre-production policy in `.claude/CLAUDE.md` first.
+2. An implementer fixes the valid ones and commits once the gates are green (playbook: Fixer); the conductor reviews the fix diff.
+3. Declined findings get a one-line reason in `report.json`. P3s are fixed only when trivial; otherwise decline them with a reason.
+4. Rerun the gates from step 3.
 
-- **Fresh reviewer subagent** — review the diff against the brief/issue and repo standards. Verify every finding against the actual code before reporting; false positives (even bogus P0s) are common here. Post ONE PR comment, signed as a session-local reviewer.
-- **Codex** (best-effort) — a subagent runs a gpt-6-astra review via the **codex-review** skill (playbook; use the skill's gpt-6-astra escalation flags, since PR reviews run on astra) and posts the findings as a PR comment under a "Codex review (gpt-6-astra)" heading, labeled as unverified — Phase 5 verifies every comment anyway. If the binary is absent or errors, skip and note it.
-- **CodeRabbit** — auto-reviews PRs to `staging`. Wait for its review to land before Phase 5 (poll `gh pr view <n> --json reviews` until a coderabbit review appears or ~10 min elapse; proceed with what exists if it doesn't).
+**Stop rule.** Stop after the first round with no valid P0-P2. Cap at 3 rounds. Rounds 4 and 5 run only while a valid P0, or a valid P1 on security, auth/tenancy, money or data integrity, stays open; such a fix counts as open until a later round has reviewed it. Still open at the cap: stop, open no PR, and ask Kenji on an answer page with the open findings. Other valid findings from the last round are fixed after it and listed under the table as commits after the last reviewed head (step 5).
 
-Completion: fresh review posted, codex attempted, CodeRabbit review present (or waited-out and noted).
+Done when: the stop rule ends the loop with every valid P0-P2 fixed, the gates are green on the last reviewed head, and every finding in every round carries a disposition.
 
-## Phase 5 — Resolve (one resolver subagent)
+## 5. Open the PR ready
 
-Spawn a FRESH resolver subagent with the PR number. For every comment — fresh reviewer, codex, CodeRabbit alike:
+Push from the main checkout, open the PR against `staging` with the **pr** skill's body (`Closes #<n>`), and add this section, which later retros count:
 
-- Verify it against the actual code first.
-- Fix valid findings with the **minimal** change. Resist over-engineering: a fix that balloons scope is itself a smell to push back on, not follow.
-- Decline false positives and gold-plating with a one-line written reason.
-- Reply to each thread; resolve the ones addressed or declined; leave genuinely open questions unresolved.
-- One commit per addressed comment; keep verify:static green; push.
+```markdown
+## Reviewed before opening
 
-Completion: every comment triaged (fixed / declined+reason), replies posted, threads resolved, branch pushed.
+| round | head | P0 | P1 | P2 | P3 | fixed | declined |
+|---|---|---|---|---|---|---|---|
+| 1 | `abc1234` | 0 | 2 | 5 | 6 | 6 | 7 |
+| 2 | `def5678` | 0 | 0 | 1 | 3 | 0 | 4 |
 
-## Phase 6 — Report
+Last reviewed head: `def5678…` (full SHA). Models: <the last round's `Models:` header line>.
+Declined: <one line per declined P0-P2: id, title, reason>.
+```
 
-Emit one compact summary: issue/plan, branch, PR URL, board status, what shipped, verify result, review outcomes, comments resolved (fixed vs declined). Nothing else needs to live in the main context.
+Commits after the last reviewed head, if any, are named below the table with why they skipped a round. Move the board item to **In review (Maji)**.
+
+Done when: the PR is open and ready (not draft), the section's last reviewed head is an ancestor of the PR head, and the board moved.
+
+## 6. Light pass in the PR
+
+```bash
+node .agents/skills/pr-review-suite/scripts/run-pr-review-suite.mjs --pr <n> --profile light --publish
+```
+
+A plan target adds the same `--spec <plan path>` as its local rounds.
+
+Verify each finding against the code. Fix valid P0 and P1 only, through the Fixer (playbook: Fixer), committing once the step 3 gates are green. Decline valid P2s with a reason in a PR comment, or file them as follow-up issues; decline invalid findings with a one-line reason. A fix commit that touches auth, tenancy or data code (schema, migrations, data-access) gets a **codex-review** of that delta before landing, with that skill's escalation for auth and data diffs and never the model that wrote the fix; no second suite pass. Push the fixes from the main checkout and confirm the PR head is the fixed SHA.
+
+Done when: the light-pass comment is on the PR, every P0/P1 is fixed or declined with a reason, every P2 is declined or filed, and CI is green on the head.
+
+## 7. Merge
+
+Publish the merge card per the **pr** skill's Done state. Once Kenji's saved doc says `choice: merge` and its `sha` equals the PR head, land with `scripts/pr-land.sh <pr> --teardown <worktree-name>`.
+
+Done when: the PR state is MERGED, the worktree is torn down, and the issue is closed.
+
+## Report
+
+One compact summary per ticket: issue, branch, PR URL, local rounds with their P0-P3 counts, light-pass outcome, what shipped, merge state.

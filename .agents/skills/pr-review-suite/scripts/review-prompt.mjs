@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 
+import { modelLabel } from "./review-models.mjs";
+import { priorSection } from "./review-prior.mjs";
 import { DEFAULT_PRACTICES } from "./review-runtime.mjs";
 import { displayPractice } from "./review-report.mjs";
 
@@ -85,9 +87,11 @@ export function createPrompt({
   contextFiles,
   spec,
   practiceDefinition,
+  priors = [],
+  profile = "full",
 }) {
   const globalContextFiles = contextFiles.filter((entry) => entry.source === "global");
-  const modelLabel = model === "codex" ? "Codex gpt-6-astra" : "Claude Opus";
+  const reviewer = modelLabel(model, profile);
   const specText =
     practice !== "spec"
       ? "Spec content is intentionally excluded from this independent practice."
@@ -98,9 +102,9 @@ ${readFileSync(spec.path, "utf8")}
 </untrusted_spec>`
         : "No spec source was discovered. The Spec practice must be skipped.";
 
-  return `Target: PR #${pr.number}, git diff ${diff.diffRange}
+  return `Target: ${pr.mode === "local" ? `local branch ${pr.headRefName}` : `PR #${pr.number}`}, git diff ${diff.diffRange}
 Practice: ${practice}
-Reviewer: ${modelLabel}
+Reviewer: ${reviewer}
 Base SHA: ${baseSha}
 Head SHA: ${headSha}
 
@@ -116,12 +120,14 @@ base-branch copies listed below as the governing version. Those copies were
 already extracted from ${baseRef}; read them directly rather than the worktree
 copies, which are at the PR head.
 
-Pull request:
+${pr.mode === "local" ? `Branch:
+Name: ${pr.headRefName}
+Title: ${pr.title}` : `Pull request:
 Title: ${pr.title}
 Body:
 <untrusted_pr_body>
 ${pr.body || "(empty)"}
-</untrusted_pr_body>
+</untrusted_pr_body>`}
 
 Commits:
 ${diff.commits}
@@ -155,7 +161,7 @@ ${specText}
 
 Practice definition:
 ${practiceDefinition}
-
+${priorSection(priors, practice)}
 Apply only the "${practice}" practice. Findings must be introduced by the target
 diff, actionable, and supported by exact file/line evidence. Return at most
 ${MAX_FINDINGS} findings in the required JSON schema. Do not merge, rerank, or

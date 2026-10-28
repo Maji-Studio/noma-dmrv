@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { productionRunDeepLinkHref } from "@/lib/certification/links";
 import { deliveryDeepLinkHref } from "@/lib/delivery-links";
 import { applicationDeepLinkHref } from "@/lib/application-links";
 
 const SOURCES = {
-  feedstock: { path: "/feedstocks", label: "feedstock intake" },
+  feedstock: { path: "/feedstock-intake", label: "feedstock intake" },
   productionRun: { path: "/production-runs", label: "production run" },
   biocharProduct: { path: "/biochar-products", label: "biochar product" },
   delivery: { path: "/deliveries", label: "delivery" },
@@ -15,7 +16,7 @@ export interface StockSource { entity: keyof typeof SOURCES; id: string }
 export function stockSourceHref(source: StockSource, facilityId: string): string {
   if (source.entity === "delivery") return deliveryDeepLinkHref(source.id, facilityId);
   if (source.entity === "application") return applicationDeepLinkHref(source.id, facilityId);
-  if (source.entity === "productionRun") return `/production-runs/${encodeURIComponent(source.id)}`;
+  if (source.entity === "productionRun") return productionRunDeepLinkHref(source.id, facilityId);
   return `${SOURCES[source.entity].path}?${new URLSearchParams({ facility: facilityId, [source.entity]: source.id })}`;
 }
 

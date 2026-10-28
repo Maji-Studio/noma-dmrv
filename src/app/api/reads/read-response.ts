@@ -1,5 +1,6 @@
 import { ZodError } from "zod";
 
+import { isPgNulCharacterError } from "@/db/errors";
 import { toActionFailure, type ActionFailure } from "@/fn/action-errors";
 import {
   resolveOrgContext,
@@ -176,7 +177,7 @@ export async function readResponse<T>({
  */
 function failureStatus(error: unknown, failure: ActionFailure): number {
   if (failure.conflict) return STATUS.conflict;
-  if (error instanceof ZodError || error instanceof SafeError) {
+  if (error instanceof ZodError || error instanceof SafeError || isPgNulCharacterError(error)) {
     return STATUS.invalidInput;
   }
   return STATUS.serverError;

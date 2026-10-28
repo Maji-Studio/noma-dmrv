@@ -26,6 +26,18 @@ beforeEach(() => {
 });
 
 describe("toActionFailure", () => {
+  it.each([
+    { code: "22021", message: 'invalid byte sequence for encoding "UTF8": 0x00' },
+    { code: "22P05", message: "unsupported Unicode escape sequence", detail: "\\u0000 cannot be converted to text." },
+  ])("maps wrapped PostgreSQL NUL refusals ($code) without logging", (cause) => {
+    expect(toActionFailure(new Error("Failed query", { cause }), options)).toEqual({
+      success: false,
+      error: "This value contains a NUL character (U+0000), which noma cannot store. Remove it and retry.",
+      code: "validation_failed",
+    });
+    expect(logError).not.toHaveBeenCalled();
+  });
+
   it("preserves domain code, issue paths and business conflict references", () => {
     const issues = [{ path: ["allocations", 0, "mass"], code: "too_small", message: "Too small", meta: { minimum: 0 } }];
     expect(toActionFailure(new DomainError("insufficient_stock", "Stock is insufficient.", {

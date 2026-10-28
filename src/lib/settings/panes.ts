@@ -4,7 +4,7 @@
  *
  * The rail groups panes by whose setting it is (#1277, variant A): You, the
  * Organization and its Certification. A pane is a route. Platform pages
- * (Organizations, Diagnostics, Template mapping) live under `/admin` (#1373).
+ * (Organizations, Diagnostics, Template mapping) live under `/platform` (#1373).
  */
 import {
   SETTINGS_CONNECTED_APPS_HREF,

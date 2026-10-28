@@ -4,7 +4,63 @@ import {
   isPgCheckViolation,
   isPgCheckViolationMessage,
   isPgForeignKeyViolation,
+  isPgNulCharacterError,
 } from "./errors";
+
+describe("isPgNulCharacterError", () => {
+  const textError = {
+    code: "22021",
+    message: 'invalid byte sequence for encoding "UTF8": 0x00',
+  };
+
+  it("matches a direct driver error and a Drizzle-style cause chain", () => {
+    expect(isPgNulCharacterError(textError)).toBe(true);
+    const wrapped = new Error("Failed query", { cause: textError });
+    expect(isPgNulCharacterError(new Error("Write failed", { cause: wrapped }))).toBe(true);
+  });
+
+  it("matches JSONB NUL failures in the driver message or detail", () => {
+    expect(isPgNulCharacterError({
+      code: "22P05",
+      message: "unsupported Unicode escape sequence: \\u0000",
+    })).toBe(true);
+    expect(isPgNulCharacterError({
+      code: "22P05",
+      message: "unsupported Unicode escape sequence",
+      detail: "\\u0000 cannot be converted to text.",
+    })).toBe(true);
+  });
+
+  it.each([
+    { code: "22021", message: 'invalid byte sequence for encoding "UTF8": 0xff' },
+    { code: "22P05", message: "unsupported Unicode escape sequence", detail: "Unicode high surrogate must not follow a high surrogate." },
+    { code: "23505", message: "duplicate key value: 0x00" },
+    { code: "22021", message: "invalid byte sequence: 0x0001" },
+    { code: "22P05", message: "unsupported Unicode escape sequence: \\u0001" },
+    { code: "22021", message: null },
+    null,
+    "0x00",
+  ])("rejects unrelated or malformed errors (%j)", (error) => {
+    expect(isPgNulCharacterError(error)).toBe(false);
+  });
+
+  it("does not combine a wrapper's message with the driver's code", () => {
+    expect(isPgNulCharacterError(new Error("Failed query: 0x00", {
+      cause: { code: "22021", message: "invalid byte sequence: 0xff" },
+    }))).toBe(false);
+  });
+
+  it("terminates on cyclic and excessively deep cause chains", () => {
+    const cyclic: { cause?: unknown } = {};
+    cyclic.cause = cyclic;
+    expect(isPgNulCharacterError(cyclic)).toBe(false);
+
+    const wrapperCount = 10;
+    let deep: unknown = textError;
+    for (let index = 0; index < wrapperCount; index++) deep = { cause: deep };
+    expect(isPgNulCharacterError(deep)).toBe(false);
+  });
+});
 
 describe("Postgres check-violation predicates", () => {
   it("matches a named check constraint through a wrapped cause", () => {

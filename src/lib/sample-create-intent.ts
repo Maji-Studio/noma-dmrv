@@ -19,7 +19,7 @@ export function sampleCreateHref(
     [CREATE_INTENT_PARAM]: "true",
     [SAMPLE_CREATE_CREDIT_BATCH_PARAM]: creditBatchId,
   });
-  return `/samples?${params.toString()}`;
+  return `/lab-samples?${params.toString()}`;
 }
 
 /**
@@ -35,7 +35,7 @@ export function sampleDetailHref(
     facility: facilityId,
     sample: sampleId,
   });
-  return `/samples?${params.toString()}`;
+  return `/lab-samples?${params.toString()}`;
 }
 
 export function resolveSampleCreateCreditBatchId(

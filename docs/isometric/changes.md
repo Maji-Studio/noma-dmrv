@@ -337,7 +337,7 @@ the full pipeline can be restored from `archive/reactor-telemetry-upload`
 
 ## 2026-10-01: Energy page drops the submission preview and shows estimates
 
-- `/energy` no longer previews the grid electricity and diesel values a
+- `/emissions` no longer previews the grid electricity and diesel values a
   Removal submits; the Removal flow already shows what is submitted. The
   page now estimates CO₂e per record from per-facility emission factors
   (`facility_emission_factors`, [ADR 0031](../adr/0031-operator-energy-estimates.md)).
@@ -718,7 +718,10 @@ Before binding durability measurements, read the exact persisted ProductionBatch
 ID ([GET Production Batch](https://docs.isometric.com/api-reference/certify/get-production-batch.md)).
 Verify its ID, stable supplier reference and saved facility; a live identity with
 a changed current project/facility mapping blocks submission. Preserve local
-payload-drift reporting and legacy date-hash migration for live same-mapping batches.
+legacy date-hash migration for live same-mapping batches. Changed hashes with
+registered figures that differ now stop submission and record a failed sync
+event before any Datapoints or MeasurementSamples are sent (#1111). Display-only
+changes retain succeeded drift audit and reuse.
 Only a 404 or the provider 400 detail naming exactly the requested missing ID
 permits recovery. Reconcile the stable reference before POST, refuse duplicate
 references, and validate the complete current payload (including supported legacy
@@ -741,7 +744,8 @@ remote batch carrying the same stable supplier reference and otherwise matching
 identity and records that compatibility claim in the sync audit trail. Stored
 payload hashes from that exact legacy representation migrate once to the
 physical-window hash; changes to mass, facility, feedstock, kind, supplier
-reference, or a later physical window still emit drift. Open member runs fail
+reference, or a later physical window still trigger the registered-figure
+comparison. Real differences stop submission (#1111). Open member runs fail
 before that batch's registry POST.
 The behavior is covered hermetically; fresh sandbox verification is pending.
 

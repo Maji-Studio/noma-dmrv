@@ -308,7 +308,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
     );
 
     // Navigate to samples
-    await page.goto(`/samples?facility=${seededData.facility.id}`);
+    await page.goto(`/lab-samples?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
     // Click "New Sample"

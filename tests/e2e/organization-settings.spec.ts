@@ -139,7 +139,7 @@ test.describe("Organization foundation UI", () => {
     adminPage,
   }) => {
     const page = adminPage;
-    await page.goto("/admin/organizations");
+    await page.goto("/platform/organizations");
 
     const list = page.getByRole("navigation", { name: "Organizations" });
     const organization = list
@@ -157,11 +157,11 @@ test.describe("Organization foundation UI", () => {
     await expect(bar).toContainText(`Platform Admin in ${ORGANIZATION_NAME}`);
     await expect(bar.getByRole("link", { name: "Back to Platform" })).toHaveAttribute(
       "href",
-      "/admin/organizations",
+      "/platform/organizations",
     );
 
     // The organization the admin is in says so and offers no switch.
-    await page.goto("/admin/organizations");
+    await page.goto("/platform/organizations");
     await organization.click();
     const panel = page.getByRole("article", { name: ORGANIZATION_NAME });
     await expect(panel).toContainText(`You're working in ${ORGANIZATION_NAME}.`);

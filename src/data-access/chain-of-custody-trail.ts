@@ -9,7 +9,7 @@
  * transport-leg `distanceSource` provenance (with the legs' own
  * bill-of-lading / weigh-ticket documents nested).
  *
- * Evidence is keyed by the DAG node-id convention (`kind:entityId`,
+ * Evidence is keyed by the graph node-id convention (`kind:entityId`,
  * `use-chain-graph.ts`) so the Trail cross-links with every other reading.
  */
 import { db } from "@/db";
@@ -62,7 +62,7 @@ export interface TrailNodeEvidence {
 }
 
 export interface ApplicationTrailEvidence {
-  /** Keyed by DAG node id (`kind:entityId`) — empty nodes are omitted. */
+  /** Keyed by graph node id (`kind:entityId`) — empty nodes are omitted. */
   byNodeId: Record<string, TrailNodeEvidence>;
   /** Total attesting records across all steps (Trail header count). */
   totalCount: number;

@@ -16,7 +16,7 @@ describe("RemovalReviewAction", () => {
     const html = renderToStaticMarkup(
       <RemovalReviewAction
         isActionable
-        reviewHref="/certification/removals?resume=removal-1&amp;facility=facility-1"
+        reviewHref="/removals?resume=removal-1&amp;facility=facility-1"
       />,
     );
 

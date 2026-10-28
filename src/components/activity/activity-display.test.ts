@@ -115,13 +115,13 @@ describe("record names and meanings", () => {
 describe("record links", () => {
   it("opens each record's side sheet on the facility it lives at", () => {
     expect(activityRecordHref(item(), CONTEXT)).toBe("/production-runs?facility=facility-1&run=run-1");
-    expect(activityRecordHref(item({ entityType: "feedstock", entityId: "f-1" }), CONTEXT)).toBe("/feedstocks?facility=facility-1&feedstock=f-1");
+    expect(activityRecordHref(item({ entityType: "feedstock", entityId: "f-1" }), CONTEXT)).toBe("/feedstock-intake?facility=facility-1&feedstock=f-1");
     expect(activityRecordHref(item({ entityType: "biochar_product", entityId: "p-1" }), CONTEXT)).toBe("/biochar-products?facility=facility-1&biocharProduct=p-1");
-    expect(activityRecordHref(item({ entityType: "lab_sample", entityId: "s-1" }), CONTEXT)).toBe("/samples?facility=facility-1&sample=s-1");
+    expect(activityRecordHref(item({ entityType: "lab_sample", entityId: "s-1" }), CONTEXT)).toBe("/lab-samples?facility=facility-1&sample=s-1");
     expect(activityRecordHref(item({ entityType: "delivery", entityId: "d-1" }), CONTEXT)).toBe("/deliveries?facility=facility-1&delivery=d-1");
     expect(activityRecordHref(item({ entityType: "application", entityId: "a-1" }), CONTEXT)).toBe("/applications?facility=facility-1&application=a-1");
-    expect(activityRecordHref(item({ entityType: "removal", entityId: "r-1" }), CONTEXT)).toBe("/certification/removals?facility=facility-1&removal=r-1");
-    expect(activityRecordHref(item({ entityType: "ghg_statement", entityId: "g-1" }), CONTEXT)).toBe("/certification/ghg-statements?facility=facility-1&statement=g-1");
+    expect(activityRecordHref(item({ entityType: "removal", entityId: "r-1" }), CONTEXT)).toBe("/removals?facility=facility-1&removal=r-1");
+    expect(activityRecordHref(item({ entityType: "ghg_statement", entityId: "g-1" }), CONTEXT)).toBe("/ghg-statements?facility=facility-1&statement=g-1");
     expect(activityRecordHref(item({ entityType: "credit_batch", entityId: "other" }), CONTEXT)).toBe("/credit-batches/other?facility=facility-1");
     expect(activityRecordHref(item({ entityType: "order", entityId: "o-1" }), CONTEXT)).toBe("/orders?facility=facility-1&order=o-1");
   });
@@ -133,7 +133,7 @@ describe("record links", () => {
 
   it("opens a document's owner, the sheet that holds its files", () => {
     expect(activityRecordHref(item({ entityType: "document", entityId: "doc-1", reasonCode: "document:lab_report:sample:s-1" }), CONTEXT))
-      .toBe("/samples?facility=facility-1&sample=s-1");
+      .toBe("/lab-samples?facility=facility-1&sample=s-1");
   });
 
   it("links nothing for tombstones, unknown facilities, sheetless records and the batch itself", () => {

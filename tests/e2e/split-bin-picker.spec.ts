@@ -70,7 +70,7 @@ test.describe("Split bin picker", () => {
 
   test("shows each sub-bin on the bin sheet, wet first, with its details a tap away", async ({ adminPage: page, testUsers }) => {
     const f = await seedOutputStockBrowserFixture(testUsers.admin.id);
-    await page.goto(`/storage-locations?facility=${f.facility.id}`);
+    await page.goto(`/storage-bins?facility=${f.facility.id}`);
     await waitForFacilityHydration(page, f.facility.name);
     await page.getByPlaceholder("Search by code or name…").fill(f.bin.code);
     await page.getByText(f.bin.name, { exact: true }).first().click();

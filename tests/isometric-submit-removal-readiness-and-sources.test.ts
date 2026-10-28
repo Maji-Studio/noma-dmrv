@@ -37,6 +37,8 @@ import * as isometric from "@/lib/isometric";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import * as reviewHash from "@/lib/certification/removal-review-hash";
 import { classifyRemovalSourceCandidate } from "@/lib/certification/removal-source-bindings";
+import { SafeError } from "@/lib/errors";
+import { IsometricApiError } from "@/lib/isometric/client";
 import * as sourceVerification from "@/lib/isometric/source-binding-verification";
 
 const CHANGED_FIELD_SIZE_HA = 2;
@@ -226,6 +228,25 @@ describe("submitRemoval — entity readiness gate", () => {
       evidenceLedgers.ensureEvidenceLedgersFromContext,
     ).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
+  });
+
+  it.each([
+    ["a network failure", new IsometricApiError("Isometric GET /x: fetch failed", undefined, undefined, "network"), "no_answer"],
+    ["a request deadline", new Error("Isometric request timed out"), "no_answer"],
+    ["a wrapped network failure", Object.assign(new SafeError("Could not register."), { cause: new IsometricApiError("down", undefined, undefined, "network") }), "no_answer"],
+    ["an HTTP refusal", new IsometricApiError("Isometric POST /x: 422", 422, undefined, "http"), null],
+    ["a plain refusal", new SafeError("Application evidence is missing."), null],
+  ])("records failure_kind on the attempt summary for %s", async (_name, failure, expected) => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockRejectedValue(failure);
+
+    await expect(
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
+    ).rejects.toBeDefined();
+
+    expect(attemptSummaryEvents()[0]?.[1]).toMatchObject({
+      status: "failed",
+      responsePayload: { failure_kind: expected },
+    });
   });
 
   it("surfaces the submission error when the attempt-summary audit also fails", async () => {
