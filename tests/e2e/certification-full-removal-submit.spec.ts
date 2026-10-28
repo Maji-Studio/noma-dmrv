@@ -115,7 +115,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       );
       const code = batch.code;
 
-      await page.goto(`/certification/removals?facility=${facilityId}`);
+      await page.goto(`/removals?facility=${facilityId}`);
 
       // ── Step 1: open the wizard and select the ready batch ──────────────
       await page

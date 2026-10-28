@@ -479,8 +479,8 @@ export function BiocharProductForm({
                   message:
                     "No biochar bin has traceable biochar available yet.",
                   href: selectedFacilityId
-                    ? `/storage-locations?facility=${encodeURIComponent(selectedFacilityId)}`
-                    : "/storage-locations",
+                    ? `/storage-bins?facility=${encodeURIComponent(selectedFacilityId)}`
+                    : "/storage-bins",
                   linkLabel: "Open storage bins",
                 }}
               />

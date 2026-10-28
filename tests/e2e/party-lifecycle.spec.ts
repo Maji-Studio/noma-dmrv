@@ -115,7 +115,7 @@ test.describe("Supplier archive and restore", () => {
   test("a feedstock keeping an archived supplier shows it, and the picker opens a read-only View with Restore", async ({ adminPage: page, seededData }) => {
     const { supplier, facility, feedstock } = seededData;
     await setArchived("suppliers", supplier.id, true);
-    await page.goto(`/feedstocks?facility=${facility.id}&feedstock=${feedstock.id}&mode=edit`);
+    await page.goto(`/feedstock-intake?facility=${facility.id}&feedstock=${feedstock.id}&mode=edit`);
     await waitForSideSheet(page);
 
     const trigger = page.getByRole("dialog").locator('[data-testid="entity-select-trigger"]').filter({ hasText: supplier.name });
@@ -135,7 +135,7 @@ test.describe("Supplier archive and restore", () => {
   test("an archived supplier is hidden from the new feedstock picker", async ({ adminPage: page, seededData }) => {
     const { supplier, facility } = seededData;
     await setArchived("suppliers", supplier.id, true);
-    await page.goto(`/feedstocks?facility=${facility.id}`);
+    await page.goto(`/feedstock-intake?facility=${facility.id}`);
     await page.getByRole("button", { name: "New feedstock" }).click();
     await waitForSideSheet(page);
     const dialog = page.getByRole("dialog");

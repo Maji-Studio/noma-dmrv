@@ -97,7 +97,7 @@ test.describe("Deferred create attachments", () => {
     cleanupTestData,
   }) => {
     void cleanupTestData;
-    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
     await expect(page.getByRole("table", { name: "Feedstocks" })).toHaveAttribute(
       "aria-busy",
@@ -161,7 +161,7 @@ test.describe("Deferred create attachments", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     await seedCreditBatch(seededData.facility.id, tag, seededData.feedstockType.id);
 
-    await page.goto(`/samples?facility=${seededData.facility.id}`);
+    await page.goto(`/lab-samples?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
     await page.click('button:has-text("New Sample")');
@@ -223,7 +223,7 @@ test.describe("Deferred create attachments", () => {
     cleanupTestData,
   }) => {
     void cleanupTestData;
-    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
     await page.click('button:has-text("New feedstock")');

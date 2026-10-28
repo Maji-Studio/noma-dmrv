@@ -173,7 +173,7 @@ export function StorageLocationList() {
   if (!facilityId) {
     return (
       <div className="container-max page-shell">
-        <PageHeader area="infrastructure" title="Storage" />
+        <PageHeader area="setup" title="Storage bins" />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its storage bins." />
       </div>
     );
@@ -190,8 +190,8 @@ export function StorageLocationList() {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="infrastructure"
-        title="Storage"
+        area="setup"
+        title="Storage bins"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />

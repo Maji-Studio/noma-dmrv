@@ -121,7 +121,7 @@ test.describe("credit batch activity", () => {
     await expect(entries).toHaveCount(1);
     await expect(entries.first().getByRole("link")).toHaveAttribute(
       "href",
-      `/feedstocks?facility=${seededData.facility.id}&feedstock=${seededData.feedstock.id}`,
+      `/feedstock-intake?facility=${seededData.facility.id}&feedstock=${seededData.feedstock.id}`,
     );
 
     await view.getByLabel("Kind").selectOption("deleted");

@@ -558,7 +558,7 @@ function attentionHref(
     case "run-mass":
       return productionRunHref(facilityId, id);
     case "feedstock-missing":
-      return `/feedstocks${facilityQuery}`;
+      return `/feedstock-intake${facilityQuery}`;
     case "application-evidence":
       return `/applications${facilityQuery}`;
     case "batch-pending":

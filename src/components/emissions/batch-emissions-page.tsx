@@ -61,7 +61,7 @@ export function BatchEmissionsPage({ creditBatchId }: BatchEmissionsPageProps) {
   if (!facilityId) {
     return (
       <div className="container-max page-shell">
-        <PageHeader area="infrastructure" title="Emissions" subtitle={SUBTITLE} />
+        <PageHeader area="verification" title="Emissions" subtitle={SUBTITLE} />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to see this credit batch's emissions." />
       </div>
     );
@@ -117,7 +117,7 @@ function BatchEmissions({ scope }: { scope: EmissionBatchScope }) {
   if (overview.isSuccess && !overviewBatch) {
     return (
       <div className="container-max page-shell">
-        <PageHeader area="infrastructure" title="Emissions" subtitle={SUBTITLE} />
+        <PageHeader area="verification" title="Emissions" subtitle={SUBTITLE} />
         <EmptyState
           icon={<FileDashedIcon size={48} />}
           title="Credit batch not found"

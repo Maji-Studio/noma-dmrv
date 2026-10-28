@@ -163,7 +163,7 @@ describe("SubmissionSummary", () => {
         compilationHash: null,
       } as unknown as RemovalCompilationView,
     });
-    expect(html).toContain('href="/samples?facility=facility-1"');
+    expect(html).toContain('href="/lab-samples?facility=facility-1"');
     expect(html).not.toContain("batch=batch-1&amp;");
     expect(html).toContain('href="/deliveries?facility=facility-1"');
   });

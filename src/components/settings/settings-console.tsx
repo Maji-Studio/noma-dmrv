@@ -5,7 +5,7 @@
  * setting it is (You, the Organization, its Certification, the Platform) plus
  * one pane. Each pane is its own route, so it can be bookmarked and each
  * route checks its own access on the server (`assertSettingsPaneVisible`).
- * `/certification/settings` folded in here and only redirects now.
+ * Registry configuration lives in this settings console.
  *
  * The pane card carries three lines the rail cannot: the scope line on top
  * (whose settings these are, and for facility panes which facility), the
@@ -17,7 +17,7 @@
  * certification panes did.
  *
  * The rail is the hub, which is why `/settings` has no landing page: a tile
- * grid whose tiles are also permanently in the rail is the thing `/admin` was.
+ * grid would duplicate the rail, as the former platform launcher did.
  */
 "use client";
 

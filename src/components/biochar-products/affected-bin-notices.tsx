@@ -24,9 +24,9 @@ function blockerHref(blocker: Blocker): string | null {
     case "application":
       return `/applications?ids=${blocker.id}`;
     case "ghgStatement":
-      return `/certification/ghg-statements?statement=${blocker.id}`;
+      return `/ghg-statements?statement=${blocker.id}`;
     default:
-      return `/certification/removals?removal=${blocker.id}`;
+      return `/removals?removal=${blocker.id}`;
   }
 }
 

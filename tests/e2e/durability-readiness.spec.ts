@@ -95,7 +95,7 @@ test.describe("200-year durability readiness", () => {
       tag,
     );
 
-    await adminPage.goto(`/samples?facility=${seededData.facility.id}`);
+    await adminPage.goto(`/lab-samples?facility=${seededData.facility.id}`);
     await adminPage.getByRole("button", { name: "New Sample" }).click();
     await waitForSideSheet(adminPage);
 

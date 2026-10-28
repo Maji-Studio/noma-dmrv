@@ -120,7 +120,7 @@ RECONNAISSANCE
 
 Before the operator walk:
 
-- Inventory every route below src/app/(app)/ and src/app/admin/ and create a visit
+- Inventory every route below src/app/(app)/ (including platform/) and create a visit
   checklist.
 - Build the current entity/prerequisite cheat sheet from GLOSSARY.md, schemas, server
   functions, and data-access code. Do not trust an old QA ledger over current code.

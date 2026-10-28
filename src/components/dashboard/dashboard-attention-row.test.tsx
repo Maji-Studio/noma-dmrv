@@ -22,7 +22,7 @@ describe("DashboardAttentionRow", () => {
           title="Complete run missing mass data"
         />
         <DashboardAttentionRow
-          href="/feedstocks?feedstock=feedstock-1"
+          href="/feedstock-intake?feedstock=feedstock-1"
           metadata="Feedstock form · Transport route · 1 affected"
           title="Transport endpoint GPS missing"
           divided
@@ -64,7 +64,7 @@ describe("DashboardAttentionRow", () => {
             label: "Transport endpoint GPS missing",
             metadata: "Feedstock form · Transport route · 1 affected",
             count: 1,
-            href: "/feedstocks?feedstock=feedstock-1&focus=transport-route",
+            href: "/feedstock-intake?feedstock=feedstock-1&focus=transport-route",
           },
         ]}
         total={3}

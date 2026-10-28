@@ -20,8 +20,8 @@ import {
 } from "./fixtures/certification-helpers";
 
 const REGISTRY_SETTINGS_URL = "/settings/registry";
-const CERTIFICATION_ROOT_URL = "/certification";
-const CERTIFICATION_REMOVALS_URL = "/certification/removals";
+const CERTIFICATION_STATEMENTS_URL = "/ghg-statements";
+const CERTIFICATION_REMOVALS_URL = "/removals";
 
 // DB-only link target; never reaches Isometric, so any string is fine.
 const FAKE_PROJECT_ID = "e2e-gating-fake-project";
@@ -81,9 +81,9 @@ test.describe("Certification registry gating", () => {
       { timeout: REDIRECT_TIMEOUT_MS },
     );
 
-    // The retired root route redirects through Removals, which is also guarded.
+    // GHG Statements has the same registry guard.
     await adminPage.goto(
-      `${CERTIFICATION_ROOT_URL}?facility=${seededData.facility.id}`,
+      `${CERTIFICATION_STATEMENTS_URL}?facility=${seededData.facility.id}`,
     );
     await expect(adminPage).toHaveURL(
       new RegExp(`${REGISTRY_SETTINGS_URL}`),
@@ -130,12 +130,12 @@ test.describe("Certification registry gating", () => {
         new RegExp(`${REGISTRY_SETTINGS_URL}`),
       );
 
-      // The root entry point now lands on the first concrete route.
+      // GHG Statements also stays accessible with a registry link.
       await adminPage.goto(
-        `${CERTIFICATION_ROOT_URL}?facility=${seededData.facility.id}`,
+        `${CERTIFICATION_STATEMENTS_URL}?facility=${seededData.facility.id}`,
       );
       await expect(adminPage).toHaveURL(
-        new RegExp(`${CERTIFICATION_REMOVALS_URL}`),
+        new RegExp(`${CERTIFICATION_STATEMENTS_URL}`),
         { timeout: REDIRECT_TIMEOUT_MS },
       );
     } finally {

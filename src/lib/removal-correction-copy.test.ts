@@ -45,8 +45,8 @@ describe("removal correction copy", () => {
   });
 
   it("links through the shared deep link helpers", () => {
-    expect(correctionStatementHref(correction(), "facility-1")).toBe("/certification/ghg-statements?facility=facility-1&statement=statement-1");
-    expect(removalSheetHref("removal-1", "facility-1")).toBe("/certification/removals?facility=facility-1&removal=removal-1");
-    expect(removalResubmitHref("removal-1", "facility-1")).toBe("/certification/removals?facility=facility-1&resume=removal-1");
+    expect(correctionStatementHref(correction(), "facility-1")).toBe("/ghg-statements?facility=facility-1&statement=statement-1");
+    expect(removalSheetHref("removal-1", "facility-1")).toBe("/removals?facility=facility-1&removal=removal-1");
+    expect(removalResubmitHref("removal-1", "facility-1")).toBe("/removals?facility=facility-1&resume=removal-1");
   });
 });

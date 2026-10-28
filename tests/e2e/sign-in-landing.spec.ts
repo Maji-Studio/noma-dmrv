@@ -16,7 +16,7 @@ import { createDbConnection } from "./fixtures/db";
 const SIGN_IN_TIMEOUT_MS = 60_000;
 /** One attempt at filling and submitting before the next try. */
 const SIGN_IN_ATTEMPT_TIMEOUT_MS = 20_000;
-const PLATFORM_HOME = /\/admin\/organizations(?:[?#]|$)/;
+const PLATFORM_HOME = /\/platform\/organizations(?:[?#]|$)/;
 const DASHBOARD = /\/dashboard(?:[?#]|$)/;
 
 /**

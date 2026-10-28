@@ -20,7 +20,7 @@ async function openBin(page: Page, f: Fixture) {
   // The sidebar that signals facility hydration is hidden on mobile, so hydrate at desktop width.
   const viewport = page.viewportSize();
   await page.setViewportSize(DRAW_ORDER_VIEWPORTS[0]);
-  await page.goto(`/storage-locations?facility=${f.facility.id}`);
+  await page.goto(`/storage-bins?facility=${f.facility.id}`);
   await waitForFacilityHydration(page, f.facility.name);
   if (viewport) await page.setViewportSize(viewport);
   await page.getByPlaceholder("Search by code or name…").fill(f.bin.code);

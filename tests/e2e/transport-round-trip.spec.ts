@@ -53,7 +53,7 @@ test.describe("Transport round trip (#852)", () => {
     cleanupTestData,
   }) => {
     void cleanupTestData;
-    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
     await waitForFacilityHydration(page, seededData.facility.name);

@@ -18,7 +18,7 @@ describe("LateEntryStatus", () => {
     const { container } = render(<LateEntryStatus entry={{ recordedAfter: AFTER, carry: { receiver: DEST, waitingReason: null } }} facilityId="f1" />);
     expect(container.textContent).toContain("Recorded after RM-26-009 was sent.");
     expect(container.textContent).toContain("Goes into RM-26-010 of credit batch CB-26-010.");
-    expect(screen.getByRole("link", { name: "RM-26-010" }).getAttribute("href")).toBe("/certification/removals?facility=f1&removal=rm-10");
+    expect(screen.getByRole("link", { name: "RM-26-010" }).getAttribute("href")).toBe("/removals?facility=f1&removal=rm-10");
     expect(screen.getByRole("link", { name: "CB-26-010" }).getAttribute("href")).toBe("/credit-batches/cb-10?facility=f1");
     expect(screen.queryByText(/Waiting/)).toBeNull();
   });
@@ -27,7 +27,7 @@ describe("LateEntryStatus", () => {
     const { container } = render(<LateEntryStatus entry={{ recordedAfter: AFTER, revisionOf: AFTER }} facilityId="f1" />);
     expect(container.textContent).toBe("Recorded after RM-26-009 was sent.Goes into the revision of RM-26-009.");
     expect(screen.getAllByRole("link", { name: "RM-26-009" }).map(link => link.getAttribute("href")))
-      .toEqual(["/certification/removals?facility=f1&removal=rm-9", "/certification/removals?facility=f1&removal=rm-9"]);
+      .toEqual(["/removals?facility=f1&removal=rm-9", "/removals?facility=f1&removal=rm-9"]);
   });
 
   it("names several credit batches", () => {

@@ -337,7 +337,7 @@ the full pipeline can be restored from `archive/reactor-telemetry-upload`
 
 ## 2026-10-01: Energy page drops the submission preview and shows estimates
 
-- `/energy` no longer previews the grid electricity and diesel values a
+- `/emissions` no longer previews the grid electricity and diesel values a
   Removal submits; the Removal flow already shows what is submitted. The
   page now estimates CO₂e per record from per-facility emission factors
   (`facility_emission_factors`, [ADR 0031](../adr/0031-operator-energy-estimates.md)).

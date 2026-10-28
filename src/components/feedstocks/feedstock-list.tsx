@@ -529,8 +529,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     return (
       <div className="flex flex-col gap-32">
         <PageHeader
-          area="production"
-          title="Feedstocks"
+          area="records"
+          title="Feedstock intake"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its feedstock deliveries." />
       </div>
@@ -569,8 +569,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-32">
       <PageHeader
-        area="production"
-        title="Feedstocks"
+        area="records"
+        title="Feedstock intake"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />

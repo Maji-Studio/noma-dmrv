@@ -1,5 +1,5 @@
 /**
- * The Vehicles | Drivers | Operators tab row, styled like the credit batch
+ * The Drivers | Operators tab row of the Crew page, styled like the credit batch
  * page tabs. There is no shared tab primitive in the repo, so this follows the
  * WAI-ARIA tabs pattern itself: tablist/tab roles, one tab stop (roving
  * tabindex), Left/Right/Home/End move and select.
@@ -7,40 +7,39 @@
 "use client";
 
 import type { KeyboardEvent } from "react";
-import type { FleetKind } from "@/lib/fleet/messages";
 import { cn } from "@/lib/utils";
-import { FLEET_KIND_COPY, FLEET_KINDS } from "./fleet-kinds";
+import { CREW_KINDS, FLEET_KIND_COPY, type CrewKind } from "./fleet-kinds";
 
-export const FLEET_TAB_PANEL_ID = "vehicles-and-crew-tab-panel";
-export const fleetTabId = (kind: FleetKind) => `vehicles-and-crew-tab-${kind}`;
+export const FLEET_TAB_PANEL_ID = "crew-tab-panel";
+export const fleetTabId = (kind: CrewKind) => `crew-tab-${kind}`;
 
 const FOCUS_RING = "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--ink)]";
 
 interface FleetTabsProps {
-  tab: FleetKind;
+  tab: CrewKind;
   /** Record count per kind; undefined while that list loads or failed. */
-  counts: Record<FleetKind, number | undefined>;
-  onChange: (kind: FleetKind) => void;
+  counts: Record<CrewKind, number | undefined>;
+  onChange: (kind: CrewKind) => void;
 }
 
-function nextTab(current: FleetKind, key: string): FleetKind | null {
-  const index = FLEET_KINDS.indexOf(current);
+function nextTab(current: CrewKind, key: string): CrewKind | null {
+  const index = CREW_KINDS.indexOf(current);
   switch (key) {
     case "ArrowRight":
-      return FLEET_KINDS[(index + 1) % FLEET_KINDS.length]!;
+      return CREW_KINDS[(index + 1) % CREW_KINDS.length]!;
     case "ArrowLeft":
-      return FLEET_KINDS[(index - 1 + FLEET_KINDS.length) % FLEET_KINDS.length]!;
+      return CREW_KINDS[(index - 1 + CREW_KINDS.length) % CREW_KINDS.length]!;
     case "Home":
-      return FLEET_KINDS[0]!;
+      return CREW_KINDS[0]!;
     case "End":
-      return FLEET_KINDS[FLEET_KINDS.length - 1]!;
+      return CREW_KINDS[CREW_KINDS.length - 1]!;
     default:
       return null;
   }
 }
 
 export function FleetTabs({ tab, counts, onChange }: FleetTabsProps) {
-  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, kind: FleetKind) => {
+  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, kind: CrewKind) => {
     const target = nextTab(kind, event.key);
     if (!target) return;
     event.preventDefault();
@@ -51,10 +50,10 @@ export function FleetTabs({ tab, counts, onChange }: FleetTabsProps) {
   return (
     <div
       role="tablist"
-      aria-label="Vehicles and crew"
+      aria-label="Crew"
       className="flex overflow-x-auto border-b border-[var(--color-border-secondary)]"
     >
-      {FLEET_KINDS.map((kind) => {
+      {CREW_KINDS.map((kind) => {
         const selected = tab === kind;
         const count = counts[kind];
         return (

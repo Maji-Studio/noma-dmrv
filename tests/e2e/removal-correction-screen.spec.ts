@@ -70,7 +70,7 @@ test.describe("Returned Removal screens", () => {
 
       for (const [size, viewport] of Object.entries(WIDTHS) as [keyof typeof WIDTHS, (typeof WIDTHS)[keyof typeof WIDTHS]][]) {
         await page.setViewportSize(viewport);
-        await page.goto(`/certification/removals?facility=${facilityId}`);
+        await page.goto(`/removals?facility=${facilityId}`);
         if (size === "desktop") await waitForFacilityHydration(page, facilityName);
         // Both layouts are in the DOM; read the visible one. Desktop scopes to the row.
         const seen = (text: string, code?: string) => (size === "desktop" && code ? page.getByRole("row").filter({ hasText: code }) : page)
@@ -89,7 +89,7 @@ test.describe("Returned Removal screens", () => {
         }
         await shoot(page, "removals-list", size);
 
-        await page.goto(`/certification/removals?facility=${facilityId}&removal=${changed.removalId}`);
+        await page.goto(`/removals?facility=${facilityId}&removal=${changed.removalId}`);
         await waitForSideSheet(page);
         const sheet = page.getByRole("dialog");
         if (CHECK_COPY) {
@@ -102,7 +102,7 @@ test.describe("Returned Removal screens", () => {
         }
         await shoot(page, "removal-sheet-changed", size);
 
-        await page.goto(`/certification/removals?facility=${facilityId}&removal=${open.removalId}`);
+        await page.goto(`/removals?facility=${facilityId}&removal=${open.removalId}`);
         await waitForSideSheet(page);
         const openSheet = page.getByRole("dialog");
         if (CHECK_COPY) {
@@ -151,7 +151,7 @@ test.describe("Returned Removal screens", () => {
       // Resubmit Removal reopens the New Removal wizard on the Removal (its href is asserted on the sheet above).
       for (const [size, viewport] of Object.entries(WIDTHS) as [keyof typeof WIDTHS, (typeof WIDTHS)[keyof typeof WIDTHS]][]) {
         await page.setViewportSize(viewport);
-        await page.goto(`/certification/removals?facility=${facilityId}&resume=${changed.removalId}`);
+        await page.goto(`/removals?facility=${facilityId}&resume=${changed.removalId}`);
         await expect(page.getByRole("dialog").getByRole("heading", { name: "New Removal" })).toBeVisible();
         await expect(page.getByRole("dialog").getByRole("heading", { name: "Empty components" })).toBeVisible({ timeout: 30_000 });
         await shoot(page, "resubmit-wizard", size);
@@ -160,7 +160,7 @@ test.describe("Returned Removal screens", () => {
       if (CHECK_COPY) {
         // On a phone the rail shows one step, so the submit step footer keeps a Back to Empty components.
         await page.setViewportSize(WIDTHS.phone);
-        await page.goto(`/certification/removals?facility=${facilityId}&resume=${changed.removalId}`);
+        await page.goto(`/removals?facility=${facilityId}&resume=${changed.removalId}`);
         await page.getByRole("button", { name: /Record 2 components as zero/i }).click();
         await page.getByRole("button", { name: "Continue" }).click();
         const back = page.getByRole("dialog").getByRole("button", { name: "Back", exact: true });
@@ -173,7 +173,7 @@ test.describe("Returned Removal screens", () => {
       }
 
       await page.setViewportSize(WIDTHS.phone);
-      await page.goto(`/certification/removals?facility=${facilityId}&create=true`);
+      await page.goto(`/removals?facility=${facilityId}&create=true`);
       await expect(page.getByRole("dialog").getByText("New Removal")).toBeVisible();
       await expect(page.getByText("Loading credit batches")).toHaveCount(0, { timeout: 30_000 });
       await shoot(page, "new-removal-rail", "phone");

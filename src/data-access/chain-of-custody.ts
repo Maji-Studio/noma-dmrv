@@ -38,7 +38,7 @@ export const CHAIN_HREFS = {
   biocharProduct: "/biochar-products",
   productionRun: "/production-runs",
   reactor: "/reactors",
-  feedstock: "/feedstocks",
+  feedstock: "/feedstock-intake",
 } as const;
 
 export interface ChainFacility {

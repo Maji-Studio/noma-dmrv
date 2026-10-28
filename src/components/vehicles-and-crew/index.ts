@@ -1,1 +1,2 @@
-export { VehiclesAndCrewPage } from "./vehicles-and-crew-page";
+export { CrewPage } from "./crew-page";
+export { VehiclesPage } from "./vehicles-page";

@@ -133,7 +133,7 @@ const ROUTE_SEGMENT: Record<
 > = {
   reactor: "reactors",
   supplier: "suppliers",
-  feedstock: "feedstocks",
+  feedstock: "feedstock-intake",
   production: "production-runs",
   credit: "credit-batches",
 };

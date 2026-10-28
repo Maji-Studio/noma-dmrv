@@ -337,8 +337,8 @@ rename a domain term.
 
 Button text, submit labels, dialog and side-sheet titles, delete-confirm titles
 and `StatCard` titles follow the same rule ("Create storage bin", "Save changes",
-"Total customers"). Page titles (`PageHeader`) and sidebar navigation labels are
-**outside** it and keep their existing casing. Entity nouns are lowercase mid-label;
+"Total customers"). Page titles (`PageHeader`) and sidebar navigation labels follow it too
+(sentence case since 2026-10-28; the sidebar and each list title match). Entity nouns are lowercase mid-label;
 glossary terms that are capitalised in GLOSSARY.md (Sample, Removal, GHG Statement)
 keep their capital ("Create Sample"). Where a dialog title or button **names an
 entity the operator just saw on a select**, the noun follows the select's label
@@ -870,7 +870,7 @@ drawn only on a complete basis; until then the block shows its unresolved state.
   records a positive amount of added water, a third segment uses solid
   `--color-moisture-added-water`, and the key line gains that swatch plus the
   final moisture, while the bar still distinguishes the original water from the
-  added water. The ledger total is the final wet mass. It does **not** take the production/infrastructure/distribution
+  added water. The ledger total is the final wet mass. It does **not** take the records/setup/partners
   accent, so the same moisture concept reads consistently across every area.
 - **Split figures are always kg** (`formatSplitMass` and `MassPair`), never the
   auto-tonne `formatMass`: 1,500 kg at 2% moisture is 1,470 kg dry, and in
@@ -941,7 +941,7 @@ stays as a preview whose lead footer action opens the page
 ```tsx
 <div className="container-max page-shell">
   {/* 1. Header — area eyebrow → title → optional subtitle (only if it adds information) → actions */}
-  <PageHeader area="production" title="Orders" actions={<Button …/>} />
+  <PageHeader area="records" title="Orders" actions={<Button …/>} />
 
   {/* 2. KPI strip — StatCards, every card carries a 24px Phosphor icon */}
   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">

@@ -38,7 +38,7 @@ describe("SampleCreateAction", () => {
 
     expect(html).toContain("Record another Sample");
     expect(html).toContain(
-      '/samples?facility=facility-1&amp;create=true&amp;createCreditBatch=batch-1',
+      '/lab-samples?facility=facility-1&amp;create=true&amp;createCreditBatch=batch-1',
     );
   });
 });

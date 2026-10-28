@@ -26,7 +26,7 @@ vi.mock("nuqs", async () => {
   const React = await import("react");
   return {
     parseAsString: { withOptions: () => ({}) },
-    parseAsStringLiteral: () => ({ withDefault: () => ({ withOptions: () => ({ default: "vehicle" }) }) }),
+    parseAsStringLiteral: () => ({ withDefault: () => ({ withOptions: () => ({ default: "driver" }) }) }),
     useQueryState: (key: string, parser?: { default?: string }) => {
       const [, force] = React.useReducer((n: number) => n + 1, 0);
       return [
@@ -66,7 +66,8 @@ vi.mock("./fleet-sheet-forms", () => ({
   ),
 }));
 
-import { VehiclesAndCrewPage } from "./vehicles-and-crew-page";
+import { CrewPage } from "./crew-page";
+import { VehiclesPage } from "./vehicles-page";
 
 const vehicle = { id: "veh-1", code: "VEH-001", name: "Feedstock truck", version: 1, vehicleType: "truck", identifier: "ZH 123", fuelType: "Diesel", fuelConsumptionLPerKm: 0.3, modelYear: 2019 };
 const driver = { id: "drv-1", code: "DRV-001", name: "Amina Okoye", version: 1, licenseNumber: "L-1", contactPhone: null };
@@ -94,27 +95,29 @@ function rowMenu(label: string, item: string) {
   fireEvent.click(screen.getByRole("menuitem", { name: item }));
 }
 
-describe("VehiclesAndCrewPage", () => {
-  it("shows a tab per kind with its count and opens on Vehicles", () => {
-    render(<VehiclesAndCrewPage />);
-    expect(tab(/^Vehicles\s*1$/).getAttribute("aria-selected")).toBe("true");
-    expect(tab(/^Drivers\s*1$/).getAttribute("aria-selected")).toBe("false");
-    expect(screen.getByRole("table", { name: "Vehicles" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "New vehicle" })).toBeTruthy();
+describe("CrewPage", () => {
+  it("shows a tab per kind with its count and opens on Drivers", () => {
+    render(<CrewPage />);
+    expect(screen.getByRole("heading", { name: "Crew" })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: /^Vehicles/ })).toBeNull();
+    expect(tab(/^Drivers\s*1$/).getAttribute("aria-selected")).toBe("true");
+    expect(tab(/^Operators\s*1$/).getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByRole("table", { name: "Drivers" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New driver" })).toBeTruthy();
   });
 
   it("opens the tab named in the URL and the header button follows it", () => {
-    state.query.tab = "driver";
-    render(<VehiclesAndCrewPage />);
-    expect(tab(/^Drivers/).getAttribute("aria-selected")).toBe("true");
-    expect(screen.getByRole("table", { name: "Drivers" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "New driver" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "New vehicle" })).toBeNull();
+    state.query.tab = "operator";
+    render(<CrewPage />);
+    expect(tab(/^Operators/).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("table", { name: "Operators" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New operator" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "New driver" })).toBeNull();
   });
 
   it("switches tab on click, keeps the choice in the URL and drops a kind link", () => {
     state.query.driver = "drv-1";
-    render(<VehiclesAndCrewPage />);
+    render(<CrewPage />);
     fireEvent.click(tab(/^Operators/));
     expect(state.query.tab).toBe("operator");
     expect(state.query.driver).toBeNull();
@@ -122,38 +125,39 @@ describe("VehiclesAndCrewPage", () => {
   });
 
   it("moves between tabs with the arrow keys, Home and End", () => {
-    render(<VehiclesAndCrewPage />);
-    fireEvent.keyDown(tab(/^Vehicles/), { key: "ArrowRight" });
+    render(<CrewPage />);
+    fireEvent.keyDown(tab(/^Drivers/), { key: "ArrowRight" });
+    expect(state.query.tab).toBe("operator");
+    fireEvent.keyDown(tab(/^Operators/), { key: "ArrowRight" });
     expect(state.query.tab).toBe("driver");
     fireEvent.keyDown(tab(/^Drivers/), { key: "End" });
     expect(state.query.tab).toBe("operator");
-    fireEvent.keyDown(tab(/^Operators/), { key: "ArrowRight" });
-    expect(state.query.tab).toBe("vehicle");
-    fireEvent.keyDown(tab(/^Vehicles/), { key: "ArrowLeft" });
+    fireEvent.keyDown(tab(/^Operators/), { key: "Home" });
+    expect(state.query.tab).toBe("driver");
+    fireEvent.keyDown(tab(/^Drivers/), { key: "ArrowLeft" });
     expect(state.query.tab).toBe("operator");
     // Only the selected tab is a tab stop.
     expect(tab(/^Operators/).getAttribute("tabindex")).toBe("0");
-    expect(tab(/^Vehicles/).getAttribute("tabindex")).toBe("-1");
+    expect(tab(/^Drivers/).getAttribute("tabindex")).toBe("-1");
   });
 
   it("opens the create sheet from the header button and from a create link", () => {
-    state.query.tab = "driver";
-    render(<VehiclesAndCrewPage />);
-    fireEvent.click(screen.getByRole("button", { name: "New driver" }));
-    expect(screen.getByText("Create driver")).toBeTruthy();
-    expect(screen.getByRole("form", { name: "driver form" }).textContent).toBe("new");
+    state.query.tab = "operator";
+    render(<CrewPage />);
+    fireEvent.click(screen.getByRole("button", { name: "New operator" }));
+    expect(screen.getByText("Create operator")).toBeTruthy();
+    expect(screen.getByRole("form", { name: "operator form" }).textContent).toBe("new");
     cleanup();
 
     state.query = {};
-    render(<VehiclesAndCrewPage />);
-    expect(screen.queryByText("Create vehicle")).toBeNull();
+    render(<CrewPage />);
+    expect(screen.queryByText("Create driver")).toBeNull();
     act(() => state.openCreate!());
-    expect(screen.getByText("Create vehicle")).toBeTruthy();
+    expect(screen.getByText("Create driver")).toBeTruthy();
   });
 
   it("opens a row in the view sheet and edits it from there", () => {
-    state.query.tab = "driver";
-    render(<VehiclesAndCrewPage />);
+    render(<CrewPage />);
     fireEvent.click(screen.getAllByRole("link", { name: "Amina Okoye" })[0]!);
     const sheet = screen.getByRole("dialog");
     // Code first, name as the subtitle.
@@ -164,41 +168,29 @@ describe("VehiclesAndCrewPage", () => {
     expect(screen.getByRole("form", { name: "driver form" }).textContent).toBe("editing Amina Okoye");
   });
 
-  it("edits from the row menu", () => {
-    render(<VehiclesAndCrewPage />);
-    rowMenu("Actions for Feedstock truck", "Edit");
-    expect(screen.getByRole("form", { name: "vehicle form" }).textContent).toBe("editing Feedstock truck");
-  });
-
   it("links each row to its record on the open tab", () => {
     state.query.tab = "operator";
-    render(<VehiclesAndCrewPage />);
+    render(<CrewPage />);
     expect(screen.getAllByRole("link", { name: "Joseph Banda" })[0]!.getAttribute("href")).toBe(
-      "/vehicles-and-crew?operator=opr-1",
+      "/crew?operator=opr-1",
     );
   });
 
   it("opens a linked record's view sheet on its own tab and keeps the tab on close", () => {
-    state.query = { driver: "drv-1" };
-    render(<VehiclesAndCrewPage />);
-    expect(tab(/^Drivers/).getAttribute("aria-selected")).toBe("true");
+    state.query = { operator: "opr-1" };
+    render(<CrewPage />);
+    expect(tab(/^Operators/).getAttribute("aria-selected")).toBe("true");
     const sheet = screen.getByRole("dialog");
-    expect(within(sheet).getByText("Amina Okoye")).toBeTruthy();
-    expect(within(sheet).getByRole("button", { name: "Edit driver" })).toBeTruthy();
+    expect(within(sheet).getByText("Joseph Banda")).toBeTruthy();
+    expect(within(sheet).getByRole("button", { name: "Edit operator" })).toBeTruthy();
     fireEvent.keyDown(sheet, { key: "Escape" });
-    expect(state.query.driver).toBeNull();
-    expect(state.query.tab).toBe("driver");
-  });
-
-  it("opens the edit sheet for mode=edit", () => {
-    state.query = { vehicle: "veh-1", mode: "edit" };
-    render(<VehiclesAndCrewPage />);
-    expect(screen.getByRole("form", { name: "vehicle form" }).textContent).toBe("editing Feedstock truck");
+    expect(state.query.operator).toBeNull();
+    expect(state.query.tab).toBe("operator");
   });
 
   it("says so and clears the link when the record is gone", () => {
     state.query = { driver: "drv-gone", mode: "edit" };
-    render(<VehiclesAndCrewPage />);
+    render(<CrewPage />);
     expect(state.toastError).toHaveBeenCalledWith("Linked driver could not be opened");
     expect(state.toastError).toHaveBeenCalledTimes(1);
     expect(state.query.driver).toBeNull();
@@ -209,20 +201,19 @@ describe("VehiclesAndCrewPage", () => {
   it("waits for a refetching list before calling a linked record gone", () => {
     state.query = { driver: "drv-new" };
     state.fetching.driver = true;
-    const { rerender } = render(<VehiclesAndCrewPage />);
+    const { rerender } = render(<CrewPage />);
     expect(state.toastError).not.toHaveBeenCalled();
     expect(state.query.driver).toBe("drv-new");
 
     state.fetching.driver = false;
     state.lists.driver = [driver, { ...driver, id: "drv-new", name: "New driver" }];
-    rerender(<VehiclesAndCrewPage />);
+    rerender(<CrewPage />);
     expect(state.toastError).not.toHaveBeenCalled();
     expect(within(screen.getByRole("dialog")).getByText("New driver")).toBeTruthy();
   });
 
   it("deletes through the row menu and confirmation", async () => {
-    state.query.tab = "driver";
-    render(<VehiclesAndCrewPage />);
+    render(<CrewPage />);
     rowMenu("Actions for Amina Okoye", "Delete");
     expect(screen.getByText("Delete Amina Okoye? This cannot be undone.")).toBeTruthy();
     await act(async () => {
@@ -236,7 +227,7 @@ describe("VehiclesAndCrewPage", () => {
   it("shows an empty state per kind with the kind's add action", () => {
     state.lists = { vehicle: [], driver: [], operator: [] };
     state.query.tab = "operator";
-    render(<VehiclesAndCrewPage />);
+    render(<CrewPage />);
     expect(screen.getByText("No operators yet")).toBeTruthy();
     fireEvent.click(tab(/^Drivers/));
     expect(screen.getByText("No drivers yet")).toBeTruthy();
@@ -245,11 +236,57 @@ describe("VehiclesAndCrewPage", () => {
     expect(screen.getByRole("button", { name: "Create your first driver" })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "New driver" })).toHaveLength(1);
   });
+});
+
+describe("VehiclesPage", () => {
+  it("shows the vehicles table alone, with no tab bar", () => {
+    render(<VehiclesPage />);
+    expect(screen.getByRole("heading", { name: "Vehicles" })).toBeTruthy();
+    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.getByRole("table", { name: "Vehicles" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New vehicle" })).toBeTruthy();
+  });
+
+  it("opens the create sheet from the header button and from a create link", () => {
+    render(<VehiclesPage />);
+    expect(screen.queryByText("Create vehicle")).toBeNull();
+    act(() => state.openCreate!());
+    expect(screen.getByText("Create vehicle")).toBeTruthy();
+    expect(screen.getByRole("form", { name: "vehicle form" }).textContent).toBe("new");
+  });
+
+  it("edits from the row menu", () => {
+    render(<VehiclesPage />);
+    rowMenu("Actions for Feedstock truck", "Edit");
+    expect(screen.getByRole("form", { name: "vehicle form" }).textContent).toBe("editing Feedstock truck");
+  });
+
+  it("links each row to its record", () => {
+    render(<VehiclesPage />);
+    expect(screen.getAllByRole("link", { name: "Feedstock truck" })[0]!.getAttribute("href")).toBe(
+      "/vehicles?vehicle=veh-1",
+    );
+  });
+
+  it("opens the view sheet for ?vehicle= and clears the link on close", () => {
+    state.query = { vehicle: "veh-1" };
+    render(<VehiclesPage />);
+    const sheet = screen.getByRole("dialog");
+    expect(within(sheet).getByText("Feedstock truck")).toBeTruthy();
+    fireEvent.keyDown(sheet, { key: "Escape" });
+    expect(state.query.vehicle).toBeNull();
+  });
+
+  it("opens the edit sheet for mode=edit", () => {
+    state.query = { vehicle: "veh-1", mode: "edit" };
+    render(<VehiclesPage />);
+    expect(screen.getByRole("form", { name: "vehicle form" }).textContent).toBe("editing Feedstock truck");
+  });
 
   it("gives way to the in-use dialog when the server refuses the delete", async () => {
     const message = "Vehicle VEH-001 was not deleted because 2 feedstock intakes use it.";
     state.removeVehicle.mockRejectedValueOnce(new ActionError({ error: message, ...inUseDeleteRefusal(message, ["vehicleId"]) }));
-    render(<VehiclesAndCrewPage />);
+    render(<VehiclesPage />);
     rowMenu("Actions for Feedstock truck", "Delete");
     await act(async () => {
       fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
@@ -267,7 +304,7 @@ describe("VehiclesAndCrewPage", () => {
     state.removeVehicle.mockRejectedValueOnce(
       new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "vehicle", id: vehicle.id, code: STALE_VERSION_CONFLICT_CODE }),
     );
-    const { rerender } = render(<VehiclesAndCrewPage />);
+    const { rerender } = render(<VehiclesPage />);
     rowMenu("Actions for Feedstock truck", "Delete");
     await act(async () => {
       fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
@@ -276,7 +313,7 @@ describe("VehiclesAndCrewPage", () => {
 
     // The mutation's invalidation refetches the list with the newer version.
     state.lists.vehicle = [{ ...vehicle, version: 2 }];
-    rerender(<VehiclesAndCrewPage />);
+    rerender(<VehiclesPage />);
     await act(async () => {
       fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
     });

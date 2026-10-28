@@ -1,7 +1,7 @@
 /**
  * Samples Page
  * Lab sample tracking linked to production runs
- * Route: /samples
+ * Route: /lab-samples
  */
 
 import { SampleList } from "@/components/samples";

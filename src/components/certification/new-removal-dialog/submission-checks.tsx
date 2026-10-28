@@ -90,7 +90,7 @@ function fixLinksFor(
   };
   const labSamples = {
     label: "Review Samples",
-    href: `/samples?facility=${facilityId}`,
+    href: `/lab-samples?facility=${facilityId}`,
   };
 
   const links = (check.lineageIssues ?? []).slice(0, ENTITY_READINESS_CHECK_DISPLAY_LIMIT).map((issue) => batchHealthFixLinkFor({
@@ -144,7 +144,7 @@ function fixLinksFor(
       }];
     case "durability":
       return [
-        { label: "Review Samples", href: `/samples?facility=${facilityId}` },
+        { label: "Review Samples", href: `/lab-samples?facility=${facilityId}` },
       ];
     case "feedstockTypeMapping": {
       return [

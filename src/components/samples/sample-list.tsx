@@ -624,7 +624,7 @@ export function SampleList({
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
-        getRowHref={(row) => entityViewHref("/samples", "sample", row.id, contextFacilityId)}
+        getRowHref={(row) => entityViewHref("/lab-samples", "sample", row.id, contextFacilityId)}
         emptyMessage={
           <EmptyState
             padding="md"

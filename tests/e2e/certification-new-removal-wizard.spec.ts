@@ -1,12 +1,11 @@
 /**
- * Certification — New-Removal wizard + review-route consolidation E2E.
+ * Certification — New-Removal wizard + resume-entry E2E.
  *
  * The Stage-4 5-step guided Review flow was consolidated into the New-Removal
  * wizard (design doc §4 / §10 step 6). These tests cover the two entry points:
  *   1. the "New removal" CTA on the Removals overview opens the wizard at its
  *      first step (Select credit batches), and Cancel closes it;
- *   2. the retired `/[removalId]/review` deep link redirects to the overview
- *      with `?resume=<removalId>`, which opens the wizard on that removal at the
+ *   2. the `/removals?resume=<removalId>` deep link opens the wizard on that Removal at the
  *      requirements step.
  *
  * Both run on a DB-seeded certifier mapping (the operational routes are gated on
@@ -90,7 +89,7 @@ test.describe("Certification — New-Removal wizard", () => {
       await expect(page).not.toHaveURL(/(?:\?|&)create=/);
 
       await page.goto(
-        `/samples?facility=${facilityId}&create=true&${SAMPLE_CREATE_CREDIT_BATCH_PARAM}=${batch.creditBatchId}`,
+        `/lab-samples?facility=${facilityId}&create=true&${SAMPLE_CREATE_CREDIT_BATCH_PARAM}=${batch.creditBatchId}`,
       );
       const sampleDialog = page.getByRole("dialog");
       await expect(
@@ -128,7 +127,7 @@ test.describe("Certification — New-Removal wizard", () => {
     });
 
     try {
-      await page.goto(`/certification/removals?facility=${facilityId}`);
+      await page.goto(`/removals?facility=${facilityId}`);
 
       // The primary CTA (the header one; the empty-state nudge shares the label,
       // so take the first in DOM order).
@@ -164,7 +163,7 @@ test.describe("Certification — New-Removal wizard", () => {
     const mapping = await seedCertifierMapping(facilityId, { externalProjectId: FAKE_PROJECT_ID });
 
     try {
-      await page.goto(`/certification/removals?facility=${facilityId}&create=true`);
+      await page.goto(`/removals?facility=${facilityId}&create=true`);
       const dialog = page.getByRole("dialog");
       await expect(
         dialog.getByRole("heading", { name: "New Removal", level: 2 }),
@@ -178,7 +177,7 @@ test.describe("Certification — New-Removal wizard", () => {
     }
   });
 
-  test("redirects the legacy review route into the wizard resume step", async ({
+  test("opens a saved Removal directly at the wizard resume step", async ({
     adminPage: page,
     seededData,
     cleanupTestData,
@@ -211,12 +210,12 @@ test.describe("Certification — New-Removal wizard", () => {
       );
 
       await page.goto(
-        `/certification/removals/${removal.removalId}/review?facility=${facilityId}`,
+        `/removals?resume=${removal.removalId}&facility=${facilityId}`,
       );
 
-      // The old /review route now redirects to the Removals hub with ?resume=.
+      // The Removals hub opens the wizard directly with ?resume=.
       await expect(page).toHaveURL(
-        new RegExp(`/certification/removals\\?.*resume=${removal.removalId}`),
+        new RegExp(`/removals\\?.*resume=${removal.removalId}`),
         { timeout: COLD_COMPILE_TIMEOUT_MS },
       );
 
@@ -226,7 +225,7 @@ test.describe("Certification — New-Removal wizard", () => {
       // via the step rail's active item (rendered immediately) rather than the
       // step body, which is gated on the removal context query (that query hits
       // the Isometric API, so its success is environment-dependent — irrelevant
-      // to the redirect + resume-entry behavior under test here).
+      // to the resume-entry behavior under test here).
       const dialog = page.getByRole("dialog");
       await expect(
         dialog.getByRole("heading", { name: "New Removal", level: 2 }),
@@ -374,7 +373,7 @@ test.describe("Certification — New-Removal wizard (Phase 0 cross-surface)", { 
 
       // Surface 1: the New-Removal wizard's box for the batch names its first
       // open check, as the batch page names it.
-      await page.goto(`/certification/removals?facility=${facilityId}`);
+      await page.goto(`/removals?facility=${facilityId}`);
       await page
         .getByRole("button", { name: "New Removal", exact: true })
         .first()
@@ -440,7 +439,7 @@ test.describe("Certification — New-Removal wizard (one box per batch)", { tag:
       // listed in the wizard, deterministically not ready.
       batch = await seedNotReadyListedBatch(seededData, testRunId);
 
-      await page.goto(`/certification/removals?facility=${facilityId}`);
+      await page.goto(`/removals?facility=${facilityId}`);
       await page
         .getByRole("button", { name: "New Removal", exact: true })
         .first()

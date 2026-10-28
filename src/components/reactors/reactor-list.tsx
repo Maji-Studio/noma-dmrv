@@ -249,7 +249,7 @@ export function ReactorList() {
     return (
       <div className="container-max page-shell">
         <PageHeader
-          area="infrastructure"
+          area="setup"
           title="Reactors"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its reactors." />
@@ -279,7 +279,7 @@ export function ReactorList() {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="infrastructure"
+        area="setup"
         title="Reactors"
         actions={
           <Button variant="primary" onClick={openCreate}>

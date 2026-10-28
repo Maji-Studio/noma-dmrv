@@ -45,8 +45,8 @@ import {
 import { createDbConnection } from "./fixtures/db";
 
 const SECTIONS = [
-  { label: "Removals", path: "/certification/removals" },
-  { label: "GHG Statements", path: "/certification/ghg-statements" },
+  { label: "Removals", path: "/removals" },
+  { label: "GHG Statements", path: "/ghg-statements" },
 ] as const;
 
 // DB-only link target to un-gate the operational routes; never reaches
@@ -78,14 +78,14 @@ test.describe("Certification workspace — section navigation", () => {
       externalProjectId: FAKE_PROJECT_ID,
     });
     try {
-      await page.goto(`/certification?facility=${facilityId}`);
+      await page.goto(`/removals?facility=${facilityId}`);
 
-      // The retired root route redirects to Removals; await the landing heading
+      // Open Removals directly; await the landing heading
       // so the shell has hydrated before we navigate.
       // The section links are unique in the page, so we address them by name
       // rather than scoping to a particular nav landmark.
       await page.waitForURL(
-        new RegExp(`/certification/removals\\?facility=${facilityId}`),
+        new RegExp(`/removals\\?facility=${facilityId}`),
         { timeout: COLD_COMPILE_TIMEOUT_MS },
       );
       await expect(
@@ -181,7 +181,7 @@ test.describe("Certification workspace — status history", () => {
         });
       });
 
-      await page.goto(`/certification/removals?facility=${facilityId}`);
+      await page.goto(`/removals?facility=${facilityId}`);
       const listBadge = page
         .getByRole("table", { name: "Removals" })
         .getByRole("button", { name: "Submitted, status history" });
@@ -262,8 +262,8 @@ test.describe("Certification workspace — Settings", { tag: "@live" }, () => {
 
     const mapping = await seedCertifierMapping(facilityId, { externalProjectId });
     try {
-      // The retired route redirects to the pane that absorbed the section.
-      await page.goto(`/certification/settings?section=certifier&facility=${facilityId}`);
+      // Open the Registry pane directly.
+      await page.goto(`/settings/registry?facility=${facilityId}`);
       await expect(page).toHaveURL(new RegExp(`/settings/registry\\?facility=${facilityId}`), {
         timeout: COLD_COMPILE_TIMEOUT_MS,
       });

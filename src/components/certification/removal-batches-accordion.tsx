@@ -13,6 +13,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { certificationRemovalsHref } from "@/lib/certification/links";
 import Link from "next/link";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import { Accordion } from "@/components/ui/accordion";
@@ -40,7 +41,7 @@ interface RemovalBatchesAccordionProps {
 // The removal's full detail lives in the guided Review flow; open it in a new
 // tab so the operator keeps their place in the statement.
 function removalReviewHref(removalId: string, facilityId: string): string {
-  return `/certification/removals/${removalId}/review?facility=${encodeURIComponent(facilityId)}`;
+  return certificationRemovalsHref({ resume: removalId, facility: facilityId });
 }
 
 export function RemovalBatchesAccordion({

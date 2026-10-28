@@ -91,7 +91,7 @@ test.describe("Record locks on screen", () => {
         });
       });
 
-      await page.goto(`/samples?facility=${seededData.facility.id}`);
+      await page.goto(`/lab-samples?facility=${seededData.facility.id}`);
       await waitForFacilityHydration(page, seededData.facility.name);
       const row = page.getByRole("row").filter({ hasText: sampleCode });
       await expect(row.getByRole("img", { name: "Sent" })).toBeVisible();
@@ -167,7 +167,7 @@ test.describe("Record locks on screen", () => {
     const submissionId = crypto.randomUUID();
     const { db, pool } = createDbConnection();
     try {
-      await page.goto(`/feedstocks?facility=${seededData.facility.id}&feedstock=${seededData.feedstock.id}`);
+      await page.goto(`/feedstock-intake?facility=${seededData.facility.id}&feedstock=${seededData.feedstock.id}`);
       await waitForFacilityHydration(page, seededData.facility.name);
       await waitForSideSheet(page);
       const sheet = page.getByRole("dialog");

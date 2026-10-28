@@ -26,7 +26,7 @@ describe("RemovalResubmitNotice", () => {
     );
     expect(screen.getByRole("link", { name: "CB-26-001" }).getAttribute("href")).toBe("/credit-batches/batch-1?facility=facility-1");
     expect(screen.getByRole("link", { name: "GHG Statement Jul 1 to Sep 30, 2026" }).getAttribute("href"))
-      .toBe("/certification/ghg-statements?facility=facility-1&statement=statement-1");
+      .toBe("/ghg-statements?facility=facility-1&statement=statement-1");
     // The status badge already says it, so the notice carries no title and no action link.
     expect(screen.queryByText("Returned by Isometric")).toBeNull();
     expect(screen.queryByRole("link", { name: "Open GHG Statement" })).toBeNull();
@@ -50,14 +50,14 @@ describe("RemovalResubmitNotice", () => {
     expect(screen.getByRole("link", { name: "CB-26-002" }).getAttribute("href")).toBe("/credit-batches/batch-2?facility=facility-1");
     expect(screen.queryByRole("link", { name: "Emissions" })).toBeNull();
     expect(screen.getByRole("link", { name: "Open GHG Statement" }).getAttribute("href"))
-      .toBe("/certification/ghg-statements?facility=facility-1&statement=statement-1");
+      .toBe("/ghg-statements?facility=facility-1&statement=statement-1");
   });
 });
 
 describe("ResubmitRemovalAction", () => {
   it("reopens the Removal in the New Removal wizard, only once something changed", () => {
     render(<ResubmitRemovalAction correction={correction({ resubmitNeeded: true, changed })} facilityId={FACILITY} />);
-    expect(screen.getByRole("link", { name: "Resubmit Removal" }).getAttribute("href")).toBe("/certification/removals?facility=facility-1&resume=removal-1");
+    expect(screen.getByRole("link", { name: "Resubmit Removal" }).getAttribute("href")).toBe("/removals?facility=facility-1&resume=removal-1");
     cleanup();
     const nothing = render(<>
       <ResubmitRemovalAction correction={correction()} facilityId={FACILITY} />

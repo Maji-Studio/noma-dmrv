@@ -79,7 +79,7 @@ const FLOW_LINE_MAX_WIDTH = 2.4;
 
 /** "See details" target per column — the entity list backing the column. */
 const COLUMN_ROUTES: Record<SankeyColumnKey, string> = {
-  feedstock: "/feedstocks",
+  feedstock: "/feedstock-intake",
   productionRuns: "/production-runs",
   biocharLots: "/biochar-products",
   applied: "/applications",

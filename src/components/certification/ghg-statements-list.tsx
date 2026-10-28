@@ -1,6 +1,6 @@
 /**
  * GhgStatementsList — the Certification → GHG Statements workspace tab (route:
- * /certification/ghg-statements). Replaces the card-grid GhgStatementsHub with
+ * /ghg-statements). Replaces the card-grid GhgStatementsHub with
  * the app-native DataTable idiom (cf. removals-list / production-runs): one
  * dense, scannable list of every GHG Statement for the selected facility. A row
  * opens a read-only centered Modal (`?statement=<id>`, nuqs); the

@@ -177,7 +177,7 @@ export function recordsSourceText(records: LineRecords): string {
 export function recordsHref(records: LineRecords, ids: { facilityId: string; creditBatchId: string }): string {
   const params = new URLSearchParams({ facility: ids.facilityId });
   if (records.source !== "transportLegs") params.set("creditBatch", ids.creditBatchId);
-  const path = { productionRuns: "/production-runs", transportLegs: "/feedstocks", deliveries: "/deliveries", applications: "/applications" }[records.source];
+  const path = { productionRuns: "/production-runs", transportLegs: "/feedstock-intake", deliveries: "/deliveries", applications: "/applications" }[records.source];
   return `${path}?${params.toString()}`;
 }
 

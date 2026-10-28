@@ -49,7 +49,7 @@ describe("removalFindingFixLink", () => {
       const link = removalFindingFixLink({ fixTarget }, "fac-1", ["b1"]);
       expect(link).toEqual(batchHealthFixLinkFor({ key: "templateSet", fixTarget }, "fac-1"));
     }
-    expect(removalFindingFixLink({ fixTarget: "labSamples" }, "fac-1", ["b1"])?.href).toBe("/samples?facility=fac-1");
+    expect(removalFindingFixLink({ fixTarget: "labSamples" }, "fac-1", ["b1"])?.href).toBe("/lab-samples?facility=fac-1");
     expect(removalFindingFixLink({ fixTarget: "labSamples" }, "fac-1", ["b1"])?.href).not.toBe(sampleCreateHref("fac-1", "b1"));
   });
 });

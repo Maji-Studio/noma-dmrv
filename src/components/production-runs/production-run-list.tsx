@@ -521,8 +521,8 @@ export function ProductionRunList() {
     return (
       <div className="container-max page-shell">
         <PageHeader
-          area="production"
-          title="Production Runs"
+          area="records"
+          title="Production runs"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its production runs." />
       </div>
@@ -554,8 +554,8 @@ export function ProductionRunList() {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="production"
-        title="Production Runs"
+        area="records"
+        title="Production runs"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />

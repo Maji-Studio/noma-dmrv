@@ -104,10 +104,10 @@ function parentEditorHref(
   focus: EntityFocusTarget,
 ): string {
   const params = new URLSearchParams({ facility: facilityId });
-  if (!target) return `/feedstocks?${params.toString()}`;
+  if (!target) return `/feedstock-intake?${params.toString()}`;
 
   const targetRoutes = {
-    feedstock: { path: "/feedstocks", queryKey: "feedstock" },
+    feedstock: { path: "/feedstock-intake", queryKey: "feedstock" },
     biochar: { path: "/biochar-products", queryKey: "biocharProduct" },
   } as const;
   const route = targetRoutes[target.entityType];

@@ -9,7 +9,7 @@ const DASHBOARD_URL = /\/dashboard(?:[/?#]|$)/;
  * "You're working in" instead of offering a switch, so go to the dashboard.
  */
 export async function enterDefaultOrganization(page: Page): Promise<void> {
-  await page.goto("/admin/organizations");
+  await page.goto("/platform/organizations");
   await page
     .getByRole("navigation", { name: "Organizations" })
     .getByRole("button")

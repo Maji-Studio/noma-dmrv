@@ -22,14 +22,14 @@ export function certifierKeyInput(scope: Locator, label: CertifierKeyLabel): Loc
 }
 
 /**
- * Picks an organization on the Platform page (`/admin/organizations`) and
+ * Picks an organization on the Platform page (`/platform/organizations`) and
  * returns its panel, the right-hand side that names the organization.
  */
 export async function openPlatformOrganization(
   page: Page,
   organizationName: string,
 ): Promise<Locator> {
-  await page.goto("/admin/organizations");
+  await page.goto("/platform/organizations");
   await page
     .getByRole("navigation", { name: "Organizations" })
     .getByRole("button")

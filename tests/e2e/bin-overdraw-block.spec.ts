@@ -650,7 +650,7 @@ test("edits delivery mass, links its saved source and locks it after a dependent
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
   const openBin = async () => {
-    await page.goto(`/storage-locations?facility=${f.facility.id}`);
+    await page.goto(`/storage-bins?facility=${f.facility.id}`);
     await waitForFacilityHydration(page, f.facility.name);
     await page.getByPlaceholder("Search by code or name…").fill(f.bin.code);
     await page.getByText(f.bin.name, { exact: true }).first().click();

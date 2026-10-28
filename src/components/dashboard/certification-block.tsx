@@ -81,7 +81,7 @@ export function CertificationBlock({
 
       <div className="border-t border-[var(--color-border-tertiary)] px-20 py-16">
         <Link
-          href={`/certification/removals?facility=${encodeURIComponent(facilityId)}`}
+          href={`/removals?facility=${encodeURIComponent(facilityId)}`}
           className="group inline-flex items-center gap-8 label-button text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
         >
           Open Removals

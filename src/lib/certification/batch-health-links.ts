@@ -113,7 +113,7 @@ export function batchHealthFixLinkFor(
             : "Add Sample data",
         href: creditBatchId
           ? sampleCreateHref(facilityId, creditBatchId)
-          : `/samples?${query(undefined, false)}`,
+          : `/lab-samples?${query(undefined, false)}`,
       };
     case "certificationEmissions":
       return {
@@ -156,13 +156,13 @@ export function batchHealthFixLinkFor(
         label: "Review feedstock transport",
         href: feedstockId
           ? buildEntityDeepLink({
-              path: "/feedstocks",
+              path: "/feedstock-intake",
               facilityId,
               entityQueryKey: "feedstock",
               entityId: feedstockId,
               focus: ENTITY_FOCUS_TARGETS.transportEvidence,
             })
-          : `/feedstocks?facility=${facilityId}`,
+          : `/feedstock-intake?facility=${facilityId}`,
       };
     }
     case "feedstockTypes": {

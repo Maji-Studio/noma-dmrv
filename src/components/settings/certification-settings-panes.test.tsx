@@ -1,5 +1,5 @@
 /**
- * The Certification panes that came out of `/certification/settings`:
+ * The Certification panes that live in the settings console:
  * Registry (status line instead of registry cards, keys first when none are
  * saved) and Facilities (project link, durability tier, soil reference only on
  * the 200-year tier).

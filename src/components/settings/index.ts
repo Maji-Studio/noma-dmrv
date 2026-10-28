@@ -1,8 +1,8 @@
 /**
  * Settings — the one settings console at `/settings` (#1277): You,
  * Organization, Certification and Platform panes, one route each.
- * Registry configuration folded in from `/certification/settings`; the
- * cross-tenant organization directory stays at `/admin/organizations`.
+ * Registry configuration lives here; the
+ * cross-tenant organization directory stays at `/platform/organizations`.
  */
 export { SettingsConsole } from "./settings-console";
 export { OrganizationDefaultsForm } from "./organization-defaults-form";

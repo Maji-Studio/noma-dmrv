@@ -5,8 +5,6 @@
  */
 
 import {
-  PLATFORM_DIAGNOSTICS_HREF,
-  PLATFORM_TEMPLATE_MAPPING_HREF,
   SETTINGS_FACILITIES_HREF,
   SETTINGS_REGISTRY_HREF,
   SETTINGS_REMOVAL_TEMPLATES_HREF,
@@ -69,76 +67,14 @@ export function removalTemplateSetupHref(
   return href;
 }
 
-/**
- * `/certification/settings` was a rail of `?section=` panes. It folded into
- * the settings console (#1277); this maps every section key it ever had,
- * including the retired `connection` and `credentials`, onto the pane that
- * absorbed it. Unknown or missing keys land on Registry.
- */
-const LEGACY_CERTIFICATION_SECTION_ROUTES: Record<string, string> = {
-  certifier: SETTINGS_REGISTRY_HREF,
-  connection: SETTINGS_REGISTRY_HREF,
-  credentials: SETTINGS_REGISTRY_HREF,
-  sources: SETTINGS_REGISTRY_HREF,
-  "removal-templates": SETTINGS_REMOVAL_TEMPLATES_HREF,
-  "emission-estimates": SETTINGS_FACILITIES_HREF,
-  diagnostics: PLATFORM_DIAGNOSTICS_HREF,
-  "template-mapping": PLATFORM_TEMPLATE_MAPPING_HREF,
-};
-
-/** Platform Admin pages; anyone else lands on Registry instead of a 404. */
-const PLATFORM_ONLY_LEGACY_ROUTES: ReadonlySet<string> = new Set([
-  PLATFORM_DIAGNOSTICS_HREF,
-  PLATFORM_TEMPLATE_MAPPING_HREF,
-]);
-
-const LEGACY_SECTION_PARAM = "section";
-const FORWARDED_LEGACY_PARAMS = [
-  "facility",
-  REMOVAL_TEMPLATES_TEMPLATE_PARAM,
-  REMOVAL_TEMPLATES_SETUP_PARAM,
-] as const;
-
-function firstValue(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-/**
- * Where an old `/certification/settings?section=` link goes now. The platform
- * sections were open to the viewers who could see them, so for anyone else
- * the link lands on Registry rather than on a 404.
- */
-export function legacyCertificationSettingsRedirect(
-  searchParams: CertificationSearchParams = {},
-  viewer: { isPlatformAdmin: boolean } = { isPlatformAdmin: false },
-): string {
-  const section = firstValue(searchParams[LEGACY_SECTION_PARAM]);
-  const mapped =
-    section && Object.hasOwn(LEGACY_CERTIFICATION_SECTION_ROUTES, section)
-      ? LEGACY_CERTIFICATION_SECTION_ROUTES[section]
-      : SETTINGS_REGISTRY_HREF;
-  const target =
-    PLATFORM_ONLY_LEGACY_ROUTES.has(mapped) && !viewer.isPlatformAdmin
-      ? SETTINGS_REGISTRY_HREF
-      : mapped;
-  const params = new URLSearchParams();
-  for (const key of FORWARDED_LEGACY_PARAMS) {
-    const value = firstValue(searchParams[key]);
-    if (value) params.set(key, value);
-  }
-  const query = params.toString();
-  return query ? `${target}?${query}` : target;
-}
-
 export type CertificationSearchParams = Record<
   string,
   string | string[] | undefined
 >;
 
 /**
- * Compatibility target for the retired certification overview route. Preserve
- * incoming query params, including empty strings, so old scoped bookmarks keep
- * the same URLSearchParams semantics as Next.js supplied.
+ * Removals list and sheet links. Preserve query params, including repeated
+ * values and empty strings, with the same semantics as Next.js search params.
  */
 export function certificationRemovalsHref(
   searchParams: CertificationSearchParams = {},
@@ -156,7 +92,7 @@ export function certificationRemovalsHref(
   }
 
   const query = params.toString();
-  return `/certification/removals${query ? `?${query}` : ""}`;
+  return `/removals${query ? `?${query}` : ""}`;
 }
 
 export function productionRunDeepLinkHref(

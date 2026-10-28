@@ -11,7 +11,7 @@ test.describe("Sample carbon feedback", () => {
     adminPage: page,
     seededData,
   }) => {
-    await page.goto(`/samples?facility=${seededData.facility.id}`);
+    await page.goto(`/lab-samples?facility=${seededData.facility.id}`);
     await expect(
       page.locator("aside").getByText(seededData.facility.name, { exact: false }),
     ).toBeVisible({ timeout: 15000 });
@@ -70,7 +70,7 @@ test.describe("Sample carbon feedback", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const batch = await seedCreditBatch(seededData.facility.id, `TGA-${tag}`, seededData.feedstockType.id);
 
-    await page.goto(`/samples?facility=${seededData.facility.id}`);
+    await page.goto(`/lab-samples?facility=${seededData.facility.id}`);
     await expect(
       page.locator("aside").getByText(seededData.facility.name, { exact: false }),
     ).toBeVisible({ timeout: 15000 });

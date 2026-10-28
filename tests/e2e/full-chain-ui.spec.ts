@@ -627,7 +627,7 @@ test.describe("Full Chain UI Smoke Test", () => {
     // Samples anchor on a credit batch (issue #309), so the batch must exist
     // first — the sample is the last link in the chain.
     await test.step("Create Sample", async () => {
-      await page.goto(`/samples?facility=${seededData.facility.id}`);
+      await page.goto(`/lab-samples?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
 
       await page.click('button:has-text("New Sample")');

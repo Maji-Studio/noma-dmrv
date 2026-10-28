@@ -63,9 +63,9 @@ describe("SubmissionChecks", () => {
   });
 
   it.each([
-    ["feedstock", "/feedstocks", "Review feedstock transport"],
+    ["feedstock", "/feedstock-intake", "Review feedstock transport"],
     ["biochar", "/deliveries", "Review biochar transport"],
-    ["sample", "/samples", "Review sample transport"],
+    ["sample", "/lab-samples", "Review sample transport"],
   ] as const)("links %s transport blockers to their repair list", (category, path, label) => {
     const html = renderToStaticMarkup(<SubmissionChecks
       checks={withUnmet("transportUniformity", { transportCategory: category })}
@@ -92,7 +92,7 @@ describe("SubmissionChecks", () => {
       <SubmissionChecks checks={checks} facilityId="facility-1" />,
     );
     for (const check of checks) expect(html).toContain(check.detail);
-    for (const path of ["/feedstocks", "/deliveries", "/samples"]) {
+    for (const path of ["/feedstock-intake", "/deliveries", "/lab-samples"]) {
       expect(html.match(new RegExp(`href="${path}\\?facility=facility-1"`, "g"))).toHaveLength(2);
     }
   });
@@ -189,16 +189,16 @@ describe("SubmissionChecks", () => {
       'href="/applications?facility=facility-1"',
     );
     expect(applicationHtml).not.toContain('href="/production-runs');
-    expect(sampleHtml).toContain('href="/samples?facility=facility-1"');
+    expect(sampleHtml).toContain('href="/lab-samples?facility=facility-1"');
     expect(runAndSampleHtml).toContain(
       'href="/production-runs?facility=facility-1"',
     );
-    expect(runAndSampleHtml).toContain('href="/samples?facility=facility-1"');
+    expect(runAndSampleHtml).toContain('href="/lab-samples?facility=facility-1"');
     expect(applicationAndSampleHtml).toContain(
       'href="/applications?facility=facility-1"',
     );
     expect(applicationAndSampleHtml).toContain(
-      'href="/samples?facility=facility-1"',
+      'href="/lab-samples?facility=facility-1"',
     );
 
     expect(bothHtml).toContain('href="/production-runs?facility=facility-1"');

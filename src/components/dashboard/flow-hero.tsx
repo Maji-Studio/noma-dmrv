@@ -171,7 +171,7 @@ export function FlowHero({
                 life as feedstock, runs and deliveries are logged.
               </p>
               <Link
-                href={`/feedstocks?facility=${encodeURIComponent(facilityId)}`}
+                href={`/feedstock-intake?facility=${encodeURIComponent(facilityId)}`}
                 className="label-button mt-16 inline-block border-[1.5px] border-[var(--ink)] px-16 py-12 transition-colors hover:bg-[var(--ink)] hover:text-[var(--paper)]"
               >
                 Add your first feedstock →

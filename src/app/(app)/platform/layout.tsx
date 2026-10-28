@@ -1,6 +1,6 @@
 /**
  * Admin layout
- * Thin authorization boundary for the /admin route subtree. The app shell
+ * Thin authorization boundary for the /platform route subtree. The app shell
  * (sidebar, FacilityProvider) is inherited from the parent (app) layout —
  * admin pages render inside the same chrome as the rest of the app.
  */

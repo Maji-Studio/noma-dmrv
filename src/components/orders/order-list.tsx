@@ -387,7 +387,7 @@ export function OrderList() {
     return (
       <div className="container-max page-shell">
         <PageHeader
-          area="distribution"
+          area="records"
           title="Orders"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its orders." />
@@ -415,7 +415,7 @@ export function OrderList() {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="distribution"
+        area="records"
         title="Orders"
         actions={
           <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />New order</Button>
