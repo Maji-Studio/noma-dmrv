@@ -178,7 +178,8 @@ cbs.forEach((c) => {
   const ss = sams.filter((s) => s.creditBatch === c.code);
   const hs = ss.map((s) => s.hToCorg);
   const f = c.code === ANCHOR ? ALL_APPS : [];
-  const range = c.runCodeRange.replace("..", " to PR-26-");
+  const [first, last] = c.runCodeRange.split("..");
+  const range = `${first} to ${first.slice(0, first.lastIndexOf("-") + 1)}${last}`;
   const hRange = `${nf(Math.min(...hs), 2)} to ${nf(Math.max(...hs), 2)}`;
   add({ id: c.code, k: "cb", code: c.code, date: null, dlabel: monthYear(c.reportingPeriod.start), pill: "Pending", sub: `${rs.length} runs · ${range}`,
     stats: [["Made", nf(c.biocharKg / 1000, 1), "t wet"], ["Applied", nf(c.appliedDryKg / 1000, 1), "t dry"], ["H/Corg", hRange, ""]],
