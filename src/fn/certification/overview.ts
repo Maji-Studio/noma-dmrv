@@ -62,6 +62,7 @@ import {
 } from "./certify-context-core";
 
 import { loadCreditBatchTodos } from "./credit-batch-todos-core";
+import { loadCreditBatchesMissingProductionRuns } from "@/data-access/credit-batch-missing-production-runs";
 
 import { logger } from "@/lib/log";
 import { refreshRemovalEvidenceLinks, type RemovalEvidenceLinks } from "./biochar-application-source-readback";
@@ -104,6 +105,12 @@ export interface CreditBatchHealthSummary {
   ghgStatementStatus: DerivedStatus | null;
 }
 
+export interface RemovalMissingProductionRuns {
+  creditBatchId: string;
+  creditBatchCode: string;
+  runs: { id: string; code: string }[];
+}
+
 // One removal's place in the Removals hub: its identity, member batches, latest
 // submission identity, and the readiness verdict (the same one the table hint
 // and wizard submit step render).
@@ -114,6 +121,11 @@ export interface RemovalPreflightSummary {
   startedOn: string | null;
   completedOn: string | null;
   memberBatchCodes: string[];
+  /**
+   * Member credit batches missing completed runs that fit them, so their
+   * emissions are not counted. Only batches no sent Removal holds appear.
+   */
+  missingProductionRuns: RemovalMissingProductionRuns[];
   externalId: string | null;
   version: number | null;
   local: LocalSubmissionStatus | null;
@@ -168,6 +180,20 @@ async function buildRemovalPreflightSummary(
       limit: RECENT_SYNC_EVENTS_LIMIT,
     }),
   ]);
+  const missingByBatch = await loadCreditBatchesMissingProductionRuns(
+    orgCtx,
+    ctx.memberBatches.map((batch) => batch.id),
+  );
+  const missingProductionRuns = ctx.memberBatches.flatMap((batch) => {
+    const missing = missingByBatch.get(batch.id);
+    // A Sent batch keeps its own late-run Check; this notice is for the gap before sending.
+    if (!missing?.heldRemovalCodes.length || missing.runs.length === 0) return [];
+    return [{
+      creditBatchId: batch.id,
+      creditBatchCode: batch.code,
+      runs: missing.runs.map((run) => ({ id: run.id, code: run.code })),
+    }];
+  });
   const facts = toRemovalReadinessFacts(ctx);
   const startedOn = scope.removal.startedOn ?? null;
   const completedOn = scope.removal.completedOn ?? null;
@@ -185,6 +211,7 @@ async function buildRemovalPreflightSummary(
     startedOn,
     completedOn,
     memberBatchCodes: ctx.memberBatches.map((batch) => batch.code),
+    missingProductionRuns,
     externalId: ctx.latestSubmission?.externalId ?? null,
     version: ctx.latestSubmission?.version ?? null,
     local: facts.local,

@@ -52,6 +52,8 @@ export interface CreditBatchOpenItem {
   detail?: string;
   /** The protocol reasoning behind a requirement, shown behind an ⓘ. */
   why?: string;
+  /** The run a missing-run Check names, so other surfaces can link its code. */
+  productionRun?: { id: string; code: string };
   /** Where the row leads; null when the viewer can't act on it (a member and components to decide). */
   target:
     | { tab: "overview" | "production" | "samples" | "emissions" | "removals"; rowId?: string }
@@ -169,6 +171,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     for (const run of late.runs) {
       check.push({
         id: `missing-production-run:${run.id}`,
+        productionRun: { id: run.id, code: run.code },
         title: `${run.code} is not in this credit batch yet`,
         detail: canManage
           ? `Its emissions are not counted. Add it in Edit before ${codes} ${late.heldRemovalCodes.length === 1 ? "is" : "are"} sent.`

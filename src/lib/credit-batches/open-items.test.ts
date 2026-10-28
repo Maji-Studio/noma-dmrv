@@ -377,6 +377,7 @@ describe("missing production runs", () => {
       missingProductionRuns: { ...missingProductionRuns, heldRemovalCodes } });
     expect(items).toEqual({ blocking: [], check: [{
       id: "missing-production-run:run",
+      productionRun: { id: "run", code: "RUN-112" },
       title: "RUN-112 is not in this credit batch yet",
       detail: `Its emissions are not counted. Add it in Edit before ${holders} sent.`,
       target: { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW },
@@ -389,6 +390,7 @@ describe("missing production runs", () => {
     expect(buildCreditBatchOpenItems({ ...batchContext, canManage: false, missingProductionRuns }))
       .toEqual({ blocking: [], check: [{
         id: "missing-production-run:run",
+        productionRun: { id: "run", code: "RUN-112" },
         title: "RUN-112 is not in this credit batch yet",
         detail: "Its emissions are not counted. An admin can add it in Edit.",
         target: null,

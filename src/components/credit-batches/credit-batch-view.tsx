@@ -35,6 +35,7 @@ import {
 } from "@/lib/certification/links";
 import { Notice } from "@/components/ui/notice";
 import { CreditBatchEmissionsPanel } from "./credit-batch-emissions-panel";
+import { CreditBatchMissingRunsNotice, type MissingRunRef } from "./credit-batch-missing-runs-notice";
 
 /** Names the figure, so the headline needs no label of its own. */
 const CARBON_ESTIMATE_TITLE = "Carbon estimate, before project emissions";
@@ -276,6 +277,10 @@ interface CreditBatchSheetSectionsOptions extends CreditBatchRunsContentProps {
   inRemoval?: boolean;
   /** Applied dry biochar (kg) from the page model; undefined while it loads, null when it failed. */
   appliedDryKg?: number | null;
+  /** Completed runs that fit the batch but are not in it (unsent holder only). */
+  missingRuns?: readonly MissingRunRef[];
+  /** Opens Edit, where Add run lives; undefined when the batch cannot be edited. */
+  onEditMissingRuns?: () => void;
 }
 
 export function creditBatchSheetSections({
@@ -292,6 +297,8 @@ export function creditBatchSheetSections({
   activeFocusTarget,
   inRemoval = false,
   appliedDryKg,
+  missingRuns = [],
+  onEditMissingRuns,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
   const removalId = creditBatch.productionEmissionsClaimedByRemovalId ?? healthSummary?.removalId ?? null;
   const removalCode = creditBatch.productionEmissionsClaimedByRemovalId
@@ -394,6 +401,11 @@ export function creditBatchSheetSections({
             runsError={runsError}
             isRetryingRuns={isRetryingRuns}
             onRetryRuns={onRetryRuns}
+          />
+          <CreditBatchMissingRunsNotice
+            runs={missingRuns}
+            facilityId={creditBatch.facilityId}
+            onEdit={onEditMissingRuns}
           />
           <CreditBatchCarbonEstimate
             creditBatch={creditBatch}

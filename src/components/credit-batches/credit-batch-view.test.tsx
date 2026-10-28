@@ -303,3 +303,23 @@ it.each([
   });
   expect(markup).toContain(reason);
 });
+
+describe("credit batch sheet missing runs", () => {
+  const productionRuns = (missingRuns?: { id: string; code: string }[], onEditMissingRuns?: () => void) =>
+    creditBatchSheetSections({ ...baseOptions, creditBatch: makeBatch({}), missingRuns, onEditMissingRuns })
+      .find((section) => section.title === "Production runs")?.content;
+
+  it("says which fitting runs are not in the batch and opens Edit", () => {
+    const onEdit = vi.fn();
+    render(<>{productionRuns([{ id: "run-9", code: "RUN-9" }], onEdit)}</>);
+    expect(screen.getByText("1 completed run is not in this credit batch yet")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "RUN-9" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add in Edit" }));
+    expect(onEdit).toHaveBeenCalledOnce();
+  });
+
+  it("adds nothing when no run is missing", () => {
+    render(<>{productionRuns(undefined)}</>);
+    expect(screen.queryByTestId("credit-batch-missing-runs")).toBeNull();
+  });
+});

@@ -94,6 +94,7 @@ it.each([false, true])("threads explicit submission enrichment freshness to faci
 // These entry-enabled regressions run the real context and overview orchestration with DB seams mocked.
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/data-access/utils", async (original) => ({ ...await original<typeof import("@/data-access/utils")>(), requireOrgFacility: vi.fn() }));
+vi.mock("@/data-access/credit-batch-missing-production-runs", () => ({ loadCreditBatchesMissingProductionRuns: vi.fn(async () => new Map()) }));
 vi.mock("@/data-access/removal-codes", () => ({ getRemovalCodes: vi.fn(async () => new Map()) }));
 vi.mock("./batch-emission-context", () => ({ loadBatchEmissionContext: vi.fn(async () => ({ batchFacts: {} })) }));
 vi.mock("@/data-access/emission-entry-contenders", () => ({ loadEmissionEntryReservations: vi.fn(async () => []) }));

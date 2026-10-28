@@ -204,6 +204,7 @@ describe("missing production run detection (real DB)", () => {
       runs: [{ id: fitting.id, code: fitting.code, startDate: "2026-06-09", createdAt: RUN_CREATED_AT }] });
     expect((await todos()).check).toEqual([{
       id: `missing-production-run:${fitting.id}`,
+      productionRun: { id: fitting.id, code: fitting.code },
       title: `${fitting.code} is not in this credit batch yet`,
       detail: `Its emissions are not counted. Add it in Edit before ${holder.code} is sent.`,
       target: { tab: "overview", rowId: "batch-details" },

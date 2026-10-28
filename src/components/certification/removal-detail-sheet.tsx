@@ -55,6 +55,7 @@ import type { RecordLockView } from "@/lib/record-lock-view";
 import { RemovalCorrectionNotice } from "./removal-correction-needed";
 import { RemovalResubmitNotice, ResubmitRemovalAction } from "./removal-resubmit-notice";
 import { correctionStatus } from "@/lib/removal-correction-copy";
+import { RemovalMissingRunsNotice } from "./removal-missing-runs-notice";
 import { RemovalEvidenceLinksNotice } from "./removal-evidence-links-notice";
 
 interface RemovalDetailSheetProps {
@@ -254,6 +255,7 @@ export function RemovalDetailSheet({
             ) : (
               <RemovalCorrectionNotice lock={lock} />
             )}
+            <RemovalMissingRunsNotice batches={summary.missingProductionRuns} facilityId={facilityId} />
             <RemovalEvidenceLinksNotice links={summary.evidenceLinks} />
 
             {summary.externalId && (

@@ -22,6 +22,7 @@ export interface RemovalListRow {
   startedOn: string | null;
   completedOn: string | null;
   memberBatchCodes: string[];
+  missingProductionRuns: RemovalPreflightSummary["missingProductionRuns"];
   externalId: string | null;
   version: number | null;
   submittedOn: SubmittedOnState;
@@ -66,6 +67,7 @@ export function buildRemovalListRows(
       memberBatchCodes:
         data?.memberBatchCodes ??
         identity.memberBatches.map((batch) => batch.code),
+      missingProductionRuns: data?.missingProductionRuns ?? [],
       externalId:
         data?.externalId ?? identity.latestSubmission?.externalId ?? null,
       version: data?.version ?? identity.latestSubmission?.version ?? null,
