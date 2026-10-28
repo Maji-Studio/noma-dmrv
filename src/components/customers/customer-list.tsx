@@ -35,8 +35,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { useToast } from "@/components/ui/toast";
-import { InUseDeleteDialog, InUseReferences } from "@/components/ui/in-use-delete-dialog";
-import { customerInUseReferences, type InUseReferenceLink } from "@/lib/in-use-references";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { customerInUseReferences, type InUseRecordLink } from "@/lib/in-use-references";
 import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { ArchivedCustomerNotice } from "@/components/parties";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
@@ -190,7 +190,7 @@ export function CustomerList() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteConflict, setDeleteConflict] = useState<CustomerWithRelations | null>(null);
   // The deliveries a refused confirm named, so the in-use dialog can link each one.
-  const [conflictReferences, setConflictReferences] = useState<InUseReferenceLink[]>([]);
+  const [conflictReferences, setConflictReferences] = useState<InUseRecordLink[]>([]);
   // The order list the server sent back when it changed since the dialog opened.
   const [changedCascade, setChangedCascade] = useState<{ cascade: CascadePreview; message: string } | null>(null);
   const [lifecycleError, setLifecycleError] = useState<string | null>(null);
@@ -383,8 +383,8 @@ export function CustomerList() {
         return;
       }
       const message = toDeleteErrorMessage(error, `Customer ${deletingCustomer.code}`, "Customer was not deleted. Try again.");
-      if (isInUseDeleteRefusal(error) && !deletingCustomer.archivedAt) {
-        // In use: the dialog gives way to the in-use dialog that offers Archive instead.
+      if (isInUseDeleteRefusal(error)) {
+        // In use: the dialog gives way to the in-use dialog (Archive instead for an active customer, Close only for an archived one).
         setDeleteConflict(deletingCustomer);
         setConflictReferences(customerInUseReferences(error));
         setDeletingCustomer(null);
@@ -437,7 +437,7 @@ export function CustomerList() {
   // A customer whose orders have deliveries is refused when the dialog opens,
   // so the lock shows before the operator confirms anything.
   const previewRefusedInUse =
-    !!deletingCustomer && !deletingCustomer.archivedAt && !!deletePreview.error && isInUseDeleteRefusal(deletePreview.error);
+    !!deletingCustomer && !!deletePreview.error && isInUseDeleteRefusal(deletePreview.error);
   const conflictCustomer = deleteConflict ?? (previewRefusedInUse ? deletingCustomer : null);
   const conflictLinks = deleteConflict ? conflictReferences : customerInUseReferences(deletePreview.error);
 
@@ -570,7 +570,9 @@ export function CustomerList() {
       {conflictCustomer && (
         <InUseDeleteDialog
           label={conflictCustomer.code}
-          onArchive={() => handleArchive(conflictCustomer)}
+          onArchive={conflictCustomer.archivedAt ? undefined : () => handleArchive(conflictCustomer)}
+          reason={conflictLinks.length > 0 ? "deliveries were recorded on its orders" : undefined}
+          references={conflictLinks}
           onClose={() => {
             setDeleteConflict(null);
             setDeletingCustomer(null);
@@ -578,15 +580,7 @@ export function CustomerList() {
           }}
           isPending={archiveCustomer.isPending}
           errorMessage={lifecycleError}
-        >
-          {conflictLinks.length > 0 ? (
-            <>
-              <p>{`${conflictCustomer.code} cannot be deleted because other records still use it.`}</p>
-              <InUseReferences references={conflictLinks} />
-              <p>Archive it instead. Existing records keep it, while pickers hide it.</p>
-            </>
-          ) : undefined}
-        </InUseDeleteDialog>
+        />
       )}
 
       {((lifecycleError && !viewedEntity && !conflictCustomer) || (deleteError && !deletingCustomer)) && (

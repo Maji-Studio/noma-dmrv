@@ -320,14 +320,12 @@ export function CustomerSavedLocations({ customerId }: { customerId: string }) {
             setLifecycleError(null);
           }}
           errorMessage={lifecycleError}
+          reason={conflictLinks.length > 0 ? `it is ${usedByPhrase(deleteConflict.refusal)}` : undefined}
+          references={deleteConflict.location.archivedAt ? conflictLinks : undefined}
         >
-          {deleteConflict.location.archivedAt && conflictLinks.length === 0 ? undefined : (
+          {deleteConflict.location.archivedAt ? undefined : (
             <>
-              <p>
-                {deleteConflict.location.archivedAt
-                  ? `${deleteConflict.location.name} cannot be deleted because other records still use it.`
-                  : onlyActiveInUseMessage(deleteConflict.location.name, deleteConflict.refusal)}
-              </p>
+              <p>{onlyActiveInUseMessage(deleteConflict.location.name, deleteConflict.refusal)}</p>
               {conflictLinks.length > 0 && <InUseReferences references={conflictLinks} />}
             </>
           )}

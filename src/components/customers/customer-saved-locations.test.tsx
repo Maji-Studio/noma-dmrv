@@ -285,7 +285,7 @@ describe("CustomerSavedLocations", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete E2E Old Field" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
     const dialog = within(await screen.findByRole("dialog", { name: "E2E Old Field is in use" }));
-    expect(dialog.getByText("E2E Old Field cannot be deleted because other records still use it.")).toBeTruthy();
+    expect(dialog.getByText("E2E Old Field cannot be deleted because it is used by orders.")).toBeTruthy();
     expect(dialog.getByRole("link", { name: "Open order OR-001" }).getAttribute("href")).toBe("/orders?facility=f1&order=o1");
   });
 

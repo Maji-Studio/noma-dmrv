@@ -36,8 +36,8 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
-import { InUseDeleteDialog, InUseReferences } from "@/components/ui/in-use-delete-dialog";
-import { supplierInUseReferences, type InUseReferenceLink } from "@/lib/in-use-references";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { supplierInUseReferences, type InUseRecordLink } from "@/lib/in-use-references";
 import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { ArchivedSupplierNotice } from "@/components/parties";
@@ -179,7 +179,7 @@ export function SupplierList() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteConflict, setDeleteConflict] = useState<SupplierWithRelations | null>(null);
   // The intakes the refusal names, so the in-use dialog can link each one.
-  const [conflictReferences, setConflictReferences] = useState<InUseReferenceLink[]>([]);
+  const [conflictReferences, setConflictReferences] = useState<InUseRecordLink[]>([]);
   const [lifecycleError, setLifecycleError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -330,8 +330,8 @@ export function SupplierList() {
       toast.success("Supplier deleted.");
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Supplier ${deletingSupplier.code}`, "Supplier was not deleted. Try again.");
-      if (isInUseDeleteRefusal(error) && !deletingSupplier.archivedAt) {
-        // In use: the dialog gives way to the in-use dialog that offers Archive instead.
+      if (isInUseDeleteRefusal(error)) {
+        // In use: the dialog gives way to the in-use dialog (Archive instead for an active supplier, Close only for an archived one).
         setDeleteConflict(deletingSupplier);
         setConflictReferences(supplierInUseReferences(error));
         setDeletingSupplier(null);
@@ -526,22 +526,16 @@ export function SupplierList() {
       {deleteConflict && (
         <InUseDeleteDialog
           label={deleteConflict.code}
-          onArchive={() => handleArchive(deleteConflict)}
+          onArchive={deleteConflict.archivedAt ? undefined : () => handleArchive(deleteConflict)}
+          reason={conflictReferences.length > 0 ? "feedstock intakes still use it" : undefined}
+          references={conflictReferences}
           onClose={() => {
             setDeleteConflict(null);
             setLifecycleError(null);
           }}
           isPending={archiveSupplier.isPending}
           errorMessage={lifecycleError}
-        >
-          {conflictReferences.length > 0 ? (
-            <>
-              <p>{`${deleteConflict.code} cannot be deleted because other records still use it.`}</p>
-              <InUseReferences references={conflictReferences} />
-              <p>Archive it instead. Existing records keep it, while pickers hide it.</p>
-            </>
-          ) : undefined}
-        </InUseDeleteDialog>
+        />
       )}
 
       {((lifecycleError && !viewedEntity && !deleteConflict) || (deleteError && !deletingSupplier)) && (

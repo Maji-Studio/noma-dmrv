@@ -190,6 +190,7 @@ describe("SupplierList archive view", () => {
     const links = dialog.getAllByRole("link");
     expect(links.map((link) => link.getAttribute("aria-label"))).toEqual(["Open feedstock FS-001", "Open feedstock FS-002"]);
     expect(links.map((link) => link.getAttribute("href"))).toEqual(["/feedstocks?facility=fac-1&feedstock=fs-1", "/feedstocks?facility=fac-2&feedstock=fs-2"]);
+    expect(dialog.getByText("SUP-0001 cannot be deleted because feedstock intakes still use it.")).toBeTruthy();
     expect(dialog.getByRole("button", { name: "Archive instead" })).toBeTruthy();
     view.unmount();
 
@@ -277,6 +278,19 @@ describe("SupplierList archive view", () => {
 
     await act(async () => finishReload({ ...stale, version: 7 }));
     expect(screen.queryByLabelText("Sheet")).toBeNull();
+  });
+
+  it("links the blocking intakes of an archived supplier in a Close-only dialog", async () => {
+    state.remove.mockRejectedValue(inUseError("Supplier was not deleted because feedstock intakes still use it.", { feedstocks: [{ id: "fs-1", code: "FS-001", facilityId: "f2" }] }));
+    render(<SupplierList />);
+    fireEvent.click(screen.getByRole("button", { name: "Archived" }));
+    fireEvent.click(within("Actions for SUP-0002", "Delete"));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    const dialog = inDialog(await screen.findByRole("dialog", { name: "SUP-0002 is in use" }));
+    expect(dialog.getByRole("link", { name: "Open feedstock FS-001" }).getAttribute("href")).toBe("/feedstocks?facility=f2&feedstock=fs-1");
+    expect(dialog.queryByRole("button", { name: "Archive instead" })).toBeNull();
+    expect(dialog.queryByText(/Archive it instead/)).toBeNull();
+    expect(dialog.getAllByRole("button", { name: "Close" }).length).toBeGreaterThan(0);
   });
 
   it("does not offer Archive instead when an already archived supplier is refused as in use", async () => {

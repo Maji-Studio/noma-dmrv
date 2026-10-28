@@ -305,6 +305,20 @@ describe("CustomerList archive view", () => {
     await waitFor(() => expect(state.restore).toHaveBeenLastCalledWith({ customerId: "id-CUST-0002", expectedVersion: 5 }));
   });
 
+  it("links the blocking deliveries of an archived customer when the dry run refuses", () => {
+    state.preview = { data: undefined, isPending: false, isError: true, error: inUseError(
+      "Customer was not deleted because deliveries were recorded on its orders. Archive it instead.",
+      { deliveries: [{ id: "d1", code: "DL-001", facilityId: "f2" }] },
+    ) };
+    render(<CustomerList />);
+    fireEvent.click(screen.getByRole("button", { name: "Archived" }));
+    fireEvent.click(within("Actions for CUST-0002", "Delete"));
+    const dialog = inDialog(screen.getByRole("dialog", { name: "CUST-0002 is in use" }));
+    expect(dialog.getByRole("link", { name: "Open delivery DL-001" }).getAttribute("href")).toBe("/deliveries?facility=f2&delivery=d1");
+    expect(dialog.queryByRole("button", { name: "Archive instead" })).toBeNull();
+    expect(dialog.queryByRole("button", { name: "Confirm delete" })).toBeNull();
+  });
+
   it("does not offer Archive instead when an already archived customer is refused as in use", async () => {
     state.remove.mockRejectedValue(inUseError("Customer was not deleted because orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer."));
     render(<CustomerList />);
