@@ -121,11 +121,13 @@ function controls() {
   });
   // Watch the page box, not window resize: iOS Safari can hand over a page opened from a QR scan
   // at its final size without a resize event, which left the sheet and cameras fitted to the old size.
-  let rz = 0;
+  // The size this handler last laid out at, kept apart from st.VW/VH, which layoutDeck also writes.
+  let rz = 0; let laidW = app.clientWidth; let laidH = app.clientHeight;
   new ResizeObserver(() => {
     clearTimeout(rz);
     rz = setTimeout(() => {
-      if (app.clientWidth === st.VW && app.clientHeight === st.VH) return;
+      if (app.clientWidth === laidW && app.clientHeight === laidH) return;
+      laidW = app.clientWidth; laidH = app.clientHeight;
       const keep = st.ai; const wasDesk = $("deck").dataset.desk === "1";
       $("deck").dataset.desk = desk() ? "1" : "0";
       if (wasDesk !== desk()) ctx.buildDeck(0); else ctx.layoutDeck();
