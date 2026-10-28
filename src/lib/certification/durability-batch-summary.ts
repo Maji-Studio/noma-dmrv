@@ -28,6 +28,7 @@
 
 import type { Sample } from "@/db/schema";
 import { formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
+import { samplingDayOf } from "./evidence-ledger/input-selection";
 import {
   evaluateReplicateCount,
   evaluateRunEligibility,
@@ -41,35 +42,6 @@ import {
   type ValueWithStdDev,
 } from "@/lib/isometric/utils/durability-aggregation";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
-
-// ISO calendar day (YYYY-MM-DD) of a sampling timestamp, resolved in the
-// facility's local timezone so this readiness surface classifies a sampling
-// instant on the SAME calendar day as the write guard (`assertSampleNotBeforeBatchWindow`)
-// and the submission gate (`isoSamplingDay`). Falls back to UTC only when the
-// timezone is absent (light fixtures). Typed `unknown` because the column maps
-// to `Date` but raw rows / fixtures can carry a string.
-function samplingDayOf(
-  samplingTime: unknown,
-  facilityTimezone: string | null | undefined,
-): string | null {
-  if (samplingTime instanceof Date) {
-    return formatDayInZone(samplingTime, facilityTimezone);
-  }
-  if (typeof samplingTime === "string" && samplingTime.length >= 10) {
-    // A timestamp string (carries a time/offset component) must resolve through
-    // the SAME facility/UTC branch as a Date — otherwise an offset-bearing value
-    // like `2026-01-15T03:30:00.000Z` slices to the UTC day and diverges from the
-    // Date-backed local day. A bare date-only string is already a calendar day.
-    if (samplingTime.includes("T")) {
-      const parsed = new Date(samplingTime);
-      if (!Number.isNaN(parsed.getTime())) {
-        return formatDayInZone(parsed, facilityTimezone);
-      }
-    }
-    return samplingTime.slice(0, 10);
-  }
-  return null;
-}
 
 /** Format a Date as its YYYY-MM-DD calendar day in the facility zone (UTC fallback). */
 function formatDayInZone(
