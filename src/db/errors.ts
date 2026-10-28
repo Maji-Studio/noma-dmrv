@@ -12,6 +12,10 @@ const PG_UNIQUE_VIOLATION = "23505";
 // migration-owned invariant triggers.
 const PG_CHECK_VIOLATION = "23514";
 
+// SQLSTATEs for character_not_in_repertoire and untranslatable_character.
+export const PG_CHARACTER_NOT_IN_REPERTOIRE = "22021";
+export const PG_UNTRANSLATABLE_CHARACTER = "22P05";
+
 // SQLSTATEs that mean the running code addressed a relation or column the
 // database does not have — the signature of a pending migration. Deliberately
 // narrow: undefined_object (42704) and undefined_function (42883) also fire on
@@ -24,6 +28,32 @@ const PG_SCHEMA_MISMATCH_CODES = new Set([
 
 // Guard against a pathological/cyclic `.cause` chain.
 const MAX_CAUSE_DEPTH = 5;
+
+/** Match NUL-specific text/JSONB refusals, including Drizzle-wrapped errors. */
+export function isPgNulCharacterError(err: unknown): boolean {
+  const visited = new Set<unknown>();
+  let current: unknown = err;
+  for (let depth = 0; current != null && depth < MAX_CAUSE_DEPTH; depth++) {
+    if (typeof current !== "object" || visited.has(current)) break;
+    visited.add(current);
+    const error = current as {
+      code?: unknown;
+      message?: unknown;
+      detail?: unknown;
+      cause?: unknown;
+    };
+    if (
+      (error.code === PG_CHARACTER_NOT_IN_REPERTOIRE || error.code === PG_UNTRANSLATABLE_CHARACTER) &&
+      [error.message, error.detail].some((message) =>
+        typeof message === "string" && /\b0x00\b|\\u0000\b/i.test(message),
+      )
+    ) {
+      return true;
+    }
+    current = error.cause;
+  }
+  return false;
+}
 
 /**
  * True when `err` is a Postgres unique-constraint violation on the named

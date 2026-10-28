@@ -24,6 +24,7 @@ import { SafeError, toActionError } from "@/lib/errors";
 import {
   formatZodActionError,
   logActionError,
+  nulCharacterFailure,
   toWarnableSuccess,
   type ResultWithWarning,
 } from "@/fn/action-errors";
@@ -95,6 +96,8 @@ async function toWarnableResult<T>(
     if (error instanceof SafeError) {
       return { success: false, error: error.message };
     }
+    const nulFailure = nulCharacterFailure(error);
+    if (nulFailure) return nulFailure;
     // Better Auth throws APIError with a user-facing `.body.message`.
     const apiMessage = extractApiErrorMessage(error);
     if (apiMessage) {

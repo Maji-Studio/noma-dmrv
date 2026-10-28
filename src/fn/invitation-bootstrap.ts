@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   formatZodActionError,
   logActionError,
+  nulCharacterFailure,
   toWarnableSuccess,
   type ResultWithWarning,
 } from "@/fn/action-errors";
@@ -49,6 +50,8 @@ async function toWarnableResult<T>(
         error: formatZodActionError(error),
       };
     }
+    const nulFailure = nulCharacterFailure(error);
+    if (nulFailure) return nulFailure;
     if (!(error instanceof SafeError)) {
       logActionError(error, { message: "invitation bootstrap action failed" });
     }

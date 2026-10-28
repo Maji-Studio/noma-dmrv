@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SafeError } from "@/lib/errors";
 
+const { logError } = vi.hoisted(() => ({ logError: vi.fn() }));
+vi.mock("@/lib/log", () => ({
+  logger: { error: logError },
+  sanitizeErrorMessage: vi.fn(() => "sanitized"),
+}));
+
 const mockReadState = vi.fn();
 const mockCreateAccount = vi.fn();
 const mockHashPassword = vi.fn();
@@ -87,6 +93,23 @@ describe("bootstrapInvitationAccountAction", () => {
     expect(result.success).toBe(false);
     expect(mockReadState).not.toHaveBeenCalled();
     expect(mockCreateAccount).not.toHaveBeenCalled();
+  });
+
+  it("returns the shared NUL validation failure without logging when account creation is refused", async () => {
+    mockCreateAccount.mockRejectedValueOnce(new Error("Failed query", {
+      cause: {
+        code: "22021",
+        message: 'invalid byte sequence for encoding "UTF8": 0x00',
+      },
+    }));
+
+    expect(await bootstrapInvitationAccountAction({ ...VALID_INPUT, name: "Invitee\u0000" })).toEqual({
+      success: false,
+      error: "This value contains a NUL character (U+0000), which noma cannot store. Remove it and retry.",
+      code: "validation_failed",
+    });
+    expect(mockSignInEmail).not.toHaveBeenCalled();
+    expect(logError).not.toHaveBeenCalled();
   });
 
   it("rejects bootstrap while a session is already active", async () => {

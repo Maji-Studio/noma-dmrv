@@ -72,6 +72,7 @@ vi.mock("@/lib/email/send", async (importOriginal) => ({
 }));
 
 import { sendEmail } from "@/lib/email/send";
+import { logActionError } from "@/fn/action-errors";
 import { auth } from "@/lib/auth/better-auth";
 import {
   getActiveOrganization,
@@ -268,6 +269,19 @@ describe("createOrganizationAction", () => {
       error: "Admin access is required for this action.",
     });
     expect(mockCreateOrganizationWithAdmin).not.toHaveBeenCalled();
+  });
+
+  it("answers the NUL validation failure without logging when the database refuses the name", async () => {
+    mockCreateOrganizationWithAdmin.mockRejectedValueOnce(new Error("Failed query", {
+      cause: { code: "22021", message: 'invalid byte sequence for encoding "UTF8": 0x00' },
+    }));
+
+    expect(await createOrganizationAction(VALID_INPUT)).toEqual({
+      success: false,
+      error: "This value contains a NUL character (U+0000), which noma cannot store. Remove it and retry.",
+      code: "validation_failed",
+    });
+    expect(logActionError).not.toHaveBeenCalled();
   });
 
   it("validates and passes the intent key as the organization identity", async () => {
