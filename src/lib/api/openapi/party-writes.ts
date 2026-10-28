@@ -4,7 +4,7 @@ import { customerLocationRepresentationSchema } from "@/lib/representations/cust
 import { createCustomerApiInput, updateCustomerApiInput } from "@/schemas/customer-input";
 import { z } from "zod";
 import { API_BODY_MAX_BYTES, SUPPLIER_REPRESENTATION_REVISION } from "@/config/api-rest";
-import { PARTY_MAX_LOCATIONS, LOCATION_DISTANCE_MIN_KM, LOCATION_DISTANCE_MAX_KM } from "@/config/party-input";
+import { BLOCKER_LIMIT, PARTY_MAX_LOCATIONS, LOCATION_DISTANCE_MIN_KM, LOCATION_DISTANCE_MAX_KM } from "@/config/party-input";
 import { supplierLocationRepresentationSchema } from "@/lib/representations/supplier-locations";
 import { itemEnvelopeSchema } from "@/lib/representations/envelopes";
 import { supplierRepresentationSchema } from "@/lib/representations/suppliers";
@@ -55,7 +55,7 @@ export function addSupplierWritePaths(paths: Paths, { publishOutput, writeErrors
   };
   paths["/suppliers/{idOrCode}"].delete = {
     ...privateOperation("delete_supplier", "suppliers:delete",
-      `Delete by UUID, including archived rows; deletes its locations and facility pairs. Intakes, including archived intakes, answer 409 conflict with feedstockCodes metadata. Blockers point at /supplierId. ${RETRY_GUIDANCE}`,
+      `Delete by UUID, including archived rows; deletes its locations and facility pairs. Intakes, including archived intakes, answer 409 conflict with issue metadata reason in_use, feedstockCodes and feedstocks (id and code of each referenced intake, up to ${BLOCKER_LIMIT} in code order, matching feedstockCodes). Blockers point at /supplierId. ${RETRY_GUIDANCE}`,
       {
         ...existingErrors,
         "204": { description: "Deleted, or replayed; no body or ETag.", headers: { ...privateHeaders, ...writeHeaders } },
@@ -104,7 +104,7 @@ export function addCustomerWritePaths(paths: Paths, { publishOutput, writeErrors
   };
   paths["/customers/{idOrCode}"].delete = {
     ...privateOperation("delete_customer", "customers:delete",
-      `Delete by UUID, including archived rows; deletes its locations and facility pairs. Orders without deliveries, including archived orders, are deleted with the customer under customers:delete alone. Deliveries answer 409 conflict with deliveryCodes metadata; registered storage-site locations answer 409 with locationIds metadata. Optional cascadeFingerprint from the dry run fences the order set after If-Match: a mismatch answers 409 cascade_changed at /cascadeFingerprint with a fresh preview of orders and cascadeFingerprint when available. Omission deletes the current order set. Keyed replay precedes both fences. Blockers point at /customerId. ${RETRY_GUIDANCE}`,
+      `Delete by UUID, including archived rows; deletes its locations and facility pairs. Orders without deliveries, including archived orders, are deleted with the customer under customers:delete alone. Deliveries answer 409 conflict with issue metadata reason in_use, deliveryCodes and deliveries (id, code and facilityId of each referenced delivery, up to ${BLOCKER_LIMIT} in code order, matching deliveryCodes); registered storage-site locations answer 409 with locationIds metadata. Optional cascadeFingerprint from the dry run fences the order set after If-Match: a mismatch answers 409 cascade_changed at /cascadeFingerprint with a fresh preview of orders and cascadeFingerprint when available. Omission deletes the current order set. Keyed replay precedes both fences. Blockers point at /customerId. ${RETRY_GUIDANCE}`,
       {
         ...existingErrors,
         "409": { ...problemResponseComponents().Problem409,

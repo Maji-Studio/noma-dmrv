@@ -25,8 +25,8 @@ export function partyArchiveConflict(kind: Party, code: string, archived: boolea
 export function partyNameConflict(message: string, meta?: DomainIssue["meta"]): DomainError {
   return partyRefusal("conflict", message, ["name"], meta);
 }
-export function supplierHasIntakes(feedstockCodes: string[] = []): DomainError {
-  return inUseDeleteRefusal(`Supplier ${IN_USE_DELETE_MARKER} feedstock intakes still use it. Review the linked intakes or keep this supplier.`, ["supplierId"], { meta: { feedstockCodes } });
+export function supplierHasIntakes(feedstocks: readonly { id: string; code: string }[] = []): DomainError {
+  return inUseDeleteRefusal(`Supplier ${IN_USE_DELETE_MARKER} feedstock intakes still use it. Review the linked intakes or keep this supplier.`, ["supplierId"], { meta: { feedstockCodes: feedstocks.map(row => row.code), feedstocks: feedstocks.map(({ id, code }) => ({ id, code })) } });
 }
 export function customerHasStorageSites(locationIds: string[] = []): DomainError {
   return inUseDeleteRefusal(`Customer ${IN_USE_DELETE_MARKER} its locations are registered storage sites. Keep this customer.`, ["customerId"], { meta: { locationIds } });
@@ -36,8 +36,8 @@ export function partyLocationNotFound(kind: Party): DomainError {
   return partyRefusal("not_found", kind === "supplier" ? "Supplier location not found" : "Customer location not found", ["locationId"]);
 }
 
-export function customerLocationHasOrders(orderCodes: string[] = [], archived = false): DomainError {
-  return inUseDeleteRefusal(`Customer location ${IN_USE_DELETE_MARKER} orders use it.${archived ? "" : " Archive it instead."}`, ["locationId"], { meta: { orderCodes } });
+export function customerLocationHasOrders(orders: readonly { id: string; code: string; facilityId: string }[] = [], archived = false): DomainError {
+  return inUseDeleteRefusal(`Customer location ${IN_USE_DELETE_MARKER} orders use it.${archived ? "" : " Archive it instead."}`, ["locationId"], { meta: { orderCodes: orders.map(row => row.code), orders: orders.map(({ id, code, facilityId }) => ({ id, code, facilityId })) } });
 }
 export function customerLocationHasStorageSite(archived = false): DomainError {
   return inUseDeleteRefusal(`Customer location ${IN_USE_DELETE_MARKER} it is registered with Isometric as a storage site.${archived ? "" : " Archive it instead."}`, ["locationId"]);
@@ -71,8 +71,8 @@ export function customerLocationLastActive(name: string): DomainError {
   return partyRefusal("conflict", `${name} is this customer's only active location, so it cannot be archived. Add or restore another location first.`, ["locationId"]);
 }
 
-export function customerHasDeliveries(deliveryCodes: string[] = []): DomainError {
-  return inUseDeleteRefusal(`Customer ${IN_USE_DELETE_MARKER} deliveries were recorded on its orders. Archive it instead.`, ["customerId"], { meta: { deliveryCodes } });
+export function customerHasDeliveries(deliveries: readonly { id: string; code: string; facilityId: string }[] = []): DomainError {
+  return inUseDeleteRefusal(`Customer ${IN_USE_DELETE_MARKER} deliveries were recorded on its orders. Archive it instead.`, ["customerId"], { meta: { deliveryCodes: deliveries.map(row => row.code), deliveries: deliveries.map(({ id, code, facilityId }) => ({ id, code, facilityId })) } });
 }
 export function cascadeChanged(): DomainError {
   return partyRefusal("cascade_changed", "The orders this delete would remove changed since the preview. Review them and confirm again.", ["cascadeFingerprint"]);
