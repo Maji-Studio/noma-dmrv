@@ -42,6 +42,7 @@ import { discoverSpec } from "./review-spec.mjs";
 import { resolveTarget, verifyLocalHead, verifyRemoteHead } from "./review-target.mjs";
 
 const MAX_DIFF_CHARS = 500_000;
+const REPORT_FILENAME = "report.json";
 // Generated payloads the models read nothing useful from: one drizzle snapshot
 // alone (~390k chars) used to push a routine schema PR past MAX_DIFF_CHARS.
 // They stay in the changed-file list, and the report names what was left out.
@@ -77,15 +78,16 @@ async function getRepoSlug() {
   return result.stdout.trim();
 }
 
-async function getDiffMetadata(baseRef, cwd) {
+async function getDiffMetadata(baseRef, cwd, headRef = "HEAD") {
+  // Display HEAD for reviewers in the pinned checkout; collect against the captured head.
   const diffRange = `${baseRef}...HEAD`;
-  const namesResult = await git(["diff", "--name-only", diffRange], { cwd });
+  const namesResult = await git(["diff", "--name-only", `${baseRef}...${headRef}`], { cwd });
   const changedFiles = namesResult.stdout.trim().split("\n").filter(Boolean);
   if (changedFiles.length === 0) {
     throw new Error(`No changes found for git diff ${diffRange}`);
   }
   const commits = (
-    await git(["log", `${baseRef}..HEAD`, "--oneline"], { cwd })
+    await git(["log", `${baseRef}..${headRef}`, "--oneline"], { cwd })
   ).stdout.trim();
   const omittedFiles = changedFiles.filter((path) =>
     GENERATED_PAYLOAD_GLOBS.some((glob) => matchesScope(path, glob)),
@@ -93,7 +95,7 @@ async function getDiffMetadata(baseRef, cwd) {
   const excludes = GENERATED_PAYLOAD_GLOBS.map((glob) => `:(exclude,glob)${glob}`);
   const patch = (
     await git(
-      ["diff", "--no-ext-diff", "--unified=5", diffRange, "--", ".", ...excludes],
+      ["diff", "--no-ext-diff", "--unified=5", `${baseRef}...${headRef}`, "--", ".", ...excludes],
       { cwd },
     )
   ).stdout;
@@ -561,7 +563,7 @@ async function main() {
   const artifactDir = options.artifactDir
     ? resolve(cwd, options.artifactDir)
     : mkdtempSync(join(tmpdir(), "noma-pr-review-suite-"));
-  if (options.prior.some((path) => resolve(path) === join(artifactDir, "report.json"))) {
+  if (options.prior.some((path) => resolve(path) === join(artifactDir, REPORT_FILENAME))) {
     throw new Error("A --prior path would be overwritten by this run; use a new --artifact-dir per round.");
   }
   mkdirSync(artifactDir, { recursive: true });
@@ -583,7 +585,7 @@ async function main() {
   }
 
   const { pr, base, headSha, baseFetchFailed } = localTarget || await resolveTarget(options, cwd);
-  const diff = await getDiffMetadata(base.name, cwd);
+  const diff = await getDiffMetadata(base.name, cwd, headSha);
   const spec = await discoverSpec(options, pr, diff, cwd, artifactDir);
   // The review criteria must come from the base branch. Reading the working tree
   // would let the PR under review rewrite the standards it is judged against.
@@ -765,7 +767,7 @@ async function main() {
   };
   writeFileSync(reportPath, aggregateReport(aggregate));
   writeFileSync(
-    join(artifactDir, "report.json"),
+    join(artifactDir, REPORT_FILENAME),
     `${JSON.stringify(buildReportJson(aggregate), null, 2)}\n`,
   );
   if (options.local) {
