@@ -6,8 +6,8 @@ import { creditBatches } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
-import { type RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
 import { entryLine } from "@/lib/certification/emission-entry-rules";
+import { lateEntryFigures, type CarriedEntryRow } from "@/lib/certification/late-entry-figures";
 import { requireOrgScope } from "./utils";
 import { getCreditBatchesByRemovalId, getCertifierRemovalById } from "./certifier-removals";
 import { getSentRemovalForComparison } from "./removal-entry-correction";
@@ -18,7 +18,7 @@ import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
 import { readRecordLockLineage } from "./record-lock-lineage";
 import { readsAsReturnedFromPersisted } from "@/lib/record-lock";
 
-export type RemovalCarriedEntry = NonNullable<RemovalEntryContributions["carriedEntries"]>[number];
+export type RemovalCarriedEntry = CarriedEntryRow;
 export interface RemovalCarriedEntries { carriedEntries: RemovalCarriedEntry[]; lateEntries: RemovalCarriedEntry[] }
 const snapshotSchema = z.object({
   templateObservationId: z.string().optional(),
@@ -72,10 +72,13 @@ async function loadRevisionLateEntries(ctx: OrgContext, removal: { id: string; f
   const memberIds = members.map(batch => batch.id);
   if (!memberIds.length) return [];
   const carry = await loadFacilityEmissionEntryCarry(ctx, facilityId, undefined, undefined, { ownedBatchIds: memberIds });
-  return carry.entries.flatMap(entry => entry.revisionOf?.removalId === removalId && memberIds.includes(entry.creditBatchId) && entry.total
-    ? [{ entryId: entry.id, creditBatchId: entry.creditBatchId, creditBatchCode: entry.creditBatchCode,
+  return carry.entries.flatMap(entry => {
+    if (entry.revisionOf?.removalId !== removalId || !memberIds.includes(entry.creditBatchId)) return [];
+    const figures = lateEntryFigures(entry);
+    if (!figures) return [];
+    return [{ entryId: entry.id, creditBatchId: entry.creditBatchId, creditBatchCode: entry.creditBatchCode,
       componentId: entry.componentId, componentName: entryLine(entry.entryObservation, entry.componentId)?.component.displayName,
-      occurredOn: entry.occurredOn, value: entry.total, evidenceDocumentIds: [...entry.evidenceDocumentIds].sort(),
-      earlierRemovalId: entry.earlierRemovalId, earlierRemovalCode: entry.earlierRemovalCode }] : [])
-    .sort((a, b) => a.entryId.localeCompare(b.entryId));
+      occurredOn: entry.occurredOn, ...figures, evidenceDocumentIds: [...entry.evidenceDocumentIds].sort(),
+      earlierRemovalId: entry.earlierRemovalId, earlierRemovalCode: entry.earlierRemovalCode }];
+  }).sort((a, b) => a.entryId.localeCompare(b.entryId));
 }

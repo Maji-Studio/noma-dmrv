@@ -349,8 +349,9 @@ it("the narrow sent read preserves the full-context carried list and its frozen 
     full!.contributions.carriedEntries!.map(item => ({ ...item, value: { magnitude: item.value.magnitude, unit: item.value.unit } })));
 });
 
-it.each(["FAILED_VERIFICATION", "DRAFT", null].flatMap(status => ["additive", "single"].map(lineRule => ({ status, lineRule }))))(
-  "discovers the own-batch revision from persisted returned lineage ($status, $lineRule)", async ({ status, lineRule }) => {
+it.each([...["FAILED_VERIFICATION", "DRAFT", null].flatMap(status => ["additive", "single"].map(lineRule => ({ status, lineRule, paired: false }))),
+  { status: "FAILED_VERIFICATION", lineRule: "single", paired: true }])(
+  "discovers the own-batch revision from persisted returned lineage ($status, $lineRule, paired $paired)", async ({ status, lineRule, paired }) => {
   const occurredOn = lineRule === "single" ? "2026-06-01" : "2026-06-10";
   if (lineRule === "single") {
     await db.update(removalTemplateObservations).set({
@@ -359,6 +360,16 @@ it.each(["FAILED_VERIFICATION", "DRAFT", null].flatMap(status => ["additive", "s
     await db.update(emissionEntries).set({ lineRule: "single", occurredOn }).where(and(
       eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id),
     ));
+  }
+  if (paired) {
+    // A second input makes the entry a pair with no single total (#1417).
+    const [{ definition }] = await db.select({ definition: removalTemplateObservations.definition }).from(removalTemplateObservations)
+      .where(and(eq(removalTemplateObservations.organizationId, ctx.organizationId), eq(removalTemplateObservations.id, observation.id)));
+    definition.groups[0].components[0].inputs.push({ key: "load_mass", type: "monitored", quantityKind: "mass" });
+    await db.update(removalTemplateObservations).set({ definition,
+      enrichment: { line: { electricity_use: { unit: "kWh" }, load_mass: { unit: "kg" } } },
+    }).where(and(eq(removalTemplateObservations.organizationId, ctx.organizationId), eq(removalTemplateObservations.id, observation.id)));
+    await db.insert(emissionEntryValues).values({ organizationId: ctx.organizationId, entryId: entry.id, inputKey: "load_mass", magnitude: "35", unit: "kg" });
   }
   // A sent snapshot is frozen, so the origin attempt is recreated as sent before the entry was recorded.
   await db.delete(certificationSubmissions).where(and(
@@ -388,6 +399,9 @@ it.each(["FAILED_VERIFICATION", "DRAFT", null].flatMap(status => ["additive", "s
   expect(own.lateEntries.map(item => item.entryId)).toEqual(status ? [entry.id] : []);
   if (status) expect(own.lateEntries[0]).toMatchObject({ creditBatchId: origin.batchId, componentName: "Electricity",
     occurredOn, value: { magnitude: "120", unit: "kWh" }, earlierRemovalId: origin.removalId });
+  if (paired) expect(own.lateEntries[0].values).toEqual(expect.arrayContaining([
+    { magnitude: "120", unit: "kWh" }, { magnitude: "35", unit: "kg" }]));
+  else expect(own.lateEntries[0]?.values).toBeUndefined();
   expect((await loadRemovalCarriedEntries(ctx, receiving.removalId)).carriedEntries).toEqual([]);
   expect(registry.getGhgStatement).not.toHaveBeenCalled();
   expect(registry.resolveClient).not.toHaveBeenCalled();

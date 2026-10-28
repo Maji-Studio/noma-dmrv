@@ -75,3 +75,15 @@ describe("RevisionLateEntriesSection", () => {
     expect(screen.getByRole("link", { name: "CB-26-009" }).getAttribute("href")).toBe("/credit-batches/cb-9?facility=f1");
   });
 });
+
+describe("RevisionLateEntriesSection paired entries", () => {
+  it("shows every value of a paired entry on its own line", () => {
+    const paired = { ...ENTRY, value: { magnitude: "40", unit: "l" }, values: [{ magnitude: "40", unit: "l" }, { magnitude: "0.85", unit: "kg/l" }] };
+    const { container } = render(<RevisionLateEntriesSection entries={[paired]} facilityId="f1" removalCode="RM-26-009" />);
+    const row = container.querySelector("[data-carried-entry]")!;
+    const lines = [...row.querySelectorAll("span.font-mono > span")].map((node) => node.textContent);
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain("40");
+    expect(lines[1]).toContain("0.85");
+  });
+});

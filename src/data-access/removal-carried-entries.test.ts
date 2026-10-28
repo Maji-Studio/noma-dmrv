@@ -82,7 +82,7 @@ it("reads only member entries assigned to this revision even when the sent carri
   vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { semantic: {} } } as never);
   vi.mocked(getCreditBatchesByRemovalId).mockResolvedValue([{ id: "member" }] as never);
   const entry = { id: "late", creditBatchId: "member", creditBatchCode: "CB-009", componentId: "line",
-    occurredOn: "2026-09-14", total: { magnitude: "120", unit: "L" }, evidenceDocumentIds: ["b", "a"],
+    occurredOn: "2026-09-14", total: { magnitude: "120", unit: "L" }, values: [{ inputKey: "diesel", magnitude: "120", unit: "L" }], evidenceDocumentIds: ["b", "a"],
     earlierRemovalId: "removal", earlierRemovalCode: "RM-009", revisionOf: { removalId: "removal", removalCode: "RM-009" },
     entryObservation: { enrichment: {}, definition: { groups: [{ components: [{ id: "line", displayName: "Diesel from saved template" }] }] },
       lineSources: { line: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } } } };
@@ -98,6 +98,20 @@ it("reads only member entries assigned to this revision even when the sent carri
   expect(loadFacilityEmissionEntryCarry).toHaveBeenCalledExactlyOnceWith(ctx, "facility", undefined, undefined, { ownedBatchIds: ["member"] });
   expect(getCreditBatchesByRemovalId).toHaveBeenCalledExactlyOnceWith(ctx, "removal");
   expect(entry.evidenceDocumentIds).toEqual(["b", "a"]);
+});
+
+it("lists a paired-input late entry with every value (#1417)", async () => {
+  vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { semantic: {} } } as never);
+  vi.mocked(getCreditBatchesByRemovalId).mockResolvedValue([{ id: "member" }] as never);
+  const entry = { id: "pair", creditBatchId: "member", creditBatchCode: "CB-009", componentId: "line", occurredOn: "2026-09-14",
+    total: null, values: [{ inputKey: "volume", magnitude: "40", unit: "L" }, { inputKey: "density", magnitude: "0.85", unit: "kg/L" }],
+    evidenceDocumentIds: [], revisionOf: { removalId: "removal", removalCode: "RM-009" },
+    entryObservation: { enrichment: {}, definition: { groups: [{ components: [{ id: "line", displayName: "Diesel" }] }] },
+      lineSources: { line: { scope: "operating", entryPolicy: "single", origin: "reviewed" } } } };
+  vi.mocked(loadFacilityEmissionEntryCarry).mockResolvedValue({ entries: [entry], contenders: [], ownContenders: [], batches: [] } as never);
+  const { lateEntries } = await loadRemovalCarriedEntries(ctx, "removal");
+  expect(lateEntries).toEqual([expect.objectContaining({ entryId: "pair", value: { magnitude: "40", unit: "L" },
+    values: [{ magnitude: "40", unit: "L" }, { magnitude: "0.85", unit: "kg/L" }] })]);
 });
 
 it("skips facility discovery for a sent Removal whose statement is not returned", async () => {
