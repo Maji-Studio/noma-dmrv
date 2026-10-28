@@ -27,7 +27,7 @@ const CERTIFICATION_REMOVALS_URL = "/removals";
 const FAKE_PROJECT_ID = "e2e-gating-fake-project";
 
 // Certification links hidden until a registry is linked.
-const OPERATIONAL_LINKS = ["Removals", "GHG statements"] as const;
+const OPERATIONAL_LINKS = ["Removals", "GHG Statements"] as const;
 
 // First navigation to a not-yet-compiled certification route can take 10-30s in
 // dev (Turbopack cold compile) before the client-side guard can run its

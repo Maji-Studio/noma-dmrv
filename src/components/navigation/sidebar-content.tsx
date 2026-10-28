@@ -137,7 +137,7 @@ const navSections: NavSection[] = [
     accent: SECTION_ACCENTS.verification,
     items: [
       { href: "/credit-batches", label: "Credit batches", icon: CertificateIcon },
-      { href: "/lab-samples", label: "Lab samples", icon: TestTubeIcon },
+      { href: "/lab-samples", label: "Lab Samples", icon: TestTubeIcon },
       { href: "/emissions", label: "Emissions", icon: CloudIcon },
     ],
   },
@@ -156,7 +156,7 @@ const navSections: NavSection[] = [
     accent: SECTION_ACCENTS.certification,
     items: [
       { href: "/removals", label: "Removals", icon: StackIcon },
-      { href: "/ghg-statements", label: "GHG statements", icon: FileTextIcon },
+      { href: "/ghg-statements", label: "GHG Statements", icon: FileTextIcon },
     ],
   },
   {

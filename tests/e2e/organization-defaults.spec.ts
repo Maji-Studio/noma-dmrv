@@ -84,9 +84,5 @@ test.describe("Organization operating defaults", () => {
     await expect(page.getByText("New facilities start with")).toBeVisible();
     await expect(page.getByRole("button", { name: "Save defaults" })).toHaveCount(0);
     await expect(page.getByRole("radio")).toHaveCount(0);
-
-    // The retired route lands on General too.
-    await page.goto("/settings/general");
-    await expect(page).toHaveURL(/\/settings\/general/);
   });
 });

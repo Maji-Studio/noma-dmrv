@@ -163,7 +163,7 @@ export function GhgStatementsList() {
     <div className="container-max page-shell">
       <PageHeader
         area="certification"
-        title="GHG statements"
+        title="GHG Statements"
         subtitle="Reporting periods and the Removals Isometric links to each."
       />
 

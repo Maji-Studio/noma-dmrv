@@ -12,7 +12,7 @@ import {
 } from "@/lib/create-intent";
 
 export const metadata = {
-  title: "Lab samples | Maji dMRV",
+  title: "Lab Samples | Maji dMRV",
   description:
     "Track lab Samples for biochar quality and credit batch certification.",
 };
