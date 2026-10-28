@@ -134,13 +134,16 @@ export async function lockCreditBatchDeclarationRuns(
     requestedProductionRunIds: string[];
     currentProductionRunIds?: string[];
     matchingProductionRunIds?: string[];
+    /** Held add-only edits persist only explicit selections; free batches expand by default. */
+    expand?: boolean;
   },
 ): Promise<{
   runIds: string[];
   lockedRuns: LockedCreditBatchProductionRun[];
 }> {
+  requireOrgScope(ctx);
   await lockMembershipFacilities(ctx, tx, [params.facilityId]);
-  const matchingBeforeLock = params.matchingProductionRunIds ?? await findMatchingUnassignedProductionRunIds(
+  const matchingBeforeLock = params.expand === false ? [] : params.matchingProductionRunIds ?? await findMatchingUnassignedProductionRunIds(
     ctx,
     tx,
     params,
@@ -157,11 +160,12 @@ export async function lockCreditBatchDeclarationRuns(
   ]);
 
   await lockProductionProcessScope(tx, params);
-  const matchingAfterLock = await findMatchingUnassignedProductionRunIds(
+  const requestedIds = new Set(params.requestedProductionRunIds);
+  const matchingAfterLock = (await findMatchingUnassignedProductionRunIds(
     ctx,
     tx,
     params,
-  );
+  )).filter(id => params.expand !== false || requestedIds.has(id));
   const lockedIds = new Set(lockedRuns.map(run => run.id));
   const lateRunIds = matchingAfterLock.filter(id => !lockedIds.has(id));
   const lateRuns = await lockCreditBatchProductionRuns(ctx, tx, lateRunIds, { skipLocked: true });
