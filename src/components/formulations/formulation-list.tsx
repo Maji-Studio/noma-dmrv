@@ -7,7 +7,7 @@ import { StaleVersionError, toDeleteErrorMessage, toArchiveRestoreErrorMessage }
 
 import { useEffect, useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
-import { RECORD_LINKS } from "@/lib/record-links";
+import { RECORD_LINKS, recordHref } from "@/lib/record-links";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArchiveIcon, ListChecksIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import {
@@ -374,6 +374,7 @@ export function FormulationList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => recordHref("formulation", row.id)}
         emptyMessage={
           <EmptyState
             padding="md"

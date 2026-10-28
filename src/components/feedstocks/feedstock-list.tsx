@@ -513,7 +513,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       ? focusedFeedstock.data
       : null;
   const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== contextFacilityId ? null : sideSheet;
-  const displaySideSheet = focusedFeedstockId && !linkedFacilityReady ? null : liveViewEntity
+  // A row the operator opened shows at once; only a link waits for its facility.
+  const displaySideSheet = focusedFeedstockId && !linkedFacilityReady && !localSideSheet ? null : liveViewEntity
     ? ({ entity: liveViewEntity, mode: "view" } as const)
     : localSideSheet ?? deepLinkedSideSheet;
   const viewedFeedstockId =

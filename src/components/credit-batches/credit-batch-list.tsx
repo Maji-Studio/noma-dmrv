@@ -457,7 +457,8 @@ export function CreditBatchList({
       ? ({ entity: focusedBatch.data, mode: "view" } as const)
       : null;
   const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== contextFacilityId ? null : sideSheet;
-  const displaySideSheet = focusedBatchId && !linkedFacilityReady ? null : localSideSheet ?? deepLinkedSideSheet;
+  // A row the operator opened shows at once; only a link waits for its facility.
+  const displaySideSheet = focusedBatchId && !linkedFacilityReady && !localSideSheet ? null : localSideSheet ?? deepLinkedSideSheet;
 
   // Member production runs for the view sheet's "Production runs" section.
   // The sheet's entity is a snapshot (click-captured, or fetched by deep link),

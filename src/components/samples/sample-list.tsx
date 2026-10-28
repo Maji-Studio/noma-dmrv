@@ -365,7 +365,8 @@ export function SampleList({
     ? ({ mode: "create", entity: null } as const)
     : null;
   const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== contextFacilityId ? null : sideSheet;
-  const displaySideSheet = focusedSampleId && !linkedFacilityReady ? null :
+  // A row the operator opened shows at once; only a link waits for its facility.
+  const displaySideSheet = focusedSampleId && !linkedFacilityReady && !localSideSheet ? null :
     localSideSheet ?? createIntentSideSheet ?? deepLinkedSideSheet;
   const labReportStatus = useDocumentsCertStatus("sample", displaySideSheet?.entity?.id, isLabReportDocument);
   const sampleLocks = useRecordLocks("sample", samples.map((sample) => sample.id));

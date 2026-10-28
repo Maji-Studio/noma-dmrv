@@ -487,7 +487,8 @@ export function ProductionRunList() {
       ? ({ entity: focusedRun.data, mode: "view" } as const)
       : null;
   const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== facilityId ? null : sideSheet;
-  const displaySideSheet = focusedRunId && !linkedFacilityReady ? null : localSideSheet ?? deepLinkedSideSheet;
+  // A row the operator opened shows at once; only a link waits for its facility.
+  const displaySideSheet = focusedRunId && !linkedFacilityReady && !localSideSheet ? null : localSideSheet ?? deepLinkedSideSheet;
   const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("productionRun", displaySideSheet?.entity?.id);
 
   const confirmCreateClose = () =>

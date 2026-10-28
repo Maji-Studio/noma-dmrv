@@ -9,7 +9,7 @@ import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { useEffect, useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
-import { RECORD_LINKS } from "@/lib/record-links";
+import { RECORD_LINKS, recordHref } from "@/lib/record-links";
 import { useEntityEditRecord } from "@/hooks/use-entity-edit-record";
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -341,6 +341,7 @@ export function ReactorList() {
         columns={columns}
         data={reactors}
         onRowClick={openView}
+        getRowHref={(row) => recordHref("reactor", row.id, { facilityId: row.facilityId })}
         enableSorting={false}
         enablePagination
         manualPagination

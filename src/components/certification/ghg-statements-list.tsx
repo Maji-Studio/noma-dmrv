@@ -354,15 +354,19 @@ function ListBody({ facilityId }: { facilityId: string }) {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 
-  const linkedStatement = useGhgStatementState(statementId ?? "", !!statementId);
-  const linkedFacilityReady = useLinkedRecordFacility(linkedStatement.data?.statement, linkedStatement.isLoading);
+  // A statement already on this facility's list opens at once (its sheet loads the registry detail);
+  // only a link from elsewhere waits for the detail read to learn its facility.
+  const linkedInList = !!statementId && !!query.data?.some((s) => s.statement.id === statementId);
+  const lookupEnabled = !!statementId && !linkedInList && !query.isLoading;
+  const linkedStatement = useGhgStatementState(statementId ?? "", lookupEnabled);
+  const linkedFacilityReady = useLinkedRecordFacility(lookupEnabled ? linkedStatement.data?.statement : undefined, linkedStatement.isLoading);
   useEffect(() => {
     // A failed refresh of a statement already shown keeps its sheet; only one that never loaded closes.
-    if (statementId && !linkedStatement.data && (linkedStatement.isError || linkedStatement.isSuccess)) {
+    if (lookupEnabled && !linkedStatement.data && (linkedStatement.isError || linkedStatement.isSuccess)) {
       toast.error("Linked GHG Statement could not be opened");
       void setStatementId(null);
     }
-  }, [statementId, linkedStatement.isError, linkedStatement.isSuccess, linkedStatement.data, setStatementId, toast]);
+  }, [lookupEnabled, linkedStatement.isError, linkedStatement.isSuccess, linkedStatement.data, setStatementId, toast]);
 
   const isProduction = summaryQuery.data?.isProduction ?? false;
   const externalProjectId =
@@ -427,7 +431,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
   }
 
   const statements = query.data ?? [];
-  const selected = statementId && linkedFacilityReady
+  const selected = statementId && (linkedInList || linkedFacilityReady)
     ? statements.find((s) => s.statement.id === statementId)
     : undefined;
 

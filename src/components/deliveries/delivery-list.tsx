@@ -393,7 +393,8 @@ export function DeliveryList() {
       ? deliveryDetailToRelations(focusedDelivery.data)
       : null;
   const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== contextFacilityId ? null : sideSheet;
-  const displaySideSheet = focusedDeliveryId && !linkedFacilityReady ? null : liveViewEntity
+  // A row the operator opened shows at once; only a link waits for its facility.
+  const displaySideSheet = focusedDeliveryId && !linkedFacilityReady && !localSideSheet ? null : liveViewEntity
     ? ({ entity: liveViewEntity, mode: "view" } as const)
     : localSideSheet ?? deepLinkedSideSheet;
   const proofStatus = useDocumentsCertStatus("delivery", displaySideSheet?.entity?.id, isProofOfDeliveryDocument);

@@ -294,7 +294,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     !focusedApplication.isLoading &&
     (focusedApplication.error != null || focusedApplicationItem == null);
   const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== contextFacilityId ? null : sideSheet;
-  const displaySideSheet = focusedApplicationId && !linkedFacilityReady ? null :
+  // A row the operator opened shows at once; only a link waits for its facility.
+  const displaySideSheet = focusedApplicationId && !linkedFacilityReady && !localSideSheet ? null :
     localSideSheet ??
     (linkedFacilityReady && focusedApplicationItem ? { entity: focusedApplicationItem, mode: "view" as const } : null);
 

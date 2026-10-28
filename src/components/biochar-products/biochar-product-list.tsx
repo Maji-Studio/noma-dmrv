@@ -328,7 +328,8 @@ export function BiocharProductList() {
         } as const)
       : null;
   const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== contextFacilityId ? null : sideSheet;
-  const displaySideSheet = focusedProductId && !linkedFacilityReady ? null : localSideSheet ?? deepLinkedSideSheet;
+  // A row the operator opened shows at once; only a link waits for its facility.
+  const displaySideSheet = focusedProductId && !linkedFacilityReady && !localSideSheet ? null : localSideSheet ?? deepLinkedSideSheet;
   const productLocks = useRecordLocks("biocharProduct", products.map((product) => product.id));
   // A lock that arrives as Sent keeps an open draft, read-only, with the way
   // back (`submitBlock`).

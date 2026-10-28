@@ -242,7 +242,8 @@ export function OrderList() {
       ? ({ entity: focusedOrder.data, mode: "view" } as const)
       : null;
   const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== facilityId ? null : sideSheet;
-  const displaySideSheet = focusedOrderId && !linkedFacilityReady ? null : localSideSheet ?? deepLinkedSideSheet;
+  // A row the operator opened shows at once; only a link waits for its facility.
+  const displaySideSheet = focusedOrderId && !linkedFacilityReady && !localSideSheet ? null : localSideSheet ?? deepLinkedSideSheet;
 
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
