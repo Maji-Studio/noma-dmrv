@@ -79,7 +79,7 @@ export function mount() {
   const lab = sams.reduce((a, b) => (b.analysisDate > a.analysisDate ? b : a)).analysisDate;
   $("chipline").lastChild.textContent = `Latest record ${dt(lastIso([po.latestDeliveryOut, po.latestApplication, po.latestRunDate, po.latestFeedstockIntake, lab]))}`;
   $("sumPeriod").textContent = `Credit batch · ${monthYear(cbs.find((x) => x.code === ANCHOR).reportingPeriod.start)}`;
-  $("sumSrc").textContent = `Records from Dark Earth Carbon's noma dMRV, read ${READ_DATE}. Plant location approximate: the facility has no coordinates on record. Road lines routed by OpenRouteService; distances shown are the recorded ones.`;
+  $("sumSrc").textContent = `Records from Dark Earth Carbon's noma dMRV, read ${READ_DATE}. Road lines routed by OpenRouteService; distances shown are the recorded ones.`;
   $("sumCode").setAttribute("href", GITHUB_URL);
   $("batchBtn").addEventListener("click", () => open($("sum").hidden));
   $("sumX").addEventListener("click", () => open(false));

@@ -2,7 +2,7 @@
 // home hero map, home/hero-map/map.js), with the transport legs drawn on their routed roads.
 // Without PUBLIC_MAPTILER_KEY it runs on a blank style over a dotted field. Without WebGL
 // createJourneyMap returns null and the page leaves the map view out.
-import { HERO, J, LEGS, PLANT_LL, R, SUPS, TOWNS, apps, supShort } from "./model.js";
+import { HERO, J, LEGS, PLANT_LL, R, SUPS, TOWNS, apps, supShort, supTown } from "./model.js";
 import { lineAt, lineMeasure } from "./geo.js";
 import { createPlant } from "./plant.js";
 import { RM } from "./state.js";
@@ -203,9 +203,9 @@ export async function createJourneyMap(host, hooks) {
     const s = J.suppliers.find((x) => x.code === c);
     const node = el("div", `jr-sp${i ? " up" : ""}`);
     const lab = el("span", "jr-lab");
-    lab.append(el("b", "mono", supShort(s).toUpperCase()), el("small", "mono", `${(s.location.city || "").toUpperCase()}, ${s.distanceToPlantKm} KM`));
+    lab.append(el("b", "mono", supShort(s).toUpperCase()), el("small", "mono", [supTown(s).toUpperCase(), `${s.distanceToPlantKm} KM`].filter(Boolean).join(", ")));
     node.append(el("i", "jr-dot"), lab);
-    node.setAttribute("aria-label", `Supplier ${supShort(s)}`);
+    node.setAttribute("aria-label", supShort(s));
     pick(node, c);
     mark(`s:${c}`, node);
     marker(node, [s.location.lng, s.location.lat]);
@@ -220,8 +220,8 @@ export async function createJourneyMap(host, hooks) {
   };
 
   const plantNode = el("div", "jr-plantmark");
-  plantNode.append(el("i", "jr-sq"), (() => { const l = el("span", "jr-lab"); l.append(el("b", "mono", "PLANT, MAFINGA"), el("small", "mono", "APPROX.")); return l; })());
-  plantNode.setAttribute("aria-label", "Plant, Mafinga, approximate location");
+  plantNode.append(el("i", "jr-sq"), (() => { const l = el("span", "jr-lab"); l.append(el("b", "mono", "PLANT, MAFINGA")); return l; })());
+  plantNode.setAttribute("aria-label", "Plant, Mafinga");
   pick(plantNode, HERO.run);
   marker(plantNode, PLANT_LL);
 

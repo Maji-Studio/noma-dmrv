@@ -32,7 +32,9 @@ const alloc = (a) => a.allocations.filter((x) => x.wetKg >= 0.01);
 export const appBy = (c) => apps.find((a) => a.code === c);
 const cust = (d) => `Customer, ${d.destination.city}`;
 const supShort = (s) => s.name.replace(/ (Ltd|Limited)$/, "");
-export { supShort };
+// Anonymised suppliers are named by town ("Supplier, Kinyanambo"), so the town is not repeated.
+const supTown = (s) => { const town = s.location.city || "location not recorded"; return supShort(s).includes(town) ? "" : town; };
+export { supShort, supTown };
 const binName = (b) => `${MONTH[+b.name.slice(-2) - 1]} biochar`;
 
 export const ANCHOR = J.meta.anchorCreditBatch;
@@ -69,7 +71,7 @@ SUPS.forEach((c) => {
   const s = supBy[c];
   const fs = J.heroFeedstockDeliveries.filter((f) => f.supplier === c).map((f) => f.code);
   const where = [s.location.city, s.location.stateRegion].filter(Boolean).join(", ");
-  add({ id: c, k: "sup", code: c, date: null, sub: `${supShort(s)} · ${s.location.city || "location not recorded"}`,
+  add({ id: c, k: "sup", code: c, date: null, sub: [supShort(s), supTown(s)].filter(Boolean).join(" · "),
     stats: [["To plant", s.distanceToPlantKm, "km"], ["Intakes", s.deliveriesToPineOffcutBin, ""], ["Wet mass", nf(s.wetKgToPineOffcutBin / 1000, 1), "t"]],
     rows: [["Supplier", s.name], ["Location", where || "Not recorded"], ["Region", s.region], ["Feedstock", s.feedstockType], ["Distance to plant", `${s.distanceToPlantKm} km one way, entered per supplier`], [`Intakes into ${FEED_BIN}`, String(s.deliveriesToPineOffcutBin)], [`Wet mass into ${FEED_BIN}`, kg(s.wetKgToPineOffcutBin)]],
     br: [{ dir: "peer", label: `${SUPS.length} suppliers feed ${FEED_BIN}`, ids: SUPS }, ...(fs.length ? [{ dir: "down", label: `${plural(fs.length, "intake", "intakes")} on ${dt(J.heroFeedstockDeliveries[0].date).replace(/ \d{4}$/, "")}`, ids: fs }] : [])],

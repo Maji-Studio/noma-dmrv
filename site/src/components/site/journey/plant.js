@@ -1,6 +1,5 @@
-// Journey page: the plant schematic, drawn over the map at the (approximate) plant. It is an
-// overlay in screen pixels, never in map units: the bins are not placed on the ground, and the
-// facility has no recorded coordinates.
+// Journey page: the plant schematic, drawn over the map at the plant. It is an
+// overlay in screen pixels, never in map units: the bins are not placed on the ground.
 import { GL, KIND } from "./model.js";
 import { mk } from "./state.js";
 
@@ -19,7 +18,7 @@ const LINK_GAP = TILE / 2 + 3;
 export function createPlant(host, { onPick, codes }) {
   const root = document.createElement("div");
   root.className = "jr-plant";
-  root.innerHTML = '<p class="jr-plant-cap mono">Plant, Mafinga · approx. · schematic</p><svg class="jr-plant-svg" aria-hidden="true"></svg>';
+  root.innerHTML = '<p class="jr-plant-cap mono">Plant, Mafinga · schematic</p><svg class="jr-plant-svg" aria-hidden="true"></svg>';
   host.appendChild(root);
   const svg = root.querySelector("svg");
   const frame = mk("rect", { class: "jr-plant-frame" }, svg);
