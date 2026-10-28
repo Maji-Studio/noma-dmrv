@@ -6,9 +6,8 @@ import { creditBatches } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
-import { type RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
 import { entryLine } from "@/lib/certification/emission-entry-rules";
-import { lateEntryFigures } from "@/lib/certification/late-entry-figures";
+import { lateEntryFigures, type CarriedEntryRow } from "@/lib/certification/late-entry-figures";
 import { requireOrgScope } from "./utils";
 import { getCreditBatchesByRemovalId, getCertifierRemovalById } from "./certifier-removals";
 import { getSentRemovalForComparison } from "./removal-entry-correction";
@@ -19,7 +18,7 @@ import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
 import { readRecordLockLineage } from "./record-lock-lineage";
 import { readsAsReturnedFromPersisted } from "@/lib/record-lock";
 
-export type RemovalCarriedEntry = NonNullable<RemovalEntryContributions["carriedEntries"]>[number];
+export type RemovalCarriedEntry = CarriedEntryRow;
 export interface RemovalCarriedEntries { carriedEntries: RemovalCarriedEntry[]; lateEntries: RemovalCarriedEntry[] }
 const snapshotSchema = z.object({
   templateObservationId: z.string().optional(),

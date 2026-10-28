@@ -19,12 +19,12 @@ import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { pluralize } from "@/lib/copy-utils";
 import { formatDayString } from "@/lib/format-utils";
 import { removalSheetHref } from "@/lib/removal-correction-copy";
-import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
+import type { CarriedEntryRow } from "@/lib/certification/late-entry-figures";
 import { cn } from "@/lib/utils";
 import { EntryFileNames } from "./new-removal-dialog/component-table";
 import { NewTabLink } from "./new-removal-dialog/link-label";
 
-export type CarriedEntry = NonNullable<RemovalEntryContributions["carriedEntries"]>[number];
+export type CarriedEntry = CarriedEntryRow;
 
 const ICON_SIZE = 14;
 const PANEL_TITLE = "Emissions from other credit batches";
@@ -158,7 +158,7 @@ function EntriesSection({ title, state, dataAttr = "data-carried-entries", child
 
 /** A paired entry has no single total, so each value sits on its own line, as in the emissions entry rows. */
 function EntryFigures({ entry }: { entry: CarriedEntry }) {
-  const figures = entry.values && entry.values.length > 1 ? entry.values : [entry.value];
+  const figures = entry.values ?? [entry.value];
   return (
     <span className="flex flex-col text-right font-mono body-small tabular-nums">
       {figures.map((figure, index) => <span key={index}>{formatFigure(figure)}</span>)}

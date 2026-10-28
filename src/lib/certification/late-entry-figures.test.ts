@@ -21,3 +21,8 @@ it("keeps every paired input as a plain figure when the total is null", () => {
     values: [{ magnitude: "120", unit: "kg" }, { magnitude: "30", unit: "km" }],
   });
 });
+
+it("shows a single value without a total as that value, as the entry rows do", () => {
+  expect(lateEntryFigures({ total: null, values: [{ magnitude: "7", unit: "kWh" }] }))
+    .toStrictEqual({ value: { magnitude: "7", unit: "kWh" } });
+});
