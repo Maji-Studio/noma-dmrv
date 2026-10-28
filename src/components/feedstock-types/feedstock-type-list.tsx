@@ -1,6 +1,6 @@
 "use client";
 
-import { entityViewHref } from "@/lib/entity-deep-link";
+import { recordHref } from "@/lib/record-links";
 import { toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
 
 import { useState } from "react";
@@ -67,7 +67,6 @@ interface SideSheetState {
   entity: FeedstockType | null;
   mode: SideSheetMode;
 }
-
 
 export function shouldShowFeedstockTypeSampling(params: {
   feedstockType: FeedstockType | null;
@@ -491,7 +490,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
         columns={columns}
         data={filteredFeedstockTypes}
         onRowClick={openView}
-        getRowHref={(row) => entityViewHref("/feedstock-types", FEEDSTOCK_TYPE_QUERY_PARAM, row.id, facilityId)}
+        getRowHref={(row) => recordHref("feedstockType", row.id, { facilityId })}
         enableSorting
         enableFiltering
         enablePagination

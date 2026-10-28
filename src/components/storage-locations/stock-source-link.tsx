@@ -1,23 +1,18 @@
+import { recordHref } from "@/lib/record-links";
 import Link from "next/link";
-import { productionRunDeepLinkHref } from "@/lib/certification/links";
-import { deliveryDeepLinkHref } from "@/lib/delivery-links";
-import { applicationDeepLinkHref } from "@/lib/application-links";
 
 const SOURCES = {
-  feedstock: { path: "/feedstock-intake", label: "feedstock intake" },
-  productionRun: { path: "/production-runs", label: "production run" },
-  biocharProduct: { path: "/biochar-products", label: "biochar product" },
-  delivery: { path: "/deliveries", label: "delivery" },
-  application: { path: "/applications", label: "application" },
+  feedstock: { label: "feedstock intake" },
+  productionRun: { label: "production run" },
+  biocharProduct: { label: "biochar product" },
+  delivery: { label: "delivery" },
+  application: { label: "application" },
 } as const;
 
 export interface StockSource { entity: keyof typeof SOURCES; id: string }
 
 export function stockSourceHref(source: StockSource, facilityId: string): string {
-  if (source.entity === "delivery") return deliveryDeepLinkHref(source.id, facilityId);
-  if (source.entity === "application") return applicationDeepLinkHref(source.id, facilityId);
-  if (source.entity === "productionRun") return productionRunDeepLinkHref(source.id, facilityId);
-  return `${SOURCES[source.entity].path}?${new URLSearchParams({ facility: facilityId, [source.entity]: source.id })}`;
+  return recordHref(source.entity, source.id, { facilityId });
 }
 
 /** Lost mass and old counts have no source form and deliberately have no link. */

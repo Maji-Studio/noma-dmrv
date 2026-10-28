@@ -267,6 +267,12 @@ facility persists via `?facility=<id>` + localStorage through `nuqs`; sidebar
 hrefs carry it; **forms never ask the user to pick a facility** — they read it
 from context.
 
+Record hrefs are owned by `src/lib/record-links.ts`: its table supplies both
+the list path and the sheet query parameter. List pages with an organization-scoped
+by-id read use `useLinkedRecordFacility` so the active facility follows the linked
+record. The hook selects only a facility available in context, through the context
+setter, and holds the linked sheet closed until the selection matches.
+
 ### Quick-Add and cascading selects
 
 Quick-Add lets a form create a missing prerequisite without leaving the page:

@@ -1,16 +1,14 @@
+import { recordHref } from "@/lib/record-links";
 import type {
   BatchHealthCheck,
   BatchHealthCheckKey,
   BatchHealthFixTarget,
 } from "./batch-health";
 import {
-  buildEntityDeepLink,
-  buildFeedstockTypeEditDeepLink,
   ENTITY_FOCUS_TARGETS,
   FEEDSTOCK_TYPE_EDIT_LABEL,
 } from "@/lib/entity-deep-link";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { facilityCertificationSettingsHref, removalTemplateSetupHref, removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "./links";
 
 export const BATCH_DETAILS_FIX_LABEL = "Edit details";
@@ -90,7 +88,7 @@ export function batchHealthFixLinkFor(
   };
   switch (target) {
     case "emissions":
-      return { label: "Review emissions", href: creditBatchId ? creditBatchDeepLinkHref(creditBatchId, facilityId, { tab: "emissions" }) : `/credit-batches?${query(undefined, false)}` };
+      return { label: "Review emissions", href: creditBatchId ? recordHref("creditBatch", creditBatchId, { facilityId, tab: "emissions" }) : `/credit-batches?${query(undefined, false)}` };
     case "certificationTemplates":
       return { label: "Review Removal templates", href: removalTemplatesSettingsHref(facilityId) };
     case "templateSetup":
@@ -155,13 +153,7 @@ export function batchHealthFixLinkFor(
       return {
         label: "Review feedstock transport",
         href: feedstockId
-          ? buildEntityDeepLink({
-              path: "/feedstock-intake",
-              facilityId,
-              entityQueryKey: "feedstock",
-              entityId: feedstockId,
-              focus: ENTITY_FOCUS_TARGETS.transportEvidence,
-            })
+          ? recordHref("feedstock", feedstockId, { facilityId, mode: "edit", focus: ENTITY_FOCUS_TARGETS.transportEvidence })
           : `/feedstock-intake?facility=${facilityId}`,
       };
     }
@@ -169,7 +161,7 @@ export function batchHealthFixLinkFor(
       const feedstockTypeId = affectedIds[0];
       return {
         label: FEEDSTOCK_TYPE_EDIT_LABEL,
-        href: buildFeedstockTypeEditDeepLink(facilityId, feedstockTypeId),
+        href: feedstockTypeId ? recordHref("feedstockType", feedstockTypeId, { facilityId, mode: "edit" }) : `/feedstock-types?${new URLSearchParams({ facility: facilityId })}`,
       };
     }
     case "orders":
@@ -180,10 +172,7 @@ export function batchHealthFixLinkFor(
     case "deliveryEvidence":
       if (affectedCount === 1) return {
         label: `Review ${check.affectedRecords![0].code} evidence`,
-        href: buildEntityDeepLink({
-          path: "/deliveries", facilityId, entityQueryKey: "delivery",
-          entityId: affectedIds[0], focus: ENTITY_FOCUS_TARGETS.transportEvidence,
-        }),
+        href: recordHref("delivery", affectedIds[0], { facilityId, mode: "edit", focus: ENTITY_FOCUS_TARGETS.transportEvidence }),
       };
     case "deliveries":
     case "deliveryDistances":

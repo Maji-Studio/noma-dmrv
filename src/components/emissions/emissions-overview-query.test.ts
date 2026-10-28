@@ -108,7 +108,10 @@ describe("emissions hrefs", () => {
       .toBe("/emissions?period=custom&from=2026-01&to=2026-03");
   });
 
-  it("links a batch with the overview query", () => {
-    expect(emissionsBatchHref("abc", { ...NO_FILTER, status: "files" })).toBe("/emissions/abc?status=files");
+  it("links a batch's Emissions tab with the overview query and the list origin", () => {
+    expect(emissionsBatchHref("abc", { ...NO_FILTER, facility: "fac", status: "files" }))
+      .toBe("/credit-batches/abc?facility=fac&tab=emissions&status=files&via=emissions");
+    // A default list still marks where the operator came from.
+    expect(emissionsBatchHref("abc", NO_FILTER)).toBe("/credit-batches/abc?tab=emissions&via=emissions");
   });
 });

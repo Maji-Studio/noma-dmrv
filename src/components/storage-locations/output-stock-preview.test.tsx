@@ -10,7 +10,6 @@ afterEach(cleanup);
 
 const readable = readableText;
 
-
 /** Opens the block's (i) and returns the panel's text. */
 async function openInfo(): Promise<string> {
   fireEvent.click(document.querySelector("[data-explanation-info]")!);
@@ -71,7 +70,7 @@ describe("OutputStockPreview", () => {
       { entity: "removal", id: "removal-id", code: "Removal" },
       { entity: "ghgStatement", id: "statement-id", code: "GHG Statement" },
     ] }} />);
-    expect(html).toContain('/applications?ids=app-id');
+    expect(html).toContain('/applications?application=app-id');
     expect(html).toContain('/removals?removal=removal-id');
     expect(html).toContain('/ghg-statements?statement=statement-id');
   });

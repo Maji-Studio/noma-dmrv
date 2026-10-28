@@ -4,7 +4,9 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { parseAsString, useQueryState } from "nuqs";
+import { RECORD_LINKS } from "@/lib/record-links";
 import {
   ArchiveIcon,
   FactoryIcon,
@@ -74,10 +76,14 @@ export function FacilityList() {
     LIST_SEARCH_DEBOUNCE_MS,
   );
 
-  const [sideSheet, setSideSheet] = useState<{
+  const [localSheet, setLocalSheet] = useState<{
     entity: FacilityWithRelations | null;
     mode: SideSheetMode;
   } | null>(null);
+  // The record param is the working-facility param, which the provider also
+  // writes on a plain visit. Only the value the page was entered with is a link.
+  const [facilityParam] = useQueryState(RECORD_LINKS.facility.param, parseAsString);
+  const [linkedFacilityId, setLinkedFacilityId] = useState<string | null>(facilityParam);
   const [archivingFacility, setArchivingFacility] = useState<{
     version: number;
     id: string;
@@ -94,7 +100,7 @@ export function FacilityList() {
     code: string;
   } | null>(null);
 
-  const { setFacilityId } = useFacilityContext();
+  const { setFacilityId, facilityId: workingFacilityId } = useFacilityContext();
 
   const filters: Partial<FacilityFilterData> = {
     search: debouncedSearch || undefined,
@@ -107,6 +113,18 @@ export function FacilityList() {
   };
 
   const { data: facilitiesData, isLoading, error: fetchError } = useFacilities(filters);
+  // Organization null keeps the lookup off until a link asks for it.
+  const linkedFacility = useFacilities(
+    { id: linkedFacilityId ?? undefined, pageSize: 1 },
+    linkedFacilityId ? undefined : null,
+  );
+  const linkedFacilityRow = linkedFacilityId ? linkedFacility.data?.items[0] : undefined;
+  const sideSheet = localSheet ??
+    (linkedFacilityRow ? { entity: linkedFacilityRow, mode: "view" as const } : null);
+  const setSideSheet = (state: typeof localSheet) => {
+    setLocalSheet(state);
+    if (!state) setLinkedFacilityId(null);
+  };
   const inventory = useFacilityOutputStock(
     sideSheet?.mode === "view" ? sideSheet.entity?.id ?? null : null,
   );
@@ -120,6 +138,12 @@ export function FacilityList() {
   const archiveFacility = useArchiveFacility();
   const restoreFacility = useRestoreFacility();
   const toast = useToast();
+
+  // The provider replaces an unknown facility param with a valid working facility.
+  const linkedMissing = !!linkedFacilityId && (linkedFacility.isError || (linkedFacility.isSuccess && !linkedFacilityRow));
+  useEffect(() => {
+    if (linkedMissing) toast.error("Linked facility could not be opened");
+  }, [linkedMissing, toast]);
 
   const facilities = facilitiesData?.items ?? [];
   const totalPages = facilitiesData?.totalPages ?? 0;
@@ -205,11 +229,14 @@ export function FacilityList() {
     setSideSheet({ entity: null, mode: "create" });
   };
 
+  // Opening a facility also makes it the working facility; archived ones cannot be.
   const openView = (facility: FacilityWithRelations) => {
+    if (!facility.archivedAt && facility.id !== workingFacilityId) setFacilityId(facility.id);
     setSideSheet({ entity: facility, mode: "view" });
   };
 
   const openEdit = (facility: FacilityWithRelations) => {
+    if (!facility.archivedAt && facility.id !== workingFacilityId) setFacilityId(facility.id);
     setCreateError(null);
     setUpdateError(null);
     setSideSheet({ entity: facility, mode: "edit" });
@@ -446,9 +473,7 @@ export function FacilityList() {
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}
-        onModeChange={(mode) =>
-          setSideSheet((previous) => (previous ? { ...previous, mode } : null))
-        }
+        onModeChange={(mode) => setSideSheet(sideSheet ? { ...sideSheet, mode } : null)}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit facility"

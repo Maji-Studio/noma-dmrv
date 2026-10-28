@@ -77,6 +77,7 @@ export function useEntityEditRecord<K extends EditableEntityType>(type: K, id: s
   const options = editRecordQueryOptions(type, id) as UseQueryOptions<EntityEditRecords[K]>;
   return useQuery({
     ...options,
+    enabled: !!id,
     staleTime: 0,
     refetchOnMount: "always",
     retry: false,

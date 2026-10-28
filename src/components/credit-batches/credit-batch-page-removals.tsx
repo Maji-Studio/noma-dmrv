@@ -6,6 +6,7 @@
  * delivery with matching swatches, and the GHG Statement once one includes the
  * batch. Every Removal mention links to the Removal; nothing here hovers.
  */
+import { recordHref } from "@/lib/record-links";
 import Link from "next/link";
 import { ArchiveIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui";
@@ -17,20 +18,10 @@ import {
   removalBarGroups,
   segmentForRemoval,
 } from "@/lib/credit-batches/removal-bar";
-import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
 import { cn } from "@/lib/utils";
 import { useCreditBatchPage } from "./credit-batch-page-context";
 import { FOCUS_RING, MUTED_TEXT, PagePanel, ROW_RULE } from "./credit-batch-page-parts";
-import {
-  DetailedRemovalBar,
-  NotAppliedCaption,
-  RemovalStatus,
-  SegmentSwatch,
-  removalHref,
-  sliceLabel,
-  sliceMeta,
-  tonnesFromKg,
-} from "./credit-batch-removal-bar";
+import { DetailedRemovalBar, NotAppliedCaption, RemovalStatus, SegmentSwatch, sliceLabel, sliceMeta, tonnesFromKg } from "./credit-batch-removal-bar";
 
 function DeliveryList({ model }: { model: CreditBatchPageModel }) {
   const { batch } = useCreditBatchPage();
@@ -58,7 +49,7 @@ function DeliveryList({ model }: { model: CreditBatchPageModel }) {
             <span className="col-start-2 col-end-4 sm:col-auto">
               {removal ? (
                 <Link
-                  href={removalHref(batch.facilityId, removal.id)}
+                  href={recordHref("removal", removal.id, { facilityId: batch.facilityId })}
                   className={cn("group inline-flex min-h-44 flex-wrap items-center gap-8", FOCUS_RING)}
                 >
                   <span className="body-small font-medium underline-offset-2 group-hover:underline">{removal.code}</span>
@@ -82,7 +73,7 @@ function GhgStatementPanel({ model }: { model: CreditBatchPageModel }) {
   return (
     <PagePanel title="GHG Statement" labelledBy="credit-batch-ghg-statement">
       <Link
-        href={ghgStatementDeepLinkHref(statement.id, batch.facilityId)}
+        href={recordHref("ghgStatement", statement.id, { facilityId: batch.facilityId })}
         className={cn("group flex min-h-44 flex-wrap items-center justify-between gap-12", FOCUS_RING)}
       >
         <span className="body-medium font-medium underline-offset-2 group-hover:underline">

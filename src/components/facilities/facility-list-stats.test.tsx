@@ -25,6 +25,7 @@ vi.mock("@/hooks/use-facilities", () => {
   useRestoreFacility: mutation,
   };
 });
+vi.mock("nuqs", async () => (await import("../../../tests/helpers/linked-sheet-mocks")).nuqsModule);
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ setFacilityId: vi.fn() }) }));
 vi.mock("@/hooks/use-debounce", () => ({ useDebounce: (value: unknown) => value }));
 vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => undefined }));
