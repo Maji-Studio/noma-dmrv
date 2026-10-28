@@ -12,7 +12,7 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { InUseDeleteDialog, InUseReference } from "@/components/ui/in-use-delete-dialog";
+import { InUseDeleteDialog, InUseReferences } from "@/components/ui/in-use-delete-dialog";
 import { deliveryDeepLinkHref } from "@/lib/delivery-links";
 import { ActionError } from "@/lib/action-error";
 import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
@@ -170,6 +170,16 @@ function createColumns(
 // Component
 // ============================================
 
+/** Every delivery the refusal names. */
+function inUseDeliveryReferences(meta: Record<string, unknown> | undefined, facilityId?: string) {
+  const named = Array.isArray(meta?.deliveries) ? meta.deliveries : [];
+  const items = named.flatMap((item: unknown) => {
+    const { id, code } = (item ?? {}) as { id?: unknown; code?: unknown };
+    return typeof id === "string" && typeof code === "string" ? [{ id, code }] : [];
+  });
+  return items.map(({ id, code }) => ({ href: deliveryDeepLinkHref(id, facilityId), code, kind: "delivery" }));
+}
+
 export function OrderList() {
   // Global facility context
   const { facilityId } = useFacilityContext();
@@ -204,7 +214,7 @@ export function OrderList() {
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   // A refused delete because records still use the row: its code and the server's reason.
-  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string; reference?: { href: string; code: string; kind: string } } | null>(null);
+  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string; references: Array<{ href: string; code: string; kind: string }> } | null>(null);
 
   const filters: Partial<OrderFilterData> = {
     search: debouncedSearch || undefined,
@@ -351,12 +361,10 @@ export function OrderList() {
       if (isInUseDeleteRefusal(error)) {
         const row = orders.find((item) => item.id === deletingOrderId);
         const meta = error instanceof ActionError ? error.issues.find((issue) => issue.meta?.reason === "in_use")?.meta : undefined;
-        const deliveryId = typeof meta?.deliveryId === "string" ? meta.deliveryId : null;
-        const deliveryCode = typeof meta?.deliveryCode === "string" ? meta.deliveryCode : null;
         setInUseRefusal({
           code: row?.code ?? "Order",
           message,
-          reference: deliveryId && deliveryCode ? { href: deliveryDeepLinkHref(deliveryId, row?.facilityId), code: deliveryCode, kind: "delivery" } : undefined,
+          references: inUseDeliveryReferences(meta, row?.facilityId),
         });
         setDeletingOrderId(null);
         return;
@@ -527,7 +535,7 @@ export function OrderList() {
       {inUseRefusal && (
         <InUseDeleteDialog label={inUseRefusal.code} onClose={() => setInUseRefusal(null)}>
           <p>{inUseRefusal.message}</p>
-          {inUseRefusal.reference && <InUseReference {...inUseRefusal.reference} />}
+          {inUseRefusal.references.length > 0 && <InUseReferences references={inUseRefusal.references} />}
         </InUseDeleteDialog>
       )}
 

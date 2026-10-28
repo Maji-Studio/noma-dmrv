@@ -37,11 +37,12 @@ export function orderQuantityBelowAllocated(allocatedWetKg: number): DomainError
     ["quantityKg"], { allocatedWetKg, unit: "kg" });
 }
 
-/** Deliveries are non-empty and sorted by code ascending; totalCount includes unnamed deliveries. */
+/** Deliveries are non-empty and sorted by code ascending; totalCount includes unnamed deliveries. Meta lists the named ones, with the first also as deliveryCode/deliveryId. */
 export function orderHasDeliveries(deliveries: readonly { id: string; code: string }[], orderCode: string, totalCount = deliveries.length): DomainError {
   const first = deliveries[0];
   const total = Math.max(totalCount, deliveries.length);
-  const names = deliveries.slice(0, ORDER_DELIVERY_NAME_CAP).map(delivery => delivery.code);
+  const named = deliveries.slice(0, ORDER_DELIVERY_NAME_CAP);
+  const names = named.map(delivery => delivery.code);
   const remaining = total - names.length;
   if (remaining > 0) names.push(`${remaining} more`);
   const deliveryList = `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
@@ -50,7 +51,10 @@ export function orderHasDeliveries(deliveries: readonly { id: string; code: stri
     : `${total} deliveries still use it: ${deliveryList}. Delete those deliveries first, or keep this order.`;
   return inUseDeleteRefusal(
     `Order ${orderCode} ${IN_USE_DELETE_MARKER} ${reason}`,
-    ["orderId"], { code: "certification_locked", meta: { deliveryCode: first.code, deliveryId: first.id } },
+    ["orderId"], { code: "certification_locked", meta: {
+      deliveryCode: first.code, deliveryId: first.id,
+      deliveries: named.map(({ id, code }) => ({ id, code })),
+    } },
   );
 }
 

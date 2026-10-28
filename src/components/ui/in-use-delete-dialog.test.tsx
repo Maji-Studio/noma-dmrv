@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { InUseDeleteDialog } from "./in-use-delete-dialog";
+import { InUseDeleteDialog, InUseReferences } from "./in-use-delete-dialog";
 
 afterEach(cleanup);
 
@@ -31,5 +31,14 @@ describe("InUseDeleteDialog", () => {
     expect(screen.queryByRole("button", { name: "Archive instead" })).toBeNull();
     expect(screen.getByText("Custom reason.")).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Close" }).length).toBeGreaterThan(0);
+  });
+});
+
+describe("InUseReferences", () => {
+  it("renders one link per record in the order given", () => {
+    render(<InUseReferences references={[{ href: "/a", code: "A-1", kind: "delivery" }, { href: "/b", code: "A-2", kind: "delivery" }]} />);
+    expect(screen.getAllByRole("link").map((link) => [link.getAttribute("aria-label"), link.getAttribute("href")])).toEqual([
+      ["Open delivery A-1", "/a"], ["Open delivery A-2", "/b"],
+    ]);
   });
 });
