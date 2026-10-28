@@ -220,6 +220,18 @@ describe("missing production run detection (real DB)", () => {
       .toEqual(new Map());
   });
 
+  it("keeps a manually covered run cleared when the batch becomes unsent and held", async () => {
+    const fitting = await run("HELD-COVERED");
+    const values = await entryValues();
+    await db.insert(emissionEntries).values({ ...values, kind: "value" });
+    expect((await todos()).check).toEqual([]);
+    await db.delete(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId),
+      eq(certificationSubmissions.localEntityId, main.removalId)));
+    expect(await read()).toMatchObject({ sentRemovalCodes: [], heldRemovalCodes: [expect.any(String)],
+      runs: [{ id: fitting.id }], manualEntries: [{ occurredOn: values.occurredOn, createdAt: AFTER_RUN }] });
+    expect((await todos()).check).toEqual([]);
+  });
+
   it.each(["FAILED_VERIFICATION", "DRAFT"])("shows missing runs for a returned %s holder without authorizing a write", async remoteStatus => {
     await cleanupLineageFixture(main);
     main = await createLineageFixture("ghgStatement");

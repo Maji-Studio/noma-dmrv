@@ -61,6 +61,7 @@ import {
   resolveScopeForRemoval,
 } from "./certify-context-core";
 
+import { uncoveredProductionRuns } from "@/lib/credit-batches/open-items";
 import { loadCreditBatchTodos } from "./credit-batch-todos-core";
 import { loadCreditBatchesMissingProductionRuns } from "@/data-access/credit-batch-missing-production-runs";
 
@@ -187,11 +188,13 @@ async function buildRemovalPreflightSummary(
   const missingProductionRuns = ctx.memberBatches.flatMap((batch) => {
     const missing = missingByBatch.get(batch.id);
     // A Sent batch keeps its own late-run Check; this notice is for the gap before sending.
-    if (!missing?.heldRemovalCodes.length || missing.runs.length === 0) return [];
+    if (!missing?.heldRemovalCodes.length || missing.sentRemovalCodes.length) return [];
+    const runs = uncoveredProductionRuns(missing);
+    if (runs.length === 0) return [];
     return [{
       creditBatchId: batch.id,
       creditBatchCode: batch.code,
-      runs: missing.runs.map((run) => ({ id: run.id, code: run.code })),
+      runs: runs.map((run) => ({ id: run.id, code: run.code })),
     }];
   });
   const facts = toRemovalReadinessFacts(ctx);

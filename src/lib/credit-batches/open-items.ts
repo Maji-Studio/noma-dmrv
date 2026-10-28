@@ -45,6 +45,7 @@ export { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "./application-mass";
 /** Overview rows a health check lands on: the Removal template block and the batch details. */
 export const CREDIT_BATCH_TEMPLATE_ROW = ENTITY_FOCUS_TARGETS.removalTemplate;
 export const CREDIT_BATCH_DETAILS_ROW = "batch-details";
+export const MISSING_PRODUCTION_RUN_ITEM_PREFIX = "missing-production-run:";
 
 export interface CreditBatchOpenItem {
   id: string;
@@ -148,6 +149,14 @@ function removalCorrectionItem(
   };
 }
 
+/** Runs whose emissions have not already been reported by a later manual entry. */
+export function uncoveredProductionRuns(missing: CreditBatchMissingProductionRuns) {
+  return missing.runs.filter(run => {
+    const entryDate = lateRunEntryDate(run.startDate, missing.batchStartDate);
+    return !missing.manualEntries.some(entry => entry.occurredOn === entryDate && entry.createdAt > run.createdAt);
+  });
+}
+
 export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
   const canManage = input.canManage;
   const blocking: CreditBatchOpenItem[] = [];
@@ -156,9 +165,8 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
   const late = input.missingProductionRuns;
   if (late?.sentRemovalCodes.length) {
     const codes = joinWithAnd(late.sentRemovalCodes);
-    for (const run of late.runs) {
+    for (const run of uncoveredProductionRuns(late)) {
       const entryDate = lateRunEntryDate(run.startDate, late.batchStartDate);
-      if (late.manualEntries.some(entry => entry.occurredOn === entryDate && entry.createdAt > run.createdAt)) continue;
       check.push({
         id: `late-production-run:${run.id}`,
         title: `${run.code} was recorded after ${codes} ${late.sentRemovalCodes.length === 1 ? "was" : "were"} sent`,
@@ -168,9 +176,9 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     }
   } else if (late?.heldRemovalCodes.length) {
     const codes = joinWithAnd(late.heldRemovalCodes);
-    for (const run of late.runs) {
+    for (const run of uncoveredProductionRuns(late)) {
       check.push({
-        id: `missing-production-run:${run.id}`,
+        id: `${MISSING_PRODUCTION_RUN_ITEM_PREFIX}${run.id}`,
         productionRun: { id: run.id, code: run.code },
         title: `${run.code} is not in this credit batch yet`,
         detail: canManage

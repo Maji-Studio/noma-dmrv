@@ -397,13 +397,29 @@ describe("missing production runs", () => {
       }] });
   });
 
-  it("keeps one Check per missing run even after a manual emissions entry", () => {
+  it.each([
+    { occurredOn: "2026-09-10", createdAt: new Date("2026-10-02"), covered: false },
+    { occurredOn: run.startDate, createdAt: new Date("2026-09-30"), covered: false },
+    { occurredOn: run.startDate, createdAt: run.createdAt, covered: false },
+    { occurredOn: run.startDate, createdAt: new Date("2026-10-02"), covered: true },
+  ])("keeps one Check per uncovered missing run after an entry ($occurredOn, $createdAt)", ({ occurredOn, createdAt, covered }) => {
     const { blocking, check } = buildCreditBatchOpenItems({ ...batchContext, missingProductionRuns: {
       ...missingProductionRuns, runs: [run, { ...run, id: "second", code: "RUN-113" }],
-      manualEntries: [{ occurredOn: run.startDate, createdAt: new Date("2026-10-02") }],
+      manualEntries: [{ occurredOn, createdAt }],
     } });
     expect(blocking).toEqual([]);
-    expect(check.map(item => item.id)).toEqual(["missing-production-run:run", "missing-production-run:second"]);
+    expect(check.map(item => item.id)).toEqual(covered ? [] : ["missing-production-run:run", "missing-production-run:second"]);
+  });
+
+  it("uses the batch start day for a covered held run that started before the window", () => {
+    const early = { ...run, startDate: "2026-08-31" };
+    const entry = { occurredOn: missingProductionRuns.batchStartDate, createdAt: new Date("2026-10-02") };
+    expect(buildCreditBatchOpenItems({ ...batchContext, missingProductionRuns: {
+      ...missingProductionRuns, runs: [early], manualEntries: [entry],
+    } }).check).toEqual([]);
+    expect(buildCreditBatchOpenItems({ ...batchContext, missingProductionRuns: {
+      ...missingProductionRuns, runs: [early], manualEntries: [{ ...entry, occurredOn: early.startDate }],
+    } }).check.map(item => item.id)).toEqual(["missing-production-run:run"]);
   });
 
   it("omits unheld unsent batches whose membership expands automatically", () => {
