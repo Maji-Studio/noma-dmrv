@@ -66,7 +66,7 @@ export function StorageLocationList() {
   const linkedBin = useEntityEditRecord("storageLocation", linkedBinId ?? "");
   const linkedFacilityReady = useLinkedRecordFacility(linkedBin.data, linkedBin.isLoading);
   const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== facilityId ? null : sideSheet;
-  const displaySideSheet = linkedBinId && !linkedFacilityReady ? null : localSideSheet ?? (linkedBinId && linkedBin.data && linkedFacilityReady
+  const displaySideSheet = localSideSheet ?? (linkedBinId && linkedBin.data && linkedFacilityReady
     ? { mode: "view" as const, entity: linkedBin.data } : null);
   const changeSideSheet = (state: StorageBinSheetState | null) => {
     setSideSheet(state);

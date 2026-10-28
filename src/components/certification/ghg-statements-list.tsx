@@ -3,7 +3,7 @@
  * /ghg-statements). Replaces the card-grid GhgStatementsHub with
  * the app-native DataTable idiom (cf. removals-list / production-runs): one
  * dense, scannable list of every GHG Statement for the selected facility. A row
- * opens a read-only centered Modal (`?statement=<id>`, nuqs); the
+ * opens a read-only side sheet (`?statement=<id>`, nuqs); the
  * "New GHG Statement" button opens the period-first create dialog.
  *
  * A GHG Statement is an independent, period-anchored artifact that rolls up
@@ -13,7 +13,7 @@
  * The status column derives from the persisted `metadata.remoteStatus` overlay
  * (`deriveSubmissionStatus(..., "ghgStatement")`) — NOT a per-row live verifier
  * fetch (P2-a, N+1). The selected statement's heavier detail (remote status,
- * sync events) loads once in the detail Modal.
+ * sync events) loads once in the detail side sheet.
  */
 "use client";
 

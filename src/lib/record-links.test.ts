@@ -17,7 +17,9 @@ const CASES = [
   ["supplier", "/suppliers/record%2F1", null],
   ["customer", "/customers/record%2F1", null],
   ["feedstockType", "/feedstock-types", "feedstockType"],
-  ["storageBin", "/storage-bins", "storageLocation"],
+  ["storageBin", "/storage-bins", "bin"],
+  ["reactor", "/reactors", "reactor"],
+  ["formulation", "/formulations", "formulation"],
   ["vehicle", "/vehicles", "vehicle"],
   ["driver", "/crew", "driver"],
   ["operator", "/crew", "operator"],
@@ -25,7 +27,12 @@ const CASES = [
 
 describe("recordHref", () => {
   it("covers every record kind", () => {
-    expect(CASES.map(([kind]) => kind).sort()).toEqual(Object.keys(RECORD_LINKS).sort());
+    expect([...CASES.map(([kind]) => kind), "facility"].sort()).toEqual(Object.keys(RECORD_LINKS).sort());
+  });
+
+  it("opens a facility through the working facility param, so one id appears once", () => {
+    expect(recordHref("facility", "fac/1")).toBe("/facilities?facility=fac%2F1");
+    expect(recordHref("facility", "fac/1", { facilityId: "other" })).toBe("/facilities?facility=fac%2F1");
   });
 
   it.each(CASES)("opens %s with and without facility, encoding both ids", (kind, path, param) => {

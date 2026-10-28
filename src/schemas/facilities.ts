@@ -5,6 +5,7 @@ import {
   requiredLatitudeSchema,
   toNumberOrUndefined,
   requiredLongitudeSchema,
+  uuidSchema,
 } from "./helpers";
 import { ianaTimezoneSchema, requiredTimezoneSchema } from "./timezone";
 
@@ -178,6 +179,9 @@ export const restoreFacilitySchema = archiveFacilitySchema;
  * Used for search, pagination, and filtering
  */
 export const facilityFilterSchema = z.object({
+  // One facility by id, active or archived: how a record link loads its sheet
+  id: uuidSchema().optional(),
+
   // Text search across code, name, location
   search: z
     .string()

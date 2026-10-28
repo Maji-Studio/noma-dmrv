@@ -7,7 +7,11 @@
 import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
 
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { parseAsString, useQueryState } from "nuqs";
+import { RECORD_LINKS } from "@/lib/record-links";
+import { useEntityEditRecord } from "@/hooks/use-entity-edit-record";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   useListPagination,
@@ -123,6 +127,12 @@ export function ReactorList() {
     entity: ReactorWithRelations | null;
     mode: SideSheetMode;
   } | null>(null);
+  const [linkedReactorId, setLinkedReactorId] = useQueryState(
+    RECORD_LINKS.reactor.param,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const linkedReactor = useEntityEditRecord("reactor", linkedReactorId ?? "");
+  const linkedFacilityReady = useLinkedRecordFacility(linkedReactor.data, linkedReactor.isLoading);
   const [deletingReactor, setDeletingReactor] = useState<ReactorWithRelations | null>(null);
 
   // Error state
@@ -162,32 +172,48 @@ export function ReactorList() {
 
   // Side sheet helpers
   const openCreate = () => {
+    void setLinkedReactorId(null);
     createReactor.startDraft();
     setCreateError(null);
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });
   };
   const openView = (reactor: ReactorWithRelations) => {
+    void setLinkedReactorId(reactor.id);
     setSideSheet({ entity: reactor, mode: "view" });
   };
   const openEdit = (reactor: ReactorWithRelations) => {
+    void setLinkedReactorId(reactor.id);
     setCreateError(null);
     setUpdateError(null);
     setSideSheet({ entity: reactor, mode: "edit" });
   };
   const closeSideSheet = () => {
+    void setLinkedReactorId(null);
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
   };
   useOpenCreateIntent(openCreate);
 
+  // A missing or deleted linked reactor toasts once and drops the param.
+  useEffect(() => {
+    if (linkedReactorId && !linkedReactor.data && (linkedReactor.isError || linkedReactor.isSuccess)) {
+      toast.error("Linked reactor could not be opened");
+      void setLinkedReactorId(null);
+    }
+  }, [linkedReactorId, linkedReactor.data, linkedReactor.isError, linkedReactor.isSuccess, setLinkedReactorId, toast]);
+  const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== contextFacilityId ? null : sideSheet;
+  const displaySideSheet = localSideSheet ?? (linkedReactorId && linkedReactor.data && linkedFacilityReady
+    ? { mode: "view" as const, entity: linkedReactor.data }
+    : null);
+
   // Handlers
   const handleCreate = async (data: CreateReactorData, onRefusal: SaveRefusalHandler) => {
     setCreateError(null);
     try {
       await createReactor.mutateAsync(data);
-      setSideSheet(null);
+      closeSideSheet();
       toast.success("Reactor created.");
     } catch (error) {
       setCreateError(onRefusal(error, error instanceof Error ? error.message : "Reactor was not created. Check the form."));
@@ -195,11 +221,11 @@ export function ReactorList() {
   };
 
   const handleUpdate = async (data: CreateReactorData, onRefusal: SaveRefusalHandler) => {
-    if (!sideSheet?.entity) return;
+    if (!displaySideSheet?.entity) return;
     setUpdateError(null);
     try {
-      await updateReactor.mutateAsync({ reactorId: sideSheet.entity.id, expectedVersion: sideSheet.entity.version, ...data });
-      setSideSheet(null);
+      await updateReactor.mutateAsync({ reactorId: displaySideSheet.entity.id, expectedVersion: displaySideSheet.entity.version, ...data });
+      closeSideSheet();
       toast.success("Reactor updated.");
     } catch (error) {
       setUpdateError(onRefusal(error, error instanceof Error ? error.message : "Reactor was not saved. Try again."));
@@ -266,9 +292,9 @@ export function ReactorList() {
   }
 
   // Derived values for the side sheet
-  const sideSheetOpen = !!sideSheet;
-  const sideSheetMode = sideSheet?.mode ?? "create";
-  const sideSheetEntity = sideSheet?.entity ?? null;
+  const sideSheetOpen = !!displaySideSheet;
+  const sideSheetMode = displaySideSheet?.mode ?? "create";
+  const sideSheetEntity = displaySideSheet?.entity ?? null;
 
   const sideSheetTitle =
     sideSheetMode === "create" ? "Create reactor" : sideSheetEntity?.code ?? "";
@@ -387,7 +413,7 @@ export function ReactorList() {
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}
-        onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
+        onModeChange={(mode) => displaySideSheet && setSideSheet({ ...displaySideSheet, mode })}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit reactor"

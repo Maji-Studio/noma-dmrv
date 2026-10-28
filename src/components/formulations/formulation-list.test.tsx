@@ -6,11 +6,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 import { FormulationList } from "./formulation-list";
+import { linkedSheet } from "../../../tests/helpers/linked-sheet-mocks";
 
 const state = vi.hoisted(() => ({
   remove: vi.fn(),
   filters: [] as Array<{ archived?: boolean }>,
   items: [] as unknown[],
+  linked: { data: undefined as unknown, isError: false, isSuccess: false },
+  toastError: vi.fn(),
 }));
 
 function formulation(code: string, archivedAt: Date | null): FormulationWithIngredients {
@@ -23,6 +26,7 @@ function formulation(code: string, archivedAt: Date | null): FormulationWithIngr
 vi.mock("@/hooks/use-formulations", () => {
   const mutation = () => ({ mutateAsync: vi.fn(), isPending: false });
   return {
+    useFormulation: () => state.linked,
     useFormulationStats: () => ({ data: undefined, isLoading: false, isError: false }),
     useFormulations: (filters: { archived?: boolean }) => {
       state.filters.push(filters);
@@ -33,19 +37,23 @@ vi.mock("@/hooks/use-formulations", () => {
     useArchiveFormulation: mutation, useRestoreFormulation: mutation,
   };
 });
+vi.mock("nuqs", async () => (await import("../../../tests/helpers/linked-sheet-mocks")).nuqsModule);
 vi.mock("@/hooks/use-list-pagination", () => ({
   useListPagination: () => ({ currentPage: 1, pageSize: 10, setCurrentPage: vi.fn(), onPaginationChange: vi.fn() }),
   useReconcileListPage: () => undefined,
 }));
 vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => undefined }));
-vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: state.toastError }) }));
 vi.mock("@/components/forms", () => ({ ServerError: ({ message }: { message: string }) => <p role="alert">{message}</p> }));
 vi.mock("./formulation-form", () => ({ FormulationForm: () => null, PURE_BIOCHAR_CUE: "Pure biochar, no ingredients." }));
 vi.mock("@/components/ui/delete-confirm-dialog", () => ({
   DeleteConfirmDialog: ({ isOpen, onConfirm, errorMessage }: { isOpen: boolean; onConfirm: () => void; errorMessage?: string }) =>
     isOpen ? <div><button onClick={onConfirm}>Confirm delete</button>{errorMessage && <p role="alert">{errorMessage}</p>}</div> : null,
 }));
-vi.mock("@/components/ui/entity-side-sheet", () => ({ EntitySideSheet: () => null }));
+vi.mock("@/components/ui/entity-side-sheet", () => ({
+  EntitySideSheet: ({ open, title, onOpenChange }: { open: boolean; title: string; onOpenChange: (open: boolean) => void }) =>
+    open ? <div role="dialog" aria-label={title}><button type="button" onClick={() => onOpenChange(false)}>Close sheet</button></div> : null,
+}));
 vi.mock("@/components/ui/stat-card", () => ({ StatCard: ({ title }: { title: string }) => <section>{title}</section> }));
 vi.mock("@/components/ui", () => ({
   Button: ({ children, onClick, ...props }: { children?: ReactNode; onClick?: () => void } & Record<string, unknown>) => (
@@ -61,12 +69,13 @@ vi.mock("@/components/ui/data-table", () => {
   const Slot = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
   return {
     DataTable: Object.assign(
-      ({ columns, data, emptyMessage, children }: { columns: Array<Record<string, unknown>>; data: unknown[]; emptyMessage: ReactNode; children: ReactNode }) => (
+      ({ columns, data, emptyMessage, children, onRowClick }: { columns: Array<Record<string, unknown>>; data: unknown[]; emptyMessage: ReactNode; children: ReactNode; onRowClick?: (row: unknown) => void }) => (
         <div>
           {children}
           {data.length === 0 && emptyMessage}
           {data.map((item) => (
             <div key={(item as { id: string }).id}>
+              <button type="button" aria-label={`Open ${(item as { code: string }).code}`} onClick={() => onRowClick?.(item)} />
               {columns.map((column, index) => {
                 const cell = column.cell as ((ctx: { row: { original: unknown } }) => ReactNode) | undefined;
                 return <div key={index}>{cell?.({ row: { original: item } })}</div>;
@@ -81,6 +90,9 @@ vi.mock("@/components/ui/data-table", () => {
 });
 
 beforeEach(() => {
+  linkedSheet.reset();
+  state.linked = linkedSheet.record;
+  state.toastError.mockReset();
   state.remove.mockReset();
   state.filters = [];
   state.items = [formulation("BCF-0001", null), formulation("BCF-0002", new Date("2026-01-01"))];
@@ -147,3 +159,34 @@ describe("FormulationList archive view", () => {
 function within(label: string): string[] {
   return Array.from(screen.getByRole("list", { name: label }).querySelectorAll("li")).map((item) => item.textContent ?? "");
 }
+
+describe("FormulationList record link", () => {
+  it("opens the sheet from ?formulation= with no facility involved", () => {
+    linkedSheet.params.formulation = "id-BCF-0001";
+    state.linked = { data: state.items[0], isError: false, isSuccess: true };
+    render(<FormulationList />);
+    expect(screen.getByRole("dialog", { name: "BCF-0001" })).toBeTruthy();
+  });
+
+  it("writes the param when a row opens, and clears it on close", () => {
+    const view = render(<FormulationList />);
+    fireEvent.click(screen.getByRole("button", { name: "Open BCF-0001" }));
+    expect(linkedSheet.params.formulation).toBe("id-BCF-0001");
+    view.rerender(<FormulationList />);
+    expect(screen.getByRole("dialog", { name: "BCF-0001" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close sheet" }));
+    expect(linkedSheet.params.formulation).toBeNull();
+    view.rerender(<FormulationList />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("toasts and clears the param when the formulation is missing", () => {
+    linkedSheet.params.formulation = "gone";
+    state.linked = { data: undefined, isError: false, isSuccess: true };
+    render(<FormulationList />);
+    expect(state.toastError).toHaveBeenCalledWith("Linked formulation could not be opened");
+    expect(linkedSheet.params.formulation).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});

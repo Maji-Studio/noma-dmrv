@@ -16,7 +16,11 @@ export const RECORD_LINKS = {
   supplier: { path: "/suppliers", param: "supplier", routed: true },
   customer: { path: "/customers", param: "customer", routed: true },
   feedstockType: { path: "/feedstock-types", param: "feedstockType" },
-  storageBin: { path: "/storage-bins", param: "storageLocation" },
+  storageBin: { path: "/storage-bins", param: "bin" },
+  reactor: { path: "/reactors", param: "reactor" },
+  formulation: { path: "/formulations", param: "formulation" },
+  // The facility param doubles as the working facility, so a record link also switches it.
+  facility: { path: "/facilities", param: "facility" },
   vehicle: { path: "/vehicles", param: "vehicle" },
   driver: { path: "/crew", param: "driver" },
   operator: { path: "/crew", param: "operator" },

@@ -5,7 +5,9 @@
 "use client";
 import { StaleVersionError, toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { parseAsString, useQueryState } from "nuqs";
+import { RECORD_LINKS } from "@/lib/record-links";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArchiveIcon, ListChecksIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import {
@@ -13,6 +15,7 @@ import {
   useCreateFormulation,
   useDeleteFormulation,
   useRestoreFormulation,
+  useFormulation,
   useFormulations,
   useUpdateFormulation,
   useFormulationStats,
@@ -146,7 +149,11 @@ type SideSheetState =
 // ============================================
 
 export function FormulationList() {
-  const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
+  const [localSheet, setLocalSheet] = useState<SideSheetState | null>(null);
+  const [linkedFormulationId, setLinkedFormulationId] = useQueryState(
+    RECORD_LINKS.formulation.param,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
   const [deletingFormulation, setDeletingFormulation] = useState<FormulationWithIngredients | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -174,6 +181,22 @@ export function FormulationList() {
   const archiveFormulation = useArchiveFormulation();
   const restoreFormulation = useRestoreFormulation();
   const toast = useToast();
+
+  // Formulations belong to the organization, so a link needs no facility switch.
+  const linkedFormulation = useFormulation(linkedFormulationId ?? "", !!linkedFormulationId);
+  useEffect(() => {
+    if (linkedFormulationId && !linkedFormulation.data && (linkedFormulation.isError || linkedFormulation.isSuccess)) {
+      toast.error("Linked formulation could not be opened");
+      void setLinkedFormulationId(null);
+    }
+  }, [linkedFormulationId, linkedFormulation.data, linkedFormulation.isError, linkedFormulation.isSuccess, setLinkedFormulationId, toast]);
+  const sideSheet: SideSheetState | null = localSheet ??
+    (linkedFormulationId && linkedFormulation.data ? { mode: "view", entity: linkedFormulation.data } : null);
+  // Closing the sheet also drops the link, or the linked view would reopen.
+  const setSideSheet = (state: SideSheetState | null) => {
+    setLocalSheet(state);
+    if (!state) void setLinkedFormulationId(null);
+  };
 
   const formulations = formulationsData?.items ?? [];
   const totalPages = formulationsData?.totalPages ?? 0;
@@ -273,9 +296,9 @@ export function FormulationList() {
     setLifecycleError(null);
   };
 
-  const openCreate = () => { createFormulation.startDraft(); setFormError(null); setSideSheet({ mode: "create", entity: null }); };
-  const openView = (formulation: FormulationWithIngredients) => { setFormError(null); setSideSheet({ mode: "view", entity: formulation }); };
-  const openEdit = (formulation: FormulationWithIngredients) => { setFormError(null); setSideSheet({ mode: "edit", entity: formulation }); };
+  const openCreate = () => { createFormulation.startDraft(); void setLinkedFormulationId(null); setFormError(null); setSideSheet({ mode: "create", entity: null }); };
+  const openView = (formulation: FormulationWithIngredients) => { void setLinkedFormulationId(formulation.id); setFormError(null); setSideSheet({ mode: "view", entity: formulation }); };
+  const openEdit = (formulation: FormulationWithIngredients) => { void setLinkedFormulationId(formulation.id); setFormError(null); setSideSheet({ mode: "edit", entity: formulation }); };
   const closeSideSheet = () => { setSideSheet(null); setFormError(null); };
   useOpenCreateIntent(openCreate);
 
