@@ -59,7 +59,8 @@ Review committed branch changes without a PR:
 node .agents/skills/pr-review-suite/scripts/run-pr-review-suite.mjs --local --issue 123 --dry-run
 ```
 
-Local mode requires a clean tracked worktree and `--dry-run` or `--plan`.
+Local mode requires a clean worktree and `--dry-run` or `--plan`.
+Keep `--artifact-dir` outside the repository.
 Use `--base <branch>` to change the default `staging` base. `--issue <number>`
 is an explicit spec source in either mode; use it instead of `--spec <path>`.
 

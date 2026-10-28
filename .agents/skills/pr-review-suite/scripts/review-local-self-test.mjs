@@ -212,13 +212,15 @@ async function testLocalGit(root) {
   equal(target.pr.url, undefined);
   equal(target.baseFetchFailed, true);
   match(warnings.join(""), /failed to fetch.*existing origin\/staging/);
-  await verifyLocalHead(headSha, root, gitCommand);
-  await rejects(verifyLocalHead(baseSha, root, gitCommand), /Local HEAD changed during review/);
+  equal(await verifyLocalHead(headSha, root, gitCommand), undefined);
+  const warning = await verifyLocalHead(baseSha, root, gitCommand);
+  match(warning, /Local HEAD changed during review.*report remains valid for reviewed head/);
+  ok(warning.includes(baseSha) && warning.includes(headSha));
   warnings.length = 0;
   writeFileSync(join(root, "untracked.txt"), "untracked\n");
-  await checkLocalWorktree(root, options);
-  equal(warnings.length, 1);
-  match(warnings[0], /untracked files.*excluded/);
+  await rejects(checkLocalWorktree(root, options), /commit or remove.*untracked\.txt/);
+  equal(warnings.length, 0);
+  rmSync(join(root, "untracked.txt"));
   writeFileSync(join(root, "file.txt"), "dirty\n");
   await rejects(checkLocalWorktree(root, options), /commit your changes first/);
   await gitCommand(["add", "file.txt"]);
@@ -227,9 +229,13 @@ async function testLocalGit(root) {
   await gitCommand(["add", "file.txt"]);
   await gitCommand(["checkout", "-q", "--detach", headSha]);
   equal((await resolveLocalTarget("staging", root, options)).pr.headRefName, "HEAD");
-  const successfulFetch = async (args, settings) => args[0] === "fetch"
-    ? { code: 0, stdout: "", stderr: "" }
-    : gitCommand(args, settings);
+  const successfulFetch = async (args, settings) => {
+    if (args[0] === "fetch") {
+      deepStrictEqual(args, ["fetch", "--no-tags", "origin", "+refs/heads/staging:refs/remotes/origin/staging"]);
+      return { code: 0, stdout: "", stderr: "" };
+    }
+    return gitCommand(args, settings);
+  };
   equal((await resolveLocalTarget("staging", root, { ...options, gitCommand: successfulFetch })).baseFetchFailed, false);
 }
 

@@ -561,6 +561,9 @@ async function main() {
   const artifactDir = options.artifactDir
     ? resolve(cwd, options.artifactDir)
     : mkdtempSync(join(tmpdir(), "noma-pr-review-suite-"));
+  if (options.prior.some((path) => resolve(path) === join(artifactDir, "report.json"))) {
+    throw new Error("A --prior path would be overwritten by this run; use a new --artifact-dir per round.");
+  }
   mkdirSync(artifactDir, { recursive: true });
   const timeoutMs = options.timeoutMinutes * 60 * 1000;
   const { priors, round } = loadPriors(options.prior);
@@ -748,7 +751,6 @@ async function main() {
     await removeReviewWorktree(cwd, reviewCwd);
   }
 
-  if (options.local) await verifyLocalHead(headSha, cwd);
   const reportPath = join(artifactDir, "review-comment.md");
   const aggregate = {
     pr,
@@ -766,6 +768,10 @@ async function main() {
     join(artifactDir, "report.json"),
     `${JSON.stringify(buildReportJson(aggregate), null, 2)}\n`,
   );
+  if (options.local) {
+    const warning = await verifyLocalHead(headSha, cwd);
+    if (warning) process.stderr.write(warning);
+  }
   const failures = reports.filter((report) => report.error);
   if (failures.length > 0) {
     const detail = failures

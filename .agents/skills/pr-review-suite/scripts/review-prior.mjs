@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 
+export const REPORT_VERSION = 1;
+
 export function loadPriors(paths = []) {
   const priors = paths.map((path, index) => {
     let prior;
@@ -14,7 +16,7 @@ export function loadPriors(paths = []) {
     const invalid = (id, reason) => {
       throw new Error(`Invalid prior report ${path}, finding ${id}: ${reason}`);
     };
-    if (prior?.version !== 1) invalid(firstId, "expected version 1");
+    if (prior?.version !== REPORT_VERSION) invalid(firstId, `expected version ${REPORT_VERSION}`);
     if (!Number.isSafeInteger(prior.round) || prior.round < 1 || !Array.isArray(prior.reports)) {
       invalid(firstId, "expected a positive round and reports array");
     }

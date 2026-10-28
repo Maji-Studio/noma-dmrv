@@ -4,6 +4,7 @@ import { run } from "./review-runtime.mjs";
 
 const git = (args, options) => run("git", args, options);
 const gh = (args, options) => run("gh", args, options);
+const MAX_UNTRACKED_PATHS = 5;
 
 async function getPr(prTarget) {
   const fields = [
@@ -57,23 +58,24 @@ export async function verifyRemoteHead(prTarget, expectedSha) {
   }
 }
 
-export async function checkLocalWorktree(cwd, { gitCommand = git, warn = (message) => process.stderr.write(message) } = {}) {
+export async function checkLocalWorktree(cwd, { gitCommand = git } = {}) {
   const tracked = await gitCommand(["status", "--porcelain", "--untracked-files=no"], { cwd });
   if (tracked.stdout.trim()) {
     throw new Error("Local review requires a clean tracked worktree; commit your changes first.");
   }
   const untracked = await gitCommand(["ls-files", "--others", "--exclude-standard"], { cwd });
   if (untracked.stdout.trim()) {
-    warn("Warning: untracked files are excluded from the local review of HEAD.\n");
+    const paths = untracked.stdout.trim().split("\n").slice(0, MAX_UNTRACKED_PATHS);
+    throw new Error(`Local review requires a clean worktree; commit or remove untracked files first: ${paths.join(", ")}`);
   }
 }
 
 export async function resolveLocalTarget(baseName, cwd, { gitCommand = git, warn = (message) => process.stderr.write(message) } = {}) {
-  await checkLocalWorktree(cwd, { gitCommand, warn });
+  await checkLocalWorktree(cwd, { gitCommand });
   await gitCommand(["check-ref-format", `refs/remotes/origin/${baseName}`], { cwd });
   let baseFetchFailed = false;
   try {
-    await gitCommand(["fetch", "--no-tags", "origin", baseName], { cwd });
+    await gitCommand(["fetch", "--no-tags", "origin", `+refs/heads/${baseName}:refs/remotes/origin/${baseName}`], { cwd });
   } catch {
     baseFetchFailed = true;
     warn(`Warning: failed to fetch origin ${baseName}; continuing with existing origin/${baseName}.\n`);
@@ -101,6 +103,6 @@ export async function resolveTarget(options, cwd) {
 export async function verifyLocalHead(expectedSha, cwd, gitCommand = git) {
   const current = (await gitCommand(["rev-parse", "HEAD"], { cwd })).stdout.trim();
   if (current !== expectedSha) {
-    throw new Error(`Local HEAD changed during review (${expectedSha} -> ${current}); refusing to write report.`);
+    return `Warning: Local HEAD changed during review (${expectedSha} -> ${current}); the report remains valid for reviewed head ${expectedSha}.\n`;
   }
 }

@@ -1,5 +1,5 @@
 import { displayModel, profileModels } from "./review-models.mjs";
-import { earlierRounds } from "./review-prior.mjs";
+import { earlierRounds, REPORT_VERSION } from "./review-prior.mjs";
 import { DEFAULT_PRACTICES } from "./review-runtime.mjs";
 
 export const COMMENT_MARKER = "<!-- noma-pr-review-suite:v1 -->";
@@ -149,7 +149,7 @@ export function buildReportJson({ pr, baseSha, headSha, reports, skippedPractice
     }),
   }));
   return {
-    version: 1,
+    version: REPORT_VERSION,
     mode: pr.mode === "local" ? "local" : "pr",
     round,
     profile,
