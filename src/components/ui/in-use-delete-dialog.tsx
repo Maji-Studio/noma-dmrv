@@ -12,6 +12,7 @@ import { ServerError } from "@/components/forms/server-error";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
+import type { InUseRecordLink } from "@/lib/in-use-references";
 
 interface InUseDeleteDialogProps {
   /** Names the row in the title: a code ("BCF-0003") or a name. */
@@ -20,12 +21,14 @@ interface InUseDeleteDialogProps {
   /** Archives the row. Leave out when archiving is not possible. */
   onArchive?: () => void;
   isPending?: boolean;
+  /** Names what uses the row ("feedstock intakes still use it") in the default explanation, instead of "other records still use it". */
+  reason?: string;
+  /** The records that still use the row, linked between the two default paragraphs. */
+  references?: ReadonlyArray<InUseRecordLink>;
   errorMessage?: string | null;
   /** Replaces the default explanation. */
   children?: ReactNode;
 }
-
-interface InUseRecordLink { href: string; code: string; kind: string }
 
 /** A record that still uses the row, as a link the operator can open. */
 export function InUseReference(reference: InUseRecordLink) {
@@ -48,6 +51,8 @@ export function InUseDeleteDialog({
   onClose,
   onArchive,
   isPending = false,
+  reason = "other records still use it",
+  references = [],
   errorMessage,
   children,
 }: InUseDeleteDialogProps) {
@@ -64,7 +69,8 @@ export function InUseDeleteDialog({
           <div id={descId} className="flex flex-col gap-8 body-medium text-[var(--color-text-secondary)]">
             {children ?? (
               <>
-                <p>{`${label} cannot be deleted because other records still use it.`}</p>
+                <p>{`${label} cannot be deleted because ${reason}.`}</p>
+                {references.length > 0 && <InUseReferences references={references} />}
                 {onArchive && <p>Archive it instead. Existing records keep it, while pickers hide it.</p>}
               </>
             )}

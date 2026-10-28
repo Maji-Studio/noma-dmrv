@@ -36,6 +36,7 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { useToast } from "@/components/ui/toast";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { customerInUseReferences, type InUseRecordLink } from "@/lib/in-use-references";
 import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { ArchivedCustomerNotice } from "@/components/parties";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
@@ -188,6 +189,8 @@ export function CustomerList() {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteConflict, setDeleteConflict] = useState<CustomerWithRelations | null>(null);
+  // The deliveries a refused confirm named, so the in-use dialog can link each one.
+  const [conflictReferences, setConflictReferences] = useState<InUseRecordLink[]>([]);
   // The order list the server sent back when it changed since the dialog opened.
   const [changedCascade, setChangedCascade] = useState<{ cascade: CascadePreview; message: string } | null>(null);
   const [lifecycleError, setLifecycleError] = useState<string | null>(null);
@@ -380,9 +383,12 @@ export function CustomerList() {
         return;
       }
       const message = toDeleteErrorMessage(error, `Customer ${deletingCustomer.code}`, "Customer was not deleted. Try again.");
-      if (isInUseDeleteRefusal(error) && !deletingCustomer.archivedAt) {
-        // In use: the dialog gives way to the in-use dialog that offers Archive instead.
+      const references = customerInUseReferences(error);
+      // An archived customer opens the in-use dialog only to link its blockers; otherwise the server's own reason shows inline.
+      if (isInUseDeleteRefusal(error) && (!deletingCustomer.archivedAt || references.length > 0)) {
+        // In use: the dialog gives way to the in-use dialog (Archive instead for an active customer, Close only for an archived one).
         setDeleteConflict(deletingCustomer);
+        setConflictReferences(references);
         setDeletingCustomer(null);
         return;
       }
@@ -433,8 +439,10 @@ export function CustomerList() {
   // A customer whose orders have deliveries is refused when the dialog opens,
   // so the lock shows before the operator confirms anything.
   const previewRefusedInUse =
-    !!deletingCustomer && !deletingCustomer.archivedAt && !!deletePreview.error && isInUseDeleteRefusal(deletePreview.error);
+    !!deletingCustomer && !!deletePreview.error && isInUseDeleteRefusal(deletePreview.error) &&
+    (!deletingCustomer.archivedAt || customerInUseReferences(deletePreview.error).length > 0);
   const conflictCustomer = deleteConflict ?? (previewRefusedInUse ? deletingCustomer : null);
+  const conflictLinks = deleteConflict ? conflictReferences : customerInUseReferences(deletePreview.error);
 
   const columns = createColumns(openView, openEdit, handleArchive, handleRestore, handleDelete);
 
@@ -565,7 +573,9 @@ export function CustomerList() {
       {conflictCustomer && (
         <InUseDeleteDialog
           label={conflictCustomer.code}
-          onArchive={() => handleArchive(conflictCustomer)}
+          onArchive={conflictCustomer.archivedAt ? undefined : () => handleArchive(conflictCustomer)}
+          reason={conflictLinks.length > 0 ? "deliveries were recorded on its orders" : undefined}
+          references={conflictLinks}
           onClose={() => {
             setDeleteConflict(null);
             setDeletingCustomer(null);

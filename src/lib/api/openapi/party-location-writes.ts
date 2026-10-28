@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { API_BODY_MAX_BYTES } from "@/config/api-rest";
-import { LOCATION_DISTANCE_MIN_KM, LOCATION_DISTANCE_MAX_KM } from "@/config/party-input";
+import { BLOCKER_LIMIT, LOCATION_DISTANCE_MIN_KM, LOCATION_DISTANCE_MAX_KM } from "@/config/party-input";
 import { supplierLocationApiInput, customerLocationApiInput } from "@/schemas/party-location-input";
 import { supplierLocationRepresentationSchema } from "@/lib/representations/supplier-locations";
 import { customerLocationRepresentationSchema } from "@/lib/representations/customer-locations";
@@ -48,7 +48,7 @@ export function addPartyLocationWritePaths(paths: Paths, { publishOutput, writeE
     };
     paths[detail].delete = {
       ...privateOperation(`delete_${kind}_location`, `${kind}s:delete`,
-        `Delete a location and its facility pairs. Deleting the default promotes the next active sibling and returns a warning in dry runs. ${kind === "customer" ? "Orders, including archived orders, or a registered storage site answer 409 conflict at /locationId; order blockers include orderCodes metadata. A busy registration fence answers retryable 409 conflict. An archived location may be deleted." : "Default promotion does not fill intake distances."} ${TARGET} ${RETRY}`,
+        `Delete a location and its facility pairs. Deleting the default promotes the next active sibling and returns a warning in dry runs. ${kind === "customer" ? `Orders, including archived orders, or a registered storage site answer 409 conflict at /locationId; order blockers include issue metadata reason in_use, orderCodes and orders (id, code and facilityId of each referenced order, up to ${BLOCKER_LIMIT} in code order, matching orderCodes). A busy registration fence answers retryable 409 conflict. An archived location may be deleted.` : "Default promotion does not fill intake distances."} ${TARGET} ${RETRY}`,
         { ...errors, "204": { description: "Deleted or replayed; no body or ETag.", headers: { ...privateHeaders, ...writeHeaders } },
           "200": jsonResponse("Dry-run pre-delete location and any warnings.", envelope, writeHeaders) }, parameters),
       requestBody: emptyBody,

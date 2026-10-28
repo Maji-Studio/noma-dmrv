@@ -400,24 +400,26 @@ describe("customer location delete blockers", () => {
     const before = await db.select().from(customerLocations).where(eq(customerLocations.id, archived.id));
     await expect(db.transaction(tx => deleteCustomerLocationInTransaction(f.ctx, tx, customerVersion(archived)))).rejects.toMatchObject({
       code: "conflict", message: "Customer location was not deleted because orders use it.",
-      issues: [{ path: ["locationId"], meta: { orderCodes: [order.code], reason: "in_use" } }],
+      issues: [{ path: ["locationId"], meta: { orderCodes: [order.code], orders: [{ id: order.id, code: order.code, facilityId: order.facilityId }], reason: "in_use" } }],
     });
     expect(await db.select().from(customerLocations).where(eq(customerLocations.id, archived.id))).toEqual(before);
   });
 
   it("includes archived orders and returns the first five codes without deleting anything", async () => {
     const f = await fixture();
-    const codes: string[] = [];
+    const references: { id: string; code: string; facilityId: string }[] = [];
     const ORDER_COUNT = 6;
     const BLOCKER_COUNT = 5;
     for (let index = 0; index < ORDER_COUNT; index++) {
       const order = await runOperationInProcess(recordOrder, f.ctx, orderInput(f));
-      codes.push(order.code);
-      await db.update(orders).set({ archivedAt: new Date() }).where(eq(orders.id, order.id));
+      const code = `E2E-OR-${ORDER_COUNT - index}`;
+      references.push({ id: order.id, code, facilityId: order.facilityId });
+      await db.update(orders).set({ code, archivedAt: new Date() }).where(eq(orders.id, order.id));
     }
     await expect(runOperationInProcess(deleteCustomerLocation, f.ctx, customerVersion(f.location))).rejects.toMatchObject({
       code: "conflict", message: "Customer location was not deleted because orders use it. Archive it instead.",
-      issues: [{ path: ["locationId"], meta: { orderCodes: codes.sort().slice(0, BLOCKER_COUNT), reason: "in_use" } }],
+      issues: [{ path: ["locationId"], meta: { orderCodes: references.map(row => row.code).sort().slice(0, BLOCKER_COUNT),
+        orders: references.sort((a, b) => a.code.localeCompare(b.code)).slice(0, BLOCKER_COUNT), reason: "in_use" } }],
     });
     expect(await getCustomerLocations(f.ctx, f.customer.id)).toMatchObject([{ id: f.location.id, version: f.location.version }]);
   });
